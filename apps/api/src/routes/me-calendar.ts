@@ -245,7 +245,7 @@ const meCalendar = new Hono<AppEnv>()
       const userId = requireUserId(c);
       const body = c.req.valid('json');
       await createCalendarSourceGroup(db, { userId, ...body });
-      return created(c, CalendarSettingsOut, await readCalendarSettings(userId));
+      return created(c, CalendarSettingsOut, await readCalendarSettings(userId), null);
     },
   )
   .patch(

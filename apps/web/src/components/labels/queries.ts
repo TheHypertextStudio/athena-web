@@ -24,6 +24,7 @@ import type {
 import { type QueryClient, useQueryClient } from '@tanstack/react-query';
 
 import { api } from '@/lib/api';
+import { fetchAllLabelGroups, fetchAllLabels } from '@/lib/org-collection-pages';
 import { apiQueryOptions, queryKeys, STALE, unwrap, useApiMutation } from '@/lib/query';
 import { invalidateWorkTargetQueries } from '@/lib/work-target-invalidation';
 
@@ -33,7 +34,7 @@ const LABEL_WORK_TARGETS = ['task', 'project', 'program', 'initiative'] as const
 export function labelsDef(orgId: string) {
   return apiQueryOptions(
     queryKeys.labels(orgId),
-    () => api.v1.orgs[':orgId'].labels.$get({ param: { orgId }, query: {} }),
+    () => fetchAllLabels(api, orgId),
     'Could not load your labels.',
     // A bounded, rarely-changing set that every composer opens against. Re-reading it per open
     // would be a request each time for data that has not moved; writes invalidate explicitly.
@@ -51,7 +52,7 @@ export function labelsDef(orgId: string) {
 export function labelsWithCountsDef(orgId: string) {
   return apiQueryOptions(
     queryKeys.labelsWithCounts(orgId),
-    () => api.v1.orgs[':orgId'].labels.$get({ param: { orgId }, query: { withCounts: '1' } }),
+    () => fetchAllLabels(api, orgId, { withCounts: '1' }),
     'Could not load your labels.',
   );
 }
@@ -60,7 +61,7 @@ export function labelsWithCountsDef(orgId: string) {
 export function labelGroupsDef(orgId: string) {
   return apiQueryOptions(
     queryKeys.labelGroups(orgId),
-    () => api.v1.orgs[':orgId'].labels.groups.$get({ param: { orgId } }),
+    () => fetchAllLabelGroups(api, orgId),
     'Could not load your label groups.',
     { staleTime: STALE.static },
   );

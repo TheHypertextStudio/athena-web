@@ -3,6 +3,21 @@ title: 'Changelog'
 description: 'What changed in Docket, grouped by the work you can now do.'
 ---
 
+<Update label="2026-09-12" description="Public REST contract identity" tags={["Developers"]}>
+  ## REST clients can identify the contract they received
+
+The public REST surface now publishes the prerelease `0.1.0` compatibility contract. Clients may
+omit `Docket-Version` or assert that exact version. Every public REST response identifies the
+contract and deployed source revision.
+
+This change establishes response identity. It does not claim that every documented API capability
+started on this date. Docket still publishes no SDK or outbound webhooks, and it supports one
+current public contract.
+
+Read [API versions](/developers/api-versions) before pinning a client.
+
+</Update>
+
 <Update label="2026-08-25" description="Task context and connections" tags={["Tasks", "Connections"]}>
   ## Tasks carry more of the work
 
@@ -80,6 +95,6 @@ cover the [MCP server](/developers/connect-an-agent-mcp), the
 [errors](/developers/errors).
 
 Read [Platform status](/developers/platform-status) before you build against the API. The public
-API is in early access, has no SDK, and does not yet carry a compatibility promise.
+API is prerelease, has no SDK, and publishes one current compatibility contract.
 
 </Update>

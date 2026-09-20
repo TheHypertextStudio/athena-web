@@ -66,7 +66,7 @@ export function ConnectedAppsTab({ orgId: _orgId }: ConnectedAppsTabProps): JSX.
   const appsQ = useLiveApiQuery(
     apiQueryOptions(
       queryKeys.connectedApps(),
-      () => api.v1.me['connected-apps'].$get(),
+      () => api.v1.me['connected-apps'].$get({ query: {} }),
       'Could not load connected apps.',
       { staleTime: STALE.static },
     ),

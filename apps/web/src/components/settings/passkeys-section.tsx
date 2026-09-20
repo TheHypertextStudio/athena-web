@@ -105,7 +105,7 @@ export function PasskeysSection(): JSX.Element {
   const listQ = useApiQuery(
     apiQueryOptions(
       queryKeys.passkeys(),
-      () => api.v1.me.passkeys.$get(),
+      () => api.v1.me.passkeys.$get({ query: {} }),
       'Could not load your passkeys.',
     ),
   );

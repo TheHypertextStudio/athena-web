@@ -33,15 +33,16 @@ import {
   MemberRemoveOut,
   MemberUpdate,
 } from '@docket/identity-access/member-contract';
-import { pageOf } from '../contracts/pagination';
-import { and, asc, eq, sql } from 'drizzle-orm';
+import { CursorQuery, pageOf } from '../contracts/pagination';
+import { and, asc, eq, gt, or, sql } from 'drizzle-orm';
 import { Hono } from 'hono';
 
 import type { AppEnv } from '../context';
-import { AuthError, ConflictError, NotFoundError } from '../error';
+import { AuthError, ConflictError, NotFoundError, ValidationError } from '../error';
 import { created, ok } from '../lib/ok';
+import { decodeIdCursor, pageResultById, pageResultByKey, seekAfterId } from '../lib/list-cursor';
 import { apiDoc } from '../lib/openapi-route';
-import { zJson, zParam } from '../lib/validate';
+import { zJson, zParam, zQuery } from '../lib/validate';
 import { capabilityGuard } from '../permissions/capability-guard';
 import { enqueueSearchDelete, enqueueSearchUpsert } from '../search/write-through';
 
@@ -68,10 +69,22 @@ const members = new Hono<AppEnv>()
 
 **Account-holders and account-less people are one list.** A person added by \`POST /\` carries \`userId: null\`; a person who redeemed an invitation carries their Better Auth user id. Nothing filters on that column, and the ordering is a plain case-insensitive sort by \`displayName\` — never by account presence, join date, or insertion order — so the two kinds interleave by name and no client can accidentally render them as two groups.
 
-Requires only org membership (no \`manage\`): any member, resolved by \`orgContextMiddleware\`, may see who else is in the org. Returns the standard \`{ items }\` page envelope of \`MemberOut\`. To enumerate non-human actors see the agents router; to see outstanding invitations (people not yet members) see \`GET /invitations\`.`,
+The cursor preserves that name order with actor id as its stable tiebreaker. Pages default to 50 items, accept at most 100, and omit \`nextCursor\` at exhaustion. Requires only org membership (no \`manage\`): any member, resolved by \`orgContextMiddleware\`, may see who else is in the org. To enumerate non-human actors see the agents router; to see outstanding invitations (people not yet members) see \`GET /invitations\`.`,
     }),
+    zQuery(CursorQuery),
     async (c) => {
       const { orgId } = c.get('actorCtx');
+      const { cursor, limit } = c.req.valid('query');
+      const boundary = decodeIdCursor(cursor);
+      const separator = boundary?.lastIndexOf(':') ?? -1;
+      if (boundary && separator < 1) {
+        throw new ValidationError([
+          { path: ['cursor'], message: 'The cursor is invalid or expired.' },
+        ]);
+      }
+      const boundaryName = boundary?.slice(0, separator);
+      const boundaryId = boundary?.slice(separator + 1);
+      const normalizedName = sql<string>`lower(${actor.displayName})`;
       // Sorted by name, case-insensitively, so an account-less person lands exactly where their
       // name puts them. Insertion order would have grouped every account-less person after every
       // account-holder purely because the create path is newer — a second-class ordering nobody
@@ -79,9 +92,29 @@ Requires only org membership (no \`manage\`): any member, resolved by \`orgConte
       const rows = await db
         .select()
         .from(actor)
-        .where(and(eq(actor.organizationId, orgId), eq(actor.kind, 'human')))
-        .orderBy(asc(sql`lower(${actor.displayName})`), asc(actor.id));
-      return ok(c, pageOf(MemberOut), { items: rows.map(toMemberOut) });
+        .where(
+          and(
+            eq(actor.organizationId, orgId),
+            eq(actor.kind, 'human'),
+            boundaryName && boundaryId
+              ? or(
+                  gt(normalizedName, boundaryName),
+                  and(eq(normalizedName, boundaryName), gt(actor.id, boundaryId)),
+                )
+              : undefined,
+          ),
+        )
+        .orderBy(asc(normalizedName), asc(actor.id))
+        .limit(limit + 1);
+      return ok(
+        c,
+        pageOf(MemberOut),
+        pageResultByKey(
+          rows.map(toMemberOut),
+          limit,
+          (item) => `${item.displayName.toLocaleLowerCase()}:${item.actorId}`,
+        ),
+      );
     },
   )
   .post(
@@ -154,7 +187,7 @@ Adding a person to a **personal organization** is rejected with **409**, matchin
       /* v8 ignore next -- @preserve defensive: insert always returns a row */
       if (!row) throw new Error('person actor insert returned no row');
       await enqueueSearchUpsert(orgId, 'actor', row.id);
-      return created(c, MemberOut, toMemberOut(row));
+      return created(c, MemberOut, toMemberOut(row), null);
     },
   )
   .post(
@@ -208,15 +241,25 @@ Errors: **404** when no invitation matches the token in this org (existence-hidi
       response: pageOf(InvitationOut),
       description: `List the org's **pending** invitations — outstanding offers not yet accepted, revoked, or expired. The query filters strictly on \`status = 'pending'\`, so accepted/revoked/expired rows never appear here even though they remain in the table for audit. Each \`InvitationOut\` carries the invited email, target role, \`asGuest\` flag, who invited them (\`invitedBy\`), and the \`expiresAt\` deadline.
 
-Requires only org membership (no \`manage\`) to read — any member can see who's been invited; \`manage\` is only required to create or revoke. Returns the standard \`{ items }\` page envelope. Note: an invitation whose \`expiresAt\` has passed but whose stored \`status\` is still \`pending\` will still appear here (expiry is enforced at accept time, not by a sweep); treat \`expiresAt < now\` as effectively expired on the client. See \`POST /invitations\` to create and \`DELETE /invitations/:id\` to revoke.`,
+Results use stable invitation-id order, default to 50 items, accept at most 100, and omit \`nextCursor\` at exhaustion. Requires only org membership (no \`manage\`) to read — any member can see who's been invited; \`manage\` is only required to create or revoke. Note: an invitation whose \`expiresAt\` has passed but whose stored \`status\` is still \`pending\` will still appear here (expiry is enforced at accept time, not by a sweep); treat \`expiresAt < now\` as effectively expired on the client. See \`POST /invitations\` to create and \`DELETE /invitations/:id\` to revoke.`,
     }),
+    zQuery(CursorQuery),
     async (c) => {
       const { orgId } = c.get('actorCtx');
+      const { cursor, limit } = c.req.valid('query');
       const rows = await db
         .select()
         .from(invitation)
-        .where(and(eq(invitation.organizationId, orgId), eq(invitation.status, 'pending')));
-      return ok(c, pageOf(InvitationOut), { items: rows.map(toInvitationOut) });
+        .where(
+          and(
+            eq(invitation.organizationId, orgId),
+            eq(invitation.status, 'pending'),
+            seekAfterId(invitation.id, cursor, 'asc'),
+          ),
+        )
+        .orderBy(asc(invitation.id))
+        .limit(limit + 1);
+      return ok(c, pageOf(InvitationOut), pageResultById(rows.map(toInvitationOut), limit));
     },
   )
   .post(
@@ -238,7 +281,7 @@ Inviting into a **personal organization** is rejected with **409** (org-of-one).
     async (c) => {
       const { orgId, actorId } = c.get('actorCtx');
       const row = await createInvitation(orgId, actorId, c.req.valid('json'));
-      return created(c, InvitationOut, toInvitationOut(row));
+      return created(c, InvitationOut, toInvitationOut(row), null);
     },
   )
   .post(

@@ -16,16 +16,17 @@ import {
 } from '@docket/authz';
 import { db, grant } from '@docket/db';
 import { GrantOut, GrantUpsert } from '../contracts/grant';
-import { pageOf } from '../contracts/pagination';
-import { and, eq } from 'drizzle-orm';
+import { CursorQuery, pageOf } from '../contracts/pagination';
+import { and, asc, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
 
 import type { AppEnv } from '../context';
 import { CapabilityError, NotFoundError } from '../error';
 import { created, ok } from '../lib/ok';
+import { pageResultById, seekAfterId } from '../lib/list-cursor';
 import { apiDoc } from '../lib/openapi-route';
-import { zJson, zParam } from '../lib/validate';
+import { zJson, zParam, zQuery } from '../lib/validate';
 import { notifyGrantsChanged } from '../mcp/notify';
 import { capabilityGuard } from '../permissions/capability-guard';
 
@@ -70,12 +71,19 @@ const grants = new Hono<AppEnv>()
       response: pageOf(GrantOut),
       description: `List every capability \`grant\` in the organization. A grant binds a **subject** — an Actor or a Role — to a **resource node** in the containment tree (\`organization\` › \`team\`/\`program\`/\`project\` › \`task\`, etc.) and confers a flat capability set there. Grants are the storage form of both role baselines (the four seeded role bundles attach their org-root grant here) and individual actor overrides. By default a grant **cascades** to the resource's whole subtree, overridable by a more-specific grant lower down (permissions §3/§4.4).
 
-Requires only org membership to read; the list is scoped to this org. Returns the standard \`{ items }\` page envelope of \`GrantOut\`, including each grant's effect (\`allow\`/\`deny\`), \`cascades\` flag, visibility override, and optional \`expiresAt\`. Note the API only ever writes \`allow\` grants (see \`PUT /\`), though the \`deny\` effect exists in the schema. See \`PUT /\` to upsert and \`DELETE /:grantId\` to remove.`,
+Results use stable grant-id order, default to 50 items, accept at most 100, and omit \`nextCursor\` at exhaustion. Requires only org membership to read; the list is scoped to this org. The API only writes \`allow\` grants, though \`deny\` remains representable.`,
     }),
+    zQuery(CursorQuery),
     async (c) => {
       const { orgId } = c.get('actorCtx');
-      const rows = await db.select().from(grant).where(eq(grant.organizationId, orgId));
-      return ok(c, pageOf(GrantOut), { items: rows.map(toOut) });
+      const { cursor, limit } = c.req.valid('query');
+      const rows = await db
+        .select()
+        .from(grant)
+        .where(and(eq(grant.organizationId, orgId), seekAfterId(grant.id, cursor, 'asc')))
+        .orderBy(asc(grant.id))
+        .limit(limit + 1);
+      return ok(c, pageOf(GrantOut), pageResultById(rows.map(toOut), limit));
     },
   )
   .post(

@@ -4,9 +4,8 @@
  *
  * @remarks
  * Mirrors `harness.test.ts` (pglite + injected actor context). Each endpoint adopted the shared
- * `lib/list-cursor` keyset helper with the backward-compatible `CursorQuery` (optional `limit`):
- * no `limit` returns the full list with no cursor (legacy behavior), and a `limit` returns a
- * bounded page plus a `nextCursor` that walks the remainder without gaps or duplicates.
+ * `lib/list-cursor` keyset helper with a default page size of 50 and maximum of 100. A
+ * `nextCursor` walks the remainder without gaps or duplicates and is absent at exhaustion.
  */
 import { beforeAll, describe, expect, it } from 'vitest';
 
@@ -77,6 +76,24 @@ async function assertPagesCover(
   expect(walked).toEqual([...expectedIds]);
 }
 
+/** Walk default-sized pages from the first response and return every encountered id. */
+async function walkDefaultPages(app: ReturnType<typeof appWithActor>): Promise<string[]> {
+  const walked: string[] = [];
+  let cursor: string | undefined;
+  let guard = 0;
+  do {
+    const page = await json<Page>(
+      await app.request(cursor ? `/?cursor=${encodeURIComponent(cursor)}` : '/'),
+    );
+    expect(page.items.length).toBeGreaterThan(0);
+    expect(page.items.length).toBeLessThanOrEqual(50);
+    walked.push(...page.items.map((item) => item.id));
+    cursor = page.nextCursor;
+    if (++guard > 20) throw new Error('default pagination did not terminate');
+  } while (cursor);
+  return walked;
+}
+
 describe('list pagination (keyset cursor)', () => {
   it('cycles: optional limit pages the roster newest-first', async () => {
     const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
@@ -101,25 +118,36 @@ describe('list pagination (keyset cursor)', () => {
     await assertPagesCover(appWithActor(cycles, orgId, ['view'], humanActorId), 2, newestFirst);
   });
 
-  it('programs: optional limit pages the list newest-first', async () => {
+  it('programs: the omitted limit defaults to 50 and timestamp ties use id descending', async () => {
     const { orgId, humanActorId, statusId } = await seedBaseOrg(db, schema);
-    const ids: string[] = [];
-    for (let i = 0; i < 3; i++) {
-      const [row] = await db
-        .insert(schema.program)
-        .values({
+    const createdAt = new Date('2026-09-01T00:00:00.000Z');
+    const rows = await db
+      .insert(schema.program)
+      .values(
+        Array.from({ length: 101 }, (_, index) => ({
           organizationId: orgId,
-          name: `P${i}`,
+          name: `P${index.toString().padStart(3, '0')}`,
           createdBy: humanActorId,
-          createdAt: new Date(Date.UTC(2026, i, 1)),
+          createdAt,
           status: 'active',
           statusId: statusId('program', 'active'),
-        })
-        .returning({ id: schema.program.id });
-      ids.push(assertDefined(row).id);
-    }
-    const newestFirst = [assertDefined(ids[2]), assertDefined(ids[1]), assertDefined(ids[0])];
-    await assertPagesCover(appWithActor(programs, orgId, ['view'], humanActorId), 2, newestFirst);
+        })),
+      )
+      .returning({ id: schema.program.id });
+    const expected = rows.map((row) => row.id).sort((left, right) => right.localeCompare(left));
+    const app = appWithActor(programs, orgId, ['view'], humanActorId);
+
+    const first = await json<Page>(await app.request('/'));
+    expect(first.items).toHaveLength(50);
+    expect(first.nextCursor).toEqual(expect.any(String));
+    expect(await walkDefaultPages(app)).toEqual(expected);
+
+    const tooLarge = await app.request('/?limit=101');
+    expect(tooLarge.status).toBe(422);
+
+    const malformed = await app.request('/?cursor=not-a-real-cursor');
+    expect(malformed.status).toBe(422);
+    expect(await json<{ code: string }>(malformed)).toMatchObject({ code: 'validation_error' });
   });
 
   it('initiatives: optional limit pages the list newest-first', async () => {

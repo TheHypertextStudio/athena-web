@@ -31,6 +31,7 @@ import { useCallback, useMemo } from 'react';
 
 import { useSession } from '@/lib/auth-client';
 import { api } from '@/lib/api';
+import { fetchAllInvitations, fetchAllMembers, fetchAllRoles } from '@/lib/org-collection-pages';
 import { STALE, apiQueryOptions, queryKeys, useApiListQuery, useLiveApiQuery } from '@/lib/query';
 
 import { QueryLoadFailure } from '@/components/feedback';
@@ -68,18 +69,15 @@ export function MembersTab({ orgId }: MembersTabProps): JSX.Element {
   // Members + roles rarely change within a session (and their mutations invalidate these keys),
   // so they ride the static tier; invitations likewise reconcile via invalidation on send/revoke.
   const membersQ = useLiveApiQuery(
-    apiQueryOptions(
-      membersKey,
-      () => api.v1.orgs[':orgId'].members.$get({ param: { orgId } }),
-      'Could not load members.',
-      { staleTime: STALE.static },
-    ),
+    apiQueryOptions(membersKey, () => fetchAllMembers(api, orgId), 'Could not load members.', {
+      staleTime: STALE.static,
+    }),
     15_000,
   );
   const rolesQ = useApiListQuery(
     apiQueryOptions(
       queryKeys.roles(orgId),
-      () => api.v1.orgs[':orgId'].roles.$get({ param: { orgId } }),
+      () => fetchAllRoles(api, orgId),
       'Could not load roles.',
       { staleTime: STALE.static },
     ),
@@ -87,7 +85,7 @@ export function MembersTab({ orgId }: MembersTabProps): JSX.Element {
   const invitationsQ = useApiListQuery(
     apiQueryOptions(
       invitationsKey,
-      () => api.v1.orgs[':orgId'].members.invitations.$get({ param: { orgId } }),
+      () => fetchAllInvitations(api, orgId),
       'Could not load invitations.',
       { staleTime: STALE.static },
     ),

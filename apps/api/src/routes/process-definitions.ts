@@ -1,6 +1,6 @@
 /** `@docket/api` — reusable process-definition routes. */
 import { db } from '@docket/db';
-import { pageOf } from '../contracts/pagination';
+import { CursorQuery, pageOf } from '../contracts/pagination';
 import {
   ProcessDefinitionCreate,
   ProcessDefinitionDetailOut,
@@ -22,8 +22,9 @@ import {
   updateProcessDefinitionMetadata,
 } from '../lib/recurrence/process-definition';
 import { created, ok } from '../lib/ok';
+import { pageResultById } from '../lib/list-cursor';
 import { apiDoc } from '../lib/openapi-route';
-import { zJson, zParam } from '../lib/validate';
+import { zJson, zParam, zQuery } from '../lib/validate';
 import { capabilityGuard } from '../permissions/capability-guard';
 
 const idParam = z.object({ id: z.string() });
@@ -37,12 +38,14 @@ const processDefinitions = new Hono<AppEnv>()
       summary: 'List process definitions',
       response: pageOf(ProcessDefinitionSummaryOut),
       description:
-        'List reusable process blueprints in this workspace. Each row reports the latest immutable revision number; archived processes are excluded. Requires workspace membership.',
+        'List reusable process blueprints in stable definition-id order. Pages default to 50 items, accept at most 100, and omit nextCursor at exhaustion. Each row reports the latest immutable revision number; archived processes are excluded. Requires workspace membership.',
     }),
+    zQuery(CursorQuery),
     async (c) => {
       const { orgId } = c.get('actorCtx');
-      const items = await listProcessDefinitions(db, orgId);
-      return ok(c, pageOf(ProcessDefinitionSummaryOut), { items });
+      const { cursor, limit } = c.req.valid('query');
+      const items = await listProcessDefinitions(db, orgId, { cursor, limit });
+      return ok(c, pageOf(ProcessDefinitionSummaryOut), pageResultById(items, limit));
     },
   )
   .post(

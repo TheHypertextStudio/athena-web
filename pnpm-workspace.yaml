@@ -46,7 +46,6 @@ catalog:
   # hono-openapi's `validator` delegates to this Standard-Schema validator (its top-level
   # import), so it must be installed for any hono-openapi symbol to load.
   '@hono/standard-validator': ^0.2.0
-  '@scalar/hono-api-reference': ^0.10.20
 
   # Validation — Zod v4 repo-wide
   zod: ^4.4.3
@@ -150,6 +149,9 @@ allowBuilds:
   sharp: false
   # Cloudflare's local Workers runtime used by Wrangler dry-runs and Vitest integration.
   workerd: true
+  # Scalar's browser bundle uses Vue 3 through vue-demi. Its postinstall selects the installed
+  # Vue major and writes no network-fetched executable, so this exact transitive build is allowed.
+  vue-demi: true
 
 patchedDependencies:
   '@better-auth/oauth-provider@1.6.19': patches/@better-auth__oauth-provider.patch

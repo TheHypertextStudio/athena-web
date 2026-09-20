@@ -6,7 +6,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 
 import type { AppEnv } from '../../src/context';
 import { ConflictError, onError } from '../../src/error';
-import { idempotency } from '../../src/lib/idempotency';
+import { idempotencyFor } from '../../src/lib/idempotency';
 import {
   appWithActor,
   fakeSession,
@@ -35,7 +35,7 @@ function idempotentApp(userId: string): Hono<AppEnv> {
     c.set('session', fakeSession(userId));
     await next();
   });
-  app.use('*', idempotency);
+  app.use('*', idempotencyFor('json-receipt'));
   app.onError(onError);
   return app;
 }
@@ -45,53 +45,6 @@ beforeAll(async () => {
 });
 
 describe('idempotency retry guidance', () => {
-  it('leases an in-progress object command briefly and retains its completed receipt for 48 hours', async () => {
-    const database = await getDb();
-    const userId = `idempotency-object-retention-${crypto.randomUUID()}`;
-    const app = idempotentApp(userId);
-    const entered = deferred();
-    const release = deferred();
-    app.post('/v1/orgs/org-1/object-commands', async (c) => {
-      entered.resolve();
-      await release.promise;
-      return c.json({ id: 'created' }, 201);
-    });
-    const key = `new-object-command-${crypto.randomUUID()}`;
-
-    const pending = app.request('/v1/orgs/org-1/object-commands', {
-      method: 'POST',
-      headers: { ...JSON_HEADERS, 'Idempotency-Key': key },
-      body: JSON.stringify({ commandId: key }),
-    });
-    await entered.promise;
-    const claimRows = await database.db
-      .select()
-      .from(database.idempotencyKey)
-      .where(and(eq(database.idempotencyKey.userId, userId), eq(database.idempotencyKey.key, key)))
-      .limit(1);
-    expect(claimRows[0]?.status).toBe('in_progress');
-    expect(
-      (claimRows[0]?.expiresAt.getTime() ?? 0) - (claimRows[0]?.createdAt.getTime() ?? 0),
-    ).toBeGreaterThan(4 * 60 * 1000);
-    expect(
-      (claimRows[0]?.expiresAt.getTime() ?? 0) - (claimRows[0]?.createdAt.getTime() ?? 0),
-    ).toBeLessThan(6 * 60 * 1000);
-
-    release.resolve();
-    const response = await pending;
-    const completedRows = await database.db
-      .select()
-      .from(database.idempotencyKey)
-      .where(and(eq(database.idempotencyKey.userId, userId), eq(database.idempotencyKey.key, key)))
-      .limit(1);
-
-    expect(response.status).toBe(201);
-    expect(completedRows[0]?.status).toBe('completed');
-    expect(
-      (completedRows[0]?.expiresAt.getTime() ?? 0) - (completedRows[0]?.createdAt.getTime() ?? 0),
-    ).toBeGreaterThan(47 * 60 * 60 * 1000);
-  });
-
   it('reclaims a pre-deploy object-command claim after the crash-recovery lease', async () => {
     const database = await getDb();
     const userId = `idempotency-object-margin-${crypto.randomUUID()}`;
@@ -583,7 +536,7 @@ describe('idempotency retry guidance', () => {
     } as const;
     const path = `/v1/orgs/${base.orgId}/object-commands`;
     const wrapped = new Hono<AppEnv>();
-    wrapped.use('*', idempotency);
+    wrapped.use('*', idempotencyFor('atomic-receipt'));
     wrapped.route(path, (await import('../../src/routes/object-commands')).default);
     const app = appWithActor(
       wrapped,

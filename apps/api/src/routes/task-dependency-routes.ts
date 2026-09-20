@@ -7,8 +7,8 @@ import {
   TaskOut,
   TaskRemoved,
 } from '@docket/work/task-model';
-import { pageOf } from '../contracts/pagination';
-import { and, eq, isNull, or } from 'drizzle-orm';
+import { CursorQuery, pageOf } from '../contracts/pagination';
+import { and, asc, eq, isNull, or } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
 
@@ -17,13 +17,14 @@ import { ConflictError, CycleError, NotFoundError, ValidationError } from '../er
 import { serializableTx } from '../lib/serializable-tx';
 import { taskActivityRows } from '../lib/task-audit';
 import { labelsForSubjects, replaceLabels, resolveLabelSet } from '../lib/labels';
+import { encodeIdCursor, pageResultById, seekAfterId } from '../lib/list-cursor';
 import { created, ok, resourceUrl } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
 import {
   applySubtaskCompletionPolicyForParents,
   finishTaskStateTransition,
 } from '../lib/task-state';
-import { zJson, zParam } from '../lib/validate';
+import { zJson, zParam, zQuery } from '../lib/validate';
 import { enqueueSearchUpsert } from '../search/write-through';
 
 import {
@@ -40,6 +41,69 @@ import {
 } from './task-helpers';
 import { resolveTaskStatus } from '../lib/work-status';
 
+async function listVisibleSubtasks(
+  organizationId: string,
+  parentTaskId: string,
+  cursor: string | undefined,
+  limit: number,
+  canView: Awaited<ReturnType<typeof buildTaskViewFilter>>,
+): Promise<(typeof task.$inferSelect)[]> {
+  const visibleRows: (typeof task.$inferSelect)[] = [];
+  let scanCursor = cursor;
+  let exhausted = false;
+  while (visibleRows.length < limit + 1 && !exhausted) {
+    const batchLimit = limit + 1 - visibleRows.length;
+    const rows = await db
+      .select()
+      .from(task)
+      .where(
+        and(
+          eq(task.parentTaskId, parentTaskId),
+          eq(task.organizationId, organizationId),
+          isNull(task.archivedAt),
+          seekAfterId(task.id, scanCursor, 'asc'),
+        ),
+      )
+      .orderBy(asc(task.id))
+      .limit(batchLimit);
+    const last = rows.at(-1);
+    exhausted = rows.length < batchLimit;
+    if (last) scanCursor = encodeIdCursor(last.id);
+    visibleRows.push(...rows.filter(canView));
+  }
+  return visibleRows;
+}
+
+function dependencyActivities(
+  pathTask: typeof task.$inferSelect,
+  otherTask: typeof task.$inferSelect,
+  blockingTaskId: string,
+  blockedTaskId: string,
+) {
+  return [
+    {
+      taskId: blockingTaskId,
+      title: pathTask.id === blockingTaskId ? pathTask.title : otherTask.title,
+      change: {
+        field: 'dependency',
+        label: 'Dependency',
+        from: null,
+        to: `Blocks ${blockedTaskId === pathTask.id ? pathTask.title : otherTask.title}`,
+      },
+    },
+    {
+      taskId: blockedTaskId,
+      title: pathTask.id === blockedTaskId ? pathTask.title : otherTask.title,
+      change: {
+        field: 'dependency',
+        label: 'Dependency',
+        from: null,
+        to: `Blocked by ${blockingTaskId === pathTask.id ? pathTask.title : otherTask.title}`,
+      },
+    },
+  ];
+}
+
 /** Subtask + dependency routes, mounted on the tasks router at `/`. */
 export const taskDependencyRoutes = new Hono<AppEnv>()
   .get(
@@ -48,30 +112,31 @@ export const taskDependencyRoutes = new Hono<AppEnv>()
       tag: 'Tasks',
       summary: 'List subtasks',
       response: pageOf(TaskOut),
-      description: `List the active (non-archived) direct children of a task — tasks whose \`parentTaskId\` is the path id. Subtasks are one level of the work hierarchy (a child may itself have children, fetched by listing on that child). The parent is loaded first, so a cross-org or unknown parent id 404s before any child read. Requires org membership (\`view\`). Returns a page of {@link TaskOut}; archived children are omitted. To create a child, see \`POST /:id/subtasks\`.`,
+      description: `List visible active direct children of a task in stable task-id order. Pages default to 50 items, accept at most 100, and omit \`nextCursor\` at exhaustion. Visibility is applied before pagination, so hidden children cannot truncate the visible page. Reuse a cursor only for the same parent task.`,
     }),
     zParam(idParam),
+    zQuery(CursorQuery),
     async (c) => {
       const { orgId, actorId } = c.get('actorCtx');
       const { id } = c.req.valid('param');
+      const { cursor, limit } = c.req.valid('query');
       const parent = await loadTask(orgId, id);
       const canView = await buildTaskViewFilter(orgId, actorId);
       if (!canView(parent)) throw new NotFoundError('Task not found');
-      const rows = await db
-        .select()
-        .from(task)
-        .where(
-          and(eq(task.parentTaskId, id), eq(task.organizationId, orgId), isNull(task.archivedAt)),
-        );
-      const visibleRows = rows.filter(canView);
+      const visibleRows = await listVisibleSubtasks(orgId, id, cursor, limit, canView);
       const labelsByTask = await labelsForSubjects(
         'task',
         orgId,
         visibleRows.map((t) => t.id),
       );
-      return ok(c, pageOf(TaskOut), {
-        items: visibleRows.map((t) => toOut(t, labelsByTask.get(t.id) ?? [])),
-      });
+      return ok(
+        c,
+        pageOf(TaskOut),
+        pageResultById(
+          visibleRows.map((t) => toOut(t, labelsByTask.get(t.id) ?? [])),
+          limit,
+        ),
+      );
     },
   )
   .post(
@@ -269,28 +334,12 @@ Two invariants are enforced. A task cannot depend on itself (self-edge → 422 v
 
       const otherTask = await loadTask(orgId, otherId);
       await assertTaskCapability(orgId, actorId, otherTask, 'contribute');
-      const dependencyActivity = [
-        {
-          taskId: blockingTaskId,
-          title: pathTask.id === blockingTaskId ? pathTask.title : otherTask.title,
-          change: {
-            field: 'dependency',
-            label: 'Dependency',
-            from: null,
-            to: `Blocks ${blockedTaskId === pathTask.id ? pathTask.title : otherTask.title}`,
-          },
-        },
-        {
-          taskId: blockedTaskId,
-          title: pathTask.id === blockedTaskId ? pathTask.title : otherTask.title,
-          change: {
-            field: 'dependency',
-            label: 'Dependency',
-            from: null,
-            to: `Blocked by ${blockingTaskId === pathTask.id ? pathTask.title : otherTask.title}`,
-          },
-        },
-      ];
+      const dependencyActivity = dependencyActivities(
+        pathTask,
+        otherTask,
+        blockingTaskId,
+        blockedTaskId,
+      );
 
       // The duplicate-check, acyclic reachability check, and the insert run in one
       // SERIALIZABLE transaction (data-model §7.4): READ COMMITTED lets two concurrent
@@ -329,7 +378,12 @@ Two invariants are enforced. A task cannot depend on itself (self-edge → 422 v
         );
       });
 
-      return created(c, TaskDependencyCreated, { created: true, blockingTaskId, blockedTaskId });
+      return created(
+        c,
+        TaskDependencyCreated,
+        { created: true, blockingTaskId, blockedTaskId },
+        null,
+      );
     },
   )
   .delete(

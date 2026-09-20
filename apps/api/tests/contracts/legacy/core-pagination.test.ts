@@ -1,7 +1,9 @@
 import { z } from 'zod';
 import { describe, expect, it } from 'vitest';
 
-import { ListQuery, pageOf } from '../../../src/contracts/pagination';
+import { TaskListQuery } from '@docket/work/task-model';
+
+import { CursorQuery, ListQuery, pageOf } from '../../../src/contracts/pagination';
 
 describe('ListQuery', () => {
   it('applies defaults (limit 50, order desc) for an empty query', () => {
@@ -32,6 +34,21 @@ describe('ListQuery', () => {
 
   it('rejects an unknown order', () => {
     expect(ListQuery.safeParse({ order: 'sideways' }).success).toBe(false);
+  });
+});
+
+describe('CursorQuery', () => {
+  it('defaults API-owned list pages to fifty rows', () => {
+    expect(CursorQuery.parse({})).toEqual({ limit: 50 });
+  });
+
+  it('defaults the domain-owned Task list page to fifty rows', () => {
+    expect(TaskListQuery.parse({})).toEqual({ limit: 50 });
+  });
+
+  it('rejects list pages above one hundred rows', () => {
+    expect(CursorQuery.safeParse({ limit: 101 }).success).toBe(false);
+    expect(TaskListQuery.safeParse({ limit: 101 }).success).toBe(false);
   });
 });
 

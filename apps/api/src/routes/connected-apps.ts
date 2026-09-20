@@ -18,15 +18,17 @@
  */
 import { revokeConnectedOAuthClient } from '@docket/auth';
 import { db, oauthClient, oauthConsent } from '@docket/db';
-import { eq } from 'drizzle-orm';
+import { and, asc, eq } from 'drizzle-orm';
 import { type Context, Hono } from 'hono';
 import { z } from 'zod';
 
 import type { AppEnv } from '../context';
+import { CursorQuery, pageOf } from '../contracts/pagination';
 import { AuthError } from '../error';
+import { pageResultByKey, seekAfterId } from '../lib/list-cursor';
 import { ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
-import { zParam } from '../lib/validate';
+import { zParam, zQuery } from '../lib/validate';
 import { fallbackClientName } from './oauth-clients';
 
 /** One authorized OAuth client returned by the list endpoint. */
@@ -43,13 +45,7 @@ const ConnectedAppOut = z.object({
 });
 type ConnectedAppOut = z.infer<typeof ConnectedAppOut>;
 
-const ConnectedAppsListOut = z.object({
-  items: z
-    .array(ConnectedAppOut)
-    .describe(
-      'The REST or MCP OAuth apps the caller has authorized. Empty when they have authorized none.',
-    ),
-});
+const ConnectedAppsListOut = pageOf(ConnectedAppOut);
 const RevokeOut = z.object({
   revoked: z
     .literal(true)
@@ -78,8 +74,10 @@ const connectedApps = new Hono<AppEnv>()
 
 User-scoped: rows are filtered to \`userId = session.user.id\`, so a caller only ever sees their own authorizations. Session-only, no capability; **401** when unauthenticated. Distinct from \`/me/identities\` (external accounts the *user* signed in with) — these are external apps that authorized *into* Docket on the user's behalf. Related: \`DELETE /me/connected-apps/:clientId\` to revoke.`,
     }),
+    zQuery(CursorQuery),
     async (c) => {
       const userId = requireUserId(c);
+      const { cursor, limit } = c.req.valid('query');
 
       const rows = await db
         .select({
@@ -91,7 +89,11 @@ User-scoped: rows are filtered to \`userId = session.user.id\`, so a caller only
         })
         .from(oauthConsent)
         .innerJoin(oauthClient, eq(oauthClient.clientId, oauthConsent.clientId))
-        .where(eq(oauthConsent.userId, userId));
+        .where(
+          and(eq(oauthConsent.userId, userId), seekAfterId(oauthConsent.clientId, cursor, 'asc')),
+        )
+        .orderBy(asc(oauthConsent.clientId))
+        .limit(limit + 1);
 
       const items: ConnectedAppOut[] = rows.map((row) => ({
         clientId: row.clientId,
@@ -101,7 +103,11 @@ User-scoped: rows are filtered to \`userId = session.user.id\`, so a caller only
         consentedAt: (row.consentedAt ?? new Date(0)).toISOString(),
       }));
 
-      return ok(c, ConnectedAppsListOut, { items });
+      return ok(
+        c,
+        ConnectedAppsListOut,
+        pageResultByKey(items, limit, (item) => item.clientId),
+      );
     },
   )
   .delete(

@@ -1,10 +1,4 @@
-/**
- * `@docket/api` — owner-only personal Athena routes (`/v1/me/athena`).
- *
- * @remarks
- * Personal connections are keyed only by the authenticated Better Auth user. They are not
- * workspace integrations and a workspace context never participates in their authorization.
- */
+/** Owner-only personal Athena routes; workspace context never grants access. */
 import {
   athenaAssignment,
   athenaTrigger,
@@ -24,11 +18,12 @@ import {
   PersonalMcpConnectionPreviewOut,
   PersonalMcpConnectionUpdate,
 } from '@docket/athena/athena-contract';
-import { and, asc, eq, or } from 'drizzle-orm';
+import { and, eq, or } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
 
 import type { AppEnv } from '../context';
+import { CursorQuery, pageOf } from '../contracts/pagination';
 import { getContainer } from '../container';
 import { env } from '../env';
 import { AuthError, ConflictError, NotFoundError } from '../error';
@@ -36,12 +31,18 @@ import { sealCredential, unsealCredential } from '../lib/credentials';
 import { signConnectState } from '../lib/oauth-state';
 import { created, ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
-import { zJson, zParam } from '../lib/validate';
+import { zJson, zParam, zQuery } from '../lib/validate';
 import {
   createAthenaAssignment,
   type AthenaAssignmentRow,
   type AthenaTriggerRow,
 } from '../agent/assignments';
+import {
+  listPersonalAthenaAssignments,
+  listPersonalAthenaTriggers,
+  listPersonalMcpConnections,
+  personalAthenaPage,
+} from './personal-athena-list-store';
 
 /** Stored personal connection row. */
 export type PersonalMcpConnectionRow = typeof personalMcpConnection.$inferSelect;
@@ -86,9 +87,7 @@ export async function loadPersonalMcpConnection(
   return row;
 }
 
-/**
- * Earn connection health through a live tools/list round trip using only the owner's credential.
- */
+/** Earn connection health through a live tools/list call using only the owner's credential. */
 export async function verifyPersonalMcpConnection(
   row: PersonalMcpConnectionRow,
 ): Promise<PersonalMcpConnectionRow> {
@@ -228,17 +227,16 @@ const personalAthena = new Hono<AppEnv>()
     apiDoc({
       tag: 'Athena',
       summary: 'List personal Athena connections',
-      response: z.array(PersonalMcpConnectionOut),
+      response: pageOf(PersonalMcpConnectionOut),
       description:
-        'List remote MCP connections owned by the authenticated user. Connections are reusable by that user’s Athena across workspaces and are never visible to another user.',
+        'List remote MCP connections owned by the authenticated user in createdAt ASC, id ASC order. Pages default to 50 items, accept at most 100, and omit nextCursor at exhaustion.',
     }),
+    zQuery(CursorQuery),
     async (c) => {
-      const rows = await db
-        .select()
-        .from(personalMcpConnection)
-        .where(eq(personalMcpConnection.ownerUserId, requestOwner(c)))
-        .orderBy(asc(personalMcpConnection.createdAt));
-      return ok(c, z.array(PersonalMcpConnectionOut), rows.map(toPersonalMcpOut));
+      const { cursor, limit } = c.req.valid('query');
+      const rows = await listPersonalMcpConnections(requestOwner(c), { cursor, limit });
+      const page = personalAthenaPage(rows, limit, toPersonalMcpOut);
+      return ok(c, pageOf(PersonalMcpConnectionOut), page);
     },
   )
   .post(
@@ -318,7 +316,7 @@ const personalAthena = new Hono<AppEnv>()
         body.authMode === 'oauth'
           ? connectionRow
           : await verifyPersonalMcpConnection(connectionRow);
-      return created(c, PersonalMcpConnectionOut, toPersonalMcpOut(output));
+      return created(c, PersonalMcpConnectionOut, toPersonalMcpOut(output), null);
     },
   )
   .patch(
@@ -438,17 +436,16 @@ const personalAthena = new Hono<AppEnv>()
     apiDoc({
       tag: 'Athena',
       summary: 'List personal Athena assignments',
-      response: z.array(AthenaAssignmentOut),
+      response: pageOf(AthenaAssignmentOut),
       description:
-        'List only the authenticated user’s Athena delegations. Athena is not a workspace assignee or Actor; human ownership on the target work remains unchanged.',
+        'List only the authenticated user’s Athena delegations in createdAt ASC, id ASC order. Pages default to 50 items, accept at most 100, and omit nextCursor at exhaustion.',
     }),
+    zQuery(CursorQuery),
     async (c) => {
-      const rows = await db
-        .select()
-        .from(athenaAssignment)
-        .where(eq(athenaAssignment.ownerUserId, requestOwner(c)))
-        .orderBy(asc(athenaAssignment.createdAt));
-      return ok(c, z.array(AthenaAssignmentOut), rows.map(toAssignmentOut));
+      const { cursor, limit } = c.req.valid('query');
+      const rows = await listPersonalAthenaAssignments(requestOwner(c), { cursor, limit });
+      const page = personalAthenaPage(rows, limit, toAssignmentOut);
+      return ok(c, pageOf(AthenaAssignmentOut), page);
     },
   )
   .post(
@@ -539,25 +536,19 @@ const personalAthena = new Hono<AppEnv>()
     apiDoc({
       tag: 'Athena',
       summary: 'List assignment triggers',
-      response: z.array(AthenaTriggerOut),
+      response: pageOf(AthenaTriggerOut),
       description:
-        'List event and scheduled triggers belonging to one owner-matched assignment. Their effective scope is always the assignment entity’s current subtree.',
+        'List event and scheduled triggers for one assignment in createdAt ASC, id ASC order. Pages default to 50 items, accept at most 100, and omit nextCursor at exhaustion.',
     }),
     zParam(idParam),
+    zQuery(CursorQuery),
     async (c) => {
       const ownerUserId = requestOwner(c);
+      const { cursor, limit } = c.req.valid('query');
       const assignment = await loadAssignment(ownerUserId, c.req.valid('param').id);
-      const rows = await db
-        .select()
-        .from(athenaTrigger)
-        .where(
-          and(
-            eq(athenaTrigger.assignmentId, assignment.id),
-            eq(athenaTrigger.ownerUserId, ownerUserId),
-          ),
-        )
-        .orderBy(asc(athenaTrigger.createdAt));
-      return ok(c, z.array(AthenaTriggerOut), rows.map(toTriggerOut));
+      const rows = await listPersonalAthenaTriggers(ownerUserId, assignment.id, { cursor, limit });
+      const page = personalAthenaPage(rows, limit, toTriggerOut);
+      return ok(c, pageOf(AthenaTriggerOut), page);
     },
   )
   .post(
@@ -594,7 +585,7 @@ const personalAthena = new Hono<AppEnv>()
         .returning();
       /* v8 ignore next -- @preserve defensive: insert always returns a row */
       if (!triggerRow) throw new Error('trigger insert returned no row');
-      return created(c, AthenaTriggerOut, toTriggerOut(triggerRow));
+      return created(c, AthenaTriggerOut, toTriggerOut(triggerRow), null);
     },
   )
   .patch(

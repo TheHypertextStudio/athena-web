@@ -24,6 +24,7 @@ import { type JSX, useState } from 'react';
 
 import { EditableTitle } from '@/components/editor/editable-title';
 import { api } from '@/lib/api';
+import { fetchAllMembers, fetchAllRoles } from '@/lib/org-collection-pages';
 import { apiQueryOptions, queryKeys, STALE, useApiListQuery } from '@/lib/query';
 import { useOrgCapability } from '@/lib/use-org-capability';
 import { useRenameTask } from '@/lib/use-rename-task';
@@ -52,7 +53,7 @@ export function LinkedTaskRow({ itemId, link, onOpenTask }: LinkedTaskRowProps):
   const membersQ = useApiListQuery(
     apiQueryOptions(
       queryKeys.members(link.organizationId),
-      () => api.v1.orgs[':orgId'].members.$get({ param: { orgId: link.organizationId } }),
+      () => fetchAllMembers(api, link.organizationId),
       'Could not load members.',
       { staleTime: STALE.static },
     ),
@@ -60,7 +61,7 @@ export function LinkedTaskRow({ itemId, link, onOpenTask }: LinkedTaskRowProps):
   const rolesQ = useApiListQuery(
     apiQueryOptions(
       queryKeys.roles(link.organizationId),
-      () => api.v1.orgs[':orgId'].roles.$get({ param: { orgId: link.organizationId } }),
+      () => fetchAllRoles(api, link.organizationId),
       'Could not load roles.',
       { staleTime: STALE.static },
     ),

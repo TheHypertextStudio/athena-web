@@ -15,6 +15,7 @@ import { useOrgCapability } from './use-org-capability';
 import { useRenameTask } from './use-rename-task';
 import { type CategoryOfState, CATEGORY_LABEL, categoryRank } from './work-category';
 import { myWorkDefs } from './my-work-defs';
+import { fetchAllRoles } from './org-collection-pages';
 import { STALE, apiQueryOptions, queryKeys, useApiQuery } from './query';
 
 /** Shared frozen empty list for the slice fallbacks (stable identity, no per-render allocation). */
@@ -83,7 +84,7 @@ export function useMyWork(
   const rolesQ = useApiQuery(
     apiQueryOptions(
       queryKeys.roles(orgId),
-      () => api.v1.orgs[':orgId'].roles.$get({ param: { orgId } }),
+      () => fetchAllRoles(api, orgId),
       'Could not load roles.',
       { staleTime: STALE.static },
     ),

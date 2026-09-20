@@ -1,10 +1,4 @@
-/**
- * `@docket/api` — normalized recurrence-series authoring, lifecycle, and serialization.
- *
- * @remarks
- * Process revisions and trigger revisions remain immutable. Series lifecycle columns decide whether
- * new work may appear; occurrence exceptions record one-off decisions without rewriting cadence.
- */
+/** Recurrence authoring with immutable revisions and explicit occurrence exceptions. */
 import {
   processDefinition,
   processInstance,
@@ -43,6 +37,7 @@ import { ConflictError, NotFoundError } from '../../error';
 import { compareCalendarDates } from '@docket/planning/calendar-date';
 import { materializeOccurrence, type MaterializedOccurrence } from './materialize';
 import type { TaskStateMutation } from '../task-state';
+import { listRecurrenceSeriesIds } from './list-store';
 
 /** Database transaction surface shared by atomic recurrence authoring operations. */
 export type RecurrenceTransaction = Parameters<Parameters<Database['transaction']>[0]>[0];
@@ -399,13 +394,7 @@ export async function createRecurrenceSeries(
   return loadRecurrenceSeries(database, command.organizationId, seriesId);
 }
 
-/**
- * Create a series and its first immutable trigger revision inside a caller-owned transaction.
- *
- * @remarks
- * Calendar bindings use this seam so the recurrence series and its stable provider binding are
- * committed together. Ordinary route authoring goes through {@link createRecurrenceSeries}.
- */
+/** Create a series and first trigger revision inside the caller's calendar-binding transaction. */
 export async function createRecurrenceSeriesInTransaction(
   tx: RecurrenceTransaction,
   command: CreateRecurrenceSeriesCommand,
@@ -506,14 +495,9 @@ export async function loadRecurrenceSeries(
 export async function listRecurrenceSeries(
   database: Database,
   organizationId: string,
+  pagination: { readonly cursor?: string | undefined; readonly limit: number },
 ): Promise<z.input<typeof RecurrenceSeriesOut>[]> {
-  const rows = await database
-    .select({ id: recurrenceSeries.id })
-    .from(recurrenceSeries)
-    .where(
-      and(eq(recurrenceSeries.organizationId, organizationId), isNull(recurrenceSeries.archivedAt)),
-    )
-    .orderBy(desc(recurrenceSeries.updatedAt));
+  const rows = await listRecurrenceSeriesIds(database, organizationId, pagination);
   return Promise.all(rows.map((row) => loadRecurrenceSeries(database, organizationId, row.id)));
 }
 

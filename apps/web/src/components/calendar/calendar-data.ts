@@ -91,6 +91,7 @@ export function calendarItemRelationsDef(itemId: string) {
     () =>
       api.v1.me.calendar.items[':id'].relations.$get({
         param: { id: itemId },
+        query: { limit: '100' },
       }),
     'Could not load related calendar items.',
     { staleTime: STALE.volatile },

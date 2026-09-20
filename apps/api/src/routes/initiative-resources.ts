@@ -3,7 +3,7 @@ import { attachment, db, initiativeLabel, label } from '@docket/db';
 import { AttachmentOut, AttachmentRemoved } from '@docket/work/attachment-contract';
 import { InitiativeResourceCreate } from '@docket/work/initiative-contract';
 import { LabelOut } from '@docket/work/label-contract';
-import { pageOf } from '../contracts/pagination';
+import { CursorQuery, pageOf } from '../contracts/pagination';
 import { and, asc, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
@@ -11,8 +11,9 @@ import { z } from 'zod';
 import type { AppEnv } from '../context';
 import { NotFoundError } from '../error';
 import { created, ok } from '../lib/ok';
+import { pageResult, pageResultById, seekAfter, seekAfterId } from '../lib/list-cursor';
 import { apiDoc } from '../lib/openapi-route';
-import { zJson, zParam } from '../lib/validate';
+import { zJson, zParam, zQuery } from '../lib/validate';
 import { capabilityGuard } from '../permissions/capability-guard';
 import { idParam, loadInitiative } from './initiative-helpers';
 
@@ -45,13 +46,15 @@ const initiativeResources = new Hono<AppEnv>()
       tag: 'Initiatives',
       summary: 'List labels attached to an Initiative',
       description:
-        'Lists only the labels currently attached to this Initiative. The workspace label catalog remains a separate, on-demand picker read.',
-      response: z.array(LabelOut),
+        'Lists labels attached to this Initiative in label-id order. Pages default to 50 items, accept at most 100, and omit nextCursor at exhaustion.',
+      response: pageOf(LabelOut),
     }),
     zParam(idParam),
+    zQuery(CursorQuery),
     async (c) => {
       const { orgId } = c.get('actorCtx');
       const { id } = c.req.valid('param');
+      const { cursor, limit } = c.req.valid('query');
       await loadInitiative(orgId, id);
       const rows = await db
         .select({ row: label })
@@ -62,22 +65,22 @@ const initiativeResources = new Hono<AppEnv>()
             eq(initiativeLabel.initiativeId, id),
             eq(initiativeLabel.organizationId, orgId),
             eq(label.organizationId, orgId),
+            seekAfterId(label.id, cursor, 'asc'),
           ),
-        );
-      return ok(
-        c,
-        z.array(LabelOut),
-        rows.map(({ row }) => ({
-          id: row.id,
-          organizationId: row.organizationId,
-          name: row.name,
-          color: row.color,
-          groupId: row.groupId,
-          teamId: row.teamId,
-          external: row.externalId !== null,
-          createdAt: row.createdAt.toISOString(),
-        })),
-      );
+        )
+        .orderBy(asc(label.id))
+        .limit(limit + 1);
+      const items = rows.map(({ row }) => ({
+        id: row.id,
+        organizationId: row.organizationId,
+        name: row.name,
+        color: row.color,
+        groupId: row.groupId,
+        teamId: row.teamId,
+        external: row.externalId !== null,
+        createdAt: row.createdAt.toISOString(),
+      }));
+      return ok(c, pageOf(LabelOut), pageResultById(items, limit));
     },
   )
   .get(
@@ -86,13 +89,15 @@ const initiativeResources = new Hono<AppEnv>()
       tag: 'Initiatives',
       summary: 'List Initiative URL resources',
       description:
-        'Lists the ordered URL resources attached directly to the selected Initiative in its owning workspace; file attachments are not supported on this surface.',
+        'Lists URL resources attached directly to the selected Initiative in createdAt ASC, id ASC order. Pages default to 50 items, accept at most 100, and omit nextCursor at exhaustion. File attachments are not supported on this surface.',
       response: pageOf(AttachmentOut),
     }),
     zParam(idParam),
+    zQuery(CursorQuery),
     async (c) => {
       const { orgId } = c.get('actorCtx');
       const { id } = c.req.valid('param');
+      const { cursor, limit } = c.req.valid('query');
       await loadInitiative(orgId, id);
       const rows = await db
         .select()
@@ -103,10 +108,16 @@ const initiativeResources = new Hono<AppEnv>()
             eq(attachment.subjectType, 'initiative'),
             eq(attachment.subjectId, id),
             eq(attachment.kind, 'url'),
+            seekAfter(attachment.createdAt, attachment.id, cursor, 'asc'),
           ),
         )
-        .orderBy(asc(attachment.createdAt));
-      return ok(c, pageOf(AttachmentOut), { items: rows.map(attachmentOut) });
+        .orderBy(asc(attachment.createdAt), asc(attachment.id))
+        .limit(limit + 1);
+      return ok(
+        c,
+        pageOf(AttachmentOut),
+        pageResult(rows.map(attachmentOut), limit, (item) => new Date(item.createdAt)),
+      );
     },
   )
   .post(
@@ -143,7 +154,7 @@ const initiativeResources = new Hono<AppEnv>()
       const row = rows[0];
       /* v8 ignore next -- @preserve defensive: insert always returns one row */
       if (!row) throw new Error('Initiative resource insert returned no row');
-      return created(c, AttachmentOut, attachmentOut(row));
+      return created(c, AttachmentOut, attachmentOut(row), null);
     },
   )
   .delete(

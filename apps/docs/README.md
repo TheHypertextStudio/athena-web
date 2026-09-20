@@ -1,7 +1,7 @@
 # `@docket/docs` — the public documentation site
 
 Mintlify renders this MDX and serves it at
-[`docket.hypertext.studio/docs`](https://docket.hypertext.studio/docs). Mintlify deploys the
+[`clearthedocket.com/docs`](https://clearthedocket.com/docs). Mintlify deploys the
 directory after a push to `main`.
 
 ## Working on the site

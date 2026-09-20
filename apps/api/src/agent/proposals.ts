@@ -17,15 +17,36 @@ import type {
   ProposalGroupOut,
   ProposalItemOut,
 } from '@docket/athena/agent-contract';
-import { and, asc, eq, isNotNull, isNull } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNotNull, isNull } from 'drizzle-orm';
 import type { z } from 'zod';
 
 import { DOCKET_CONNECTION } from './toolbox';
 import { ConflictError, NotFoundError } from '../error';
 import { deriveCaptureTitle } from '../lib/capture-title';
+import { seekAfterId } from '../lib/list-cursor';
 import type { ActivityRow } from '../routes/agent-session-helpers';
 
 export { approvalOutcome } from './approval-outcome';
+
+/** Load the newest still-proposed action in stable activity order. */
+export async function latestProposedAction(
+  sessionId: string,
+): Promise<typeof sessionActivity.$inferSelect> {
+  const rows = await db
+    .select()
+    .from(sessionActivity)
+    .where(
+      and(
+        eq(sessionActivity.sessionId, sessionId),
+        eq(sessionActivity.type, 'action'),
+        eq(sessionActivity.approvalStatus, 'proposed'),
+      ),
+    )
+    .orderBy(desc(sessionActivity.createdAt), desc(sessionActivity.id))
+    .limit(1);
+  if (!rows[0]) throw new ConflictError('No proposed action awaiting approval');
+  return rows[0];
+}
 
 /** Return the workspace declared by a stored proposal tool input, when it has one. */
 export function proposalInputOrganizationId(input: unknown): string | null {
@@ -168,10 +189,31 @@ function toProposalItem(row: ActivityRow): z.input<typeof ProposalItemOut> | nul
  * List a session's pending proposal groups, oldest-first, ghost-projected.
  *
  * @param sessionId - The owning session.
+ * @param pagination - The opaque group cursor and requested page size.
  */
 export async function listProposalGroups(
   sessionId: string,
+  pagination: { readonly cursor?: string | undefined; readonly limit: number } = { limit: 50 },
 ): Promise<z.input<typeof ProposalGroupOut>[]> {
+  const groupRows = await db
+    .selectDistinct({ proposalGroupId: sessionActivity.proposalGroupId })
+    .from(sessionActivity)
+    .where(
+      and(
+        eq(sessionActivity.sessionId, sessionId),
+        eq(sessionActivity.type, 'action'),
+        eq(sessionActivity.approvalStatus, 'proposed'),
+        isNotNull(sessionActivity.proposalGroupId),
+        seekAfterId(sessionActivity.proposalGroupId, pagination.cursor, 'asc'),
+      ),
+    )
+    .orderBy(asc(sessionActivity.proposalGroupId))
+    .limit(pagination.limit + 1);
+  const groupIds = groupRows.flatMap(({ proposalGroupId }) =>
+    proposalGroupId ? [proposalGroupId] : [],
+  );
+  if (groupIds.length === 0) return [];
+
   const rows = await db
     .select()
     .from(sessionActivity)
@@ -180,10 +222,14 @@ export async function listProposalGroups(
         eq(sessionActivity.sessionId, sessionId),
         eq(sessionActivity.type, 'action'),
         eq(sessionActivity.approvalStatus, 'proposed'),
-        isNotNull(sessionActivity.proposalGroupId),
+        inArray(sessionActivity.proposalGroupId, groupIds),
       ),
     )
-    .orderBy(asc(sessionActivity.createdAt));
+    .orderBy(
+      asc(sessionActivity.proposalGroupId),
+      asc(sessionActivity.createdAt),
+      asc(sessionActivity.id),
+    );
 
   const groups = new Map<string, z.input<typeof ProposalGroupOut>>();
   for (const row of rows) {

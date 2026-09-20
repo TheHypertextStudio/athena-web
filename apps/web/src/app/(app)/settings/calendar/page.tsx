@@ -91,6 +91,19 @@ function nearestHourHeight(stored: number): number {
   );
 }
 
+function calendarSharesDef(workspaceId: string) {
+  return apiQueryOptions(
+    queryKeys.calendarShares(workspaceId || 'none'),
+    () =>
+      api.v1.me.calendar.shares[':organizationId'].$get({
+        param: { organizationId: workspaceId },
+        query: { limit: '100' },
+      }),
+    'Could not load calendar sharing.',
+    { enabled: Boolean(workspaceId), staleTime: STALE.standard },
+  );
+}
+
 /** Calendar settings route. */
 export default function CalendarSettingsPage(): JSX.Element {
   const { orgs } = useActiveOrg();
@@ -112,17 +125,7 @@ export default function CalendarSettingsPage(): JSX.Element {
     ),
   );
   const layersQ = useApiListQuery(calendarLayersDef());
-  const sharesQ = useApiListQuery(
-    apiQueryOptions(
-      queryKeys.calendarShares(workspaceId || 'none'),
-      () =>
-        api.v1.me.calendar.shares[':organizationId'].$get({
-          param: { organizationId: workspaceId },
-        }),
-      'Could not load calendar sharing.',
-      { enabled: Boolean(workspaceId), staleTime: STALE.standard },
-    ),
-  );
+  const sharesQ = useApiListQuery(calendarSharesDef(workspaceId));
 
   useEffect(() => {
     if (!preferencesQ.data) return;

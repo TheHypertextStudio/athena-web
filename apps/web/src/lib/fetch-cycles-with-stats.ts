@@ -1,6 +1,7 @@
 import type { CycleOut, CycleStats } from '@docket/work/cycle-contract';
 
 import type { api as ApiClient } from '@/lib/api';
+import { fetchAllCycles } from '@/lib/org-collection-pages';
 import { rpcErrorResponse, type RpcResponse } from '@/lib/query-core';
 
 /**
@@ -42,10 +43,7 @@ export function fetchCyclesWithStats(
   return async () => {
     // `roll=true`: the list endpoint auto-materializes every team's window in-process before
     // listing (one call), replacing the old per-team `/current` ensure fan-out.
-    const listRes = await client.v1.orgs[':orgId'].cycles.$get({
-      param: { orgId },
-      query: { roll: 'true' },
-    });
+    const listRes = await fetchAllCycles(client, orgId, { roll: 'true' });
     if (!listRes.ok) {
       return rpcErrorResponse<CyclesWithStats>(listRes);
     }

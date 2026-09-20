@@ -41,6 +41,7 @@ import { ConfirmDestructiveDialog, EmptyState, InlineBanner } from '@docket/ui/c
 import { SettingsGroup } from './settings-group';
 import { SETTINGS_NODES } from './settings-capabilities';
 import { api } from '@/lib/api';
+import { fetchAllMcpIntegrations } from '@/lib/org-collection-pages';
 import { UserFacingError } from '@/lib/problem';
 import {
   apiQueryOptions,
@@ -62,12 +63,11 @@ export interface McpConnectorsSectionProps {
 /** The MCP connectors settings section: list + add-a-server form. */
 export function McpConnectorsSection({ orgId, canManage }: McpConnectorsSectionProps): JSX.Element {
   const searchParams = useAppSearchParams();
-  const mcpReturn = searchParams.get('mcp');
   const [addOpen, setAddOpen] = useState(false);
   const listQ = useApiQuery(
     apiQueryOptions(
       queryKeys.mcpIntegrations(orgId),
-      () => api.v1.orgs[':orgId'].integrations.mcp.$get({ param: { orgId } }),
+      () => fetchAllMcpIntegrations(api, orgId),
       'Could not load your MCP connectors.',
       { staleTime: STALE.volatile },
     ),
@@ -79,7 +79,7 @@ export function McpConnectorsSection({ orgId, canManage }: McpConnectorsSectionP
       action={
         // While nothing is connected the empty state carries the action, so the header does not
         // offer the same thing twice.
-        canManage && (listQ.data?.length ?? 0) > 0 ? (
+        canManage && (listQ.data?.items.length ?? 0) > 0 ? (
           <Button
             type="button"
             variant="secondary"
@@ -93,12 +93,12 @@ export function McpConnectorsSection({ orgId, canManage }: McpConnectorsSectionP
         ) : undefined
       }
     >
-      {mcpReturn === 'connected' ? (
+      {searchParams.get('mcp') === 'connected' ? (
         <p role="status" className="text-success text-body-medium">
           Tool connected.
         </p>
       ) : null}
-      {mcpReturn === 'error' ? (
+      {searchParams.get('mcp') === 'error' ? (
         <InlineBanner tone="critical" title="Connection was not approved.">
           Connect the server again and approve access when it asks.
         </InlineBanner>
@@ -111,9 +111,9 @@ export function McpConnectorsSection({ orgId, canManage }: McpConnectorsSectionP
           <Skeleton className="h-16 w-full rounded-xl" />
           <Skeleton className="h-16 w-full rounded-xl" />
         </div>
-      ) : listQ.data && listQ.data.length > 0 ? (
+      ) : listQ.data && listQ.data.items.length > 0 ? (
         <ul className="flex flex-col gap-2">
-          {listQ.data.map((mcp) => (
+          {listQ.data.items.map((mcp) => (
             <McpConnectorRow key={mcp.id} orgId={orgId} mcp={mcp} canManage={canManage} />
           ))}
         </ul>

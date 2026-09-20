@@ -2,7 +2,7 @@
 import { attachment, db } from '@docket/db';
 import { AttachmentOut, AttachmentRemoved } from '@docket/work/attachment-contract';
 import { ProjectResourceCreate } from '../contracts/project';
-import { pageOf } from '../contracts/pagination';
+import { CursorQuery, pageOf } from '../contracts/pagination';
 import { and, asc, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
@@ -10,9 +10,10 @@ import { z } from 'zod';
 import type { AppEnv } from '../context';
 import { NotFoundError } from '../error';
 import { created, ok } from '../lib/ok';
+import { pageResult, seekAfter } from '../lib/list-cursor';
 import { assertProjectInOrg } from '../lib/project-guard';
 import { apiDoc } from '../lib/openapi-route';
-import { zJson, zParam } from '../lib/validate';
+import { zJson, zParam, zQuery } from '../lib/validate';
 import { capabilityGuard } from '../permissions/capability-guard';
 
 const idParam = z.object({ id: z.string() });
@@ -44,13 +45,16 @@ const projectResources = new Hono<AppEnv>()
     apiDoc({
       tag: 'Projects',
       summary: 'List Project URL resources',
-      description: 'Lists URL resources attached directly to the selected Project.',
+      description:
+        'Lists URL resources attached directly to the selected Project in createdAt ASC, id ASC order. Pages default to 50 items, accept at most 100, and omit nextCursor at exhaustion. Reuse a cursor only for the same Project.',
       response: pageOf(AttachmentOut),
     }),
     zParam(idParam),
+    zQuery(CursorQuery),
     async (c) => {
       const { orgId } = c.get('actorCtx');
       const { id } = c.req.valid('param');
+      const { cursor, limit } = c.req.valid('query');
       await assertProjectInOrg(orgId, id);
       const rows = await db
         .select()
@@ -61,10 +65,16 @@ const projectResources = new Hono<AppEnv>()
             eq(attachment.subjectType, 'project'),
             eq(attachment.subjectId, id),
             eq(attachment.kind, 'url'),
+            seekAfter(attachment.createdAt, attachment.id, cursor, 'asc'),
           ),
         )
-        .orderBy(asc(attachment.createdAt));
-      return ok(c, pageOf(AttachmentOut), { items: rows.map(attachmentOut) });
+        .orderBy(asc(attachment.createdAt), asc(attachment.id))
+        .limit(limit + 1);
+      return ok(
+        c,
+        pageOf(AttachmentOut),
+        pageResult(rows.map(attachmentOut), limit, (item) => new Date(item.createdAt)),
+      );
     },
   )
   .post(
@@ -100,7 +110,7 @@ const projectResources = new Hono<AppEnv>()
       const row = rows[0];
       /* v8 ignore next -- @preserve the insert returns its single created row */
       if (!row) throw new Error('Project resource insert returned no row');
-      return created(c, AttachmentOut, attachmentOut(row));
+      return created(c, AttachmentOut, attachmentOut(row), null);
     },
   )
   .delete(

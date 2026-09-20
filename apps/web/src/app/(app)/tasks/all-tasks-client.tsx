@@ -196,7 +196,11 @@ function TaskRow({ task, orgLabel }: TaskRowProps): JSX.Element {
   const membersQ = useApiListQuery(
     apiQueryOptions(
       queryKeys.members(task.organizationId),
-      () => api.v1.orgs[':orgId'].members.$get({ param: { orgId: task.organizationId } }),
+      () =>
+        api.v1.orgs[':orgId'].members.$get({
+          param: { orgId: task.organizationId },
+          query: { limit: '100' },
+        }),
       'Could not load members.',
       { staleTime: STALE.static },
     ),
@@ -204,7 +208,11 @@ function TaskRow({ task, orgLabel }: TaskRowProps): JSX.Element {
   const rolesQ = useApiListQuery(
     apiQueryOptions(
       queryKeys.roles(task.organizationId),
-      () => api.v1.orgs[':orgId'].roles.$get({ param: { orgId: task.organizationId } }),
+      () =>
+        api.v1.orgs[':orgId'].roles.$get({
+          param: { orgId: task.organizationId },
+          query: { limit: '100' },
+        }),
       'Could not load roles.',
       { staleTime: STALE.static },
     ),

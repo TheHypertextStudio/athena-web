@@ -6,7 +6,7 @@ import type { Capability } from '@docket/identity-access/capabilities';
 import type { WorkStatusEntityType } from '@docket/work/work-status-contract';
 import { and, eq } from 'drizzle-orm';
 
-import type { ActorCtx, AppEnv, AuthSession } from '../../src/context';
+import type { ActorCtx, AppEnv, AuthSession, CallerPrincipal } from '../../src/context';
 import { getContainer } from '../../src/container';
 import { onError } from '../../src/error';
 import { flushDeferredWork } from '../../src/lib/after-response';
@@ -16,6 +16,17 @@ import { getMigratedDb } from './db';
 type Db = typeof DbModule.db;
 
 let dbmod: typeof DbModule | undefined;
+
+/** Build the session principal installed by the production principal middleware. */
+export function principalForSession(session: AuthSession): CallerPrincipal | null {
+  if (!session) return null;
+  return {
+    kind: 'session',
+    userId: session.user.id,
+    user: session.user,
+    session: session.session,
+  };
+}
 
 /**
  * Load (once), migrate, and return the shared `@docket/db` module + in-memory PGlite.
@@ -87,7 +98,8 @@ export function appWithActor(
 ) {
   const app = new Hono<AppEnv>();
   app.use('*', async (c, next) => {
-    if (session) c.set('session', session);
+    c.set('session', session);
+    c.set('principal', principalForSession(session));
     const ctx: ActorCtx = { orgId, actorId, roleId, capabilities };
     c.set('actorCtx', ctx);
     await next();
@@ -127,6 +139,7 @@ export function appWithSession(router: unknown, session: AuthSession) {
   const app = new Hono<AppEnv>();
   app.use('*', async (c, next) => {
     c.set('session', session);
+    c.set('principal', principalForSession(session));
     await next();
   });
   app.route('/', router as never);

@@ -20,6 +20,7 @@ import {
 import { createTaskHierarchy } from '@/components/tasks/task-hierarchy-model';
 import { useTaskHierarchyMutation } from '@/components/tasks/use-task-hierarchy-mutation';
 import { api } from '@/lib/api';
+import { fetchAllProjects, fetchAllTasks, fetchAllTeams } from '@/lib/org-collection-pages';
 import { userErrorMessage } from '@/lib/problem';
 import { apiQueryOptions, queryKeys, STALE, useApiListQuery } from '@/lib/query';
 
@@ -38,7 +39,7 @@ export function TaskHierarchyPickerOverlay({
   const tasksQ = useApiListQuery(
     apiQueryOptions(
       queryKeys.tasks(organizationId),
-      () => api.v1.orgs[':orgId'].tasks.$get({ param: { orgId: organizationId }, query: {} }),
+      () => fetchAllTasks(api, organizationId),
       'Could not load tasks.',
       { staleTime: STALE.volatile },
     ),
@@ -46,7 +47,7 @@ export function TaskHierarchyPickerOverlay({
   const projectsQ = useApiListQuery(
     apiQueryOptions(
       queryKeys.projects(organizationId),
-      () => api.v1.orgs[':orgId'].projects.$get({ param: { orgId: organizationId }, query: {} }),
+      () => fetchAllProjects(api, organizationId),
       'Could not load projects.',
       { staleTime: STALE.static },
     ),
@@ -54,7 +55,7 @@ export function TaskHierarchyPickerOverlay({
   const teamsQ = useApiListQuery(
     apiQueryOptions(
       queryKeys.teams(organizationId),
-      () => api.v1.orgs[':orgId'].teams.$get({ param: { orgId: organizationId } }),
+      () => fetchAllTeams(api, organizationId),
       'Could not load teams.',
       { staleTime: STALE.static },
     ),

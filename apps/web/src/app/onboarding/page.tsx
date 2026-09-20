@@ -85,7 +85,7 @@ export default function OnboardingPage(): JSX.Element {
     void (async () => {
       try {
         const list = await unwrap(
-          () => api.v1.me.passkeys.$get(),
+          () => api.v1.me.passkeys.$get({ query: {} }),
           'Could not check your passkeys.',
         );
         if (list.items.length === 0) setNeedsPasskey(true);

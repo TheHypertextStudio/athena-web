@@ -15,11 +15,23 @@
 import { type Capability } from '@docket/authz';
 import { describeRoute, resolver } from 'hono-openapi';
 import type { DescribeRouteOptions } from 'hono-openapi';
-import type { z } from 'zod';
+import { z } from 'zod';
 
 import type { StatusCode } from 'hono/utils/http-status';
+import type { MiddlewareHandler } from 'hono';
 
-import { EVENT_STREAM_MEDIA_TYPE, producesEventStream } from './media-types';
+import type { AppEnv } from '../context';
+import { ApiError } from '../error';
+import {
+  API_OPERATION_CONTRACT,
+  assertApiOperationContract,
+  renderOperationNarrative,
+  type ApiOperationContract,
+  type ApiSuccess,
+} from './api-operation-contract';
+import { idempotencyFor } from './idempotency';
+import { operationMediaTypes } from './media-types';
+import { conditionalWriteFor } from './work-schedule-conditional';
 
 export { describeRoute, resolver };
 
@@ -74,7 +86,7 @@ export interface ApiDocOptions {
  * )
  * ```
  */
-export function apiDoc(opts: ApiDocOptions) {
+function legacyApiDoc(opts: ApiDocOptions): MiddlewareHandler<AppEnv> {
   const statuses = opts.status === undefined ? [200] : [opts.status].flat();
   const response = opts.response;
   const spec: DescribeRouteOptions = {
@@ -101,32 +113,280 @@ export function apiDoc(opts: ApiDocOptions) {
   return describeRoute(spec);
 }
 
-/** Options for {@link describeEventStream}. */
-export interface EventStreamDocOptions extends DescribeRouteOptions {
-  /** Description of the `200` event stream (default 'Server-Sent Events.'). */
-  streamDescription?: string;
+function isOperationContract(
+  options: ApiDocOptions | ApiOperationContract,
+): options is ApiOperationContract {
+  return 'operationId' in options;
+}
+
+type DocumentedSchema =
+  ReturnType<typeof resolver> | { readonly type: 'string'; readonly format?: 'uri' | 'binary' };
+
+interface DocumentedResponse {
+  readonly description: string;
+  readonly headers?: Readonly<
+    Record<
+      string,
+      {
+        readonly description: string;
+        readonly schema: DocumentedSchema;
+      }
+    >
+  >;
+  readonly content?: Readonly<
+    Record<
+      string,
+      {
+        readonly schema: DocumentedSchema;
+        readonly examples?: Readonly<
+          Record<string, { readonly summary: string; readonly value: string }>
+        >;
+        readonly 'x-docket-events'?: readonly {
+          readonly name: string;
+          readonly description: string;
+          readonly schema: unknown;
+          readonly example: string;
+        }[];
+      }
+    >
+  >;
+}
+
+function successResponse(outcome: ApiSuccess): DocumentedResponse {
+  switch (outcome.kind) {
+    case 'json':
+      return {
+        description: outcome.description,
+        ...(outcome.location
+          ? {
+              headers: {
+                Location: {
+                  description:
+                    outcome.location === 'monitor'
+                      ? 'Absolute URL of the operation status monitor.'
+                      : 'Absolute URL of the created resource.',
+                  schema: { type: 'string', format: 'uri' },
+                },
+              },
+            }
+          : {}),
+        content: { 'application/json': { schema: resolver(outcome.schema) } },
+      };
+    case 'empty':
+      return { description: outcome.description };
+    case 'binary':
+      return {
+        description: outcome.description,
+        headers: {
+          'Content-Disposition': {
+            description: `The response is delivered ${outcome.disposition}.`,
+            schema: { type: 'string' },
+          },
+        },
+        content: Object.fromEntries(
+          outcome.mediaTypes.map((mediaType) => [
+            mediaType,
+            { schema: { type: 'string', format: 'binary' } },
+          ]),
+        ),
+      };
+    case 'sse':
+      return {
+        description: outcome.description,
+        content: {
+          'text/event-stream': {
+            schema: { type: 'string' },
+            examples: Object.fromEntries(
+              outcome.events.map((event) => [
+                event.name,
+                { summary: event.description, value: event.example },
+              ]),
+            ),
+            'x-docket-events': outcome.events.map((event) => ({
+              name: event.name,
+              description: event.description,
+              schema: z.toJSONSchema(event.schema, { io: 'output' }),
+              example: event.example,
+            })),
+          },
+        },
+      };
+  }
+}
+
+function strictResponses(
+  contract: ApiOperationContract,
+): Readonly<Record<string, DocumentedResponse>> {
+  const responses: Record<string, DocumentedResponse> = {};
+  for (const outcome of contract.success) {
+    const response = successResponse(outcome);
+    const prior = responses[String(outcome.status)];
+    responses[String(outcome.status)] = prior
+      ? {
+          ...prior,
+          description: `${prior.description} ${response.description}`,
+          headers: { ...prior.headers, ...response.headers },
+          content: { ...prior.content, ...response.content },
+        }
+      : response;
+  }
+  return responses;
+}
+
+function streamResume(
+  contract: ApiOperationContract,
+): Extract<ApiSuccess, { readonly kind: 'sse' }>['resume'] | undefined {
+  return contract.success.find(
+    (outcome): outcome is Extract<ApiSuccess, { readonly kind: 'sse' }> => outcome.kind === 'sse',
+  )?.resume;
+}
+
+function streamResumeParameters(
+  contract: ApiOperationContract,
+): DescribeRouteOptions['parameters'] | undefined {
+  const resume = streamResume(contract);
+  if (resume?.kind !== 'last-event-id') return undefined;
+  return [
+    {
+      name: resume.header,
+      in: 'header',
+      required: false,
+      description: `${resume.description} Replay window: ${resume.replayWindow}`,
+      schema: { type: 'string' },
+    },
+  ];
+}
+
+function mediaType(response: Response): string {
+  return (response.headers.get('Content-Type')?.split(';')[0] ?? '').trim().toLowerCase();
+}
+
+function hasDeclaredLocation(response: Response, outcome: ApiSuccess): boolean {
+  const value = response.headers.get('Location');
+  if (outcome.kind !== 'json' || outcome.location === undefined) return value === null;
+  if (value === null) return false;
+  try {
+    const url = new URL(value);
+    return url.protocol === 'http:' || url.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
+async function jsonResponseMatches(
+  response: Response,
+  outcome: Extract<ApiSuccess, { readonly kind: 'json' }>,
+): Promise<boolean> {
+  if (!/^application\/(?:[^;+]+\+)?json$/u.test(mediaType(response))) return false;
+  try {
+    return outcome.schema.safeParse(await response.clone().json()).success;
+  } catch {
+    return false;
+  }
+}
+
+function binaryResponseMatches(
+  response: Response,
+  outcome: Extract<ApiSuccess, { readonly kind: 'binary' }>,
+): boolean {
+  const disposition = response.headers.get('Content-Disposition')?.trim().toLowerCase();
+  const declaredDisposition = new RegExp(`^${outcome.disposition}(?:;|$)`, 'u');
+  return (
+    outcome.mediaTypes.map((value) => value.toLowerCase()).includes(mediaType(response)) &&
+    declaredDisposition.test(disposition ?? '')
+  );
+}
+
+function streamResponseMatches(response: Response): boolean {
+  return (
+    mediaType(response) === 'text/event-stream' &&
+    response.headers.get('Cache-Control')?.toLowerCase().includes('no-transform') === true &&
+    response.headers.get('X-Accel-Buffering')?.toLowerCase() === 'no' &&
+    !response.headers.has('Content-Encoding') &&
+    !response.headers.has('ETag')
+  );
+}
+
+async function responseMatchesOutcome(response: Response, outcome: ApiSuccess): Promise<boolean> {
+  if (response.status !== outcome.status || !hasDeclaredLocation(response, outcome)) return false;
+  if (outcome.kind === 'json') return jsonResponseMatches(response, outcome);
+  if (outcome.kind === 'empty') return response.body === null;
+  if (outcome.kind === 'binary') return binaryResponseMatches(response, outcome);
+  return streamResponseMatches(response);
+}
+
+async function assertRuntimeResponse(
+  context: Parameters<MiddlewareHandler<AppEnv>>[0],
+  contract: ApiOperationContract,
+): Promise<void> {
+  if (context.res.status >= 400) return;
+  const candidates = contract.success.filter((outcome) => outcome.status === context.res.status);
+  for (const outcome of candidates) {
+    if (await responseMatchesOutcome(context.res, outcome)) return;
+  }
+  console.error(
+    JSON.stringify({
+      level: 'error',
+      source: 'api',
+      event: 'response_contract_violation',
+      operationId: contract.operationId,
+      status: context.res.status,
+      mediaType: mediaType(context.res),
+    }),
+  );
+  throw new ApiError(500, 'internal', 'Response did not match its declared operation contract');
+}
+
+function strictApiDoc(contract: ApiOperationContract): MiddlewareHandler<AppEnv> {
+  assertApiOperationContract(contract);
+  const resume = streamResume(contract);
+  const parameters = streamResumeParameters(contract);
+  const routeOptions = {
+    operationId: contract.operationId,
+    summary: contract.summary,
+    tags: [contract.tag],
+    description: renderOperationNarrative(contract),
+    // `openapi-types` does not model vendor extensions inside media-type objects. The value is
+    // otherwise a normal response map, and generation retains `x-docket-events` verbatim.
+    responses: strictResponses(contract) as NonNullable<DescribeRouteOptions['responses']>,
+    ...(parameters ? { parameters } : {}),
+    ...(contract.capability ? { 'x-docket-capability': contract.capability } : {}),
+    'x-docket-access': contract.access,
+    'x-docket-errors': contract.errors,
+    'x-docket-conditional-read': contract.conditionalRead,
+    'x-docket-conditional-write': contract.conditionalWrite,
+    'x-docket-idempotency': contract.idempotency,
+    'x-docket-related-operations': contract.related,
+    ...(resume ? { 'x-docket-stream-resume': resume } : {}),
+  } as unknown as DescribeRouteOptions;
+  const documented = describeRoute(routeOptions);
+  const negotiate = operationMediaTypes(contract);
+  const enforceConditionalWrite = conditionalWriteFor(contract.conditionalWrite);
+  const enforceIdempotency = idempotencyFor(contract.idempotency);
+  const runtime: MiddlewareHandler<AppEnv> = async (context, next) => {
+    await negotiate(context, async () => {
+      await enforceConditionalWrite(context, async () => {
+        const response = await enforceIdempotency(context, async () => {
+          await next();
+          await assertRuntimeResponse(context, contract);
+        });
+        if (response !== undefined) {
+          if (!context.finalized) context.res = response;
+          await assertRuntimeResponse(context, contract);
+        }
+      });
+    });
+  };
+  return Object.assign(runtime, documented, {
+    [API_OPERATION_CONTRACT]: contract,
+  });
 }
 
 /**
- * Build the `describeRoute` middleware for a Server-Sent Events route.
+ * Build one operation's documentation and runtime metadata middleware.
  *
- * @remarks
- * Documents the `200` response as {@link EVENT_STREAM_MEDIA_TYPE} and registers the same
- * middleware with {@link producesEventStream}, so negotiation accepts the documented type.
- *
- * @param opts - The operation's tags, summary, description, and parameters.
- * @returns the route's documentation middleware.
+ * Legacy options remain accepted only while Task 4 migrates every public declaration.
  */
-export function describeEventStream({ streamDescription, ...spec }: EventStreamDocOptions) {
-  return producesEventStream(
-    describeRoute({
-      ...spec,
-      responses: {
-        200: {
-          description: streamDescription ?? 'Server-Sent Events.',
-          content: { [EVENT_STREAM_MEDIA_TYPE]: { schema: { type: 'string' } } },
-        },
-      },
-    }),
-  );
+export function apiDoc(options: ApiDocOptions | ApiOperationContract): MiddlewareHandler<AppEnv> {
+  return isOperationContract(options) ? strictApiDoc(options) : legacyApiDoc(options);
 }

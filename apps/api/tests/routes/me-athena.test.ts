@@ -720,7 +720,7 @@ describe('personal Athena routes', () => {
       headers: JSON_HEADERS,
       body: JSON.stringify({ context: { workspaceId: seed.orgB } }),
     });
-    expect(fresh.status).toBe(200);
+    expect(fresh.status).toBe(201);
     const freshBody = (await fresh.json()) as { id: string };
     expect(freshBody.id).not.toBe(initial.id);
     expect(((await (await ownerApp.request('/chat')).json()) as { id: string }).id).toBe(
@@ -771,7 +771,7 @@ describe('personal Athena routes', () => {
         context: { source: { type: 'project', id: projectId } },
       }),
     });
-    expect(created.status).toBe(200);
+    expect(created.status).toBe(201);
     const body = (await created.json()) as {
       id: string;
       workspace: { id: string; name: string } | null;
@@ -1691,7 +1691,7 @@ describe('personal Athena routes', () => {
     expect(body.indexOf('id: activity_alpha')).toBeLessThan(body.indexOf('id: activity_zulu'));
   });
 
-  it('replays the full bounded window when a resumed Last-Event-ID matches no persisted activity', async () => {
+  it('rejects an unknown Last-Event-ID before opening the personal stream', async () => {
     const seed = await seedPeople();
     const sessionId = await seedSession(seed, seed.owner, 'completed');
     await seedActivity(sessionId, { type: 'response', body: { text: 'Only entry' } });
@@ -1700,9 +1700,9 @@ describe('personal Athena routes', () => {
       headers: { 'last-event-id': 'activity_never_persisted' },
     });
 
-    expect(stream.status).toBe(200);
-    const text = await stream.text();
-    expect(text).toContain('Only entry');
+    expect(stream.status).toBe(422);
+    expect(stream.headers.get('content-type')).toContain('application/problem+json');
+    expect(await stream.json()).toMatchObject({ code: 'validation_error', status: 422 });
   });
 
   it('bounds a stream opened without Last-Event-ID to the newest activity window', async () => {
@@ -2004,7 +2004,7 @@ describe('personal Athena routes', () => {
       headers: JSON_HEADERS,
       body: JSON.stringify({}),
     });
-    expect(fresh.status).toBe(200);
+    expect(fresh.status).toBe(201);
     expect((await fresh.json()) as { context: unknown }).toMatchObject({ context: null });
   });
 
@@ -2042,7 +2042,7 @@ describe('personal Athena routes', () => {
       body: JSON.stringify({ prompt: 'I need to create a dentist appointment' }),
     });
 
-    expect(response.status).toBe(200);
+    expect(response.status).toBe(201);
     const body = (await response.json()) as {
       id: string;
       context: { workspaceId?: string } | null;
@@ -2081,7 +2081,7 @@ describe('personal Athena routes', () => {
       }),
     });
 
-    expect(response.status).toBe(200);
+    expect(response.status).toBe(201);
     const body = (await response.json()) as {
       id: string;
       context: { workspaceId?: string } | null;

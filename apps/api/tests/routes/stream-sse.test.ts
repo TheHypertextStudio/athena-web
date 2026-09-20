@@ -69,7 +69,7 @@ async function openStream(userId: string) {
     controller.abort();
   };
   openConnections.push(close);
-  return { nextFrame, close };
+  return { response: res, nextFrame, close };
 }
 
 const SAMPLE_EVENT: StreamEvent = {
@@ -101,13 +101,42 @@ describe('live stream SSE', () => {
 
   it('forwards a published event as a stream-event frame with the exact payload', async () => {
     const userId = `sse-user-${Math.random().toString(36).slice(2)}`;
-    const { nextFrame } = await openStream(userId);
+    const { response, nextFrame } = await openStream(userId);
+
+    expect(response.headers.get('content-type')).toContain('text/event-stream');
+    expect(response.headers.get('cache-control')).toBe('no-cache, no-transform');
+    expect(response.headers.get('x-accel-buffering')).toBe('no');
+    expect(response.headers.get('etag')).toBeNull();
+    expect(response.headers.get('content-encoding')).toBeNull();
 
     publish(userId, SAMPLE_EVENT);
 
     const frame = await nextFrame();
     expect(frame.event).toBe('stream-event');
     expect(JSON.parse(frame.data)).toEqual(SAMPLE_EVENT);
+  });
+
+  it('rejects Last-Event-ID before opening this non-resumable stream', async () => {
+    const router = await loadRouter();
+    const app = appWithSession(router, fakeSession('sse-non-resumable'));
+
+    const response = await app.request('/sse', {
+      headers: { accept: 'text/event-stream', 'last-event-id': 'evt_old' },
+    });
+
+    expect(response.status).toBe(422);
+    expect(response.headers.get('content-type')).toContain('application/problem+json');
+    expect(await response.json()).toMatchObject({ code: 'validation_error', status: 422 });
+  });
+
+  it('rejects a client that accepts JSON but not the declared event stream', async () => {
+    const router = await loadRouter();
+    const app = appWithSession(router, fakeSession('sse-negotiation'));
+
+    const response = await app.request('/sse', { headers: { accept: 'application/json' } });
+
+    expect(response.status).toBe(406);
+    expect(await response.json()).toMatchObject({ code: 'not_acceptable', status: 406 });
   });
 
   it('never delivers another user’s events on this connection', async () => {

@@ -32,6 +32,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { api } from '@/lib/api';
 import { authClient } from '@/lib/auth-client';
+import { fetchAllIntegrations, fetchAllTeams } from '@/lib/org-collection-pages';
 import { useAuthenticationRecovery } from '@/components/authentication-interlock';
 import { UserFacingError, userErrorMessage } from '@/lib/problem';
 import { connectorAvailable, connectorOAuthConfigured, usePublicConfig } from '@/lib/public-config';
@@ -144,14 +145,14 @@ export function useIntegrationsData(orgId: string): IntegrationsData {
   const integrationsQ = useApiQuery(
     apiQueryOptions(
       queryKeys.integrations(orgId),
-      () => api.v1.orgs[':orgId'].integrations.$get({ param: { orgId } }),
+      () => fetchAllIntegrations(api, orgId),
       'Could not load integrations.',
     ),
   );
   const teamsQ = useApiQuery(
     apiQueryOptions(
       queryKeys.teams(orgId),
-      () => api.v1.orgs[':orgId'].teams.$get({ param: { orgId } }),
+      () => fetchAllTeams(api, orgId),
       'Could not load teams.',
     ),
   );

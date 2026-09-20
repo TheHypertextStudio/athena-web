@@ -18,6 +18,15 @@ import { buildProviderResolver } from '@/components/triage/provider-directory';
 import type { TriageDestination } from '@/components/triage/triage-actions';
 import type { TriageRowData } from '@/components/triage/triage-row';
 import { api } from './api';
+import {
+  fetchAllIntegrations,
+  fetchAllMembers,
+  fetchAllPrograms,
+  fetchAllProjects,
+  fetchAllRoles,
+  fetchAllTasks,
+  fetchAllTeams,
+} from './org-collection-pages';
 import { STALE, apiQueryOptions, queryKeys, useApiQuery } from './query';
 import { useOrgCapability } from './use-org-capability';
 import { useRenameTask } from './use-rename-task';
@@ -70,7 +79,7 @@ export function useTriage(orgId: string, categoryOf: CategoryOfState): TriageSta
   const tasksQ = useApiQuery(
     apiQueryOptions(
       queryKeys.tasks(orgId),
-      () => api.v1.orgs[':orgId'].tasks.$get({ param: { orgId }, query: {} }),
+      () => fetchAllTasks(api, orgId),
       'Could not load the triage queue.',
       { staleTime: STALE.volatile },
     ),
@@ -78,7 +87,7 @@ export function useTriage(orgId: string, categoryOf: CategoryOfState): TriageSta
   const teamsQ = useApiQuery(
     apiQueryOptions(
       queryKeys.teams(orgId),
-      () => api.v1.orgs[':orgId'].teams.$get({ param: { orgId } }),
+      () => fetchAllTeams(api, orgId),
       'Could not load teams.',
       { staleTime: STALE.static },
     ),
@@ -86,7 +95,7 @@ export function useTriage(orgId: string, categoryOf: CategoryOfState): TriageSta
   const membersQ = useApiQuery(
     apiQueryOptions(
       queryKeys.members(orgId),
-      () => api.v1.orgs[':orgId'].members.$get({ param: { orgId } }),
+      () => fetchAllMembers(api, orgId),
       'Could not load members.',
       { staleTime: STALE.static },
     ),
@@ -94,7 +103,7 @@ export function useTriage(orgId: string, categoryOf: CategoryOfState): TriageSta
   const rolesQ = useApiQuery(
     apiQueryOptions(
       queryKeys.roles(orgId),
-      () => api.v1.orgs[':orgId'].roles.$get({ param: { orgId } }),
+      () => fetchAllRoles(api, orgId),
       'Could not load roles.',
       { staleTime: STALE.static },
     ),
@@ -102,7 +111,7 @@ export function useTriage(orgId: string, categoryOf: CategoryOfState): TriageSta
   const projectsQ = useApiQuery(
     apiQueryOptions(
       queryKeys.projects(orgId),
-      () => api.v1.orgs[':orgId'].projects.$get({ param: { orgId }, query: {} }),
+      () => fetchAllProjects(api, orgId),
       'Could not load projects.',
       { staleTime: STALE.static },
     ),
@@ -110,7 +119,7 @@ export function useTriage(orgId: string, categoryOf: CategoryOfState): TriageSta
   const programsQ = useApiQuery(
     apiQueryOptions(
       queryKeys.programs(orgId),
-      () => api.v1.orgs[':orgId'].programs.$get({ param: { orgId }, query: {} }),
+      () => fetchAllPrograms(api, orgId),
       'Could not load programs.',
       { staleTime: STALE.static },
     ),
@@ -118,7 +127,7 @@ export function useTriage(orgId: string, categoryOf: CategoryOfState): TriageSta
   const integrationsQ = useApiQuery(
     apiQueryOptions(
       queryKeys.integrations(orgId),
-      () => api.v1.orgs[':orgId'].integrations.$get({ param: { orgId } }),
+      () => fetchAllIntegrations(api, orgId),
       'Could not load integrations.',
       { staleTime: STALE.static },
     ),

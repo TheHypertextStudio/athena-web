@@ -2,7 +2,6 @@
 
 import type { AttachmentOut } from '@docket/work/attachment-contract';
 import type { Health } from '@docket/work/capability-contract';
-import type { LabelOut } from '@docket/work/label-contract';
 import type { UpdateOut } from '@docket/work/update-contract';
 import { InitiativeSubjectRef } from '@docket/work/subject-ref-contract';
 import type { PickerOption } from '@docket/ui/components';
@@ -83,6 +82,7 @@ import {
   seedNavigationSnapshot,
 } from '@/lib/navigation-snapshot-runtime';
 import { orgMembersDef } from '@/lib/use-org-membership';
+import * as orgPages from '@/lib/org-collection-pages';
 
 type TabId = 'overview' | 'subinitiatives' | 'work' | 'updates' | 'resources';
 const INITIATIVE_TABS = ['overview', 'subinitiatives', 'work', 'updates', 'resources'] as const;
@@ -144,12 +144,9 @@ export default function InitiativeDetailPage(): JSX.Element {
   const membersQ = useApiQuery({ ...orgMembersDef(orgId), enabled: ownerPickerOpen });
   const members = membersQ.data?.items ?? [];
   const selectedLabelsQ = useApiQuery(
-    apiQueryOptions<readonly LabelOut[]>(
+    apiQueryOptions(
       [...aggregateKey, 'labels'],
-      () =>
-        api.v1.orgs[':orgId'].initiatives[':id'].labels.$get({
-          param: { orgId, id: initiativeId },
-        }),
+      () => orgPages.fetchAllInitiativeLabels(api, orgId, initiativeId),
       'Could not load Initiative labels.',
       { enabled: labelsPickerOpen },
     ),
@@ -159,10 +156,7 @@ export default function InitiativeDetailPage(): JSX.Element {
   const resourcesQ = useApiQuery(
     apiQueryOptions(
       resourcesKey,
-      () =>
-        api.v1.orgs[':orgId'].initiatives[':id'].resources.$get({
-          param: { orgId, id: initiativeId },
-        }),
+      () => orgPages.fetchAllInitiativeResources(api, orgId, initiativeId),
       'Could not load resources.',
       { enabled: aggregate !== null && tab === 'resources' },
     ),
@@ -191,7 +185,7 @@ export default function InitiativeDetailPage(): JSX.Element {
     if (!owner || options.some((option) => option.value === owner.actorId)) return options;
     return [{ value: owner.actorId, label: owner.displayName }, ...options];
   }, [aggregate?.references.owner, members]);
-  const assignedLabels = selectedLabelsQ.data ?? [];
+  const assignedLabels = selectedLabelsQ.data?.items ?? [];
   const availableLabels = useMemo(
     () =>
       (labelsQ.data?.items ?? []).filter(
@@ -367,7 +361,13 @@ export default function InitiativeDetailPage(): JSX.Element {
                 ) ?? '—',
             },
             { label: 'Update cadence', value: INITIATIVE_CADENCE_LABEL[detail.updateCadence] },
-            { label: 'Labels', value: assignedLabels.map((label) => label.name).join(', ') || '—' },
+            {
+              label: 'Labels',
+              value: assignedLabels
+                .map((label) => label.name)
+                .join(', ')
+                .padEnd(1, '—'),
+            },
           ]}
         />
       }

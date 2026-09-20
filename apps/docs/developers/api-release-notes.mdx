@@ -1,0 +1,21 @@
+---
+title: 'API release notes'
+description: 'Published changes to Docket’s public REST compatibility contract.'
+---
+
+## `0.1.0` — 2026-09-12
+
+Status: prerelease.
+
+Docket established its initial explicit public REST compatibility contract. Before this release,
+the public `/v1` surface had no explicit contract assertion. After this release, clients may omit
+`Docket-Version` or assert `Docket-Version: 0.1.0`, and every public REST response identifies the
+contract plus its deployed source revision.
+
+This release does not claim that every documented capability first appeared on 2026-09-12. It
+establishes the version and response identity contract for the public REST surface.
+
+Client action: accept the current contract by omitting the header, or assert `0.1.0` and handle
+`unsupported_api_version` before parsing a response. Docket retains no earlier public contract.
+
+See [API versions](/developers/api-versions) for header semantics and compatibility rules.

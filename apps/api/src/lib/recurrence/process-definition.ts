@@ -1,11 +1,4 @@
-/**
- * `@docket/api` — validated, normalized authoring of immutable process revisions.
- *
- * @remarks
- * A process definition is the named lifecycle container; every executable graph is an immutable
- * published revision. Materialized instances retain their revision id, so publishing a future
- * revision cannot rewrite work that already exists.
- */
+/** Validated authoring of immutable process revisions that never rewrite existing instances. */
 import {
   actor,
   cycle,
@@ -47,6 +40,7 @@ import type { z } from 'zod';
 
 import { ConflictError, CycleError, NotFoundError } from '../../error';
 import { calendarDaysBetween } from '@docket/planning/calendar-date';
+import { listActiveProcessDefinitionRows } from './list-store';
 
 type Transaction = Parameters<Parameters<Database['transaction']>[0]>[0];
 
@@ -897,18 +891,9 @@ export async function loadProcessDefinitionDetail(
 export async function listProcessDefinitions(
   database: Database,
   organizationId: string,
+  pagination: { readonly cursor?: string | undefined; readonly limit: number },
 ): Promise<z.input<typeof ProcessDefinitionSummaryOut>[]> {
-  const definitions = await database
-    .select()
-    .from(processDefinition)
-    .where(
-      and(
-        eq(processDefinition.organizationId, organizationId),
-        isNull(processDefinition.archivedAt),
-        ne(processDefinition.status, 'archived'),
-      ),
-    )
-    .orderBy(desc(processDefinition.updatedAt));
+  const definitions = await listActiveProcessDefinitionRows(database, organizationId, pagination);
   return Promise.all(
     definitions.map(async (definition) => {
       const latest = await database

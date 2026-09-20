@@ -3,19 +3,20 @@ import { LAST_PASSKEY_MESSAGE, canRemovePasskey } from '@docket/auth';
 import { db, passkey, user as userTable } from '@docket/db';
 import {
   PasskeyDeleteOut,
-  PasskeyListOut,
   PasskeyRenameIn,
   PasskeySummary,
 } from '@docket/identity-access/passkey-management-contract';
-import { and, desc, eq } from 'drizzle-orm';
+import { and, asc, eq } from 'drizzle-orm';
 import { type Context, Hono } from 'hono';
 import { z } from 'zod';
 
 import type { AppEnv, AuthSession } from '../context';
+import { CursorQuery, pageOf } from '../contracts/pagination';
 import { AuthError, CapabilityError, NotFoundError } from '../error';
+import { pageResultById, seekAfterId } from '../lib/list-cursor';
 import { ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
-import { zJson, zParam } from '../lib/validate';
+import { zJson, zParam, zQuery } from '../lib/validate';
 
 /** Require the signed-in person whose credentials are being managed. */
 function requireSession(c: Context<AppEnv>): NonNullable<AuthSession> {
@@ -64,18 +65,21 @@ const mePasskeys = new Hono<AppEnv>()
     apiDoc({
       tag: 'Me',
       summary: 'List passkeys',
-      response: PasskeyListOut,
+      response: pageOf(PasskeySummary),
       description:
         "List safe summaries of the signed-in user's passkeys. Credential ids, public keys, and counters are never returned.",
     }),
+    zQuery(CursorQuery),
     async (c) => {
       const { user } = requireSession(c);
+      const { cursor, limit } = c.req.valid('query');
       const rows = await db
         .select(summaryColumns)
         .from(passkey)
-        .where(eq(passkey.userId, user.id))
-        .orderBy(desc(passkey.createdAt));
-      return ok(c, PasskeyListOut, { items: rows.map(toSummary) });
+        .where(and(eq(passkey.userId, user.id), seekAfterId(passkey.id, cursor, 'asc')))
+        .orderBy(asc(passkey.id))
+        .limit(limit + 1);
+      return ok(c, pageOf(PasskeySummary), pageResultById(rows.map(toSummary), limit));
     },
   )
   .patch(

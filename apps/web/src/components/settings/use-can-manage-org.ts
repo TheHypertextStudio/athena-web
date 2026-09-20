@@ -31,6 +31,7 @@ import { useSession } from '@/lib/auth-client';
 import { satisfies } from '@docket/identity-access/capabilities';
 
 import { api } from '@/lib/api';
+import { fetchAllMembers, fetchAllRoles } from '@/lib/org-collection-pages';
 import { STALE, apiQueryOptions, queryKeys, useApiQuery } from '@/lib/query';
 
 /** The role keys that confer org-management ability. */
@@ -90,7 +91,7 @@ export function useCanManageOrg(
   const membersQ = useApiQuery(
     apiQueryOptions(
       queryKeys.members(orgId),
-      () => api.v1.orgs[':orgId'].members.$get({ param: { orgId } }),
+      () => fetchAllMembers(api, orgId),
       'Could not load members.',
       { enabled, staleTime: STALE.static },
     ),
@@ -98,7 +99,7 @@ export function useCanManageOrg(
   const rolesQ = useApiQuery(
     apiQueryOptions(
       queryKeys.roles(orgId),
-      () => api.v1.orgs[':orgId'].roles.$get({ param: { orgId } }),
+      () => fetchAllRoles(api, orgId),
       'Could not load roles.',
       { enabled, staleTime: STALE.static },
     ),

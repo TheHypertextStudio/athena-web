@@ -29,6 +29,7 @@ import {
 } from '@/components/pickers/use-composer-options';
 import { useActionDispatch, useActionRegistry } from '@/lib/actions';
 import { api } from '@/lib/api';
+import { fetchAllTasks, fetchAllTeams } from '@/lib/org-collection-pages';
 import { userErrorMessage } from '@/lib/problem';
 import { taskDetailDef } from '@/lib/use-task-detail';
 import { apiQueryOptions, queryKeys, STALE, useApiListQuery, useApiQuery } from '@/lib/query';
@@ -115,7 +116,7 @@ export function RelationTargetPickerOverlay({
   const tasksQ = useApiListQuery(
     apiQueryOptions(
       queryKeys.tasks(organizationId),
-      () => api.v1.orgs[':orgId'].tasks.$get({ param: { orgId: organizationId }, query: {} }),
+      () => fetchAllTasks(api, organizationId),
       'Could not load tasks.',
       { enabled: targetKind === 'task', staleTime: STALE.volatile },
     ),
@@ -123,7 +124,7 @@ export function RelationTargetPickerOverlay({
   const teamsQ = useApiListQuery(
     apiQueryOptions(
       queryKeys.teams(organizationId),
-      () => api.v1.orgs[':orgId'].teams.$get({ param: { orgId: organizationId } }),
+      () => fetchAllTeams(api, organizationId),
       'Could not load teams.',
       { enabled: targetKind === 'team', staleTime: STALE.static },
     ),

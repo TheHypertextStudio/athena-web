@@ -322,7 +322,7 @@ export function createAdminRoutes<
             reason,
             ttlMinutes,
           });
-          return created(c, AdminImpersonationOut, toImpersonationOut(sess));
+          return created(c, AdminImpersonationOut, toImpersonationOut(sess), null);
         },
       )
       .post(

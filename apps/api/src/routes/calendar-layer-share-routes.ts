@@ -5,16 +5,17 @@ import {
   CalendarLayerShareOut,
   CalendarLayerSharesReplace,
 } from '@docket/planning/calendar-contract';
-import { pageOf } from '../contracts/pagination';
-import { and, eq, inArray } from 'drizzle-orm';
+import { CursorQuery, pageOf } from '../contracts/pagination';
+import { and, asc, eq, inArray } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
 
 import type { AppEnv } from '../context';
 import { NotFoundError, ValidationError } from '../error';
 import { ok } from '../lib/ok';
+import { pageResultByKey, seekAfterId } from '../lib/list-cursor';
 import { apiDoc } from '../lib/openapi-route';
-import { zJson, zParam } from '../lib/validate';
+import { zJson, zParam, zQuery } from '../lib/validate';
 
 import { requireUserId } from './calendar-shared';
 
@@ -63,12 +64,14 @@ export const calendarLayerShareRoutes = new Hono<AppEnv>()
       summary: 'List calendar layers shared with a workspace',
       response: CalendarLayerSharesOut,
       description:
-        "List the caller's personal calendar layers currently exposed to one workspace. The caller must be an active human member of that workspace; non-membership is existence-hidden as 404.",
+        "List the caller's personal calendar layers currently exposed to one workspace in layer-id order. Pages default to 50 items, accept at most 100, and omit nextCursor at exhaustion.",
     }),
     zParam(organizationParam),
+    zQuery(CursorQuery),
     async (c) => {
       const userId = requireUserId(c);
       const { organizationId } = c.req.valid('param');
+      const { cursor, limit } = c.req.valid('query');
       await requireActiveOrgActor(userId, organizationId);
       const rows = await db
         .select({ share: calendarLayerShare })
@@ -78,11 +81,20 @@ export const calendarLayerShareRoutes = new Hono<AppEnv>()
           and(
             eq(calendarLayerShare.organizationId, organizationId),
             eq(calendarLayer.userId, userId),
+            seekAfterId(calendarLayerShare.layerId, cursor, 'asc'),
           ),
-        );
-      return ok(c, CalendarLayerSharesOut, {
-        items: rows.map((row) => toCalendarLayerShareOut(row.share)),
-      });
+        )
+        .orderBy(asc(calendarLayerShare.layerId))
+        .limit(limit + 1);
+      return ok(
+        c,
+        CalendarLayerSharesOut,
+        pageResultByKey(
+          rows.map((row) => toCalendarLayerShareOut(row.share)),
+          limit,
+          (item) => item.layerId,
+        ),
+      );
     },
   )
   .put(

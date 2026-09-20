@@ -29,7 +29,7 @@ import {
   TaskViewDefinition,
   type WorkViewContext,
 } from '@docket/work/work-view-contract';
-import { type Page, pageOf } from '../contracts/pagination';
+import { CursorQuery, type Page, pageOf } from '../contracts/pagination';
 import { and, eq, exists, or, type SQL } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
@@ -40,30 +40,14 @@ import type { JsonRoute } from '../lib/hono-rpc';
 import { created, ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
 import { logStaleStoredDefinition } from '../lib/stored-definition';
-import { zJson, zParam } from '../lib/validate';
+import { zJson, zParam, zQuery } from '../lib/validate';
 import { capabilityGuard } from '../permissions/capability-guard';
 import { enqueueSearchDelete, enqueueSearchUpsert } from '../search/write-through';
+import { pageSavedViews } from './saved-view-list-store';
 
 type SavedViewRow = typeof savedView.$inferSelect;
 
-/**
- * Project a stored row, or `null` when the current contract cannot represent it.
- *
- * @remarks
- * The list route is unpaginated and org-wide, so throwing here took every member's saved-view list
- * down over one stale row. This validates the **whole** output rather than just `definition`:
- * `context`, `scope`, `position` and the legacy projection are all contract-derived stored values
- * and any of them can be what moved, so checking one column would have left the same outage
- * reachable through the others.
- *
- * A row that fails is not usable in the product either — the update route already answers one with
- * "This saved view requires a current client before its filters can be changed". Every route treats
- * it as absent, and the row id reaches the logs so a backfill can repair it rather than the row
- * being deleted.
- *
- * @param v - The stored saved-view row.
- * @returns the validated response shape, or `null` when the row is stale.
- */
+/** Project a stored row, or hide and log it when the current contract cannot represent it. */
 function toOutOrNull(v: SavedViewRow): z.infer<typeof SavedWorkViewOut> | null {
   const result = SavedWorkViewOut.safeParse(savedViewPayload(v));
   if (result.success) return result.data;
@@ -322,13 +306,19 @@ const savedViews: Hono<AppEnv, SavedViewRoutes> = new Hono<AppEnv>()
       tag: 'Views',
       summary: 'List saved views',
       response: pageOf(SavedWorkViewOut),
-      description: `List the saved views visible to the caller. Organization views are visible to every member, Team views require current Team membership, and personal views are owner-only. The list is unpaginated and requires org membership (\`view\`). Returns a page wrapper of {@link SavedWorkViewOut}.`,
+      description: `List the saved views visible to the caller. Organization views are visible to every member, Team views require current Team membership, and personal views are owner-only. Results use stable saved-view-id order, default to 50 items, accept at most 100, and omit \`nextCursor\` at exhaustion. Visibility is applied before pagination.`,
     }),
+    zQuery(CursorQuery),
     async (c) => {
       const { orgId, actorId } = c.get('actorCtx');
-      const rows = await db.select().from(savedView).where(visibleSavedView(orgId, actorId));
-      const items = rows.map(toOutOrNull).filter((item) => item !== null);
-      return ok(c, pageOf(SavedWorkViewOut), { items });
+      const { cursor, limit } = c.req.valid('query');
+      const page = await pageSavedViews(
+        visibleSavedView(orgId, actorId),
+        cursor,
+        limit,
+        toOutOrNull,
+      );
+      return ok(c, pageOf(SavedWorkViewOut), page);
     },
   )
   .post(

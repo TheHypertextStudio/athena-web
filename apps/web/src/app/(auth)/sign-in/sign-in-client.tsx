@@ -9,6 +9,7 @@ import { type JSX, useCallback, useEffect, useRef, useState } from 'react';
 import { safeSameOriginPath } from '@/lib/auth-navigation';
 import { api } from '@/lib/api';
 import { authClient } from '@/lib/auth-client';
+import { fetchAllOrganizations } from '@/lib/org-collection-pages';
 
 import { AuthError, Spinner } from '../_components/auth-feedback';
 import { AuthShell } from '../_components/auth-shell';
@@ -89,7 +90,7 @@ function navigateAfterSignIn(router: ReturnType<typeof useRouter>, destination: 
   router.push(destination);
 }
 
-type OrgsResponse = Awaited<ReturnType<typeof api.v1.orgs.$get>>;
+type OrgsResponse = Awaited<ReturnType<typeof fetchAllOrganizations>>;
 
 /** Wait briefly for the browser/proxy cookie path to settle. */
 function delay(ms: number): Promise<void> {
@@ -112,7 +113,7 @@ function delay(ms: number): Promise<void> {
 async function loadOrgsAfterSignIn(isMounted: () => boolean): Promise<OrgsResponse> {
   let lastResponse: OrgsResponse | null = null;
   for (let attempt = 0; attempt < SESSION_SETTLE_ATTEMPTS; attempt += 1) {
-    const response = await api.v1.orgs.$get();
+    const response = await fetchAllOrganizations(api);
     if (response.status !== 401) return response;
     lastResponse = response;
     if (attempt < SESSION_SETTLE_ATTEMPTS - 1) {
@@ -120,7 +121,7 @@ async function loadOrgsAfterSignIn(isMounted: () => boolean): Promise<OrgsRespon
       if (!isMounted()) return response;
     }
   }
-  return lastResponse ?? api.v1.orgs.$get();
+  return lastResponse ?? fetchAllOrganizations(api);
 }
 
 /**

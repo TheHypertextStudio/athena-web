@@ -32,7 +32,10 @@ const NO_PASSKEY_MESSAGE =
 export function useReauth(): () => Promise<void> {
   return useCallback(async () => {
     // A social-only account has no passkey to challenge — surface a fix, not a cryptic failure.
-    const list = await unwrap(() => api.v1.me.passkeys.$get(), 'Could not check your passkeys.');
+    const list = await unwrap(
+      () => api.v1.me.passkeys.$get({ query: {} }),
+      'Could not check your passkeys.',
+    );
     if (list.items.length === 0) {
       throw toUserFacingError(undefined, NO_PASSKEY_MESSAGE);
     }

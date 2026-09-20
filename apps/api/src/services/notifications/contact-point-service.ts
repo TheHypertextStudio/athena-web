@@ -14,10 +14,11 @@ import {
   normalizeContactPointValue,
   type ContactPointRow,
 } from '@docket/notifications/dispatch';
-import { and, desc, eq } from 'drizzle-orm';
+import { and, asc, eq } from 'drizzle-orm';
 import type { z } from 'zod';
 
 import { ConflictError, NotFoundError } from '../../error';
+import { pageResultById, seekAfterId } from '../../lib/list-cursor';
 
 const TEST_VERIFICATION_CODE = '000000';
 
@@ -26,14 +27,23 @@ export class NotificationContactPointService {
   constructor(private readonly db: Database) {}
 
   /** Return caller-owned contact points, creating the account email contact point if needed. */
-  async list(userId: string): Promise<{ items: z.input<typeof ContactPointOut>[] }> {
+  async list(
+    userId: string,
+    pagination: { readonly cursor?: string | undefined; readonly limit: number } = { limit: 50 },
+  ): Promise<{ items: z.input<typeof ContactPointOut>[]; nextCursor?: string }> {
     await ensureAccountEmailContactPoint(this.db, userId);
     const rows = await this.db
       .select()
       .from(contactPoint)
-      .where(eq(contactPoint.userId, userId))
-      .orderBy(desc(contactPoint.createdAt));
-    return { items: rows.map(toContactPointOut) };
+      .where(
+        and(
+          eq(contactPoint.userId, userId),
+          seekAfterId(contactPoint.id, pagination.cursor, 'asc'),
+        ),
+      )
+      .orderBy(asc(contactPoint.id))
+      .limit(pagination.limit + 1);
+    return pageResultById(rows.map(toContactPointOut), pagination.limit);
   }
 
   /** Create a pending caller-owned contact point. */

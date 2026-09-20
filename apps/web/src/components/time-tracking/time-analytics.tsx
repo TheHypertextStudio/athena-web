@@ -32,6 +32,7 @@ import { useActiveOrg } from '@/components/active-org';
 import { DateRangePicker } from '@/components/date-picker';
 import { resolveScheduleTimezone } from '@/components/scheduling';
 import { api } from '@/lib/api';
+import { fetchAllProjects, fetchAllTasks } from '@/lib/org-collection-pages';
 import { useAppRouter } from '@/lib/interactions/navigation';
 import { useAppSearchParams } from '@/lib/app-location';
 import { STALE, apiQueryOptions, queryKeys, useApiListQuery, useApiQuery } from '@/lib/query';
@@ -123,11 +124,7 @@ export function TimeAnalytics(): JSX.Element {
   const projectsQ = useApiListQuery(
     apiQueryOptions(
       queryKeys.projects(selectedWorkspace),
-      () =>
-        api.v1.orgs[':orgId'].projects.$get({
-          param: { orgId: selectedWorkspace },
-          query: {},
-        }),
+      () => fetchAllProjects(api, selectedWorkspace),
       'Could not load projects for this workspace.',
       { enabled: Boolean(selectedWorkspace), staleTime: STALE.static },
     ),
@@ -135,7 +132,7 @@ export function TimeAnalytics(): JSX.Element {
   const tasksQ = useApiListQuery(
     apiQueryOptions(
       queryKeys.tasks(selectedWorkspace),
-      () => api.v1.orgs[':orgId'].tasks.$get({ param: { orgId: selectedWorkspace }, query: {} }),
+      () => fetchAllTasks(api, selectedWorkspace),
       'Could not load tasks for this workspace.',
       { enabled: Boolean(selectedWorkspace), staleTime: STALE.static },
     ),

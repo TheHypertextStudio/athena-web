@@ -114,7 +114,7 @@ export function useTaskRosters(orgId: string, task: TaskDetail | null): TaskRost
   const agentsQ = useApiQuery(
     apiQueryOptions(
       queryKeys.agents(orgId),
-      () => api.v1.orgs[':orgId'].agents.$get({ param: { orgId } }),
+      () => api.v1.orgs[':orgId'].agents.$get({ param: { orgId }, query: { limit: '100' } }),
       'Could not load agents.',
       { enabled: Boolean(task?.delegateId), staleTime: STALE.static },
     ),

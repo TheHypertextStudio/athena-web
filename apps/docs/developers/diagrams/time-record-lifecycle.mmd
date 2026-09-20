@@ -1,0 +1,7 @@
+stateDiagram-v2
+  [*] --> Running: start or switch
+  Running --> Paused: pause
+  Paused --> Running: resume
+  Running --> Finished: stop with named work
+  Running --> Running: switch
+  Finished --> [*]

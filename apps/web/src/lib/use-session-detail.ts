@@ -10,6 +10,12 @@ import { buildActorDirectory, type ActorDirectory } from '@/components/agents/ac
 import type { ChangeReceiptItem, SessionControlsState } from '@/components/agents/session-sidebar';
 import { presentFailure, presentRejectedResponse } from '@/components/feedback';
 import { api } from './api';
+import {
+  fetchAllAgents,
+  fetchAllMembers,
+  fetchAllSessionActivity,
+  fetchAllSessionProposals,
+} from './org-collection-pages';
 import { readProblemError } from './problem';
 import { startViewTransition } from './view-transition';
 
@@ -77,10 +83,8 @@ export function useSessionDetail(orgId: string, sessionId: string): SessionDetai
       }
       const detail = await sessionRes.json();
 
-      const proposalsRes = await api.v1.orgs[':orgId'].sessions[':id'].proposals.$get({
-        param: { orgId, id: sessionId },
-      });
-      const nextProposals = proposalsRes.ok ? await proposalsRes.json() : null;
+      const proposalsRes = await fetchAllSessionProposals(api, orgId, sessionId);
+      const nextProposals = proposalsRes.ok ? (await proposalsRes.json()).items : null;
 
       // The session's activities and its proposal groups render the ghost grammar together — commit
       // both inside one View Transition so an approved/rejected group's ghost rows morph in place
@@ -91,8 +95,8 @@ export function useSessionDetail(orgId: string, sessionId: string): SessionDetai
       });
 
       const [membersRes, agentsRes, orgRes] = await Promise.all([
-        api.v1.orgs[':orgId'].members.$get({ param: { orgId } }),
-        api.v1.orgs[':orgId'].agents.$get({ param: { orgId } }),
+        fetchAllMembers(api, orgId),
+        fetchAllAgents(api, orgId),
         api.v1.orgs[':orgId'].$get({ param: { orgId } }),
       ]);
       if (membersRes.ok) setMembers((await membersRes.json()).items);
@@ -115,12 +119,10 @@ export function useSessionDetail(orgId: string, sessionId: string): SessionDetai
   }, [orgId, sessionId]);
 
   const reloadActivities = useCallback(async (): Promise<void> => {
-    const res = await api.v1.orgs[':orgId'].sessions[':id'].activity.$get({
-      param: { orgId, id: sessionId },
-    });
+    const res = await fetchAllSessionActivity(api, orgId, sessionId);
     if (res.ok) {
       const { items } = await res.json();
-      setSession((current) => (current ? { ...current, activities: items } : current));
+      setSession((current) => (current ? { ...current, activities: [...items] } : current));
     } else {
       await load();
     }
@@ -333,10 +335,8 @@ export function useSessionDetail(orgId: string, sessionId: string): SessionDetai
           await presentRejectedResponse(res, 'Could not save the edit.');
           return;
         }
-        const proposalsRes = await api.v1.orgs[':orgId'].sessions[':id'].proposals.$get({
-          param: { orgId, id: sessionId },
-        });
-        if (proposalsRes.ok) setProposals(await proposalsRes.json());
+        const proposalsRes = await fetchAllSessionProposals(api, orgId, sessionId);
+        if (proposalsRes.ok) setProposals((await proposalsRes.json()).items);
       } catch (caught) {
         presentFailure(caught, 'Could not save the edit.');
       } finally {

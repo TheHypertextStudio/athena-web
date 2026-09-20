@@ -11,14 +11,16 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 
 import type { AppEnv } from '../context';
+import { CursorQuery, pageOf } from '../contracts/pagination';
 import { getContainer } from '../container';
 import { env } from '../env';
 import { ConflictError, NotFoundError } from '../error';
 import { sealCredential, unsealCredential } from '../lib/credentials';
 import { signConnectState } from '../lib/oauth-state';
 import { created, ok } from '../lib/ok';
+import { pageResult, seekAfter } from '../lib/list-cursor';
 import { apiDoc } from '../lib/openapi-route';
-import { zJson, zParam } from '../lib/validate';
+import { zJson, zParam, zQuery } from '../lib/validate';
 import { capabilityGuard } from '../permissions/capability-guard';
 import { productCapabilityGuard } from '../product-capability';
 
@@ -156,17 +158,30 @@ const router = new Hono<AppEnv>()
     apiDoc({
       tag: 'Integrations',
       summary: 'List remote MCP servers',
-      response: z.array(McpIntegrationOut),
-      description: `List the org's connected remote MCP servers as {@link McpIntegrationOut} (URL, label, alias, connection health, advertised tool count — never the credential). These are the org-held connections Athena's toolbox unions in as \`<alias>__<name>\` tools. A read; org membership suffices.`,
+      response: pageOf(McpIntegrationOut),
+      description: `List the org's connected remote MCP servers in \`createdAt ASC, id ASC\` order. Pages default to 50 items, accept at most 100, and omit \`nextCursor\` at exhaustion. Credentials are never returned.`,
     }),
+    zQuery(CursorQuery),
     async (c) => {
       const { orgId } = c.get('actorCtx');
+      const { cursor, limit } = c.req.valid('query');
       const rows = await db
         .select()
         .from(integration)
-        .where(and(eq(integration.organizationId, orgId), eq(integration.provider, 'mcp')))
-        .orderBy(asc(integration.createdAt));
-      return ok(c, z.array(McpIntegrationOut), rows.map(toMcpOut));
+        .where(
+          and(
+            eq(integration.organizationId, orgId),
+            eq(integration.provider, 'mcp'),
+            seekAfter(integration.createdAt, integration.id, cursor, 'asc'),
+          ),
+        )
+        .orderBy(asc(integration.createdAt), asc(integration.id))
+        .limit(limit + 1);
+      return ok(
+        c,
+        pageOf(McpIntegrationOut),
+        pageResult(rows.map(toMcpOut), limit, (item) => new Date(item.createdAt)),
+      );
     },
   )
   .post(
@@ -259,7 +274,7 @@ const router = new Hono<AppEnv>()
       // bearer-backed servers still receive the existing immediate live verification.
       const output =
         authMode === 'oauth' ? integrationRow : await verifyIntegration(integrationRow);
-      return created(c, McpIntegrationOut, toMcpOut(output));
+      return created(c, McpIntegrationOut, toMcpOut(output), null);
     },
   )
   .post(

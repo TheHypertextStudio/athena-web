@@ -10,16 +10,18 @@
  */
 import { auditEvent, db } from '@docket/db';
 import { AuditEventOut } from '@docket/connections/activity-contract';
-import { pageOf } from '../contracts/pagination';
-import { desc, eq } from 'drizzle-orm';
+import { CursorQuery, pageOf } from '../contracts/pagination';
+import { and, desc, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import type { z } from 'zod';
 
 import type { AppEnv } from '../context';
 import { ok } from '../lib/ok';
+import { encodeListCursor, seekAfter } from '../lib/list-cursor';
 import { apiDoc } from '../lib/openapi-route';
+import { zQuery } from '../lib/validate';
 
-import { buildTaskBearingEventVisibility } from './stream-helpers';
+import { buildTaskBearingEventVisibility, collectVisibilityFilteredPage } from './stream-helpers';
 
 type AuditEventRow = typeof auditEvent.$inferSelect;
 
@@ -61,18 +63,35 @@ const activity = new Hono<AppEnv>().get(
     response: pageOf(AuditEventOut),
     description: `Return the organization's audit feed — domain actions over Docket's *own* entities (tasks, projects, agents, sessions, integrations, memberships, …), newest-first, as a page of {@link AuditEventOut}. This is the internal accountability ledger: who did what to which subject, written by the entity routers as side effects of their mutations. Task entries, and entries for comments attached to tasks, are returned only when the current active human actor has canonical task visibility; non-task entries retain the active-organization feed behavior. It is deliberately distinct from the **observation stream** (\`GET /v1/orgs/:orgId/stream\`), which records activity in *external* tools where the source of truth lives elsewhere.
 
-A key property for governed automation: an agent action carries BOTH an \`actorId\` (the agent's Actor — who acted) and an \`initiatorId\` (the human who triggered or authorized it — who is accountable); a direct human action carries just \`actorId\`. So approval-gate decisions land here as \`approved\`/\`rejected\` events with \`subjectType='agent_session'\`, attributing the agent while recording the human approver. Read-only over the API and org-scoped; active organization membership plus any applicable task visibility suffices. Related: \`GET /v1/orgs/:orgId/stream\` (external observations), and the session activity routes that generate the \`approved\`/\`rejected\` entries.`,
+Results use \`createdAt DESC, id DESC\`, default to 50 visible items, accept at most 100, and omit \`nextCursor\` at exhaustion. Task visibility is applied before pagination. A key property for governed automation is that agent events carry both the acting agent and accountable initiator. Read-only and org-scoped.`,
   }),
+  zQuery(CursorQuery),
   async (c) => {
     const { orgId, actorId } = c.get('actorCtx');
-    const rows = await db
-      .select()
-      .from(auditEvent)
-      .where(eq(auditEvent.organizationId, orgId))
-      .orderBy(desc(auditEvent.createdAt));
+    const { cursor, limit } = c.req.valid('query');
     const visibility = await buildTaskBearingEventVisibility([{ organizationId: orgId, actorId }]);
+    const page = await collectVisibilityFilteredPage({
+      initialCursor: cursor,
+      limit,
+      fetch: (scanCursor, batchSize) =>
+        db
+          .select()
+          .from(auditEvent)
+          .where(
+            and(
+              eq(auditEvent.organizationId, orgId),
+              seekAfter(auditEvent.createdAt, auditEvent.id, scanCursor ?? undefined),
+            ),
+          )
+          .orderBy(desc(auditEvent.createdAt), desc(auditEvent.id))
+          .limit(batchSize),
+      filter: (rows) => visibility.filterAuditEvents(rows),
+      cursorOf: (row) => encodeListCursor(row.createdAt, row.id),
+    });
+    const last = page.items[page.items.length - 1];
     return ok(c, pageOf(AuditEventOut), {
-      items: (await visibility.filterAuditEvents(rows)).map(toOut),
+      items: page.items.map(toOut),
+      ...(page.hasMore && last ? { nextCursor: encodeListCursor(last.createdAt, last.id) } : {}),
     });
   },
 );

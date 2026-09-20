@@ -20,7 +20,7 @@ import type { AppEnv } from '../context';
 import type { CallerPrincipal } from '../context';
 import { AuthError, CapabilityError, InsufficientScopeError } from '../error';
 import { resolvePresentedRestBearer } from '../auth/principal-middleware';
-import { accessForOperation } from '../auth/rest-access-policy';
+import { accessForRequest } from '../auth/rest-access-policy';
 
 /**
  * Routes reachable without a session:
@@ -69,7 +69,7 @@ function assertRequiredScopes(
 }
 
 async function enforceOperationAccess(
-  access: ReturnType<typeof accessForOperation>,
+  access: ReturnType<typeof accessForRequest>,
   principal: CallerPrincipal | null,
   next: () => Promise<void>,
 ): Promise<void> {
@@ -90,7 +90,7 @@ async function enforceOperationAccess(
  * @throws {InsufficientScopeError} When an OAuth token lacks a required operation scope.
  */
 export const requireAuth: MiddlewareHandler<AppEnv> = async (c, next) => {
-  const access = accessForOperation(c.req.method, c.req.path);
+  const access = accessForRequest(c);
   const principal = await operationPrincipal(c);
   c.set('principal', principal);
 

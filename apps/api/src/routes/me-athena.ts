@@ -20,7 +20,7 @@ import {
   ProposalGroupOut,
   SessionActivityOut,
 } from '@docket/athena/agent-contract';
-import { pageOf } from '../contracts/pagination';
+import { CursorQuery, pageOf } from '../contracts/pagination';
 import type { AthenaInvocationContext } from '@docket/athena/agent-contract';
 import { and, asc, count, desc, eq, gt, inArray, lt, ne, or, sql } from 'drizzle-orm';
 import { Hono } from 'hono';
@@ -42,16 +42,17 @@ import {
   driveSessionAfterMessage,
   resumeSessionExecution,
 } from '../agent/loop';
-import { editProposalInput, listProposalGroups } from '../agent/proposals';
+import { editProposalInput, latestProposedAction, listProposalGroups } from '../agent/proposals';
 import { cancelLatticeDelegation } from '../agent/lattice-delegations';
 import { latticeDelegationDependencies } from '../agent/lattice-delegation-runtime';
 import { assertHostedExecutionSurface } from '../agent/execution-surface';
 import { loadTranscript, saveTranscript } from '../agent/transcript';
 import type { AppEnv } from '../context';
 import { AuthError, ConflictError, NotFoundError } from '../error';
-import { accepted, ok } from '../lib/ok';
+import { accepted, created as createdResponse, ok } from '../lib/ok';
+import { pageResultByKey } from '../lib/list-cursor';
 import { declareStreaming } from '../lib/sse-headers';
-import { apiDoc, describeEventStream } from '../lib/openapi-route';
+import { apiDoc } from '../lib/openapi-route';
 import { zJson, zParam, zQuery } from '../lib/validate';
 import { assertProductCapability } from '../product-capability';
 
@@ -81,6 +82,13 @@ import { toPersonalActivityOut } from './me-athena-activity';
 import { athenaWorkConditions, type AthenaWorkScope } from './me-athena-scope';
 import meAthenaChanges from './me-athena-undo';
 import { runSession } from './agent-session-runner';
+import { personalSessionMonitor } from './session-monitor';
+import {
+  personalAgentUpdatesStreamOperation,
+  personalAthenaActivityStreamOperation,
+  rejectNonResumableCursor,
+  unknownStreamCursor,
+} from './stream-contracts';
 import {
   resolveAthenaDisplay,
   resolveAthenaDisplays,
@@ -381,7 +389,13 @@ async function activityCursor(sessionId: string, id: string): Promise<ActivityCu
   const rows = await db
     .select({ createdAt: sessionActivity.createdAt, id: sessionActivity.id })
     .from(sessionActivity)
-    .where(and(eq(sessionActivity.sessionId, sessionId), eq(sessionActivity.id, id)))
+    .where(
+      and(
+        eq(sessionActivity.sessionId, sessionId),
+        eq(sessionActivity.id, id),
+        ne(sessionActivity.type, 'thought'),
+      ),
+    )
     .limit(1);
   return rows[0] ?? null;
 }
@@ -670,26 +684,6 @@ async function appendMessage(
   });
 }
 
-/** Load the latest still-proposed action in deterministic activity order. */
-async function latestProposedAction(
-  sessionId: string,
-): Promise<typeof sessionActivity.$inferSelect> {
-  const rows = await db
-    .select()
-    .from(sessionActivity)
-    .where(
-      and(
-        eq(sessionActivity.sessionId, sessionId),
-        eq(sessionActivity.type, 'action'),
-        eq(sessionActivity.approvalStatus, 'proposed'),
-      ),
-    )
-    .orderBy(desc(sessionActivity.createdAt), desc(sessionActivity.id))
-    .limit(1);
-  if (!rows[0]) throw new ConflictError('No proposed action awaiting approval');
-  return rows[0];
-}
-
 /** Reopen eligible work after a steering message through the configured execution path. */
 async function driveAfterMessage(session: SessionRow): Promise<'sync' | 'async' | 'parked'> {
   assertHostedExecutionSurface(session);
@@ -713,6 +707,7 @@ async function driveAfterMessage(session: SessionRow): Promise<'sync' | 'async' 
 async function streamOwnedActivity(c: Context<AppEnv>, session: SessionRow) {
   const lastEventId = c.req.header('last-event-id');
   const resumedCursor = lastEventId ? await activityCursor(session.id, lastEventId) : null;
+  if (lastEventId && !resumedCursor) throw unknownStreamCursor();
   const terminal = new Set(['completed', 'failed', 'canceled']);
   return declareStreaming(
     streamSSE(c, async (stream) => {
@@ -833,77 +828,54 @@ const meAthena = new Hono<AppEnv>()
     async (c) =>
       ok(c, AthenaSearchOut, await athenaConversationSearch(requestOwner(c), c.req.valid('query'))),
   )
-  .get(
-    '/agents/stream',
-    describeEventStream({
-      tags: ['Athena'],
-      summary: 'Stream every running agent’s updates (SSE)',
-      description:
-        'One subscription onto the shared agent bus: the merged, ordered stream of every agent Athena has spawned for this caller, each update carrying its own agent and task identity. Updates published before the subscription attached are replayed first, so an agent that finished in the moment before the connection opened is still visible. Pass Last-Event-ID to resume strictly after a sequence.',
-      parameters: [
-        {
-          name: 'Last-Event-ID',
-          in: 'header',
-          required: false,
-          description: 'Resume strictly after this bus sequence; omit to replay retained history.',
-          schema: { type: 'string' },
-        },
-      ],
-      streamDescription: 'Merged agent updates as Server-Sent Events.',
-    }),
-    async (c) => {
-      const owner = requestOwner(c);
-      const resumeFrom = Number.parseInt(c.req.header('last-event-id') ?? '', 10);
-      return declareStreaming(
-        streamSSE(c, async (stream) => {
-          const queued: AgentUpdate[] = [];
-          const detach = subscribeAgentUpdates(
-            {
-              ownerUserId: owner,
-              ...(Number.isFinite(resumeFrom) ? { since: resumeFrom } : {}),
-            },
-            (update) => queued.push(update),
-          );
-          try {
-            let lastHeartbeat = Date.now();
-            for (;;) {
-              if (stream.aborted) return;
-              while (queued.length > 0) {
-                const update = queued.shift();
-                /* v8 ignore next -- @preserve defensive: length was just checked */
-                if (!update) break;
-                await stream.writeSSE({
-                  id: String(update.sequence),
-                  event: update.kind,
-                  data: JSON.stringify({
-                    sequence: update.sequence,
-                    sessionId: update.sessionId,
-                    parentSessionId: update.parentSessionId,
-                    taskId: update.taskId,
-                    agentName: update.agentName,
-                    milestone: update.milestone,
-                    progress: update.progress,
-                    reasonCode: update.reasonCode,
-                    at: update.at.toISOString(),
-                  }),
-                });
-              }
-              if (Date.now() - lastHeartbeat >= STREAM_HEARTBEAT_MS) {
-                await stream.write(': heartbeat\n\n');
-                lastHeartbeat = Date.now();
-              }
-              await stream.sleep(STREAM_POLL_MS);
+  .get('/agents/stream', apiDoc(personalAgentUpdatesStreamOperation), async (c) => {
+    const owner = requestOwner(c);
+    rejectNonResumableCursor(c.req.header('last-event-id'));
+    return declareStreaming(
+      streamSSE(c, async (stream) => {
+        const queued: AgentUpdate[] = [];
+        const detach = subscribeAgentUpdates({ ownerUserId: owner }, (update) =>
+          queued.push(update),
+        );
+        try {
+          let lastHeartbeat = Date.now();
+          for (;;) {
+            if (stream.aborted) return;
+            while (queued.length > 0) {
+              const update = queued.shift();
+              /* v8 ignore next -- @preserve defensive: length was just checked */
+              if (!update) break;
+              await stream.writeSSE({
+                event: update.kind,
+                data: JSON.stringify({
+                  sequence: update.sequence,
+                  sessionId: update.sessionId,
+                  parentSessionId: update.parentSessionId,
+                  taskId: update.taskId,
+                  agentName: update.agentName,
+                  milestone: update.milestone,
+                  progress: update.progress,
+                  reasonCode: update.reasonCode,
+                  at: update.at.toISOString(),
+                }),
+              });
             }
-          } finally {
-            detach();
+            if (Date.now() - lastHeartbeat >= STREAM_HEARTBEAT_MS) {
+              await stream.write(': heartbeat\n\n');
+              lastHeartbeat = Date.now();
+            }
+            await stream.sleep(STREAM_POLL_MS);
           }
-        }),
-      );
-    },
-  )
+        } finally {
+          detach();
+        }
+      }),
+    );
+  })
   .post(
     '/chat/new',
     apiDoc({
+      status: 201,
       tag: 'Athena',
       summary: 'Start a fresh personal chat',
       response: AthenaSessionDetailOut,
@@ -913,13 +885,19 @@ const meAthena = new Hono<AppEnv>()
     zJson(AthenaFreshChatBody),
     async (c) => {
       const owner = requestOwner(c);
-      const created = await createChat(owner, c.req.valid('json').context);
-      return ok(c, AthenaSessionDetailOut, await personalDetail(owner, created.id));
+      const session = await createChat(owner, c.req.valid('json').context);
+      return createdResponse(
+        c,
+        AthenaSessionDetailOut,
+        await personalDetail(owner, session.id),
+        personalSessionMonitor(session.id),
+      );
     },
   )
   .post(
     '/chat/messages',
     apiDoc({
+      status: [200, 202],
       tag: 'Athena',
       summary: 'Message the current personal chat',
       response: AthenaSessionDetailOut,
@@ -935,7 +913,7 @@ const meAthena = new Hono<AppEnv>()
       const mode = await driveAfterMessage(current);
       const detail = await personalDetail(owner, session.id);
       return mode === 'async'
-        ? accepted(c, AthenaSessionDetailOut, detail)
+        ? accepted(c, AthenaSessionDetailOut, detail, personalSessionMonitor(session.id))
         : ok(c, AthenaSessionDetailOut, detail);
     },
   )
@@ -954,6 +932,7 @@ const meAthena = new Hono<AppEnv>()
   .post(
     '/sessions',
     apiDoc({
+      status: [201, 202],
       tag: 'Athena',
       summary: 'Create personal Athena work',
       response: AthenaSessionDetailOut,
@@ -1023,8 +1002,8 @@ const meAthena = new Hono<AppEnv>()
       }
       const detail = await personalDetail(owner, created.id);
       return admission.mode === 'async'
-        ? accepted(c, AthenaSessionDetailOut, detail)
-        : ok(c, AthenaSessionDetailOut, detail);
+        ? accepted(c, AthenaSessionDetailOut, detail, personalSessionMonitor(created.id))
+        : createdResponse(c, AthenaSessionDetailOut, detail, personalSessionMonitor(created.id));
     },
   )
   .get(
@@ -1048,6 +1027,7 @@ const meAthena = new Hono<AppEnv>()
   .post(
     '/sessions/:id/messages',
     apiDoc({
+      status: [200, 202],
       tag: 'Athena',
       summary: 'Steer personal Athena work',
       response: AthenaSessionDetailOut,
@@ -1064,13 +1044,14 @@ const meAthena = new Hono<AppEnv>()
       const mode = await driveAfterMessage(current);
       const detail = await personalDetail(owner, session.id);
       return mode === 'async'
-        ? accepted(c, AthenaSessionDetailOut, detail)
+        ? accepted(c, AthenaSessionDetailOut, detail, personalSessionMonitor(session.id))
         : ok(c, AthenaSessionDetailOut, detail);
     },
   )
   .post(
     '/sessions/:id/run',
     apiDoc({
+      status: [200, 202],
       tag: 'Athena',
       summary: 'Run personal Athena work',
       response: AthenaSessionDetailOut,
@@ -1091,7 +1072,7 @@ const meAthena = new Hono<AppEnv>()
       }
       const detail = await personalDetail(owner, session.id);
       return admission.mode === 'async'
-        ? accepted(c, AthenaSessionDetailOut, detail)
+        ? accepted(c, AthenaSessionDetailOut, detail, personalSessionMonitor(session.id))
         : ok(c, AthenaSessionDetailOut, detail);
     },
   )
@@ -1119,23 +1100,7 @@ const meAthena = new Hono<AppEnv>()
   )
   .get(
     '/sessions/:id/stream',
-    describeEventStream({
-      tags: ['Athena'],
-      summary: 'Stream personal Athena activity (SSE)',
-      description:
-        'Replay and live-tail only the caller-owned session activity as Server-Sent Events. A new client without Last-Event-ID receives only the newest 100 visible activities and should use the newest received id on reconnect; older history remains available through the paginated JSON activity route. A recognized Last-Event-ID resumes strictly after that persisted activity.',
-      parameters: [
-        {
-          name: 'Last-Event-ID',
-          in: 'header',
-          required: false,
-          description:
-            'Resume strictly after this previously received activity id. Omit only for the bounded newest-100 initial replay.',
-          schema: { type: 'string' },
-        },
-      ],
-      streamDescription: 'Replay and live-tail activity as Server-Sent Events.',
-    }),
+    apiDoc(personalAthenaActivityStreamOperation),
     zParam(idParam),
     async (c) =>
       streamOwnedActivity(c, await loadOwnedSession(requestOwner(c), c.req.valid('param').id)),
@@ -1147,13 +1112,20 @@ const meAthena = new Hono<AppEnv>()
       summary: 'List personal Athena proposals',
       response: pageOf(ProposalGroupOut),
       description:
-        'List still-pending proposal groups for one caller-owned Athena session without exposing another user’s private review queue.',
+        'List still-pending proposal groups in stable proposal-group-id order. Pages default to 50 groups, accept at most 100, and omit nextCursor at exhaustion. The session must belong to the caller.',
     }),
     zParam(idParam),
+    zQuery(CursorQuery),
     async (c) => {
       const id = c.req.valid('param').id;
+      const { cursor, limit } = c.req.valid('query');
       await loadOwnedSession(requestOwner(c), id);
-      return ok(c, pageOf(ProposalGroupOut), { items: await listProposalGroups(id) });
+      const items = await listProposalGroups(id, { cursor, limit });
+      return ok(
+        c,
+        pageOf(ProposalGroupOut),
+        pageResultByKey(items, limit, (item) => item.proposalGroupId),
+      );
     },
   )
   .patch(
@@ -1216,6 +1188,7 @@ const meAthena = new Hono<AppEnv>()
           c,
           SessionActivityOut,
           toPersonalActivityOut(await loadActivity(id, activityId)),
+          personalSessionMonitor(id),
         );
       }
       await approveAndResume(session.contextOrganizationId ?? '', null, id, activityId, decision);
@@ -1249,7 +1222,12 @@ const meAthena = new Hono<AppEnv>()
       );
       if (asynchronousRunnerEnabled()) {
         await wakeWaitingAthenaGeneration(id);
-        return accepted(c, SessionActivityOut, toPersonalActivityOut(created));
+        return accepted(
+          c,
+          SessionActivityOut,
+          toPersonalActivityOut(created),
+          personalSessionMonitor(id),
+        );
       }
       await resumeSessionExecution(workspaceId, id);
       return ok(c, SessionActivityOut, toPersonalActivityOut(created));
@@ -1283,7 +1261,12 @@ const meAthena = new Hono<AppEnv>()
           queueWake: true,
         });
         await wakeWaitingAthenaGeneration(id);
-        return accepted(c, AthenaSessionDetailOut, await personalDetail(owner, id));
+        return accepted(
+          c,
+          AthenaSessionDetailOut,
+          await personalDetail(owner, id),
+          personalSessionMonitor(id),
+        );
       }
       await approveGroupAndResume(orgId, null, id, groupId, verdict, activityIds);
       return ok(c, AthenaSessionDetailOut, await personalDetail(owner, id));
@@ -1331,6 +1314,7 @@ const meAthena = new Hono<AppEnv>()
           c,
           AthenaSessionSummaryOut,
           await personalSummaryForSession(owner, current),
+          personalSessionMonitor(session.id),
         );
       }
       const updated = await resumeSessionExecution(session.contextOrganizationId ?? '', session.id);
@@ -1340,7 +1324,6 @@ const meAthena = new Hono<AppEnv>()
   .post(
     '/sessions/:id/cancel',
     apiDoc({
-      status: [200, 202],
       tag: 'Athena',
       summary: 'Cancel personal Athena work',
       response: AthenaSessionSummaryOut,
@@ -1377,11 +1360,7 @@ const meAthena = new Hono<AppEnv>()
       await interruptAthenaWork(session.id, owner);
       if (shouldWake) {
         await wakeWaitingAthenaGeneration(session.id);
-        return accepted(
-          c,
-          AthenaSessionSummaryOut,
-          await personalSummaryForSession(owner, updated),
-        );
+        return ok(c, AthenaSessionSummaryOut, await personalSummaryForSession(owner, updated));
       }
       return ok(c, AthenaSessionSummaryOut, await personalSummaryForSession(owner, updated));
     },
@@ -1428,6 +1407,7 @@ const meAthena = new Hono<AppEnv>()
             c,
             AthenaSessionSummaryOut,
             await personalSummaryForSession(owner, current),
+            personalSessionMonitor(session.id),
           );
         }
         const updated = await approveLatestAndResume(orgId, null, session.id);
@@ -1453,11 +1433,7 @@ const meAthena = new Hono<AppEnv>()
         : await transitionLifecycle(session, 'cancel');
       if (asynchronous) {
         await wakeWaitingAthenaGeneration(session.id);
-        return accepted(
-          c,
-          AthenaSessionSummaryOut,
-          await personalSummaryForSession(owner, updated),
-        );
+        return ok(c, AthenaSessionSummaryOut, await personalSummaryForSession(owner, updated));
       }
       return ok(c, AthenaSessionSummaryOut, await personalSummaryForSession(owner, updated));
     },

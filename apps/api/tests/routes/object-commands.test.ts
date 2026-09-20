@@ -9,7 +9,7 @@ import type projectsRouter from '../../src/routes/projects';
 import type timeRouter from '../../src/routes/time';
 import type { AppEnv } from '../../src/context';
 import { MAX_OBJECT_COMMAND_BYTES } from '../../src/lib/http-limits';
-import { idempotency } from '../../src/lib/idempotency';
+import { idempotencyFor } from '../../src/lib/idempotency';
 import { flushDeferredWork } from '../../src/lib/after-response';
 import { EntityWriteBus, type EntityWriteEvent } from '../../src/events/entity-write-bus';
 import { setEntityWriteBus } from '../../src/events/entity-write-registry';
@@ -3339,7 +3339,7 @@ describe('object commands', () => {
       name: 'Retry safe',
     });
     const wrapped = new Hono<AppEnv>();
-    wrapped.use('*', idempotency);
+    wrapped.use('*', idempotencyFor('atomic-receipt'));
     wrapped.route('/', objectCommands);
     const app = appWithActor(
       wrapped,
@@ -3379,7 +3379,7 @@ describe('object commands', () => {
     });
     let breakGenericResponseRecording = true;
     const wrapped = new Hono<AppEnv>();
-    wrapped.use('*', idempotency);
+    wrapped.use('*', idempotencyFor('atomic-receipt'));
     wrapped.use('*', async (c, next) => {
       await next();
       if (!breakGenericResponseRecording) return;

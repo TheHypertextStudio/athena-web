@@ -17,8 +17,14 @@ import type { Hono, Context } from 'hono';
 import type { AppEnv } from '../context';
 import { MethodNotAllowedError, NotFoundError } from '../error';
 
-/** The methods this API routes; `HEAD` and `OPTIONS` are handled by Hono and CORS. */
-const ROUTED_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'] as const;
+/** Methods that may own an operation at a path; HEAD is implied by every GET registration. */
+const ROUTED_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'] as const;
+
+function hasRegisteredOperation(app: Hono<AppEnv>, method: string, path: string): boolean {
+  return app.router
+    .match(method, path)[0]
+    .some((match) => match[0][1].method === method && match[0][1].path !== '*');
+}
 
 /**
  * Build the `notFound` handler for a fully-composed app.
@@ -35,9 +41,10 @@ const ROUTED_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'] as const;
 export function unmatchedRoute(app: Hono<AppEnv>) {
   return (c: Context<AppEnv>): never => {
     const path = new URL(c.req.url).pathname;
-    const allowed = ROUTED_METHODS.filter(
-      (method) => method !== c.req.method && app.router.match(method, path)[0].length > 0,
-    );
+    const registered = ROUTED_METHODS.filter((method) => hasRegisteredOperation(app, method, path));
+    const allowed = registered.includes('GET')
+      ? (['GET', 'HEAD', ...registered.filter((method) => method !== 'GET')] as const)
+      : registered;
     if (allowed.length > 0) throw new MethodNotAllowedError(allowed);
     throw new NotFoundError();
   };

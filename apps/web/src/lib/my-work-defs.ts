@@ -10,6 +10,14 @@
  * `'use client'`): `apiQueryOptions` comes from `query-core`.
  */
 import type { api as ApiClient } from './api';
+import {
+  fetchAllAgents,
+  fetchAllMembers,
+  fetchAllProjects,
+  fetchAllSessions,
+  fetchAllTasks,
+  fetchAllTeams,
+} from './org-collection-pages';
 import { STALE, apiQueryOptions } from './query-core';
 import { queryKeys } from './query-keys';
 
@@ -27,37 +35,37 @@ export function myWorkDefs(orgId: string, client: typeof ApiClient) {
   return {
     tasks: apiQueryOptions(
       queryKeys.tasks(orgId),
-      () => client.v1.orgs[':orgId'].tasks.$get({ param: { orgId }, query: {} }),
+      () => fetchAllTasks(client, orgId),
       'Could not load your work.',
       { staleTime: STALE.volatile },
     ),
     projects: apiQueryOptions(
       queryKeys.projects(orgId),
-      () => client.v1.orgs[':orgId'].projects.$get({ param: { orgId }, query: {} }),
+      () => fetchAllProjects(client, orgId),
       'Could not load projects.',
       { staleTime: STALE.standard },
     ),
     members: apiQueryOptions(
       queryKeys.members(orgId),
-      () => client.v1.orgs[':orgId'].members.$get({ param: { orgId } }),
+      () => fetchAllMembers(client, orgId),
       'Could not load members.',
       { staleTime: STALE.static },
     ),
     agents: apiQueryOptions(
       queryKeys.agents(orgId),
-      () => client.v1.orgs[':orgId'].agents.$get({ param: { orgId } }),
+      () => fetchAllAgents(client, orgId),
       'Could not load agents.',
       { staleTime: STALE.static },
     ),
     teams: apiQueryOptions(
       queryKeys.teams(orgId),
-      () => client.v1.orgs[':orgId'].teams.$get({ param: { orgId } }),
+      () => fetchAllTeams(client, orgId),
       'Could not load teams.',
       { staleTime: STALE.static },
     ),
     sessions: apiQueryOptions(
       queryKeys.sessions(orgId),
-      () => client.v1.orgs[':orgId'].sessions.$get({ param: { orgId }, query: {} }),
+      () => fetchAllSessions(client, orgId),
       'Could not load agent sessions.',
       { staleTime: STALE.volatile },
     ),

@@ -19,12 +19,45 @@ import type {
   TeamRosterEntry,
   WorkflowStateType,
 } from '../contracts/team';
-import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
+import { and, asc, eq, gt, inArray, isNull, or, sql, type SQL } from 'drizzle-orm';
 
+import { ValidationError } from '../error';
+import { decodeTupleCursor } from '../lib/list-cursor';
 import { buildTaskViewFilter } from './task-helpers';
 
 /** How many days of history the throughput series covers. */
 export const THROUGHPUT_WINDOW_DAYS = 30;
+
+/** Cursor and page size for a database-bounded team-roster query. */
+export interface TeamRosterPagination {
+  /** Opaque cursor returned by the preceding page. */
+  readonly cursor?: string | undefined;
+  /** Maximum rows to return, excluding the one-row continuation probe. */
+  readonly limit: number;
+}
+
+/** Decode and validate a two-string tuple cursor before using it in a SQL seek predicate. */
+function tupleBoundary(cursor: string | undefined): readonly [string, string] | null {
+  const tuple = decodeTupleCursor(cursor);
+  if (
+    tuple === null ||
+    (tuple.length === 2 && typeof tuple[0] === 'string' && typeof tuple[1] === 'string')
+  ) {
+    return tuple as readonly [string, string] | null;
+  }
+  throw new ValidationError([{ path: ['cursor'], message: 'The cursor is invalid or expired.' }]);
+}
+
+/** Build a strict seek predicate for a two-column ascending string order. */
+function seekTuple(
+  first: Parameters<typeof gt>[0],
+  second: Parameters<typeof gt>[0],
+  cursor: string | undefined,
+): SQL | undefined {
+  const boundary = tupleBoundary(cursor);
+  if (!boundary) return undefined;
+  return or(gt(first, boundary[0]), and(eq(first, boundary[0]), gt(second, boundary[1])));
+}
 
 /** The state types whose tasks count as still open. */
 const OPEN_STATE_TYPES: readonly WorkflowStateType[] = ['backlog', 'unstarted', 'started'];
@@ -64,8 +97,10 @@ export async function loadTeamMembers(
   orgId: string,
   teamId: string,
   viewerActorId: string,
+  pagination?: TeamRosterPagination,
 ): Promise<TeamMemberOut[]> {
-  const rows = await db
+  const normalizedName = sql<string>`lower(${actor.displayName})`;
+  const query = db
     .select({
       actorId: actor.id,
       displayName: actor.displayName,
@@ -80,9 +115,11 @@ export async function loadTeamMembers(
         eq(teamMember.teamId, teamId),
         eq(teamMember.organizationId, orgId),
         isNull(actor.archivedAt),
+        pagination ? seekTuple(normalizedName, actor.id, pagination.cursor) : undefined,
       ),
     )
-    .orderBy(sql`lower(${actor.displayName})`);
+    .orderBy(asc(normalizedName), asc(actor.id));
+  const rows = pagination ? await query.limit(pagination.limit + 1) : await query;
 
   if (rows.length === 0) return [];
 
@@ -115,7 +152,11 @@ export async function loadTeamMembers(
  * @param orgId - The tenant.
  * @returns Every (team, member) pair, ordered by team then name.
  */
-export async function loadOrgTeamRosters(orgId: string): Promise<TeamRosterEntry[]> {
+export async function loadOrgTeamRosters(
+  orgId: string,
+  pagination: TeamRosterPagination,
+): Promise<TeamRosterEntry[]> {
+  const boundary = tupleBoundary(pagination.cursor);
   const rows = await db
     .select({
       teamId: teamMember.teamId,
@@ -125,8 +166,20 @@ export async function loadOrgTeamRosters(orgId: string): Promise<TeamRosterEntry
     })
     .from(teamMember)
     .innerJoin(actor, eq(actor.id, teamMember.actorId))
-    .where(and(eq(teamMember.organizationId, orgId), isNull(actor.archivedAt)))
-    .orderBy(teamMember.teamId, sql`lower(${actor.displayName})`);
+    .where(
+      and(
+        eq(teamMember.organizationId, orgId),
+        isNull(actor.archivedAt),
+        boundary
+          ? or(
+              gt(teamMember.teamId, boundary[0]),
+              and(eq(teamMember.teamId, boundary[0]), gt(actor.id, boundary[1])),
+            )
+          : undefined,
+      ),
+    )
+    .orderBy(asc(teamMember.teamId), asc(actor.id))
+    .limit(pagination.limit + 1);
   return rows.map((row) => ({
     teamId: row.teamId as TeamRosterEntry['teamId'],
     actorId: row.actorId,

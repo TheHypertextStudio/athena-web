@@ -17,6 +17,7 @@ import { fetchCyclesWithStats } from '@/lib/fetch-cycles-with-stats';
 import { unwrap } from '@/lib/query-core';
 import { queryKeys } from '@/lib/query-keys';
 import { dehydrate, getServerApi, getServerQueryClient } from '@/lib/query-server';
+import { fetchAllTeams } from '@/lib/org-collection-pages';
 
 import CyclesClient from './cycles-client';
 
@@ -42,11 +43,7 @@ export default async function CyclesListPage({
     }),
     queryClient.prefetchQuery({
       queryKey: queryKeys.teams(orgId),
-      queryFn: () =>
-        unwrap(
-          () => api.v1.orgs[':orgId'].teams.$get({ param: { orgId } }),
-          'Could not load teams.',
-        ),
+      queryFn: () => unwrap(() => fetchAllTeams(api, orgId), 'Could not load teams.'),
     }),
   ]);
 

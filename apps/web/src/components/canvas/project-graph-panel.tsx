@@ -51,6 +51,7 @@ import {
 } from '@/components/canvas/project-graph-panel-support';
 import { useCanvasAspectRatio } from '@/components/canvas/use-canvas-aspect-ratio';
 import { api } from '@/lib/api';
+import { fetchAllMembers, fetchAllRoles } from '@/lib/org-collection-pages';
 import { useAppPathname } from '@/lib/app-location';
 import { apiQueryOptions, queryKeys, useApiListQuery } from '@/lib/query';
 import { useOrgCapability } from '@/lib/use-org-capability';
@@ -110,14 +111,14 @@ export function ProjectGraphPanel({ rows, orgId }: ProjectGraphPanelProps): JSX.
   const membersQ = useApiListQuery(
     apiQueryOptions(
       queryKeys.members(orgId),
-      () => api.v1.orgs[':orgId'].members.$get({ param: { orgId } }),
+      () => fetchAllMembers(api, orgId),
       'Could not load members.',
     ),
   );
   const rolesQ = useApiListQuery(
     apiQueryOptions(
       queryKeys.roles(orgId),
-      () => api.v1.orgs[':orgId'].roles.$get({ param: { orgId } }),
+      () => fetchAllRoles(api, orgId),
       'Could not load roles.',
     ),
   );

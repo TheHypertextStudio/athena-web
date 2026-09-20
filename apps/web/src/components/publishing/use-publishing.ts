@@ -149,7 +149,7 @@ export function usePublicationsQuery(orgId: string, enabled: boolean) {
   return useApiQuery(
     apiQueryOptions(
       queryKeys.publications(orgId),
-      () => api.v1.orgs[':orgId'].publications.$get({ param: { orgId } }),
+      () => api.v1.orgs[':orgId'].publications.$get({ param: { orgId }, query: { limit: '100' } }),
       'Could not load published pages.',
       { enabled },
     ),
@@ -183,7 +183,11 @@ export function useWorkspaceDomainsQuery(orgId: string, enabled: boolean) {
   return useApiQuery(
     apiQueryOptions(
       queryKeys.workspaceDomains(orgId),
-      () => api.v1.orgs[':orgId'].publishing.domains.$get({ param: { orgId } }),
+      () =>
+        api.v1.orgs[':orgId'].publishing.domains.$get({
+          param: { orgId },
+          query: { limit: '100' },
+        }),
       'Could not load custom domains.',
       { enabled },
     ),

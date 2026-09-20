@@ -39,7 +39,7 @@ export default function NotificationsSettingsPage(): JSX.Element {
   const preferencesQ = useApiQuery(
     apiQueryOptions(
       queryKeys.notificationPreferences(),
-      () => api.v1.me.notifications.preferences.$get(),
+      () => api.v1.me.notifications.preferences.$get({ query: {} }),
       'Could not load notification preferences.',
       { staleTime: STALE.standard },
     ),
@@ -47,7 +47,7 @@ export default function NotificationsSettingsPage(): JSX.Element {
   const contactPointsQ = useApiListQuery(
     apiQueryOptions(
       queryKeys.contactPoints(),
-      () => api.v1.me['contact-points'].$get(),
+      () => api.v1.me['contact-points'].$get({ query: {} }),
       'Could not load notification contact points.',
       { staleTime: STALE.standard },
     ),

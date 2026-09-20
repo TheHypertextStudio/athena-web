@@ -23,6 +23,7 @@ import type { MemberOut } from '@docket/identity-access/member-contract';
 import type { RoleOut } from './contracts/role';
 
 import { api } from '@/lib/api';
+import { fetchAllMembers, fetchAllRoles } from '@/lib/org-collection-pages';
 import { STALE, apiQueryOptions, queryKeys, useApiQuery } from '@/lib/query';
 
 /** The org's roster and roles, plus whether they are still resolving. */
@@ -50,7 +51,7 @@ export interface OrgMembership {
 export function orgMembersDef(orgId: string) {
   return apiQueryOptions(
     queryKeys.members(orgId),
-    () => api.v1.orgs[':orgId'].members.$get({ param: { orgId } }),
+    () => fetchAllMembers(api, orgId),
     'Could not load members.',
     { staleTime: STALE.static },
   );
@@ -65,7 +66,7 @@ export function orgMembersDef(orgId: string) {
 export function orgRolesDef(orgId: string) {
   return apiQueryOptions(
     queryKeys.roles(orgId),
-    () => api.v1.orgs[':orgId'].roles.$get({ param: { orgId } }),
+    () => fetchAllRoles(api, orgId),
     'Could not load roles.',
     { staleTime: STALE.static },
   );

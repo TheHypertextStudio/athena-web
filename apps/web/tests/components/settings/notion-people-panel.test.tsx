@@ -91,6 +91,25 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('NotionPeoplePanel — deciding about a person', () => {
+  it('keeps requesting cursor pages until every Notion person is available', async () => {
+    peopleGet.mockImplementation(({ query }: { readonly query?: { readonly cursor?: string } }) =>
+      query?.cursor === 'people-page-2'
+        ? Promise.resolve(okResponse({ items: [person()] }))
+        : Promise.resolve(okResponse({ items: [], nextCursor: 'people-page-2' })),
+    );
+    renderPanel();
+
+    expect(await screen.findByRole('combobox')).toBeInTheDocument();
+    expect(peopleGet).toHaveBeenNthCalledWith(1, {
+      param: { orgId: ORG_ID, id: INTEGRATION_ID },
+      query: { limit: '100' },
+    });
+    expect(peopleGet).toHaveBeenNthCalledWith(2, {
+      param: { orgId: ORG_ID, id: INTEGRATION_ID },
+      query: { limit: '100', cursor: 'people-page-2' },
+    });
+  });
+
   it('asks about somebody nobody has decided on yet', async () => {
     peopleGet.mockResolvedValue(okResponse({ items: [person()] }));
     renderPanel();

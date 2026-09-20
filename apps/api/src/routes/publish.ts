@@ -28,16 +28,17 @@ import {
   PublicationUpdate,
   suggestPublicSlug,
 } from '@docket/work/publish-contract';
-import { pageOf } from '../contracts/pagination';
+import { CursorQuery, pageOf } from '../contracts/pagination';
 import { and, desc, eq, ne } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
 
 import type { AppEnv } from '../context';
 import { ConflictError, NotFoundError, ValidationError } from '../error';
-import { created, ok } from '../lib/ok';
+import { created, memberUrl, ok } from '../lib/ok';
+import { pageResult, seekAfter } from '../lib/list-cursor';
 import { apiDoc } from '../lib/openapi-route';
-import { zJson, zParam } from '../lib/validate';
+import { zJson, zParam, zQuery } from '../lib/validate';
 import { capabilityGuard } from '../permissions/capability-guard';
 import { briefPath, briefUrls, requireSubjectTitle } from './publish-brief';
 
@@ -148,20 +149,32 @@ const publications = new Hono<AppEnv>()
       tag: 'Publishing',
       summary: 'List published briefs',
       response: pageOf(PublicationOut),
-      description: `List every publication in the workspace — each row is one initiative, program, or project that has been published as a public brief, newest first, including those currently withdrawn (\`published: false\`). Withdrawn rows are retained so re-publishing restores the same URL, which is why they appear here rather than vanishing. Each row's \`urls\` array is resolved live: it lists the shared brief host (when one is configured for this deployment) plus every verified custom domain, and is empty for a withdrawn brief. Reads require only org membership.`,
+      description: `List every publication in the workspace in \`createdAt DESC, id DESC\` order, including withdrawn rows. Pages default to 50 items, accept at most 100, and omit \`nextCursor\` at exhaustion. Each row's \`urls\` array is resolved live. Reads require only org membership.`,
     }),
+    zQuery(CursorQuery),
     async (c) => {
       const { orgId } = c.get('actorCtx');
+      const { cursor, limit } = c.req.valid('query');
       const [rows, slug] = await Promise.all([
         db
           .select()
           .from(publication)
-          .where(eq(publication.organizationId, orgId))
-          .orderBy(desc(publication.createdAt)),
+          .where(
+            and(
+              eq(publication.organizationId, orgId),
+              seekAfter(publication.createdAt, publication.id, cursor),
+            ),
+          )
+          .orderBy(desc(publication.createdAt), desc(publication.id))
+          .limit(limit + 1),
         workspaceSlug(orgId),
       ]);
-      const items = await Promise.all(rows.map((row) => toOut(row, slug)));
-      return ok(c, pageOf(PublicationOut), { items });
+      const page = pageResult(rows, limit, (row) => row.createdAt);
+      const items = await Promise.all(page.items.map((row) => toOut(row, slug)));
+      return ok(c, pageOf(PublicationOut), {
+        items,
+        ...(page.nextCursor ? { nextCursor: page.nextCursor } : {}),
+      });
     },
   )
   .get(
@@ -268,7 +281,12 @@ Publishing a record that was previously withdrawn restores it at its **original*
       /* v8 ignore next -- @preserve defensive: insert/update always returns one row */
       if (!row) throw new Error('publication write returned no row');
 
-      return created(c, PublicationOut, await toOut(row, await workspaceSlug(orgId)));
+      return created(
+        c,
+        PublicationOut,
+        await toOut(row, await workspaceSlug(orgId)),
+        memberUrl(c, `${row.subjectKind}/${row.subjectId}`),
+      );
     },
   )
   .patch(

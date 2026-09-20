@@ -4,17 +4,19 @@ import {
   CalendarItemKind,
   CalendarItemRelationCreate,
   CalendarItemRelationOut,
+  CalendarItemRelationRole,
 } from '@docket/planning/calendar-contract';
-import { pageOf } from '../contracts/pagination';
-import { and, eq, inArray } from 'drizzle-orm';
+import { CursorQuery, pageOf } from '../contracts/pagination';
+import { and, asc, eq, gt, inArray, or } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
 
 import type { AppEnv } from '../context';
 import { ConflictError, NotFoundError, ValidationError } from '../error';
 import { created, ok } from '../lib/ok';
+import { decodeTupleCursor, pageResultByTuple } from '../lib/list-cursor';
 import { apiDoc } from '../lib/openapi-route';
-import { zJson, zParam } from '../lib/validate';
+import { zJson, zParam, zQuery } from '../lib/validate';
 import { resolveCanonicalCalendarItemSet } from '../calendar/calendar-read';
 
 import { requireUserId } from './calendar-shared';
@@ -107,7 +109,7 @@ export const calendarItemRelationRoutes = new Hono<AppEnv>()
         .returning();
       const relation = rows[0];
       if (!relation) throw new ConflictError('Calendar items are already related');
-      return created(c, CalendarItemRelationOut, toCalendarItemRelationOut(relation));
+      return created(c, CalendarItemRelationOut, toCalendarItemRelationOut(relation), null);
     },
   )
   .get(
@@ -117,23 +119,52 @@ export const calendarItemRelationRoutes = new Hono<AppEnv>()
       summary: 'List calendar item relationships',
       response: CalendarItemRelationsOut,
       description:
-        'List the directed contents and related calendar items attached to one caller-owned calendar item.',
+        'List directed calendar-item relationships in target-id and role order. Pages default to 50 items, accept at most 100, and omit nextCursor at exhaustion.',
     }),
     zParam(idParam),
+    zQuery(CursorQuery),
     async (c) => {
       const userId = requireUserId(c);
       const { id } = c.req.valid('param');
+      const { cursor, limit } = c.req.valid('query');
       const sourceSet = await resolveCanonicalCalendarItemSet(db, { userId, itemId: id });
       if (!sourceSet) throw new NotFoundError('Calendar item not found');
+      const boundary = decodeTupleCursor(cursor);
+      if (
+        boundary !== null &&
+        (boundary.length !== 2 ||
+          typeof boundary[0] !== 'string' ||
+          typeof boundary[1] !== 'string')
+      ) {
+        throw new ValidationError([
+          { path: ['cursor'], message: 'The cursor is invalid or expired.' },
+        ]);
+      }
       const physicalRows = await db
-        .select()
+        .selectDistinctOn([calendarItemRelation.targetItemId, calendarItemRelation.role])
         .from(calendarItemRelation)
-        .where(inArray(calendarItemRelation.sourceItemId, [...sourceSet.memberItemIds]));
-      const rows = [
-        ...new Map(
-          physicalRows.map((row) => [`${row.targetItemId}\0${row.role}`, row] as const),
-        ).values(),
-      ];
+        .where(
+          and(
+            inArray(calendarItemRelation.sourceItemId, [...sourceSet.memberItemIds]),
+            inArray(calendarItemRelation.role, CalendarItemRelationRole.options),
+            boundary
+              ? or(
+                  gt(calendarItemRelation.targetItemId, boundary[0] as string),
+                  and(
+                    eq(calendarItemRelation.targetItemId, boundary[0] as string),
+                    gt(calendarItemRelation.role, boundary[1] as string),
+                  ),
+                )
+              : undefined,
+          ),
+        )
+        .orderBy(
+          asc(calendarItemRelation.targetItemId),
+          asc(calendarItemRelation.role),
+          asc(calendarItemRelation.sourceItemId),
+        )
+        .limit(limit + 1);
+      const rows = physicalRows;
       const targets =
         rows.length === 0
           ? []
@@ -150,13 +181,13 @@ export const calendarItemRelationRoutes = new Hono<AppEnv>()
                 ),
               );
       const targetById = new Map(targets.map((target) => [target.id, target]));
-      return ok(c, CalendarItemRelationsOut, {
+      const items =
         // A single row that fails to parse (an unrecognized role, an unrecognized target kind)
         // is dropped rather than raising `.map()`'s error through the whole response — otherwise
         // one malformed relation makes every OTHER relation on this item unreadable too. Contrast
         // with the single-relation POST/DELETE responses below, which parse the one row they
         // return and correctly throw if it's invalid.
-        items: rows.flatMap((row) => {
+        rows.flatMap((row) => {
           const relation = CalendarItemRelationOut.safeParse(
             toCalendarItemRelationOutUnsafe(row, { sourceItemId: sourceSet.canonicalItemId }),
           );
@@ -166,8 +197,12 @@ export const calendarItemRelationRoutes = new Hono<AppEnv>()
           const targetKind = CalendarItemKind.safeParse(target.kind);
           if (!targetKind.success) return [relation.data];
           return [{ ...relation.data, targetTitle: target.title, targetKind: targetKind.data }];
-        }),
-      });
+        });
+      return ok(
+        c,
+        CalendarItemRelationsOut,
+        pageResultByTuple(items, limit, (item) => [item.targetItemId, item.role]),
+      );
     },
   )
   .delete(

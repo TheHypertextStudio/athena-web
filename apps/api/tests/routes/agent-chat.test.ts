@@ -197,8 +197,11 @@ describe('the Athena chat thread', () => {
     const original = (await first.json()) as AgentSessionDetailOut;
 
     const started = await app.request('/chat/new', { method: 'POST' });
-    expect(started.status).toBe(200);
+    expect(started.status).toBe(201);
     const fresh = (await started.json()) as AgentSessionDetailOut;
+    expect(new URL(assertDefined(started.headers.get('location'))).pathname).toBe(
+      `/v1/orgs/${seed.orgId}/sessions/${fresh.id}`,
+    );
     expect(fresh.id).not.toBe(original.id);
     expect(fresh.activities).toHaveLength(0);
 

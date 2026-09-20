@@ -97,6 +97,58 @@ describe('search browse mode', () => {
     expect(ours).toEqual(expected.map((doc) => `task:${orgId}:${doc.entityId}`));
   });
 
+  it('rejects a browse cursor when the effective filters change', async () => {
+    const schema = await getDb();
+    const { db } = schema;
+    const userId = await seedUserWithHub(db, schema, 'BrowseBoundCursorUser');
+    const orgId = await seedOrg(db, schema);
+    await addMember(db, schema, orgId, userId);
+    await seedDocs(db, schema, orgId, 'browsebound', 3);
+
+    const first = await searchWorkspace({
+      scope: 'org',
+      caller: { kind: 'user', userId },
+      orgId,
+      params: { limit: 1, kinds: ['task'] },
+    });
+    expect(first.nextCursor).toEqual(expect.any(String));
+
+    await expect(
+      searchWorkspace({
+        scope: 'org',
+        caller: { kind: 'user', userId },
+        orgId,
+        params: { limit: 1, kinds: ['project'], cursor: first.nextCursor },
+      }),
+    ).rejects.toMatchObject({ status: 422, code: 'validation_error' });
+  });
+
+  it('normalizes set-like filters before binding a browse cursor', async () => {
+    const schema = await getDb();
+    const { db } = schema;
+    const userId = await seedUserWithHub(db, schema, 'BrowseNormalizedCursorUser');
+    const orgId = await seedOrg(db, schema);
+    await addMember(db, schema, orgId, userId);
+    await seedDocs(db, schema, orgId, 'browsenormalized', 3);
+
+    const first = await searchWorkspace({
+      scope: 'org',
+      caller: { kind: 'user', userId },
+      orgId,
+      params: { limit: 1, kinds: ['project', 'task', 'task'] },
+    });
+    const second = await searchWorkspace({
+      scope: 'org',
+      caller: { kind: 'user', userId },
+      orgId,
+      params: { limit: 1, kinds: ['task', 'project'], cursor: first.nextCursor },
+    });
+
+    expect(first.nextCursor).toEqual(expect.any(String));
+    expect(second.items).toHaveLength(1);
+    expect(second.items[0]?.id).not.toBe(first.items[0]?.id);
+  });
+
   it('hides another member’s private documents from a browsing caller', async () => {
     const schema = await getDb();
     const { db } = schema;

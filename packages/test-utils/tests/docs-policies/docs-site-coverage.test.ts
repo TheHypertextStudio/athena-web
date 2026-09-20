@@ -32,6 +32,19 @@ const MCP_REFERENCE_PAGE = 'developers/mcp-tools-and-resources.mdx';
 const AUTHENTICATION_PAGE = 'developers/authentication.mdx';
 const TERMINOLOGY_PAGE = 'guides/concepts/terminology.mdx';
 const CONCEPTS_DIR = 'guides/concepts';
+const DEVELOPER_PAGE_ORDER = [
+  'developers/overview',
+  'developers/make-your-first-request',
+  'developers/authentication',
+  'developers/rest-api',
+  'developers/api-versions',
+  'developers/api-release-notes',
+  'developers/connect-an-agent-mcp',
+  'developers/mcp-tools-and-resources',
+  'developers/track-time',
+  'developers/errors',
+  'developers/platform-status',
+] as const;
 
 /**
  * Lower bounds that make a silent scan failure loud. A regex that stops matching returns an empty
@@ -65,12 +78,7 @@ const LEGACY_APEX = ['hypertext', 'studio'].join('.');
  * reference its own variables. That leaves the 14 hits in `rest-api.mdx` (link destinations) and
  * the 8 in `docs.json`.
  */
-const LEGACY_APEX_INVENTORY: Readonly<Record<string, number>> = {
-  'developers/connect-an-agent-mcp.mdx': 5,
-  'developers/errors.mdx': 2,
-  'developers/rest-api.mdx': 14,
-  'docs.json': 8,
-};
+const LEGACY_APEX_INVENTORY: Readonly<Record<string, number>> = {};
 
 function readDocsFile(relativePath: string): string {
   return readFileSync(resolve(DOCS_ROOT, relativePath), 'utf8');
@@ -155,7 +163,40 @@ function navigationPages(node: unknown, insidePages = false): string[] {
   );
 }
 
+/** The ordered page list under Mintlify's Developers tab. */
+function developerNavigation(config: unknown): string[] {
+  if (!config || typeof config !== 'object') return [];
+  const navigation = (config as { navigation?: unknown }).navigation;
+  if (!navigation || typeof navigation !== 'object') return [];
+  const tabs = (navigation as { tabs?: unknown }).tabs;
+  if (!Array.isArray(tabs)) return [];
+  const developerTab = tabs.find(
+    (tab): tab is { tab?: unknown; pages?: unknown } =>
+      !!tab && typeof tab === 'object' && (tab as { tab?: unknown }).tab === 'Developers',
+  );
+  return Array.isArray(developerTab?.pages)
+    ? developerTab.pages.filter((page): page is string => typeof page === 'string')
+    : [];
+}
+
 describe('documentation site coverage', () => {
+  it('keeps the developer guides in the capability-first order', () => {
+    const config: unknown = JSON.parse(readDocsFile('docs.json'));
+
+    expect(developerNavigation(config)).toEqual([...DEVELOPER_PAGE_ORDER]);
+  });
+
+  it('removes retired hosts, routes, and hand-maintained MCP counts from developer guidance', () => {
+    const developerPages = publishedDocsFiles().filter((file) => file.startsWith('developers/'));
+    const developerCopy = developerPages.map(readDocsFile).join('\n');
+
+    expect(developerCopy).not.toContain('docket.hypertext.studio');
+    expect(developerCopy).not.toContain('docket-api.hypertext.studio');
+    expect(developerCopy).not.toContain('/api/auth/mcp/register');
+    expect(developerCopy).not.toMatch(/\b\d+\s+(?:MCP\s+)?tools?\b/i);
+    expect(readDocsFile('README.md')).not.toContain('docket.hypertext.studio');
+  });
+
   it('every page docs.json navigates to exists on disk', () => {
     const config: unknown = JSON.parse(readDocsFile('docs.json'));
     const navigation =
@@ -185,7 +226,7 @@ describe('documentation site coverage', () => {
   });
 
   it('every OAuth capability scope is documented on both pages that promise a full list', () => {
-    const scopes = unionMembers(readFileSync(OAUTH_SCOPE_SOURCE, 'utf8'), 'McpCapabilityScope');
+    const scopes = unionMembers(readFileSync(OAUTH_SCOPE_SOURCE, 'utf8'), 'OAuthCapabilityScope');
     expect(scopes).toHaveLength(EXPECTED_CAPABILITY_SCOPES);
 
     for (const page of [AUTHENTICATION_PAGE, MCP_REFERENCE_PAGE]) {

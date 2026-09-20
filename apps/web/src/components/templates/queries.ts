@@ -19,13 +19,14 @@ import type {
 } from '@docket/work/template-contract';
 
 import { api } from '@/lib/api';
+import { fetchAllTemplates } from '@/lib/org-collection-pages';
 import { apiQueryOptions, queryKeys, STALE, unwrap, useApiMutation } from '@/lib/query';
 
 /** Every template in the org, for the settings list. */
 export function templatesDef(orgId: string) {
   return apiQueryOptions(
     queryKeys.templates(orgId),
-    () => api.v1.orgs[':orgId'].templates.$get({ param: { orgId }, query: {} }),
+    () => fetchAllTemplates(api, orgId),
     'Could not load your templates.',
     // Templates change when someone edits one, which is rare and always invalidates this key
     // explicitly. Re-reading them on every composer open would be a request per open for data
@@ -38,7 +39,7 @@ export function templatesDef(orgId: string) {
 export function templatesOfKindDef(orgId: string, targetType: TemplateTargetType) {
   return apiQueryOptions(
     queryKeys.templatesOfKind(orgId, targetType),
-    () => api.v1.orgs[':orgId'].templates.$get({ param: { orgId }, query: { targetType } }),
+    () => fetchAllTemplates(api, orgId, { targetType }),
     'Could not load your templates.',
     { staleTime: STALE.static },
   );

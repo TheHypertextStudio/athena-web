@@ -13,13 +13,14 @@ import {
   RecurrenceSeriesOut,
   SeriesEdit,
 } from '../contracts/recurrence';
-import { pageOf } from '../contracts/pagination';
+import { CursorQuery, pageOf } from '../contracts/pagination';
 import { Hono } from 'hono';
 import { z } from 'zod';
 
 import type { AppEnv } from '../context';
 import { AuthError } from '../error';
 import { created, ok } from '../lib/ok';
+import { pageResultById } from '../lib/list-cursor';
 import { apiDoc } from '../lib/openapi-route';
 import { createScheduledProcess } from '../lib/recurrence/authoring';
 import { bindProcessToCalendarItem } from '../lib/recurrence/calendar-binding';
@@ -34,7 +35,7 @@ import {
   utcCalendarDate,
 } from '../lib/recurrence/series';
 import { materializeRecurrenceSeriesWindow } from '../lib/recurrence/sweep';
-import { zJson, zParam } from '../lib/validate';
+import { zJson, zParam, zQuery } from '../lib/validate';
 import { capabilityGuard } from '../permissions/capability-guard';
 import { enqueueSearchDelete } from '../search/write-through';
 
@@ -51,12 +52,14 @@ const recurrenceSeriesRoutes = new Hono<AppEnv>()
       summary: 'List recurrence series',
       response: pageOf(RecurrenceSeriesOut),
       description:
-        'List active, paused, and ended recurrence series in this workspace with each latest trigger revision reconstructed as a named discriminated union.',
+        'List active, paused, and ended recurrence series in stable series-id order. Pages default to 50 items, accept at most 100, and omit nextCursor at exhaustion. Each row reconstructs its latest trigger revision as a named discriminated union.',
     }),
+    zQuery(CursorQuery),
     async (c) => {
       const { orgId } = c.get('actorCtx');
-      const items = await listRecurrenceSeries(db, orgId);
-      return ok(c, pageOf(RecurrenceSeriesOut), { items });
+      const { cursor, limit } = c.req.valid('query');
+      const items = await listRecurrenceSeries(db, orgId, { cursor, limit });
+      return ok(c, pageOf(RecurrenceSeriesOut), pageResultById(items, limit));
     },
   )
   .post(
@@ -108,7 +111,7 @@ const recurrenceSeriesRoutes = new Hono<AppEnv>()
         calendarItemId: selected.calendarItemId,
         processDefinitionId: selected.processDefinitionId,
       });
-      return created(c, CalendarProcessBindingOut, binding);
+      return created(c, CalendarProcessBindingOut, binding, null);
     },
   )
   .get(

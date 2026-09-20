@@ -12,12 +12,13 @@ import {
   type FieldIssueCode,
   type ProblemCode,
 } from './contracts/errors';
-import type { Context } from 'hono';
+import type { Context, Env } from 'hono';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
 import { ZodError } from 'zod';
 
 import { describeIssues } from './lib/stored-definition';
-import { accessForOperation } from './auth/rest-access-policy';
+import { accessForRequest } from './auth/rest-access-policy';
+import type { AppEnv } from './context';
 
 /** Base class for all mapped API errors. */
 export class ApiError extends Error {
@@ -436,7 +437,7 @@ function docketSessionChallenge(error: ApiError): string {
     : 'DocketSession realm="docket"';
 }
 
-function authenticationChallenge(error: ApiError, context: Context): string | undefined {
+function authenticationChallenge(error: ApiError, context: Context<AppEnv>): string | undefined {
   const path = context.req.path;
   const onRest = path === '/v1' || path.startsWith('/v1/');
   if (error instanceof InsufficientScopeError && onRest) {
@@ -452,7 +453,7 @@ function authenticationChallenge(error: ApiError, context: Context): string | un
     return `Bearer realm="docket", error="invalid_token", resource_metadata="${restResourceMetadataUrl()}"`;
   }
 
-  const access = accessForOperation(context.req.method, path);
+  const access = accessForRequest(context);
   if (access.kind === 'session-or-oauth') {
     return `Bearer realm="docket", resource_metadata="${restResourceMetadataUrl()}", scope="${access.scopes.join(' ')}"`;
   }
@@ -484,7 +485,10 @@ function authenticationChallenge(error: ApiError, context: Context): string | un
  * @param c - The Hono context.
  * @returns a `application/problem+json` response.
  */
-export function onError(err: Error, c: Context) {
+export function onError<E extends Env>(err: Error, c: Context<E>): Response {
+  // The production server always supplies AppEnv. Keeping the handler generic also lets small
+  // isolated Hono tests exercise Problem rendering without fabricating unrelated context values.
+  const appContext = c as unknown as Context<AppEnv>;
   const apiErr =
     err instanceof ApiError
       ? err
@@ -500,7 +504,7 @@ export function onError(err: Error, c: Context) {
         event: err instanceof ZodError ? 'schema_validation_error' : 'unhandled_error',
         // Set by Hono's `requestId` middleware and echoed to the client as `X-Request-Id`, so a
         // report of "it failed at 14:03" resolves to exactly one line here.
-        requestId: c.get('requestId'),
+        requestId: appContext.get('requestId'),
         method: c.req.method,
         path: c.req.path,
         ...(err instanceof ZodError
@@ -514,7 +518,7 @@ export function onError(err: Error, c: Context) {
   // external OAuth clients see the REST resource metadata, while session-only browser routes do
   // not falsely advertise Bearer access. Header presence still selects Bearer and forbids cookie
   // fallback, so a malformed or invalid presented credential receives `invalid_token`.
-  const authenticate = authenticationChallenge(apiErr, c);
+  const authenticate = authenticationChallenge(apiErr, appContext);
   const challenge = authenticate ? { 'WWW-Authenticate': authenticate } : {};
 
   const problem = {

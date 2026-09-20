@@ -27,6 +27,7 @@ import { QueryLoadFailure } from '@/components/feedback';
 import { ObjectSurface } from '@/components/objects/object-surface';
 import { OrgChip } from '@/components/org-chip';
 import { api } from '@/lib/api';
+import { fetchAllMembers, fetchAllRoles } from '@/lib/org-collection-pages';
 import { formatDay } from '@/components/date-picker';
 import { apiQueryOptions, queryKeys, STALE, useApiListQuery, useApiQuery } from '@/lib/query';
 import { todayISODate } from '@/lib/today';
@@ -57,7 +58,7 @@ function DayTaskRow({
   const membersQ = useApiListQuery(
     apiQueryOptions(
       queryKeys.members(task.organizationId),
-      () => api.v1.orgs[':orgId'].members.$get({ param: { orgId: task.organizationId } }),
+      () => fetchAllMembers(api, task.organizationId),
       'Could not load members.',
       { staleTime: STALE.static },
     ),
@@ -65,7 +66,7 @@ function DayTaskRow({
   const rolesQ = useApiListQuery(
     apiQueryOptions(
       queryKeys.roles(task.organizationId),
-      () => api.v1.orgs[':orgId'].roles.$get({ param: { orgId: task.organizationId } }),
+      () => fetchAllRoles(api, task.organizationId),
       'Could not load roles.',
       { staleTime: STALE.static },
     ),

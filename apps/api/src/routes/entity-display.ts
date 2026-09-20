@@ -22,18 +22,19 @@ import {
 } from '@docket/work/entity-display-contract';
 import { isKnownEmojiHexcode } from '@docket/work/emoji-catalog';
 import { isKnownMaterialSymbolName } from '@docket/work/material-symbol-catalog';
-import { pageOf } from '../contracts/pagination';
-import { and, eq } from 'drizzle-orm';
+import { CursorQuery, pageOf } from '../contracts/pagination';
+import { and, asc, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
 
 import type { AppEnv } from '../context';
 import { NotFoundError } from '../error';
 import { ok } from '../lib/ok';
+import { pageResultByKey, seekAfterId } from '../lib/list-cursor';
 import { storedEntityDisplayOut } from '../lib/entity-display-output';
 import { apiDoc } from '../lib/openapi-route';
 import { capabilityGuard } from '../permissions/capability-guard';
-import { zJson, zParam } from '../lib/validate';
+import { zJson, zParam, zQuery } from '../lib/validate';
 
 const displayParam = z.object({
   subjectType: EntityDisplaySubjectType,
@@ -197,22 +198,36 @@ const entityDisplayRouter = new Hono<AppEnv>()
       tag: 'Display',
       summary: 'List display metadata for every customized subject of one type',
       description:
-        'Returns the stored display rows for one subject type across the workspace. Only **customized** subjects appear — anything absent takes the stable default for its type, which the client already knows how to compose. This exists so a grid of N teams costs one request instead of N.',
+        'Returns customized display rows in stable subject-id order. Pages default to 50 items, accept at most 100, and omit nextCursor at exhaustion. Reuse a cursor only for the same subject type. Anything absent uses the stable type default.',
       response: pageOf(EntityDisplayOut),
     }),
     zParam(z.object({ subjectType: EntityDisplaySubjectType })),
+    zQuery(CursorQuery),
     async (c) => {
       const { orgId } = c.get('actorCtx');
       const { subjectType } = c.req.valid('param');
+      const { cursor, limit } = c.req.valid('query');
       const rows = await db
         .select()
         .from(entityDisplay)
         .where(
-          and(eq(entityDisplay.organizationId, orgId), eq(entityDisplay.subjectType, subjectType)),
-        );
-      return ok(c, pageOf(EntityDisplayOut), {
-        items: rows.map((row) => storedEntityDisplayOut(subjectType, row.subjectId, row)),
-      });
+          and(
+            eq(entityDisplay.organizationId, orgId),
+            eq(entityDisplay.subjectType, subjectType),
+            seekAfterId(entityDisplay.subjectId, cursor, 'asc'),
+          ),
+        )
+        .orderBy(asc(entityDisplay.subjectId))
+        .limit(limit + 1);
+      return ok(
+        c,
+        pageOf(EntityDisplayOut),
+        pageResultByKey(
+          rows.map((row) => storedEntityDisplayOut(subjectType, row.subjectId, row)),
+          limit,
+          (item) => item.subjectId,
+        ),
+      );
     },
   )
   .delete(

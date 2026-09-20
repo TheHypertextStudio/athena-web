@@ -19,6 +19,7 @@ import Link from '@/components/docket-link';
 import type { JSX } from 'react';
 
 import { api } from '@/lib/api';
+import { fetchAllAttachedAthenaMail } from '@/lib/org-collection-pages';
 import { apiQueryOptions, STALE } from '@/lib/query-core';
 import { useApiQuery } from '@/lib/query';
 
@@ -56,10 +57,7 @@ export function MailAttachmentsPanel({
   const attachedQ = useApiQuery(
     apiQueryOptions(
       ['me', 'athena', 'mail', 'attached', subjectType, subjectId] as const,
-      () =>
-        api.v1.me.athena.mail.attached.$get({
-          query: { subjectType, subjectId, organizationId },
-        }),
+      () => fetchAllAttachedAthenaMail(api, { subjectType, subjectId, organizationId }),
       'Could not load the email attached to this item.',
       { staleTime: STALE.volatile, enabled: subjectId.length > 0 && organizationId.length > 0 },
     ),

@@ -13,6 +13,10 @@
 import type { AthenaMailAttachBody } from '@docket/athena/athena-mail-contract';
 
 import { api } from '@/lib/api';
+import {
+  fetchAllAthenaMail,
+  fetchAllAthenaMailAttachmentTargets,
+} from '@/lib/org-collection-pages';
 import { apiQueryOptions, STALE } from '@/lib/query-core';
 
 /** Query key for the caller's inbox address. */
@@ -46,7 +50,7 @@ export function mailboxDef() {
 export function mailListDef() {
   return apiQueryOptions(
     mailListKey,
-    () => api.v1.me.athena.mail.$get({ query: {} }),
+    () => fetchAllAthenaMail(api),
     'Could not load the messages Athena received.',
     { staleTime: STALE.volatile },
   );
@@ -66,7 +70,7 @@ export function mailMessageDef(id: string) {
 export function mailAttachmentsDef(id: string) {
   return apiQueryOptions(
     mailAttachmentsKey(id),
-    () => api.v1.me.athena.mail[':id'].attachments.$get({ param: { id } }),
+    () => fetchAllAthenaMailAttachmentTargets(api, id),
     'Could not load what this message is attached to.',
     { staleTime: STALE.volatile, enabled: id.length > 0 },
   );

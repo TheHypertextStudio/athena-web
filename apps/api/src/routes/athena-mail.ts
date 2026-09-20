@@ -22,7 +22,7 @@ import {
   AthenaMailMessageOut,
 } from '@docket/athena/athena-mail-contract';
 import { AttachmentRemoved, AttachmentSubjectType } from '@docket/work/attachment-contract';
-import { pageOf } from '../contracts/pagination';
+import { CursorQuery, pageOf } from '../contracts/pagination';
 import { and, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import type { Context } from 'hono';
@@ -38,25 +38,22 @@ import { assertSharedWorkWritable } from '../product-capability';
 import {
   ATHENA_MAIL_ATTACHMENT_KIND,
   athenaMailHost,
+  countAttachmentTargets,
   ensureMailbox,
-  listAttachmentTargets,
+  listAttachmentTargetsPage,
   listMessagesAttachedTo,
   listOwnedMessages,
+  loadAttachmentTarget,
   loadOwnedMessage,
   mailboxAddress,
   messagePermalink,
   toMailMessageOut,
 } from './athena-mail-store';
 
-/** Default and maximum number of received messages returned in one page. */
-const MESSAGE_PAGE_LIMIT = 100;
-
 const idParam = z.object({ id: z.string() });
 const attachmentParam = z.object({ id: z.string(), attachmentId: z.string() });
-const listQuery = z.object({
-  limit: z.coerce.number().int().min(1).max(MESSAGE_PAGE_LIMIT).optional(),
-});
-const attachedQuery = z.object({
+const listQuery = CursorQuery;
+const attachedQuery = CursorQuery.extend({
   subjectType: AttachmentSubjectType,
   subjectId: z.string().min(1),
   organizationId: z.string().min(1),
@@ -149,14 +146,16 @@ const athenaMail = new Hono<AppEnv>()
       summary: 'List messages Athena received',
       response: pageOf(AthenaMailMessageOut),
       description:
-        "List the messages Athena received natively at the caller's inbox address, newest first. These are stored separately from mail Docket syncs out of a connected mailbox: they live in Athena's own store, Docket holds their full content, and no integration is involved. Each is returned as a context object (stable id, title, content, provenance, timestamps) with its email envelope alongside, plus how many Docket entities it is currently attached to.",
+        "List the messages Athena received natively at the caller's inbox address in receivedAt DESC, id DESC order. Pages default to 50 items, accept at most 100, and omit nextCursor at exhaustion. These messages live in Athena's own store and each row includes its attachment count.",
     }),
     zQuery(listQuery),
     async (c) => {
-      const { limit } = c.req.valid('query');
-      return ok(c, pageOf(AthenaMailMessageOut), {
-        items: await listOwnedMessages(requestOwner(c), limit ?? MESSAGE_PAGE_LIMIT),
-      });
+      const { cursor, limit } = c.req.valid('query');
+      return ok(
+        c,
+        pageOf(AthenaMailMessageOut),
+        await listOwnedMessages(requestOwner(c), limit, cursor),
+      );
     },
   )
   .get(
@@ -166,16 +165,24 @@ const athenaMail = new Hono<AppEnv>()
       summary: 'List the Athena messages attached to one entity',
       response: pageOf(AthenaMailMessageOut),
       description:
-        'List the messages Athena received that are attached to one task, project, or initiative — the read behind the "received email" section on an entity. Reads the same generic attachment table every other attachable resource uses, joined back to Athena’s own message store, so an entity surface renders these without a mail-specific join. Requires the caller to be an active member of the named workspace.',
+        'List received messages attached to one task, project, or initiative in receivedAt DESC, id DESC order. Pages default to 50 items, accept at most 100, and omit nextCursor at exhaustion. Reuse a cursor only with the same entity filters.',
     }),
     zQuery(attachedQuery),
     async (c) => {
       const owner = requestOwner(c);
       const q = c.req.valid('query');
       await requireMembership(owner, q.organizationId);
-      return ok(c, pageOf(AthenaMailMessageOut), {
-        items: await listMessagesAttachedTo(q.subjectType, q.subjectId, q.organizationId),
-      });
+      return ok(
+        c,
+        pageOf(AthenaMailMessageOut),
+        await listMessagesAttachedTo(
+          q.subjectType,
+          q.subjectId,
+          q.organizationId,
+          q.limit,
+          q.cursor,
+        ),
+      );
     },
   )
   .get(
@@ -193,8 +200,11 @@ const athenaMail = new Hono<AppEnv>()
       const { id } = c.req.valid('param');
       const row = await loadOwnedMessage(owner, id);
       if (!row) throw new NotFoundError('Message not found');
-      const targets = await listAttachmentTargets(row.id);
-      return ok(c, AthenaMailMessageOut, toMailMessageOut(row, targets.length));
+      return ok(
+        c,
+        AthenaMailMessageOut,
+        toMailMessageOut(row, await countAttachmentTargets(row.id)),
+      );
     },
   )
   .get(
@@ -204,17 +214,21 @@ const athenaMail = new Hono<AppEnv>()
       summary: 'List what a received message is attached to',
       response: pageOf(AthenaMailAttachmentTargetOut),
       description:
-        'List the Docket entities a received message is currently attached to, oldest first, each with the entity’s current title. Reads the same generic attachment table every other attachable resource uses — there is no mail-specific join.',
+        'List the Docket entities a received message is attached to in createdAt ASC, attachmentId ASC order. Pages default to 50 items, accept at most 100, and omit nextCursor at exhaustion.',
     }),
     zParam(idParam),
+    zQuery(CursorQuery),
     async (c) => {
       const owner = requestOwner(c);
       const { id } = c.req.valid('param');
+      const { cursor, limit } = c.req.valid('query');
       const row = await loadOwnedMessage(owner, id);
       if (!row) throw new NotFoundError('Message not found');
-      return ok(c, pageOf(AthenaMailAttachmentTargetOut), {
-        items: await listAttachmentTargets(row.id),
-      });
+      return ok(
+        c,
+        pageOf(AthenaMailAttachmentTargetOut),
+        await listAttachmentTargetsPage(row.id, limit, cursor),
+      );
     },
   )
   .post(
@@ -277,11 +291,10 @@ const athenaMail = new Hono<AppEnv>()
       /* v8 ignore next -- @preserve the insert returns its single created row */
       if (!row) throw new Error('attachment insert returned no row');
 
-      const targets = await listAttachmentTargets(message.id);
-      const attached = targets.find((target) => target.attachmentId === row.id);
+      const attached = await loadAttachmentTarget(message.id, row.id);
       /* v8 ignore next -- @preserve the row was just written and its subject was just verified */
       if (!attached) throw new Error('attachment target read back empty');
-      return created(c, AthenaMailAttachmentTargetOut, attached);
+      return created(c, AthenaMailAttachmentTargetOut, attached, null);
     },
   )
   .delete(

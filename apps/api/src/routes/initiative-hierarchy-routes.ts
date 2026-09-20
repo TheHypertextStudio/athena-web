@@ -163,7 +163,7 @@ const initiativeHierarchyRoutes = new Hono<AppEnv>()
       });
       /* v8 ignore next -- @preserve defensive: insert always returns one row */
       if (!row) throw new Error('Initiative hierarchy insert returned no row');
-      return created(c, InitiativeHierarchyLinkOut, hierarchyOut(row));
+      return created(c, InitiativeHierarchyLinkOut, hierarchyOut(row), null);
     },
   )
   .patch(

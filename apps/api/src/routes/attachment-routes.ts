@@ -18,7 +18,7 @@ import {
   AttachmentRemoved,
 } from '@docket/work/attachment-contract';
 import { canonicalizeResourceUrl } from '@docket/connections/resource-contract';
-import { pageOf } from '../contracts/pagination';
+import { CursorQuery, pageOf } from '../contracts/pagination';
 import { and, asc, eq, isNull } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
@@ -27,8 +27,9 @@ import { getContainer } from '../container';
 import type { AppEnv } from '../context';
 import { NotFoundError } from '../error';
 import { created, ok } from '../lib/ok';
+import { pageResult, seekAfter } from '../lib/list-cursor';
 import { apiDoc } from '../lib/openapi-route';
-import { zForm, zJson, zParam } from '../lib/validate';
+import { zForm, zJson, zParam, zQuery } from '../lib/validate';
 import { enqueueSearchDelete, enqueueSearchUpsert } from '../search/write-through';
 import { recordTaskChanges } from '../lib/task-audit';
 import { assertTaskCapability, buildTaskViewFilter, loadTask } from './task-helpers';
@@ -155,12 +156,14 @@ export const attachmentRoutes = new Hono<AppEnv>()
       tag: 'Tasks',
       summary: 'List task attachments',
       response: pageOf(AttachmentOut),
-      description: `List a task's attachments — typed references from the task to an external or stored resource (a pasted \`url\` link, or an integration-backed \`email\` pointer whose content stays in Gmail). Ordered oldest-first by creation. The subject is always derived from the route (\`task\` + \`:id\`), never the body, so a caller can only read attachments on a task it can already address; the host task is loaded first (cross-org/unknown 404s) and that single check is the tenant boundary. Archived attachments are excluded. Requires org membership (\`view\`). Returns a page of {@link AttachmentOut}.`,
+      description: `List a task's attachments in \`createdAt ASC, id ASC\` order. Pages default to 50 items, accept at most 100, and omit \`nextCursor\` at exhaustion. Reuse a cursor only for the same task. The host task is loaded first and archived attachments are excluded. Requires org membership (\`view\`).`,
     }),
     zParam(taskParam),
+    zQuery(CursorQuery),
     async (c) => {
       const { orgId, actorId } = c.get('actorCtx');
       const { id } = c.req.valid('param');
+      const { cursor, limit } = c.req.valid('query');
       const target = await loadTask(orgId, id);
       const canView = await buildTaskViewFilter(orgId, actorId);
       if (!canView(target)) throw new NotFoundError('Task not found');
@@ -173,10 +176,16 @@ export const attachmentRoutes = new Hono<AppEnv>()
             eq(attachment.subjectType, 'task'),
             eq(attachment.subjectId, id),
             isNull(attachment.archivedAt),
+            seekAfter(attachment.createdAt, attachment.id, cursor, 'asc'),
           ),
         )
-        .orderBy(asc(attachment.createdAt));
-      return ok(c, pageOf(AttachmentOut), { items: rows.map(toOut) });
+        .orderBy(asc(attachment.createdAt), asc(attachment.id))
+        .limit(limit + 1);
+      return ok(
+        c,
+        pageOf(AttachmentOut),
+        pageResult(rows.map(toOut), limit, (item) => new Date(item.createdAt)),
+      );
     },
   )
   .post(
@@ -250,7 +259,7 @@ The \`kind\` determines the required fields, enforced at the schema edge: a \`ur
       });
       await enqueueSearchUpsert(orgId, 'attachment', row.id);
       await enqueueSearchUpsert(orgId, 'task', id);
-      return created(c, AttachmentOut, toOut(row));
+      return created(c, AttachmentOut, toOut(row), null);
     },
   )
   .post(

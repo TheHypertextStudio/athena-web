@@ -13,6 +13,7 @@ import {
 import { api } from '@/lib/api';
 import { projectRecordDef } from '@/lib/entity-records';
 import { projectDetailDef } from '@/lib/fetch-project-detail';
+import { fetchAllProjectResources, fetchAllUpdates } from '@/lib/org-collection-pages';
 import { apiQueryOptions, queryKeys, useApiQuery } from '@/lib/query';
 import { useOrgCapability } from '@/lib/use-org-capability';
 import { useOrgMembership } from '@/lib/use-org-membership';
@@ -34,21 +35,14 @@ export function useProjectDetailPage(orgId: string, projectId: string) {
   const updatesQ = useApiQuery(
     apiQueryOptions(
       updatesKey,
-      () =>
-        api.v1.orgs[':orgId'].updates.$get({
-          param: { orgId },
-          query: subject,
-        }),
+      () => fetchAllUpdates(api, orgId, subject),
       'Could not load updates.',
     ),
   );
   const resourcesQ = useApiQuery(
     apiQueryOptions(
       [...detailKey, 'resources'] as const,
-      () =>
-        api.v1.orgs[':orgId'].projects[':id'].resources.$get({
-          param: { orgId, id: projectId },
-        }),
+      () => fetchAllProjectResources(api, orgId, projectId),
       'Could not load resources.',
     ),
   );
@@ -58,6 +52,7 @@ export function useProjectDetailPage(orgId: string, projectId: string) {
       () =>
         api.v1.orgs[':orgId'].display[':subjectType'].$get({
           param: { orgId, subjectType: 'initiative' },
+          query: { limit: '100' },
         }),
       'Could not load initiative icons.',
     ),

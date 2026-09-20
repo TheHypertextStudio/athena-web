@@ -136,14 +136,14 @@ export function usePlanRouteData(orgId: string, planId: string): PlanRouteData {
   const membersQ = useApiListQuery(
     apiQueryOptions(
       queryKeys.members(orgId),
-      () => api.v1.orgs[':orgId'].members.$get({ param: { orgId } }),
+      () => api.v1.orgs[':orgId'].members.$get({ param: { orgId }, query: { limit: '100' } }),
       'Could not load members.',
     ),
   );
   const rolesQ = useApiListQuery(
     apiQueryOptions(
       queryKeys.roles(orgId),
-      () => api.v1.orgs[':orgId'].roles.$get({ param: { orgId } }),
+      () => api.v1.orgs[':orgId'].roles.$get({ param: { orgId }, query: { limit: '100' } }),
       'Could not load roles.',
     ),
   );

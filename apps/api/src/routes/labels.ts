@@ -23,15 +23,21 @@ import {
   nextLabelColor,
   normalizeLabelName,
 } from '@docket/work/label-contract';
-import { pageOf } from '../contracts/pagination';
-import { and, eq } from 'drizzle-orm';
+import { CursorQuery, pageOf } from '../contracts/pagination';
+import { and, asc, eq, gt, or, type SQL } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
 
 import type { AppEnv } from '../context';
-import { ConflictError, NotFoundError } from '../error';
+import { ConflictError, NotFoundError, ValidationError } from '../error';
 import { labelUsageCounts, mergeLabelAttachments } from '../lib/labels';
 import { created, ok } from '../lib/ok';
+import {
+  decodeTupleCursor,
+  pageResultById,
+  pageResultByTuple,
+  seekAfterId,
+} from '../lib/list-cursor';
 import { apiDoc } from '../lib/openapi-route';
 import { zJson, zParam, zQuery } from '../lib/validate';
 import { capabilityGuard } from '../permissions/capability-guard';
@@ -67,12 +73,34 @@ function groupToOut(g: LabelGroupRow): z.input<typeof LabelGroupOut> {
 }
 
 const idParam = z.object({ id: z.string() });
-const listQuery = z.object({
+const listQuery = CursorQuery.extend({
   withCounts: z
     .enum(['0', '1'])
     .optional()
     .describe('Set to `1` to include `usageCount` on every label.'),
 });
+
+function labelGroupSeek(cursor: string | undefined): SQL | undefined {
+  const boundary = decodeTupleCursor(cursor);
+  if (!boundary) return undefined;
+  if (
+    boundary.length !== 3 ||
+    typeof boundary[0] !== 'number' ||
+    !Number.isInteger(boundary[0]) ||
+    typeof boundary[1] !== 'string' ||
+    typeof boundary[2] !== 'string'
+  ) {
+    throw new ValidationError([{ path: ['cursor'], message: 'The cursor is invalid or expired.' }]);
+  }
+  const [sortOrder, name, id] = boundary as [number, string, string];
+  return or(
+    gt(labelGroup.sortOrder, sortOrder),
+    and(
+      eq(labelGroup.sortOrder, sortOrder),
+      or(gt(labelGroup.name, name), and(eq(labelGroup.name, name), gt(labelGroup.id, id))),
+    ),
+  );
+}
 
 /**
  * Resolve a group id within the org, returning the row.
@@ -98,20 +126,37 @@ const labels = new Hono<AppEnv>()
       tag: 'Labels',
       summary: 'List labels',
       response: pageOf(LabelOut),
-      description: `List every label defined in the org — both workspace-wide labels (\`teamId\` null, offered everywhere) and team-limited labels (\`teamId\` set, offered only inside that team). Labels are Docket's one open-ended dimension: freely-applied tags used to classify and filter work (e.g. \`bug\`, \`design\`, \`needs-triage\`), orthogonal to workflow state and priority. Pass \`withCounts=1\` to include \`usageCount\` (total attachments across tasks, projects, initiatives, programs, and library resources) — this is what powers the settings page's counts and its "Unused" section. The list is unpaginated: labels are a small, bounded set per org. Requires org membership (\`view\`). Returns a page wrapper of {@link LabelOut}.`,
+      description: `List every label defined in the org — both workspace-wide labels (\`teamId\` null, offered everywhere) and team-limited labels (\`teamId\` set, offered only inside that team). Labels are Docket's one open-ended dimension: freely-applied tags used to classify and filter work (e.g. \`bug\`, \`design\`, \`needs-triage\`), orthogonal to workflow state and priority. Results use stable label-id order, default to 50 items, accept at most 100, and omit \`nextCursor\` at exhaustion; reuse a cursor only with the same \`withCounts\` value. Pass \`withCounts=1\` to include \`usageCount\` (total attachments across tasks, projects, initiatives, programs, and library resources). Requires org membership (\`view\`).`,
     }),
     zQuery(listQuery),
     async (c) => {
       const { orgId } = c.get('actorCtx');
-      const { withCounts } = c.req.valid('query');
-      const rows = await db.select().from(label).where(eq(label.organizationId, orgId));
+      const { cursor, limit, withCounts } = c.req.valid('query');
+      const rows = await db
+        .select()
+        .from(label)
+        .where(and(eq(label.organizationId, orgId), seekAfterId(label.id, cursor, 'asc')))
+        .orderBy(asc(label.id))
+        .limit(limit + 1);
       if (withCounts !== '1') {
-        return ok(c, pageOf(LabelOut), { items: rows.map((r) => toOut(r)) });
+        return ok(
+          c,
+          pageOf(LabelOut),
+          pageResultById(
+            rows.map((r) => toOut(r)),
+            limit,
+          ),
+        );
       }
       const counts = await labelUsageCounts(orgId);
-      return ok(c, pageOf(LabelOut), {
-        items: rows.map((r) => toOut(r, counts.get(r.id) ?? 0)),
-      });
+      return ok(
+        c,
+        pageOf(LabelOut),
+        pageResultById(
+          rows.map((r) => toOut(r, counts.get(r.id) ?? 0)),
+          limit,
+        ),
+      );
     },
   )
   .post(
@@ -164,7 +209,7 @@ const labels = new Hono<AppEnv>()
       /* v8 ignore next -- @preserve defensive: insert/update always returns a row */
       if (!row) throw new Error('label insert returned no row');
       await enqueueSearchUpsert(orgId, 'label', row.id);
-      return created(c, LabelOut, toOut(row, 0));
+      return created(c, LabelOut, toOut(row, 0), null);
     },
   )
   // Registered before `/:id` so the literal path is not swallowed by the parameter.
@@ -174,16 +219,27 @@ const labels = new Hono<AppEnv>()
       tag: 'Labels',
       summary: 'List label groups',
       response: pageOf(LabelGroupOut),
-      description: `List the org's label groups. A group is a named set of related labels and the only place *exclusivity* is recorded: when \`exclusive\` is true (the default), applying one member releases every other member, which is how an org expresses a single-select dimension like \`Type\` or \`Stage\` without Docket growing a custom-field engine. A non-exclusive group is purely visual clustering. Requires org membership (\`view\`). Returns a page wrapper of {@link LabelGroupOut}.`,
+      description: `List the org's label groups. A group is a named set of related labels and the only place *exclusivity* is recorded. Results follow \`sortOrder, name, id\`, default to 50 items, accept at most 100, and omit \`nextCursor\` at exhaustion. A non-exclusive group is purely visual clustering. Requires org membership (\`view\`).`,
     }),
+    zQuery(CursorQuery),
     async (c) => {
       const { orgId } = c.get('actorCtx');
+      const { cursor, limit } = c.req.valid('query');
       const rows = await db
         .select()
         .from(labelGroup)
-        .where(eq(labelGroup.organizationId, orgId))
-        .orderBy(labelGroup.sortOrder, labelGroup.name);
-      return ok(c, pageOf(LabelGroupOut), { items: rows.map(groupToOut) });
+        .where(and(eq(labelGroup.organizationId, orgId), labelGroupSeek(cursor)))
+        .orderBy(asc(labelGroup.sortOrder), asc(labelGroup.name), asc(labelGroup.id))
+        .limit(limit + 1);
+      return ok(
+        c,
+        pageOf(LabelGroupOut),
+        pageResultByTuple(rows.map(groupToOut), limit, (item) => [
+          item.sortOrder,
+          item.name,
+          item.id,
+        ]),
+      );
     },
   )
   .post(
@@ -213,7 +269,7 @@ const labels = new Hono<AppEnv>()
       const row = inserted[0];
       /* v8 ignore next -- @preserve defensive: insert always returns a row */
       if (!row) throw new Error('label group insert returned no row');
-      return created(c, LabelGroupOut, groupToOut(row));
+      return created(c, LabelGroupOut, groupToOut(row), null);
     },
   )
   .patch(

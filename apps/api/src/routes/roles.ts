@@ -8,17 +8,18 @@
  * requires an Owner membership.
  */
 import { actor, db, grant, role } from '@docket/db';
-import { pageOf } from '../contracts/pagination';
+import { CursorQuery, pageOf } from '../contracts/pagination';
 import { RoleCreate, RoleOut, RoleUpdate } from '../contracts/role';
-import { and, eq } from 'drizzle-orm';
+import { and, asc, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
 
 import type { AppEnv } from '../context';
 import { CapabilityError, ConflictError, NotFoundError } from '../error';
 import { created, ok } from '../lib/ok';
+import { pageResultById, seekAfterId } from '../lib/list-cursor';
 import { apiDoc } from '../lib/openapi-route';
-import { zJson, zParam } from '../lib/validate';
+import { zJson, zParam, zQuery } from '../lib/validate';
 import { notifyGrantsChanged } from '../mcp/notify';
 import { capabilityGuard } from '../permissions/capability-guard';
 
@@ -80,12 +81,19 @@ const roles = new Hono<AppEnv>()
       response: pageOf(RoleOut),
       description: `List every role defined in the organization — the four seeded **system roles** (Owner, Admin, Member, Guest; \`isSystem: true\`) plus any custom roles the org has created. A role is a named, org-scoped capability bundle: a flat \`capabilities\` array (resolved by max-rank) plus a \`baseCapability\` that, when non-null, is materialized as a role-grant at the org root and becomes the holder's org-wide baseline (Owner/Admin → \`manage\`, Member → \`contribute\`, Guest → \`null\`, i.e. grant-only).
 
-Requires only org membership to read (no \`manage\`) — members need to see the role catalog to assign roles in invites. Returns the standard \`{ items }\` page envelope of \`RoleOut\`. See \`POST /\` to create custom roles and \`GET /:id\` for a single role.`,
+Results use stable role-id order, default to 50 items, accept at most 100, and omit \`nextCursor\` at exhaustion. Requires only org membership to read (no \`manage\`) — members need to see the role catalog to assign roles in invites. See \`POST /\` to create custom roles and \`GET /:id\` for a single role.`,
     }),
+    zQuery(CursorQuery),
     async (c) => {
       const { orgId } = c.get('actorCtx');
-      const rows = await db.select().from(role).where(eq(role.organizationId, orgId));
-      return ok(c, pageOf(RoleOut), { items: rows.map(toOut) });
+      const { cursor, limit } = c.req.valid('query');
+      const rows = await db
+        .select()
+        .from(role)
+        .where(and(eq(role.organizationId, orgId), seekAfterId(role.id, cursor, 'asc')))
+        .orderBy(asc(role.id))
+        .limit(limit + 1);
+      return ok(c, pageOf(RoleOut), pageResultById(rows.map(toOut), limit));
     },
   )
   .post(

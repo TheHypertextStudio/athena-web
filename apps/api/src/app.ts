@@ -16,6 +16,7 @@
  */
 import { db } from '@docket/db';
 import { Hono } from 'hono';
+import type { MiddlewareHandler } from 'hono';
 
 import agenda from './routes/agenda';
 import athenaMail from './routes/athena-mail';
@@ -30,9 +31,10 @@ import { getContainer } from './container';
 import { env } from './env';
 import type { AppEnv } from './context';
 import { bodyLimit } from 'hono/body-limit';
-import { etag } from 'hono/etag';
 
 import { cachePolicy } from './lib/cache-policy';
+import { finiteEtag } from './lib/finite-etag';
+import { operationContractForRequest } from './lib/api-operation-contract';
 import {
   MAX_OBJECT_COMMAND_BYTES,
   MAX_REQUEST_BYTES,
@@ -41,7 +43,7 @@ import {
 } from './lib/http-limits';
 import { mediaTypes } from './lib/media-types';
 import { idempotency } from './lib/idempotency';
-import { preconditions } from './lib/preconditions';
+import { conditionalWriteFor } from './lib/work-schedule-conditional';
 import dailyPlan from './routes/daily-plan';
 import scheduleWeek from './routes/schedule-week';
 import directiveFeed from './routes/schedule-week-directive';
@@ -71,7 +73,6 @@ import orgs from './routes/orgs';
 import {
   authoritativeSessionMiddleware,
   replayOwnerSessionMiddleware,
-  sessionMiddleware,
 } from './auth/session-middleware';
 import { requireAuth } from './permissions/require-auth';
 import { AdminNotificationService } from './services/notifications/admin-service';
@@ -104,12 +105,10 @@ for (const path of [
   app.use(path, authoritativeSessionMiddleware);
 }
 
-// Entity tags for every response, and `304` for a matching `If-None-Match`. Hono's own
-// middleware rather than a hand-rolled one in the output helper: it hashes the finished body so
-// it covers streaming and binary handlers too, and it strips the headers RFC 9110 §15.4.5 says a
-// `304` must not carry — which the version this replaced did not. Scoped to safe methods,
-// because `If-None-Match` on a `POST` must not turn a create into a `304`.
-app.use('*', safeMethodsOnly(etag()));
+// Hash only completed finite representations. An SSE response stays open by design, so cloning
+// it to compute a digest would hold the response until disconnect and prevent the first event
+// from reaching the client. Weak If-None-Match comparison remains valid for these strong tags.
+app.use('*', safeMethodsOnly(finiteEtag));
 
 // Reject a body larger than anything this API legitimately accepts, before it is buffered.
 app.use('*', bodyLimit({ maxSize: MAX_REQUEST_BYTES, onError: () => rejectOversizedBody() }));
@@ -137,41 +136,33 @@ app.use('*', replayOwnerSessionMiddleware);
 // chain (membership/capability authz still layer on top per-route).
 app.use('*', requireAuth);
 
-// Negotiate only after the caller has passed the operation's access policy. A malformed or
-// unauthorized credential must not learn representation details through an earlier 406/415,
-// and a valid OAuth caller on a session-only route must receive the policy's 403.
+// Strict contracts negotiate at their route-local declaration after org/resource guards. This
+// temporary global adapter covers only declarations Task 4 has not migrated yet.
 app.use('*', mediaTypes);
 
-// Retry safety for creates. Registered after `requireAuth` because keys are scoped to the
-// authenticated user, and before the route chain so every `POST` on `/v1` honors the
-// `Idempotency-Key` header the published reference has always promised. A request without the
-// header is unaffected.
-app.use('*', idempotency);
+// Strict contracts install their declared receipt adapter after route guards. Legacy declarations
+// retain the old global behavior only until Task 4 gives them an explicit policy.
+const legacyIdempotency: MiddlewareHandler<AppEnv> = async (c, next) => {
+  if (operationContractForRequest(c)) {
+    return next();
+  }
+  return idempotency(c, next);
+};
+app.use('*', legacyIdempotency);
 
-/**
- * The `/v1` app behind the session middleware, for the precondition sub-request.
- *
- * @remarks
- * `sessionMiddleware` is registered on the **root server**, so `app.request(...)` on its own
- * enters `/v1` with no session and `requireAuth` rejects it — which the precondition middleware
- * would read as a stale tag and turn into a `412` for every conditional write outside the few
- * prefixes carrying `authoritativeSessionMiddleware` above.
- *
- * Built on first use rather than here, because `.route()` copies the sub-app's routes at call
- * time and the chain below has not been assembled yet.
- */
-let selfWithSession: Hono<AppEnv> | undefined;
+const transactionalScheduleWrite = /^\/v1\/me\/work-location\/schedule(?:\/dates\/[^/]+)?$/u;
 
-// Optimistic concurrency for writes. Resolves the target's current `ETag` by asking this same
-// app for it, so the tag a write is checked against is the one a read actually hands out, for
-// every resource, with no per-handler code. Only a request that sends `If-Match` pays for it.
-app.use(
-  '*',
-  preconditions(async (url, init) => {
-    selfWithSession ??= new Hono<AppEnv>().use('*', sessionMiddleware).route('/', app);
-    return selfWithSession.request(url, init);
-  }),
-);
+// Work-schedule handlers compare the validator while holding their aggregate revision lock.
+// Every other legacy declaration rejects If-Match instead of running the old self-GET check,
+// whose read and mutation could race.
+const legacyConditionalWrites: MiddlewareHandler<AppEnv> = async (c, next) => {
+  if (operationContractForRequest(c)) {
+    return next();
+  }
+  if (c.req.method === 'PUT' && transactionalScheduleWrite.test(c.req.path)) return next();
+  return conditionalWriteFor(false)(c, next);
+};
+app.use('*', legacyConditionalWrites);
 
 const notificationInbox = new NotificationInboxService(db);
 const notificationIntents = new NotificationIntentService(db);
@@ -273,7 +264,7 @@ export const adminApp = new Hono<AppEnv>();
 
 // The staff back-office gets the same protocol treatment as the product surface: its data is no
 // more cacheable than a tenant's own, and its requests negotiate the same way.
-adminApp.use('*', safeMethodsOnly(etag()));
+adminApp.use('*', safeMethodsOnly(finiteEtag));
 adminApp.use('*', bodyLimit({ maxSize: MAX_REQUEST_BYTES, onError: () => rejectOversizedBody() }));
 adminApp.use('*', mediaTypes);
 adminApp.use('*', cachePolicy);

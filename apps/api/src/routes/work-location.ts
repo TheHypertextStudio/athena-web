@@ -33,6 +33,7 @@ import { ConflictError } from '../error';
 import { ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
 import { zJson, zParam, zQuery } from '../lib/validate';
+import { conditionalWriteFor } from '../lib/work-schedule-conditional';
 import {
   archiveWorkLocationAssertion,
   clearManualCurrentWorkLocation,
@@ -51,9 +52,9 @@ import {
 } from '../services/work-location/repository';
 import {
   ignoreWorkScheduleChange,
-  listWorkSchedule,
   listWorkScheduleChanges,
   linkWorkPlaceAlias,
+  readVersionedWorkSchedule,
   replaceWorkSchedulePlan,
   resolveWorkScheduleConflict,
   setWorkScheduleException,
@@ -180,10 +181,15 @@ const workLocation = new Hono<AppEnv>()
       description:
         'Return effective-dated default plan versions and complete dated replacements for the caller-owned personal Hub.',
     }),
-    async (c) => ok(c, WorkScheduleOut, await listWorkSchedule(db, await callerHub(c))),
+    async (c) => {
+      const result = await readVersionedWorkSchedule(db, await callerHub(c));
+      c.header('ETag', result.etag);
+      return ok(c, WorkScheduleOut, result.value);
+    },
   )
   .put(
     '/schedule',
+    conditionalWriteFor('work-schedule'),
     apiDoc({
       tag: 'Work location',
       summary: 'Start a new default work-schedule version',
@@ -196,11 +202,17 @@ const workLocation = new Hono<AppEnv>()
       ok(
         c,
         WorkSchedulePlanOut,
-        await replaceWorkSchedulePlan(db, await callerHub(c), c.req.valid('json')),
+        await replaceWorkSchedulePlan(
+          db,
+          await callerHub(c),
+          c.req.valid('json'),
+          c.req.header('If-Match'),
+        ),
       ),
   )
   .put(
     '/schedule/dates/:date',
+    conditionalWriteFor('work-schedule'),
     apiDoc({
       tag: 'Work location',
       summary: 'Replace one date in the default work schedule',
@@ -217,7 +229,7 @@ const workLocation = new Hono<AppEnv>()
       return ok(
         c,
         WorkScheduleExceptionOut,
-        await setWorkScheduleException(db, await callerHub(c), input),
+        await setWorkScheduleException(db, await callerHub(c), input, c.req.header('If-Match')),
       );
     },
   )

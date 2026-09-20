@@ -16,19 +16,20 @@
  */
 import { db, milestone } from '@docket/db';
 import { MilestoneCreate, MilestoneOut, MilestoneUpdate } from '@docket/work/milestone-contract';
-import { pageOf } from '../contracts/pagination';
-import { and, asc, eq } from 'drizzle-orm';
+import { CursorQuery, pageOf } from '../contracts/pagination';
+import { and, asc, eq, gt, or } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
 
 import type { AppEnv } from '../context';
-import { NotFoundError } from '../error';
+import { NotFoundError, ValidationError } from '../error';
 import { created, ok } from '../lib/ok';
 import { appendMilestone } from '../lib/milestone-writes';
+import { decodeTupleCursor, pageResultByTuple } from '../lib/list-cursor';
 import { one } from '../lib/one';
 import { assertProjectInOrg } from '../lib/project-guard';
 import { apiDoc } from '../lib/openapi-route';
-import { zJson, zParam } from '../lib/validate';
+import { zJson, zParam, zQuery } from '../lib/validate';
 import { capabilityGuard } from '../permissions/capability-guard';
 import { enqueueSearchDelete, enqueueSearchUpsert } from '../search/write-through';
 
@@ -94,19 +95,51 @@ const milestones = new Hono<AppEnv>()
       tag: 'Milestones',
       summary: "List a project's milestones",
       response: pageOf(MilestoneOut),
-      description: `List the named checkpoints inside a Project. Ordered by the manual \`sort\` key ascending — the order they render on the project's timeline — NOT by target date, so a client can present them as a sequence regardless of dates. Unlike the other planning lists this read returns the full set rather than key-paginating; a project's milestones are a handful of rows by nature. 404 \`Project not found\` when the project is absent, archived, or in another tenant. Read-only; org membership suffices. Returns a page of {@link MilestoneOut}.`,
+      description: `List the named checkpoints inside a Project. Ordered by \`sort ASC, id ASC\`, which is the order they render on the project timeline rather than target-date order. Pages default to 50 items, accept at most 100, and omit \`nextCursor\` at exhaustion. Reuse a cursor only for the same Project. 404 \`Project not found\` when the project is absent, archived, or in another tenant.`,
     }),
     zParam(projectParam),
+    zQuery(CursorQuery),
     async (c) => {
       const { orgId } = c.get('actorCtx');
       const { id } = c.req.valid('param');
+      const { cursor, limit } = c.req.valid('query');
       await assertProjectInOrg(orgId, id);
+      const boundary = decodeTupleCursor(cursor);
+      if (
+        boundary &&
+        (boundary.length !== 2 ||
+          typeof boundary[0] !== 'number' ||
+          !Number.isInteger(boundary[0]) ||
+          typeof boundary[1] !== 'string')
+      ) {
+        throw new ValidationError([
+          { path: ['cursor'], message: 'The cursor is invalid or expired.' },
+        ]);
+      }
+      const boundarySort = boundary?.[0] as number | undefined;
+      const boundaryId = boundary?.[1] as string | undefined;
       const rows = await db
         .select()
         .from(milestone)
-        .where(and(eq(milestone.organizationId, orgId), eq(milestone.projectId, id)))
-        .orderBy(asc(milestone.sort));
-      return ok(c, pageOf(MilestoneOut), { items: rows.map(toOut) });
+        .where(
+          and(
+            eq(milestone.organizationId, orgId),
+            eq(milestone.projectId, id),
+            boundarySort !== undefined && boundaryId
+              ? or(
+                  gt(milestone.sort, boundarySort),
+                  and(eq(milestone.sort, boundarySort), gt(milestone.id, boundaryId)),
+                )
+              : undefined,
+          ),
+        )
+        .orderBy(asc(milestone.sort), asc(milestone.id))
+        .limit(limit + 1);
+      return ok(
+        c,
+        pageOf(MilestoneOut),
+        pageResultByTuple(rows.map(toOut), limit, (item) => [item.sort, item.id]),
+      );
     },
   )
   .post(

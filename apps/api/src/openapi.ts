@@ -14,11 +14,9 @@
  * contract and are documented by neither. `openAPIRouteHandler(app)` only sees the routes
  * registered on the app it is given, which is what keeps the two surfaces cleanly apart.
  */
-import { Scalar } from '@scalar/hono-api-reference';
 import { openAPIRouteHandler } from 'hono-openapi';
 // A value import, not `import type`: `openapiDocument` constructs a throwaway server.
 import { Hono } from 'hono';
-import type { Input, MiddlewareHandler } from 'hono';
 
 import type { AdminInstance, AppInstance } from './app';
 import type { AppEnv } from './context';
@@ -30,6 +28,14 @@ import {
   type ApiAccess,
 } from './auth/rest-access-policy';
 import { API_IDENTITY_COMPONENTS, normalizePublicApiIdentity } from './openapi-identity';
+import { collectApiOperationContracts } from './lib/api-operation-contract';
+import {
+  assertPublicReference,
+  compactPublicReference,
+  normalizePublicReference,
+} from './openapi-public-reference';
+import { registerReferenceAssets } from './openapi-reference-routes';
+import { cacheOpenapiDocument } from './openapi-document-cache';
 
 /**
  * The product overview rendered as the Scalar reference's introduction. This is the front door
@@ -98,25 +104,27 @@ approval gate layered on top.
 - **Identifiers** — every entity has a branded **ULID**: 26 Crockford-base32 chars matching
   \`^[0-9A-HJKMNP-TV-Z]{26}$\`. Each entity type has its own branded id, so ids are not
   interchangeable across resources.
-- **Pagination** — list endpoints are **keyset/cursor** paginated: pass \`cursor\` and \`limit\`,
-  then read \`nextCursor\` from the response (null when the last page is reached).
+- **Pagination** — public collections default to 50 items and accept at most 100. Pass the opaque
+  \`nextCursor\` back with the same normalized filters to continue. The final page omits
+  \`nextCursor\`.
 - **Errors** — failures return RFC-9457 \`application/problem+json\` with a stable machine
   \`code\` (e.g. \`unauthorized\`, \`forbidden\`, \`not_found\`, \`validation_error\`,
   \`dependency_cycle\`, \`card_required\`), an HTTP \`status\`, and (for validation) per-field
   \`fieldErrors\`.
-- **Idempotency** — any \`POST\` accepts an \`Idempotency-Key\` header, deduplicated per user for
-  24 hours. A replay returns the recorded response with \`Idempotency-Replayed: true\`; the same
-  key against a different body is \`422 idempotency_key_reuse\`.
+- **Idempotency** — only operations that declare a JSON receipt accept \`Idempotency-Key\`.
+  Receipt identity includes the user, session or OAuth client, API version, and key for 48 hours.
+  A replay returns allowed response headers with \`Idempotency-Replayed: true\`; changing the
+  method, path, query, content type, or exact body bytes is \`422 idempotency_key_reuse\`.
 - **Status codes** — a create answers \`201\` with a \`Location\` naming the new resource; work
   that is queued rather than finished answers \`202\` with the \`Location\` of a status monitor.
-- **Conditional requests** — every \`GET\` carries a strong \`ETag\`, and \`If-None-Match\` gets
-  \`304\`. Send that tag back as \`If-Match\` on a write to make it conditional: a \`412\` means
-  someone changed the resource since you read it, so re-read and retry. Omit the header and the
-  write is last-writer-wins.
-- **Negotiation** — a body must declare a \`Content-Type\` this API reads (\`application/json\`,
-  or a form encoding where a file is expected); anything else, including an undeclared body, is
-  \`415\` with an \`Accept\` header naming what would work. An \`Accept\` header excluding JSON is
-  \`406\`.
+- **Conditional requests** — finite \`GET\` and \`HEAD\` responses may carry a representation
+  \`ETag\`, and weak \`If-None-Match\` comparison can return \`304\`. Only writes that document a
+  transaction-bound aggregate validator accept \`If-Match\`; every other write rejects the header.
+  A stale strong validator is \`412\`. Headerless writes remain last-writer-wins.
+- **Negotiation** — a body must declare a \`Content-Type\` the operation reads. Anything else,
+  including an undeclared non-empty body, is \`415\`. An \`Accept\` header that excludes every
+  representation the operation can produce is \`406\`; JSON, binary, and event-stream operations
+  negotiate their own media types.
 - **Caching** — responses are \`private, no-cache\` and vary on the caller's credentials: store
   them, but revalidate against the \`ETag\` before reuse.
 - **Validation** — request *and* response bodies are validated against the same Zod schemas
@@ -336,12 +344,20 @@ function securityForAccess(access: ApiAccess): readonly SecurityRequirement[] {
   }
 }
 
-function applyRestOperationSecurity(document: PublicDocument): PublicDocument {
+function applyRestOperationSecurity(document: PublicDocument, app: AppInstance): PublicDocument {
+  const declaredAccess = new Map(
+    collectApiOperationContracts(app).map(({ method, path, contract }) => [
+      `${method.toUpperCase()} ${path}`,
+      contract.access,
+    ]),
+  );
   for (const [path, pathItem] of Object.entries(document.paths)) {
     for (const method of OPENAPI_METHODS) {
       const operation = pathItem[method];
       if (!operation) continue;
-      operation.security = [...securityForAccess(accessForOperation(method, path))];
+      const access =
+        declaredAccess.get(`${method.toUpperCase()} ${path}`) ?? accessForOperation(method, path);
+      operation.security = [...securityForAccess(access)];
     }
   }
   return document;
@@ -436,80 +452,37 @@ export function registerOpenapi(
   app: AppInstance,
   adminApp: AdminInstance,
 ): void {
-  // Scalar's config is a union whose object-literal excess-property check is over-strict;
-  // the `{ url }` form is the documented runtime usage, so cast past the type quirk.
-  const scalar = (url: string) => Scalar({ url });
-
-  const cacheDocument = <Path extends string, RouteInput extends Input>(
-    handler: MiddlewareHandler<AppEnv, Path, RouteInput>,
-    cacheControl: string,
-    publicIdentity = false,
-  ): MiddlewareHandler<AppEnv, Path, RouteInput> => {
-    let cached:
-      | {
-          readonly body: Uint8Array;
-          readonly headers: Headers;
-          readonly status: number;
-          readonly statusText: string;
-        }
-      | undefined;
-    return async (context, next) => {
-      if (cached) {
-        return new Response(cached.body, {
-          status: cached.status,
-          statusText: cached.statusText,
-          headers: cached.headers,
-        });
-      }
-      const generated = await handler(context, next);
-      if (!generated) return generated;
-      const headers = new Headers(generated.headers);
-      headers.set('cache-control', cacheControl);
-      const body = publicIdentity
-        ? new TextEncoder().encode(
-            JSON.stringify(
-              applyRestOperationSecurity(
-                normalizePublicApiIdentity((await generated.json()) as PublicDocument),
-              ),
-            ),
-          )
-        : new Uint8Array(await generated.arrayBuffer());
-      cached = {
-        body,
-        headers,
-        status: generated.status,
-        statusText: generated.statusText,
-      };
-      return new Response(cached.body, {
-        status: cached.status,
-        statusText: cached.statusText,
-        headers: cached.headers,
-      });
-    };
-  };
-
-  // Public reference (`/v1`). The generated document is about 6 MB. Building it on every request
-  // exhausted the old production heap and restarted the API instance, so each instance builds it
-  // once and shared caches may reuse it for five minutes.
+  // Public reference (`/v1`). Building the document on every request exhausted the old production
+  // heap and restarted the API instance, so each instance builds it once and shared caches may
+  // reuse the compact representation for five minutes.
   server.get(
     '/v1/openapi.json',
-    cacheDocument(
+    cacheOpenapiDocument(
       openAPIRouteHandler(app, { documentation: buildDocumentation() }),
       'public, max-age=300, stale-while-revalidate=86400',
-      true,
+      async (generated) => {
+        const secured = applyRestOperationSecurity((await generated.json()) as PublicDocument, app);
+        const document = compactPublicReference(
+          normalizePublicApiIdentity(normalizePublicReference(secured)) as unknown as Record<
+            string,
+            unknown
+          >,
+        );
+        assertPublicReference(document);
+        return new TextEncoder().encode(JSON.stringify(document));
+      },
     ),
   );
-  server.get('/v1/docs', scalar('/v1/openapi.json'));
+  registerReferenceAssets(server);
 
   // Internal staff reference (`/admin`) — staff-gated by fall-through past the admin router.
   server.get(
     '/admin/openapi.json',
-    cacheDocument(
+    cacheOpenapiDocument(
       openAPIRouteHandler(adminApp, { documentation: buildAdminDocumentation() }),
       'private, no-store',
     ),
   );
-  server.get('/admin/docs', scalar('/admin/openapi.json'));
 }
 
 /**
@@ -530,7 +503,38 @@ export async function openapiDocument(
   adminApp: AdminInstance,
   surface: 'v1' | 'admin' = 'v1',
 ): Promise<unknown> {
+  const cached = generatedDocumentCache.get(app)?.get(adminApp)?.get(surface);
+  if (cached) return structuredClone(await cached);
+
+  const byAdmin = generatedDocumentCache.get(app) ?? new WeakMap<AdminInstance, DocumentPromises>();
+  const bySurface = byAdmin.get(adminApp) ?? new Map<'v1' | 'admin', Promise<unknown>>();
+  generatedDocumentCache.set(app, byAdmin);
+  byAdmin.set(adminApp, bySurface);
+
+  const generated = generateOpenapiDocument(app, adminApp, surface);
+  bySurface.set(surface, generated);
+  try {
+    return structuredClone(await generated);
+  } catch (error) {
+    bySurface.delete(surface);
+    throw error;
+  }
+}
+
+type DocumentPromises = Map<'v1' | 'admin', Promise<unknown>>;
+
+const generatedDocumentCache = new WeakMap<AppInstance, WeakMap<AdminInstance, DocumentPromises>>();
+
+async function generateOpenapiDocument(
+  app: AppInstance,
+  adminApp: AdminInstance,
+  surface: 'v1' | 'admin',
+): Promise<unknown> {
   const server = new Hono<AppEnv>();
   registerOpenapi(server, app, adminApp);
-  return (await server.request(`/${surface}/openapi.json`)).json();
+  const response = await server.request(`/${surface}/openapi.json`);
+  if (!response.ok) {
+    throw new Error(`OpenAPI generation failed with HTTP ${String(response.status)}.`);
+  }
+  return response.json();
 }

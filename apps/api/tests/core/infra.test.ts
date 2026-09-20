@@ -388,13 +388,37 @@ describe('openapi', () => {
     for (const path of Object.keys(doc.paths)) expect(path.startsWith('/v1/')).toBe(true);
   });
 
-  it('registerOpenapi mounts the Scalar docs UI at /v1/docs', async () => {
+  it('registerOpenapi serves the owned Scalar reference and local assets', async () => {
     const { registerOpenapi } = await import('../../src/openapi');
     const { app, adminApp } = await import('../../src/app');
     const server = new Hono();
     registerOpenapi(server as never, app, adminApp);
     const docs = await server.request('/v1/docs');
     expect(docs.status).toBe(200);
+    expect(docs.headers.get('cache-control')).toBe(
+      'public, max-age=60, must-revalidate, stale-while-revalidate=300',
+    );
+    expect(docs.headers.get('content-security-policy')).toContain("script-src 'self'");
+    const html = await docs.text();
+    expect(html).toContain('Docket API Reference');
+    expect(html).toContain('API 0.1.0');
+    expect(html).toContain('Loading API reference');
+    expect(html).toContain('/v1/docs/assets/scalar-api-reference-1.68.0.js');
+    expect(html).not.toContain('cdn.jsdelivr.net');
+
+    const scalar = await server.request('/v1/docs/assets/scalar-api-reference-1.68.0.js');
+    expect(scalar.status).toBe(200);
+    expect(scalar.headers.get('content-type')).toContain('javascript');
+    expect(scalar.headers.get('cache-control')).toBe('public, max-age=31536000, immutable');
+
+    const loaderPath = /\/v1\/docs\/assets\/reference\.[a-z0-9]+\.js/.exec(html)?.[0];
+    if (loaderPath === undefined) throw new Error('Reference loader path is missing');
+    const loader = await server.request(loaderPath);
+    expect(loader.status).toBe(200);
+    const loaderSource = await loader.text();
+    expect(loaderSource).toContain('Docket-Version');
+    expect(loaderSource).toContain('customFetch');
+    expect(loaderSource).toContain('reference-error');
   });
 });
 

@@ -15,7 +15,7 @@ import {
   EmailThreadOut,
   SuggestionDisposition,
 } from '@docket/athena/email-suggestion-contract';
-import { pageOf } from '../contracts/pagination';
+import { CursorQuery, pageOf } from '../contracts/pagination';
 import type { MailThread } from '@docket/integrations';
 import { and, asc, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
@@ -25,8 +25,9 @@ import type { AppEnv } from '../context';
 import { ConflictError, NotFoundError } from '../error';
 import { acceptSuggestion } from '../lib/email-to-task/accept';
 import { ok } from '../lib/ok';
+import { pageResult, seekAfter } from '../lib/list-cursor';
 import { apiDoc } from '../lib/openapi-route';
-import { zJson, zParam } from '../lib/validate';
+import { zJson, zParam, zQuery } from '../lib/validate';
 import { capabilityGuard } from '../permissions/capability-guard';
 import { asConnectorProvider, connectorFor, resolveConnectorToken } from './integration-provider';
 
@@ -109,18 +110,29 @@ const emailSuggestions = new Hono<AppEnv>()
       response: pageOf(EmailSuggestionOut),
       description: `List the org's **pending** email suggestions, oldest-first, as a page of {@link EmailSuggestionOut}. Resolved ones — accepted, dismissed, expired — are deliberately absent: this is a queue to work through, not a history, and a decided suggestion has nothing left to decide.
 
-Each item carries the synthesized draft (title, description, priority, due date, suggested project/program), a \`confidence\` score, and an \`emailMeta\` snapshot of the source message captured at ingest so a client can render the row without a provider round-trip. Fetch \`GET /{id}/thread\` only when a reviewer opens one. Org membership suffices to read.`,
+Each item carries the synthesized draft and an \`emailMeta\` snapshot. Pages use \`createdAt ASC, id ASC\`, default to 50 items, accept at most 100, and omit \`nextCursor\` at exhaustion. Org membership suffices to read.`,
     }),
+    zQuery(CursorQuery),
     async (c) => {
       const { orgId } = c.get('actorCtx');
+      const { cursor, limit } = c.req.valid('query');
       const rows = await db
         .select()
         .from(emailSuggestion)
         .where(
-          and(eq(emailSuggestion.organizationId, orgId), eq(emailSuggestion.status, 'pending')),
+          and(
+            eq(emailSuggestion.organizationId, orgId),
+            eq(emailSuggestion.status, 'pending'),
+            seekAfter(emailSuggestion.createdAt, emailSuggestion.id, cursor, 'asc'),
+          ),
         )
-        .orderBy(asc(emailSuggestion.createdAt));
-      return ok(c, pageOf(EmailSuggestionOut), { items: rows.map(toOut) });
+        .orderBy(asc(emailSuggestion.createdAt), asc(emailSuggestion.id))
+        .limit(limit + 1);
+      return ok(
+        c,
+        pageOf(EmailSuggestionOut),
+        pageResult(rows.map(toOut), limit, (item) => new Date(item.createdAt)),
+      );
     },
   )
   .get(

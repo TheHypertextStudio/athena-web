@@ -15,15 +15,17 @@
  */
 import { db, session as sessionTable } from '@docket/db';
 import { SessionListOut, SessionOut } from '@docket/identity-access/session-contract';
-import { and, eq, gt, ne } from 'drizzle-orm';
+import { and, desc, eq, gt, ne } from 'drizzle-orm';
 import { type Context, Hono } from 'hono';
 import { z } from 'zod';
 
 import type { AppEnv, AuthSession } from '../context';
+import { CursorQuery, pageOf } from '../contracts/pagination';
 import { AuthError, ConflictError, NotFoundError } from '../error';
+import { pageResult, seekAfter } from '../lib/list-cursor';
 import { ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
-import { zParam } from '../lib/validate';
+import { zParam, zQuery } from '../lib/validate';
 
 /** Require an active session; throw 401 if none. */
 function requireSession(c: Context<AppEnv>): NonNullable<AuthSession> {
@@ -54,22 +56,37 @@ const meSessions = new Hono<AppEnv>()
     apiDoc({
       tag: 'Me',
       summary: 'List active sessions',
-      response: SessionListOut,
+      response: pageOf(SessionOut),
       description: `List every active session (signed-in device/browser) on the caller's account, most recently active first, for the Settings → Security device list. Each entry reports whether it's \`current\` (the session this very request is authenticated with), its \`ipAddress\`/\`userAgent\` when Better Auth recorded them, and when it was created/last refreshed. **The bearer token itself is never returned** — only the opaque \`id\`, which \`POST /me/sessions/:id/revoke\` resolves server-side. Session-only, no capability. **401** when unauthenticated. Related: \`/me/identities\` (linked external accounts, a different concept) and the passkey-management endpoints (credentials that mint a session, not a session itself).`,
     }),
+    zQuery(CursorQuery),
     async (c) => {
       const { user, session } = requireSession(c);
+      const { cursor, limit } = c.req.valid('query');
       // Expired rows are never pruned proactively by Better Auth (it only deletes a row when that
       // exact expired cookie is presented again), so without this filter a stale session from a
       // long-abandoned browser profile would render here looking exactly like an active one.
       const rows = await db
         .select()
         .from(sessionTable)
-        .where(and(eq(sessionTable.userId, user.id), gt(sessionTable.expiresAt, new Date())));
-      const items = rows
-        .map((row) => toOut(row, session.token))
-        .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
-      return ok(c, SessionListOut, { items });
+        .where(
+          and(
+            eq(sessionTable.userId, user.id),
+            gt(sessionTable.expiresAt, new Date()),
+            seekAfter(sessionTable.updatedAt, sessionTable.id, cursor),
+          ),
+        )
+        .orderBy(desc(sessionTable.updatedAt), desc(sessionTable.id))
+        .limit(limit + 1);
+      return ok(
+        c,
+        pageOf(SessionOut),
+        pageResult(
+          rows.map((row) => toOut(row, session.token)),
+          limit,
+          (item) => new Date(item.updatedAt),
+        ),
+      );
     },
   )
   .post(

@@ -1,0 +1,12 @@
+sequenceDiagram
+  participant Client as Native client
+  participant Browser as Person's browser
+  participant Auth as Docket authorization server
+  participant API as Docket REST API
+  Client->>Auth: discover resource and register client
+  Client->>Browser: open PKCE authorization request
+  Browser->>Auth: sign in and approve scope
+  Auth->>Client: redirect with code and state
+  Client->>Auth: exchange code with verifier
+  Auth->>Client: issue access token
+  Client->>API: call GET /v1/orgs

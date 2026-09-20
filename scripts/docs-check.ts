@@ -4,7 +4,7 @@ import { relative, resolve, sep } from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 
-const PRIMARY_ORIGIN = 'https://docket.hypertext.studio';
+const PRIMARY_ORIGIN = 'https://clearthedocket.com';
 
 interface DocsConfig {
   readonly name?: string;

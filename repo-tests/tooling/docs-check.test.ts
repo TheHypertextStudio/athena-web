@@ -15,7 +15,7 @@ function docsFixture(): string {
       name: 'Docket',
       navigation: { tabs: [{ tab: 'Guides', pages: ['guides/start'] }] },
       navbar: {
-        primary: { href: 'https://docket.hypertext.studio' },
+        primary: { href: 'https://clearthedocket.com' },
       },
     }),
   );
@@ -65,7 +65,7 @@ describe('public documentation check', () => {
           { source: '/guides/old', destination: '/guides/missing' },
           { source: '/guides/second', destination: '/guides/start' },
         ],
-        navbar: { primary: { href: 'https://docket.hypertext.studio' } },
+        navbar: { primary: { href: 'https://clearthedocket.com' } },
       }),
     );
     for (const page of ['start', 'second']) {

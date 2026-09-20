@@ -14,14 +14,14 @@
  *    widen casually.
  */
 import { db, teamMember, template } from '@docket/db';
-import { pageOf } from '../contracts/pagination';
+import { CursorQuery, pageOf } from '../contracts/pagination';
 import {
   TemplateCreate,
   TemplateOut,
   TemplateTargetType,
   TemplateUpdate,
 } from '@docket/work/template-contract';
-import { and, eq } from 'drizzle-orm';
+import { and, asc, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
 
@@ -31,6 +31,7 @@ import { NotFoundError, ValidationError } from '../error';
 import { seedDefaultTemplates } from '../lib/templates/defaults';
 import { visibleTemplateWhere } from '../lib/templates/visibility';
 import { created, ok } from '../lib/ok';
+import { pageResultById, seekAfterId } from '../lib/list-cursor';
 import { apiDoc } from '../lib/openapi-route';
 import { zJson, zParam, zQuery } from '../lib/validate';
 import { capabilityGuard } from '../permissions/capability-guard';
@@ -78,7 +79,7 @@ function toOut(t: TemplateRow): z.input<typeof TemplateOut> {
 
 const idParam = z.object({ id: z.string() });
 
-const listQuery = z.object({
+const listQuery = CursorQuery.extend({
   targetType: TemplateTargetType.optional().describe(
     'Limit the list to templates that create this kind. Omit for every template in the org.',
   ),
@@ -125,18 +126,25 @@ const templates = new Hono<AppEnv>()
       tag: 'Templates',
       summary: 'List templates',
       response: pageOf(TemplateOut),
-      description: `List the templates visible to the caller: organization templates, their personal templates, and templates owned by teams they belong to. Pass \`targetType\` to limit the list to one kind, which is what a create composer's picker does. Clients may narrow team templates further for the selected entity or composer context, but the API never returns another member's personal payload or a nonmember team's payload. The first call for an org installs Docket's shipped defaults as ordinary editable rows, so a workspace never sees an empty picker before it has authored anything. The list is unpaginated. Requires org membership (\`view\`). Returns a page wrapper of {@link TemplateOut}.`,
+      description: `List the templates visible to the caller: organization templates, their personal templates, and templates owned by teams they belong to. Results use stable template-id order, default to 50 items, accept at most 100, and omit \`nextCursor\` at exhaustion. Reuse a cursor only with the same \`targetType\` filter. Visibility is applied before pagination. The first call seeds Docket's shipped defaults.`,
     }),
     zQuery(listQuery),
     async (c) => {
       const { orgId, actorId } = c.get('actorCtx');
-      const { targetType } = c.req.valid('query');
+      const { targetType, cursor, limit } = c.req.valid('query');
       await seedDefaultTemplates(orgId, actorId);
       const rows = await db
         .select()
         .from(template)
-        .where(visibleTemplateWhere(orgId, actorId, { targetType }));
-      return ok(c, pageOf(TemplateOut), { items: rows.map(toOut) });
+        .where(
+          and(
+            visibleTemplateWhere(orgId, actorId, { targetType }),
+            seekAfterId(template.id, cursor, 'asc'),
+          ),
+        )
+        .orderBy(asc(template.id))
+        .limit(limit + 1);
+      return ok(c, pageOf(TemplateOut), pageResultById(rows.map(toOut), limit));
     },
   )
   .post(

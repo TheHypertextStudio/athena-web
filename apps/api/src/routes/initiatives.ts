@@ -50,7 +50,7 @@ import {
   resolveLabelSet,
 } from '../lib/labels';
 import { deferAfterResponse } from '../lib/after-response';
-import { created, memberUrl, ok } from '../lib/ok';
+import { created, ok } from '../lib/ok';
 import { resolveContainerStatus } from '../lib/work-status';
 import { pageResult, seekAfter } from '../lib/list-cursor';
 import { apiDoc } from '../lib/openapi-route';
@@ -109,15 +109,13 @@ const initiatives = new Hono<AppEnv>()
       tag: 'Initiatives',
       summary: 'List initiatives',
       response: pageOf(InitiativeOut),
-      description: `List the organization's initiatives — the cross-cutting themes that span many Programs and Projects (an Initiative contains no work of its own; it associates with work via many-to-many edges). Results are keyset-paginated newest-first, ordered by \`createdAt\` with \`id\` as the tiebreak. The \`limit\` query param is optional: omit it to receive the full list (legacy behavior), or supply it to receive a bounded page plus a \`nextCursor\` for the next page; pass that opaque cursor back as \`cursor\` to continue. Each item is the flat {@link InitiativeOut} (no rolled-up child mix or health) — fetch a single initiative via \`GET /:id\` for the derived roll-up. Reads require only org membership (the implicit \`view\` capability supplied by the org-context middleware); no capability guard gates this route. Scoped strictly to the caller's organization, so initiatives owned by other tenants are never returned.`,
+      description: `List the organization's initiatives — the cross-cutting themes that span many Programs and Projects (an Initiative contains no work of its own; it associates with work via many-to-many edges). Results use a stable keyset order of \`createdAt DESC, id DESC\`. \`limit\` defaults to 50 and accepts at most 100. Copy \`nextCursor\` unchanged into \`cursor\`; it is absent when the result set is exhausted. Each item is the flat {@link InitiativeOut} (no rolled-up child mix or health) — fetch a single initiative via \`GET /:id\` for the derived roll-up. Reads require only org membership (the implicit \`view\` capability supplied by the org-context middleware); no capability guard gates this route. Scoped strictly to the caller's organization, so initiatives owned by other tenants are never returned.`,
     }),
     zQuery(CursorQuery),
     async (c) => {
       const { orgId } = c.get('actorCtx');
       const { cursor, limit } = c.req.valid('query');
-      // Keyset-paginate newest-first (createdAt, id tiebreak). `limit` is optional: omitted returns
-      // the full list as before; supplied returns a bounded page + `nextCursor`.
-      const base = db
+      const rows = await db
         .select()
         .from(initiative)
         .where(
@@ -126,8 +124,8 @@ const initiatives = new Hono<AppEnv>()
             seekAfter(initiative.createdAt, initiative.id, cursor),
           ),
         )
-        .orderBy(desc(initiative.createdAt), desc(initiative.id));
-      const rows = await (limit === undefined ? base : base.limit(limit + 1));
+        .orderBy(desc(initiative.createdAt), desc(initiative.id))
+        .limit(limit + 1);
       const { items, nextCursor } = pageResult(rows, limit, (r) => r.createdAt);
       return ok(c, pageOf(InitiativeOut), { items: items.map(toOut), nextCursor });
     },
@@ -604,7 +602,7 @@ const initiatives = new Hono<AppEnv>()
         c,
         InitiativeProjectLinked,
         { initiativeId: id, projectId, linked: true },
-        memberUrl(c, projectId),
+        null,
       );
     },
   )
@@ -684,7 +682,7 @@ const initiatives = new Hono<AppEnv>()
         c,
         InitiativeProgramLinked,
         { initiativeId: id, programId, linked: true },
-        memberUrl(c, programId),
+        null,
       );
     },
   )

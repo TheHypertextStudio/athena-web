@@ -3,7 +3,7 @@
  * `inbound-mail.test.ts` suite does not reach: the key-minting rejection loop, dedupe in
  * recipient resolution, the zero-id short circuits, the `metadata-only`/anonymous-sender
  * projection branches, the mailbox-creation race, and the orphaned/mixed-subject-type paths of
- * `listAttachmentTargets`.
+ * `listAttachmentTargetsPage`.
  */
 import type * as DbModule from '@docket/db';
 import { apiHosts } from '@docket/env/api';
@@ -21,7 +21,7 @@ let ensureMailbox!: typeof AthenaMailStoreModule.ensureMailbox;
 let resolveMailboxForRecipients!: typeof AthenaMailStoreModule.resolveMailboxForRecipients;
 let countAttachmentsFor!: typeof AthenaMailStoreModule.countAttachmentsFor;
 let toMailMessageOut!: typeof AthenaMailStoreModule.toMailMessageOut;
-let listAttachmentTargets!: typeof AthenaMailStoreModule.listAttachmentTargets;
+let listAttachmentTargetsPage!: typeof AthenaMailStoreModule.listAttachmentTargetsPage;
 let athenaMailHost!: typeof AthenaMailStoreModule.athenaMailHost;
 
 beforeAll(async () => {
@@ -34,7 +34,7 @@ beforeAll(async () => {
     resolveMailboxForRecipients,
     countAttachmentsFor,
     toMailMessageOut,
-    listAttachmentTargets,
+    listAttachmentTargetsPage,
     athenaMailHost,
   } = mod);
 });
@@ -165,9 +165,9 @@ describe('toMailMessageOut', () => {
   });
 });
 
-describe('listAttachmentTargets', () => {
+describe('listAttachmentTargetsPage', () => {
   it('returns an empty array when the message has no attachments', async () => {
-    expect(await listAttachmentTargets('msg_with_nothing_attached')).toEqual([]);
+    expect(await listAttachmentTargetsPage('msg_with_nothing_attached', 50)).toEqual({ items: [] });
   });
 
   it('resolves a project-only attachment set (no task attachments) with the project title', async () => {
@@ -207,7 +207,7 @@ describe('listAttachmentTargets', () => {
       externalId: assertDefined(message).id,
     });
 
-    const targets = await listAttachmentTargets(assertDefined(message).id);
+    const targets = (await listAttachmentTargetsPage(assertDefined(message).id, 50)).items;
     expect(targets).toHaveLength(1);
     expect(targets[0]).toMatchObject({
       subjectType: 'project',
@@ -252,7 +252,7 @@ describe('listAttachmentTargets', () => {
       externalId: assertDefined(message).id,
     });
 
-    const targets = await listAttachmentTargets(assertDefined(message).id);
+    const targets = (await listAttachmentTargetsPage(assertDefined(message).id, 50)).items;
     expect(targets).toHaveLength(1);
     expect(targets[0]).toMatchObject({
       subjectType: 'initiative',
@@ -297,6 +297,6 @@ describe('listAttachmentTargets', () => {
     });
     await db.delete(schema.task).where(eq(schema.task.id, assertDefined(task).id));
 
-    expect(await listAttachmentTargets(assertDefined(message).id)).toEqual([]);
+    expect(await listAttachmentTargetsPage(assertDefined(message).id, 50)).toEqual({ items: [] });
   });
 });

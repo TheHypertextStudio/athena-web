@@ -442,7 +442,7 @@ const billingDiscounts = new Hono<AppEnv>()
         .select()
         .from(billingDiscountApplicationEvent)
         .where(eq(billingDiscountApplicationEvent.applicationId, application.id));
-      return created(c, DiscountApplicationOut, applicationOut(application, events));
+      return created(c, DiscountApplicationOut, applicationOut(application, events), null);
     },
   )
   .post(
@@ -501,7 +501,7 @@ const billingDiscounts = new Hono<AppEnv>()
         .select()
         .from(billingDiscountApplicationEvent)
         .where(eq(billingDiscountApplicationEvent.applicationId, application.id));
-      return created(c, DiscountApplicationOut, applicationOut(application, events));
+      return created(c, DiscountApplicationOut, applicationOut(application, events), null);
     },
   )
   .post(
@@ -668,7 +668,7 @@ const billingDiscounts = new Hono<AppEnv>()
         .from(billingDiscountApplicationEvent)
         .where(eq(billingDiscountApplicationEvent.applicationId, application.id))
         .orderBy(billingDiscountApplicationEvent.createdAt);
-      return created(c, DiscountApplicationOut, applicationOut(application, events));
+      return created(c, DiscountApplicationOut, applicationOut(application, events), null);
     },
   );
 

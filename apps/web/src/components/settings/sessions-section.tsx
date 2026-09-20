@@ -111,7 +111,7 @@ export function SessionsSection(): JSX.Element {
   const listQ = useApiQuery(
     apiQueryOptions(
       queryKeys.activeSessions(),
-      () => api.v1.me.sessions.$get(),
+      () => api.v1.me.sessions.$get({ query: {} }),
       'Could not load your active sessions.',
     ),
   );

@@ -90,22 +90,20 @@ const programs = new Hono<AppEnv>()
       tag: 'Programs',
       summary: 'List programs',
       response: pageOf(ProgramOut),
-      description: `List the organization's programs — ongoing areas of operation that have NO terminal state (a program is \`active\`, \`paused\`, or \`archived\`; intentionally never \`completed\`, because operational work never "finishes"). Unlike bounded Projects, Programs persist; they own Projects and host directly-attached Tasks. Keyset-paginated newest-first by \`createdAt\` (\`id\` tiebreak); the optional \`limit\` yields a bounded page plus \`nextCursor\` (omit for the full list). Each item is the flat {@link ProgramOut} — fetch \`GET /:id\` for the child-work roll-up. Read-only; org membership suffices. Strictly org-scoped.`,
+      description: `List the organization's programs — ongoing areas of operation that have NO terminal state (a program is \`active\`, \`paused\`, or \`archived\`; intentionally never \`completed\`, because operational work never "finishes"). Unlike bounded Projects, Programs persist; they own Projects and host directly-attached Tasks. Results use a stable keyset order of \`createdAt DESC, id DESC\`. \`limit\` defaults to 50 and accepts at most 100. Copy \`nextCursor\` unchanged into \`cursor\`; it is absent when the result set is exhausted. Each item is the flat {@link ProgramOut} — fetch \`GET /:id\` for the child-work roll-up. Read-only; org membership suffices. Strictly org-scoped.`,
     }),
     zQuery(CursorQuery),
     async (c) => {
       const { orgId } = c.get('actorCtx');
       const { cursor, limit } = c.req.valid('query');
-      // Keyset-paginate newest-first (createdAt, id tiebreak). `limit` is optional: omitted returns
-      // the full list as before; supplied returns a bounded page + `nextCursor`.
-      const base = db
+      const rows = await db
         .select()
         .from(program)
         .where(
           and(eq(program.organizationId, orgId), seekAfter(program.createdAt, program.id, cursor)),
         )
-        .orderBy(desc(program.createdAt), desc(program.id));
-      const rows = await (limit === undefined ? base : base.limit(limit + 1));
+        .orderBy(desc(program.createdAt), desc(program.id))
+        .limit(limit + 1);
       const { items, nextCursor } = pageResult(rows, limit, (r) => r.createdAt);
       return ok(c, pageOf(ProgramOut), { items: items.map(toOut), nextCursor });
     },

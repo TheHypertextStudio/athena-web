@@ -12,7 +12,7 @@ import {
   IntegrationUpdate,
   SyncRunOut,
 } from '@docket/connections/integration-contract';
-import { pageOf } from '../contracts/pagination';
+import { CursorQuery, pageOf } from '../contracts/pagination';
 import { TaskOut } from '@docket/work/task-model';
 import { providerErrorKind } from '@docket/connections/provider-error';
 import { isConnectorError, uninstallInstallation, type ImportedItem } from '@docket/integrations';
@@ -23,9 +23,10 @@ import { z } from 'zod';
 import type { AppEnv } from '../context';
 import { ConflictError, NotFoundError, ValidationError } from '../error';
 import { created, ok, resourceUrl } from '../lib/ok';
+import { pageResultById } from '../lib/list-cursor';
 import { apiDoc } from '../lib/openapi-route';
 import { serializableTx } from '../lib/serializable-tx';
-import { zJson, zParam } from '../lib/validate';
+import { zJson, zParam, zQuery } from '../lib/validate';
 import { buildInstallUrl, githubAppConfigFromEnv, signInstallState } from '../lib/github-app';
 import { seedDefaultAutomationRules } from '../lib/automation/rules-store';
 import { deferAfterResponse } from '../lib/after-response';
@@ -52,13 +53,8 @@ import { runNotionMirrorSync } from './notion-mirror-reconcile';
 import { importItems, resolveImportTeam } from './integration-import';
 import { toExternalActorOut } from './integration-identity';
 import { assertRefInOrg } from './task-helpers';
-
-/** `assignToImporter` lands new linked tasks under My Work's "Assigned to me". */
-const ImportBody = z.object({
-  assignToImporter: z.boolean().optional().default(false),
-});
-
-const idParam = z.object({ id: z.string() });
+import { listExternalActorRows, listIntegrationRows } from './integration-list-store';
+import { ImportBody, integrationIdParam } from './integration-route-contracts';
 /** Path params for a single external-actor mapping nested under an integration. */
 const externalActorParam = z.object({ id: z.string(), externalActorId: z.string() });
 /** Path params for a single sync run nested under an integration. */
@@ -90,29 +86,7 @@ async function setIntegration(
   return row;
 }
 
-/**
- * Start the Notion mirror pass too, when this integration has one configured.
- *
- * @remarks
- * "Sync" on a Notion connection has to mean both directions. The task-mirror spine pulls a
- * provider's work IN; the Notion mirror pushes Docket's work OUT into the designed databases.
- * Running only the first is how the button came to report success having never touched the mirror.
- *
- * Deferred rather than awaited, and that is not an optimization. A mirror pass spends up to
- * `WRITE_BUDGET` Notion writes paced at a few per second — minutes of deliberate sleeping — and
- * this route is the generic Sync button on every connector row. Awaiting it here would push a
- * shared endpoint past gateway and browser timeouts, so the caller would see a network error for
- * a run that was in fact proceeding. The run row is durable from the moment it starts, so
- * `GET /:id/runs` is the honest place to read the outcome; the response below deliberately speaks
- * only for the task sync it actually waited on.
- *
- * Skipped when no container page has been chosen: that is an unfinished setup, not a failure, and
- * running anyway would demote a healthy connection and notify its owner.
- *
- * @param row - The integration just synced.
- * @param actorId - The acting Docket actor, as the spine requires.
- * @returns true when a mirror pass was scheduled, so the caller can say so.
- */
+/** Schedule the slow outbound Notion pass after the inbound sync when setup is complete. */
 function scheduleConfiguredNotionMirror(row: IntegrationRow, actorId: string): boolean {
   if (row.provider !== 'notion') return false;
   const config = ConnectorConfig.safeParse(row.config).data ?? {};
@@ -273,12 +247,14 @@ const integrations = new Hono<AppEnv>()
       tag: 'Integrations',
       summary: 'List integrations',
       response: pageOf(IntegrationOut),
-      description: `List every integration connected to the active organization as a single page of {@link IntegrationOut}. An integration is an org-scoped external connection in one of two patterns — a **Migration** (replace: a one-time import that pulls work into Docket) or a **Connector** (complement: an ongoing read-only mirror, optionally two-way) — contributing one or more roles (\`work\`, \`context\`, \`signal\`, \`time\`, \`code\`). Each row exposes connection health (\`status\`), sync mode, write-back flag, and last-sync/last-error fields, but never the credential itself (only a \`credentialsRef\`). A read; org membership suffices. Related: connect via \`POST /\`, browse connectable providers via \`GET /directory\`, and inspect sync history via \`GET /:id/runs\`.`,
+      description: `List every integration connected to the active organization as a cursor page of {@link IntegrationOut}. Results use stable integration-id order, default to 50 items, accept at most 100, and omit \`nextCursor\` at exhaustion. Each row exposes connection health, sync mode, write-back state, and sync timestamps, but never the credential itself. A read; org membership suffices.`,
     }),
+    zQuery(CursorQuery),
     async (c) => {
       const { orgId } = c.get('actorCtx');
-      const rows = await db.select().from(integration).where(eq(integration.organizationId, orgId));
-      return ok(c, pageOf(IntegrationOut), { items: rows.map(toOut) });
+      const { cursor, limit } = c.req.valid('query');
+      const rows = await listIntegrationRows(orgId, { cursor, limit });
+      return ok(c, pageOf(IntegrationOut), pageResultById(rows.map(toOut), limit));
     },
   )
   .post(
@@ -410,7 +386,7 @@ Requires \`manage\` — wiring an external data source into the org is an admini
       response: IntegrationOut,
       description: `Fetch a single integration by id, scoped to the active organization, returning {@link IntegrationOut}. A missing/cross-tenant id returns 404 (\`Integration not found\`; existence-hiding across tenants). A read; org membership suffices. The response is the full health picture — \`status\`, \`syncMode\`, \`writeBack\`, \`lastSyncStatus\`/\`lastSyncedAt\`, \`lastError\`/\`lastErrorAt\`, \`syncCadenceMinutes\` — without ever exposing the credential. Related: \`GET /:id/runs\` (sync history), \`GET /:id/lists\` (selectable provider containers), \`POST /:id/verify\` (re-check health).`,
     }),
-    zParam(idParam),
+    zParam(integrationIdParam),
     async (c) => {
       const { orgId } = c.get('actorCtx');
       const { id } = c.req.valid('param');
@@ -430,7 +406,7 @@ Requires \`manage\` — wiring an external data source into the org is an admini
 
 Requires \`manage\` — it touches live provider credentials and configures sync. Related: \`PATCH /:id\` (persist the chosen \`config.listIds\`/\`defaultListId\`), \`POST /:id/sync\`.`,
     }),
-    zParam(idParam),
+    zParam(integrationIdParam),
     async (c) => {
       const { orgId } = c.get('actorCtx');
       const { id } = c.req.valid('param');
@@ -459,7 +435,7 @@ Requires \`manage\` — it touches live provider credentials and configures sync
       response: pageOf(SyncRunOut),
       description: `List the most recent (up to 20) sync runs for an integration, newest-first, as a page of {@link SyncRunOut}. Each run is the **durable** record of one \`importWork\` pass — its \`status\` (\`running\`/\`succeeded\`/\`failed\`), \`trigger\` (\`manual\`/\`scheduled\`), \`processed\`/\`total\` counts, error reason, and start/finish timestamps — so a failed sync leaves a real, auditable trace instead of vanishing on restart (this replaced the former ephemeral in-memory job model). The org-scoped integration must exist (404 \`Integration not found\`). A read; org membership suffices. Related: \`POST /:id/sync\` (start a run), \`GET /:id\` (the integration's roll-up health).`,
     }),
-    zParam(idParam),
+    zParam(integrationIdParam),
     async (c) => {
       const { orgId } = c.get('actorCtx');
       const { id } = c.req.valid('param');
@@ -514,7 +490,7 @@ Unlike \`GET /:id/runs\`, which is capped at the 20 most recent runs, this addre
       response: IntegrationOut,
       description: `Update an integration's mutable settings — \`roles\`, connector \`config\` (target team/project, \`listIds\`, \`defaultListId\`, \`pushNativeTasks\`, work-graph connectors' \`teamMappings\`, and — on mail-capable connectors — \`emailToTask: { enabled, threshold }\`, the strictly-opt-in email-to-task ingest switch validated against {@link ConnectorConfig}), \`syncMode\`, \`writeBack\`, and the one-time \`externalAccountId\` binding for a legacy connection — returning the refreshed {@link IntegrationOut}. Provider-owned \`connection\` metadata (including Linear's webhook-routing workspace id), credentials, and \`status\` are intentionally **not** accepted: identity/workspace metadata is learned from the provider during verification, and health is earned through verify/sync, so a client cannot forge routing or a healthy state. A partial update writes only accepted present fields. Enabling \`emailToTask\` also seeds the org's default automation rules once (idempotent), so the dismiss-promotions / archive-on-complete defaults exist the moment the feature turns on. Flipping \`writeBack: true\` on a Linear integration additionally requires the bound Linear identity to carry the \`write\` OAuth scope — lacking it rejects with 409 (reconnect message); a read-only (\`writeBack: false\`) update never checks scope. When \`config.teamMappings\` is present it is validated: every \`teamId\` must be a real team in the caller's org and every \`externalTeamId\` must be unique within the array — either failure 422s (\`validation_error\`) rather than persisting a mapping that would silently misroute at sync time. A missing/cross-tenant id 404s. Requires \`manage\`. Related: \`POST /:id/verify\` (re-validate after changing the connection), \`GET /:id/lists\` (to discover valid \`config.listIds\`).`,
     }),
-    zParam(idParam),
+    zParam(integrationIdParam),
     zJson(IntegrationUpdate),
     async (c) => {
       const { orgId, actorId } = c.get('actorCtx');
@@ -592,7 +568,7 @@ Unlike \`GET /:id/runs\`, which is capped at the 20 most recent runs, this addre
       response: IntegrationOut,
       description: `Disconnect (delete) an integration from the organization, returning the deleted {@link IntegrationOut} as it was just before removal. A missing/cross-tenant id 404s (\`Integration not found\`). Requires \`manage\` — severing an external data source is an administrative decision. Removing the integration drops the org's link to that provider; tasks already mirrored into Docket persist as rows but their \`sourceIntegrationId\` no longer resolves to a live connection (a subsequent reconnect of the same provider/account reuses a fresh integration id). For \`github\`, this also best-effort uninstalls the GitHub App installation on GitHub's side (never blocks the disconnect on that call's outcome) — without it, a stale installation survives on GitHub and a later reconnect silently reuses it instead of prompting a fresh install. Related: \`POST /\` (reconnect), \`PATCH /:id\` (reconfigure instead of disconnecting), \`GET /:id/connect-url\` (the install ceremony this reverses).`,
     }),
-    zParam(idParam),
+    zParam(integrationIdParam),
     async (c) => {
       const { orgId } = c.get('actorCtx');
       const { id } = c.req.valid('param');
@@ -641,7 +617,7 @@ Crucially, a failure is recorded, not thrown away: if the credential can't be re
 
 Requires \`manage\` — it exercises live credentials and mutates health. Side effect: writes \`status\`/\`lastError\`/connection label. Related: \`POST /\` (which leaves the integration \`pending\` for this route to verify), \`POST /:id/sync\` & \`POST /:id/import\` (which also prove health on success).`,
     }),
-    zParam(idParam),
+    zParam(integrationIdParam),
     async (c) => {
       const { orgId, actorId } = c.get('actorCtx');
       const { id } = c.req.valid('param');
@@ -792,7 +768,7 @@ The optional body flag \`assignToImporter\` (default \`false\`) controls landing
 
 Requires \`contribute\` (it creates tasks, the same bar as authoring work directly) — note this is a *lower* bar than the \`manage\`-gated \`POST /:id/sync\`, because import is a user pulling their own work in, whereas sync configures ongoing org-level mirroring. Related: \`POST /:id/sync\`, \`GET /:id/runs\`.`,
     }),
-    zParam(idParam),
+    zParam(integrationIdParam),
     zJson(ImportBody),
     async (c) => {
       const { orgId, actorId } = c.get('actorCtx');
@@ -879,7 +855,7 @@ The mirror pass is **started, not awaited**: it spends minutes pacing writes aga
 
 Requires \`manage\` — triggering org-wide mirroring is an administrative action (contrast the \`contribute\`-level \`POST /:id/import\`, which is a user pulling their own work in). Related: \`GET /:id/runs\`, \`POST /:id/verify\`, \`POST /:id/notion/sync\` (the mirror alone).`,
     }),
-    zParam(idParam),
+    zParam(integrationIdParam),
     async (c) => {
       const { orgId, actorId } = c.get('actorCtx');
       const { id } = c.req.valid('param');
@@ -906,7 +882,7 @@ Requires \`manage\` — triggering org-wide mirroring is an administrative actio
       capability: 'manage',
       description: `Return the **connect URL** the client redirects the user to in order to install a GitHub App integration. The response is \`{ url }\`. A missing/cross-tenant id 404s. Requires \`manage\`. Related: \`POST /\` (create the integration row first), \`POST /:id/sync\`.`,
     }),
-    zParam(idParam),
+    zParam(integrationIdParam),
     async (c) => {
       const { orgId } = c.get('actorCtx');
       const { id } = c.req.valid('param');
@@ -930,18 +906,17 @@ Requires \`manage\` — triggering org-wide mirroring is an administrative actio
       response: pageOf(ExternalActorOut),
       description: `List every \`external_actor\` identity mapping for this integration — one row per provider-side user (e.g. a Linear member) the sync engine has ever seen, as a page of {@link ExternalActorOut}. Includes matched AND unmatched rows: an unmatched row (\`actorId: null\`) is an explicit, queryable state, never hidden or fabricated. \`matchedBy\` distinguishes an automatic \`email\` match (re-evaluated on every sync) from a \`manual\` link (set via \`PATCH /:id/external-actors/:externalActorId\`, immune to re-matching). \`ignoredAt\` splits the unmatched rows again: non-null is a deliberate exclusion, also immune to re-matching, and null means nobody has decided yet. A missing/cross-tenant integration id 404s (\`Integration not found\`).
 
-Requires \`manage\` — reviewing/curating identity mappings is an administrative task, the same bar as the other integration-configuration routes. Related: \`PATCH /:id/external-actors/:externalActorId\` (manually link/unlink one row).`,
+Results use stable external-actor-id order, default to 50 items, accept at most 100, and omit \`nextCursor\` at exhaustion. Reuse a cursor only for the same integration. Requires \`manage\` — reviewing/curating identity mappings is an administrative task, the same bar as the other integration-configuration routes.`,
     }),
-    zParam(idParam),
+    zParam(integrationIdParam),
+    zQuery(CursorQuery),
     async (c) => {
       const { orgId } = c.get('actorCtx');
       const { id } = c.req.valid('param');
+      const { cursor, limit } = c.req.valid('query');
       await loadIntegration(orgId, id);
-      const rows = await db
-        .select()
-        .from(externalActor)
-        .where(and(eq(externalActor.integrationId, id), eq(externalActor.organizationId, orgId)));
-      return ok(c, pageOf(ExternalActorOut), { items: rows.map(toExternalActorOut) });
+      const rows = await listExternalActorRows(orgId, id, { cursor, limit });
+      return ok(c, pageOf(ExternalActorOut), pageResultById(rows.map(toExternalActorOut), limit));
     },
   )
   .patch(

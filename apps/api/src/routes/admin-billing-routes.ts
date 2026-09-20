@@ -761,7 +761,7 @@ export const adminBillingRoutes = new Hono<AppEnv>()
         holdId: hold.id,
         reason,
       });
-      return created(c, AdminHoldOut, toHoldOut(hold));
+      return created(c, AdminHoldOut, toHoldOut(hold), null);
     },
   )
   .delete(

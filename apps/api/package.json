@@ -57,7 +57,7 @@
     "@lovelace-ai/lattice-relay-client": "^0.0.1",
     "@lovelace-ai/lattice-relay-crypto": "^0.0.1",
     "@modelcontextprotocol/sdk": "catalog:",
-    "@scalar/hono-api-reference": "catalog:",
+    "@scalar/api-reference": "1.68.0",
     "drizzle-orm": "catalog:",
     "fflate": "^0.8.3",
     "hono": "catalog:",

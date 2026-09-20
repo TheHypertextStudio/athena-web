@@ -42,7 +42,7 @@ import {
   NotFoundError,
   ReauthRequiredError,
 } from '../error';
-import { accepted, created, memberUrl, ok } from '../lib/ok';
+import { created, memberUrl, ok } from '../lib/ok';
 import { one } from '../lib/one';
 import { apiDoc, describeRoute } from '../lib/openapi-route';
 import { deleteSettingsImage, storeSettingsImage } from '../lib/settings-image';
@@ -290,17 +290,15 @@ Computed by scanning the caller's Hub deletion fields, recomputing ownership blo
       return ok(c, AccountStatusOut, await loadStatus(user.id));
     },
   )
-  // Deleting the account schedules a recoverable 14-day deletion. 202 Accepted — the request is
-  // accepted but the purge is enacted later by the cron sweep (the grace window). Requires a fresh
-  // session (step-up) and no sole-owner blockers (409 otherwise).
+  // Deleting the account synchronously records a recoverable 14-day deletion schedule. The later
+  // purge is not a monitorable job because its successful terminal state removes this resource.
   .delete(
     '/',
     apiDoc({
       tag: 'Me',
       summary: 'Schedule account deletion',
       response: AccountStatusOut,
-      status: 202,
-      description: `Schedule a **recoverable, 14-day-grace** deletion of the caller's account, returning the updated account status. Responds **202 Accepted** because the request only *records intent*: the account flips to \`pending_deletion\` now, but the irreversible purge is enacted later by a cron sweep once the grace window (\`deleteAfterAt\`) closes — until then the deletion can be undone via \`POST /me/account/reactivation\`.
+      description: `Synchronously record a **recoverable, 14-day-grace** deletion schedule for the caller's account and return the updated \`pending_deletion\` status. The later irreversible purge is enacted by a cron sweep once \`deleteAfterAt\` closes. It is not represented as accepted work because a successful purge removes the authenticated account resource instead of leaving a readable job monitor. Until then the schedule remains visible through \`GET /me/account\` and can be undone through \`POST /me/account/reactivation\`.
 
 **Two gates must pass.** First, step-up: the action requires a **freshly re-authenticated session** (created within the last 5 minutes); a passkey re-verification on the client mints a new session, and a stale session is rejected with **401 \`reauth_required\`** so the client re-challenges and retries. Second, ownership: if the caller is the sole active owner of any shared org, the request is refused with **409 \`deletion_blocked\`** (the blocking orgs are listed in account status) — they must transfer ownership or delete those orgs first.
 
@@ -336,7 +334,7 @@ Computed by scanning the caller's Hub deletion fields, recomputing ownership blo
           body: { html: email.html, text: email.text },
         });
       }
-      return accepted(c, AccountStatusOut, status);
+      return ok(c, AccountStatusOut, status);
     },
   )
   // Recover a scheduled deletion during its grace window (the inverse of DELETE /me/account).

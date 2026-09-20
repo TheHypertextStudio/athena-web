@@ -13,6 +13,7 @@ import {
   templatesDef,
 } from '@/components/templates/queries';
 import { api } from '@/lib/api';
+import { fetchAllMembers } from '@/lib/org-collection-pages';
 import { authClient } from '@/lib/auth-client';
 import { apiQueryOptions, queryKeys, STALE, useApiListQuery, useApiQuery } from '@/lib/query';
 
@@ -48,7 +49,7 @@ export function useCommandActions({ open, close }: CommandActionsInput): readonl
   const membersQuery = useApiListQuery(
     apiQueryOptions(
       queryKeys.members(activeOrgId ?? ''),
-      () => api.v1.orgs[':orgId'].members.$get({ param: { orgId: activeOrgId ?? '' } }),
+      () => fetchAllMembers(api, activeOrgId ?? ''),
       'Could not load members.',
       { enabled: open && activeOrgId !== null, staleTime: STALE.static },
     ),

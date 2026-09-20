@@ -52,6 +52,9 @@ export interface SearchQueryParams {
   includeArchived?: boolean;
 }
 
+/** The query fingerprint bound into every cursor for this execution. */
+export type SearchQueryFingerprint = string;
+
 /** One raw `search_document` row, before scoring or filtering, plus the full-text rank the
  * ranked-search scan attaches to it (`0` for rows browse mode never full-text-matched). */
 export type SearchDocumentRow = typeof searchDocument.$inferSelect & { textRank: number };

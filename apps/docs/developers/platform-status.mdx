@@ -1,51 +1,36 @@
 ---
 title: 'Platform status'
-description: 'What is stable today, what may still change, and what Docket promises about the API.'
+description: 'The current public API contract and the limits that apply while it is prerelease.'
 ---
 
-Read this before you build anything you plan to maintain. **Docket's public API is in early
-access.** Its current interfaces are available, but they do not carry a compatibility promise yet.
+Docket's public API is prerelease. The current public REST compatibility contract is `0.1.0`, and
+Docket supports one current contract rather than a retained set of versions.
 
-|                         | Status                                                                                        |
-| ----------------------- | --------------------------------------------------------------------------------------------- |
-| REST API `/v1`          | Available. **Unversioned in practice.** `/v1` is a path, and not yet a compatibility promise. |
-| MCP server              | Available. Follows the MCP specification, including its authorization spec.                   |
-| OAuth 2.1 authorization | Available. Standards-based, and the most stable thing here.                                   |
-| Published SDK           | **None.** No client library for any language.                                                 |
-| Outbound webhooks       | **None.** Docket receives webhooks and sends none.                                            |
-| Deprecation policy      | **None yet.**                                                                                 |
+| Surface                  | Current status                                                                  |
+| ------------------------ | ------------------------------------------------------------------------------- |
+| REST resource            | `https://api.clearthedocket.com/v1` with version and revision response headers. |
+| REST OAuth bearer access | `GET` and `HEAD /v1/orgs` with `work:read` only.                                |
+| MCP                      | Streamable HTTP at `https://api.clearthedocket.com/mcp`.                        |
+| OAuth                    | Authorization code and refresh-token grants with PKCE `S256`.                   |
+| SDK                      | No published SDK.                                                               |
+| Outbound webhooks        | None.                                                                           |
 
 ## What may change
 
-<Warning>
-  Docket can rename a field, reshape a response envelope, or change a tool's arguments with no
-  deprecation window.
-</Warning>
+Docket can expand the REST OAuth operation manifest in a later release. Until then, no task,
+project, time, or other business REST operation should be assumed to accept a bearer token. Read
+the live OpenAPI reference for schemas, and use [MCP](/developers/connect-an-agent-mcp) where an
+agent needs work actions now.
 
-- **Prefer MCP over REST** where both would work. Docket can reshape the task payload underneath
-  `capture` without renaming the tool.
-- **Never parse an identifier.** ULIDs are opaque.
-- **Branch on the error `code`.** Match `not_found`, never "We could not find that".
-- **Pin nothing to the byte shape of `/v1/openapi.json`.** It changes when the service changes.
+Clients should send `Docket-Version: 0.1.0` when they need a deliberate assertion and should handle
+`unsupported_api_version`. Every public REST response also carries `Docket-Revision`, the full
+deployed source revision.
 
-## What is stable
+## Reliability boundaries
 
-Build on these specifications:
+Docket does not send outbound webhooks, publish an SDK, or promise older version routing. MCP
+resource notifications are best-effort and not replayed. A client must re-read a resource after a
+notification and must reauthorize after an authority failure.
 
-- OAuth 2.1 with PKCE, and the discovery documents of RFC 8414, RFC 9728, and RFC 8707.
-- MCP Streamable HTTP transport semantics.
-- RFC 9457 problem documents as the error envelope.
-
-The nouns are stable too. Organization, Team, Initiative, Program, Project, Cycle, Task, Update,
-and Comment have meant the same thing for a long time. Docket changes the fields underneath them,
-not the nouns.
-
-## No SDK, and what to do instead
-
-Every package in the Docket repository is private. Generate your REST client from
-`/v1/openapi.json`, which anyone can fetch and which describes the deployed service. For MCP, use
-your language's client library.
-
-## When the docs and the API disagree
-
-Believe the API. Docket renders [`/v1/docs`](/developers/rest-api) from the running service.
+Report a mismatch between these pages and the live API with the response's `Docket-Version`,
+`Docket-Revision`, request method, and path. Never include an access token.

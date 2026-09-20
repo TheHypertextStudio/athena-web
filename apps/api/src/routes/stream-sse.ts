@@ -16,19 +16,22 @@ import { streamSSE } from 'hono/streaming';
 
 import type { AppEnv } from '../context';
 import { AuthError } from '../error';
+import { apiDoc } from '../lib/openapi-route';
 import { type StreamEvent, subscribe } from '../lib/event-bus';
 import { declareStreaming } from '../lib/sse-headers';
 
 import { canDeliverQueuedStreamEvent } from './stream-helpers';
+import { personalActivityStreamOperation, rejectNonResumableCursor } from './stream-contracts';
 
 /** Heartbeat cadence (ms) — a comment-frame ping that keeps the connection warm. */
 const HEARTBEAT_MS = 25_000;
 
 /** Live stream router: a single SSE subscription per connection. */
-const streamSse = new Hono<AppEnv>().get('/sse', (c) => {
+const streamSse = new Hono<AppEnv>().get('/sse', apiDoc(personalActivityStreamOperation), (c) => {
   const session = c.get('session');
   if (!session?.user) throw new AuthError();
   const userId = session.user.id;
+  rejectNonResumableCursor(c.req.header('last-event-id'));
 
   return declareStreaming(
     streamSSE(c, async (stream) => {
@@ -69,7 +72,7 @@ const streamSse = new Hono<AppEnv>().get('/sse', (c) => {
           notify = null;
           // Heartbeat only when nothing arrived; the `while` re-checks `aborted` to exit.
           if (pending.length === 0) {
-            await stream.writeSSE({ event: 'ping', data: '' });
+            await stream.writeSSE({ event: 'ping', data: '{}' });
           }
         }
       } finally {

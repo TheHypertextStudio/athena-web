@@ -32,6 +32,7 @@ import type { JSX } from 'react';
 
 import { EntityIconGlyph } from '@/components/entity-display/entity-icon-glyph';
 import { api } from '@/lib/api';
+import { fetchAllEntityDisplays } from '@/lib/org-collection-pages';
 import { apiQueryOptions, queryKeys, useApiListQuery } from '@/lib/query';
 
 /** Props for {@link TeamPicker}. */
@@ -88,10 +89,7 @@ function TeamPickerControl({
   const teamDisplaysQ = useApiListQuery(
     apiQueryOptions(
       queryKeys.entityDisplays(organizationId, 'team'),
-      () =>
-        api.v1.orgs[':orgId'].display[':subjectType'].$get({
-          param: { orgId: organizationId, subjectType: 'team' },
-        }),
+      () => fetchAllEntityDisplays(api, organizationId, 'team'),
       'Could not load team icons.',
       { enabled: organizationId.length > 0 },
     ),

@@ -6,6 +6,7 @@ import { and, desc, inArray, isNull } from 'drizzle-orm';
 
 import { encodeListCursor, seekAfter } from '../lib/list-cursor';
 import { collapseActivityRows } from './query-collapse';
+import { decodeBrowseCursor, encodeBrowseCursor } from './query-cursor';
 import { buildFacetSummaries } from './query-facets';
 import { filterRow, rowSortTime } from './query-filters';
 import { toSearchResult, withSearchDisplays } from './query-results';
@@ -41,6 +42,18 @@ export interface BrowseInput {
   accessByOrg: ReadonlyMap<string, CallerOrgAccess>;
   fromTime: number | null;
   toTime: number | null;
+  /** Canonical identity of the effective scope and filters for cursor reuse validation. */
+  cursorFingerprint: string;
+}
+
+function nextBrowsePosition(
+  last: ScoredRow | undefined,
+  hasMore: boolean,
+  exhausted: boolean,
+  scanCursor: string | undefined,
+): string | undefined {
+  if (hasMore && last) return encodeListCursor(last.row.updatedAt, last.row.id);
+  return !hasMore && !exhausted ? scanCursor : undefined;
 }
 
 /**
@@ -60,7 +73,7 @@ export interface BrowseInput {
 export async function browseDocuments(input: BrowseInput): Promise<SearchOut> {
   const collected: ScoredRow[] = [];
   const seen = new Set<string>();
-  let cursor = input.params.cursor;
+  let cursor = decodeBrowseCursor(input.params.cursor, input.cursorFingerprint)?.position;
   let exhausted = false;
   // Recomputed at the end of every round that adds rows, and read again as next round's break
   // check — so a round that finds nothing new never re-collapses the same `collected` twice.
@@ -114,13 +127,7 @@ export async function browseDocuments(input: BrowseInput): Promise<SearchOut> {
   // `collapseActivityRows` has no memory across calls, so an activity row correctly collapsed on
   // this page (because its subject's own row was also in `collected`, ahead of the cursor) can
   // reappear at the top of the next page once that subject's row is no longer in the scan window.
-  const nextCursor = hasMore
-    ? last
-      ? encodeListCursor(last.row.updatedAt, last.row.id)
-      : undefined
-    : !exhausted
-      ? cursor
-      : undefined;
+  const nextPosition = nextBrowsePosition(last, hasMore, exhausted, cursor);
   const usedIn = await usedInForPage(page, input.caller);
   const items = await withSearchDisplays(
     page.map((row) => toSearchResult(row, usedIn.get(row.row.id) ?? [])),
@@ -132,7 +139,9 @@ export async function browseDocuments(input: BrowseInput): Promise<SearchOut> {
     // depends on them being complete.
     facets: buildFacetSummaries(page),
     items,
-    ...(nextCursor ? { nextCursor } : {}),
+    ...(nextPosition
+      ? { nextCursor: encodeBrowseCursor(nextPosition, input.cursorFingerprint) }
+      : {}),
   };
 }
 

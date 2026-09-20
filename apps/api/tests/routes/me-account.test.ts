@@ -285,13 +285,14 @@ describe('GET /me/account/exports/:exportId/file', () => {
 });
 
 describe('DELETE /me/account (schedule deletion)', () => {
-  it('schedules deletion (202 Accepted) on a fresh session with no blockers', async () => {
+  it('synchronously schedules deletion on a fresh session with no blockers', async () => {
     const { db, schema, meAccount, outbox } = await setup();
     const userId = await seedUserWithHub(db, schema, 'leaver');
     const before = outbox.length;
     const app = appWithSession(meAccount, agedSession(userId, 0));
     const res = await app.request('/', { method: 'DELETE' });
-    expect(res.status).toBe(202);
+    expect(res.status).toBe(200);
+    expect(res.headers.get('location')).toBeNull();
     expect(((await res.json()) as { deletionState: string }).deletionState).toBe(
       'pending_deletion',
     );

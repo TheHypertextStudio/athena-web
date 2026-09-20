@@ -30,6 +30,7 @@ import type { Context } from 'hono';
 import { z } from 'zod';
 
 import type { AppEnv } from '../context';
+import { CursorQuery } from '../contracts/pagination';
 import type { ApiError } from '../error';
 import {
   AuthError,
@@ -40,8 +41,9 @@ import {
   ValidationError,
 } from '../error';
 import { ok } from '../lib/ok';
+import { pageResult, seekAfter } from '../lib/list-cursor';
 import { apiDoc } from '../lib/openapi-route';
-import { zJson, zParam } from '../lib/validate';
+import { zJson, zParam, zQuery } from '../lib/validate';
 
 import {
   attemptsRemaining,
@@ -59,6 +61,12 @@ import type { TelephonyProvider } from './twilio-telephony';
 import { revokePhoneAccess } from './voice-session-service';
 
 const idParam = z.object({ id: z.string() });
+const PhoneNumberListPageOut = PhoneNumberListOut.extend({
+  nextCursor: z
+    .string()
+    .optional()
+    .describe('Opaque cursor for the next page, absent at exhaustion.'),
+});
 
 /** Every dial code the country selector offers, as the server's allowlist. */
 const DIAL_CODE_BY_COUNTRY = new Map(
@@ -152,6 +160,29 @@ export interface PhoneNumberRouteDeps {
   }) => z.input<typeof PhoneVerificationAvailability>;
 }
 
+async function listPhoneNumberRows(
+  userId: string,
+  cursor: string | undefined,
+  limit: number,
+): Promise<(typeof phoneNumber.$inferSelect)[]> {
+  return db
+    .select()
+    .from(phoneNumber)
+    .where(
+      and(eq(phoneNumber.userId, userId), seekAfter(phoneNumber.createdAt, phoneNumber.id, cursor)),
+    )
+    .orderBy(desc(phoneNumber.createdAt), desc(phoneNumber.id))
+    .limit(limit + 1);
+}
+
+async function phoneNumberPage(
+  rows: (typeof phoneNumber.$inferSelect)[],
+  limit: number,
+): Promise<{ items: z.input<typeof PhoneNumberOut>[]; nextCursor?: string }> {
+  const items = await Promise.all(rows.map(phoneNumberOut));
+  return pageResult(items, limit, (item) => new Date(item.createdAt));
+}
+
 /**
  * Build the caller-owned phone-number routes.
  *
@@ -169,25 +200,22 @@ export function createPhoneNumberRoutes(
       apiDoc({
         tag: 'Me Phone',
         summary: 'List bound phone numbers',
-        response: PhoneNumberListOut,
+        response: PhoneNumberListPageOut,
         description:
           'List the phone numbers bound to the account, always redacted. A number still awaiting its code carries that code’s remaining lifetime, tries, and resend time, so a half-finished verification can be resumed from any session.',
       }),
+      zQuery(CursorQuery),
       async (c) => {
         const userId = requireUserId(c);
+        const { cursor, limit } = c.req.valid('query');
         const verification = availability(c, deps);
-        const rows = await db
-          .select()
-          .from(phoneNumber)
-          .where(eq(phoneNumber.userId, userId))
-          .orderBy(desc(phoneNumber.createdAt));
+        const rows = await listPhoneNumberRows(userId, cursor, limit);
 
-        // A person holds a handful of numbers and only the pending ones are looked up, so this is
-        // zero or one extra query, issued concurrently — not a fan-out worth batching.
-        return ok(c, PhoneNumberListOut, {
+        const page = await phoneNumberPage(rows, limit);
+        return ok(c, PhoneNumberListPageOut, {
           athenaNumber: deps?.athenaNumber() ?? null,
           verification,
-          items: await Promise.all(rows.map(phoneNumberOut)),
+          ...page,
         });
       },
     )

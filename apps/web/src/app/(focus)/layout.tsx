@@ -6,6 +6,7 @@ import { type JSX, type ReactNode } from 'react';
 
 import { AutomaticLocationProvider } from '@/components/work-location/automatic-location-provider';
 import { unwrap } from '@/lib/query-core';
+import { fetchAllOrganizations } from '@/lib/org-collection-pages';
 import { queryKeys } from '@/lib/query-keys';
 import { dehydrate, getServerApi, getServerQueryClient } from '@/lib/query-server';
 import { readServerSession } from '@/lib/server-session';
@@ -26,7 +27,7 @@ export default async function FocusGroupLayout({
   const api = await getServerApi();
   await queryClient.prefetchQuery({
     queryKey: queryKeys.orgs(),
-    queryFn: () => unwrap(() => api.v1.orgs.$get(), 'Could not load your organizations.'),
+    queryFn: () => unwrap(() => fetchAllOrganizations(api), 'Could not load your organizations.'),
   });
 
   return (

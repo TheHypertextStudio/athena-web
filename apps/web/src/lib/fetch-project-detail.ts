@@ -30,6 +30,18 @@ import {
   buildActorDirectory,
 } from '@/components/project-detail/actor-directory';
 import { api } from './api';
+import {
+  fetchAllAgents,
+  fetchAllInitiatives,
+  fetchAllLabels,
+  fetchAllMembers,
+  fetchAllMilestones,
+  fetchAllPrograms,
+  fetchAllProjects,
+  fetchAllRoles,
+  fetchAllSessions,
+  fetchAllTasks,
+} from './org-collection-pages';
 import { type RpcResponse, apiQueryOptions, queryKeys, rpcErrorResponse } from './query';
 
 /** The composite project-detail payload assembled from the typed RPC surface. */
@@ -110,23 +122,21 @@ export function fetchProjectDetail(
       displayRes,
       labelsRes,
     ] = await Promise.all([
-      api.v1.orgs[':orgId'].projects.$get({ param: { orgId }, query: {} }),
+      fetchAllProjects(api, orgId),
       api.v1.orgs[':orgId'].projects[':id'].progress.$get({ param: { orgId, id: projectId } }),
-      api.v1.orgs[':orgId'].tasks.$get({ param: { orgId }, query: {} }),
-      api.v1.orgs[':orgId'].projects[':id'].milestones.$get({
-        param: { orgId, id: projectId },
-      }),
-      api.v1.orgs[':orgId'].members.$get({ param: { orgId } }),
-      api.v1.orgs[':orgId'].agents.$get({ param: { orgId } }),
-      api.v1.orgs[':orgId'].sessions.$get({ param: { orgId }, query: {} }),
-      api.v1.orgs[':orgId'].programs.$get({ param: { orgId }, query: {} }),
-      api.v1.orgs[':orgId'].initiatives.$get({ param: { orgId }, query: {} }),
-      api.v1.orgs[':orgId'].roles.$get({ param: { orgId } }),
+      fetchAllTasks(api, orgId),
+      fetchAllMilestones(api, orgId, projectId),
+      fetchAllMembers(api, orgId),
+      fetchAllAgents(api, orgId),
+      fetchAllSessions(api, orgId),
+      fetchAllPrograms(api, orgId),
+      fetchAllInitiatives(api, orgId),
+      fetchAllRoles(api, orgId),
       api.v1.orgs[':orgId'].projects[':id'].rollup.$get({ param: { orgId, id: projectId } }),
       api.v1.orgs[':orgId'].display[':subjectType'][':subjectId'].$get({
         param: { orgId, ...subject },
       }),
-      api.v1.orgs[':orgId'].labels.$get({ param: { orgId }, query: {} }),
+      fetchAllLabels(api, orgId),
     ]);
 
     if (!projectsRes.ok) {
@@ -140,14 +150,14 @@ export function fetchProjectDetail(
       : defaultEntityDisplay('project', projectId);
     const progress = progressRes.ok ? await progressRes.json() : null;
 
-    const memberItems: MemberOut[] = membersRes.ok ? (await membersRes.json()).items : [];
+    const memberItems: MemberOut[] = membersRes.ok ? [...(await membersRes.json()).items] : [];
     const agents = agentsRes.ok ? (await agentsRes.json()).items : [];
     const agentActorByAgentId = new Map(agents.map((a) => [a.id, a.actorId]));
     const directory = buildActorDirectory({
       members: memberItems.map((m) => ({ actorId: m.actorId, displayName: m.displayName })),
       agents: agents.map((a) => ({ actorId: a.actorId, name: `Agent ${a.actorId.slice(0, 6)}` })),
     });
-    const roles: RoleOut[] = rolesRes.ok ? (await rolesRes.json()).items : [];
+    const roles: RoleOut[] = rolesRes.ok ? [...(await rolesRes.json()).items] : [];
     const programs: readonly ProgramOut[] = programsRes.ok ? (await programsRes.json()).items : [];
     const initiatives: readonly InitiativeOut[] = initiativesRes.ok
       ? (await initiativesRes.json()).items

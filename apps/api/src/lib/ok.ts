@@ -182,16 +182,25 @@ export function created<T extends z.ZodType>(
  * @param c - The Hono context.
  * @param schema - The response Zod schema.
  * @param data - The queued job (the schema's input shape).
- * @param location - The job/status resource to poll, when there is one.
- * @throws {ApiError} 500 `internal` when the data does not satisfy its declared schema.
+ * @param location - The absolute URL of the job/status resource to poll.
+ * @throws {ApiError} 500 `internal` when the monitor URL or data is invalid.
  */
 export function accepted<T extends z.ZodType>(
   c: Context,
   schema: T,
   data: z.input<T>,
-  location?: string,
+  location: string,
 ) {
-  if (location !== undefined) c.header('Location', location);
+  let monitor: URL;
+  try {
+    monitor = new URL(location);
+  } catch {
+    throw new ApiError(500, 'internal', 'Accepted work requires an absolute monitor URL');
+  }
+  if (monitor.protocol !== 'http:' && monitor.protocol !== 'https:') {
+    throw new ApiError(500, 'internal', 'Accepted work requires an HTTP monitor URL');
+  }
+  c.header('Location', monitor.href);
   withStatus(c, 202);
   return c.json(serialize(c, schema, data));
 }

@@ -108,12 +108,16 @@
         "tab": "Developers",
         "pages": [
           "developers/overview",
-          "developers/platform-status",
+          "developers/make-your-first-request",
           "developers/authentication",
+          "developers/rest-api",
+          "developers/api-versions",
+          "developers/api-release-notes",
           "developers/connect-an-agent-mcp",
           "developers/mcp-tools-and-resources",
-          "developers/rest-api",
-          "developers/errors"
+          "developers/track-time",
+          "developers/errors",
+          "developers/platform-status"
         ]
       },
       {
@@ -152,13 +156,13 @@
     "links": [
       {
         "label": "Pricing",
-        "href": "https://docket.hypertext.studio/pricing"
+        "href": "https://clearthedocket.com/pricing"
       }
     ],
     "primary": {
       "type": "button",
       "label": "Open Docket",
-      "href": "https://docket.hypertext.studio"
+      "href": "https://clearthedocket.com"
     }
   },
   "footer": {
@@ -166,17 +170,17 @@
       {
         "header": "Product",
         "items": [
-          { "label": "Docket", "href": "https://docket.hypertext.studio" },
-          { "label": "Pricing", "href": "https://docket.hypertext.studio/pricing" },
-          { "label": "API reference", "href": "https://docket-api.hypertext.studio/v1/docs" }
+          { "label": "Docket", "href": "https://clearthedocket.com" },
+          { "label": "Pricing", "href": "https://clearthedocket.com/pricing" },
+          { "label": "API reference", "href": "https://api.clearthedocket.com/v1/docs" }
         ]
       },
       {
         "header": "Company",
         "items": [
-          { "label": "About", "href": "https://docket.hypertext.studio/about" },
-          { "label": "Privacy", "href": "https://docket.hypertext.studio/privacy" },
-          { "label": "Terms", "href": "https://docket.hypertext.studio/terms" }
+          { "label": "About", "href": "https://clearthedocket.com/about" },
+          { "label": "Privacy", "href": "https://clearthedocket.com/privacy" },
+          { "label": "Terms", "href": "https://clearthedocket.com/terms" }
         ]
       }
     ]

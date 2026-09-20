@@ -173,11 +173,16 @@ export const projectDependencyRoutes = new Hono<AppEnv>()
           blockedProjectId,
         });
       });
-      return created(c, ProjectDependencyCreated, {
-        created: true,
-        blockingProjectId,
-        blockedProjectId,
-      });
+      return created(
+        c,
+        ProjectDependencyCreated,
+        {
+          created: true,
+          blockingProjectId,
+          blockedProjectId,
+        },
+        null,
+      );
     },
   )
   .delete(

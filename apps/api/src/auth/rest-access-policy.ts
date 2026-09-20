@@ -5,6 +5,10 @@ import type {
   OAuthCapabilityScope,
   OAuthIssuableScope,
 } from '@docket/identity-access/oauth-scope-contract';
+import type { Context } from 'hono';
+
+import type { AppEnv } from '../context';
+import { operationContractForRequest } from '../lib/api-operation-contract';
 
 /** The authentication mechanism and OAuth scopes one REST operation accepts. */
 export type ApiAccess =
@@ -49,4 +53,12 @@ export const REST_OPERATION_ACCESS: ReadonlyMap<string, ApiAccess> = new Map<str
 /** Return the exact operation policy, defaulting unknown operations to session-only. */
 export function accessForOperation(method: string, path: string): ApiAccess {
   return REST_OPERATION_ACCESS.get(`${method.toUpperCase()} ${path}`) ?? SESSION_ONLY;
+}
+
+/** Select access from the matched operation contract, with the temporary Task 2 fallback. */
+export function accessForRequest(context: Context<AppEnv>): ApiAccess {
+  return (
+    operationContractForRequest(context)?.access ??
+    accessForOperation(context.req.method, context.req.path)
+  );
 }

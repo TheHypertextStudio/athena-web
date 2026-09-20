@@ -54,7 +54,11 @@ export function useTaskAttachments(orgId: string, taskId: string): TaskAttachmen
   const listQ = useApiQuery(
     apiQueryOptions(
       key,
-      () => api.v1.orgs[':orgId'].tasks[':id'].attachments.$get({ param: { orgId, id: taskId } }),
+      () =>
+        api.v1.orgs[':orgId'].tasks[':id'].attachments.$get({
+          param: { orgId, id: taskId },
+          query: { limit: '100' },
+        }),
       'Could not load attachments.',
     ),
   );

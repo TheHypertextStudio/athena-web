@@ -1,35 +1,31 @@
 ---
-title: "MCP tools and resources"
-description: "The 26 tools, the docket:// resource scheme, the bootstrap prompts, and the scopes each one needs."
+title: 'MCP tools and resources'
+description: 'Registered MCP tool names, read resources, prompts, and authority limits.'
 ---
 
-**26 tools**, a set of `docket://` resources, and 3 prompts. Each is named for what the caller is
-trying to do.
+Docket returns only the tools that the caller's current scopes and grants allow. Tool availability
+can change after consent or grant changes, so handle `notifications/tools/list_changed`.
 
 ## Tools
 
-<AccordionGroup>
-  <Accordion title="Reading: 5 tools" defaultOpen>
-    | Tool | Does |
-    | --- | --- |
-    | `workspaces` | Lists the workspaces you belong to. Usually the first call. |
-    | `find` | Searches the workspace and ranks the results. |
-    | `list_work` | Lists rows matching exact criteria. |
-    | `get` | Returns one entity in full, by ID or by name. |
-    | `brief` | Returns what needs you today. |
+The work and planning tools are `workspaces`, `find`, `list_work`, `brief`, `capture`, `organize`,
+`update`, `comment`, `report_status`, `link`, `archive`, `plan_day`, `undo`, `retrospect`,
+`define_process`, `schedule_process`, `repeat_task`, and `track`.
 
-    `find` reads the same permission-filtered index the web app reads. That index updates a moment
-    after a write.
+The agent, session, connector, and directive tools are `run_agent`, `manage_session`,
+`link_external`, `acknowledge_directive`, `pause_athena_assignment_trigger`, and
+`remove_athena_assignment_trigger`.
 
-    `list_work` filters on team, project, assignee, delegate, state, priority, label, cycle, due
-    window, blocked-ness, and the triage queue. Pass a filter the chosen entity has no column for
-    and the call **fails, naming the filters that entity does support**.
+`get` is the compatibility generic entity read. Prefer the semantic readers when a client knows the
+entity type: `get_tasks`, `get_projects`, `get_programs`, `get_initiatives`, `get_cycles`,
+`get_teams`, `get_updates`, `get_comments`, `get_sessions`, `get_agents`, `get_views`, and
+`get_organizations`.
 
-    `get` returns a task with its dependencies and subtasks, and lists the references you cannot
-    see in `missing`.
-  </Accordion>
+`review_work_destination` reviews a proposed work destination before writing. It does not create
+or move work on its own.
 
-  <Accordion title="Writing: 9 tools">
+### Writing
+
     | Tool | Does |
     | --- | --- |
     | `capture` | Creates a task from a sentence. |
@@ -44,24 +40,24 @@ trying to do.
 
     **Every write records an undoable change set.** Call `undo` once and Docket reverses forty
     edits.
-  </Accordion>
 
-  <Accordion title="Time and reflection: 2 tools">
+### Time and reflection
+
     | Tool | Does |
     | --- | --- |
     | `track` | Records time against work. See [Time](/guides/daily/time). |
     | `retrospect` | Returns a retrospective for a period. |
-  </Accordion>
 
-  <Accordion title="Repeating work and processes: 3 tools">
+### Repeating work and processes
+
     | Tool | Does |
     | --- | --- |
     | `define_process` | Defines a process. |
     | `schedule_process` | Schedules a process to run. |
     | `repeat_task` | Makes a task recur. |
-  </Accordion>
 
-  <Accordion title="Agents, sessions, and connectors: 7 tools">
+### Agents, sessions, and connectors
+
     | Tool | Does |
     | --- | --- |
     | `run_agent` | Starts an agent session. |
@@ -71,67 +67,54 @@ trying to do.
     | `pause_athena_assignment_trigger` | Pauses a trigger on your Athena assignment. |
     | `remove_athena_assignment_trigger` | Removes a trigger on your Athena assignment. |
     | `review_work_destination` | Reviews whether a normalized web destination supports one task, with at most one follow-up question. |
-  </Accordion>
-</AccordionGroup>
 
 ### Scopes per tool
 
-| Scope | Covers |
-| --- | --- |
-| `work:read` | `workspaces`, `find`, `list_work`, `get`, `brief`, and every resource read |
-| `work:write` | `capture`, `organize`, `update`, `comment`, `report_status`, `link`, `archive`, `plan_day`, `undo`, `track`, `retrospect`, `acknowledge_directive`, `define_process`, `schedule_process`, `repeat_task` |
-| `agents:run` | `run_agent`, `manage_session`, `pause_athena_assignment_trigger`, `remove_athena_assignment_trigger`, `review_work_destination` |
-| `connectors:link` | `link_external` |
+| Scope             | Covers                                                                                                                                                                                                  |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `work:read`       | `workspaces`, `find`, `list_work`, `get`, `brief`, and every resource read                                                                                                                              |
+| `work:write`      | `capture`, `organize`, `update`, `comment`, `report_status`, `link`, `archive`, `plan_day`, `undo`, `track`, `retrospect`, `acknowledge_directive`, `define_process`, `schedule_process`, `repeat_task` |
+| `agents:run`      | `run_agent`, `manage_session`, `pause_athena_assignment_trigger`, `remove_athena_assignment_trigger`, `review_work_destination`                                                                         |
+| `connectors:link` | `link_external`                                                                                                                                                                                         |
 
-See [Authentication](/developers/authentication#scopes) for requesting and stepping up scopes.
+See [Authentication](/developers/authentication#request-the-smallest-scope) for requesting and stepping up scopes.
+
+`work:read` gates reads. `work:write` gates work mutations and time tracking. `agents:run` gates
+agent sessions and Athena assignment controls. `connectors:link` gates external linking.
+`offline_access` only allows token refresh. Every call still checks the person's current Docket
+grant.
 
 ## Resources
 
-The same data, read as resources. An item you cannot see looks like one that does not exist.
+Use these caller-scoped resources for discovery and Hub views:
 
-| URI | Contents |
-| --- | --- |
-| `docket://orgs` | Every workspace you belong to |
-| `docket://hub/today` | Your daily plan |
-| `docket://hub/inbox` | What needs a response |
-| `docket://hub/directive` | The current scheduling directive |
-| `docket://hub/portfolio` | Every workspace's programs and projects |
+| URI                        | Contents                                                                      |
+| -------------------------- | ----------------------------------------------------------------------------- |
+| `docket://orgs`            | Every workspace you belong to                                                 |
+| `docket://hub/today`       | Your daily plan                                                               |
+| `docket://hub/inbox`       | What needs a response                                                         |
+| `docket://hub/directive`   | The current scheduling directive                                              |
+| `docket://hub/portfolio`   | Every workspace's programs and projects                                       |
 | `docket://hub/active-work` | Your current running or paused timer and its permission-filtered task context |
 
-Everything else is templated:
+Read one entity through:
 
-```
+```text
 docket://{org}/{type}/{id}
 ```
 
-Where `type` is one of `task`, `project`, `program`, `initiative`, `cycle`, `team`, `update`,
-`comment`, `session`, `agent`, `view`, or `org`.
+`type` is `task`, `project`, `program`, `initiative`, `cycle`, `team`, `update`, `comment`,
+`session`, `agent`, `view`, or `org`. Docket returns an unreadable resource as not found.
 
-### Subscriptions
+MCP Apps clients can also render `ui://docket/*` resources. Other clients receive structured tool
+and resource results.
 
-Call `resources/subscribe`, then open the `GET /mcp` stream and Docket sends
-`notifications/resources/updated`. Delivery is best-effort and never replayed. Read the resource
-again when one arrives.
+## Prompts and notifications
 
-## Prompts
+The server registers `docket_system`, `task_brief`, and `standup` prompts. It supports resource
+subscriptions and emits `notifications/resources/updated` as a best-effort signal. Re-read the
+resource after the signal because Docket does not replay a notification stream.
 
-| Prompt | Purpose |
-| --- | --- |
-| `docket_system` | The Docket system prompt |
-| `task_brief` | A brief on one task |
-| `standup` | A standup summary |
-
-## Widgets
-
-Hosts that render MCP Apps get UI resources under `ui://docket/*` for every entity type, plus work
-lists, plans, and change reports. Other hosts get the structured results.
-
-## Server capabilities
-
-`tools.listChanged`, `resources.subscribe`, `resources.listChanged`, `prompts.listChanged`,
-`completions`, and `logging`. A deployment flag turns on experimental MCP task support.
-
-<Note>
-  `tools/list` returns only the tools **your** grants allow. Change one and Docket sends
-  `notifications/tools/list_changed` immediately.
-</Note>
+The server also advertises `resources.listChanged`, `prompts.listChanged`, completions, and logging.
+Experimental MCP task support depends on the deployment configuration and is not a public REST API
+capability.

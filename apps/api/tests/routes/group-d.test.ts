@@ -13,6 +13,7 @@ import {
   fakeSession,
   getDb,
   one,
+  principalForSession,
   seedBaseOrg,
   seedStatuses,
 } from '../support/routes-harness';
@@ -70,6 +71,7 @@ function orgsApp(session: AuthSession) {
   const app = new Hono<AppEnv>();
   app.use('*', async (c, next) => {
     c.set('session', session);
+    c.set('principal', principalForSession(session));
     await next();
   });
   app.route('/', orgs);
@@ -82,6 +84,7 @@ function orgsApiApp(session: AuthSession) {
   const app = new Hono<AppEnv>();
   app.use('*', async (c, next) => {
     c.set('session', session);
+    c.set('principal', principalForSession(session));
     await next();
   });
   app.route('/v1/orgs', orgs);

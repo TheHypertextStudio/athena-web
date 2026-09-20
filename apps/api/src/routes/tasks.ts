@@ -1296,7 +1296,7 @@ Side effects: emits a \`created\` observation onto the org's activity stream, an
       response: pageOf(TaskOut),
       description: `List the org's active (non-archived) tasks, newest-first. Ordering is a stable keyset on \`(createdAt DESC, id DESC)\`, so paging never skips or repeats a row even as tasks are created concurrently. Archived (soft-deleted) tasks are excluded — fetch those contexts via their parent/project surfaces, not here.
 
-Pagination is opt-in via the cursor query: omit \`limit\` to receive the full active-task list in one response (legacy behavior); supply \`limit\` to receive a bounded page plus a \`nextCursor\` you pass back as \`cursor\` to fetch the next page. \`nextCursor\` is \`null\` on the final page. An optional \`labelId\` narrows the list to tasks carrying that label; an optional \`programId\` narrows the list to tasks under that Program — carrying its \`program_id\` directly, or belonging to one of the Program's Projects (the same union a Program's own work view applies). Requires org membership (\`view\`); no extra capability. Each item is a {@link TaskOut} (the flat task shape without dependency/subtask edges — use \`GET /:id\` for those). Returns a cursor page of {@link TaskOut}.`,
+\`limit\` defaults to 50 and accepts at most 100. Copy \`nextCursor\` unchanged into \`cursor\`; it is absent on the final page. Reuse a cursor only with the same \`programId\` and \`labelId\` filters. An optional \`labelId\` narrows the list to tasks carrying that label; an optional \`programId\` narrows the list to tasks under that Program — carrying its \`programId\` directly, or belonging to one of the Program's Projects (the same union a Program's own work view applies). Visibility filtering is applied before Docket decides whether the page is full, so inaccessible Tasks do not strand accessible Tasks behind a cursor boundary. Requires org membership (\`view\`); no extra capability. Each item is a {@link TaskOut} (the flat task shape without dependency/subtask edges — use \`GET /:id\` for those). Returns a cursor page of {@link TaskOut}.`,
     }),
     zQuery(TaskListQuery),
     async (c) => {
@@ -1357,26 +1357,20 @@ Pagination is opt-in via the cursor query: omit \`limit\` to receive the full ac
       // row between two visible rows would then become the cursor boundary and make the latter
       // unreachable. The bounded path scans raw keyset batches until it has one extra *visible*
       // row, so `pageResult` still encodes the last returned visible task.
-      let rows: (typeof task.$inferSelect)[];
-      if (limit === undefined) {
-        rows = (await queryAfter(cursor)).filter(canView);
-      } else {
-        const visible: (typeof task.$inferSelect)[] = [];
-        let scanCursor = cursor;
-        const scanBatchSize = Math.max(limit + 1, 100);
-        while (visible.length <= limit) {
-          const batch = await queryAfter(scanCursor).limit(scanBatchSize);
-          if (batch.length === 0) break;
-          visible.push(...batch.filter(canView));
-          if (visible.length > limit || batch.length < scanBatchSize) break;
-          const lastScanned = batch[batch.length - 1];
-          /* v8 ignore next -- @preserve non-empty batch above guarantees a last row */
-          if (!lastScanned) break;
-          scanCursor = encodeListCursor(lastScanned.createdAt, lastScanned.id);
-        }
-        rows = visible;
+      const visible: (typeof task.$inferSelect)[] = [];
+      let scanCursor = cursor;
+      const scanBatchSize = Math.max(limit + 1, 100);
+      while (visible.length <= limit) {
+        const batch = await queryAfter(scanCursor).limit(scanBatchSize);
+        if (batch.length === 0) break;
+        visible.push(...batch.filter(canView));
+        if (visible.length > limit || batch.length < scanBatchSize) break;
+        const lastScanned = batch[batch.length - 1];
+        /* v8 ignore next -- @preserve non-empty batch above guarantees a last row */
+        if (!lastScanned) break;
+        scanCursor = encodeListCursor(lastScanned.createdAt, lastScanned.id);
       }
-      const { items, nextCursor } = pageResult(rows, limit, (r) => r.createdAt);
+      const { items, nextCursor } = pageResult(visible, limit, (r) => r.createdAt);
       // One extra query for the whole page rather than one per row.
       const labelsByTask = await labelsForSubjects(
         'task',

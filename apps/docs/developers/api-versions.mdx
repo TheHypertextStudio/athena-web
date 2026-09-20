@@ -1,0 +1,40 @@
+---
+title: 'API versions'
+description: 'Assert Docket’s current REST compatibility contract and detect a contract change before parsing a response.'
+---
+
+Docket's current public REST compatibility contract is `0.1.0`. It is prerelease, and Docket
+supports only this current contract.
+
+## Assert the contract
+
+Omit `Docket-Version` to accept the current contract, or send the exact current version:
+
+```http
+Docket-Version: 0.1.0
+```
+
+Docket rejects any other asserted version with `400` and `unsupported_api_version`. Do not send an
+older version and expect compatibility routing.
+
+## Read the response identity
+
+Every public REST response includes:
+
+| Header            | Meaning                                                       |
+| ----------------- | ------------------------------------------------------------- |
+| `Docket-Version`  | The compatibility contract used for the response.             |
+| `Docket-Revision` | The full deployed source revision that produced the response. |
+
+The path prefix `/v1` identifies the REST resource. It does not substitute for a version assertion.
+The OpenAPI document describes the live current contract. The revision lets an operator tie an
+observed response to the deployed source without pretending it is another API version.
+
+## Compatibility policy
+
+The contract uses semantic versioning. A breaking change advances the minor version during this
+`0.x` prerelease period. An additive backward-compatible change advances the patch version. A
+published release note names what changed and any client action.
+
+There is no retained-version window, published SDK, or outbound webhook compatibility surface.
+Check [API release notes](/developers/api-release-notes) before upgrading a pinned client.

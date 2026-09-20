@@ -342,7 +342,7 @@ const workStatuses = new Hono<AppEnv>()
       });
       /* v8 ignore next -- @preserve defensive: insert always returns a row */
       if (!statusRow) throw new Error('status insert returned no row');
-      return created(c, WorkStatusOut, toOut(statusRow));
+      return created(c, WorkStatusOut, toOut(statusRow), null);
     },
   )
   .patch(

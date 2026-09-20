@@ -50,7 +50,7 @@ export const SearchHttpQuery = z.object({
     // A cleared search box sends `?q=`; collapsing that to absent means it browses rather than
     // searching for the empty string.
     .transform((value) => (value === undefined || value.length === 0 ? undefined : value)),
-  limit: z.coerce.number().int().min(1).max(100).default(20),
+  limit: z.coerce.number().int().min(1).max(100).default(50),
   cursor: z.string().optional(),
   families: csvEnum(SearchDocumentFamily),
   kinds: csvEnum(SearchDocumentKind),

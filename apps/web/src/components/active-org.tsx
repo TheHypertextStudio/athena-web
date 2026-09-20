@@ -6,6 +6,7 @@ import type { VocabularySkin } from '@docket/work/vocabulary';
 import { createContext, type JSX, type ReactNode, useContext, useMemo } from 'react';
 
 import { api } from '@/lib/api';
+import { fetchAllTeams } from '@/lib/org-collection-pages';
 import { RESOLVING_LABEL } from '@/components/views/field-catalog';
 import { STALE, apiQueryOptions, queryKeys, useApiQuery } from '@/lib/query';
 import { StatusRegistryProvider } from './statuses/status-registry';
@@ -111,7 +112,7 @@ export function ActiveOrgContext({
   const teamsQ = useApiQuery(
     apiQueryOptions(
       queryKeys.teams(activeOrgId ?? ''),
-      () => api.v1.orgs[':orgId'].teams.$get({ param: { orgId: activeOrgId ?? '' } }),
+      () => fetchAllTeams(api, activeOrgId ?? ''),
       'Could not load teams.',
       { enabled: Boolean(activeOrgId), staleTime: STALE.static },
     ),

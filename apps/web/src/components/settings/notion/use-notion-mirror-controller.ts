@@ -121,7 +121,7 @@ export function useNotionMirror(orgId: string): NotionMirrorModel {
   const integrationsQ = useApiQuery(
     apiQueryOptions(
       queryKeys.integrations(orgId),
-      () => api.v1.orgs[':orgId'].integrations.$get({ param: { orgId } }),
+      () => api.v1.orgs[':orgId'].integrations.$get({ param: { orgId }, query: { limit: '100' } }),
       'Could not load connections.',
     ),
   );
@@ -606,6 +606,7 @@ export function useNotionPeople(orgId: string, integrationId: string): NotionPeo
       () =>
         api.v1.orgs[':orgId'].integrations[':id'].notion.people.$get({
           param: { orgId, id: integrationId },
+          query: { limit: '100' },
         }),
       'Could not load people.',
     ),
@@ -626,7 +627,7 @@ export function useNotionPeople(orgId: string, integrationId: string): NotionPeo
   const rosterQ = useApiQuery({
     ...apiQueryOptions(
       queryKeys.members(orgId),
-      () => api.v1.orgs[':orgId'].members.$get({ param: { orgId } }),
+      () => api.v1.orgs[':orgId'].members.$get({ param: { orgId }, query: { limit: '100' } }),
       'Could not load your people.',
     ),
     enabled,

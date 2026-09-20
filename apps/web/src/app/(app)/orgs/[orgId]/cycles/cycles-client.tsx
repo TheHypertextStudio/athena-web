@@ -61,6 +61,7 @@ import { isEmptyViewState } from '@/components/views/view-state-url';
 import { cycleDetailDef } from '@/lib/fetch-cycle-detail';
 import { fetchCyclesWithStats } from '@/lib/fetch-cycles-with-stats';
 import { api } from '@/lib/api';
+import { fetchAllEntityDisplays } from '@/lib/org-collection-pages';
 import {
   apiQueryOptions,
   queryKeys,
@@ -114,10 +115,7 @@ export default function CyclesClient(): JSX.Element {
   const displaysQ = useApiListQuery(
     apiQueryOptions(
       queryKeys.entityDisplays(orgId, 'cycle'),
-      () =>
-        api.v1.orgs[':orgId'].display[':subjectType'].$get({
-          param: { orgId, subjectType: 'cycle' },
-        }),
+      () => fetchAllEntityDisplays(api, orgId, 'cycle'),
       'Could not load cycle icons.',
     ),
   );
@@ -128,14 +126,14 @@ export default function CyclesClient(): JSX.Element {
   const membersQ = useApiListQuery(
     apiQueryOptions(
       queryKeys.members(orgId),
-      () => api.v1.orgs[':orgId'].members.$get({ param: { orgId } }),
+      () => api.v1.orgs[':orgId'].members.$get({ param: { orgId }, query: { limit: '100' } }),
       'Could not load members.',
     ),
   );
   const rolesQ = useApiListQuery(
     apiQueryOptions(
       queryKeys.roles(orgId),
-      () => api.v1.orgs[':orgId'].roles.$get({ param: { orgId } }),
+      () => api.v1.orgs[':orgId'].roles.$get({ param: { orgId }, query: { limit: '100' } }),
       'Could not load roles.',
     ),
   );

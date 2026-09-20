@@ -15,7 +15,7 @@ import {
   AutomationRuleRemoved,
   AutomationRuleUpdate,
 } from '../contracts/automation';
-import { pageOf } from '../contracts/pagination';
+import { CursorQuery, pageOf } from '../contracts/pagination';
 import { and, asc, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
@@ -23,8 +23,9 @@ import { z } from 'zod';
 import type { AppEnv } from '../context';
 import { NotFoundError } from '../error';
 import { created, ok } from '../lib/ok';
+import { pageResult, seekAfter } from '../lib/list-cursor';
 import { apiDoc } from '../lib/openapi-route';
-import { zJson, zParam } from '../lib/validate';
+import { zJson, zParam, zQuery } from '../lib/validate';
 import { capabilityGuard } from '../permissions/capability-guard';
 
 type RuleRow = typeof automationRule.$inferSelect;
@@ -68,16 +69,28 @@ const automationRules = new Hono<AppEnv>()
       response: pageOf(AutomationRuleOut),
       description: `List every automation rule in the org, oldest-first, as a page of {@link AutomationRuleOut}. The order is deliberate: rules are evaluated in creation order, so reading them in that order shows the sequence the engine will apply.
 
-Seeded defaults are included and carry \`isSeed: true\` — enabling \`emailToTask\` on a connector writes them once (see \`PATCH /orgs/{orgId}/integrations/{id}\`), and a client should present them as Docket's defaults rather than as rules the workspace wrote. A rule that has been switched off is still returned, with \`enabled: false\`; nothing is hidden by state. Org membership suffices to read. Related: \`POST /\` to add one.`,
+Seeded defaults are included and carry \`isSeed: true\`. Pages preserve \`createdAt ASC, id ASC\`, default to 50 items, accept at most 100, and omit \`nextCursor\` at exhaustion. A disabled rule remains visible. Org membership suffices to read.`,
     }),
+    zQuery(CursorQuery),
     async (c) => {
       const { orgId } = c.get('actorCtx');
+      const { cursor, limit } = c.req.valid('query');
       const rows = await db
         .select()
         .from(automationRule)
-        .where(eq(automationRule.organizationId, orgId))
-        .orderBy(asc(automationRule.createdAt));
-      return ok(c, pageOf(AutomationRuleOut), { items: rows.map(toOut) });
+        .where(
+          and(
+            eq(automationRule.organizationId, orgId),
+            seekAfter(automationRule.createdAt, automationRule.id, cursor, 'asc'),
+          ),
+        )
+        .orderBy(asc(automationRule.createdAt), asc(automationRule.id))
+        .limit(limit + 1);
+      return ok(
+        c,
+        pageOf(AutomationRuleOut),
+        pageResult(rows.map(toOut), limit, (item) => new Date(item.createdAt)),
+      );
     },
   )
   .post(
@@ -114,7 +127,7 @@ Requires \`manage\`. A rule runs against work its author may never look at again
       const row = inserted[0];
       /* v8 ignore next -- @preserve defensive: insert always returns a row */
       if (!row) throw new Error('automation rule insert returned no row');
-      return created(c, AutomationRuleOut, toOut(row));
+      return created(c, AutomationRuleOut, toOut(row), null);
     },
   )
   .patch(

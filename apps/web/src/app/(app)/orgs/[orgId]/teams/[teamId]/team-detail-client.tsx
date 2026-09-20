@@ -42,6 +42,7 @@ import { TeamPeople, TeamPeopleSkeleton } from '@/components/team-detail/team-pe
 import { TeamCover } from '@/components/teams/team-cover';
 import { EntityDetailLayout } from '@/components/views/entity-detail-layout';
 import { api } from '@/lib/api';
+import { fetchAllTeamMembers } from '@/lib/org-collection-pages';
 import { useTypedRoute } from '@/lib/app-location';
 import {
   apiQueryOptions,
@@ -99,7 +100,7 @@ export default function TeamDetailClient(): JSX.Element {
   const membersQ = useApiListQuery(
     apiQueryOptions(
       queryKeys.teamMembers(orgId, teamId),
-      () => api.v1.orgs[':orgId'].teams[':teamId'].members.$get({ param: { orgId, teamId } }),
+      () => fetchAllTeamMembers(api, orgId, teamId),
       'Could not load this team’s people.',
     ),
   );

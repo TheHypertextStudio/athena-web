@@ -9,7 +9,7 @@
  * duplicate key with a 409. Delete is a soft archive (sets `archived_at`).
  */
 import { actor, db, defaultWorkflowStates, team, teamMember } from '@docket/db';
-import { pageOf } from '../contracts/pagination';
+import { CursorQuery, pageOf } from '../contracts/pagination';
 import {
   TeamActivityOut,
   TeamCreate,
@@ -22,7 +22,7 @@ import {
   TeamRosterEntry,
   TeamUpdate,
 } from '../contracts/team';
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, asc, eq, isNull } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
 
@@ -30,8 +30,9 @@ import type { AppEnv } from '../context';
 import { ConflictError, NotFoundError } from '../error';
 import { clearableTextPatch } from '../lib/clearable-text';
 import { created, ok } from '../lib/ok';
+import { pageResultById, pageResultByTuple, seekAfterId } from '../lib/list-cursor';
 import { apiDoc } from '../lib/openapi-route';
-import { zJson, zParam } from '../lib/validate';
+import { zJson, zParam, zQuery } from '../lib/validate';
 import { capabilityGuard } from '../permissions/capability-guard';
 import { enqueueSearchDelete, enqueueSearchUpsert } from '../search/write-through';
 import { entityMentionRoutes } from './entity-mentions';
@@ -100,10 +101,12 @@ const teams = new Hono<AppEnv>()
       response: pageOf(TeamOut),
       description: `List the organization's **active** teams. A Team is a first-class unit within an org that owns its own \`workflow_states\`, Cycles, and the Triage queue. The query filters on \`archived_at IS NULL\`, so soft-deleted (archived) teams are excluded. Each \`TeamOut\` carries the team's name, unique \`key\`, description, workflow states, \`triageEnabled\` flag, and optional agent guidance / approval routing.
 
-Requires only org membership to read (the \`view\` capability is satisfied by any member). Returns the standard \`{ items }\` page envelope. Every new org seeds a default "General" team (key \`GEN\`). See \`POST /\` to create a team and \`GET /:teamId\` for full detail.`,
+Results use stable team-id order, default to 50 items, accept at most 100, and omit \`nextCursor\` at exhaustion. Requires only org membership to read (the \`view\` capability is satisfied by any member). Every new org seeds a default "General" team (key \`GEN\`). See \`POST /\` to create a team and \`GET /:teamId\` for full detail.`,
     }),
+    zQuery(CursorQuery),
     async (c) => {
       const { orgId } = c.get('actorCtx');
+      const { cursor, limit } = c.req.valid('query');
       const rows = await db
         .select({ row: team, actorId: actor.id })
         .from(team)
@@ -111,10 +114,23 @@ Requires only org membership to read (the \`view\` capability is satisfied by an
           actor,
           and(eq(actor.teamId, team.id), eq(actor.kind, 'team'), isNull(actor.archivedAt)),
         )
-        .where(and(eq(team.organizationId, orgId), isNull(team.archivedAt)));
-      return ok(c, pageOf(TeamOut), {
-        items: rows.map(({ row, actorId }) => toOut(row, actorId)),
-      });
+        .where(
+          and(
+            eq(team.organizationId, orgId),
+            isNull(team.archivedAt),
+            seekAfterId(team.id, cursor, 'asc'),
+          ),
+        )
+        .orderBy(asc(team.id))
+        .limit(limit + 1);
+      return ok(
+        c,
+        pageOf(TeamOut),
+        pageResultById(
+          rows.map(({ row, actorId }) => toOut(row, actorId)),
+          limit,
+        ),
+      );
     },
   )
   .post(
@@ -174,12 +190,18 @@ Defaults applied when omitted: \`workflowStates\` seeds the canonical five-state
       response: pageOf(TeamRosterEntry),
       description: `Every \`(team, member)\` pair in the org, identity only — no per-person load figures. This exists so the Teams hub can draw a face stack on every card with **one** request instead of one per team.
 
-Declared before \`GET /:teamId\` so the literal segment wins the route match. Ordered after it, this returns 404 with \`rosters\` read as a team id — which is silent, because the hub degrades to "No members yet" rather than showing an error. Requires only org membership.`,
+Results use stable \`teamId, actorId\` order, default to 50 items, accept at most 100, and omit \`nextCursor\` at exhaustion. Declared before \`GET /:teamId\` so the literal segment wins the route match. Requires only org membership.`,
     }),
+    zQuery(CursorQuery),
     async (c) => {
       const { orgId } = c.get('actorCtx');
-      const items = await loadOrgTeamRosters(orgId);
-      return ok(c, pageOf(TeamRosterEntry), { items });
+      const { cursor, limit } = c.req.valid('query');
+      const items = await loadOrgTeamRosters(orgId, { cursor, limit });
+      return ok(
+        c,
+        pageOf(TeamRosterEntry),
+        pageResultByTuple(items, limit, (item) => [item.teamId, item.actorId]),
+      );
     },
   )
   .get(
@@ -311,15 +333,24 @@ After archival the team disappears from \`GET /\` and \`GET /:teamId\` (both fil
 
 There is deliberately **no field indicating whether a member holds a Docket account**. A volunteer who never signs in and a full-time staffer come back as the same shape, so no client can render one as second-class (see \`docs/engineering/specs/people.md\`). \`openTaskCount\` is the observed load signal — Docket stores no declared allocation percentage, because a maintained percentage goes stale silently while still looking authoritative.
 
-Ordered by name, case-insensitively. Requires only org membership. Unknown or archived team → **404**.`,
+Ordered by name case-insensitively with actor id as the stable tiebreaker. The page defaults to 50 items, accepts at most 100, and omits \`nextCursor\` at exhaustion. Requires only org membership. Unknown or archived team → **404**.`,
     }),
     zParam(idParam),
+    zQuery(CursorQuery),
     async (c) => {
       const { orgId, actorId } = c.get('actorCtx');
       const { teamId } = c.req.valid('param');
+      const { cursor, limit } = c.req.valid('query');
       if (!(await teamExists(orgId, teamId))) throw new NotFoundError('Team not found');
-      const items = await loadTeamMembers(orgId, teamId, actorId);
-      return ok(c, pageOf(TeamMemberOut), { items });
+      const items = await loadTeamMembers(orgId, teamId, actorId, { cursor, limit });
+      return ok(
+        c,
+        pageOf(TeamMemberOut),
+        pageResultByTuple(items, limit, (item) => [
+          item.displayName.toLocaleLowerCase(),
+          item.actorId,
+        ]),
+      );
     },
   )
   .get(

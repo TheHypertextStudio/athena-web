@@ -226,7 +226,7 @@ export type SearchResult = z.infer<typeof SearchResult>;
 export const SearchQuery = z
   .object({
     q: z.string().trim().optional(),
-    limit: z.number().int().min(1).max(100).default(20),
+    limit: z.number().int().min(1).max(100).default(50),
     cursor: z.string().optional(),
     families: z.array(SearchDocumentFamily).default([]),
     kinds: z.array(SearchDocumentKind).default([]),

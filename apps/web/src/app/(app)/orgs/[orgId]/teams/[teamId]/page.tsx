@@ -13,6 +13,7 @@ import type { JSX } from 'react';
 import { unwrap } from '@/lib/query-core';
 import { queryKeys } from '@/lib/query-keys';
 import { dehydrate, getServerApi, getServerQueryClient } from '@/lib/query-server';
+import { fetchAllTeamMembers } from '@/lib/org-collection-pages';
 
 import TeamDetailClient from './team-detail-client';
 
@@ -54,10 +55,7 @@ export default async function TeamDetailPage({
     queryClient.prefetchQuery({
       queryKey: queryKeys.teamMembers(orgId, teamId),
       queryFn: () =>
-        unwrap(
-          () => api.v1.orgs[':orgId'].teams[':teamId'].members.$get({ param: { orgId, teamId } }),
-          'Could not load this team’s people.',
-        ),
+        unwrap(() => fetchAllTeamMembers(api, orgId, teamId), 'Could not load this team’s people.'),
     }),
     queryClient.prefetchQuery({
       queryKey: queryKeys.teamActivity(orgId, teamId),

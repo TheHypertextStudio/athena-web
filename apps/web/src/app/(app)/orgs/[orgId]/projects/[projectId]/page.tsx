@@ -14,6 +14,7 @@ import type { JSX } from 'react';
 import { apiQueryOptions, unwrap } from '@/lib/query-core';
 import { queryKeys } from '@/lib/query-keys';
 import { dehydrate, getServerApi, getServerQueryClient } from '@/lib/query-server';
+import { fetchAllMembers, fetchAllRoles } from '@/lib/org-collection-pages';
 
 import ProjectDetailClient from './project-detail-client';
 
@@ -38,19 +39,11 @@ export default async function ProjectDetailPage({
   const roster = [
     queryClient.prefetchQuery({
       queryKey: queryKeys.members(orgId),
-      queryFn: () =>
-        unwrap(
-          () => api.v1.orgs[':orgId'].members.$get({ param: { orgId } }),
-          'Could not load members.',
-        ),
+      queryFn: () => unwrap(() => fetchAllMembers(api, orgId), 'Could not load members.'),
     }),
     queryClient.prefetchQuery({
       queryKey: queryKeys.roles(orgId),
-      queryFn: () =>
-        unwrap(
-          () => api.v1.orgs[':orgId'].roles.$get({ param: { orgId } }),
-          'Could not load roles.',
-        ),
+      queryFn: () => unwrap(() => fetchAllRoles(api, orgId), 'Could not load roles.'),
     }),
   ];
 

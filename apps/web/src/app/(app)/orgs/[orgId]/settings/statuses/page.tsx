@@ -45,6 +45,7 @@ import { StatusEntitySection, type TeamChoice } from '@/components/statuses/stat
 import type { StatusLike } from '@/components/statuses/status-registry';
 import { api } from '@/lib/api';
 import { useTypedRoute } from '@/lib/app-location';
+import { fetchAllEntityDisplays } from '@/lib/org-collection-pages';
 import {
   apiQueryOptions,
   queryKeys,
@@ -104,7 +105,7 @@ export default function StatusesSettingsPage(): JSX.Element {
   const teamsQ = useApiListQuery(
     apiQueryOptions(
       queryKeys.teams(orgId),
-      () => api.v1.orgs[':orgId'].teams.$get({ param: { orgId } }),
+      () => api.v1.orgs[':orgId'].teams.$get({ param: { orgId }, query: { limit: '100' } }),
       'Could not load teams.',
       { enabled: !isPersonal, staleTime: STALE.static },
     ),
@@ -112,10 +113,7 @@ export default function StatusesSettingsPage(): JSX.Element {
   const displaysQ = useApiListQuery(
     apiQueryOptions(
       queryKeys.entityDisplays(orgId, 'workStatus'),
-      () =>
-        api.v1.orgs[':orgId'].display[':subjectType'].$get({
-          param: { orgId, subjectType: 'workStatus' },
-        }),
+      () => fetchAllEntityDisplays(api, orgId, 'workStatus'),
       'Could not load status icons.',
       { staleTime: STALE.static },
     ),

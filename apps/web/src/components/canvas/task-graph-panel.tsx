@@ -162,35 +162,35 @@ export default function TaskGraphPanel({
   const membersQ = useApiListQuery(
     apiQueryOptions(
       queryKeys.members(orgId),
-      () => api.v1.orgs[':orgId'].members.$get({ param: { orgId } }),
+      () => api.v1.orgs[':orgId'].members.$get({ param: { orgId }, query: { limit: '100' } }),
       'Could not load members.',
     ),
   );
   const agentsQ = useApiListQuery(
     apiQueryOptions(
       queryKeys.agents(orgId),
-      () => api.v1.orgs[':orgId'].agents.$get({ param: { orgId } }),
+      () => api.v1.orgs[':orgId'].agents.$get({ param: { orgId }, query: { limit: '100' } }),
       'Could not load agents.',
     ),
   );
   const projectsQ = useApiListQuery(
     apiQueryOptions(
       queryKeys.projects(orgId),
-      () => api.v1.orgs[':orgId'].projects.$get({ param: { orgId }, query: {} }),
+      () => api.v1.orgs[':orgId'].projects.$get({ param: { orgId }, query: { limit: '100' } }),
       'Could not load projects.',
     ),
   );
   const rolesQ = useApiListQuery(
     apiQueryOptions(
       queryKeys.roles(orgId),
-      () => api.v1.orgs[':orgId'].roles.$get({ param: { orgId } }),
+      () => api.v1.orgs[':orgId'].roles.$get({ param: { orgId }, query: { limit: '100' } }),
       'Could not load roles.',
     ),
   );
   const teamsQ = useApiListQuery(
     apiQueryOptions(
       queryKeys.teams(orgId),
-      () => api.v1.orgs[':orgId'].teams.$get({ param: { orgId } }),
+      () => api.v1.orgs[':orgId'].teams.$get({ param: { orgId }, query: { limit: '100' } }),
       'Could not load teams.',
     ),
   );

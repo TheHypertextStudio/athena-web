@@ -17,6 +17,7 @@
  * @see {@link file://../../../../../docs/engineering/specs/people.md}
  */
 import { api } from '@/lib/api';
+import { fetchAllMembers, fetchAllRoles } from '@/lib/org-collection-pages';
 import { STALE, apiQueryOptions, queryKeys, unwrap, useApiMutation } from '@/lib/query';
 
 /** The profile payload `GET /v1/orgs/:orgId/members/:actorId/profile` returns. */
@@ -59,7 +60,7 @@ export function personProfileKey(orgId: string, actorId: string): readonly strin
 export function peopleQuery(orgId: string) {
   return apiQueryOptions(
     queryKeys.members(orgId),
-    () => api.v1.orgs[':orgId'].members.$get({ param: { orgId } }),
+    () => fetchAllMembers(api, orgId),
     'Could not load the people in this workspace.',
     { staleTime: STALE.static },
   );
@@ -69,7 +70,7 @@ export function peopleQuery(orgId: string) {
 export function rolesQuery(orgId: string) {
   return apiQueryOptions(
     queryKeys.roles(orgId),
-    () => api.v1.orgs[':orgId'].roles.$get({ param: { orgId } }),
+    () => fetchAllRoles(api, orgId),
     'Could not load workspace roles.',
     { staleTime: STALE.static },
   );

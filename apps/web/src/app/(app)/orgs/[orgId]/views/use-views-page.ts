@@ -23,6 +23,13 @@ import { buildTaskCatalog, toStoredView, toViewState } from '@/components/views/
 import type { RunnerActor } from '@/components/views/view-runner';
 import { api } from '@/lib/api';
 import {
+  fetchAllAgents,
+  fetchAllMembers,
+  fetchAllPrograms,
+  fetchAllProjects,
+  fetchAllTasks,
+} from '@/lib/org-collection-pages';
+import {
   apiQueryOptions,
   queryKeys,
   seedListItem,
@@ -82,35 +89,35 @@ export function useViewsPage(orgId: string): ViewsPageData {
   const tasksQ = useApiListQuery(
     apiQueryOptions(
       queryKeys.tasks(orgId),
-      () => api.v1.orgs[':orgId'].tasks.$get({ param: { orgId }, query: {} }),
+      () => fetchAllTasks(api, orgId),
       'Could not load tasks.',
     ),
   );
   const projectsQ = useApiListQuery(
     apiQueryOptions(
       queryKeys.projects(orgId),
-      () => api.v1.orgs[':orgId'].projects.$get({ param: { orgId }, query: {} }),
+      () => fetchAllProjects(api, orgId),
       'Could not load projects.',
     ),
   );
   const programsQ = useApiListQuery(
     apiQueryOptions(
       queryKeys.programs(orgId),
-      () => api.v1.orgs[':orgId'].programs.$get({ param: { orgId }, query: {} }),
+      () => fetchAllPrograms(api, orgId),
       'Could not load programs.',
     ),
   );
   const membersQ = useApiListQuery(
     apiQueryOptions(
       queryKeys.members(orgId),
-      () => api.v1.orgs[':orgId'].members.$get({ param: { orgId } }),
+      () => fetchAllMembers(api, orgId),
       'Could not load members.',
     ),
   );
   const agentsQ = useApiListQuery(
     apiQueryOptions(
       queryKeys.agents(orgId),
-      () => api.v1.orgs[':orgId'].agents.$get({ param: { orgId } }),
+      () => fetchAllAgents(api, orgId),
       'Could not load agents.',
     ),
   );

@@ -50,6 +50,7 @@ import {
 import { useCanManageOrg } from '@/components/settings/use-can-manage-org';
 import { api } from '@/lib/api';
 import { useTypedRoute } from '@/lib/app-location';
+import { fetchAllEntityDisplays } from '@/lib/org-collection-pages';
 import {
   apiQueryOptions,
   queryKeys,
@@ -94,7 +95,7 @@ export default function LabelsSettingsPage(): JSX.Element {
   const teamsQ = useApiListQuery(
     apiQueryOptions(
       queryKeys.teams(orgId),
-      () => api.v1.orgs[':orgId'].teams.$get({ param: { orgId } }),
+      () => api.v1.orgs[':orgId'].teams.$get({ param: { orgId }, query: { limit: '100' } }),
       'Could not load teams.',
       { enabled: !hideScope, staleTime: STALE.static },
     ),
@@ -102,10 +103,7 @@ export default function LabelsSettingsPage(): JSX.Element {
   const displaysQ = useApiListQuery(
     apiQueryOptions(
       queryKeys.entityDisplays(orgId, 'label'),
-      () =>
-        api.v1.orgs[':orgId'].display[':subjectType'].$get({
-          param: { orgId, subjectType: 'label' },
-        }),
+      () => fetchAllEntityDisplays(api, orgId, 'label'),
       'Could not load label icons.',
       { staleTime: STALE.static },
     ),

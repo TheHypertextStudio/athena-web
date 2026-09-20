@@ -25,7 +25,7 @@ import {
 import type { MirrorParentPage } from '@docket/connections/notion/mirror-port';
 import { ConnectorConfig, SyncRunOut } from '@docket/connections/integration-contract';
 import { CursorQuery, pageOf } from '../contracts/pagination';
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, asc, eq, isNull } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
 
@@ -33,6 +33,7 @@ import type { AppEnv } from '../context';
 import { buildNotionMirror } from '../container';
 import { ConflictError, NotFoundError } from '../error';
 import { ok } from '../lib/ok';
+import { pageResultByKey, seekAfterId } from '../lib/list-cursor';
 import { apiDoc } from '../lib/openapi-route';
 import { zJson, zParam, zQuery } from '../lib/validate';
 import { capabilityGuard } from '../permissions/capability-guard';
@@ -62,7 +63,6 @@ const entityParam = z.object({ id: z.string(), entity: NotionMirrorEntity });
  * A picker's worth, not a workspace's worth. The list is searched at the provider and scrolls to
  * a cursor, so the ceiling is about how much a person reads before typing — not about coverage.
  */
-const PARENT_PAGE_LIMIT = 25;
 
 /**
  * Query params for the parent-page search.
@@ -239,7 +239,7 @@ An empty list is a legitimate and common state, not an error: a public Notion in
       const page = await buildNotionMirror(token, { integrationId: id }).listParentPages({
         ...(q !== undefined ? { query: q } : {}),
         ...(cursor !== undefined ? { cursor } : {}),
-        limit: limit ?? PARENT_PAGE_LIMIT,
+        limit,
       });
       return ok(c, pageOf(NotionParentPageOut), {
         items: page.items.map(toParentPageOut),
@@ -362,25 +362,38 @@ Requires \`manage\`. Returns 409 when another run already holds the integration'
 Notion's own user list mixes integration bots in with people (a real workspace usually has several); those are filtered out at the provider edge, because offering an automation as an assignable teammate would be nonsense.`,
     }),
     zParam(mirrorParam),
+    zQuery(CursorQuery),
     async (c) => {
       const { orgId } = c.get('actorCtx');
       const { id } = c.req.valid('param');
+      const { cursor, limit } = c.req.valid('query');
       await assertNotionIntegration(orgId, id);
       const rows = await db
         .select()
         .from(externalActor)
-        .where(and(eq(externalActor.integrationId, id), eq(externalActor.organizationId, orgId)));
-      return ok(c, pageOf(NotionWorkspacePerson), {
-        items: rows.map((row) => ({
-          externalId: row.externalId,
-          name: row.displayName,
-          email: row.email,
-          avatarUrl: row.avatarUrl,
-          actorId: row.actorId,
-          matchedBy: row.matchedBy,
-          ignoredAt: row.ignoredAt?.toISOString() ?? null,
-        })),
-      });
+        .where(
+          and(
+            eq(externalActor.integrationId, id),
+            eq(externalActor.organizationId, orgId),
+            seekAfterId(externalActor.externalId, cursor, 'asc'),
+          ),
+        )
+        .orderBy(asc(externalActor.externalId))
+        .limit(limit + 1);
+      const items = rows.map((row) => ({
+        externalId: row.externalId,
+        name: row.displayName,
+        email: row.email,
+        avatarUrl: row.avatarUrl,
+        actorId: row.actorId,
+        matchedBy: row.matchedBy,
+        ignoredAt: row.ignoredAt?.toISOString() ?? null,
+      }));
+      return ok(
+        c,
+        pageOf(NotionWorkspacePerson),
+        pageResultByKey(items, limit, (item) => item.externalId),
+      );
     },
   )
   .post(

@@ -351,7 +351,7 @@ export function VoicePhoneNumbers(): JSX.Element {
   const numbersQ = useApiQuery(
     apiQueryOptions<PhoneNumberListOut>(
       queryKeys.phoneNumbers(),
-      () => api.v1.me['phone-numbers'].$get(),
+      () => api.v1.me['phone-numbers'].$get({ query: {} }),
       'Could not load your phone numbers.',
     ),
   );

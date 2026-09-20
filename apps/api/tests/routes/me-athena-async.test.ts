@@ -442,7 +442,7 @@ describe('personal Athena asynchronous acknowledgement', () => {
       },
     );
 
-    expect(response.status).toBe(202);
+    expect(response.status).toBe(200);
     const [current] = await schema.db
       .select({ status: schema.agentSession.status })
       .from(schema.agentSession)
@@ -600,7 +600,7 @@ describe('personal Athena asynchronous acknowledgement', () => {
     expect(runnerMocks.wake).toHaveBeenCalledWith(sessionId);
   });
 
-  it('acknowledges the session-level reject shortcut by queueing a wake, not resuming inline', async () => {
+  it('returns the synchronously canceled session while queueing cleanup', async () => {
     const suffix = Math.random().toString(36).slice(2, 9);
     const [owner] = await schema.db
       .insert(schema.user)
@@ -619,7 +619,7 @@ describe('personal Athena asynchronous acknowledgement', () => {
       },
     );
 
-    expect(response.status).toBe(202);
+    expect(response.status).toBe(200);
     expect(runnerMocks.wake).toHaveBeenCalledWith(sessionId);
   });
 

@@ -17,7 +17,7 @@ import {
   CommentRemoved,
   CommentUpdate,
 } from '@docket/work/comment-contract';
-import { pageOf } from '../contracts/pagination';
+import { CursorQuery, pageOf } from '../contracts/pagination';
 import { type Capability, satisfies } from '@docket/authz';
 import { and, asc, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
@@ -27,6 +27,7 @@ import { z } from 'zod';
 import type { AppEnv } from '../context';
 import { CapabilityError, NotFoundError, ValidationError } from '../error';
 import { created, ok } from '../lib/ok';
+import { pageResult, seekAfter } from '../lib/list-cursor';
 import { apiDoc } from '../lib/openapi-route';
 import { zJson, zParam, zQuery } from '../lib/validate';
 import { assertSharedWorkWritable } from '../product-capability';
@@ -52,6 +53,7 @@ function toOut(c: CommentRow): z.input<typeof CommentOut> {
 }
 
 const idParam = z.object({ id: z.string() });
+const PaginatedCommentListQuery = CommentListQuery.and(CursorQuery);
 
 /**
  * Load a single org-scoped comment, or throw {@link NotFoundError}.
@@ -179,12 +181,12 @@ const comments = new Hono<AppEnv>()
       tag: 'Comments',
       summary: 'List comments',
       response: pageOf(CommentOut),
-      description: `List the comments on one polymorphic subject, identified by the required \`subjectType\` (\`task | project | program | initiative | cycle\`) and \`subjectId\` query params. Comments are the discussion thread attached to a work item. Results are ordered ascending by creation time so the client can reconstruct the two-level thread tree in post order — a reply always sorts after the parent it references (\`parentCommentId\`). Task comments require current canonical task visibility; non-task comments retain the organization-scoped read rule. Returns a page wrapper of {@link CommentOut}.`,
+      description: `List the comments on one polymorphic subject, identified by the required \`subjectType\` and \`subjectId\` query params. Results are ordered by \`createdAt ASC, id ASC\` so the client can reconstruct the two-level thread tree. Pages default to 50 items, accept at most 100, and omit \`nextCursor\` at exhaustion. Reuse a cursor only with the same subject filters. Task comments require current canonical task visibility; non-task comments retain the organization-scoped read rule.`,
     }),
-    zQuery(CommentListQuery),
+    zQuery(PaginatedCommentListQuery),
     async (c) => {
       const { orgId, actorId } = c.get('actorCtx');
-      const { subjectType, subjectId } = c.req.valid('query');
+      const { subjectType, subjectId, cursor, limit } = c.req.valid('query');
       if (subjectType === 'task') await assertTaskCommentVisible(orgId, actorId, subjectId);
       // Ascending by creation so the client can reconstruct threads in post order:
       // a reply always sorts after the parent it references.
@@ -196,10 +198,16 @@ const comments = new Hono<AppEnv>()
             eq(comment.organizationId, orgId),
             eq(comment.subjectType, subjectType),
             eq(comment.subjectId, subjectId),
+            seekAfter(comment.createdAt, comment.id, cursor, 'asc'),
           ),
         )
-        .orderBy(asc(comment.createdAt));
-      return ok(c, pageOf(CommentOut), { items: rows.map(toOut) });
+        .orderBy(asc(comment.createdAt), asc(comment.id))
+        .limit(limit + 1);
+      return ok(
+        c,
+        pageOf(CommentOut),
+        pageResult(rows.map(toOut), limit, (item) => new Date(item.createdAt)),
+      );
     },
   )
   .post(

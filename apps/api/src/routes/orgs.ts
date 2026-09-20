@@ -28,17 +28,19 @@ import {
   WorkspaceSettingsOut,
   WorkspaceSettingsUpdate,
 } from '../contracts/organization';
-import { pageOf } from '../contracts/pagination';
-import { and, eq, isNull } from 'drizzle-orm';
+import { CursorQuery, pageOf } from '../contracts/pagination';
+import { and, asc, eq, isNull } from 'drizzle-orm';
 import { Hono } from 'hono';
 import type { z } from 'zod';
 
 import type { AppEnv } from '../context';
 import { AuthError, ConflictError } from '../error';
 import { created, ok, resourceUrl } from '../lib/ok';
+import { idempotencyFor } from '../lib/idempotency';
+import { pageResultById, seekAfterId } from '../lib/list-cursor';
 import { apiDoc } from '../lib/openapi-route';
 import { deleteSettingsImage, storeSettingsImage } from '../lib/settings-image';
-import { zJson } from '../lib/validate';
+import { zJson, zQuery } from '../lib/validate';
 import { capabilityGuard } from '../permissions/capability-guard';
 import { orgContextMiddleware } from '../permissions/org-context-middleware';
 import { enqueueSearchUpsert } from '../search/write-through';
@@ -97,11 +99,13 @@ const orgs = new Hono<AppEnv>()
       tag: 'Orgs',
       summary: 'List organizations',
       response: pageOf(OrgSummary),
-      description: `List every organization the authenticated caller belongs to, as compact \`OrgSummary\` rows for workspace selection. Docket uses the selected session or OAuth principal's user identity and returns only organizations where that user has an active, unarchived human membership. Personal spaces (\`isPersonal: true\`) are included alongside team organizations. This is the only un-nested organization read because it spans workspaces; every other organization route lives under \`/:orgId\` and resolves one membership. A first-party session needs no extra capability. An OAuth client needs \`work:read\`, and Docket still applies the same membership filter after scope validation. Results use the standard \`{ items }\` page envelope. See \`GET /:orgId\` for the full representation of one organization.`,
+      description: `List every organization the authenticated caller belongs to, as compact \`OrgSummary\` rows for workspace selection. Docket uses the selected session or OAuth principal's user identity and returns only organizations where that user has an active, unarchived human membership. Personal spaces (\`isPersonal: true\`) are included alongside team organizations. Results use stable organization-id order, default to 50 items, accept at most 100, and omit \`nextCursor\` at exhaustion. Copy the opaque cursor unchanged and keep the same caller identity. This is the only un-nested organization read because it spans workspaces; every other organization route lives under \`/:orgId\` and resolves one membership. A first-party session needs no extra capability. An OAuth client needs \`work:read\`, and Docket still applies the same membership filter after scope validation. See \`GET /:orgId\` for the full representation of one organization.`,
     }),
+    zQuery(CursorQuery),
     async (c) => {
       const principal = c.get('principal');
       if (!principal) throw new AuthError();
+      const { cursor, limit } = c.req.valid('query');
       const rows = await db
         .select({ org: organization })
         .from(actor)
@@ -112,8 +116,11 @@ const orgs = new Hono<AppEnv>()
             eq(actor.kind, 'human'),
             eq(actor.status, 'active'),
             isNull(actor.archivedAt),
+            seekAfterId(organization.id, cursor, 'asc'),
           ),
-        );
+        )
+        .orderBy(asc(organization.id))
+        .limit(limit + 1);
       const items = rows.map((r) => ({
         id: r.org.id,
         name: r.org.name,
@@ -121,7 +128,7 @@ const orgs = new Hono<AppEnv>()
         avatar: r.org.avatar,
         isPersonal: r.org.isPersonal,
       }));
-      return ok(c, pageOf(OrgSummary), { items });
+      return ok(c, pageOf(OrgSummary), pageResultById(items, limit));
     },
   )
   .post(
@@ -473,6 +480,7 @@ Related: \`GET /\` lists all orgs the caller belongs to; the nested routers unde
     },
   )
   .use('/:orgId/*', orgContextMiddleware)
+  .use('/:orgId/object-commands', idempotencyFor('atomic-receipt'))
   .route('/:orgId/billing/export', billingExportDownload)
   .route('/:orgId/billing', billing)
   .route('/:orgId/teams', teams)

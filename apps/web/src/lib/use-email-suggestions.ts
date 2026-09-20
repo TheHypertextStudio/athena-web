@@ -46,7 +46,11 @@ export function useEmailSuggestions(orgId: string): EmailSuggestionsData {
   const listQ = useApiQuery(
     apiQueryOptions(
       key,
-      () => api.v1.orgs[':orgId']['email-suggestions'].$get({ param: { orgId } }),
+      () =>
+        api.v1.orgs[':orgId']['email-suggestions'].$get({
+          param: { orgId },
+          query: { limit: '100' },
+        }),
       'Could not load suggestions.',
     ),
   );

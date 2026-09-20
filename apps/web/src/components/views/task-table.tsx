@@ -361,6 +361,7 @@ export function TaskTable({
       () =>
         api.v1.orgs[':orgId'].display[':subjectType'].$get({
           param: { orgId: organizationId ?? '', subjectType: 'task' },
+          query: { limit: '100' },
         }),
       'Could not load task display settings.',
       { enabled: organizationId !== null },

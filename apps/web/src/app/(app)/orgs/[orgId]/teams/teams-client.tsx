@@ -25,6 +25,13 @@ import { FilterToolbar } from '@/components/views/filter-toolbar';
 import { type LayoutMode, useLayoutMode } from '@/components/views/use-layout-mode';
 import { useViewState } from '@/components/views/use-view-state';
 import { api } from '@/lib/api';
+import {
+  fetchAllEntityDisplays,
+  fetchAllProjects,
+  fetchAllTasks,
+  fetchAllTeamRosters,
+  fetchAllTeams,
+} from '@/lib/org-collection-pages';
 import { useTypedRoute } from '@/lib/app-location';
 import { apiQueryOptions, queryKeys, useApiListQuery } from '@/lib/query';
 
@@ -70,38 +77,35 @@ export default function TeamsListClient(): JSX.Element {
   const teamsQ = useApiListQuery(
     apiQueryOptions(
       queryKeys.teams(orgId),
-      () => api.v1.orgs[':orgId'].teams.$get({ param: { orgId } }),
+      () => fetchAllTeams(api, orgId),
       'Could not load your teams.',
     ),
   );
   const displaysQ = useApiListQuery(
     apiQueryOptions(
       queryKeys.entityDisplays(orgId, 'team'),
-      () =>
-        api.v1.orgs[':orgId'].display[':subjectType'].$get({
-          param: { orgId, subjectType: 'team' },
-        }),
+      () => fetchAllEntityDisplays(api, orgId, 'team'),
       'Could not load team icons.',
     ),
   );
   const rostersQ = useApiListQuery(
     apiQueryOptions(
       queryKeys.teamRosters(orgId),
-      () => api.v1.orgs[':orgId'].teams.rosters.$get({ param: { orgId } }),
+      () => fetchAllTeamRosters(api, orgId),
       'Could not load team members.',
     ),
   );
   const projectsQ = useApiListQuery(
     apiQueryOptions(
       queryKeys.projects(orgId),
-      () => api.v1.orgs[':orgId'].projects.$get({ param: { orgId }, query: {} }),
+      () => fetchAllProjects(api, orgId),
       'Could not load projects.',
     ),
   );
   const tasksQ = useApiListQuery(
     apiQueryOptions(
       queryKeys.tasks(orgId),
-      () => api.v1.orgs[':orgId'].tasks.$get({ param: { orgId }, query: {} }),
+      () => fetchAllTasks(api, orgId),
       'Could not load tasks.',
     ),
   );

@@ -1,98 +1,49 @@
 ---
-title: "REST API"
-description: "Conventions, the permission model, and the complete endpoint reference."
+title: 'REST API'
+description: 'The current public REST contract, its OAuth boundary, and the live OpenAPI reference.'
 ---
 
-Call more than 470 operations under `/v1`.
-
-<Card title="Open the full API reference" icon="book" href="https://docket-api.hypertext.studio/v1/docs" horizontal>
-  Every endpoint and field, with a request playground.
-</Card>
-
-<Note>
-  **`/v1/docs` is the source of truth for endpoint detail.** Where it and these pages disagree,
-  believe it.
-</Note>
-
-Generate a client from
-[`/v1/openapi.json`](https://docket-api.hypertext.studio/v1/openapi.json). Docket publishes no SDK.
-See [Platform status](/developers/platform-status).
-
-## Authentication
-
-Send a bearer token on every request:
-
-```http
-Authorization: Bearer <token>
-```
-
-**Only `GET /v1/config` works without one.** See [Authentication](/developers/authentication) to
-get one.
-
-## What shapes your client
-
-Four things decide how you build against `/v1`. The reference documents the rest, including
-idempotency, conditional requests with `ETag`, content negotiation, and caching.
-
-- **IDs are ULIDs, branded per entity type.** Pass a `TaskId` to a parameter typed `ProjectId` and
-  the call fails. Never parse one.
-- **Pagination is keyset.** Pass `cursor` and `limit`, read `nextCursor`, stop when it is `null`.
-- **Failures are RFC 9457 problem documents.** Branch on `code`. See [Errors](/developers/errors).
-- **Requests and responses share one schema.** A response that does not match what `/v1/docs`
-  renders is a bug.
-
-## Permissions
-
-**Membership.** Every `/v1/orgs/{orgId}/*` route needs an active Actor. Docket returns **404** to
-non-members, never 403. Probing tells you nothing.
-
-**Capability.** Mutations need a capability on the ladder:
-
-```
-view  <  comment  <  contribute  <  assign  <  manage
-```
-
-Reassign a task, you need `assign`. Post a comment, `comment`. Rename the workspace, `manage`. Read
-endpoints apply the permission predicate inside the query. Skip the client-side filter.
-Agents pass the identical checks, plus the
-[approval gate](/guides/athena/proposals-and-approvals).
-
-## Cross-workspace reads
-
-The Hub (`/hub/today`, `/portfolio`, `/search`, `/inbox`, `/activity`), notifications, and the
-personal daily plan read every workspace you are a member of. Docket runs **one permission-scoped
-query per membership** and merges the results in application code. No SQL join crosses tenants.
-
-## Resource groups
-
-| Group | Covers |
-| --- | --- |
-| [Orgs](https://docket-api.hypertext.studio/v1/docs#tag/orgs) | Workspaces, the tenant boundary |
-| [Teams](https://docket-api.hypertext.studio/v1/docs#tag/teams) | Teams and their workflow states |
-| [Tasks](https://docket-api.hypertext.studio/v1/docs#tag/tasks) | Subtasks and dependencies |
-| [Projects](https://docket-api.hypertext.studio/v1/docs#tag/projects) | Bounded efforts and milestones |
-| [Programs](https://docket-api.hypertext.studio/v1/docs#tag/programs) | Ongoing areas of operation |
-| [Initiatives](https://docket-api.hypertext.studio/v1/docs#tag/initiatives) | Strategic themes |
-| [Cycles](https://docket-api.hypertext.studio/v1/docs#tag/cycles) | Team time windows |
-| [Updates](https://docket-api.hypertext.studio/v1/docs#tag/updates) | Narrative status and health |
-| [Comments](https://docket-api.hypertext.studio/v1/docs#tag/comments) | Threaded discussion |
-| [Agents](https://docket-api.hypertext.studio/v1/docs#tag/agents) | Agents and their sessions |
-| [Hub](https://docket-api.hypertext.studio/v1/docs#tag/hub) | Cross-workspace reads |
-| [Me](https://docket-api.hypertext.studio/v1/docs#tag/me) | Connections, sessions, preferences |
-
-## Live updates
-
-Open `GET /v1/stream/sse` and Docket sends `stream-event` frames, with a ping every 25 seconds.
-Cannot open a long-lived connection? Poll `/v1/hub/stream` and `/v1/orgs/{orgId}/stream`.
+The REST resource identifier is `https://api.clearthedocket.com/v1`. The live reference is
+[`/v1/docs`](https://api.clearthedocket.com/v1/docs), and its OpenAPI document is
+[`/v1/openapi.json`](https://api.clearthedocket.com/v1/openapi.json).
 
 <Warning>
-  Docket sends **no outbound webhooks**. To react to changes, poll a stream endpoint or subscribe
-  over [MCP](/developers/mcp-tools-and-resources#subscriptions).
+  `0.1.0` is prerelease and Docket supports one current compatibility contract. Docket does not
+  publish an SDK, retain older public contracts, or send outbound webhooks.
 </Warning>
 
-## REST or MCP?
+## Authentication boundary
 
-The [MCP server](/developers/connect-an-agent-mcp) calls the identical service layer beneath the
-same permission engine. Use REST when you know which record you want and which fields to set. Use
-MCP when your caller describes intent: tools take names anywhere IDs go, and `organize` applies a
-whole plan in one call.
+`GET /v1/config` is public. The current OAuth bearer boundary is only `GET /v1/orgs` and
+`HEAD /v1/orgs`, which require `work:read`. The REST access policy treats every business operation
+outside that explicit boundary as session-only. Do not infer bearer access from an endpoint's
+presence in OpenAPI.
+
+```http
+Authorization: Bearer <access-token>
+Docket-Version: 0.1.0
+```
+
+Use [Authentication](/developers/authentication) to discover the resource and authorization server.
+Use [Make your first request](/developers/make-your-first-request) for the working organization-list
+flow.
+
+## Contract headers
+
+Each public REST response carries `Docket-Version` and `Docket-Revision`. The version identifies
+the compatibility contract. The revision identifies the deployed source revision. Send no version
+header, or send the exact current version. Docket rejects another version with
+`unsupported_api_version`.
+
+Read [API versions](/developers/api-versions) and [API release notes](/developers/api-release-notes)
+before deciding how a client should react to a contract change.
+
+## Errors
+
+Failures use RFC 9457 problem documents. Branch on the stable `code`, not a human-readable title
+or detail. The live reference owns request and response schemas. The error page explains retry and
+reauthorization behavior.
+
+<Card title="Read error handling" icon="triangle-exclamation" href="/developers/errors" horizontal>
+  Treat a problem code as a machine contract and write application-owned user copy.
+</Card>

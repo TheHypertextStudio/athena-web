@@ -4,6 +4,7 @@ import type { ProgramDetail } from '@docket/work/program-contract';
 import type { RoleOut } from './contracts/role';
 
 import { api } from './api';
+import { fetchAllAgents, fetchAllMembers, fetchAllRoles } from './org-collection-pages';
 import { rpcErrorResponse, type RpcResponse } from './query';
 
 /** ProgramDetailData describes the fetch program detail data contract shared by the hook or component. */
@@ -22,9 +23,9 @@ export function fetchProgramDetail(
   return async () => {
     const [detailRes, membersRes, agentsRes, rolesRes] = await Promise.all([
       api.v1.orgs[':orgId'].programs[':id'].$get({ param: { orgId, id: programId } }),
-      api.v1.orgs[':orgId'].members.$get({ param: { orgId } }),
-      api.v1.orgs[':orgId'].agents.$get({ param: { orgId } }),
-      api.v1.orgs[':orgId'].roles.$get({ param: { orgId } }),
+      fetchAllMembers(api, orgId),
+      fetchAllAgents(api, orgId),
+      fetchAllRoles(api, orgId),
     ]);
     if (!detailRes.ok) {
       return rpcErrorResponse<ProgramDetailData>(detailRes);

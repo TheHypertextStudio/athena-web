@@ -26,6 +26,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useAppRouter as useRouter } from '@/lib/interactions/navigation';
 import { useAppPathname } from '@/lib/app-location';
 import { AppShellAccountSkeleton, AppShellAgendaSkeleton } from '@/components/app-shell-skeletons';
+import { fetchAllOrganizations } from '@/lib/org-collection-pages';
 import {
   type JSX,
   type ReactNode,
@@ -272,7 +273,7 @@ export function AppShellFrame({ children, initialSession }: AppShellFrameProps):
   const orgsQ = useApiQuery(
     apiQueryOptions(
       queryKeys.orgs(),
-      () => api.v1.orgs.$get(),
+      () => fetchAllOrganizations(api),
       'Could not load your organizations.',
       {
         enabled: !identitySwitching && (Boolean(session) || Boolean(initialSession)),

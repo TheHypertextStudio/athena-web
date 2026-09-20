@@ -25,6 +25,7 @@ import {
   type LocalInputOccurrence,
 } from '@/components/calendar/datetime-input';
 import { api } from '@/lib/api';
+import { fetchAllTasks } from '@/lib/org-collection-pages';
 import { apiQueryOptions, queryKeys, unwrap, useApiListQuery, useApiMutation } from '@/lib/query';
 
 /** Props for {@link TimeAddPastDialog}. */
@@ -72,7 +73,7 @@ export function TimeAddPastDialog({
   const tasksQ = useApiListQuery(
     apiQueryOptions(
       queryKeys.tasks(workspace),
-      () => api.v1.orgs[':orgId'].tasks.$get({ param: { orgId: workspace }, query: {} }),
+      () => fetchAllTasks(api, workspace),
       'Could not load tasks for this workspace.',
       { enabled: Boolean(workspace) },
     ),

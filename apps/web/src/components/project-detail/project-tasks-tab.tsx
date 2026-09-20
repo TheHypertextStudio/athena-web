@@ -120,7 +120,7 @@ function useProjectActorDirectory(orgId: string): ActorDirectory {
   const agentsQ = useApiQuery(
     apiQueryOptions(
       queryKeys.agents(orgId),
-      () => api.v1.orgs[':orgId'].agents.$get({ param: { orgId } }),
+      () => api.v1.orgs[':orgId'].agents.$get({ param: { orgId }, query: { limit: '100' } }),
       'Could not load agents.',
     ),
   );

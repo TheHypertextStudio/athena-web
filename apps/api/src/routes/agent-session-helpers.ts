@@ -10,6 +10,7 @@ import { z } from 'zod';
 import type { AppEnv } from '../context';
 import { persistWaitingAthenaWake } from '../agent/async-runner';
 import { AuthError, CapabilityError, ConflictError, NotFoundError } from '../error';
+import { encodeListCursor, seekAfter } from '../lib/list-cursor';
 
 import { buildTaskViewFilter } from './task-helpers';
 
@@ -168,6 +169,7 @@ export async function canContinueSessionDelivery(
 export async function listSessionAccess(
   c: Context<AppEnv>,
   status?: z.infer<typeof SessionStatus>,
+  pagination?: { readonly cursor?: string | undefined; readonly limit: number },
 ): Promise<SessionRow[]> {
   const userId = requestUserId(c);
   const { orgId, actorId } = c.get('actorCtx');
@@ -175,12 +177,39 @@ export async function listSessionAccess(
     and(eq(agentSession.executorKind, 'athena'), eq(agentSession.ownerUserId, userId)),
     and(eq(agentSession.executorKind, 'registered_agent'), eq(agentSession.organizationId, orgId)),
   );
-  const sessions = await db
-    .select()
-    .from(agentSession)
-    .where(status ? and(ownership, eq(agentSession.status, status)) : ownership)
-    .orderBy(desc(agentSession.createdAt));
-  return filterRegisteredTaskSessionDelivery(orgId, actorId, sessions);
+  if (!pagination) {
+    const sessions = await db
+      .select()
+      .from(agentSession)
+      .where(status ? and(ownership, eq(agentSession.status, status)) : ownership)
+      .orderBy(desc(agentSession.createdAt), desc(agentSession.id));
+    return filterRegisteredTaskSessionDelivery(orgId, actorId, sessions);
+  }
+
+  const targetSize = pagination.limit + 1;
+  const visible: SessionRow[] = [];
+  let scanCursor = pagination.cursor;
+  while (visible.length < targetSize) {
+    const batchSize = targetSize - visible.length;
+    const sessions = await db
+      .select()
+      .from(agentSession)
+      .where(
+        and(
+          status ? and(ownership, eq(agentSession.status, status)) : ownership,
+          seekAfter(agentSession.createdAt, agentSession.id, scanCursor),
+        ),
+      )
+      .orderBy(desc(agentSession.createdAt), desc(agentSession.id))
+      .limit(batchSize);
+    if (sessions.length === 0) break;
+    visible.push(...(await filterRegisteredTaskSessionDelivery(orgId, actorId, sessions)));
+    if (sessions.length < batchSize) break;
+    const last = sessions[sessions.length - 1];
+    if (!last) break;
+    scanCursor = encodeListCursor(last.createdAt, last.id);
+  }
+  return visible.slice(0, targetSize);
 }
 
 /** toSessionOut converts internal API route data into the public API response shape. */

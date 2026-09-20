@@ -1,80 +1,52 @@
 ---
 title: 'Developer overview'
-description: "Docket's MCP server, REST API, and OAuth apps, and which one fits what you are building."
+description: 'Use Docket through MCP, the prerelease REST contract, or a person-authorized OAuth client.'
 ---
 
-Three ways in, one domain model. Every call runs as a real person, under that person's grants.
+Docket exposes work through an MCP server and a prerelease REST contract. Both run as the person
+who authorizes the client. The authorization scope narrows that person's access. It never expands
+it.
 
 <CardGroup cols={3}>
-  <Card title="MCP server" icon="robot" href="/developers/connect-an-agent-mcp">
-    Point an agent at `/mcp` for 25 tools over Streamable HTTP. **The most complete way in.**
+  <Card title="Make your first request" icon="bolt" href="/developers/make-your-first-request">
+    Discover the REST resource, register a native client, and list the organizations you can read.
   </Card>
-  <Card title="REST API" icon="code" href="/developers/rest-api">
-    More than 470 operations under `/v1`. Read them at `/v1/docs`.
+  <Card title="Connect an AI agent" icon="robot" href="/developers/connect-an-agent-mcp">
+    Connect an MCP client to Docket's Streamable HTTP endpoint.
   </Card>
-  <Card title="OAuth apps" icon="key" href="/developers/authentication">
-    Register a client, ask for `work:read`, call as the person who consents.
+  <Card title="REST contract" icon="code" href="/developers/rest-api">
+    Read the current public REST boundary and its version headers.
   </Card>
 </CardGroup>
 
 <Warning>
-  Docket's public API is **in early access**. There is no SDK, and the API is unversioned. Read
-  [Platform status](/developers/platform-status) first.
+  The public API is prerelease. Docket publishes one current compatibility contract, `0.1.0`. It
+  does not publish an SDK or send outbound webhooks.
 </Warning>
 
-## MCP, REST, or an OAuth app
+## Choose an interface
 
-| You are building                      | Use                                                           |
-| ------------------------------------- | ------------------------------------------------------------- |
-| An AI agent that works in Docket      | [MCP](/developers/connect-an-agent-mcp)                       |
-| A script that syncs something nightly | [REST](/developers/rest-api)                                  |
-| A product other Docket users install  | [OAuth app](/developers/authentication) + MCP or REST         |
-| An integration that reacts to changes | REST plus the [SSE stream](/developers/rest-api#live-updates) |
+| You are building                                     | Use                                                                  |
+| ---------------------------------------------------- | -------------------------------------------------------------------- |
+| An agent that understands work in natural language   | [MCP](/developers/connect-an-agent-mcp)                              |
+| A client that needs the current REST canary          | [REST](/developers/rest-api) and [OAuth](/developers/authentication) |
+| A client that needs task, project, or time mutations | MCP until those REST operations publish OAuth access contracts       |
 
-Call `capture` and "email the caterer by Friday" becomes a task. `organize` writes a twelve-item
-plan in one call, and a second run creates no duplicates.
+The current REST bearer canary is deliberately narrow: `GET /v1/orgs` and `HEAD /v1/orgs` accept
+an OAuth token with `work:read`. Other business REST operations remain first-party session routes
+until their published operation contracts expand this boundary.
 
-## The model in one screen
+## The work model
 
-Docket scopes every row to one **Organization**, the tenant boundary.
+An Organization is Docket's tenant boundary. Teams carry workflow states. Tasks can belong to
+projects, programs, or initiatives, and a task's `parentTaskId` creates a task hierarchy. Personal
+Athena data belongs under `/v1/me/athena`, not an organization work route.
 
-```
-Organization
-  ├─ Team          owns workflow states, cycles, and a triage queue
-  ├─ Initiative    a theme; no work of its own; links to Programs and Projects
-  ├─ Program       ongoing operations; contains Projects and Tasks
-  ├─ Project       a bounded effort; contains Tasks and Milestones
-  └─ Task          the atomic unit; subtasks, acyclic dependencies, attachments, labels
-```
+Use names only where a documented MCP tool accepts them. REST identifiers and fields come from the
+live [OpenAPI reference](https://api.clearthedocket.com/v1/docs).
 
-Use a Program for work that never finishes, like customer support. Use a Project for "Launch v2",
-which closes when it ships. Cycles schedule Tasks into a team's two-week window without containing
-them. Updates set health: `on_track`, `at_risk`, `off_track`.
+## Build against the contract
 
-Two kinds of edge:
-
-| Kind            | What it is                                                                                                                    |
-| --------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| **Containment** | A hard parent-to-child edge. Grant someone `contribute` on a Program and it applies to every Project and Task in it.          |
-| **Association** | A soft link. Delete it and both sides remain. An Initiative themes a Project, a Cycle schedules a Task, a Task blocks a Task. |
-
-<Note>
-  Workspaces relabel these words: a Cycle may display as a Season. **The API always uses the default
-  names.** See [Terminology](/guides/concepts/terminology).
-</Note>
-
-## Conventions every call follows
-
-|                   |                                                                                                             |
-| ----------------- | ----------------------------------------------------------------------------------------------------------- |
-| **Identifiers**   | 26-character ULIDs. They sort. Never parse them.                                                            |
-| **Pagination**    | Pass `cursor` and `limit`. Read `nextCursor`.                                                               |
-| **Errors**        | RFC 9457 problem documents. Branch on `code`, such as `dependency_cycle`. See [Errors](/developers/errors). |
-| **Idempotency**   | Send an `Idempotency-Key` header on unsafe operations.                                                      |
-| **Authorization** | `view < comment < contribute < assign < manage`. Reassigning a task needs `assign`.                         |
-
-## What a token can do
-
-**A token never grants more than the human behind it has.** Docket checks the scope first, then
-that person's own grants. Someone with `view` on "Launch v2" cannot write to it with a `work:write`
-token.
+Send `Docket-Version: 0.1.0` when a client needs to assert the current contract. Every public REST
+response identifies the contract and its deployed revision. Read [API versions](/developers/api-versions)
+before pinning client behavior, and read [Errors](/developers/errors) before writing retries.

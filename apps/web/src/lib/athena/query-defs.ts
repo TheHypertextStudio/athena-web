@@ -178,7 +178,10 @@ export const personalAthenaTransport: PersonalAthenaTransport = {
     api.v1.me.athena.changes[':changeSetId'].undo.$post({ param: { changeSetId } }),
   proposals: (sessionId) =>
     adaptedResponse(
-      api.v1.me.athena.sessions[':id'].proposals.$get({ param: { id: sessionId } }),
+      api.v1.me.athena.sessions[':id'].proposals.$get({
+        param: { id: sessionId },
+        query: { limit: '100' },
+      }),
       (page) => page.items,
     ),
 };

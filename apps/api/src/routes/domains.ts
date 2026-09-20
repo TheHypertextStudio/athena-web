@@ -38,7 +38,7 @@ import {
   WorkspaceDomainOut,
   WorkspaceDomainVerifyOut,
 } from '@docket/work/publish-contract';
-import { pageOf } from '../contracts/pagination';
+import { CursorQuery, type Page, pageOf } from '../contracts/pagination';
 import { and, asc, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
@@ -46,8 +46,9 @@ import { z } from 'zod';
 import type { AppEnv } from '../context';
 import { ConflictError, NotFoundError, ValidationError } from '../error';
 import { created, ok } from '../lib/ok';
+import { pageResult, seekAfter } from '../lib/list-cursor';
 import { apiDoc } from '../lib/openapi-route';
-import { zJson, zParam } from '../lib/validate';
+import { zJson, zParam, zQuery } from '../lib/validate';
 import { capabilityGuard } from '../permissions/capability-guard';
 
 /** Path parameter for a single domain row. */
@@ -123,6 +124,28 @@ async function loadDomain(organizationId: string, id: string): Promise<DomainRow
   return row;
 }
 
+async function listDomainRows(
+  organizationId: string,
+  cursor: string | undefined,
+  limit: number,
+): Promise<DomainRow[]> {
+  return db
+    .select()
+    .from(workspaceDomain)
+    .where(
+      and(
+        eq(workspaceDomain.organizationId, organizationId),
+        seekAfter(workspaceDomain.createdAt, workspaceDomain.id, cursor, 'asc'),
+      ),
+    )
+    .orderBy(asc(workspaceDomain.createdAt), asc(workspaceDomain.id))
+    .limit(limit + 1);
+}
+
+function domainPage(rows: DomainRow[], limit: number): Page<z.input<typeof WorkspaceDomainOut>> {
+  return pageResult(rows.map(toDomainOut), limit, (item) => new Date(item.createdAt));
+}
+
 /**
  * Build the publishing-addresses router.
  *
@@ -147,16 +170,14 @@ export function createPublishingAddressRoutes(lookupTxt: TxtLookup = resolveTxt)
         response: pageOf(WorkspaceDomainOut),
         description: `List every custom domain claimed by this workspace, oldest first, each with its current verification state and the exact DNS records to publish. Requires \`manage\`: domain configuration decides which host the entire workspace answers on, so it is an administrator's decision, not a member's. A non-admin member receives **403**; a member of another workspace receives **404** from the org-context gate before this handler runs.
 
-\`lastFailure\` is a stable code (\`lookup-failed\` / \`no-record\` / \`token-mismatch\`), never resolver output — DNS answers come from a domain Docket does not own, so their text is never rendered.`,
+Results use \`createdAt ASC, id ASC\`, default to 50 items, accept at most 100, and omit \`nextCursor\` at exhaustion. \`lastFailure\` is a stable code (\`lookup-failed\` / \`no-record\` / \`token-mismatch\`), never resolver output.`,
       }),
+      zQuery(CursorQuery),
       async (c) => {
         const { orgId } = c.get('actorCtx');
-        const rows = await db
-          .select()
-          .from(workspaceDomain)
-          .where(eq(workspaceDomain.organizationId, orgId))
-          .orderBy(asc(workspaceDomain.createdAt));
-        return ok(c, pageOf(WorkspaceDomainOut), { items: rows.map(toDomainOut) });
+        const { cursor, limit } = c.req.valid('query');
+        const rows = await listDomainRows(orgId, cursor, limit);
+        return ok(c, pageOf(WorkspaceDomainOut), domainPage(rows, limit));
       },
     )
     .post(
@@ -216,7 +237,7 @@ Requires \`manage\`.`,
         const row = rows[0];
         /* v8 ignore next -- @preserve defensive: insert always returns one row */
         if (!row) throw new Error('workspace domain insert returned no row');
-        return created(c, WorkspaceDomainOut, toDomainOut(row));
+        return created(c, WorkspaceDomainOut, toDomainOut(row), null);
       },
     )
     .post(

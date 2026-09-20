@@ -1,108 +1,246 @@
-/**
- * `@docket/api` — OpenAPI documentation richness gates.
- *
- * @remarks
- * Guards the "the API reference IS the product documentation" bar: a comprehensive product
- * overview, per-resource narratives, an operation-level description on (nearly) every route,
- * truthful per-operation security, and field-level descriptions on DTO schema properties.
- */
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { brotliCompressSync, constants } from 'node:zlib';
 
-import { AgentSessionOut } from '@docket/athena/agent-contract';
-import { CommentOut } from '@docket/work/comment-contract';
-import { TaskOut } from '@docket/work/task-model';
 import { describe, expect, it } from 'vitest';
-import { OrgOut } from '../../src/contracts/organization';
-import { ProjectOut } from '../../src/contracts/project';
 
-/** The published page that deep-links readers into the Scalar reference by tag. */
-const REST_API_PAGE = resolve(import.meta.dirname, '../../../../apps/docs/developers/rest-api.mdx');
+import { PUBLIC_TAG_GROUPS, PUBLIC_TAGS } from '../../src/lib/public-api-tags';
 
-describe('openapi documentation richness', () => {
-  it('serves an exhaustive, truthful, self-documenting spec', async () => {
-    const { openapiDocument } = await import('../../src/openapi');
-    const { app, adminApp } = await import('../../src/app');
-    const doc = (await openapiDocument(app, adminApp)) as {
-      info: { description: string };
-      tags: { name: string; description?: string }[];
-      security?: unknown[];
-      paths: Record<
-        string,
-        Record<string, { description?: string; security?: unknown[]; tags?: string[] }>
-      >;
-    };
+type JsonObject = Record<string, unknown>;
 
-    // Product overview is a substantial narrative.
-    expect(doc.info.description.length).toBeGreaterThan(2000);
+const HTTP_METHODS = new Set(['get', 'put', 'post', 'delete', 'options', 'head', 'patch']);
+const REQUIRED_SECTIONS = [
+  'Purpose',
+  'Inputs and constraints',
+  'Result and side effects',
+  'Access and permissions',
+  'Failures and recovery',
+  'Related operations',
+] as const;
 
-    // Every tag carries a real narrative (not a stub one-liner).
-    for (const tag of doc.tags) expect((tag.description ?? '').length).toBeGreaterThan(80);
+function isObject(value: unknown): value is JsonObject {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
 
-    // The published REST page deep-links into `/v1/docs#tag/<name>`. An anchor at an undeclared tag
-    // silently drops the reader at the top of the reference. Checked here because the document is
-    // already generated; doing it in its own file would import `src/app` a second time.
-    const declared = new Set(doc.tags.map((tag) => tag.name.toLowerCase()));
-    const page = readFileSync(REST_API_PAGE, 'utf8');
-    const anchors = [...page.matchAll(/\/v1\/docs#tag\/([a-z-]+)/g)].map(([, tag]) => tag ?? '');
-    // Zero anchors would pass the check below vacuously.
-    expect(anchors.length).toBeGreaterThanOrEqual(10);
-    const unresolvable = [...new Set(anchors)].filter((tag) => !declared.has(tag));
-    expect(
-      unresolvable,
-      `\nDeep links in apps/docs/developers/rest-api.mdx pointing at undeclared tags:\n  ${unresolvable.join('\n  ')}\n`,
-    ).toEqual([]);
+async function publicDocument(): Promise<JsonObject> {
+  const { openapiDocument } = await import('../../src/openapi');
+  const { app, adminApp } = await import('../../src/app');
+  return (await openapiDocument(app, adminApp)) as JsonObject;
+}
 
-    // Walk all operations.
-    interface Op {
-      description?: string;
-      security?: unknown[];
-      tags?: string[];
+function publicOperations(document: JsonObject): readonly JsonObject[] {
+  const paths = isObject(document['paths']) ? document['paths'] : {};
+  return Object.values(paths).flatMap((item) => {
+    if (!isObject(item)) return [];
+    return Object.entries(item).flatMap(([method, operation]) =>
+      HTTP_METHODS.has(method) && isObject(operation) ? [operation] : [],
+    );
+  });
+}
+
+function componentSchemas(document: JsonObject): JsonObject {
+  const components = isObject(document['components']) ? document['components'] : {};
+  return isObject(components['schemas']) ? components['schemas'] : {};
+}
+
+function dereferenceSchema(schema: unknown, document: JsonObject): JsonObject | undefined {
+  if (!isObject(schema)) return undefined;
+  const reference = schema['$ref'];
+  if (typeof reference !== 'string' || !reference.startsWith('#/components/schemas/'))
+    return schema;
+  const name = reference.slice('#/components/schemas/'.length);
+  const resolved = componentSchemas(document)[name];
+  return isObject(resolved) ? resolved : undefined;
+}
+
+function mediaHasExample(media: JsonObject, document: JsonObject): boolean {
+  if ('example' in media || 'examples' in media) return true;
+  const schema = dereferenceSchema(media['schema'], document);
+  return Boolean(schema && ('example' in schema || 'examples' in schema));
+}
+
+function hasDescription(value: unknown): boolean {
+  return typeof value === 'string' && value.trim() !== '';
+}
+
+function collectMissingPropertyDescriptions(
+  schema: unknown,
+  document: JsonObject,
+  location: string,
+  missing: string[],
+  seen: Set<JsonObject>,
+): void {
+  const resolved = dereferenceSchema(schema, document);
+  if (!resolved || seen.has(resolved)) return;
+  seen.add(resolved);
+  const properties = isObject(resolved['properties']) ? resolved['properties'] : {};
+  for (const [name, property] of Object.entries(properties)) {
+    const child = dereferenceSchema(property, document);
+    if (!child) continue;
+    const directDescription = isObject(property) ? property['description'] : undefined;
+    const resolvedDescription = child['description'];
+    if (!hasDescription(directDescription) && !hasDescription(resolvedDescription)) {
+      missing.push(`${location}.${name}`);
     }
-    const ops: { method: string; path: string; op: Op }[] = [];
-    for (const path of Object.keys(doc.paths)) {
-      const item = doc.paths[path];
-      if (!item) continue;
-      for (const method of Object.keys(item)) {
-        const op = item[method];
-        if (op) ops.push({ method, path, op });
-      }
-    }
-
-    // (a) Operation-level descriptions on ≥95% of operations (rich prose, not just a summary).
-    const described = ops.filter((o) => (o.op.description ?? '').length > 60);
-    expect(described.length / ops.length).toBeGreaterThanOrEqual(0.95);
-
-    // (b) Security is truthful: every operation requires bearer auth except the public config.
-    const publicOps = ops.filter((o) => {
-      const sec = o.op.security ?? doc.security;
-      return !sec || (Array.isArray(sec) && sec.length === 0);
+    collectMissingPropertyDescriptions(child, document, `${location}.${name}`, missing, seen);
+  }
+  collectMissingPropertyDescriptions(resolved['items'], document, `${location}[]`, missing, seen);
+  for (const keyword of ['allOf', 'anyOf', 'oneOf']) {
+    const variants = Array.isArray(resolved[keyword]) ? resolved[keyword] : [];
+    variants.forEach((variant, index) => {
+      collectMissingPropertyDescriptions(
+        variant,
+        document,
+        `${location}.${keyword}[${String(index)}]`,
+        missing,
+        seen,
+      );
     });
-    expect(publicOps.map((o) => `${o.method.toUpperCase()} ${o.path}`)).toEqual(['GET /v1/config']);
+  }
+}
+
+interface CompletenessAudit {
+  readonly descriptions: string[];
+  readonly examples: string[];
+}
+
+function auditMedia(
+  content: unknown,
+  document: JsonObject,
+  location: string,
+  audit: CompletenessAudit,
+  requireExamples: boolean,
+): void {
+  if (!isObject(content)) return;
+  for (const [mediaType, media] of Object.entries(content)) {
+    if (!isObject(media)) continue;
+    collectMissingPropertyDescriptions(
+      media['schema'],
+      document,
+      `${location}.${mediaType}`,
+      audit.descriptions,
+      new Set(),
+    );
+    if (requireExamples && mediaType.includes('json') && !mediaHasExample(media, document)) {
+      audit.examples.push(`${location}.${mediaType}`);
+    }
+  }
+}
+
+function auditParameters(
+  operation: JsonObject,
+  document: JsonObject,
+  operationId: string,
+  audit: CompletenessAudit,
+): void {
+  const parameters = Array.isArray(operation['parameters']) ? operation['parameters'] : [];
+  for (const parameter of parameters) {
+    if (!isObject(parameter) || '$ref' in parameter) continue;
+    const name = typeof parameter['name'] === 'string' ? parameter['name'] : 'value';
+    const location = `${operationId}.parameter.${name}`;
+    if (!hasDescription(parameter['description'])) audit.descriptions.push(location);
+    collectMissingPropertyDescriptions(
+      parameter['schema'],
+      document,
+      location,
+      audit.descriptions,
+      new Set(),
+    );
+  }
+}
+
+function auditRequestBody(
+  operation: JsonObject,
+  document: JsonObject,
+  operationId: string,
+  audit: CompletenessAudit,
+): void {
+  const body = isObject(operation['requestBody']) ? operation['requestBody'] : undefined;
+  if (!body) return;
+  if (!hasDescription(body['description'])) audit.descriptions.push(`${operationId}.requestBody`);
+  auditMedia(body['content'], document, `${operationId}.requestBody`, audit, true);
+}
+
+function auditResponses(
+  operation: JsonObject,
+  document: JsonObject,
+  operationId: string,
+  audit: CompletenessAudit,
+): void {
+  const responses = isObject(operation['responses']) ? operation['responses'] : {};
+  for (const [status, response] of Object.entries(responses)) {
+    if (!isObject(response) || '$ref' in response) continue;
+    const location = `${operationId}.response.${status}`;
+    if (!hasDescription(response['description'])) audit.descriptions.push(location);
+    auditMedia(response['content'], document, location, audit, /^2\d\d$/.test(status));
+  }
+}
+
+describe('public OpenAPI contract', () => {
+  it('publishes one complete, grouped, plain-language operation contract', async () => {
+    const document = await publicDocument();
+    const operations = publicOperations(document);
+    const ids = operations.map((operation) => operation['operationId']);
+    expect(operations.length).toBeGreaterThan(500);
+    expect(ids.every((id) => typeof id === 'string' && id.length > 0)).toBe(true);
+    expect(new Set(ids).size).toBe(ids.length);
+
+    const declaredTags = new Set<string>(PUBLIC_TAGS.map((tag) => tag.id));
+    for (const operation of operations) {
+      const tags = operation['tags'];
+      expect(Array.isArray(tags) ? tags : []).toHaveLength(1);
+      expect(declaredTags.has((tags as string[])[0] ?? '')).toBe(true);
+      const description =
+        typeof operation['description'] === 'string' ? operation['description'] : '';
+      for (const section of REQUIRED_SECTIONS) expect(description).toContain(`## ${section}`);
+      expect(description).not.toContain('Success.');
+      expect(isObject(operation['responses'])).toBe(true);
+      expect(Object.keys(operation['responses'] as JsonObject).length).toBeGreaterThan(1);
+    }
+
+    expect(document['x-tagGroups']).toEqual(
+      PUBLIC_TAG_GROUPS.map((group) => ({ name: group.displayName, tags: [...group.tags] })),
+    );
   });
 
-  it('documents DTO fields with descriptions', async () => {
-    // Field-level descriptions live on the Zod schemas; verify a representative sample has a
-    // description on every property (these flow into the spec's component schemas).
-    const sample = { TaskOut, OrgOut, ProjectOut, CommentOut, AgentSessionOut };
-    for (const schema of Object.values(sample)) {
-      interface JsonSchema {
-        readonly properties?: Readonly<Record<string, { readonly description?: string }>>;
-        readonly anyOf?: readonly JsonSchema[];
-        readonly oneOf?: readonly JsonSchema[];
-      }
-      const json = (await import('zod')).z.toJSONSchema(schema as never, {
-        io: 'output',
-      }) as JsonSchema;
-      const variants = json.properties ? [json] : [...(json.anyOf ?? []), ...(json.oneOf ?? [])];
-      expect(variants.length).toBeGreaterThan(0);
-      for (const variant of variants) {
-        const props = Object.entries(variant.properties ?? {});
-        expect(props.length).toBeGreaterThan(0);
-        const withDesc = props.filter(([, v]) => (v.description ?? '').length > 0);
-        // Every property of every discriminated core-output variant is documented.
-        expect(withDesc.length).toBe(props.length);
-      }
+  it('documents every request field, body, response, and JSON example', async () => {
+    const document = await publicDocument();
+    const audit: CompletenessAudit = { descriptions: [], examples: [] };
+    for (const operation of publicOperations(document)) {
+      const operationId =
+        typeof operation['operationId'] === 'string' ? operation['operationId'] : 'operation';
+      auditParameters(operation, document, operationId, audit);
+      auditRequestBody(operation, document, operationId, audit);
+      auditResponses(operation, document, operationId, audit);
     }
+    expect(audit.descriptions).toEqual([]);
+    expect(audit.examples).toEqual([]);
+  });
+
+  it('contains no source notation, stale hosts, weak success labels, or sentinel examples', async () => {
+    const document = await publicDocument();
+    const serialized = JSON.stringify(document);
+    for (const forbidden of [
+      '{@link',
+      'Success.',
+      'workflow_states',
+      'docket.hypertext.studio',
+      'docket-api.hypertext.studio',
+      'Docket accepts or returns',
+      'the atomic unit of work',
+      'two front doors onto one system',
+      'cross-org cockpit',
+      '"id":""',
+      '"id":0',
+    ]) {
+      expect(serialized).not.toContain(forbidden);
+    }
+  });
+
+  it('stays within the compressed transfer budget', async () => {
+    const document = await publicDocument();
+    const compact = JSON.stringify(document);
+    const brotli = brotliCompressSync(compact, {
+      params: { [constants.BROTLI_PARAM_QUALITY]: 5 },
+    });
+    expect(brotli.byteLength).toBeLessThanOrEqual(350 * 1024);
   });
 });

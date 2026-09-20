@@ -96,7 +96,7 @@ export const adminStaffRoutes = new Hono<AppEnv>()
         targetUserId: userId,
         role,
       });
-      return created(c, AdminStaffOut, toStaffOut(staff, u));
+      return created(c, AdminStaffOut, toStaffOut(staff, u), null);
     },
   )
   .delete(

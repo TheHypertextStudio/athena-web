@@ -72,6 +72,7 @@ import { useDetailTab } from '@/components/views/use-detail-tab';
 import { EntityDetailLayout, EntityMetadataRow } from '@/components/views/entity-detail-layout';
 import { api } from '@/lib/api';
 import { useProjectPageIdentity } from './use-project-page-identity';
+import { fetchAllInitiatives, fetchAllPrograms } from '@/lib/org-collection-pages';
 import { useTypedRoute } from '@/lib/app-location';
 import {
   aggregateLoadState,
@@ -232,7 +233,7 @@ export default function ProjectDetailPage(): JSX.Element {
   const programsQ = useApiQuery(
     apiQueryOptions(
       [...queryKeys.programs(orgId), 'picker'] as const,
-      () => api.v1.orgs[':orgId'].programs.$get({ param: { orgId }, query: {} }),
+      () => fetchAllPrograms(api, orgId),
       'Could not load Programs.',
       { enabled: programPickerOpen },
     ),
@@ -240,7 +241,7 @@ export default function ProjectDetailPage(): JSX.Element {
   const initiativesQ = useApiQuery(
     apiQueryOptions(
       [...queryKeys.initiatives(orgId), 'picker'] as const,
-      () => api.v1.orgs[':orgId'].initiatives.$get({ param: { orgId }, query: {} }),
+      () => fetchAllInitiatives(api, orgId),
       'Could not load Initiatives.',
       { enabled: initiativesPickerOpen },
     ),
@@ -271,6 +272,7 @@ export default function ProjectDetailPage(): JSX.Element {
       () =>
         api.v1.orgs[':orgId'].projects[':id'].resources.$get({
           param: { orgId, id: projectId },
+          query: { limit: '100' },
         }),
       'Could not load resources.',
       { enabled: aggregate !== null && tab === 'resources' },

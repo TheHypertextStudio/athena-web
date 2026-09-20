@@ -102,7 +102,7 @@ export function useProposedTaskChanges(
 
   return useMemo(() => {
     const map = new Map<string, string>();
-    collectTaskProposals(map, threadProposals.data);
+    collectTaskProposals(map, threadProposals.data?.items);
     for (const result of jobProposals) {
       collectTaskProposals(map, result.data);
     }

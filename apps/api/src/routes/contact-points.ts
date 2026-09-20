@@ -3,7 +3,7 @@ import {
   ContactPointOut,
   ContactPointVerify,
 } from '@docket/notifications/schemas';
-import { pageOf } from '../contracts/pagination';
+import { CursorQuery, pageOf } from '../contracts/pagination';
 import { Hono } from 'hono';
 import type { Context } from 'hono';
 import { z } from 'zod';
@@ -12,7 +12,7 @@ import type { AppEnv } from '../context';
 import { AuthError } from '../error';
 import { created, ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
-import { zJson, zParam } from '../lib/validate';
+import { zJson, zParam, zQuery } from '../lib/validate';
 import type { NotificationContactPointService } from '../services/notifications/contact-point-service';
 
 const idParam = z.object({ id: z.string() });
@@ -26,12 +26,13 @@ export function createContactPointRoutes(contactPoints: NotificationContactPoint
         tag: 'Me Contact Points',
         summary: 'List notification contact points',
         response: pageOf(ContactPointOut),
-        description:
-          'List caller-owned email, phone, and push-token contact points. The primary account email is materialized as an active contact point when absent.',
+        description: `List caller-owned email, phone, and push-token contact points. The primary account email is materialized as an active contact point when absent.`,
       }),
+      zQuery(CursorQuery),
       async (c) => {
         const userId = requireUserId(c);
-        return ok(c, pageOf(ContactPointOut), await contactPoints.list(userId));
+        const { cursor, limit } = c.req.valid('query');
+        return ok(c, pageOf(ContactPointOut), await contactPoints.list(userId, { cursor, limit }));
       },
     )
     .post(
@@ -41,13 +42,13 @@ export function createContactPointRoutes(contactPoints: NotificationContactPoint
         tag: 'Me Contact Points',
         summary: 'Create a notification contact point',
         response: ContactPointOut,
-        description:
-          'Create a pending caller-owned destination for notification delivery. Phone contact points are verified before SMS delivery can use them.',
+        description: `Create a pending caller-owned destination for notification delivery. Phone contact points are verified before SMS delivery can use them.`,
       }),
       zJson(ContactPointCreate),
       async (c) => {
         const userId = requireUserId(c);
-        return created(c, ContactPointOut, await contactPoints.create(userId, c.req.valid('json')));
+        const contactPoint = await contactPoints.create(userId, c.req.valid('json'));
+        return created(c, ContactPointOut, contactPoint, null);
       },
     )
     .post(
@@ -56,8 +57,7 @@ export function createContactPointRoutes(contactPoints: NotificationContactPoint
         tag: 'Me Contact Points',
         summary: 'Verify a contact point',
         response: ContactPointOut,
-        description:
-          'Verify one pending caller-owned contact point with its short-lived verification code.',
+        description: `Verify one pending caller-owned contact point with its short-lived verification code.`,
       }),
       zParam(idParam),
       zJson(ContactPointVerify),

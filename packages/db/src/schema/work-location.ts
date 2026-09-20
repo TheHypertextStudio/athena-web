@@ -14,6 +14,7 @@ import type {
 } from '@docket/planning/work-location-contract';
 import { sql } from 'drizzle-orm';
 import {
+  bigint,
   check,
   date,
   doublePrecision,
@@ -256,6 +257,26 @@ export const workScheduleException = pgTable(
     }).onDelete('cascade'),
     check('work_schedule_exception_origin_check', sql`${t.origin} IN ('docket', 'provider')`),
   ],
+);
+
+/**
+ * The monotonic edit generation shared by every row in one Hub's default work schedule.
+ *
+ * @remarks
+ * Database triggers on plan versions and dated exceptions advance this row. The trigger boundary
+ * includes HTTP, agent, migration, and provider writers without relying on each call site to
+ * remember an application-level increment.
+ */
+export const workScheduleAggregateRevision = pgTable(
+  'work_schedule_aggregate_revision',
+  {
+    hubId: text('hub_id')
+      .primaryKey()
+      .references(() => hub.id, { onDelete: 'cascade' }),
+    revision: bigint('revision', { mode: 'number' }).notNull().default(0),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [check('work_schedule_aggregate_revision_nonnegative', sql`${t.revision} >= 0`)],
 );
 
 /** One short-lived current-location fact; never stores raw observation coordinates. */

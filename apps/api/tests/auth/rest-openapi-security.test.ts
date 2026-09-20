@@ -1,9 +1,11 @@
 import { Hono } from 'hono';
 import { describeRoute } from 'hono-openapi';
 import { describe, expect, it } from 'vitest';
+import { z } from 'zod';
 
 import type { AdminInstance, AppInstance } from '../../src/app';
 import { openapiDocument } from '../../src/openapi';
+import { apiDoc } from '../../src/lib/openapi-route';
 
 interface SecurityDocument {
   readonly security?: readonly Readonly<Record<string, readonly string[]>>[];
@@ -33,6 +35,33 @@ function fixtureApps(): { readonly app: AppInstance; readonly adminApp: AdminIns
     .get('/v1/orgs', route('List organizations'), (c) => c.json({ ok: true }))
     .post('/v1/orgs', route('Create organization'), (c) => c.json({ ok: true }))
     .get('/v1/me/account', route('Read account'), (c) => c.json({ ok: true }))
+    .get(
+      '/v1/contract-public',
+      apiDoc({
+        operationId: 'getSecurityContractProbe',
+        tag: 'Config',
+        summary: 'Read the security contract probe',
+        narrative: {
+          purpose: 'Prove that OpenAPI security comes from the matched operation declaration.',
+          behavior: ['Return a public fixture response.'],
+        },
+        access: { kind: 'public' },
+        success: [
+          {
+            kind: 'json',
+            status: 200,
+            schema: z.object({ ok: z.boolean().describe('Whether the probe completed.') }),
+            description: 'The public fixture response.',
+          },
+        ],
+        errors: [],
+        conditionalRead: false,
+        conditionalWrite: false,
+        idempotency: false,
+        related: [],
+      }),
+      (c) => c.json({ ok: true }),
+    )
     .get('/v1/public/time/status', route('Read shared time status'), (c) => c.json({ ok: true }));
   const adminApp = new Hono().get('/admin/session', route('Read staff session'), (c) =>
     c.json({ ok: true }),
@@ -41,6 +70,35 @@ function fixtureApps(): { readonly app: AppInstance; readonly adminApp: AdminIns
     app: app as unknown as AppInstance,
     adminApp: adminApp as unknown as AdminInstance,
   };
+}
+
+function oauthOperationNames(document: SecurityDocument): readonly string[] {
+  const operations: string[] = [];
+  for (const [path, pathItem] of Object.entries(document.paths)) {
+    for (const [method, operation] of Object.entries(pathItem)) {
+      if (operation.security?.some((requirement) => 'restOAuth' in requirement)) {
+        operations.push(`${method.toUpperCase()} ${path}`);
+      }
+    }
+  }
+  return operations;
+}
+
+function expectSessionAndOAuthAssignments(document: SecurityDocument): void {
+  expect(document.security).toEqual([{ sessionCookie: [] }]);
+  expect(document.paths['/v1/config']?.['get']?.security).toEqual([]);
+  expect(document.paths['/v1/orgs']?.['get']?.security).toEqual([
+    { restOAuth: ['work:read'] },
+    { sessionCookie: [] },
+  ]);
+  expect(document.paths['/v1/orgs']?.['post']?.security).toEqual([{ sessionCookie: [] }]);
+  expect(document.paths['/v1/me/account']?.['get']?.security).toEqual([{ sessionCookie: [] }]);
+}
+
+function expectPublicAssignments(document: SecurityDocument): void {
+  expect(document.paths['/v1/contract-public']?.['get']?.security).toEqual([]);
+  expect(document.paths['/v1/public/time/status']?.['get']?.security).toEqual([{ shareToken: [] }]);
+  expect(oauthOperationNames(document)).toEqual(['GET /v1/orgs']);
 }
 
 describe('REST OpenAPI authentication contract', () => {
@@ -90,26 +148,8 @@ describe('REST OpenAPI authentication contract', () => {
     const { app, adminApp } = fixtureApps();
     const document = (await openapiDocument(app, adminApp)) as SecurityDocument;
 
-    expect(document.security).toEqual([{ sessionCookie: [] }]);
-    expect(document.paths['/v1/config']?.['get']?.security).toEqual([]);
-    expect(document.paths['/v1/orgs']?.['get']?.security).toEqual([
-      { restOAuth: ['work:read'] },
-      { sessionCookie: [] },
-    ]);
-    expect(document.paths['/v1/orgs']?.['post']?.security).toEqual([{ sessionCookie: [] }]);
-    expect(document.paths['/v1/me/account']?.['get']?.security).toEqual([{ sessionCookie: [] }]);
-    expect(document.paths['/v1/public/time/status']?.['get']?.security).toEqual([
-      { shareToken: [] },
-    ]);
-
-    const oauthOperations = Object.entries(document.paths).flatMap(([path, pathItem]) =>
-      Object.entries(pathItem)
-        .filter(([, operation]) =>
-          operation.security?.some((requirement) => 'restOAuth' in requirement),
-        )
-        .map(([method]) => `${method.toUpperCase()} ${path}`),
-    );
-    expect(oauthOperations).toEqual(['GET /v1/orgs']);
+    expectSessionAndOAuthAssignments(document);
+    expectPublicAssignments(document);
   });
 
   it('keeps the internal staff document cookie-only', async () => {

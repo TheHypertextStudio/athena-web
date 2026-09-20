@@ -13,6 +13,7 @@ import { type JSX, type SubmitEventHandler, useEffect, useState } from 'react';
 import { useActiveOrg } from '@/components/active-org';
 import { PartialLoadBanner } from '@/components/feedback';
 import { api } from '@/lib/api';
+import { fetchAllProcessDefinitions } from '@/lib/org-collection-pages';
 import {
   apiQueryOptions,
   queryKeys,
@@ -75,10 +76,7 @@ export function PlanWorkForEventForm({ item, onDone }: PlanWorkForEventFormProps
   const definitions = useApiListQuery(
     apiQueryOptions(
       queryKeys.processDefinitions(organizationId),
-      () =>
-        api.v1.orgs[':orgId']['process-definitions'].$get({
-          param: { orgId: organizationId },
-        }),
+      () => fetchAllProcessDefinitions(api, organizationId),
       'Could not load reusable work.',
       { enabled: organizationId.length > 0, staleTime: STALE.static },
     ),

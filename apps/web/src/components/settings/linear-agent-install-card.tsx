@@ -31,6 +31,7 @@ import { useAppSearchParams } from '@/lib/app-location';
 import type { JSX } from 'react';
 
 import { api } from '@/lib/api';
+import { fetchAllIntegrations } from '@/lib/org-collection-pages';
 import { userErrorMessage } from '@/lib/problem';
 import { apiQueryOptions, queryKeys, unwrap, useApiMutation, useApiQuery } from '@/lib/query';
 
@@ -63,7 +64,7 @@ export function LinearAgentInstallCard({
   const integrationsQ = useApiQuery(
     apiQueryOptions(
       queryKeys.integrations(orgId),
-      () => api.v1.orgs[':orgId'].integrations.$get({ param: { orgId } }),
+      () => fetchAllIntegrations(api, orgId),
       'Could not load the Linear Agent install status.',
     ),
   );

@@ -39,6 +39,17 @@ import {
   teamOptions,
 } from '@/components/pickers/options';
 import { api } from '@/lib/api';
+import {
+  fetchAllAgents,
+  fetchAllCycles,
+  fetchAllEntityDisplays,
+  fetchAllInitiatives,
+  fetchAllLabels,
+  fetchAllMembers,
+  fetchAllPrograms,
+  fetchAllProjects,
+  fetchAllTeams,
+} from '@/lib/org-collection-pages';
 import { projectMilestonesDef } from '@/lib/project-milestones-def';
 import { STALE, apiQueryOptions, queryKeys, useApiQuery } from '@/lib/query';
 
@@ -117,7 +128,7 @@ export function useComposerOptions(
   const membersQ = useApiQuery(
     apiQueryOptions(
       queryKeys.members(orgId),
-      () => api.v1.orgs[':orgId'].members.$get({ param: { orgId } }),
+      () => fetchAllMembers(api, orgId),
       'Could not load members.',
       { enabled: on('actors'), staleTime: STALE.static },
     ),
@@ -125,7 +136,7 @@ export function useComposerOptions(
   const agentsQ = useApiQuery(
     apiQueryOptions(
       queryKeys.agents(orgId),
-      () => api.v1.orgs[':orgId'].agents.$get({ param: { orgId } }),
+      () => fetchAllAgents(api, orgId),
       'Could not load agents.',
       { enabled: on('actors'), staleTime: STALE.static },
     ),
@@ -133,7 +144,7 @@ export function useComposerOptions(
   const projectsQ = useApiQuery(
     apiQueryOptions(
       queryKeys.projects(orgId),
-      () => api.v1.orgs[':orgId'].projects.$get({ param: { orgId }, query: {} }),
+      () => fetchAllProjects(api, orgId),
       'Could not load projects.',
       { enabled: on('projects'), staleTime: STALE.static },
     ),
@@ -141,10 +152,7 @@ export function useComposerOptions(
   const projectDisplaysQ = useApiQuery(
     apiQueryOptions(
       queryKeys.entityDisplays(orgId, 'project'),
-      () =>
-        api.v1.orgs[':orgId'].display[':subjectType'].$get({
-          param: { orgId, subjectType: 'project' },
-        }),
+      () => fetchAllEntityDisplays(api, orgId, 'project'),
       'Could not load project icons.',
       { enabled: on('projects'), staleTime: STALE.static },
     ),
@@ -152,7 +160,7 @@ export function useComposerOptions(
   const programsQ = useApiQuery(
     apiQueryOptions(
       queryKeys.programs(orgId),
-      () => api.v1.orgs[':orgId'].programs.$get({ param: { orgId }, query: {} }),
+      () => fetchAllPrograms(api, orgId),
       'Could not load programs.',
       { enabled: on('programs'), staleTime: STALE.static },
     ),
@@ -160,10 +168,7 @@ export function useComposerOptions(
   const programDisplaysQ = useApiQuery(
     apiQueryOptions(
       queryKeys.entityDisplays(orgId, 'program'),
-      () =>
-        api.v1.orgs[':orgId'].display[':subjectType'].$get({
-          param: { orgId, subjectType: 'program' },
-        }),
+      () => fetchAllEntityDisplays(api, orgId, 'program'),
       'Could not load program icons.',
       { enabled: on('programs'), staleTime: STALE.static },
     ),
@@ -171,7 +176,7 @@ export function useComposerOptions(
   const initiativesQ = useApiQuery(
     apiQueryOptions(
       queryKeys.initiatives(orgId),
-      () => api.v1.orgs[':orgId'].initiatives.$get({ param: { orgId }, query: {} }),
+      () => fetchAllInitiatives(api, orgId),
       'Could not load initiatives.',
       { enabled: on('initiatives'), staleTime: STALE.static },
     ),
@@ -179,10 +184,7 @@ export function useComposerOptions(
   const initiativeDisplaysQ = useApiQuery(
     apiQueryOptions(
       queryKeys.entityDisplays(orgId, 'initiative'),
-      () =>
-        api.v1.orgs[':orgId'].display[':subjectType'].$get({
-          param: { orgId, subjectType: 'initiative' },
-        }),
+      () => fetchAllEntityDisplays(api, orgId, 'initiative'),
       'Could not load initiative icons.',
       { enabled: on('initiatives'), staleTime: STALE.static },
     ),
@@ -190,7 +192,7 @@ export function useComposerOptions(
   const labelsQ = useApiQuery(
     apiQueryOptions(
       ['org', orgId, 'labels'],
-      () => api.v1.orgs[':orgId'].labels.$get({ param: { orgId }, query: {} }),
+      () => fetchAllLabels(api, orgId),
       'Could not load labels.',
       { enabled: on('labels'), staleTime: STALE.static },
     ),
@@ -198,7 +200,7 @@ export function useComposerOptions(
   const cyclesQ = useApiQuery(
     apiQueryOptions(
       queryKeys.cycles(orgId),
-      () => api.v1.orgs[':orgId'].cycles.$get({ param: { orgId }, query: {} }),
+      () => fetchAllCycles(api, orgId),
       'Could not load cycles.',
       { enabled: on('cycles'), staleTime: STALE.static },
     ),
@@ -206,10 +208,7 @@ export function useComposerOptions(
   const cycleDisplaysQ = useApiQuery(
     apiQueryOptions(
       queryKeys.entityDisplays(orgId, 'cycle'),
-      () =>
-        api.v1.orgs[':orgId'].display[':subjectType'].$get({
-          param: { orgId, subjectType: 'cycle' },
-        }),
+      () => fetchAllEntityDisplays(api, orgId, 'cycle'),
       'Could not load cycle icons.',
       { enabled: on('cycles'), staleTime: STALE.static },
     ),
@@ -221,10 +220,7 @@ export function useComposerOptions(
   const milestoneDisplaysQ = useApiQuery(
     apiQueryOptions(
       queryKeys.entityDisplays(orgId, 'milestone'),
-      () =>
-        api.v1.orgs[':orgId'].display[':subjectType'].$get({
-          param: { orgId, subjectType: 'milestone' },
-        }),
+      () => fetchAllEntityDisplays(api, orgId, 'milestone'),
       'Could not load milestone icons.',
       { enabled: on('milestones'), staleTime: STALE.static },
     ),
@@ -232,7 +228,7 @@ export function useComposerOptions(
   const teamsQ = useApiQuery(
     apiQueryOptions(
       queryKeys.teams(orgId),
-      () => api.v1.orgs[':orgId'].teams.$get({ param: { orgId } }),
+      () => fetchAllTeams(api, orgId),
       'Could not load teams.',
       { enabled: on('teams'), staleTime: STALE.static },
     ),
@@ -240,10 +236,7 @@ export function useComposerOptions(
   const teamDisplaysQ = useApiQuery(
     apiQueryOptions(
       queryKeys.entityDisplays(orgId, 'team'),
-      () =>
-        api.v1.orgs[':orgId'].display[':subjectType'].$get({
-          param: { orgId, subjectType: 'team' },
-        }),
+      () => fetchAllEntityDisplays(api, orgId, 'team'),
       'Could not load team icons.',
       { enabled: on('teams'), staleTime: STALE.static },
     ),

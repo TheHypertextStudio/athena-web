@@ -32,16 +32,7 @@ export const ListQuery = z
 /** Validated list-query value. */
 export type ListQuery = z.infer<typeof ListQuery>;
 
-/**
- * Backward-compatible cursor query for endpoints that historically returned every row.
- *
- * @remarks
- * Unlike {@link ListQuery} (which bounds by default at 50), `limit` here is **optional with no
- * default**: when omitted the endpoint returns its full result set exactly as before, so adding
- * this to an existing list endpoint never silently truncates a caller that doesn't opt in. When a
- * `limit` is supplied the endpoint returns a bounded keyset page plus a `nextCursor` to continue.
- * Ordering is fixed (newest-first) — these endpoints have a single canonical order.
- */
+/** Query params for fixed-order cursor lists. */
 export const CursorQuery = z
   .object({
     cursor: z
@@ -53,13 +44,11 @@ export const CursorQuery = z
       .int()
       .min(1)
       .max(100)
-      .optional()
-      .describe(
-        'Optional page size, 1..100. Unlike `ListQuery`, there is NO default: omit it to return the full result set (legacy behavior); supply it to get a bounded keyset page plus a `nextCursor`.',
-      ),
+      .default(50)
+      .describe('Maximum items to return on this page, 1..100 (default 50).'),
   })
   .describe(
-    'Backward-compatible cursor query for endpoints that historically returned every row; `limit` is opt-in so adding it never silently truncates existing callers. Ordering is fixed newest-first.',
+    'Cursor pagination for endpoints with one documented canonical order. Copy `nextCursor` into `cursor`; omit `limit` to request the default 50 rows.',
   );
 /** Validated cursor-query value. */
 export type CursorQuery = z.infer<typeof CursorQuery>;

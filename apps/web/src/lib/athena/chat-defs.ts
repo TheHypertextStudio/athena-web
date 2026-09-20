@@ -23,6 +23,7 @@ import { useQueryClient, type QueryClient, type UseQueryResult } from '@tanstack
 import { useEffect } from 'react';
 
 import { api } from '@/lib/api';
+import { fetchAllSessionProposals } from '@/lib/org-collection-pages';
 import { readProblemError } from '@/lib/problem';
 import { apiQueryOptions, STALE } from '@/lib/query-core';
 import { queryKeys, useApiQuery } from '@/lib/query';
@@ -65,9 +66,9 @@ export function orgChatThreadDef(orgId: string) {
  * @param enabled - Pass `false` to skip the read (e.g. no session is awaiting approval yet).
  */
 export function orgSessionProposalsDef(orgId: string, sessionId: string, enabled = true) {
-  return apiQueryOptions<readonly ProposalGroupOut[]>(
+  return apiQueryOptions<{ readonly items: readonly ProposalGroupOut[] }>(
     queryKeys.orgSessionProposals(orgId, sessionId),
-    () => api.v1.orgs[':orgId'].sessions[':id'].proposals.$get({ param: { orgId, id: sessionId } }),
+    () => fetchAllSessionProposals(api, orgId, sessionId),
     'Could not load the proposed changes.',
     { enabled: enabled && sessionId.length > 0, staleTime: STALE.volatile },
   );

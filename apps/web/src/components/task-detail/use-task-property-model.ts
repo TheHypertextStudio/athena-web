@@ -73,7 +73,11 @@ function useEntityDisplays(
   const query = useApiListQuery(
     apiQueryOptions(
       queryKeys.entityDisplays(orgId, subjectType),
-      () => api.v1.orgs[':orgId'].display[':subjectType'].$get({ param: { orgId, subjectType } }),
+      () =>
+        api.v1.orgs[':orgId'].display[':subjectType'].$get({
+          param: { orgId, subjectType },
+          query: { limit: '100' },
+        }),
       `Could not load ${subjectType} icons.`,
       { enabled },
     ),

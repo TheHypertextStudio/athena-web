@@ -7,6 +7,14 @@ import type { TaskOut } from '@docket/work/task-model';
 
 import { type ActorDirectory, buildActorDirectory } from '@/components/agents/actor-directory';
 import { api } from './api';
+import {
+  fetchAllAgents,
+  fetchAllCycles,
+  fetchAllMembers,
+  fetchAllPrograms,
+  fetchAllProjects,
+  fetchAllRoles,
+} from './org-collection-pages';
 import { type RpcResponse, apiQueryOptions, queryKeys, rpcErrorResponse } from './query';
 
 /** CycleDetailData describes the fetch cycle detail data contract shared by the hook or component. */
@@ -85,12 +93,12 @@ export function fetchCycleDetail(
       api.v1.orgs[':orgId'].cycles[':id'].$get({ param: { orgId, id: cycleId } }),
       api.v1.orgs[':orgId'].cycles[':id'].burnup.$get({ param: { orgId, id: cycleId } }),
       api.v1.orgs[':orgId'].cycles[':id'].tasks.$get({ param: { orgId, id: cycleId }, query: {} }),
-      api.v1.orgs[':orgId'].projects.$get({ param: { orgId }, query: {} }),
-      api.v1.orgs[':orgId'].programs.$get({ param: { orgId }, query: {} }),
-      api.v1.orgs[':orgId'].members.$get({ param: { orgId } }),
-      api.v1.orgs[':orgId'].agents.$get({ param: { orgId } }),
-      api.v1.orgs[':orgId'].cycles.$get({ param: { orgId }, query: {} }),
-      api.v1.orgs[':orgId'].roles.$get({ param: { orgId } }),
+      fetchAllProjects(api, orgId),
+      fetchAllPrograms(api, orgId),
+      fetchAllMembers(api, orgId),
+      fetchAllAgents(api, orgId),
+      fetchAllCycles(api, orgId),
+      fetchAllRoles(api, orgId),
     ]);
 
     if (!cycleRes.ok) {

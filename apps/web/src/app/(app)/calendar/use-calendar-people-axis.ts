@@ -8,6 +8,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useActiveOrg } from '@/components/active-org';
 import type { ScheduleLane } from '@/components/scheduling';
 import { api } from '@/lib/api';
+import { fetchAllMembers } from '@/lib/org-collection-pages';
 import { apiQueryOptions, queryKeys, STALE, useApiQuery } from '@/lib/query';
 
 import { buildComparisonLane, dateRange, type CalendarAxis } from './calendar-schedule-model';
@@ -55,10 +56,7 @@ export function useCalendarPeopleAxis(
   const membersQuery = useApiQuery(
     apiQueryOptions(
       queryKeys.members(comparisonOrgId || 'none'),
-      () =>
-        api.v1.orgs[':orgId'].members.$get({
-          param: { orgId: comparisonOrgId },
-        }),
+      () => fetchAllMembers(api, comparisonOrgId),
       'Could not load workspace members.',
       { enabled: axis === 'people' && Boolean(comparisonOrgId), staleTime: STALE.standard },
     ),

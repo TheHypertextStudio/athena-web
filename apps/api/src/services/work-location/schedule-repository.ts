@@ -4,110 +4,46 @@ import {
   hub,
   workLocationExternalBinding,
   workLocationSyncAccount,
-  workPlace,
   workPlaceAlias,
   workScheduleChange,
   workScheduleException,
   workSchedulePlan,
   type Database,
 } from '@docket/db';
-import { addCalendarDays } from '@docket/planning/calendar-date';
 import {
   WorkScheduleChangeListOut,
   WorkScheduleConflictPayload,
   WorkScheduleExceptionCreate,
-  WorkScheduleExceptionOut,
-  WorkScheduleOut,
   WorkSchedulePlanCreate,
-  WorkSchedulePlanOut,
-  type WorkScheduleCycleDay,
-  type WorkScheduleSegment,
+  type WorkScheduleExceptionOut,
+  type WorkScheduleOut,
+  type WorkSchedulePlanOut,
 } from '@docket/planning/work-location-contract';
-import { and, asc, desc, eq, gt, gte, inArray, isNull, lte, or } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, isNull, lte, or } from 'drizzle-orm';
 
 import { ConflictError, NotFoundError } from '../../error';
+import {
+  readConditionalWorkSchedule,
+  writeConditionalWorkSchedule,
+  type WorkScheduleConditionalRead,
+} from '../../lib/work-schedule-conditional';
 import { migrateLegacyWorkSchedule } from './legacy-schedule-migration';
 import { enqueueWorkLocationProjection, listWorkLocationAssertions } from './repository';
+import {
+  insertWorkSchedulePlanVersion,
+  orderedScheduleSegments,
+  readStoredWorkSchedule,
+  referencedSchedulePlaceIds,
+  requireScheduleHub,
+  requireSchedulePlaces,
+  scheduleExceptionOut,
+  schedulePlanOut,
+} from './schedule-storage';
 
 /** Require the row that a successful persistence operation must return. */
 function persisted<T>(value: T | undefined, operation: string): T {
   if (value === undefined) throw new Error(`Work-schedule persistence failed: ${operation}`);
   return value;
-}
-
-/** Require an existing Hub without exposing a caller-selected Hub through the HTTP contract. */
-async function requireHub(database: Database, hubId: string): Promise<void> {
-  const row = (
-    await database.select({ id: hub.id }).from(hub).where(eq(hub.id, hubId)).limit(1)
-  )[0];
-  if (!row) throw new NotFoundError('Hub not found');
-}
-
-/** Return every saved-place id referenced by a plan or replacement. */
-function referencedPlaceIds(cycleDays: readonly WorkScheduleCycleDay[]): string[] {
-  return [
-    ...new Set(
-      cycleDays.flatMap((day) =>
-        day.segments.flatMap((segment) =>
-          segment.location.type === 'saved_place' ? [segment.location.placeId] : [],
-        ),
-      ),
-    ),
-  ];
-}
-
-/** Store schedule segments in chronological order regardless of client edit order. */
-function orderedSegments(segments: readonly WorkScheduleSegment[]): WorkScheduleSegment[] {
-  return [...segments].sort((left, right) => left.startMinute - right.startMinute);
-}
-
-/** Normalize every cycle day before it becomes a canonical plan version. */
-function orderedCycleDays(cycleDays: readonly WorkScheduleCycleDay[]): WorkScheduleCycleDay[] {
-  return cycleDays.map((day) => ({ segments: orderedSegments(day.segments) }));
-}
-
-/** Require every referenced saved place to be active and owned by the same Hub. */
-async function requirePlaces(database: Database, hubId: string, placeIds: string[]): Promise<void> {
-  if (placeIds.length === 0) return;
-  const rows = await database
-    .select({ id: workPlace.id })
-    .from(workPlace)
-    .where(
-      and(
-        eq(workPlace.hubId, hubId),
-        inArray(workPlace.id, placeIds),
-        isNull(workPlace.archivedAt),
-      ),
-    );
-  if (rows.length !== placeIds.length) throw new NotFoundError('Work place not found');
-}
-
-/** Project one stored plan row onto the public contract. */
-function planOut(row: typeof workSchedulePlan.$inferSelect): WorkSchedulePlanOut {
-  return WorkSchedulePlanOut.parse({
-    id: row.id,
-    anchorDate: row.anchorDate,
-    timezone: row.timezone,
-    effectiveFrom: row.effectiveFrom,
-    effectiveUntil: row.effectiveUntil,
-    cycleDays: row.cycleDays,
-    revision: row.revision,
-    createdAt: row.createdAt.toISOString(),
-    updatedAt: row.updatedAt.toISOString(),
-  });
-}
-
-/** Project one stored dated replacement onto the public contract. */
-function exceptionOut(row: typeof workScheduleException.$inferSelect): WorkScheduleExceptionOut {
-  return WorkScheduleExceptionOut.parse({
-    id: row.id,
-    planVersionId: row.planVersionId,
-    date: row.date,
-    segments: row.segments,
-    origin: row.origin,
-    createdAt: row.createdAt.toISOString(),
-    updatedAt: row.updatedAt.toISOString(),
-  });
 }
 
 /**
@@ -121,24 +57,27 @@ export async function listWorkSchedule(
   database: Database,
   hubId: string,
 ): Promise<WorkScheduleOut> {
-  await requireHub(database, hubId);
+  await requireScheduleHub(database, hubId);
   await migrateLegacyWorkSchedule(database, hubId);
-  const [plans, exceptions] = await Promise.all([
-    database
-      .select()
-      .from(workSchedulePlan)
-      .where(eq(workSchedulePlan.hubId, hubId))
-      .orderBy(asc(workSchedulePlan.effectiveFrom)),
-    database
-      .select()
-      .from(workScheduleException)
-      .where(eq(workScheduleException.hubId, hubId))
-      .orderBy(asc(workScheduleException.date)),
-  ]);
-  return WorkScheduleOut.parse({
-    plans: plans.map(planOut),
-    exceptions: exceptions.map(exceptionOut),
-  });
+  return readStoredWorkSchedule(database, hubId);
+}
+
+/**
+ * Read the public default schedule and its resource-bound strong validator atomically.
+ *
+ * @param database - The database connection.
+ * @param hubId - The caller-owned personal Hub.
+ * @returns The schedule and the exact validator accepted by conditional schedule writes.
+ */
+export async function readVersionedWorkSchedule(
+  database: Database,
+  hubId: string,
+): Promise<WorkScheduleConditionalRead<WorkScheduleOut>> {
+  await requireScheduleHub(database, hubId);
+  await migrateLegacyWorkSchedule(database, hubId);
+  return readConditionalWorkSchedule(database, hubId, (transaction) =>
+    readStoredWorkSchedule(transaction, hubId),
+  );
 }
 
 /**
@@ -152,7 +91,7 @@ export async function listWorkScheduleChanges(
   database: Database,
   hubId: string,
 ): Promise<WorkScheduleChangeListOut> {
-  await requireHub(database, hubId);
+  await requireScheduleHub(database, hubId);
   const rows = await database
     .select({
       id: workScheduleChange.id,
@@ -279,80 +218,25 @@ export async function resolveWorkScheduleConflict(
  * @param database - The database connection.
  * @param hubId - The caller-owned personal Hub.
  * @param input - The complete new plan version.
+ * @param ifMatch - Optional strong validator from the last schedule read.
  * @returns The newly created plan version.
  */
 export async function replaceWorkSchedulePlan(
   database: Database,
   hubId: string,
   input: WorkSchedulePlanCreate,
+  ifMatch?: string,
 ): Promise<WorkSchedulePlanOut> {
   const parsed = WorkSchedulePlanCreate.parse(input);
-  await requireHub(database, hubId);
-  await requirePlaces(database, hubId, referencedPlaceIds(parsed.cycleDays));
-  const created = await database.transaction(async (tx) => {
-    const future = await tx
-      .select({ id: workSchedulePlan.id })
-      .from(workSchedulePlan)
-      .where(
-        and(
-          eq(workSchedulePlan.hubId, hubId),
-          gt(workSchedulePlan.effectiveFrom, parsed.effectiveFrom),
-        ),
-      )
-      .limit(1);
-    if (future[0]) {
-      throw new ConflictError('A later work-schedule version already exists');
-    }
-    const governing = await tx
-      .select()
-      .from(workSchedulePlan)
-      .where(
-        and(
-          eq(workSchedulePlan.hubId, hubId),
-          lte(workSchedulePlan.effectiveFrom, parsed.effectiveFrom),
-          or(
-            isNull(workSchedulePlan.effectiveUntil),
-            gt(workSchedulePlan.effectiveUntil, parsed.effectiveFrom),
-            eq(workSchedulePlan.effectiveUntil, parsed.effectiveFrom),
-          ),
-        ),
-      )
-      .limit(1);
-    const current = governing[0];
-    if (current?.effectiveFrom === parsed.effectiveFrom) {
-      throw new ConflictError('A work-schedule version already starts on that date');
-    }
-    if (current) {
-      await tx
-        .update(workSchedulePlan)
-        .set({
-          effectiveUntil: addCalendarDays(parsed.effectiveFrom, -1),
-          updatedAt: new Date(),
-        })
-        .where(eq(workSchedulePlan.id, current.id));
-    }
-    const next = persisted(
-      (
-        await tx
-          .insert(workSchedulePlan)
-          .values({ hubId, ...parsed, cycleDays: orderedCycleDays(parsed.cycleDays) })
-          .returning()
-      )[0],
-      'create plan version',
-    );
-    if (current) {
-      await tx
-        .update(workScheduleException)
-        .set({ planVersionId: next.id, updatedAt: new Date() })
-        .where(
-          and(
-            eq(workScheduleException.planVersionId, current.id),
-            gte(workScheduleException.date, parsed.effectiveFrom),
-          ),
-        );
-    }
-    return next;
-  });
+  await requireScheduleHub(database, hubId);
+  await requireSchedulePlaces(database, hubId, referencedSchedulePlaceIds(parsed.cycleDays));
+  const created = await writeConditionalWorkSchedule(
+    database,
+    hubId,
+    ifMatch,
+    (transaction) => readStoredWorkSchedule(transaction, hubId),
+    (transaction) => insertWorkSchedulePlanVersion(transaction, hubId, parsed),
+  );
   await database
     .update(workScheduleChange)
     .set({ state: 'resolved', resolvedAt: new Date(), updatedAt: new Date() })
@@ -363,7 +247,7 @@ export async function replaceWorkSchedulePlan(
         eq(workScheduleChange.state, 'pending'),
       ),
     );
-  return planOut(created);
+  return schedulePlanOut(created);
 }
 
 /**
@@ -372,61 +256,75 @@ export async function replaceWorkSchedulePlan(
  * @param database - The database connection.
  * @param hubId - The caller-owned personal Hub.
  * @param input - The date and its complete replacement segment list.
+ * @param ifMatch - Optional strong validator from the last schedule read.
  * @returns The created or updated dated replacement.
  */
 export async function setWorkScheduleException(
   database: Database,
   hubId: string,
   input: WorkScheduleExceptionCreate,
+  ifMatch?: string,
 ): Promise<WorkScheduleExceptionOut> {
   const parsed = WorkScheduleExceptionCreate.parse(input);
-  await requireHub(database, hubId);
-  await requirePlaces(database, hubId, referencedPlaceIds([{ segments: parsed.segments }]));
-  const plan = (
-    await database
-      .select()
-      .from(workSchedulePlan)
-      .where(
-        and(
-          eq(workSchedulePlan.hubId, hubId),
-          lte(workSchedulePlan.effectiveFrom, parsed.date),
-          or(
-            isNull(workSchedulePlan.effectiveUntil),
-            gte(workSchedulePlan.effectiveUntil, parsed.date),
-          ),
-        ),
-      )
-      .orderBy(desc(workSchedulePlan.effectiveFrom))
-      .limit(1)
-  )[0];
-  if (!plan) throw new ConflictError('No work-schedule plan governs that date');
-  const row = persisted(
-    (
-      await database
-        .insert(workScheduleException)
-        .values({
-          hubId,
-          planVersionId: plan.id,
-          date: parsed.date,
-          segments: orderedSegments(parsed.segments),
-          origin: 'docket',
-        })
-        .onConflictDoUpdate({
-          target: [workScheduleException.planVersionId, workScheduleException.date],
-          set: {
-            segments: orderedSegments(parsed.segments),
-            origin: 'docket',
-            originProvider: null,
-            originConnectionId: null,
-            sourceUpdatedAt: null,
-            updatedAt: new Date(),
-          },
-        })
-        .returning()
-    )[0],
-    'save dated replacement',
+  await requireScheduleHub(database, hubId);
+  await requireSchedulePlaces(
+    database,
+    hubId,
+    referencedSchedulePlaceIds([{ segments: parsed.segments }]),
   );
-  return exceptionOut(row);
+  const row = await writeConditionalWorkSchedule(
+    database,
+    hubId,
+    ifMatch,
+    (transaction) => readStoredWorkSchedule(transaction, hubId),
+    async (transaction) => {
+      const plan = (
+        await transaction
+          .select()
+          .from(workSchedulePlan)
+          .where(
+            and(
+              eq(workSchedulePlan.hubId, hubId),
+              lte(workSchedulePlan.effectiveFrom, parsed.date),
+              or(
+                isNull(workSchedulePlan.effectiveUntil),
+                gte(workSchedulePlan.effectiveUntil, parsed.date),
+              ),
+            ),
+          )
+          .orderBy(desc(workSchedulePlan.effectiveFrom))
+          .limit(1)
+      )[0];
+      if (!plan) throw new ConflictError('No work-schedule plan governs that date');
+      return persisted(
+        (
+          await transaction
+            .insert(workScheduleException)
+            .values({
+              hubId,
+              planVersionId: plan.id,
+              date: parsed.date,
+              segments: orderedScheduleSegments(parsed.segments),
+              origin: 'docket',
+            })
+            .onConflictDoUpdate({
+              target: [workScheduleException.planVersionId, workScheduleException.date],
+              set: {
+                segments: orderedScheduleSegments(parsed.segments),
+                origin: 'docket',
+                originProvider: null,
+                originConnectionId: null,
+                sourceUpdatedAt: null,
+                updatedAt: new Date(),
+              },
+            })
+            .returning()
+        )[0],
+        'save dated replacement',
+      );
+    },
+  );
+  return scheduleExceptionOut(row);
 }
 
 /**
@@ -447,56 +345,68 @@ export async function setProviderWorkScheduleException(
   },
 ): Promise<WorkScheduleExceptionOut | null> {
   const parsed = WorkScheduleExceptionCreate.parse(options.input);
-  await requireHub(database, options.hubId);
-  await requirePlaces(database, options.hubId, referencedPlaceIds([{ segments: parsed.segments }]));
-  const plan = (
-    await database
-      .select()
-      .from(workSchedulePlan)
-      .where(
-        and(
-          eq(workSchedulePlan.hubId, options.hubId),
-          lte(workSchedulePlan.effectiveFrom, parsed.date),
-          or(
-            isNull(workSchedulePlan.effectiveUntil),
-            gte(workSchedulePlan.effectiveUntil, parsed.date),
-          ),
-        ),
-      )
-      .orderBy(desc(workSchedulePlan.effectiveFrom))
-      .limit(1)
-  )[0];
-  if (!plan) return null;
-  const row = persisted(
-    (
-      await database
-        .insert(workScheduleException)
-        .values({
-          hubId: options.hubId,
-          planVersionId: plan.id,
-          date: parsed.date,
-          segments: orderedSegments(parsed.segments),
-          origin: 'provider',
-          originProvider: options.provider,
-          originConnectionId: options.connectionId,
-          sourceUpdatedAt: options.sourceUpdatedAt,
-        })
-        .onConflictDoUpdate({
-          target: [workScheduleException.planVersionId, workScheduleException.date],
-          set: {
-            segments: orderedSegments(parsed.segments),
-            origin: 'provider',
-            originProvider: options.provider,
-            originConnectionId: options.connectionId,
-            sourceUpdatedAt: options.sourceUpdatedAt,
-            updatedAt: new Date(),
-          },
-        })
-        .returning()
-    )[0],
-    'save provider dated replacement',
+  await requireScheduleHub(database, options.hubId);
+  await requireSchedulePlaces(
+    database,
+    options.hubId,
+    referencedSchedulePlaceIds([{ segments: parsed.segments }]),
   );
-  return exceptionOut(row);
+  const row = await writeConditionalWorkSchedule(
+    database,
+    options.hubId,
+    undefined,
+    (transaction) => readStoredWorkSchedule(transaction, options.hubId),
+    async (transaction) => {
+      const plan = (
+        await transaction
+          .select()
+          .from(workSchedulePlan)
+          .where(
+            and(
+              eq(workSchedulePlan.hubId, options.hubId),
+              lte(workSchedulePlan.effectiveFrom, parsed.date),
+              or(
+                isNull(workSchedulePlan.effectiveUntil),
+                gte(workSchedulePlan.effectiveUntil, parsed.date),
+              ),
+            ),
+          )
+          .orderBy(desc(workSchedulePlan.effectiveFrom))
+          .limit(1)
+      )[0];
+      if (!plan) return null;
+      return persisted(
+        (
+          await transaction
+            .insert(workScheduleException)
+            .values({
+              hubId: options.hubId,
+              planVersionId: plan.id,
+              date: parsed.date,
+              segments: orderedScheduleSegments(parsed.segments),
+              origin: 'provider',
+              originProvider: options.provider,
+              originConnectionId: options.connectionId,
+              sourceUpdatedAt: options.sourceUpdatedAt,
+            })
+            .onConflictDoUpdate({
+              target: [workScheduleException.planVersionId, workScheduleException.date],
+              set: {
+                segments: orderedScheduleSegments(parsed.segments),
+                origin: 'provider',
+                originProvider: options.provider,
+                originConnectionId: options.connectionId,
+                sourceUpdatedAt: options.sourceUpdatedAt,
+                updatedAt: new Date(),
+              },
+            })
+            .returning()
+        )[0],
+        'save provider dated replacement',
+      );
+    },
+  );
+  return row ? scheduleExceptionOut(row) : null;
 }
 
 /**
@@ -513,7 +423,7 @@ export async function linkWorkPlaceAlias(
   changeId: string,
   placeId: string,
 ): Promise<void> {
-  await requirePlaces(database, hubId, [placeId]);
+  await requireSchedulePlaces(database, hubId, [placeId]);
   const change = (
     await database
       .select()

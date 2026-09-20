@@ -13,6 +13,7 @@ import type { JSX } from 'react';
 import { unwrap } from '@/lib/query-core';
 import { queryKeys } from '@/lib/query-keys';
 import { dehydrate, getServerApi, getServerQueryClient } from '@/lib/query-server';
+import { fetchAllProjects, fetchAllTasks, fetchAllTeams } from '@/lib/org-collection-pages';
 
 import TeamsListClient from './teams-client';
 
@@ -34,27 +35,15 @@ export default async function TeamsListPage({
   await Promise.allSettled([
     queryClient.prefetchQuery({
       queryKey: queryKeys.teams(orgId),
-      queryFn: () =>
-        unwrap(
-          () => api.v1.orgs[':orgId'].teams.$get({ param: { orgId } }),
-          'Could not load teams.',
-        ),
+      queryFn: () => unwrap(() => fetchAllTeams(api, orgId), 'Could not load teams.'),
     }),
     queryClient.prefetchQuery({
       queryKey: queryKeys.projects(orgId),
-      queryFn: () =>
-        unwrap(
-          () => api.v1.orgs[':orgId'].projects.$get({ param: { orgId }, query: {} }),
-          'Could not load projects.',
-        ),
+      queryFn: () => unwrap(() => fetchAllProjects(api, orgId), 'Could not load projects.'),
     }),
     queryClient.prefetchQuery({
       queryKey: queryKeys.tasks(orgId),
-      queryFn: () =>
-        unwrap(
-          () => api.v1.orgs[':orgId'].tasks.$get({ param: { orgId }, query: {} }),
-          'Could not load tasks.',
-        ),
+      queryFn: () => unwrap(() => fetchAllTasks(api, orgId), 'Could not load tasks.'),
     }),
   ]);
 

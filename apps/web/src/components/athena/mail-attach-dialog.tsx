@@ -37,6 +37,7 @@ import { cn } from '@docket/ui/lib/utils';
 import { type JSX, useEffect, useMemo, useState } from 'react';
 
 import { api } from '@/lib/api';
+import { fetchAllOrganizations } from '@/lib/org-collection-pages';
 import { userErrorMessage } from '@/lib/problem';
 import { apiQueryOptions, STALE, unwrap } from '@/lib/query-core';
 import { queryKeys, useApiMutation, useApiQuery } from '@/lib/query';
@@ -63,6 +64,15 @@ export interface MailAttachDialogProps {
   readonly messageTitle: string;
   /** The workspace the message was filed into — the default place to look. */
   readonly defaultOrganizationId: string;
+}
+
+function organizationsDef(open: boolean) {
+  return apiQueryOptions(
+    queryKeys.orgs(),
+    () => fetchAllOrganizations(api),
+    'Could not load your workspaces.',
+    { staleTime: STALE.static, enabled: open },
+  );
 }
 
 /** The search-result kinds that can host an attachment. */
@@ -132,12 +142,7 @@ export function MailAttachDialog({
     }
   }, [open, defaultOrganizationId]);
 
-  const orgsQ = useApiQuery(
-    apiQueryOptions(queryKeys.orgs(), () => api.v1.orgs.$get(), 'Could not load your workspaces.', {
-      staleTime: STALE.static,
-      enabled: open,
-    }),
-  );
+  const orgsQ = useApiQuery(organizationsDef(open));
   const workspaces = orgsQ.data?.items ?? [];
 
   // Debounced: this used to put the raw `term` straight into the query key, so every keystroke

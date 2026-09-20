@@ -2,60 +2,47 @@
  * `@docket/api` — the `Idempotency-Key` middleware.
  *
  * @remarks
- * `POST` is the one unsafe method HTTP gives no retry story for: a client that loses the
- * response to `POST /tasks` cannot know whether the task was created, and both choices are
- * wrong — retrying duplicates it, giving up loses it. The `Idempotency-Key` header resolves
- * that by making the *request* the unit of deduplication: the first attempt under a key runs
- * and has its outcome recorded, and every later attempt under the same key replays that
- * recorded outcome instead of executing again.
+ * A declared JSON `POST` can opt into response receipts. The receipt identity contains the user,
+ * caller namespace, public API version, and caller-selected key. Session and OAuth callers cannot
+ * replay each other's results, and two OAuth clients owned by one user remain isolated.
  *
- * This closes a contract the API had already published without implementing. The
- * `idempotency_key` table (`@docket/db`, data-model §8), the `idempotency_key_reuse` problem
- * code, and the Scalar reference's "creates accept an `Idempotency-Key` header" promise all
- * predate this middleware; until it existed a client that followed the documentation got no
- * deduplication at all and no error telling it so.
+ * The request fingerprint length-delimits the method, canonical path, normalized query, normalized
+ * content type, and exact body bytes before hashing. Reusing a key for a different fingerprint
+ * returns `422 idempotency_key_reuse`. An unfinished claim has a five-minute lease. A completed
+ * current receipt remains authoritative for 48 hours. Legacy session receipts retain their stored
+ * deadline and fingerprint only during the bounded `0.1.0` dual-read window.
  *
- * Scope and semantics:
+ * `atomic-receipt` completion shares the domain mutation transaction. `json-receipt` completion
+ * records a validated JSON success after the handler returns, so process death between mutation and
+ * recording can permit another execution after the lease expires. Operations that declare no
+ * receipt support reject a supplied key before the handler. Binary, SSE, and bodyless operations
+ * therefore cannot imply retry safety by silently ignoring the header.
  *
- * - Only `POST` is covered. `GET`/`PUT`/`PATCH`/`DELETE` are already idempotent or safe by
- *   method definition, so a key would add bookkeeping and no guarantee.
- * - Keys are scoped per user, so one caller's key can never replay another's response.
- * - The stored request fingerprint is `method + path + body`. Replaying a key against a
- *   *different* request is a client bug, not a retry, and gets `422 idempotency_key_reuse`
- *   rather than the earlier response.
- * - An unfinished claim has a five-minute lease. Completed ordinary records remain authoritative
- *   for 24 hours. Completed object-command records remain authoritative for 48 hours because the
- *   offline client may replay for 24 hours after the live attempt began. The first caller after the
- *   effective deadline conditionally removes the expired row and competes to claim the key again.
- * - Only JSON responses are recorded. Streaming and binary handlers have no body worth
- *   replaying, so they pass through unprotected rather than being buffered into memory.
+ * The strict operation pipeline installs this middleware after current scope, membership,
+ * capability, visibility, and product checks. A stored response is never an authorization grant.
  *
  * @see `docs/engineering/specs/rest-conventions.md` §"Retry safety".
  */
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 
-import { CAPABILITY_RANK, satisfies, type Capability } from '@docket/authz';
 import {
-  ObjectCommandRequest,
-  ObjectCommandResult,
-  type ObjectCommandRequest as ObjectCommandRequestValue,
-} from '../contracts/object-command';
-import { actor, db, idempotencyKey, label } from '@docket/db';
-import { and, eq, inArray, isNull } from 'drizzle-orm';
+  apiIdempotencyReceipt,
+  db,
+  idempotencyKey,
+  type ApiIdempotencyReceiptFormat,
+} from '@docket/db';
+import { and, eq } from 'drizzle-orm';
 import type { MiddlewareHandler } from 'hono';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
 
+import { API_VERSION } from '../api-version';
 import type { AppEnv } from '../context';
-import { CapabilityError, ConflictError, IdempotencyConflictError, NotFoundError } from '../error';
-import {
-  resourceAccessKey,
-  resolveResourceAccess,
-  type ResourceAccessRef,
-} from '../permissions/resource-access';
+import { ConflictError, IdempotencyConflictError, ValidationError } from '../error';
+import { assertCurrentObjectCommandReplayAccess } from './idempotency-replay-access';
 import { isReplayOwnerRequest } from '../replay-owner-contract';
 
-/** How long an ordinary keyed POST remains authoritative. */
-const RETENTION_MS = 24 * 60 * 60 * 1000;
+/** How long a completed public API receipt remains authoritative. */
+const RECEIPT_RETENTION_MS = 48 * 60 * 60 * 1000;
 
 /**
  * How long an atomically completed object command remains authoritative.
@@ -65,7 +52,7 @@ const RETENTION_MS = 24 * 60 * 60 * 1000;
  * the server room for a delayed or lost response and clock drift without reclaiming the stable key
  * while any supported client can still send it.
  */
-const OBJECT_COMMAND_RETENTION_MS = 48 * 60 * 60 * 1000;
+const OBJECT_COMMAND_RETENTION_MS = RECEIPT_RETENTION_MS;
 
 /**
  * Maximum time a process may own an unfinished idempotency claim.
@@ -86,10 +73,16 @@ const IN_PROGRESS_RETRY_AFTER_SECONDS = 1;
 export interface IdempotencyClaim {
   /** The authenticated account that owns the retry key. */
   readonly userId: string;
+  /** The session or OAuth-client namespace that owns the retry key. */
+  readonly callerNamespace: string;
+  /** The public compatibility contract under which the request was interpreted. */
+  readonly apiVersion: string;
   /** The exact caller-provided retry key. */
   readonly key: string;
-  /** Generation marker that prevents an expired request from completing a replacement claim. */
-  readonly expiresAt: Date;
+  /** Unique lease generation that prevents an expired owner from completing its replacement. */
+  readonly claimId: string;
+  /** Whether completion must share the domain transaction or may follow the response. */
+  readonly receiptFormat: Exclude<ApiIdempotencyReceiptFormat, 'legacy-json'>;
   /** Deadline retained after the domain mutation and receipt commit together. */
   readonly completedExpiresAt: Date;
 }
@@ -102,6 +95,8 @@ export interface AtomicIdempotencyResult {
   readonly responseStatus: number;
   /** The validated JSON body replayed to later attempts. */
   readonly responseBody: unknown;
+  /** Safe response metadata that a retry must receive with the stored body. */
+  readonly responseHeaders?: Readonly<Record<string, string>>;
 }
 
 /**
@@ -118,36 +113,124 @@ export async function completeIdempotencyInTransaction(
   result: AtomicIdempotencyResult,
 ): Promise<void> {
   const completed = await database
-    .update(idempotencyKey)
+    .update(apiIdempotencyReceipt)
     .set({
       organizationId: result.organizationId,
       status: 'completed',
       responseStatus: result.responseStatus,
       responseBody: result.responseBody,
+      responseHeaders: sanitizeReplayHeaders(result.responseHeaders),
       expiresAt: claim.completedExpiresAt,
     })
     .where(
       and(
-        eq(idempotencyKey.userId, claim.userId),
-        eq(idempotencyKey.key, claim.key),
-        eq(idempotencyKey.expiresAt, claim.expiresAt),
-        eq(idempotencyKey.status, 'in_progress'),
+        eq(apiIdempotencyReceipt.userId, claim.userId),
+        eq(apiIdempotencyReceipt.callerNamespace, claim.callerNamespace),
+        eq(apiIdempotencyReceipt.apiVersion, claim.apiVersion),
+        eq(apiIdempotencyReceipt.key, claim.key),
+        eq(apiIdempotencyReceipt.claimId, claim.claimId),
+        eq(apiIdempotencyReceipt.status, 'in_progress'),
       ),
     )
-    .returning({ key: idempotencyKey.key });
+    .returning({ key: apiIdempotencyReceipt.key });
   if (completed.length !== 1) {
     throw new ConflictError('The idempotent request claim is no longer active');
   }
 }
 
-/** A stable fingerprint of the request a key was first used for. */
-function fingerprint(method: string, path: string, body: string): string {
+const REPLAYABLE_RESPONSE_HEADERS = ['content-language', 'content-type', 'location'] as const;
+
+/** Keep only response metadata that is safe and necessary to reproduce a JSON success. */
+function sanitizeReplayHeaders(
+  headers: Headers | Readonly<Record<string, string>> | undefined,
+): Record<string, string> {
+  if (headers === undefined) return {};
+  const source = headers instanceof Headers ? headers : new Headers(headers);
+  return Object.fromEntries(
+    REPLAYABLE_RESPONSE_HEADERS.flatMap((name) => {
+      const value = source.get(name);
+      return value === null ? [] : [[name, value]];
+    }),
+  );
+}
+
+/** Normalize an HTTP media type without treating distinct representations as equivalent. */
+function normalizedContentType(value: string | undefined): string {
+  if (value === undefined) return '';
+  const [rawType = '', ...rawParameters] = value.split(';');
+  const type = rawType.trim().toLowerCase();
+  const parameters = rawParameters
+    .map((parameter) => {
+      const separator = parameter.indexOf('=');
+      if (separator < 0) return [parameter.trim().toLowerCase(), ''] as const;
+      const name = parameter.slice(0, separator).trim().toLowerCase();
+      const rawValue = parameter.slice(separator + 1).trim();
+      const normalizedValue = name === 'charset' ? rawValue.toLowerCase() : rawValue;
+      return [name, normalizedValue] as const;
+    })
+    .filter(([name]) => name.length > 0)
+    .sort(([left], [right]) => left.localeCompare(right));
+  return [type, ...parameters.map(([name, parameter]) => `${name}=${parameter}`)].join(';');
+}
+
+/** Sort query keys while retaining the caller's order among repeated values for one key. */
+function normalizedQuery(url: URL): string {
+  const entries = [...url.searchParams.entries()].map(([key, value], position) => ({
+    key,
+    value,
+    position,
+  }));
+  entries.sort(
+    (left, right) => left.key.localeCompare(right.key) || left.position - right.position,
+  );
+  const normalized = new URLSearchParams();
+  for (const { key, value } of entries) normalized.append(key, value);
+  return normalized.toString();
+}
+
+/** Add one byte string with an eight-byte length prefix to an incremental digest. */
+function addFingerprintPart(hash: ReturnType<typeof createHash>, bytes: Uint8Array): void {
+  const length = Buffer.alloc(8);
+  length.writeBigUInt64BE(BigInt(bytes.byteLength));
+  hash.update(length);
+  hash.update(bytes);
+}
+
+/**
+ * Compute the versioned receipt fingerprint over the exact observable request identity.
+ *
+ * @param request - The incoming request whose body has not been consumed.
+ * @returns A SHA-256 digest of method, canonical path, normalized query and content type, and bytes.
+ */
+export async function idempotencyFingerprint(request: Request): Promise<string> {
+  return fingerprintRequestBytes(request, new Uint8Array(await request.clone().arrayBuffer()));
+}
+
+/** Compute a receipt fingerprint from the one bounded body read owned by the middleware. */
+function fingerprintRequestBytes(request: Request, body: Uint8Array): string {
+  const url = new URL(request.url);
+  const encoder = new TextEncoder();
+  const hash = createHash('sha256');
+  for (const value of [
+    request.method.toUpperCase(),
+    url.pathname,
+    normalizedQuery(url),
+    normalizedContentType(request.headers.get('Content-Type') ?? undefined),
+  ]) {
+    addFingerprintPart(hash, encoder.encode(value));
+  }
+  addFingerprintPart(hash, body);
+  return hash.digest('base64url');
+}
+
+/** The legacy text fingerprint retained only while old session receipts can still replay. */
+function legacyFingerprint(method: string, path: string, body: string): string {
   return createHash('sha256').update(`${method}\n${path}\n${body}`).digest('base64url');
 }
 
 /** Select the retention contract published by one request line. */
 function retentionMs(method: string, path: string): number {
-  return isReplayOwnerRequest(method, path) ? OBJECT_COMMAND_RETENTION_MS : RETENTION_MS;
+  return isReplayOwnerRequest(method, path) ? OBJECT_COMMAND_RETENTION_MS : RECEIPT_RETENTION_MS;
 }
 
 /**
@@ -155,8 +238,8 @@ function retentionMs(method: string, path: string): number {
  *
  * @remarks
  * Old unfinished object-command claims can carry a 48-hour `expiresAt`, so cap them at the current
- * five-minute lease. Old completed rows can carry the former 24-hour deadline, so extend those from
- * immutable `createdAt` without a migration race or a duplicate-execution window.
+ * five-minute lease. A completed legacy row keeps its stored deadline. The migration must not grant
+ * a receipt more authority than the old application wrote.
  */
 function effectiveExpiry(record: {
   readonly method: string;
@@ -170,245 +253,7 @@ function effectiveExpiry(record: {
       Math.min(record.expiresAt.getTime(), record.createdAt.getTime() + IN_PROGRESS_LEASE_MS),
     );
   }
-  if (!isReplayOwnerRequest(record.method, record.path)) return record.expiresAt;
-  const policyExpiry = record.createdAt.getTime() + OBJECT_COMMAND_RETENTION_MS;
-  return new Date(Math.max(record.expiresAt.getTime(), policyExpiry));
-}
-
-/** Resolve receipt properties whose scalar values are ids of access-controlled work. */
-function receiptReferenceKind(
-  objectKind: 'task' | 'project',
-  property: string,
-): ResourceAccessRef['kind'] | null {
-  if (objectKind === 'task') {
-    if (property === 'projectId') return 'project';
-    if (property === 'programId') return 'program';
-    if (property === 'parentTaskId') return 'task';
-    return null;
-  }
-  if (property === 'teamId') return 'team';
-  if (property === 'programId') return 'program';
-  return null;
-}
-
-interface ReplayResourceRequirement {
-  readonly ref: ResourceAccessRef;
-  readonly capability: Capability;
-}
-
-/** Return the write rank the live object-command route requires for one changed object. */
-function receiptObjectCapability(
-  objectKind: 'task' | 'project',
-  action: string,
-  property?: string,
-): Capability {
-  if (objectKind === 'project' && (action === 'trash' || action === 'restore')) return 'manage';
-  if (objectKind === 'project' && property === 'archivedAt') return 'manage';
-  if (property === 'assigneeId' || property === 'leadId') return 'assign';
-  return 'contribute';
-}
-
-/** Return the target-object rank for a validated forward command. */
-function forwardObjectCapability(
-  request: Extract<ObjectCommandRequestValue, { objectKind: 'task' | 'project' }>,
-): Capability {
-  const operation = request.operation;
-  if (
-    request.objectKind === 'project' &&
-    (operation.type === 'trash' || operation.type === 'restore')
-  ) {
-    return 'manage';
-  }
-  if (
-    operation.type === 'replace_property' &&
-    (operation.property === 'assigneeId' || operation.property === 'leadId')
-  ) {
-    return 'assign';
-  }
-  return 'contribute';
-}
-
-/** Parse a request body only when it is a complete object-command payload. */
-function parseObjectCommandRequest(body: string): ObjectCommandRequestValue | null {
-  try {
-    const parsed = ObjectCommandRequest.safeParse(JSON.parse(body));
-    return parsed.success ? parsed.data : null;
-  } catch {
-    return null;
-  }
-}
-
-async function assertCurrentObjectCommandReplayAccess(
-  userId: string,
-  path: string,
-  organizationId: string | null,
-  requestBody: string,
-  responseBody: unknown,
-): Promise<void> {
-  const parsed = ObjectCommandResult.safeParse(responseBody);
-  const pathOrganizationId = /^\/v1\/orgs\/([^/]+)\/object-commands$/u.exec(path)?.[1] ?? null;
-  if (!parsed.success || organizationId === null || pathOrganizationId !== organizationId) {
-    throw new NotFoundError('Object command result not found');
-  }
-  const memberships = await db
-    .select({ id: actor.id })
-    .from(actor)
-    .where(
-      and(
-        eq(actor.organizationId, organizationId),
-        eq(actor.userId, userId),
-        eq(actor.kind, 'human'),
-        eq(actor.status, 'active'),
-        isNull(actor.archivedAt),
-      ),
-    )
-    .limit(1);
-  if (!memberships[0]) throw new NotFoundError('Object command result not found');
-
-  const receipt = parsed.data.receipt;
-  const requirements = new Map<string, ReplayResourceRequirement>();
-  const addRequirement = (ref: ResourceAccessRef, capability: Capability): void => {
-    const key = resourceAccessKey(ref);
-    const current = requirements.get(key);
-    if (
-      current === undefined ||
-      CAPABILITY_RANK[capability] > CAPABILITY_RANK[current.capability]
-    ) {
-      requirements.set(key, { ref, capability });
-    }
-  };
-  const objectCapabilityById = new Map<string, Capability>();
-  for (const entry of receipt.entries) {
-    const required = receiptObjectCapability(
-      receipt.objectKind,
-      receipt.action,
-      entry.kind === 'object' ? entry.property : undefined,
-    );
-    const current = objectCapabilityById.get(entry.objectId);
-    if (current === undefined || CAPABILITY_RANK[required] > CAPABILITY_RANK[current]) {
-      objectCapabilityById.set(entry.objectId, required);
-    }
-  }
-  for (const id of [
-    ...parsed.data.appliedIds,
-    ...parsed.data.conflictingIds,
-    ...parsed.data.deniedIds,
-  ]) {
-    addRequirement(
-      { organizationId, kind: receipt.objectKind, id },
-      objectCapabilityById.get(id) ?? receiptObjectCapability(receipt.objectKind, receipt.action),
-    );
-  }
-  const labelIds: string[] = [];
-  for (const entry of receipt.entries) {
-    const objectRef: ResourceAccessRef = {
-      organizationId,
-      kind: receipt.objectKind,
-      id: entry.objectId,
-    };
-    addRequirement(
-      objectRef,
-      receiptObjectCapability(
-        receipt.objectKind,
-        receipt.action,
-        entry.kind === 'object' ? entry.property : undefined,
-      ),
-    );
-    if (entry.kind === 'object') {
-      const referenceKind = receiptReferenceKind(receipt.objectKind, entry.property);
-      if (referenceKind !== null) {
-        for (const value of [entry.before, entry.after]) {
-          if (typeof value === 'string') {
-            addRequirement({ organizationId, kind: referenceKind, id: value }, 'view');
-          }
-        }
-      }
-      continue;
-    }
-    if (entry.relation === 'dependency') {
-      addRequirement(
-        { organizationId, kind: receipt.objectKind, id: entry.relatedId },
-        'contribute',
-      );
-      continue;
-    }
-    if (entry.relation === 'initiative') {
-      addRequirement({ organizationId, kind: 'initiative', id: entry.relatedId }, 'view');
-      continue;
-    }
-    labelIds.push(entry.relatedId);
-  }
-
-  const request = parseObjectCommandRequest(requestBody);
-  if (request && 'direction' in request) {
-    for (const entry of request.receipt.entries) {
-      addRequirement(
-        { organizationId, kind: request.receipt.objectKind, id: entry.objectId },
-        receiptObjectCapability(
-          request.receipt.objectKind,
-          request.receipt.action,
-          entry.kind === 'object' ? entry.property : undefined,
-        ),
-      );
-      if (entry.kind === 'relation' && entry.relation === 'dependency') {
-        addRequirement(
-          { organizationId, kind: request.receipt.objectKind, id: entry.relatedId },
-          'contribute',
-        );
-      }
-      if (entry.kind === 'object') {
-        const referenceKind = receiptReferenceKind(request.receipt.objectKind, entry.property);
-        const target = request.direction === 'undo' ? entry.before : entry.after;
-        if (referenceKind !== null && typeof target === 'string') {
-          addRequirement({ organizationId, kind: referenceKind, id: target }, 'contribute');
-        }
-      }
-    }
-  } else if (request) {
-    const required = forwardObjectCapability(request);
-    for (const id of request.objectIds) {
-      addRequirement({ organizationId, kind: request.objectKind, id }, required);
-    }
-    const operation = request.operation;
-    if (operation.type === 'add_dependency' || operation.type === 'remove_dependency') {
-      for (const id of [operation.blockingId, operation.blockedId]) {
-        addRequirement({ organizationId, kind: request.objectKind, id }, 'contribute');
-      }
-    }
-    if (operation.type === 'change_parent' && operation.parentId !== null) {
-      addRequirement({ organizationId, kind: 'task', id: operation.parentId }, 'contribute');
-    }
-    if (operation.type === 'replace_property' && typeof operation.value === 'string') {
-      const referenceKind = receiptReferenceKind(request.objectKind, operation.property);
-      if (referenceKind !== null) {
-        addRequirement({ organizationId, kind: referenceKind, id: operation.value }, 'contribute');
-      }
-    }
-  }
-
-  const uniqueRequirements = [...requirements.values()];
-  const accessByResource = await resolveResourceAccess(
-    userId,
-    uniqueRequirements.map(({ ref }) => ref),
-  );
-  for (const requirement of uniqueRequirements) {
-    const access = accessByResource.get(resourceAccessKey(requirement.ref));
-    if (!access?.canView || access.effectiveCapability === null) {
-      throw new NotFoundError('Object command result not found');
-    }
-    if (!satisfies(access.effectiveCapability, requirement.capability)) {
-      throw new CapabilityError();
-    }
-  }
-  const uniqueLabelIds = [...new Set(labelIds)];
-  if (uniqueLabelIds.length === 0) return;
-  const currentLabels = await db
-    .select({ id: label.id })
-    .from(label)
-    .where(and(eq(label.organizationId, organizationId), inArray(label.id, uniqueLabelIds)));
-  if (currentLabels.length !== uniqueLabelIds.length) {
-    throw new NotFoundError('Object command result not found');
-  }
+  return record.expiresAt;
 }
 
 /**
@@ -425,133 +270,260 @@ async function assertCurrentObjectCommandReplayAccess(
  * A process death can leave a row `in_progress` until the first request after its five-minute lease
  * conditionally removes and reclaims it.
  */
-export const idempotency: MiddlewareHandler<AppEnv> = async (c, next) => {
-  const key = c.req.header('Idempotency-Key');
-  const userId = c.get('session')?.user.id;
-  if (c.req.method !== 'POST' || key === undefined || key === '' || userId === undefined) {
-    return next();
+/** The retry behavior one operation declares in its public contract. */
+export type IdempotencyReceiptMode = false | 'json-receipt' | 'atomic-receipt';
+
+interface ReceiptOwner {
+  readonly userId: string;
+  readonly callerNamespace: string;
+}
+
+/** Resolve the authenticated caller identity that scopes a public retry key. */
+function receiptOwner(c: Parameters<MiddlewareHandler<AppEnv>>[0]): ReceiptOwner | null {
+  const principal = c.get('principal');
+  if (principal?.kind === 'oauth') {
+    return { userId: principal.userId, callerNamespace: `oauth:${principal.clientId}` };
   }
-
-  const path = new URL(c.req.url).pathname;
-  const requestBody = await c.req.raw.clone().text();
-  const hash = fingerprint(c.req.method, path, requestBody);
-
-  let claimExpiresAt: Date;
-  let completedExpiresAt: Date;
-  for (;;) {
-    const now = new Date();
-    const expiresAt = new Date(now.getTime() + IN_PROGRESS_LEASE_MS);
-    const completionDeadline = new Date(now.getTime() + retentionMs(c.req.method, path));
-    const claimed = await db
-      .insert(idempotencyKey)
-      .values({
-        userId,
-        key,
-        method: c.req.method,
-        path,
-        requestHash: hash,
-        status: 'in_progress',
-        expiresAt,
-        createdAt: now,
-      })
-      .onConflictDoNothing()
-      .returning({ key: idempotencyKey.key });
-    if (claimed.length > 0) {
-      claimExpiresAt = expiresAt;
-      completedExpiresAt = completionDeadline;
-      break;
-    }
-
-    const rows = await db
-      .select()
-      .from(idempotencyKey)
-      .where(and(eq(idempotencyKey.userId, userId), eq(idempotencyKey.key, key)))
-      .limit(1);
-    const prior = rows[0];
-    // Another reclaimer can remove the expired row between our failed insert and read. Loop back
-    // through the insert so this request never executes without owning a durable claim.
-    if (!prior) continue;
-    if (effectiveExpiry(prior) <= now) {
-      // The expiry predicate is part of the delete. A competing request may already have replaced
-      // this row with a fresh claim, and this stale reclaimer must not delete that new owner.
-      await db
-        .delete(idempotencyKey)
-        .where(
-          and(
-            eq(idempotencyKey.userId, userId),
-            eq(idempotencyKey.key, key),
-            eq(idempotencyKey.status, prior.status),
-            eq(idempotencyKey.expiresAt, prior.expiresAt),
-            eq(idempotencyKey.createdAt, prior.createdAt),
-          ),
-        );
-      continue;
-    }
-    if (prior.requestHash !== hash) throw new IdempotencyConflictError();
-    if (prior.status === 'in_progress' || prior.responseStatus === null) {
-      c.header('Retry-After', String(IN_PROGRESS_RETRY_AFTER_SECONDS));
-      throw new ConflictError('An earlier request with this key is still in flight');
-    }
-    if (isReplayOwnerRequest(c.req.method, path)) {
-      await assertCurrentObjectCommandReplayAccess(
-        userId,
-        path,
-        prior.organizationId,
-        requestBody,
-        prior.responseBody,
-      );
-    }
-    c.header(REPLAY_HEADER, 'true');
-    // Only the status and body are recorded, so a replayed `201` carries no `Location`. It is
-    // tempting to rebuild one from the request path and the body's `id`, and that is wrong:
-    // `created()` takes an explicit location precisely because some resources do not live below
-    // the collection posted to — a subtask created through `POST /tasks/{id}/subtasks` is
-    // addressed at `/tasks/{newId}` — so the derivation would hand a retrying client a URL that
-    // matches no route, and none at all for a body without a top-level `id`. An absent header is
-    // a smaller lie than a fabricated one; recording the real one needs a column this table has
-    // not got.
-    return c.json(prior.responseBody, prior.responseStatus as ContentfulStatusCode);
+  if (principal?.kind === 'session') {
+    return { userId: principal.userId, callerNamespace: 'session' };
   }
+  const session = c.get('session');
+  return session?.user ? { userId: session.user.id, callerNamespace: 'session' } : null;
+}
 
-  c.set('idempotencyClaim', {
-    userId,
-    key,
-    expiresAt: claimExpiresAt,
-    completedExpiresAt,
-  });
+/** Return a completed response without copying any historical request identity or credentials. */
+function replayResponse(
+  c: Parameters<MiddlewareHandler<AppEnv>>[0],
+  status: number,
+  body: unknown,
+  headers: Readonly<Record<string, string>>,
+): Response {
+  const response = c.json(body, status as ContentfulStatusCode);
+  for (const [name, value] of Object.entries(sanitizeReplayHeaders(headers))) {
+    response.headers.set(name, value);
+  }
+  response.headers.set(REPLAY_HEADER, 'true');
+  // The transitional app adapter invokes this middleware directly and awaits it instead of
+  // returning its Response. Finalizing the shared Context keeps that wrapper from discarding a
+  // replay before Task 4 removes the legacy composition.
+  c.res = response;
+  return c.res;
+}
 
-  await next();
-
-  if (c.get('idempotencyCompleted') === true) return;
-
-  // Only a completed JSON response is worth replaying. A failure is not recorded at all, so
-  // the key stays usable: retrying a create that 500ed is exactly what the header is for.
-  const isJson = c.res.headers.get('Content-Type')?.includes('application/json') ?? false;
-  if (c.res.status < 400 && isJson) {
+/** Compare and replay one still-live legacy session receipt created by an older application. */
+async function replayLegacyReceipt(
+  c: Parameters<MiddlewareHandler<AppEnv>>[0],
+  owner: ReceiptOwner,
+  key: string,
+  path: string,
+  requestBody: string,
+): Promise<Response | null> {
+  if (owner.callerNamespace !== 'session' || API_VERSION !== '0.1.0') return null;
+  const [prior] = await db
+    .select()
+    .from(idempotencyKey)
+    .where(and(eq(idempotencyKey.userId, owner.userId), eq(idempotencyKey.key, key)))
+    .limit(1);
+  if (!prior) return null;
+  const now = new Date();
+  if (effectiveExpiry(prior) <= now) {
     await db
-      .update(idempotencyKey)
-      .set({
-        status: 'completed',
-        responseStatus: c.res.status,
-        responseBody: await c.res.clone().json(),
-        expiresAt: completedExpiresAt,
-      })
+      .delete(idempotencyKey)
       .where(
         and(
-          eq(idempotencyKey.userId, userId),
+          eq(idempotencyKey.userId, owner.userId),
           eq(idempotencyKey.key, key),
-          eq(idempotencyKey.expiresAt, claimExpiresAt),
+          eq(idempotencyKey.status, prior.status),
+          eq(idempotencyKey.expiresAt, prior.expiresAt),
+          eq(idempotencyKey.createdAt, prior.createdAt),
         ),
       );
-    return;
+    return null;
   }
-  await db
-    .delete(idempotencyKey)
-    .where(
-      and(
-        eq(idempotencyKey.userId, userId),
-        eq(idempotencyKey.key, key),
-        eq(idempotencyKey.expiresAt, claimExpiresAt),
-      ),
+  const hash = legacyFingerprint(c.req.method, path, requestBody);
+  if (prior.requestHash !== hash) throw new IdempotencyConflictError();
+  if (prior.status === 'in_progress' || prior.responseStatus === null) {
+    c.header('Retry-After', String(IN_PROGRESS_RETRY_AFTER_SECONDS));
+    throw new ConflictError('An earlier request with this key is still in flight');
+  }
+  if (isReplayOwnerRequest(c.req.method, path)) {
+    await assertCurrentObjectCommandReplayAccess(
+      owner.userId,
+      path,
+      prior.organizationId,
+      requestBody,
+      prior.responseBody,
     );
+  }
+  return replayResponse(c, prior.responseStatus, prior.responseBody, {});
+}
+
+function unsupportedIdempotencyKey(): ValidationError {
+  return new ValidationError([
+    {
+      path: ['headers', 'Idempotency-Key'],
+      message: 'This operation does not support Idempotency-Key.',
+    },
+  ]);
+}
+
+/** Build an idempotency middleware for one declared response persistence guarantee. */
+export function idempotencyFor(receiptMode: IdempotencyReceiptMode): MiddlewareHandler<AppEnv> {
+  return async (c, next) => {
+    const key = c.req.header('Idempotency-Key');
+    if (key === undefined) return next();
+    if (receiptMode === false || key === '') throw unsupportedIdempotencyKey();
+    const isUnsafe = !['GET', 'HEAD', 'OPTIONS', 'TRACE'].includes(c.req.method.toUpperCase());
+    if (!isUnsafe) return next();
+    if (c.req.method !== 'POST') throw unsupportedIdempotencyKey();
+    const owner = receiptOwner(c);
+    if (owner === null) return next();
+
+    const url = new URL(c.req.url);
+    const path = url.pathname;
+    const requestBytes = new Uint8Array(await c.req.raw.clone().arrayBuffer());
+    const requestBody = new TextDecoder().decode(requestBytes);
+    const hash = fingerprintRequestBytes(c.req.raw, requestBytes);
+    const completedExpiresAt = new Date(Date.now() + retentionMs(c.req.method, path));
+    const legacyReplay = await replayLegacyReceipt(c, owner, key, path, requestBody);
+    if (legacyReplay) return legacyReplay;
+    let claimId: string;
+
+    for (;;) {
+      const now = new Date();
+      const expiresAt = new Date(now.getTime() + IN_PROGRESS_LEASE_MS);
+      const proposedClaimId = randomUUID();
+      const claimed = await db
+        .insert(apiIdempotencyReceipt)
+        .values({
+          ...owner,
+          apiVersion: API_VERSION,
+          key,
+          claimId: proposedClaimId,
+          method: c.req.method,
+          path,
+          requestHash: hash,
+          receiptFormat: receiptMode,
+          status: 'in_progress',
+          expiresAt,
+          createdAt: now,
+        })
+        .onConflictDoNothing()
+        .returning({ claimId: apiIdempotencyReceipt.claimId });
+      if (claimed.length > 0) {
+        claimId = proposedClaimId;
+        break;
+      }
+
+      const [prior] = await db
+        .select()
+        .from(apiIdempotencyReceipt)
+        .where(
+          and(
+            eq(apiIdempotencyReceipt.userId, owner.userId),
+            eq(apiIdempotencyReceipt.callerNamespace, owner.callerNamespace),
+            eq(apiIdempotencyReceipt.apiVersion, API_VERSION),
+            eq(apiIdempotencyReceipt.key, key),
+          ),
+        )
+        .limit(1);
+      if (!prior) continue;
+      if (effectiveExpiry(prior) <= now) {
+        await db
+          .delete(apiIdempotencyReceipt)
+          .where(
+            and(
+              eq(apiIdempotencyReceipt.userId, owner.userId),
+              eq(apiIdempotencyReceipt.callerNamespace, owner.callerNamespace),
+              eq(apiIdempotencyReceipt.apiVersion, API_VERSION),
+              eq(apiIdempotencyReceipt.key, key),
+              eq(apiIdempotencyReceipt.claimId, prior.claimId),
+              eq(apiIdempotencyReceipt.status, prior.status),
+            ),
+          );
+        continue;
+      }
+      const expectedHash =
+        prior.receiptFormat === 'legacy-json'
+          ? legacyFingerprint(c.req.method, path, requestBody)
+          : hash;
+      if (prior.requestHash !== expectedHash) throw new IdempotencyConflictError();
+      if (prior.status === 'in_progress' || prior.responseStatus === null) {
+        c.header('Retry-After', String(IN_PROGRESS_RETRY_AFTER_SECONDS));
+        throw new ConflictError('An earlier request with this key is still in flight');
+      }
+      if (isReplayOwnerRequest(c.req.method, path)) {
+        await assertCurrentObjectCommandReplayAccess(
+          owner.userId,
+          path,
+          prior.organizationId,
+          requestBody,
+          prior.responseBody,
+        );
+      }
+      return replayResponse(c, prior.responseStatus, prior.responseBody, prior.responseHeaders);
+    }
+
+    const claim: IdempotencyClaim = {
+      ...owner,
+      apiVersion: API_VERSION,
+      key,
+      claimId,
+      receiptFormat: receiptMode,
+      completedExpiresAt,
+    };
+    c.set('idempotencyClaim', claim);
+
+    await next();
+
+    if (c.get('idempotencyCompleted') === true) return;
+    const identity = and(
+      eq(apiIdempotencyReceipt.userId, owner.userId),
+      eq(apiIdempotencyReceipt.callerNamespace, owner.callerNamespace),
+      eq(apiIdempotencyReceipt.apiVersion, API_VERSION),
+      eq(apiIdempotencyReceipt.key, key),
+      eq(apiIdempotencyReceipt.claimId, claimId),
+    );
+    if (receiptMode === 'atomic-receipt') {
+      await db.delete(apiIdempotencyReceipt).where(identity);
+      throw new Error('An atomic idempotency operation did not complete its receipt transaction.');
+    }
+
+    const isJson = /\bapplication\/(?:[^;+]+\+)?json\b/iu.test(
+      c.res.headers.get('Content-Type') ?? '',
+    );
+    if (c.res.status < 400 && isJson) {
+      const completed = await db
+        .update(apiIdempotencyReceipt)
+        .set({
+          status: 'completed',
+          responseStatus: c.res.status,
+          responseBody: await c.res.clone().json(),
+          responseHeaders: sanitizeReplayHeaders(c.res.headers),
+          expiresAt: completedExpiresAt,
+        })
+        .where(and(identity, eq(apiIdempotencyReceipt.status, 'in_progress')))
+        .returning({ claimId: apiIdempotencyReceipt.claimId });
+      if (completed.length !== 1) {
+        throw new ConflictError('The idempotent request claim is no longer active');
+      }
+      return;
+    }
+    await db.delete(apiIdempotencyReceipt).where(identity);
+  };
+}
+
+/**
+ * Reject retry keys on undeclared operations while object commands enforce them after org access.
+ *
+ * @remarks
+ * The object-command child route installs its atomic adapter after the parent organization guard.
+ * Running a receipt adapter here would let a stored response bypass that guard. Every other legacy
+ * declaration has no trustworthy response contract, so a supplied key is rejected before its
+ * handler instead of guessing that an arbitrary response can be stored and replayed.
+ */
+export const idempotency: MiddlewareHandler<AppEnv> = async (c, next) => {
+  const path = new URL(c.req.url).pathname;
+  if (isReplayOwnerRequest(c.req.method, path)) return next();
+  return idempotencyFor(false)(c, next);
 };

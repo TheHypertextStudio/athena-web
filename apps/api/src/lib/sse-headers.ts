@@ -32,6 +32,8 @@
  * @returns the same response, with the streaming headers applied.
  */
 export function declareStreaming(response: Response): Response {
+  response.headers.delete('ETag');
+  response.headers.delete('Content-Encoding');
   response.headers.set('Cache-Control', 'no-cache, no-transform');
   response.headers.set('X-Accel-Buffering', 'no');
   return response;

@@ -4,8 +4,8 @@
  * @remarks
  * Proves the three things that matter about this one shared subscription: a caller only ever
  * sees updates for agents *they* own, an update published before the connection attached is
- * still replayed, and a resumed connection (`Last-Event-ID`) never repeats what it already
- * received. Modeled on `tests/routes/stream-sse.test.ts`'s reader-based harness, since this
+ * still replayed, and the process-local stream rejects resume attempts it cannot honor across
+ * restarts. Modeled on `tests/routes/stream-sse.test.ts`'s reader-based harness, since this
  * route's poll loop — like that one's — runs until the client disconnects, not until any
  * database state changes.
  */
@@ -127,6 +127,7 @@ describe('merged agent-updates stream', () => {
     const frame = await nextFrame();
 
     expect(frame.event).toBe('agent_started');
+    expect(frame.id).toBe('');
     expect(JSON.parse(frame.data)).toMatchObject({
       sessionId,
       milestone: 'Booting up',
@@ -190,7 +191,7 @@ describe('merged agent-updates stream', () => {
     expect(JSON.parse(frame.data)).toMatchObject({ sessionId: ownerSessionId, milestone: 'Yours' });
   });
 
-  it('resumes strictly after a given sequence without repeating it', async () => {
+  it('rejects Last-Event-ID before opening this process-local stream', async () => {
     const suffix = Math.random().toString(36).slice(2, 9);
     const [owner] = await db
       .insert(schema.user)
@@ -204,7 +205,7 @@ describe('merged agent-updates stream', () => {
       kind: 'agent_started',
       milestone: 'First',
     });
-    const second = await reportAgentMilestone({
+    await reportAgentMilestone({
       sessionId,
       ownerUserId: assertDefined(owner).id,
       kind: 'agent_progress',
@@ -212,15 +213,16 @@ describe('merged agent-updates stream', () => {
     });
     expect(first).not.toBeNull();
 
-    const { nextFrame } = await openAgentStream(
-      assertDefined(owner).id,
-      String(assertDefined(first).sequence),
-    );
-    const frame = await nextFrame();
-    expect(JSON.parse(frame.data)).toMatchObject({
-      sequence: assertDefined(second).sequence,
-      milestone: 'Second',
+    const app = appWithSession(meAthena, fakeSession(assertDefined(owner).id));
+    const response = await app.request('/agents/stream', {
+      headers: {
+        accept: 'text/event-stream',
+        'last-event-id': String(assertDefined(first).sequence),
+      },
     });
+    expect(response.status).toBe(422);
+    expect(response.headers.get('content-type')).toContain('application/problem+json');
+    expect(await response.json()).toMatchObject({ code: 'validation_error', status: 422 });
   });
 
   it('drops the bus subscription once the connection is aborted', async () => {

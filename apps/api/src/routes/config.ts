@@ -88,14 +88,36 @@ export function resolveLegacyPasskeyRpId(
 const config = new Hono<AppEnv>().get(
   '/',
   apiDoc({
+    operationId: 'getPublicConfig',
     tag: 'Config',
     summary: 'Get public client config',
-    response: PublicConfigOut,
-    description: `Return the non-secret runtime configuration the web client bootstraps from. This is the **single public, unauthenticated endpoint** in the personal/account domain. The sign-in page reads it *before* anyone is authenticated to decide which auth buttons and connector affordances to render.
-
-The payload is **derived from the server's real credentials**, never from a parallel set of \`NEXT_PUBLIC_*\` mirror flags: a social provider is listed in \`oauthProviders\` if and only if its OAuth client id + secret are actually configured (the same truth Better Auth's \`configuredSocialProviders\` consumes), and a connector key is listed in \`connectors\` only when the grant that funds it is configured (one Google grant unlocks \`gmail\`/\`calendar\`/\`gtasks\`; GitHub and Linear fund their own). Because availability is computed from setup, the advertised capabilities can never drift from what the server can actually do. \`appMode\` echoes the deployment mode (\`local\` flips on mock-everything affordances) and \`mcpUrl\` is the MCP server URL shown in the Authorized-apps setup guide (null when unset — the client then derives it from its own origin).
-
-Carries nothing secret and requires no session. Related: the authenticated personal surfaces (\`/v1/me/*\`, \`/v1/hub/*\`, \`/v1/me/notifications\`, \`/v1/daily-plan\`) all assume the client already learned provider/connector availability from here.`,
+    narrative: {
+      purpose:
+        'Return the non-secret deployment settings a client needs before it asks a person to sign in.',
+      behavior: [
+        'The response lists a social provider only when the server has the credentials required to use it.',
+        'Connector availability comes from the same configured provider grants used by the runtime. One Google grant can expose Gmail, Calendar, and Google Tasks.',
+        'The response reports the deployment mode, passkey relying-party identifiers, and the configured MCP URL. A nullable value means the client must not assume that capability is configured.',
+      ],
+      constraints: [
+        'The response contains no provider secret, session data, tenant data, or user data.',
+        'Clients should read this operation before rendering sign-in and connector choices instead of mirroring server configuration in build-time flags.',
+      ],
+    },
+    access: { kind: 'public' },
+    success: [
+      {
+        kind: 'json',
+        status: 200,
+        schema: PublicConfigOut,
+        description: 'The current non-secret client configuration for this Docket deployment.',
+      },
+    ],
+    errors: ['not_acceptable', 'internal'],
+    conditionalRead: true,
+    conditionalWrite: false,
+    idempotency: false,
+    related: ['listOrganizations'],
   }),
   (c) => {
     const oauthProviders = configuredSocialProviders(env).filter(isPublicSignInProvider);

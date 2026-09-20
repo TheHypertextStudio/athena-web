@@ -3,7 +3,7 @@
  */
 import { type Capability, satisfies } from '@docket/authz';
 import { db, initiative, program, project, update } from '@docket/db';
-import { pageOf } from '../contracts/pagination';
+import { CursorQuery, pageOf } from '../contracts/pagination';
 import {
   UpdateCreate,
   UpdateListQuery,
@@ -17,6 +17,7 @@ import { z } from 'zod';
 import type { AppEnv } from '../context';
 import { CapabilityError, NotFoundError } from '../error';
 import { created, ok } from '../lib/ok';
+import { pageResult, seekAfter } from '../lib/list-cursor';
 import { apiDoc } from '../lib/openapi-route';
 import { zJson, zParam, zQuery } from '../lib/validate';
 import { capabilityGuard } from '../permissions/capability-guard';
@@ -42,6 +43,7 @@ function toOut(u: UpdateRow): z.input<typeof UpdateOut> {
 const subjectTable = { project, program, initiative } as const;
 
 const idParam = z.object({ id: z.string() });
+const PaginatedUpdateListQuery = UpdateListQuery.and(CursorQuery);
 
 /** Assert an Update subject belongs to the caller's organization. */
 async function assertSubjectInOrg(
@@ -159,12 +161,12 @@ const updates = new Hono<AppEnv>()
       tag: 'Updates',
       summary: 'List updates',
       response: pageOf(UpdateOut),
-      description: `List the status updates posted on one subject — a Project, Program, or Initiative — identified by the required \`subjectType\` and \`subjectId\` query params. An Update is a narrative status post that optionally carries a \`health\` signal (\`on_track | at_risk | off_track\`); the newest health-bearing post drives the subject's current health. Results are ordered newest-first. Scoped to the caller's org. Requires org membership (\`view\`). Returns a page wrapper of {@link UpdateOut}.`,
+      description: `List the status updates posted on one subject. Results use \`createdAt DESC, id DESC\`, default to 50 items, accept at most 100, and omit \`nextCursor\` at exhaustion. Reuse a cursor only with the same \`subjectType\` and \`subjectId\`. Scoped to the caller's org.`,
     }),
-    zQuery(UpdateListQuery),
+    zQuery(PaginatedUpdateListQuery),
     async (c) => {
       const { orgId } = c.get('actorCtx');
-      const { subjectType, subjectId } = c.req.valid('query');
+      const { subjectType, subjectId, cursor, limit } = c.req.valid('query');
       const rows = await db
         .select()
         .from(update)
@@ -173,10 +175,16 @@ const updates = new Hono<AppEnv>()
             eq(update.organizationId, orgId),
             eq(update.subjectType, subjectType),
             eq(update.subjectId, subjectId),
+            seekAfter(update.createdAt, update.id, cursor),
           ),
         )
-        .orderBy(desc(update.createdAt));
-      return ok(c, pageOf(UpdateOut), { items: rows.map(toOut) });
+        .orderBy(desc(update.createdAt), desc(update.id))
+        .limit(limit + 1);
+      return ok(
+        c,
+        pageOf(UpdateOut),
+        pageResult(rows.map(toOut), limit, (item) => new Date(item.createdAt)),
+      );
     },
   )
   .post(

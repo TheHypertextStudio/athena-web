@@ -196,7 +196,12 @@ const time = new Hono<AppEnv>()
     zJson(TimeCategoryCreate),
     async (c) => {
       const { user } = requireSession(c);
-      return created(c, TimeCategoryOut, await createTimeCategory(user.id, c.req.valid('json')));
+      return created(
+        c,
+        TimeCategoryOut,
+        await createTimeCategory(user.id, c.req.valid('json')),
+        null,
+      );
     },
   )
   .post(
@@ -386,6 +391,7 @@ const time = new Hono<AppEnv>()
         c,
         TimeRecordOut,
         await addTimeContext(user.id, c.req.valid('param').id, c.req.valid('json')),
+        null,
       );
     },
   )
@@ -439,12 +445,17 @@ const time = new Hono<AppEnv>()
       // `API_URL` to their own origin anyway, so the fallback could only ever have restated it.
       const origin = apiHosts.api;
       const statusUrl = `${origin}${SHARED_TIMER_STATUS_PATH}`;
-      return created(c, TimeShareTokenCreated, {
-        ...minted.stored,
-        token: minted.token,
-        statusUrl,
-        embedSnippet: sharedTimerEmbedSnippet(statusUrl, minted.token),
-      });
+      return created(
+        c,
+        TimeShareTokenCreated,
+        {
+          ...minted.stored,
+          token: minted.token,
+          statusUrl,
+          embedSnippet: sharedTimerEmbedSnippet(statusUrl, minted.token),
+        },
+        null,
+      );
     },
   )
   .delete(

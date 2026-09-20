@@ -9,16 +9,17 @@
  */
 import { actor, agent, db } from '@docket/db';
 import { AgentCreate, AgentOut, AgentUpdate } from '@docket/athena/agent-contract';
-import { pageOf } from '../contracts/pagination';
-import { and, eq } from 'drizzle-orm';
+import { CursorQuery, pageOf } from '../contracts/pagination';
+import { and, asc, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
 
 import type { AppEnv } from '../context';
 import { ConflictError, NotFoundError } from '../error';
 import { created, ok } from '../lib/ok';
+import { pageResultById, seekAfterId } from '../lib/list-cursor';
 import { apiDoc } from '../lib/openapi-route';
-import { zJson, zParam } from '../lib/validate';
+import { zJson, zParam, zQuery } from '../lib/validate';
 import { capabilityGuard } from '../permissions/capability-guard';
 import { enqueueSearchDelete, enqueueSearchUpsert } from '../search/write-through';
 
@@ -48,12 +49,19 @@ const agents = new Hono<AppEnv>()
       tag: 'Agents',
       summary: 'List agents',
       response: pageOf(AgentOut),
-      description: `List every agent registered in the active organization, as a single (unpaginated) page of {@link AgentOut}. An agent is the persistent, org-scoped wrapper around an ephemeral external runtime (an MCP/A2A/webhook endpoint); each one IS an Actor (\`actor.kind = 'agent'\`) and so can be assigned work, appear in the activity feed, and run sessions exactly like a human member. The list reflects registered agents only — it does not enumerate running {@link AgentSessionOut} sessions (see \`GET /v1/orgs/:orgId/sessions\`). No capability is required beyond org membership; this is a plain read. Each row carries the agent's connection metadata, approval policy, accountable human owner, and approval routing, but never the connection secret itself (only a \`credentialsRef\`). Related: register with \`POST /\`, fetch one with \`GET /:id\`, and dispatch work via the sessions router.`,
+      description: `List every agent registered in the active organization as a cursor page of {@link AgentOut}. Results use stable agent-id order, default to 50 items, accept at most 100, and omit \`nextCursor\` at exhaustion. An agent is the persistent, org-scoped wrapper around an ephemeral external runtime (an MCP/A2A/webhook endpoint); each one IS an Actor (\`actor.kind = 'agent'\`) and so can be assigned work, appear in the activity feed, and run sessions exactly like a human member. No capability is required beyond org membership; this is a plain read. The response never includes the connection secret.`,
     }),
+    zQuery(CursorQuery),
     async (c) => {
       const { orgId } = c.get('actorCtx');
-      const rows = await db.select().from(agent).where(eq(agent.organizationId, orgId));
-      return ok(c, pageOf(AgentOut), { items: rows.map(toOut) });
+      const { cursor, limit } = c.req.valid('query');
+      const rows = await db
+        .select()
+        .from(agent)
+        .where(and(eq(agent.organizationId, orgId), seekAfterId(agent.id, cursor, 'asc')))
+        .orderBy(asc(agent.id))
+        .limit(limit + 1);
+      return ok(c, pageOf(AgentOut), pageResultById(rows.map(toOut), limit));
     },
   )
   .post(

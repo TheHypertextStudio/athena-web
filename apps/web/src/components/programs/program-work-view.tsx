@@ -34,6 +34,14 @@ import { buildTaskCatalog } from '@/components/views/task-catalog';
 import { buildTaskColumns, TaskTable } from '@/components/views/task-table';
 import { useViewState } from '@/components/views/use-view-state';
 import { api } from '@/lib/api';
+import {
+  fetchAllAgents,
+  fetchAllMembers,
+  fetchAllPrograms,
+  fetchAllProjects,
+  fetchAllRoles,
+  fetchAllTasks,
+} from '@/lib/org-collection-pages';
 import { apiQueryOptions, queryKeys, STALE, useApiListQuery, usePrefetchApi } from '@/lib/query';
 import { useOrgCapability } from '@/lib/use-org-capability';
 import { taskDetailDef } from '@/lib/use-task-detail';
@@ -60,14 +68,14 @@ export function ProgramWorkView({ orgId, programId }: ProgramWorkViewProps): JSX
   const tasksQ = useApiListQuery(
     apiQueryOptions(
       taskKey,
-      () => api.v1.orgs[':orgId'].tasks.$get({ param: { orgId }, query: { programId } }),
+      () => fetchAllTasks(api, orgId, { programId }),
       "Could not load this program's work.",
     ),
   );
   const membersQ = useApiListQuery(
     apiQueryOptions(
       queryKeys.members(orgId),
-      () => api.v1.orgs[':orgId'].members.$get({ param: { orgId } }),
+      () => fetchAllMembers(api, orgId),
       'Could not load members.',
       { staleTime: STALE.static },
     ),
@@ -75,7 +83,7 @@ export function ProgramWorkView({ orgId, programId }: ProgramWorkViewProps): JSX
   const projectsQ = useApiListQuery(
     apiQueryOptions(
       queryKeys.projects(orgId),
-      () => api.v1.orgs[':orgId'].projects.$get({ param: { orgId }, query: {} }),
+      () => fetchAllProjects(api, orgId),
       'Could not load projects.',
       { staleTime: STALE.static },
     ),
@@ -83,7 +91,7 @@ export function ProgramWorkView({ orgId, programId }: ProgramWorkViewProps): JSX
   const programsQ = useApiListQuery(
     apiQueryOptions(
       queryKeys.programs(orgId),
-      () => api.v1.orgs[':orgId'].programs.$get({ param: { orgId }, query: {} }),
+      () => fetchAllPrograms(api, orgId),
       'Could not load programs.',
       { staleTime: STALE.static },
     ),
@@ -91,7 +99,7 @@ export function ProgramWorkView({ orgId, programId }: ProgramWorkViewProps): JSX
   const rolesQ = useApiListQuery(
     apiQueryOptions(
       queryKeys.roles(orgId),
-      () => api.v1.orgs[':orgId'].roles.$get({ param: { orgId } }),
+      () => fetchAllRoles(api, orgId),
       'Could not load roles.',
       { staleTime: STALE.static },
     ),
@@ -101,7 +109,7 @@ export function ProgramWorkView({ orgId, programId }: ProgramWorkViewProps): JSX
   const agentsQ = useApiListQuery(
     apiQueryOptions(
       queryKeys.agents(orgId),
-      () => api.v1.orgs[':orgId'].agents.$get({ param: { orgId } }),
+      () => fetchAllAgents(api, orgId),
       'Could not load agents.',
       { staleTime: STALE.static },
     ),

@@ -20,6 +20,7 @@ import type { QueryKey } from '@tanstack/react-query';
 
 import { api } from './api';
 import { projectWorkSectionsDef } from './fetch-project-sections';
+import { fetchAllMilestones } from './org-collection-pages';
 import { STALE, apiQueryOptions } from './query';
 
 /** A page of milestones, as the nested collection returns them. */
@@ -43,10 +44,7 @@ export function projectMilestonesDef(
 ) {
   return apiQueryOptions<MilestonePage>(
     ['org', orgId, 'projects', projectId ?? '', 'milestones'] as const,
-    () =>
-      api.v1.orgs[':orgId'].projects[':id'].milestones.$get({
-        param: { orgId, id: projectId ?? '' },
-      }),
+    () => fetchAllMilestones(api, orgId, projectId ?? ''),
     'Could not load milestones.',
     { enabled: (enabled ?? true) && Boolean(projectId), staleTime: STALE.static },
   );

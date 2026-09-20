@@ -436,15 +436,13 @@ const projects = new Hono<AppEnv>()
       tag: 'Projects',
       summary: 'List projects',
       response: pageOf(ProjectOut),
-      description: `List the organization's projects — the bounded, dated efforts that sit between ongoing Programs above and Tasks/Milestones below. Keyset-paginated newest-first by \`createdAt\` (\`id\` tiebreak); the optional \`limit\` yields a bounded page plus \`nextCursor\` (omit for the full list). Each item is the flat {@link ProjectOut} (no progress roll-up — call \`GET /:id/progress\` for weighted completion, or \`GET /:id/rollup\` for the detail-screen extras). Read-only; org membership suffices. Strictly org-scoped.`,
+      description: `List the organization's projects — the bounded, dated efforts that sit between ongoing Programs above and Tasks/Milestones below. Results use a stable keyset order of \`createdAt DESC, id DESC\`. \`limit\` defaults to 50 and accepts at most 100. Copy \`nextCursor\` unchanged into \`cursor\`; it is absent when the result set is exhausted. Archived Projects remain excluded on every page, and the cursor must be reused with the same filter set. Each item is the flat {@link ProjectOut} (no progress roll-up — call \`GET /:id/progress\` for weighted completion, or \`GET /:id/rollup\` for the detail-screen extras). Read-only; org membership suffices. Strictly org-scoped.`,
     }),
     zQuery(CursorQuery),
     async (c) => {
       const { orgId } = c.get('actorCtx');
       const { cursor, limit } = c.req.valid('query');
-      // Keyset-paginate newest-first (createdAt, id tiebreak). `limit` is optional: omitted returns
-      // the full list as before; supplied returns a bounded page + `nextCursor`.
-      const base = db
+      const rows = await db
         .select()
         .from(project)
         .where(
@@ -454,8 +452,8 @@ const projects = new Hono<AppEnv>()
             seekAfter(project.createdAt, project.id, cursor),
           ),
         )
-        .orderBy(desc(project.createdAt), desc(project.id));
-      const rows = await (limit === undefined ? base : base.limit(limit + 1));
+        .orderBy(desc(project.createdAt), desc(project.id))
+        .limit(limit + 1);
       const { items, nextCursor } = pageResult(rows, limit, (r) => r.createdAt);
       return ok(c, pageOf(ProjectOut), { items: items.map(toOut), nextCursor });
     },

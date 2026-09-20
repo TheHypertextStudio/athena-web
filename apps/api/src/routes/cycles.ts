@@ -62,7 +62,7 @@ const cycles = new Hono<AppEnv>()
       tag: 'Cycles',
       summary: 'List cycles',
       response: pageOf(CycleDetail),
-      description: `List the organization's cycles — fixed-length team iterations (sprints) on a configurable cadence. Each item is a {@link CycleDetail}: the cycle plus its pace \`stats\` (committed/completed/capacity/scopeChange/carryover) folded in inline, and the date-derived \`isCurrent\` flag, so a roster renders complete without a per-cycle fan-out. The page's committed tasks are fetched in ONE batched query and run through the same pure \`computeStats\` the detail endpoint uses (avoiding an N+1), after canonical task visibility filters each caller's aggregate. Keyset-paginated newest-first by \`startsAt\` (\`id\` tiebreak); \`limit\` optional. Opt-in side effect: pass \`roll=true\` to auto-materialize every team's rolling cycle window in-process before listing (one batched ensure instead of a per-team \`/current\` HTTP fan-out on SSR) — so surfaces that need the live rolling roster never see an empty list; other callers omit \`roll\` and get the raw stored roster with NO write. Read-only otherwise; organization membership accesses cycles while task-derived stats use canonical task visibility. Returns a page of {@link CycleDetail}.`,
+      description: `List the organization's cycles — fixed-length team iterations (sprints) on a configurable cadence. Each item is a {@link CycleDetail}: the cycle plus its pace \`stats\` (committed/completed/capacity/scopeChange/carryover) folded in inline, and the date-derived \`isCurrent\` flag, so a roster renders complete without a per-cycle fan-out. The page's committed tasks are fetched in ONE batched query and run through the same pure \`computeStats\` the detail endpoint uses (avoiding an N+1), after canonical task visibility filters each caller's aggregate. Keyset-paginated newest-first by \`startsAt\` with \`id\` descending as the stable tiebreaker. \`limit\` defaults to 50 and accepts at most 100. Copy \`nextCursor\` unchanged into \`cursor\`; it is absent when the result set is exhausted, and a cursor must be reused with the same \`roll\` choice. Opt-in side effect: pass \`roll=true\` to auto-materialize every team's rolling cycle window in-process before listing (one batched ensure instead of a per-team \`/current\` HTTP fan-out on SSR) — so surfaces that need the live rolling roster never see an empty list; other callers omit \`roll\` and get the raw stored roster with NO write. Read-only otherwise; organization membership accesses cycles while task-derived stats use canonical task visibility. Returns a page of {@link CycleDetail}.`,
     }),
     zQuery(CycleListQuery),
     async (c) => {
@@ -75,14 +75,12 @@ const cycles = new Hono<AppEnv>()
       // HTTP fan-out (T self-HTTP round-trips on SSR). Other callers get the raw stored roster.
       if (roll === 'true') await ensureOrgCycleWindows(orgId, actorId, now);
 
-      // Keyset-paginate the roster (newest-first by start, id as tiebreak). `limit` is optional:
-      // omitted, the full roster is returned as before; supplied, a bounded page + `nextCursor`.
-      const base = db
+      const rows = await db
         .select()
         .from(cycle)
         .where(and(eq(cycle.organizationId, orgId), seekAfter(cycle.startsAt, cycle.id, cursor)))
-        .orderBy(desc(cycle.startsAt), desc(cycle.id));
-      const rows = await (limit === undefined ? base : base.limit(limit + 1));
+        .orderBy(desc(cycle.startsAt), desc(cycle.id))
+        .limit(limit + 1);
       const { items: pageRows, nextCursor } = pageResult(rows, limit, (r) => r.startsAt);
 
       // Roll up each cycle's pace stats inline so callers render a complete roster without a

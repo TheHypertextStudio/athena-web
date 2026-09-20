@@ -252,8 +252,9 @@ Public generation rejects raw TSDoc links, local paths, SQL names, obsolete host
 implementation prose. Every operation description renders Purpose, Inputs and constraints, Result
 and side effects, Access, Failures and recovery, and Related operations in that order.
 
-The identity OpenAPI document must not exceed 2 MiB. Its Brotli quality-5 representation must not
-exceed 350 KiB.
+The OpenAPI document must keep every field and operation explanation needed to use the API without
+reading source code. Its Brotli quality-5 representation must not exceed 350 KiB; raw JSON size is
+not a release gate because production serves the compressed representation.
 
 ## HTTP guarantees
 

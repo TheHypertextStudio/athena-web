@@ -15,14 +15,15 @@ import {
   DailyPlanItemOut,
   DailyPlanItemUpdate,
 } from '@docket/planning/daily-plan-contract';
-import { pageOf } from '../contracts/pagination';
-import { and, asc, eq, isNull } from 'drizzle-orm';
+import { CursorQuery, pageOf } from '../contracts/pagination';
+import { and, asc, eq, gt, isNull, or } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
 
 import type { AppEnv } from '../context';
-import { AuthError, NotFoundError } from '../error';
+import { AuthError, NotFoundError, ValidationError } from '../error';
 import { created, ok } from '../lib/ok';
+import { decodeTupleCursor, pageResultByTuple } from '../lib/list-cursor';
 import { apiDoc } from '../lib/openapi-route';
 import { zJson, zParam, zQuery } from '../lib/validate';
 import { buildTaskViewFilter } from './task-helpers';
@@ -98,7 +99,7 @@ async function requireViewableTask(
   if (!canView(taskRow)) throw new NotFoundError('Task not found');
 }
 
-const listQuery = z.object({ date: z.iso.date() });
+const listQuery = CursorQuery.extend({ date: z.iso.date() });
 const idParam = z.object({ id: z.string() });
 
 /** Daily-plan router: the caller's Hub daily plan for a date + add/update/remove items. */
@@ -109,7 +110,7 @@ const dailyPlan = new Hono<AppEnv>()
       tag: 'DailyPlan',
       summary: 'Get the daily plan',
       response: pageOf(DailyPlanItemOut),
-      description: `Return the caller's personal daily plan for a single calendar \`date\` (required query param), ordered by \`sort\` ascending. The daily plan is a **cross-org, Hub-scoped** surface: each item references a Task in any of the orgs the caller is a human Actor in, pulled together into one prioritized list for the day. The owning Hub is resolved server-side from the session user (\`hub.userId = session.user.id\`); items are filtered to \`(hubId, date)\`, so the caller only ever sees their own plan.
+      description: `Return the caller's personal daily plan for one required calendar \`date\`, ordered by \`sort ASC, id ASC\`. Pages default to 50 items, accept at most 100, and omit \`nextCursor\` at exhaustion. Reuse a cursor only for the same date. The daily plan is a cross-org, Hub-scoped surface and only contains the caller's own rows.
 
 Session-only, no capability. 401 when unauthenticated; **404 (Hub not found)** if the session user has no Hub row. Side-effect-free read. Related: \`POST /\` to add an item, \`PATCH /:id\` to reorder/complete/timebox, \`DELETE /:id\` to remove; \`GET /hub/today\` folds this plan into the cross-org Today cockpit.`,
     }),
@@ -117,14 +118,44 @@ Session-only, no capability. 401 when unauthenticated; **404 (Hub not found)** i
     async (c) => {
       const session = c.get('session');
       if (!session?.user) throw new AuthError();
-      const { date } = c.req.valid('query');
+      const { date, cursor, limit } = c.req.valid('query');
       const hubId = await resolveHubId(session.user.id);
+      const boundary = decodeTupleCursor(cursor);
+      if (
+        boundary &&
+        (boundary.length !== 2 ||
+          typeof boundary[0] !== 'number' ||
+          !Number.isInteger(boundary[0]) ||
+          typeof boundary[1] !== 'string')
+      ) {
+        throw new ValidationError([
+          { path: ['cursor'], message: 'The cursor is invalid or expired.' },
+        ]);
+      }
+      const boundarySort = boundary?.[0] as number | undefined;
+      const boundaryId = boundary?.[1] as string | undefined;
       const rows = await db
         .select()
         .from(dailyPlanItem)
-        .where(and(eq(dailyPlanItem.hubId, hubId), eq(dailyPlanItem.date, date)))
-        .orderBy(asc(dailyPlanItem.sort));
-      return ok(c, pageOf(DailyPlanItemOut), { items: rows.map(toOut) });
+        .where(
+          and(
+            eq(dailyPlanItem.hubId, hubId),
+            eq(dailyPlanItem.date, date),
+            boundarySort !== undefined && boundaryId
+              ? or(
+                  gt(dailyPlanItem.sort, boundarySort),
+                  and(eq(dailyPlanItem.sort, boundarySort), gt(dailyPlanItem.id, boundaryId)),
+                )
+              : undefined,
+          ),
+        )
+        .orderBy(asc(dailyPlanItem.sort), asc(dailyPlanItem.id))
+        .limit(limit + 1);
+      return ok(
+        c,
+        pageOf(DailyPlanItemOut),
+        pageResultByTuple(rows.map(toOut), limit, (item) => [item.sort, item.id]),
+      );
     },
   )
   .post(
@@ -166,7 +197,7 @@ The owning \`hubId\` is resolved server-side from the session user and is never 
       const row = inserted[0];
       /* v8 ignore next -- @preserve defensive: insert/update always returns a row */
       if (!row) throw new Error('daily plan item insert returned no row');
-      return created(c, DailyPlanItemOut, toOut(row));
+      return created(c, DailyPlanItemOut, toOut(row), null);
     },
   )
   .patch(

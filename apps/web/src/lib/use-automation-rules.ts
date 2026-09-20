@@ -44,7 +44,11 @@ export function useAutomationRules(orgId: string): AutomationRulesData {
   const listQ = useApiQuery(
     apiQueryOptions(
       key,
-      () => api.v1.orgs[':orgId']['automation-rules'].$get({ param: { orgId } }),
+      () =>
+        api.v1.orgs[':orgId']['automation-rules'].$get({
+          param: { orgId },
+          query: { limit: '100' },
+        }),
       'Could not load automation rules.',
     ),
   );

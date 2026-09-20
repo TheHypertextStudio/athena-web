@@ -29,8 +29,10 @@ import type {
   AthenaMailMessageOut,
   AthenaMailAttachmentTargetOut,
 } from '@docket/athena/athena-mail-contract';
-import { and, desc, eq, inArray } from 'drizzle-orm';
+import { and, asc, count, desc, eq, inArray } from 'drizzle-orm';
 import type { z } from 'zod';
+
+import { encodeListCursor, pageResult, pageResultByTimestamp, seekAfter } from '../lib/list-cursor';
 
 /** A stored Athena mailbox row. */
 export type AthenaMailboxRow = typeof athenaMailbox.$inferSelect;
@@ -293,15 +295,25 @@ export function toMailMessageOut(
 export async function listOwnedMessages(
   ownerUserId: string,
   limit: number,
-): Promise<z.input<typeof AthenaMailMessageOut>[]> {
+  cursor?: string,
+): Promise<{ items: z.input<typeof AthenaMailMessageOut>[]; nextCursor?: string }> {
   const rows = await db
     .select()
     .from(athenaInboundMessage)
-    .where(eq(athenaInboundMessage.ownerUserId, ownerUserId))
+    .where(
+      and(
+        eq(athenaInboundMessage.ownerUserId, ownerUserId),
+        seekAfter(athenaInboundMessage.receivedAt, athenaInboundMessage.id, cursor),
+      ),
+    )
     .orderBy(desc(athenaInboundMessage.receivedAt), desc(athenaInboundMessage.id))
-    .limit(limit);
-  const counts = await countAttachmentsFor(rows.map((row) => row.id));
-  return rows.map((row) => toMailMessageOut(row, counts.get(row.id) ?? 0));
+    .limit(limit + 1);
+  const page = pageResult(rows, limit, (row) => row.receivedAt);
+  const counts = await countAttachmentsFor(page.items.map((row) => row.id));
+  return {
+    items: page.items.map((row) => toMailMessageOut(row, counts.get(row.id) ?? 0)),
+    ...(page.nextCursor ? { nextCursor: page.nextCursor } : {}),
+  };
 }
 
 /**
@@ -322,7 +334,9 @@ export async function listMessagesAttachedTo(
   subjectType: 'task' | 'project' | 'initiative',
   subjectId: string,
   organizationId: string,
-): Promise<z.input<typeof AthenaMailMessageOut>[]> {
+  limit: number,
+  cursor?: string,
+): Promise<{ items: z.input<typeof AthenaMailMessageOut>[]; nextCursor?: string }> {
   const rows = await db
     .select({ message: athenaInboundMessage })
     .from(attachment)
@@ -333,11 +347,21 @@ export async function listMessagesAttachedTo(
         eq(attachment.organizationId, organizationId),
         eq(attachment.subjectType, subjectType),
         eq(attachment.subjectId, subjectId),
+        seekAfter(athenaInboundMessage.receivedAt, athenaInboundMessage.id, cursor),
       ),
     )
-    .orderBy(desc(athenaInboundMessage.receivedAt));
-  const counts = await countAttachmentsFor(rows.map((row) => row.message.id));
-  return rows.map((row) => toMailMessageOut(row.message, counts.get(row.message.id) ?? 0));
+    .orderBy(desc(athenaInboundMessage.receivedAt), desc(athenaInboundMessage.id))
+    .limit(limit + 1);
+  const page = pageResult(
+    rows.map((row) => row.message),
+    limit,
+    (message) => message.receivedAt,
+  );
+  const counts = await countAttachmentsFor(page.items.map((message) => message.id));
+  return {
+    items: page.items.map((message) => toMailMessageOut(message, counts.get(message.id) ?? 0)),
+    ...(page.nextCursor ? { nextCursor: page.nextCursor } : {}),
+  };
 }
 
 /**
@@ -374,17 +398,9 @@ export async function loadOwnedMessage(
  * @param messageId - The stored message id.
  * @returns the attachment targets, oldest first.
  */
-export async function listAttachmentTargets(
-  messageId: string,
+async function projectAttachmentTargets(
+  rows: readonly (typeof attachment.$inferSelect)[],
 ): Promise<z.input<typeof AthenaMailAttachmentTargetOut>[]> {
-  const rows = await db
-    .select()
-    .from(attachment)
-    .where(
-      and(eq(attachment.kind, ATHENA_MAIL_ATTACHMENT_KIND), eq(attachment.externalId, messageId)),
-    );
-  if (rows.length === 0) return [];
-
   const titles = new Map<string, string>();
   const byType = (type: 'task' | 'project' | 'initiative'): string[] =>
     rows.filter((row) => row.subjectType === type).map((row) => row.subjectId);
@@ -433,4 +449,70 @@ export async function listAttachmentTargets(
     })
     .filter((entry): entry is z.input<typeof AthenaMailAttachmentTargetOut> => entry !== null)
     .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+}
+
+/** Count the durable entity links for one received message without loading the collection. */
+export async function countAttachmentTargets(messageId: string): Promise<number> {
+  const rows = await db
+    .select({ value: count() })
+    .from(attachment)
+    .where(
+      and(eq(attachment.kind, ATHENA_MAIL_ATTACHMENT_KIND), eq(attachment.externalId, messageId)),
+    );
+  return rows[0]?.value ?? 0;
+}
+
+/** Load one attachment target by id for a single-resource response. */
+export async function loadAttachmentTarget(
+  messageId: string,
+  attachmentId: string,
+): Promise<z.input<typeof AthenaMailAttachmentTargetOut> | null> {
+  const rows = await db
+    .select()
+    .from(attachment)
+    .where(
+      and(
+        eq(attachment.id, attachmentId),
+        eq(attachment.kind, ATHENA_MAIL_ATTACHMENT_KIND),
+        eq(attachment.externalId, messageId),
+      ),
+    )
+    .limit(1);
+  return (await projectAttachmentTargets(rows))[0] ?? null;
+}
+
+/** List message attachment targets with database-bounded visibility refill. */
+export async function listAttachmentTargetsPage(
+  messageId: string,
+  limit: number,
+  cursor?: string,
+): Promise<{ items: z.input<typeof AthenaMailAttachmentTargetOut>[]; nextCursor?: string }> {
+  const items: z.input<typeof AthenaMailAttachmentTargetOut>[] = [];
+  let scanCursor = cursor;
+  let exhausted = false;
+  while (items.length < limit + 1 && !exhausted) {
+    const batchLimit = limit + 1 - items.length;
+    const rows = await db
+      .select()
+      .from(attachment)
+      .where(
+        and(
+          eq(attachment.kind, ATHENA_MAIL_ATTACHMENT_KIND),
+          eq(attachment.externalId, messageId),
+          seekAfter(attachment.createdAt, attachment.id, scanCursor, 'asc'),
+        ),
+      )
+      .orderBy(asc(attachment.createdAt), asc(attachment.id))
+      .limit(batchLimit);
+    const last = rows[rows.length - 1];
+    exhausted = rows.length < batchLimit;
+    if (last) scanCursor = encodeListCursor(last.createdAt, last.id);
+    items.push(...(await projectAttachmentTargets(rows)));
+  }
+  return pageResultByTimestamp(
+    items,
+    limit,
+    (item) => new Date(item.createdAt),
+    (item) => item.attachmentId,
+  );
 }

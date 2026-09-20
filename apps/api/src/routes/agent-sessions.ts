@@ -12,10 +12,9 @@ import {
   SessionFromPromptBody,
   SessionReplyBody,
 } from '@docket/athena/agent-contract';
-import { pageOf } from '../contracts/pagination';
-import { and, asc, desc, eq, gt } from 'drizzle-orm';
+import { CursorQuery, pageOf } from '../contracts/pagination';
+import { and, asc, desc, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
-import { streamSSE } from 'hono/streaming';
 import { z } from 'zod';
 
 import {
@@ -25,17 +24,15 @@ import {
   wakeWaitingAthenaGeneration,
 } from '../agent/async-runner';
 import type { AppEnv } from '../context';
-import { ConflictError } from '../error';
 import { accepted, created, ok } from '../lib/ok';
-import { declareStreaming } from '../lib/sse-headers';
-import { apiDoc, describeEventStream } from '../lib/openapi-route';
+import { pageResult, pageResultByKey, seekAfter } from '../lib/list-cursor';
+import { apiDoc } from '../lib/openapi-route';
 import { zJson, zParam, zQuery } from '../lib/validate';
 import { capabilityGuard } from '../permissions/capability-guard';
 import { enqueueSearchUpsert } from '../search/write-through';
 
 import {
   activityParam,
-  canContinueSessionDelivery,
   idParam,
   loadSessionDeliveryAccess,
   listSessionAccess,
@@ -48,6 +45,7 @@ import {
   loadActivity,
 } from './agent-session-helpers';
 import { createAndRunFromPrompt, postReplyAndResume, runSession } from './agent-session-runner';
+import { streamOrganizationActivity } from './agent-session-stream';
 import {
   decideActivity,
   decideProposalGroup,
@@ -60,11 +58,13 @@ import {
   approveLatestAndResume,
   resumeSessionExecution,
 } from '../agent/loop';
-import { editProposalInput, listProposalGroups } from '../agent/proposals';
+import { editProposalInput, latestProposedAction, listProposalGroups } from '../agent/proposals';
 import { cancelLatticeDelegation } from '../agent/lattice-delegations';
 import { latticeDelegationDependencies } from '../agent/lattice-delegation-runtime';
 import { assertHostedExecutionSurface } from '../agent/execution-surface';
 import { loadTranscript } from '../agent/transcript';
+import { organizationSessionMonitor } from './session-monitor';
+import { organizationAgentActivityStreamOperation } from './stream-contracts';
 
 /**
  * Get — or lazily create — the user's persistent Athena chat session (`kind: 'chat'`).
@@ -115,13 +115,9 @@ async function getOrCreateChatSession(
   return created;
 }
 
-/** SSE live-tail poll cadence (DB-backed, restart-safe). */
-const STREAM_POLL_MS = 750;
-/** SSE heartbeat cadence (keeps proxies from idling the connection out). */
-const STREAM_HEARTBEAT_MS = 15_000;
-
 /** Route params for the proposal-group routes. */
 const groupParam = z.object({ id: z.string(), groupId: z.string() });
+const paginatedSessionListQuery = listQuery.extend(CursorQuery.shape);
 
 /**
  * A decision on one gated activity, optionally widened to the whole session.
@@ -140,26 +136,6 @@ const ActivityDecisionBody = z
   })
   .meta({ id: 'ActivityDecisionBody', description: 'A decision on one gated session activity.' });
 
-/** Load the latest still-proposed action for a session-level compatibility decision. */
-async function latestProposedAction(
-  sessionId: string,
-): Promise<typeof sessionActivity.$inferSelect> {
-  const rows = await db
-    .select()
-    .from(sessionActivity)
-    .where(
-      and(
-        eq(sessionActivity.sessionId, sessionId),
-        eq(sessionActivity.type, 'action'),
-        eq(sessionActivity.approvalStatus, 'proposed'),
-      ),
-    )
-    .orderBy(desc(sessionActivity.createdAt), desc(sessionActivity.id))
-    .limit(1);
-  if (!rows[0]) throw new ConflictError('No proposed action awaiting approval');
-  return rows[0];
-}
-
 /** Agent-sessions router: list (status filter), read with stream, approve + reject. */
 const agentSessions = new Hono<AppEnv>()
   .get(
@@ -168,13 +144,17 @@ const agentSessions = new Hono<AppEnv>()
       tag: 'Agents',
       summary: 'List agent sessions',
       response: pageOf(AgentSessionOut),
-      description: `List the organization's agent sessions, newest first, as a single page of {@link AgentSessionOut} summaries (no activity stream — use \`GET /:id\` for that). An agent session is the Docket-hosted lifecycle of one agent task: it tracks status, trigger, the bound agent, an optional linked task, the human initiator, and start/end timestamps, but deliberately does NOT model compute/cost/telemetry (the external provider owns execution). Pass \`?status=\` to filter to a single lifecycle state (\`pending\`, \`running\`, \`awaiting_input\`, \`awaiting_approval\`, \`completed\`, \`failed\`, or \`canceled\`) — useful for surfacing the review queue (\`awaiting_approval\`) or live work (\`running\`). A read; org membership is sufficient. Related: start one via \`POST /\`, inspect via \`GET /:id\`, and watch live via \`GET /:id/stream\`.`,
+      description: `List the organization's agent sessions in \`createdAt DESC, id DESC\` order. Pages default to 50 items, accept at most 100, and omit \`nextCursor\` at exhaustion. Reuse a cursor only with the same \`status\` filter. The summaries omit activity; use \`GET /:id\` for detail. A read; org membership is sufficient.`,
     }),
-    zQuery(listQuery),
+    zQuery(paginatedSessionListQuery),
     async (c) => {
-      const { status } = c.req.valid('query');
-      const rows = await listSessionAccess(c, status);
-      return ok(c, pageOf(AgentSessionOut), { items: rows.map(toSessionOut) });
+      const { status, cursor, limit } = c.req.valid('query');
+      const rows = await listSessionAccess(c, status, { cursor, limit });
+      return ok(
+        c,
+        pageOf(AgentSessionOut),
+        pageResult(rows.map(toSessionOut), limit, (item) => new Date(item.createdAt)),
+      );
     },
   )
   .post(
@@ -186,7 +166,7 @@ const agentSessions = new Hono<AppEnv>()
       summary: 'Start an agent session from a prompt',
       capability: 'contribute',
       response: AgentSessionOut,
-      description: `Create and dispatch an agent session from a freeform \`prompt\`. Personal Athena work returns \`202\` after production asynchronous admission, with the parent session \`running\` and its generation durably queued; local/test Athena and explicit registered agents preserve the synchronous \`200\` settled response. This is the "ask Athena to plan" escalation of the hybrid Home prompt box; its sibling, plain quick-capture, lives at \`POST /v1/orgs/:orgId/capture\` and never invokes an agent.
+      description: `Create and dispatch an agent session from a freeform \`prompt\`. Personal Athena work returns \`202\` after production asynchronous admission, with the parent session \`running\` and its generation durably queued; local/test Athena and explicit registered agents return the created resource as \`201\`. This is the "ask Athena to plan" escalation of the hybrid Home prompt box; its sibling, plain quick-capture, lives at \`POST /v1/orgs/:orgId/capture\` and never invokes an agent.
 
 Behavior: the session binds to the supplied \`agentId\` (validated to be a registered agent in this workspace, else 404 \`Agent not found\`) or, when omitted, to the caller's personal Athena executor. Athena stores the caller's user id as owner and this workspace only as context; no workspace agent or grant is created. The prompt is persisted as the session's first \`response\` activity (there is no schema brief column) and threaded through as the runtime task brief. \`trigger\` is recorded as \`delegation\`, and the caller becomes the session \`initiatorId\`.
 
@@ -200,7 +180,12 @@ Side effects: dispatches the executor against the runtime; each yielded activity
       const settled = await createAndRunFromPrompt(orgId, actorId, prompt, agentId, ownerUserId);
       await enqueueSearchUpsert(orgId, 'agent_session', settled.id);
       if (settled.executorKind === 'athena' && asynchronousRunnerEnabled()) {
-        return accepted(c, AgentSessionOut, toSessionOut(settled));
+        return accepted(
+          c,
+          AgentSessionOut,
+          toSessionOut(settled),
+          organizationSessionMonitor(orgId, settled.id),
+        );
       }
       return created(c, AgentSessionOut, toSessionOut(settled));
     },
@@ -231,6 +216,7 @@ Side effects: dispatches the executor against the runtime; each yielded activity
     '/chat/messages',
     capabilityGuard('contribute'),
     apiDoc({
+      status: [200, 202],
       tag: 'Agents',
       summary: 'Send a message to the Athena chat thread',
       capability: 'contribute',
@@ -262,7 +248,7 @@ Side effects: dispatches the executor against the runtime; each yielded activity
         activities: activities.map(toActivityOut),
       };
       return asynchronous
-        ? accepted(c, AgentSessionDetailOut, detail)
+        ? accepted(c, AgentSessionDetailOut, detail, organizationSessionMonitor(orgId, settled.id))
         : ok(c, AgentSessionDetailOut, detail);
     },
   )
@@ -270,6 +256,7 @@ Side effects: dispatches the executor against the runtime; each yielded activity
     '/chat/new',
     capabilityGuard('contribute'),
     apiDoc({
+      status: 201,
       tag: 'Agents',
       summary: 'Start a new Athena chat thread',
       capability: 'contribute',
@@ -279,7 +266,7 @@ Side effects: dispatches the executor against the runtime; each yielded activity
     async (c) => {
       const { orgId, actorId } = c.get('actorCtx');
       const ownerUserId = requestUserId(c);
-      const [created] = await db
+      const [session] = await db
         .insert(agentSession)
         .values({
           executorKind: 'athena',
@@ -292,8 +279,13 @@ Side effects: dispatches the executor against the runtime; each yielded activity
         })
         .returning();
       /* v8 ignore next -- @preserve defensive: insert always returns a row */
-      if (!created) throw new Error('chat session insert returned no row');
-      return ok(c, AgentSessionDetailOut, { ...toSessionOut(created), activities: [] });
+      if (!session) throw new Error('chat session insert returned no row');
+      return created(
+        c,
+        AgentSessionDetailOut,
+        { ...toSessionOut(session), activities: [] },
+        organizationSessionMonitor(orgId, session.id),
+      );
     },
   )
   .get(
@@ -341,7 +333,12 @@ Behavior & side effects: atomically claims a durable \`agent_session_run\` gener
         await admitAthenaGeneration(session, { runnableStatuses: ['pending', 'running'] });
         const { session: current } = await loadSessionAccess(c, id, 'contribute');
         await enqueueSearchUpsert(orgId, 'agent_session', current.id);
-        return accepted(c, AgentSessionOut, toSessionOut(current));
+        return accepted(
+          c,
+          AgentSessionOut,
+          toSessionOut(current),
+          organizationSessionMonitor(orgId, current.id),
+        );
       }
       const settled = await runSession(orgId, id);
       await enqueueSearchUpsert(orgId, 'agent_session', settled.id);
@@ -350,88 +347,12 @@ Behavior & side effects: atomically claims a durable \`agent_session_run\` gener
   )
   .get(
     '/:id/stream',
-    describeEventStream({
-      tags: ['Agents'],
-      summary: 'Stream agent session activity (SSE)',
-      description: `Stream a session's Activity entries as **Server-Sent Events** (\`text/event-stream\`), rather than a JSON envelope. Each persisted activity is emitted as one SSE message whose \`id\` is the activity id, whose \`event\` name is the activity \`type\` (\`thought\` | \`action\` | \`response\` | \`elicitation\` | \`error\`), and whose \`data\` is the JSON-serialized {@link SessionActivityOut}. A client subscribes (e.g. via \`EventSource\`) to render the agent's reasoning, proposed actions, questions, and results as they arrive — the live counterpart to the one-shot \`GET /:id\` transcript.
-
-Semantics: the org-scoped session must exist (404 \`Session not found\` otherwise). The stream replays the session's existing activities in chronological order. Because each event carries the activity \`id\`, a reconnecting client can use the standard SSE \`Last-Event-ID\` header to resume after the last entry it saw. Reads only; org membership suffices. Approval is driven separately via \`PUT /:id/activity/:activityId/decision\` and \`POST /:id/activity/:activityId/reply\`; this endpoint is read-only observation.`,
-    }),
+    apiDoc(organizationAgentActivityStreamOperation),
     zParam(idParam),
     async (c) => {
       const { id } = c.req.valid('param');
       const { session } = await loadSessionDeliveryAccess(c, id);
-      const activities = await db
-        .select()
-        .from(sessionActivity)
-        .where(eq(sessionActivity.sessionId, id))
-        .orderBy(asc(sessionActivity.createdAt));
-      // Live tail: after replaying history, poll the DB for new rows until the session
-      // settles terminally. DB-backed (not process-coupled), so the tail survives the
-      // loop and the SSE reader living in different processes/restarts. `Last-Event-ID`
-      // resumes after the last activity a reconnecting client saw (ULIDs sort by id).
-      const lastEventId = c.req.header('last-event-id');
-      const terminal = new Set(['completed', 'failed', 'canceled']);
-      return declareStreaming(
-        streamSSE(c, async (stream) => {
-          let lastSeen = lastEventId ?? '';
-          const replay = activities.filter((activity) => !lastSeen || activity.id > lastSeen);
-          if (replay.length > 0) {
-            if (!(await canContinueSessionDelivery(c, session))) {
-              await stream.close();
-              return;
-            }
-            // A finite replay is one atomic stream write. This prevents an in-memory/test reader
-            // from observing EOF between queued frames when a terminal session is under load.
-            await stream.write(
-              replay
-                .map(
-                  (activity) =>
-                    `event: ${activity.type}\ndata: ${JSON.stringify(toActivityOut(activity))}\nid: ${activity.id}\n\n`,
-                )
-                .join(''),
-            );
-            lastSeen = replay.at(-1)?.id ?? lastSeen;
-          }
-          let status = session.status;
-          let sincePing = 0;
-          while (!terminal.has(status) && !stream.aborted) {
-            await new Promise((resolve) => setTimeout(resolve, STREAM_POLL_MS));
-            const fresh = await db
-              .select()
-              .from(sessionActivity)
-              .where(and(eq(sessionActivity.sessionId, id), gt(sessionActivity.id, lastSeen)))
-              .orderBy(asc(sessionActivity.id));
-            for (const activity of fresh) {
-              if (!(await canContinueSessionDelivery(c, session))) {
-                await stream.close();
-                return;
-              }
-              await stream.writeSSE({
-                id: activity.id,
-                event: activity.type,
-                data: JSON.stringify(toActivityOut(activity)),
-              });
-              lastSeen = activity.id;
-            }
-            sincePing += STREAM_POLL_MS;
-            if (sincePing >= STREAM_HEARTBEAT_MS) {
-              await stream.writeSSE({ event: 'ping', data: '{}' });
-              sincePing = 0;
-            }
-            const rows = await db
-              .select({ status: agentSession.status })
-              .from(agentSession)
-              .where(eq(agentSession.id, id))
-              .limit(1);
-            status = rows[0]?.status ?? 'completed';
-          }
-          // Hono closes again when the callback returns, but awaiting the close here is
-          // important for finite replays: it drains every queued SSE frame before the
-          // in-memory/test response reader observes EOF.
-          await stream.close();
-        }),
-      );
+      return streamOrganizationActivity(c, session);
     },
   )
   .get(
@@ -439,15 +360,21 @@ Semantics: the org-scoped session must exist (404 \`Session not found\` otherwis
     apiDoc({
       tag: 'Agents',
       summary: 'List pending proposal groups',
-      response: z.array(ProposalGroupOut),
-      description: `List the session's still-\`proposed\` actions grouped by \`proposalGroupId\` (one batch per assistant turn), each member ghost-projected as {@link ProposalItemOut} — the read behind both the session proposal card ("review all N") and the workspace ghost rows. A proposal that resolves to exactly one task — a \`capture\`, or a single-item \`organize\` — carries a \`ghost\` task shape (title/team/project/dueDate) that views render as a translucent, editable row; proposals without a spatial home have \`ghost: null\` and review in the session card. Editing goes through \`PATCH /:id/activity/:activityId/proposal\`; deciding through \`PUT /:id/proposals/:groupId/decision\`. Org-scoped 404 when the session is missing. A read; org membership suffices.`,
+      response: pageOf(ProposalGroupOut),
+      description: `List the session's still-proposed actions grouped by \`proposalGroupId\`. Results use stable proposal-group-id order, default to 50 groups, accept at most 100, and omit \`nextCursor\` at exhaustion. Org-scoped 404 when the session is missing.`,
     }),
     zParam(idParam),
+    zQuery(CursorQuery),
     async (c) => {
       const { id } = c.req.valid('param');
+      const { cursor, limit } = c.req.valid('query');
       await loadSessionDeliveryAccess(c, id);
-      const groups = await listProposalGroups(id);
-      return ok(c, z.array(ProposalGroupOut), groups);
+      const groups = await listProposalGroups(id, { cursor, limit });
+      return ok(
+        c,
+        pageOf(ProposalGroupOut),
+        pageResultByKey(groups, limit, (item) => item.proposalGroupId),
+      );
     },
   )
   .put(
@@ -484,7 +411,12 @@ Answers **202** when Athena's durable runner takes the work rather than finishin
         });
         await wakeWaitingAthenaGeneration(id);
         const { session: current } = await loadSessionAccess(c, id, 'assign');
-        return accepted(c, AgentSessionOut, toSessionOut(current));
+        return accepted(
+          c,
+          AgentSessionOut,
+          toSessionOut(current),
+          organizationSessionMonitor(orgId, current.id),
+        );
       }
       const settled = await approveGroupAndResume(
         orgId,
@@ -529,18 +461,30 @@ Answers **202** when Athena's durable runner takes the work rather than finishin
       tag: 'Agents',
       summary: 'List agent session activity',
       response: pageOf(SessionActivityOut),
-      description: `List a session's Activity entries as a single page of {@link SessionActivityOut}, oldest-first — the JSON (non-streaming) equivalent of \`GET /:id/stream\`, suited to a plain fetch/poll rather than an \`EventSource\`. The org-scoped session must exist (404 \`Session not found\`). Each entry has a \`type\` (\`thought\`/\`action\`/\`response\`/\`elicitation\`/\`error\`) and, for \`action\` rows, an \`approvalStatus\` showing its position in the approval gate. A read; org membership suffices. To drive the gate, see \`PUT /:id/activity/:activityId/decision\` and \`POST /:id/activity/:activityId/reply\`.`,
+      description: `List a session's Activity entries in \`createdAt ASC, id ASC\` order. Pages default to 50 items, accept at most 100, and omit \`nextCursor\` at exhaustion. Reuse a cursor only for the same session. This is the JSON equivalent of \`GET /:id/stream\`. The session must be visible to the caller.`,
     }),
     zParam(idParam),
+    zQuery(CursorQuery),
     async (c) => {
       const { id } = c.req.valid('param');
+      const { cursor, limit } = c.req.valid('query');
       await loadSessionDeliveryAccess(c, id);
       const activities = await db
         .select()
         .from(sessionActivity)
-        .where(eq(sessionActivity.sessionId, id))
-        .orderBy(asc(sessionActivity.createdAt));
-      return ok(c, pageOf(SessionActivityOut), { items: activities.map(toActivityOut) });
+        .where(
+          and(
+            eq(sessionActivity.sessionId, id),
+            seekAfter(sessionActivity.createdAt, sessionActivity.id, cursor, 'asc'),
+          ),
+        )
+        .orderBy(asc(sessionActivity.createdAt), asc(sessionActivity.id))
+        .limit(limit + 1);
+      return ok(
+        c,
+        pageOf(SessionActivityOut),
+        pageResult(activities.map(toActivityOut), limit, (item) => new Date(item.createdAt)),
+      );
     },
   )
   .put(
@@ -582,7 +526,12 @@ Athena decisions require the authenticated owner; registered-agent decisions req
         await wakeWaitingAthenaGeneration(id);
         const updated = await loadActivity(id, activityId);
         await enqueueSearchUpsert(orgId, 'agent_session', id);
-        return accepted(c, SessionActivityOut, toActivityOut(updated));
+        return accepted(
+          c,
+          SessionActivityOut,
+          toActivityOut(updated),
+          organizationSessionMonitor(orgId, id),
+        );
       }
       await approveAndResume(orgId, actorId, id, activityId, decision);
       const updated = await loadActivity(id, activityId);
@@ -619,7 +568,12 @@ Side effect: when the session was parked in \`awaiting_input\` it is resumed to 
       if (session.executorKind === 'athena' && asynchronousRunnerEnabled()) {
         await wakeWaitingAthenaGeneration(id);
         await enqueueSearchUpsert(orgId, 'agent_session', id);
-        return accepted(c, SessionActivityOut, toActivityOut(created));
+        return accepted(
+          c,
+          SessionActivityOut,
+          toActivityOut(created),
+          organizationSessionMonitor(orgId, id),
+        );
       }
       // Athena always enters through durable admission, initializing a missing transcript only
       // after its claim. Registered-agent rows keep the status-only fallback solely for legacy
@@ -671,7 +625,12 @@ Side effect: when the session was parked in \`awaiting_input\` it is resumed to 
         await wakeWaitingAthenaGeneration(id);
         const { session: current } = await loadSessionAccess(c, id, 'contribute');
         await enqueueSearchUpsert(orgId, 'agent_session', current.id);
-        return accepted(c, AgentSessionOut, toSessionOut(current));
+        return accepted(
+          c,
+          AgentSessionOut,
+          toSessionOut(current),
+          organizationSessionMonitor(orgId, current.id),
+        );
       }
       const updated =
         session.executorKind === 'athena' || (await loadTranscript(db, id)).length > 0
@@ -684,7 +643,6 @@ Side effect: when the session was parked in \`awaiting_input\` it is resumed to 
   .post(
     '/:id/cancel',
     apiDoc({
-      status: [200, 202],
       tag: 'Agents',
       summary: 'Cancel an agent session',
       response: AgentSessionOut,
@@ -721,7 +679,7 @@ Side effect: when the session was parked in \`awaiting_input\` it is resumed to 
       if (shouldWake) {
         await wakeWaitingAthenaGeneration(id);
         await enqueueSearchUpsert(orgId, 'agent_session', updated.id);
-        return accepted(c, AgentSessionOut, toSessionOut(updated));
+        return ok(c, AgentSessionOut, toSessionOut(updated));
       }
       await enqueueSearchUpsert(orgId, 'agent_session', updated.id);
       return ok(c, AgentSessionOut, toSessionOut(updated));
@@ -775,7 +733,14 @@ Athena requires its authenticated owner and reauthorizes the stored tool with th
         await wakeWaitingAthenaGeneration(id);
         const { session: current } = await loadSessionAccess(c, id, 'assign');
         await enqueueSearchUpsert(orgId, 'agent_session', current.id);
-        return accepted(c, AgentSessionOut, toSessionOut(current));
+        return approving
+          ? accepted(
+              c,
+              AgentSessionOut,
+              toSessionOut(current),
+              organizationSessionMonitor(orgId, current.id),
+            )
+          : ok(c, AgentSessionOut, toSessionOut(current));
       }
       const updated = approving
         ? await approveLatestAndResume(orgId, actorId, id)

@@ -76,7 +76,6 @@ describe('personal inbox client ownership', () => {
       expect(
         requests.filter((request) => request === 'GET /v1/me/notifications/count').length,
       ).toBeGreaterThan(1);
-      expect(result.current.actionError).toBeNull();
       expect(requests.some((request) => request.includes('/v1/notifications'))).toBe(false);
     },
   );

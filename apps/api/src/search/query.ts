@@ -10,7 +10,7 @@
  */
 import type { SearchOut } from '../contracts/search';
 import { collapseActivityRows, applyPaletteDiversityCap } from './query-collapse';
-import { decodeCursor, encodeCursor } from './query-cursor';
+import { decodeCursor, encodeCursor, fingerprintSearchQuery } from './query-cursor';
 import { browseDocuments, type BrowseInput } from './query-browse';
 import { scanRankedCandidates } from './query-ranked-scan';
 import { toSearchResult, withSearchDisplays } from './query-results';
@@ -26,6 +26,14 @@ export {
   type VisibleDocumentsQuery,
 } from './query-lookups';
 
+function normalizedSet(values: readonly string[] | undefined): readonly string[] {
+  return [...new Set(values ?? [])].sort((left, right) => left.localeCompare(right));
+}
+
+function normalizedQuery(value: string): string {
+  return value.trim().toLocaleLowerCase('en-US').replace(/\s+/g, ' ');
+}
+
 interface SearchWorkspaceInput {
   scope: 'hub' | 'org';
   caller: SearchCaller;
@@ -36,6 +44,38 @@ interface SearchWorkspaceInput {
   /** Fixed request clock for deterministic internal callers; cursors always take precedence. */
   rankedAt?: number | undefined;
   params: SearchQueryParams;
+}
+
+function searchCursorFingerprint(
+  input: SearchWorkspaceInput,
+  query: string,
+  accessibleOrgIds: readonly string[],
+  fromTime: number | null,
+  toTime: number | null,
+): string {
+  return fingerprintSearchQuery({
+    contract: 'search-query-v1',
+    mode: query.length === 0 ? 'browse' : 'ranked',
+    scope: input.scope,
+    caller: input.caller,
+    organizationId: input.scope === 'org' ? (input.orgId ?? null) : null,
+    accessibleOrgIds: normalizedSet(accessibleOrgIds),
+    activeOrgId: input.activeOrgId ?? null,
+    query: normalizedQuery(query),
+    surface: input.params.surface ?? 'page',
+    includeArchived: input.params.includeArchived ?? false,
+    fromTime,
+    toTime,
+    families: normalizedSet(input.params.families),
+    kinds: normalizedSet(input.params.kinds),
+    sources: normalizedSet(input.params.sources),
+    ownerIds: normalizedSet(input.params.ownerIds),
+    assigneeIds: normalizedSet(input.params.assigneeIds),
+    labelIds: normalizedSet(input.params.labelIds),
+    ids: normalizedSet(input.params.ids),
+    statuses: normalizedSet(input.params.statuses),
+    healths: normalizedSet(input.params.healths),
+  });
 }
 
 /**
@@ -50,7 +90,7 @@ interface SearchWorkspaceInput {
 export async function searchWorkspace(input: SearchWorkspaceInput): Promise<SearchOut> {
   const query = input.params.q?.trim() ?? '';
   const maxLimit = input.params.surface === 'palette' ? 50 : 100;
-  const limit = Math.min(Math.max(input.params.limit ?? 20, 1), maxLimit);
+  const limit = Math.min(Math.max(input.params.limit ?? 50, 1), maxLimit);
 
   // An agent owns no documents, so it has no personal scope to widen the search with.
   const ownerUserId = input.caller.kind === 'user' ? input.caller.userId : null;
@@ -67,6 +107,13 @@ export async function searchWorkspace(input: SearchWorkspaceInput): Promise<Sear
 
   const fromTime = input.params.from ? new Date(input.params.from).getTime() : null;
   const toTime = input.params.to ? new Date(input.params.to).getTime() : null;
+  const cursorFingerprint = searchCursorFingerprint(
+    input,
+    query,
+    accessibleOrgIds,
+    fromTime,
+    toTime,
+  );
 
   if (query.length === 0) {
     return browseDocuments({
@@ -78,10 +125,11 @@ export async function searchWorkspace(input: SearchWorkspaceInput): Promise<Sear
       accessByOrg: callerAccessByOrg,
       fromTime,
       toTime,
+      cursorFingerprint,
     } satisfies BrowseInput);
   }
 
-  const cursor = decodeCursor(input.params.cursor);
+  const cursor = decodeCursor(input.params.cursor, cursorFingerprint);
   const rankedAt = cursor?.rankedAt ?? input.rankedAt ?? Date.now();
   const { scored: candidates, facets } = await scanRankedCandidates({
     ownerUserId,
@@ -116,6 +164,6 @@ export async function searchWorkspace(input: SearchWorkspaceInput): Promise<Sear
     query,
     items,
     facets,
-    ...(next ? { nextCursor: encodeCursor(next, rankedAt) } : {}),
+    ...(next ? { nextCursor: encodeCursor(next, rankedAt, cursorFingerprint) } : {}),
   };
 }

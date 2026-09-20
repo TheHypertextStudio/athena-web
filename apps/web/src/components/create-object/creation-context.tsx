@@ -8,6 +8,7 @@ import type { VocabularySkin } from '@docket/work/vocabulary';
 import { createContext, type JSX, type ReactNode, useContext, useMemo } from 'react';
 
 import { api } from '@/lib/api';
+import { fetchAllMembers, fetchAllRoles, fetchAllTeams } from '@/lib/org-collection-pages';
 import { useSession } from '@/lib/auth-client';
 import { STALE, apiQueryOptions, queryKeys, useApiQuery } from '@/lib/query';
 import { useOrgCapability } from '@/lib/use-org-capability';
@@ -125,7 +126,7 @@ function ResolvedCreationContext({
   const teamsQ = useApiQuery(
     apiQueryOptions(
       queryKeys.teams(targetWorkspaceId),
-      () => api.v1.orgs[':orgId'].teams.$get({ param: { orgId: targetWorkspaceId } }),
+      () => fetchAllTeams(api, targetWorkspaceId),
       'Could not load teams.',
       { staleTime: STALE.static },
     ),
@@ -133,7 +134,7 @@ function ResolvedCreationContext({
   const membersQ = useApiQuery(
     apiQueryOptions(
       queryKeys.members(targetWorkspaceId),
-      () => api.v1.orgs[':orgId'].members.$get({ param: { orgId: targetWorkspaceId } }),
+      () => fetchAllMembers(api, targetWorkspaceId),
       'Could not load members.',
       { staleTime: STALE.static },
     ),
@@ -141,7 +142,7 @@ function ResolvedCreationContext({
   const rolesQ = useApiQuery(
     apiQueryOptions(
       queryKeys.roles(targetWorkspaceId),
-      () => api.v1.orgs[':orgId'].roles.$get({ param: { orgId: targetWorkspaceId } }),
+      () => fetchAllRoles(api, targetWorkspaceId),
       'Could not load roles.',
       { staleTime: STALE.static },
     ),

@@ -18,24 +18,17 @@
  * the caller received a `422` complaining that fields were missing which it had in fact sent.
  * `415` says the true thing — the body could not be read at all — and names what to declare.
  */
-import { accepts } from 'hono/accepts';
-import { matchedRoutes } from 'hono/route';
-import type { Context, MiddlewareHandler } from 'hono';
+import type { MiddlewareHandler } from 'hono';
 
 import type { AppEnv } from '../context';
 import { NotAcceptableError, UnsupportedMediaTypeError } from '../error';
+import { operationContractForRequest, type ApiOperationContract } from './api-operation-contract';
 
 /** The representation every endpoint answers with. */
 const JSON_MEDIA_TYPE = 'application/json';
 
-/** Everything this API can produce. Errors are the problem+json flavour of the same thing. */
-const PRODUCED = [JSON_MEDIA_TYPE, 'application/problem+json'];
-
-/** The Server-Sent Events representation, produced only by {@link producesEventStream} routes. */
-export const EVENT_STREAM_MEDIA_TYPE = 'text/event-stream';
-
-/** Sentinel for "nothing on offer satisfies this request", which `accepts` has no notion of. */
-const UNACCEPTABLE = 'none';
+/** The successful representation produced by legacy JSON operations. */
+const PRODUCED = [JSON_MEDIA_TYPE] as const;
 
 /**
  * Everything this API can consume.
@@ -55,36 +48,147 @@ function bare(value: string): string {
   return (value.split(';')[0] ?? '').trim().toLowerCase();
 }
 
-/** Route handlers registered through {@link producesEventStream}. */
-const eventStreamHandlers = new WeakSet();
+interface MediaRange {
+  readonly type: string;
+  readonly subtype: string;
+  readonly quality: number;
+  readonly parameterCount: number;
+  readonly order: number;
+}
 
-/**
- * Declare that the route carrying this handler answers with Server-Sent Events.
- *
- * @remarks
- * {@link mediaTypes} runs before any route middleware, so it finds the registered handler among
- * the request's matched handlers.
- *
- * @param handler - A handler in the stream route's chain.
- * @returns the same handler, now registered.
- */
-export function producesEventStream<T extends object>(handler: T): T {
-  eventStreamHandlers.add(handler);
-  return handler;
+interface RangeSelection {
+  readonly range: MediaRange;
+  readonly specificity: number;
+}
+
+function splitHeader(value: string): string[] {
+  const entries: string[] = [];
+  let entry = '';
+  let quoted = false;
+  let escaped = false;
+  for (const character of value) {
+    if (escaped) {
+      entry += character;
+      escaped = false;
+      continue;
+    }
+    if (quoted && character === '\\') {
+      entry += character;
+      escaped = true;
+      continue;
+    }
+    if (character === '"') quoted = !quoted;
+    if (character === ',' && !quoted) {
+      entries.push(entry);
+      entry = '';
+      continue;
+    }
+    entry += character;
+  }
+  entries.push(entry);
+  return entries;
+}
+
+function parseRange(value: string, order: number): MediaRange | undefined {
+  const [rawType, ...rawParameters] = value.split(';');
+  const mediaType = rawType?.trim().toLowerCase() ?? '';
+  const match = /^([a-z0-9!#$&^_.+*-]+)\/([a-z0-9!#$&^_.+*-]+)$/.exec(mediaType);
+  if (!match || (match[1] === '*' && match[2] !== '*')) return undefined;
+
+  let quality = 1;
+  let parameterCount = 0;
+  for (const rawParameter of rawParameters) {
+    const separator = rawParameter.indexOf('=');
+    if (separator < 1) return undefined;
+    const name = rawParameter.slice(0, separator).trim().toLowerCase();
+    const rawValue = rawParameter.slice(separator + 1).trim();
+    if (name === 'q') {
+      if (!/^(?:0(?:\.\d{0,3})?|1(?:\.0{0,3})?)$/.test(rawValue)) return undefined;
+      quality = Number(rawValue);
+    } else {
+      parameterCount += 1;
+    }
+  }
+
+  return {
+    type: match[1] ?? '',
+    subtype: match[2] ?? '',
+    quality,
+    parameterCount,
+    order,
+  };
+}
+
+function matchSpecificity(
+  range: MediaRange,
+  offeredType: string,
+  offeredSubtype: string,
+): number | undefined {
+  if (range.type !== '*' && range.type !== offeredType) return undefined;
+  if (range.subtype !== '*' && range.subtype !== offeredSubtype) return undefined;
+  if (range.type === '*') return 0;
+  return range.subtype === '*' ? 1 : 2;
+}
+
+function outranksRange(
+  range: MediaRange,
+  specificity: number,
+  selected: RangeSelection | undefined,
+): boolean {
+  if (!selected) return true;
+  if (specificity !== selected.specificity) return specificity > selected.specificity;
+  if (range.parameterCount !== selected.range.parameterCount) {
+    return range.parameterCount > selected.range.parameterCount;
+  }
+  return range.order < selected.range.order;
+}
+
+function effectiveRange(ranges: readonly MediaRange[], offered: string): MediaRange | undefined {
+  const [offeredType, offeredSubtype] = bare(offered).split('/');
+  if (!offeredType || !offeredSubtype) return undefined;
+
+  let selected: RangeSelection | undefined;
+  for (const range of ranges) {
+    const specificity = matchSpecificity(range, offeredType, offeredSubtype);
+    if (specificity === undefined) continue;
+    if (outranksRange(range, specificity, selected)) {
+      selected = { range, specificity };
+    }
+  }
+  return selected?.range;
+}
+
+function preferredOffer(ranges: readonly MediaRange[], offered: readonly string[]): string | null {
+  let selection: { readonly offered: string; readonly quality: number } | undefined;
+  for (const candidate of offered) {
+    const range = effectiveRange(ranges, candidate);
+    if (!range || range.quality === 0) continue;
+    if (!selection || range.quality > selection.quality) {
+      selection = { offered: candidate, quality: range.quality };
+    }
+  }
+  return selection?.offered ?? null;
 }
 
 /**
- * Whether one accepted media range is satisfied by what the matched route produces.
+ * Select one offered representation using the most specific matching Accept range.
  *
- * @param type - The lowercased media range from `Accept`.
- * @param c - The request context, read only when the range names an event stream.
- * @returns true when this API has a representation inside the range.
+ * @param accept - The raw Accept header, or undefined when the client accepts anything.
+ * @param offered - Successful response media types in server-preference order.
+ * @returns the selected offered media type, or null when the client refused every offer.
  */
-function covers(type: string, c: Context<AppEnv>): boolean {
-  if (type === '*/*' || type === 'application/*') return true;
-  if (PRODUCED.includes(type) || type.endsWith('+json')) return true;
-  if (type !== EVENT_STREAM_MEDIA_TYPE && type !== 'text/*') return false;
-  return matchedRoutes(c).some((route) => eventStreamHandlers.has(route.handler));
+export function negotiateMediaType(
+  accept: string | undefined,
+  offered: readonly string[],
+): string | null {
+  if (offered.length === 0) return null;
+  if (accept === undefined || accept.trim() === '') return offered[0] ?? null;
+
+  const ranges = splitHeader(accept)
+    .map((entry, order) => parseRange(entry.trim(), order))
+    .filter((range): range is MediaRange => range !== undefined);
+  if (ranges.length === 0) return null;
+  return preferredOffer(ranges, offered);
 }
 
 /**
@@ -95,7 +199,7 @@ function covers(type: string, c: Context<AppEnv>): boolean {
  * sending `Accept: application/json;q=0` has said it will not take JSON, and there is nothing
  * else to offer.
  */
-export const mediaTypes: MiddlewareHandler<AppEnv> = async (c, next) => {
+async function enforceRequestMediaType(c: Parameters<MiddlewareHandler<AppEnv>>[0]): Promise<void> {
   // `raw.body` rather than `Content-Length`: the length is often computed at send time and is
   // absent on the request object, while the stream is the authoritative answer to "is there
   // content here". A `POST` to a controller resource frequently carries none, and demanding a
@@ -110,27 +214,57 @@ export const mediaTypes: MiddlewareHandler<AppEnv> = async (c, next) => {
       if (hasContent) throw new UnsupportedMediaTypeError(CONSUMED);
     }
   }
+}
 
-  // Parsed by Hono's own `accepts` helper rather than by splitting the header here: it already
-  // handles q-values, quoted parameters, and malformed entries, and re-deriving that was the
-  // largest piece of duplicated code in this module. All that remains local is the wildcard
-  // policy, which the helper's default matcher has no opinion about.
-  const chosen = accepts(c, {
-    header: 'Accept',
-    supports: PRODUCED,
-    // Reached only when the header is absent, which means "anything will do".
-    default: JSON_MEDIA_TYPE,
-    match: (ranges) =>
-      ranges
-        .filter((range) => range.q > 0)
-        // Lowercased before comparing: a media type is case-insensitive, and Hono's parser
-        // hands back whatever the client wrote, so `Accept: APPLICATION/JSON` would otherwise
-        // match nothing on offer and be refused with `406`.
-        .some((range) => covers(range.type.toLowerCase(), c))
-        ? JSON_MEDIA_TYPE
-        : UNACCEPTABLE,
-  });
-  if (chosen === UNACCEPTABLE) throw new NotAcceptableError();
+function successfulMediaTypes(contract: ApiOperationContract): readonly string[] {
+  return [
+    ...new Set(
+      contract.success.flatMap((outcome) => {
+        switch (outcome.kind) {
+          case 'json':
+            return ['application/json'];
+          case 'binary':
+            return outcome.mediaTypes;
+          case 'sse':
+            return ['text/event-stream'];
+          case 'empty':
+            return [];
+        }
+      }),
+    ),
+  ];
+}
+
+function enforceResponseMediaType(
+  c: Parameters<MiddlewareHandler<AppEnv>>[0],
+  offered: readonly string[],
+): void {
+  if (offered.length === 0) return;
+  if (negotiateMediaType(c.req.header('Accept'), offered) === null) {
+    throw new NotAcceptableError();
+  }
+}
+
+/** Apply request and success-representation negotiation for one strict operation contract. */
+export function operationMediaTypes(contract: ApiOperationContract): MiddlewareHandler<AppEnv> {
+  const offered = successfulMediaTypes(contract);
+  return async (c, next) => {
+    await enforceRequestMediaType(c);
+    enforceResponseMediaType(c, offered);
+    await next();
+  };
+}
+
+/** Temporary negotiation for legacy routes that Task 4 has not migrated yet. */
+export const mediaTypes: MiddlewareHandler<AppEnv> = async (c, next) => {
+  if (operationContractForRequest(c)) {
+    await next();
+    return;
+  }
+
+  await enforceRequestMediaType(c);
+
+  enforceResponseMediaType(c, PRODUCED);
 
   await next();
 };

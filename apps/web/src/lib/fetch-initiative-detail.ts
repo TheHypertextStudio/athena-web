@@ -6,6 +6,13 @@ import type { ProjectOut } from './contracts/project';
 import type { RoleOut } from './contracts/role';
 
 import { api } from './api';
+import {
+  fetchAllLabels,
+  fetchAllMembers,
+  fetchAllPrograms,
+  fetchAllProjects,
+  fetchAllRoles,
+} from './org-collection-pages';
 import { type RpcResponse, apiQueryOptions, queryKeys, rpcErrorResponse } from './query';
 
 /** InitiativeDetailData describes the fetch initiative detail data contract shared by the hook or component. */
@@ -45,11 +52,11 @@ export function fetchInitiativeDetail(
         api.v1.orgs[':orgId'].initiatives[':id'].aggregate.$get({
           param: { orgId, id: initiativeId },
         }),
-        api.v1.orgs[':orgId'].projects.$get({ param: { orgId }, query: {} }),
-        api.v1.orgs[':orgId'].programs.$get({ param: { orgId }, query: {} }),
-        api.v1.orgs[':orgId'].members.$get({ param: { orgId } }),
-        api.v1.orgs[':orgId'].roles.$get({ param: { orgId } }),
-        api.v1.orgs[':orgId'].labels.$get({ param: { orgId }, query: {} }),
+        fetchAllProjects(api, orgId),
+        fetchAllPrograms(api, orgId),
+        fetchAllMembers(api, orgId),
+        fetchAllRoles(api, orgId),
+        fetchAllLabels(api, orgId),
       ]);
     if (!detailRes.ok) {
       return rpcErrorResponse<InitiativeDetailData>(detailRes);

@@ -1,53 +1,38 @@
 ---
-title: "Errors"
-description: "Branch on the code, and handle the two that behave differently than they look."
+title: 'Errors'
+description: 'Use stable problem codes for REST and MCP failures, then reauthorize only when authority changed.'
 ---
 
-Every failure returns an RFC 9457 problem document:
-
-```http
-HTTP/1.1 409 Conflict
-Content-Type: application/problem+json
-```
+Docket returns RFC 9457 problem documents for REST failures:
 
 ```json
 {
-  "type": "https://docket.hypertext.studio/problems/dependency_cycle",
-  "title": "That would create a loop",
-  "status": 409,
-  "code": "dependency_cycle",
-  "detail": "..."
+  "type": "https://clearthedocket.com/problems/unsupported_api_version",
+  "title": "Unsupported API version",
+  "status": 400,
+  "code": "unsupported_api_version"
 }
 ```
 
-<Warning>
-  **Branch on `code`, never on `title` or `detail`.** `code` is a closed, stable taxonomy. The
-  strings are Docket's own copy, rewritten freely. Write your own.
-</Warning>
+Branch on `code`. Do not branch on `title` or `detail`, and do not show either provider-owned string
+as your application error message.
 
-A `validation_error` also includes `fieldErrors`, one stable reason code per failing field.
+## Authorization errors
 
-<Card title="Browse every problem code" icon="triangle-exclamation" href="https://docket.hypertext.studio/problems" horizontal>
-  Each code, its status, and what to do. Every `type` URI resolves to a page in this catalog.
+| Signal                                                           | Meaning                                                           | Client action                                              |
+| ---------------------------------------------------------------- | ----------------------------------------------------------------- | ---------------------------------------------------------- |
+| `401`                                                            | The token is missing, invalid, expired, or its authority changed. | Stop and begin authorization again.                        |
+| `403` with `WWW-Authenticate: Bearer error="insufficient_scope"` | The current token lacks the required scope.                       | Ask the person to approve the narrower required scope.     |
+| `404`                                                            | A resource may be absent or hidden from the caller.               | Do not treat it as proof that the resource does not exist. |
+
+Client revocation, consent reduction, client disablement, user removal, and live grant reduction
+invalidate authority immediately. Do not retry a request by silently widening scopes.
+
+## Version errors
+
+`unsupported_api_version` means a client asserted a version other than the current `0.1.0` contract.
+Omit `Docket-Version` to accept the current contract, or send `Docket-Version: 0.1.0` exactly.
+
+<Card title="Read authentication behavior" icon="key" href="/developers/authentication" horizontal>
+  Discover the authorization server and request only the scopes a client needs.
 </Card>
-
-## `not_found` can mean hidden
-
-A 404 from `/v1/orgs/{orgId}/tasks` can mean the workspace exists and you are not a member. Never
-treat it as proof of absence.
-
-## `reauth_required` is not a sign-out
-
-It returns 401, but the session is only too old for a high-risk action. Prompt for a passkey
-step-up and retry the same request. Clear the session here and you log someone out for no reason.
-
-## Errors over MCP
-
-MCP tools return the same failures. Docket returns a `403` for a scope problem:
-
-```http
-WWW-Authenticate: Bearer error="insufficient_scope"
-```
-
-Re-authorize for the wider scope, then retry. See
-[Authentication](/developers/authentication#insufficient-scope).

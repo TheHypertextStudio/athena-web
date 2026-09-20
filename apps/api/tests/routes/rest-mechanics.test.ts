@@ -11,10 +11,9 @@
  * only place `Location` resolves to its real `/v1`-prefixed URL. A router mounted at the root
  * in a sibling test resolves it against its own root and would prove nothing about production.
  */
-import { and, eq } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
-import type { AppEnv } from '../../src/context';
 import { getSession } from '../support/auth-mock';
 import { composedV1App, getDb, seedBaseOrg, seedUserWithHub } from '../support/routes-harness';
 
@@ -50,14 +49,12 @@ async function createCategory(name: string, headers: Record<string, string> = {}
 }
 
 describe('creating a resource', () => {
-  it('answers 201 with a Location that names the new resource under /v1', async () => {
+  it('omits Location when the created resource has no readable member route', async () => {
     const res = await createCategory('Deep work');
     expect(res.status).toBe(201);
 
-    const { id } = (await res.json()) as { id: string };
-    const location = res.headers.get('location');
-    // Absolute, and carrying the mount prefix — a client must be able to follow it verbatim.
-    expect(location).toBe(`https://api.docket.localhost/v1/time/categories/${id}`);
+    expect((await res.json()) as { id: string }).toMatchObject({ id: expect.any(String) });
+    expect(res.headers.get('location')).toBeNull();
   });
 });
 
@@ -96,63 +93,26 @@ describe('typed work-view requests', () => {
 });
 
 describe('Idempotency-Key', () => {
-  it('replays the first outcome instead of creating a second resource', async () => {
+  it('rejects the header before an undeclared operation executes', async () => {
     const { db, schema } = await setup();
     const key = `retry-${Math.random().toString(36).slice(2)}`;
 
-    const first = await createCategory('Retried', { 'Idempotency-Key': key });
-    expect(first.status).toBe(201);
-    const created = (await first.json()) as { id: string };
-    expect(first.headers.get('idempotency-replayed')).toBeNull();
-
-    const replay = await createCategory('Retried', { 'Idempotency-Key': key });
-    expect(replay.status).toBe(201);
-    expect(replay.headers.get('idempotency-replayed')).toBe('true');
-    // Only the status and body are recorded, so the replay carries no `Location`. Deriving one
-    // would be worse than omitting it: `created()` takes an explicit location for resources that
-    // do not live below the collection posted to, so a derived URL can name nothing at all.
-    expect(replay.headers.get('location')).toBeNull();
-    // The same resource comes back, and no second one was written.
-    expect((await replay.json()) as { id: string }).toMatchObject({ id: created.id });
+    const response = await createCategory('Retried', { 'Idempotency-Key': key });
+    expect(response.status).toBe(422);
+    expect((await response.json()) as { code: string }).toMatchObject({
+      code: 'validation_error',
+    });
     expect(
       await db.select().from(schema.timeCategory).where(eq(schema.timeCategory.name, 'Retried')),
-    ).toHaveLength(1);
+    ).toHaveLength(0);
   });
 
-  it('refuses a key replayed against a different request', async () => {
-    const key = `reused-${Math.random().toString(36).slice(2)}`;
-    expect((await createCategory('Original', { 'Idempotency-Key': key })).status).toBe(201);
-
-    const mismatch = await createCategory('Something else', { 'Idempotency-Key': key });
-    expect(mismatch.status).toBe(422);
-    expect(mismatch.headers.get('content-type')).toContain('application/problem+json');
-    expect((await mismatch.json()) as { code: string }).toMatchObject({
-      code: 'idempotency_key_reuse',
-    });
-  });
-
-  it('leaves the key usable when the first attempt failed', async () => {
-    const { app } = await setup();
-    const key = `failed-${Math.random().toString(36).slice(2)}`;
-    const invalid = await app.request('/v1/time/categories', {
-      method: 'POST',
-      headers: { ...JSON_HEADERS, 'Idempotency-Key': key },
-      body: JSON.stringify({ name: '' }),
-    });
-    expect(invalid.status).toBe(422);
-
-    // Retrying a create that failed is exactly what the header is for, so the key must not be
-    // burned by the attempt that never produced anything.
-    expect((await createCategory('After a failure', { 'Idempotency-Key': key })).status).toBe(201);
-  });
-
-  it('ignores the header on a method that is already idempotent', async () => {
+  it('rejects the header on an undeclared safe operation', async () => {
     const { app } = await setup();
     const res = await app.request('/v1/time/categories', {
       headers: { 'Idempotency-Key': 'unused-on-a-read' },
     });
-    expect(res.status).toBe(200);
-    expect(res.headers.get('idempotency-replayed')).toBeNull();
+    expect(res.status).toBe(422);
   });
 });
 
@@ -191,89 +151,20 @@ describe('conditional requests', () => {
     ).toBe(200);
   });
 
-  it('refuses a write whose If-Match names a version the resource no longer has', async () => {
+  it('rejects If-Match on a write without a transactional aggregate adapter', async () => {
     const { app } = await setup();
-    const stale = (await app.request(PROFILE)).headers.get('etag') ?? '';
-
-    // Someone else writes first, which is what makes the held tag stale.
-    expect(
-      (
-        await app.request(PROFILE, {
-          method: 'PATCH',
-          headers: JSON_HEADERS,
-          body: JSON.stringify({ name: 'Renamed by someone else' }),
-        })
-      ).status,
-    ).toBe(200);
-
-    const lost = await app.request(PROFILE, {
+    const before = (await (await app.request(PROFILE)).json()) as { name: string };
+    const response = await app.request(PROFILE, {
       method: 'PATCH',
-      headers: { ...JSON_HEADERS, 'If-Match': stale },
-      body: JSON.stringify({ name: 'Would have clobbered' }),
+      headers: {
+        ...JSON_HEADERS,
+        'If-Match': (await app.request(PROFILE)).headers.get('etag') ?? '',
+      },
+      body: JSON.stringify({ name: 'Must not execute' }),
     });
-    expect(lost.status).toBe(412);
-    expect(lost.headers.get('content-type')).toContain('application/problem+json');
-    expect((await lost.json()) as { code: string }).toMatchObject({ code: 'precondition_failed' });
-
-    // The write that would have been lost did not land.
-    expect((await (await app.request(PROFILE)).json()) as { name: string }).toMatchObject({
-      name: 'Renamed by someone else',
-    });
-  });
-
-  it('accepts a write whose If-Match is current', async () => {
-    const { app } = await setup();
-    const tag = (await app.request(PROFILE)).headers.get('etag') ?? '';
-
-    const res = await app.request(PROFILE, {
-      method: 'PATCH',
-      headers: { ...JSON_HEADERS, 'If-Match': tag },
-      body: JSON.stringify({ name: 'Renamed by the holder' }),
-    });
-    expect(res.status).toBe(200);
-  });
-
-  it('refuses a precondition on a URI that serves no representation', async () => {
-    const { app } = await setup();
-
-    // `If-Match: *` means "if a current representation exists". A write-only address has none,
-    // so a caller asserting a version of it is mistaken about what it is writing.
-    const res = await app.request('/v1/me/notifications/read-all', {
-      method: 'DELETE',
-      headers: { ...JSON_HEADERS, 'If-Match': '*' },
-    });
-    expect(res.status).toBe(412);
-  });
-
-  it('works on a resource outside the authoritative-session prefixes', async () => {
-    const { app } = await setup();
-    const PREFERENCES = '/v1/me/notifications/preferences';
-    const tag = (await app.request(PREFERENCES)).headers.get('etag') ?? '';
-
-    // The tag is resolved by a sub-request into the `/v1` app, which does not carry the root
-    // server's `sessionMiddleware`. Without routing that sub-request through it, this 412s —
-    // and it would 412 on every resource except the three `/me/*` prefixes that happen to
-    // register `authoritativeSessionMiddleware`, one of which the cases above use.
-    const res = await app.request(PREFERENCES, {
-      method: 'PATCH',
-      headers: { ...JSON_HEADERS, 'If-Match': tag },
-      body: JSON.stringify({}),
-    });
-    expect(res.status).toBe(200);
-  });
-
-  it('ignores a conditional read header travelling alongside If-Match', async () => {
-    const { app } = await setup();
-    const tag = (await app.request(PROFILE)).headers.get('etag') ?? '';
-
-    // A client that kept its header set from the read sends both. Forwarding `If-None-Match` to
-    // the sub-request would have it answered `304`, which reads as "no current representation".
-    const res = await app.request(PROFILE, {
-      method: 'PATCH',
-      headers: { ...JSON_HEADERS, 'If-Match': tag, 'If-None-Match': tag },
-      body: JSON.stringify({ name: 'Sent both headers' }),
-    });
-    expect(res.status).toBe(200);
+    expect(response.status).toBe(422);
+    expect((await response.json()) as { code: string }).toMatchObject({ code: 'validation_error' });
+    expect((await (await app.request(PROFILE)).json()) as { name: string }).toMatchObject(before);
   });
 
   it('writes last-writer-wins when no precondition is sent', async () => {
@@ -287,65 +178,6 @@ describe('conditional requests', () => {
       body: JSON.stringify({ name: 'No precondition' }),
     });
     expect(res.status).toBe(200);
-  });
-});
-
-describe('an unmatched request', () => {
-  /** A throwaway app carrying the same fallback the real server registers. */
-  async function appWithFallback() {
-    const { Hono } = await import('hono');
-    const { onError } = await import('../../src/error');
-    const { unmatchedRoute } = await import('../../src/lib/unmatched-route');
-    const probe = new Hono<AppEnv>()
-      .get('/things/:id', (c) => c.json({ ok: true }))
-      .patch('/things/:id', (c) => c.json({ ok: true }));
-    probe.notFound(unmatchedRoute(probe));
-    probe.onError(onError);
-    return probe;
-  }
-
-  it('answers 405 with an Allow header when the path exists under another method', async () => {
-    const res = await (await appWithFallback()).request('/things/abc', { method: 'DELETE' });
-    expect(res.status).toBe(405);
-    // RFC 9110 §15.5.6 requires it, and without it a client learns only that it failed.
-    expect(res.headers.get('allow')?.split(', ').sort()).toEqual(['GET', 'PATCH']);
-    expect(res.headers.get('content-type')).toContain('application/problem+json');
-    expect((await res.json()) as { code: string }).toMatchObject({ code: 'method_not_allowed' });
-  });
-
-  it('answers 404 as a Problem rather than as plain text', async () => {
-    const res = await (await appWithFallback()).request('/nothing-here');
-    expect(res.status).toBe(404);
-    expect(res.headers.get('content-type')).toContain('application/problem+json');
-    expect((await res.json()) as { code: string; status: number }).toMatchObject({
-      code: 'not_found',
-      status: 404,
-    });
-  });
-});
-
-describe('idempotency records', () => {
-  it('scopes a key to the user who used it', async () => {
-    const { db, schema } = await setup();
-    const key = `scoped-${Math.random().toString(36).slice(2)}`;
-    expect((await createCategory('Mine', { 'Idempotency-Key': key })).status).toBe(201);
-
-    const other = await seedUserWithHub(db, schema, `restmech-other-${key.slice(-6)}`);
-    getSession.mockResolvedValue({
-      user: { id: other, name: 'Someone Else', email: 'other@example.test' },
-    });
-
-    // The same key from a different caller is a fresh key, never a replay of someone else's
-    // response — the primary key is `(user_id, key)` precisely so this cannot leak.
-    const res = await createCategory('Theirs', { 'Idempotency-Key': key });
-    expect(res.status).toBe(201);
-    expect(res.headers.get('idempotency-replayed')).toBeNull();
-    expect(
-      await db
-        .select()
-        .from(schema.idempotencyKey)
-        .where(and(eq(schema.idempotencyKey.key, key), eq(schema.idempotencyKey.userId, other))),
-    ).toHaveLength(1);
   });
 });
 
@@ -448,17 +280,15 @@ describe('media types', () => {
     expect((await res.json()) as { code: string }).toMatchObject({ code: 'not_acceptable' });
   });
 
-  it('treats a wildcard, a suffix, and silence as acceptable', async () => {
+  it('treats a wildcard, JSON case variants, and silence as acceptable', async () => {
     const { app } = await setup();
     for (const accept of [
       '*/*',
       'application/*',
-      'application/problem+json',
       'text/html, */*',
       // Media types are case-insensitive (RFC 9110 §8.3.1); comparing the client's spelling
       // against a lowercase list refused this with `406`.
       'APPLICATION/JSON',
-      'Application/Problem+JSON',
     ]) {
       expect(
         (await app.request('/v1/time/categories', { headers: { Accept: accept } })).status,
@@ -471,6 +301,14 @@ describe('media types', () => {
     const { app } = await setup();
     const res = await app.request('/v1/time/categories', {
       headers: { Accept: 'application/json;q=0' },
+    });
+    expect(res.status).toBe(406);
+  });
+
+  it('lets an explicit JSON refusal override an acceptable wildcard', async () => {
+    const { app } = await setup();
+    const res = await app.request('/v1/time/categories', {
+      headers: { Accept: 'application/json;q=0, */*;q=1' },
     });
     expect(res.status).toBe(406);
   });

@@ -56,6 +56,41 @@ import { VOICE_TOOL_DEFINITIONS } from './voice-tools';
 const idParam = z.object({ id: z.string() });
 const changeParam = z.object({ id: z.string(), changeSetId: z.string() });
 
+async function startWebVoiceSession(
+  createProvider: () => VoiceRealtimeProvider,
+  userId: string,
+  workspaceId: string | null | undefined,
+): Promise<z.infer<typeof VoiceSessionOut>> {
+  const provider = createProvider();
+  const opened = await openVoiceSession({
+    userId,
+    channel: 'web',
+    provider: provider.id,
+    organizationId: workspaceId ?? null,
+  });
+  const greeting = callerGreeting(opened.speakerName);
+  const credential = await provider.issueClientSession({
+    instructions: voiceInstructions(opened.speakerName, opened.recentContext),
+    tools: VOICE_TOOL_DEFINITIONS,
+    greeting,
+  });
+  return {
+    id: opened.voiceSessionId,
+    conversationId: opened.conversationId,
+    channel: 'web',
+    state: opened.engine.state,
+    credential,
+    greeting,
+    tools: VOICE_TOOL_DEFINITIONS.map((tool) => ({
+      name: tool.name,
+      description: tool.description,
+      parameters: tool.parameters,
+    })),
+    startedAt: opened.startedAt.toISOString(),
+    endedAt: null,
+  };
+}
+
 /**
  * Build the browser voice routes.
  *
@@ -79,36 +114,13 @@ export function createVoiceRoutes(createProvider: () => VoiceRealtimeProvider) {
       }),
       zJson(VoiceSessionStartBody),
       async (c) => {
-        const userId = requireUserId(c);
         const body = c.req.valid('json');
-        const provider = createProvider();
-        const opened = await openVoiceSession({
-          userId,
-          channel: 'web',
-          provider: provider.id,
-          organizationId: body.workspaceId ?? null,
-        });
-        const greeting = callerGreeting(opened.speakerName);
-        const credential = await provider.issueClientSession({
-          instructions: voiceInstructions(opened.speakerName, opened.recentContext),
-          tools: VOICE_TOOL_DEFINITIONS,
-          greeting,
-        });
-        return created(c, VoiceSessionOut, {
-          id: opened.voiceSessionId,
-          conversationId: opened.conversationId,
-          channel: 'web',
-          state: opened.engine.state,
-          credential,
-          greeting,
-          tools: VOICE_TOOL_DEFINITIONS.map((tool) => ({
-            name: tool.name,
-            description: tool.description,
-            parameters: tool.parameters,
-          })),
-          startedAt: opened.startedAt.toISOString(),
-          endedAt: null,
-        });
+        const session = await startWebVoiceSession(
+          createProvider,
+          requireUserId(c),
+          body.workspaceId,
+        );
+        return created(c, VoiceSessionOut, session, null);
       },
     )
     .get(

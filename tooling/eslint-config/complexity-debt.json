@@ -2615,12 +2615,6 @@
       "excess": 408
     }
   },
-  "apps/web/src/components/activity/day-highlight-row.tsx": {
-    "max-lines-per-function": {
-      "max": 82,
-      "excess": 2
-    }
-  },
   "apps/web/src/components/activity/day-highlights.tsx": {
     "max-lines-per-function": {
       "max": 98,

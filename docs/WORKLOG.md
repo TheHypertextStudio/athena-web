@@ -12,7 +12,7 @@
 - **Status**: IN_PROGRESS
 - **Started**: 2026-09-18
 - **Priority**: P0
-- **Description**: Systematically eliminate complexity-debt.json violations. Phase 1 targets 176 files with 1-10 total excess points across all rules. Current total: 1,285 entries, 155,525 excess points across 735 files.
+- **Description**: Systematically eliminate complexity-debt.json violations. Phase 1 targets 176 files with 1-10 total excess points across all rules. Current total: 1,284 entries, 155,523 excess points across 734 files.
 
 #### Analysis Complete
 
@@ -197,6 +197,8 @@ Quick-win files to process:
   - Mock observer entity and participant normalization now use focused helpers, clearing its final
     two complexity points while preserving all 24 observer/index tests. The ledger is 735 files and
     1,285 entries.
+  - Day-highlight metadata now renders through a focused helper, clearing its final function-length
+    excess while preserving the activity row behavior. The ledger is 734 files and 1,284 entries.
 
 ---
 

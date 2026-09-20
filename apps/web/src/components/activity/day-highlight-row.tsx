@@ -97,26 +97,7 @@ export function DayHighlightRow({
           />
         )
       }
-      meta={
-        <>
-          <RowMeta>
-            <ProviderBadge system={highlight.system} />
-          </RowMeta>
-          <RowMeta>
-            <time
-              dateTime={highlight.occurredAt}
-              className="text-label-small tabular-nums"
-              title={new Date(highlight.occurredAt).toLocaleString('en-US', { timeZone: timezone })}
-            >
-              {entryTimeLabel({
-                occurredAt: highlight.occurredAt,
-                endedAt: highlight.endedAt,
-                timezone,
-              })}
-            </time>
-          </RowMeta>
-        </>
-      }
+      meta={<DayHighlightMeta highlight={highlight} timezone={timezone} />}
       trailing={
         actions ? (
           <Button
@@ -133,5 +114,34 @@ export function DayHighlightRow({
         ) : null
       }
     />
+  );
+}
+
+function DayHighlightMeta({
+  highlight,
+  timezone,
+}: {
+  readonly highlight: HighlightOut;
+  readonly timezone: string;
+}): JSX.Element {
+  return (
+    <>
+      <RowMeta>
+        <ProviderBadge system={highlight.system} />
+      </RowMeta>
+      <RowMeta>
+        <time
+          dateTime={highlight.occurredAt}
+          className="text-label-small tabular-nums"
+          title={new Date(highlight.occurredAt).toLocaleString('en-US', { timeZone: timezone })}
+        >
+          {entryTimeLabel({
+            occurredAt: highlight.occurredAt,
+            endedAt: highlight.endedAt,
+            timezone,
+          })}
+        </time>
+      </RowMeta>
+    </>
   );
 }

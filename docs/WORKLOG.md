@@ -107,6 +107,9 @@ Quick-win files to process:
   - `scheduling-time-axis.ts` now formats each tick through a small context-driven helper, removing
     its final complexity excess. Axis tests pass; the unrelated canvas fixture still reports the
     documented stale ancestor failure. The ledger is 764 files and 1,318 entries.
+  - The overlap coloring helper now delegates two-color neighbor traversal to a focused function,
+    removing its one-point cognitive-complexity excess. The overlap layout suite passes; the ledger
+    is 763 files and 1,317 entries.
 
 ---
 

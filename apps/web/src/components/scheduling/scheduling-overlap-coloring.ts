@@ -40,6 +40,24 @@ function oneColoring(neighbors: readonly ReadonlySet<number>[]): number[] | null
     : new Array<number>(neighbors.length).fill(0);
 }
 
+function colorTwoColorNeighbors(
+  vertex: number,
+  color: number,
+  neighbors: readonly ReadonlySet<number>[],
+  colors: number[],
+  pending: number[],
+): boolean {
+  for (const neighbor of neighbors[vertex] ?? []) {
+    const neighborColor = colors[neighbor];
+    if (neighborColor === color) return false;
+    if (neighborColor === -1) {
+      colors[neighbor] = 1 - color;
+      pending.push(neighbor);
+    }
+  }
+  return true;
+}
+
 function twoColoring(neighbors: readonly ReadonlySet<number>[]): number[] | null {
   const colors = new Array<number>(neighbors.length).fill(-1);
   for (let start = 0; start < neighbors.length; start += 1) {
@@ -48,14 +66,7 @@ function twoColoring(neighbors: readonly ReadonlySet<number>[]): number[] | null
     const pending = [start];
     for (const vertex of pending) {
       const color = colors[vertex] ?? 0;
-      for (const neighbor of neighbors[vertex] ?? []) {
-        const neighborColor = colors[neighbor];
-        if (neighborColor === color) return null;
-        if (neighborColor === -1) {
-          colors[neighbor] = 1 - color;
-          pending.push(neighbor);
-        }
-      }
+      if (!colorTwoColorNeighbors(vertex, color, neighbors, colors, pending)) return null;
     }
   }
   return colors;

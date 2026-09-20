@@ -4929,12 +4929,6 @@
       "excess": 25
     }
   },
-  "apps/web/src/components/views/task-catalog.ts": {
-    "max-lines-per-function": {
-      "max": 81,
-      "excess": 1
-    }
-  },
   "apps/web/src/components/views/task-table.tsx": {
     "max-lines-per-function": {
       "max": 114,

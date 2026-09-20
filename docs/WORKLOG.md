@@ -12,7 +12,7 @@
 - **Status**: IN_PROGRESS
 - **Started**: 2026-09-18
 - **Priority**: P0
-- **Description**: Systematically eliminate complexity-debt.json violations. Phase 1 targets 176 files with 1-10 total excess points across all rules. Current total: 1,294 entries, 155,539 excess points across 744 files.
+- **Description**: Systematically eliminate complexity-debt.json violations. Phase 1 targets 176 files with 1-10 total excess points across all rules. Current total: 1,293 entries, 155,538 excess points across 743 files.
 
 #### Analysis Complete
 
@@ -171,6 +171,9 @@ Quick-win files to process:
   - Recovery-code dialog body rendering now lives in a focused helper, clearing its final
     function-length excess while preserving the recovery/passkey component tests. The ledger is
     744 files and 1,294 entries.
+  - Task catalog label-field construction now lives in a focused helper, clearing its final
+    function-length excess while preserving 21 view/catalog tests. The ledger is 743 files and
+    1,293 entries.
 
 ---
 

@@ -107,6 +107,27 @@ function labelOptionsOf(tasks: readonly TaskOut[]): readonly FieldOption[] {
     .sort((a, b) => a.label.localeCompare(b.label));
 }
 
+function taskLabelField(
+  rows: readonly TaskOut[],
+  labelNames: ReadonlyMap<string, string> | null,
+): FieldCatalog<TaskOut>[number] {
+  return {
+    key: 'labels',
+    label: 'Label',
+    type: 'relation',
+    // Sorting reads `accessor`, and ordering a row by a *set* has no single honest answer, so this
+    // reports the first label and the field is not sortable.
+    accessor: (task) => task.labels[0]?.id ?? null,
+    // The multi-value slot the engine already had: filtering matches if *any* label matches, and
+    // grouping fans a task into one bucket per label — so a task with two labels appears under
+    // both, and group counts can exceed the row count.
+    values: (task) => task.labels.map((l) => l.id),
+    resolveOptions: () => labelOptionsOf(rows),
+    resolveLabel: (id) => labelNames?.get(id) ?? id,
+    groupable: true,
+  };
+}
+
 /**
  * Build the task {@link FieldCatalog} the Saved Views toolbar drives.
  *
@@ -164,25 +185,7 @@ export function buildTaskCatalog(deps: TaskCatalogDeps): FieldCatalog<TaskOut> {
       resolveLabel: deps.resolveProgram,
       groupable: true,
     },
-    ...(rows
-      ? ([
-          {
-            key: 'labels',
-            label: 'Label',
-            type: 'relation',
-            // Sorting reads `accessor`, and ordering a row by a *set* has no single honest
-            // answer, so this reports the first label and the field is not sortable.
-            accessor: (task) => task.labels[0]?.id ?? null,
-            // The multi-value slot the engine already had: filtering matches if *any* label
-            // matches, and grouping fans a task into one bucket per label — so a task with two
-            // labels appears under both, and group counts can exceed the row count.
-            values: (task) => task.labels.map((l) => l.id),
-            resolveOptions: () => labelOptionsOf(rows),
-            resolveLabel: (id) => labelNames?.get(id) ?? id,
-            groupable: true,
-          },
-        ] satisfies FieldCatalog<TaskOut>)
-      : []),
+    ...(rows ? [taskLabelField(rows, labelNames)] : []),
     {
       key: 'dueDate',
       label: 'Due date',

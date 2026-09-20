@@ -1679,12 +1679,6 @@
       "excess": 889
     }
   },
-  "apps/api/tests/routes/hub-aggregation-test-helpers.ts": {
-    "max-params": {
-      "max": 6,
-      "excess": 1
-    }
-  },
   "apps/api/tests/routes/hub-aggregation.test.ts": {
     "max-lines": {
       "max": 1246,
@@ -2613,12 +2607,6 @@
       "excess": 120
     }
   },
-  "apps/web/src/app/(marketing)/privacy/page.tsx": {
-    "max-lines-per-function": {
-      "max": 81,
-      "excess": 1
-    }
-  },
   "apps/web/src/app/(marketing)/terms/page.tsx": {
     "max-lines-per-function": {
       "max": 106,
@@ -2963,12 +2951,6 @@
       "excess": 19
     }
   },
-  "apps/web/src/components/authentication-interlock.tsx": {
-    "max-lines-per-function": {
-      "max": 81,
-      "excess": 1
-    }
-  },
   "apps/web/src/components/billing/billing-recovery.tsx": {
     "max-lines-per-function": {
       "max": 104,
@@ -3125,12 +3107,6 @@
     "max-lines-per-function": {
       "max": 90,
       "excess": 10
-    }
-  },
-  "apps/web/src/components/canvas/graph-annotate.ts": {
-    "complexity": {
-      "max": 13,
-      "excess": 1
     }
   },
   "apps/web/src/components/canvas/graph-initial-frame.ts": {
@@ -3321,12 +3297,6 @@
     "complexity": {
       "max": 15,
       "excess": 3
-    }
-  },
-  "apps/web/src/components/context-menu/object-context-menu.tsx": {
-    "complexity": {
-      "max": 13,
-      "excess": 1
     }
   },
   "apps/web/src/components/create-object/creation-context.tsx": {
@@ -3927,12 +3897,6 @@
       "excess": 4
     }
   },
-  "apps/web/src/components/recovery-nudge-banner.tsx": {
-    "complexity": {
-      "max": 13,
-      "excess": 1
-    }
-  },
   "apps/web/src/components/recurrence/plan-work-for-event-form.tsx": {
     "complexity": {
       "max": 22,
@@ -4075,12 +4039,6 @@
       "excess": 2
     }
   },
-  "apps/web/src/components/scheduling/scheduling-overlap-coloring.ts": {
-    "sonarjs/cognitive-complexity": {
-      "max": 16,
-      "excess": 1
-    }
-  },
   "apps/web/src/components/scheduling/scheduling-overlap-components.ts": {
     "complexity": {
       "max": 15,
@@ -4103,12 +4061,6 @@
     "max-lines-per-function": {
       "max": 160,
       "excess": 80
-    }
-  },
-  "apps/web/src/components/scheduling/scheduling-time-axis.ts": {
-    "complexity": {
-      "max": 13,
-      "excess": 1
     }
   },
   "apps/web/src/components/scheduling/scheduling-time-label.ts": {
@@ -4729,12 +4681,6 @@
       "excess": 40
     }
   },
-  "apps/web/src/components/tasks/task-relation-port.ts": {
-    "complexity": {
-      "max": 13,
-      "excess": 1
-    }
-  },
   "apps/web/src/components/team-detail/throughput-chart.tsx": {
     "complexity": {
       "max": 14,
@@ -4843,8 +4789,8 @@
   },
   "apps/web/src/components/time-tracking/focus-task-queue.tsx": {
     "max-lines-per-function": {
-      "max": 128,
-      "excess": 48
+      "max": 127,
+      "excess": 47
     },
     "sonarjs/cognitive-complexity": {
       "max": 16,
@@ -5349,12 +5295,6 @@
       "excess": 20
     }
   },
-  "apps/web/src/lib/route-match.ts": {
-    "sonarjs/cognitive-complexity": {
-      "max": 16,
-      "excess": 1
-    }
-  },
   "apps/web/src/lib/search-route.ts": {
     "complexity": {
       "max": 15,
@@ -5663,12 +5603,6 @@
       "excess": 100
     }
   },
-  "domains/athena/src/conversation-terms.ts": {
-    "complexity": {
-      "max": 13,
-      "excess": 1
-    }
-  },
   "domains/athena/src/elicitation.ts": {
     "complexity": {
       "max": 32,
@@ -5905,12 +5839,6 @@
     "max-lines": {
       "max": 3911,
       "excess": 3411
-    }
-  },
-  "domains/work/src/parent-resolution.ts": {
-    "complexity": {
-      "max": 13,
-      "excess": 1
     }
   },
   "domains/work/tests/legacy/dto-work-contracts.test.ts": {
@@ -6433,12 +6361,6 @@
       "excess": 91
     }
   },
-  "packages/ui/src/components/pickers/OptionPicker.tsx": {
-    "complexity": {
-      "max": 13,
-      "excess": 1
-    }
-  },
   "packages/ui/src/components/pickers/PickerList.tsx": {
     "complexity": {
       "max": 31,
@@ -6535,12 +6457,6 @@
       "excess": 99
     }
   },
-  "packages/ui/src/components/toolbar/ResponsiveControlGroup.tsx": {
-    "complexity": {
-      "max": 13,
-      "excess": 1
-    }
-  },
   "packages/ui/src/components/views/EntityListRow.tsx": {
     "complexity": {
       "max": 30,
@@ -6613,18 +6529,6 @@
     "max-lines-per-function": {
       "max": 91,
       "excess": 11
-    }
-  },
-  "packages/ui/src/primitives/dialog.tsx": {
-    "complexity": {
-      "max": 13,
-      "excess": 1
-    }
-  },
-  "packages/ui/src/primitives/field.tsx": {
-    "complexity": {
-      "max": 13,
-      "excess": 1
     }
   },
   "packages/ui/src/primitives/tabs.tsx": {

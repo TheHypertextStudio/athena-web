@@ -241,6 +241,47 @@ function dialogClosePositionClass(presentation: DialogPresentation | undefined):
   return 'top-4 right-4';
 }
 
+type HostedDialogPresentation = Extract<DialogPresentation, { kind: 'hosted' }>;
+
+function dialogBackdrop(hosted: HostedDialogPresentation | null): React.JSX.Element | null {
+  if (hosted?.backdrop === 'none') return null;
+  return <DialogOverlay className={hosted?.backdrop === 'surface' ? 'bg-surface' : undefined} />;
+}
+
+function dialogHostedStyle(
+  hosted: HostedDialogPresentation | null,
+): React.CSSProperties | undefined {
+  if (!hosted) return undefined;
+  return {
+    top: hosted.position.top,
+    left: hosted.position.left,
+    width: hosted.position.width,
+    maxHeight: hosted.position.maxHeight,
+  };
+}
+
+function DialogCloseButton({
+  closeLabel,
+  presentation,
+}: {
+  readonly closeLabel: string;
+  readonly presentation: DialogPresentation;
+}): React.JSX.Element {
+  return (
+    <DialogPrimitive.Close
+      aria-label={closeLabel}
+      className={cn(
+        controlChrome('sm', { iconOnly: true }),
+        'text-on-surface-variant hover:bg-surface-container-highest hover:text-on-surface absolute z-10 opacity-70 transition-colors transition-opacity hover:opacity-100',
+        dialogClosePositionClass(presentation),
+        focusRing,
+      )}
+    >
+      <X />
+    </DialogPrimitive.Close>
+  );
+}
+
 /** Render a focus-trapped dialog panel with one shared presentation contract. */
 export function DialogContent({
   className,
@@ -259,20 +300,9 @@ export function DialogContent({
 
   return (
     <DialogPortal container={hosted?.portalContainer}>
-      {hosted?.backdrop === 'none' ? null : (
-        <DialogOverlay className={hosted?.backdrop === 'surface' ? 'bg-surface' : undefined} />
-      )}
+      {dialogBackdrop(hosted)}
       <DialogPrimitive.Content
-        {...(hosted
-          ? {
-              style: {
-                top: hosted.position.top,
-                left: hosted.position.left,
-                width: hosted.position.width,
-                maxHeight: hosted.position.maxHeight,
-              },
-            }
-          : {})}
+        style={dialogHostedStyle(hosted)}
         className={cn(
           // Position, width, height, and the viewport gutter all come from the presentation; this
           // string is only the panel's surface, elevation, motion, and clipping.
@@ -290,17 +320,7 @@ export function DialogContent({
       >
         {children}
         {showClose ? (
-          <DialogPrimitive.Close
-            aria-label={closeLabel}
-            className={cn(
-              controlChrome('sm', { iconOnly: true }),
-              'text-on-surface-variant hover:bg-surface-container-highest hover:text-on-surface absolute z-10 opacity-70 transition-colors transition-opacity hover:opacity-100',
-              dialogClosePositionClass(presentation),
-              focusRing,
-            )}
-          >
-            <X />
-          </DialogPrimitive.Close>
+          <DialogCloseButton closeLabel={closeLabel} presentation={presentation} />
         ) : null}
       </DialogPrimitive.Content>
     </DialogPortal>

@@ -98,6 +98,9 @@ Quick-win files to process:
   - The next one-point entry is also cleared: `hub-aggregation-test-helpers.ts` now accepts
     optional actor status and role values as an options object. Its 29-route-test focused suite,
     API typecheck, and ESLint pass; the ledger is 767 files and 1,321 entries.
+  - `packages/ui/src/primitives/dialog.tsx` is now below the complexity ceiling by extracting its
+    backdrop, hosted-style, and close-button render helpers. The dialog primitive suite passes and
+    the ledger is 766 files and 1,320 entries.
 
 ---
 

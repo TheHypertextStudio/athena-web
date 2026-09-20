@@ -137,24 +137,25 @@ function compareIntervals(a: VisualInterval, b: VisualInterval): number {
   return 0;
 }
 
+function exactIntervalsOverlap(left: OverlapLayoutInterval, right: OverlapLayoutInterval): boolean {
+  const exact = [
+    left.exactStartMinutes,
+    left.exactEndMinutes,
+    right.exactStartMinutes,
+    right.exactEndMinutes,
+  ];
+  if (exact.some((value) => value === undefined || !Number.isFinite(value))) return false;
+  const [leftStart, leftEnd, rightStart, rightEnd] = exact as [number, number, number, number];
+  return (
+    leftStart < leftEnd && rightStart < rightEnd && leftStart < rightEnd && rightStart < leftEnd
+  );
+}
+
 /** Return whether two cards collide visually or overlap as exact instants across a DST change. */
 function intervalsConflict(left: OverlapLayoutInterval, right: OverlapLayoutInterval): boolean {
   const visuallyOverlap =
     left.startMinutes < right.effectiveEndMinutes && right.startMinutes < left.effectiveEndMinutes;
-  const exactlyOverlap =
-    left.exactStartMinutes !== undefined &&
-    left.exactEndMinutes !== undefined &&
-    right.exactStartMinutes !== undefined &&
-    right.exactEndMinutes !== undefined &&
-    Number.isFinite(left.exactStartMinutes) &&
-    Number.isFinite(left.exactEndMinutes) &&
-    Number.isFinite(right.exactStartMinutes) &&
-    Number.isFinite(right.exactEndMinutes) &&
-    left.exactStartMinutes < left.exactEndMinutes &&
-    right.exactStartMinutes < right.exactEndMinutes &&
-    left.exactStartMinutes < right.exactEndMinutes &&
-    right.exactStartMinutes < left.exactEndMinutes;
-  return visuallyOverlap || exactlyOverlap;
+  return visuallyOverlap || exactIntervalsOverlap(left, right);
 }
 
 /**

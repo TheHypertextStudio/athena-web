@@ -3995,12 +3995,6 @@
       "excess": 3
     }
   },
-  "apps/web/src/components/scheduling/scheduling-overlap-layout.ts": {
-    "complexity": {
-      "max": 14,
-      "excess": 2
-    }
-  },
   "apps/web/src/components/scheduling/scheduling-overlap-sweep.ts": {
     "complexity": {
       "max": 15,

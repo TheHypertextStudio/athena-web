@@ -289,7 +289,7 @@ const TAGS = [
   {
     name: 'Hub',
     description:
-      'The cross-org cockpit: Today, Inbox, Portfolio, Search, and Activity surfaces that aggregate across every org you belong to via a permission-scoped fan-out (one query per membership, merged in app code, each row carrying its org chip). Requires only an authenticated session — the per-resource gate has already run on each constituent row.',
+      'Personal Today, Inbox, Portfolio, Search, and Activity views across every Organization the signed-in person may access. Each item identifies its Organization, and normal resource visibility still applies.',
   },
   {
     name: 'Me',
@@ -306,7 +306,7 @@ const SESSION_COOKIE_SCHEME = {
   in: 'cookie' as const,
   name: '__Secure-better-auth.session_token',
   description:
-    'The first-party Docket browser session cookie. Production uses `__Secure-better-auth.session_token`; local HTTP development uses the unprefixed `better-auth.session_token` cookie.',
+    'The secure first-party Docket browser session cookie. External integrations should use OAuth 2.1 instead of reading or setting this cookie.',
 };
 
 const SHARE_TOKEN_SCHEME = {

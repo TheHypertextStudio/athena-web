@@ -14,6 +14,8 @@ import { env } from './env';
 
 /** Stable same-origin URL for the pinned Scalar browser bundle. */
 export const SCALAR_ASSET_PATH = '/v1/docs/assets/scalar-api-reference-1.68.0.js';
+/** Stable same-origin URL for the reference's IBM Plex Sans variable font. */
+export const REFERENCE_FONT_PATH = '/v1/docs/assets/ibm-plex-sans-latin-wght-normal-5.3.0.woff2';
 const revisionLabel = API_REVISION === 'dev' ? 'dev' : API_REVISION.slice(0, 12);
 const assetRevision = revisionLabel.replace(/[^a-zA-Z0-9]/g, '') || 'dev';
 /** Revisioned same-origin URL for the public reference loader. */
@@ -24,6 +26,7 @@ export const REFERENCE_STYLE_PATH = `/v1/docs/assets/reference.${assetRevision}.
 export const ADMIN_REFERENCE_SCRIPT_PATH = `/v1/docs/assets/admin-reference.${assetRevision}.js`;
 
 let scalarScript: Uint8Array | undefined;
+let referenceFont: Uint8Array | undefined;
 
 /** Read the exact Scalar browser bundle installed with the API. */
 export function scalarBrowserScript(): Uint8Array {
@@ -33,8 +36,26 @@ export function scalarBrowserScript(): Uint8Array {
   return scalarScript;
 }
 
+/** Read the self-hosted Latin IBM Plex Sans variable font installed with the API. */
+export function referenceFontFile(): Uint8Array {
+  if (referenceFont) return referenceFont;
+  const entry = fileURLToPath(
+    import.meta
+      .resolve('@fontsource-variable/ibm-plex-sans/files/ibm-plex-sans-latin-wght-normal.woff2'),
+  );
+  referenceFont = readFileSync(entry);
+  return referenceFont;
+}
+
 /** CSS for the Docket frame and the Scalar theme overrides. */
 export const REFERENCE_CSS = `
+@font-face {
+  font-family: "IBM Plex Sans";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 700;
+  src: url("${REFERENCE_FONT_PATH}") format("woff2-variations");
+}
 :root {
   color-scheme: light dark;
   --docket-paper: #fbf8f2;
@@ -43,7 +64,7 @@ export const REFERENCE_CSS = `
   --docket-line: #ded7cc;
   --docket-accent: #b94c2f;
   --docket-panel: #f3eee6;
-  --scalar-font: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --scalar-font: "IBM Plex Sans", ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --scalar-font-code: ui-monospace, "SFMono-Regular", Consolas, monospace;
   --scalar-background-1: var(--docket-paper);
   --scalar-background-2: var(--docket-panel);
@@ -298,6 +319,7 @@ export function publicReferenceHtml(): string {
   <meta name="color-scheme" content="light dark">
   <title>${title}</title>
   <link rel="icon" href="/favicon.ico">
+  <link rel="preload" href="${REFERENCE_FONT_PATH}" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="${REFERENCE_STYLE_PATH}">
   <script defer src="${SCALAR_ASSET_PATH}"></script>
   <script defer src="${REFERENCE_SCRIPT_PATH}"></script>
@@ -316,5 +338,5 @@ export function publicReferenceHtml(): string {
 
 /** Render the staff reference with the same local Scalar runtime. */
 export function adminReferenceHtml(): string {
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Docket Admin API Reference</title><link rel="stylesheet" href="${REFERENCE_STYLE_PATH}"><script defer src="${SCALAR_ASSET_PATH}"></script><script defer src="${ADMIN_REFERENCE_SCRIPT_PATH}"></script></head><body><header class="docket-header"><div class="docket-brand"><span class="docket-mark" aria-hidden="true">D</span><span class="docket-title">Docket Admin API Reference</span></div><span class="docket-version">internal · revision ${escapeHtml(revisionLabel)}</span></header><div id="reference-status" role="status" aria-live="polite">Loading API reference…</div><main id="app" aria-label="Docket admin API operations"></main></body></html>`;
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Docket Admin API Reference</title><link rel="preload" href="${REFERENCE_FONT_PATH}" as="font" type="font/woff2" crossorigin><link rel="stylesheet" href="${REFERENCE_STYLE_PATH}"><script defer src="${SCALAR_ASSET_PATH}"></script><script defer src="${ADMIN_REFERENCE_SCRIPT_PATH}"></script></head><body><header class="docket-header"><div class="docket-brand"><span class="docket-mark" aria-hidden="true">D</span><span class="docket-title">Docket Admin API Reference</span></div><span class="docket-version">internal · revision ${escapeHtml(revisionLabel)}</span></header><div id="reference-status" role="status" aria-live="polite">Loading API reference…</div><main id="app" aria-label="Docket admin API operations"></main></body></html>`;
 }

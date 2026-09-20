@@ -51,6 +51,7 @@
     "@docket/planning": "workspace:*",
     "@docket/work": "workspace:*",
     "@electric-sql/pglite": "catalog:",
+    "@fontsource-variable/ibm-plex-sans": "5.3.0",
     "@hono/node-server": "^2.0.8",
     "@hono/standard-validator": "catalog:",
     "@lovelace-ai/compute": "^0.0.1",

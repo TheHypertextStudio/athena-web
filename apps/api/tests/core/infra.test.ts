@@ -404,12 +404,20 @@ describe('openapi', () => {
     expect(html).toContain('API 0.1.0');
     expect(html).toContain('Loading API reference');
     expect(html).toContain('/v1/docs/assets/scalar-api-reference-1.68.0.js');
+    expect(html).toContain('/v1/docs/assets/ibm-plex-sans-latin-wght-normal-5.3.0.woff2');
     expect(html).not.toContain('cdn.jsdelivr.net');
 
     const scalar = await server.request('/v1/docs/assets/scalar-api-reference-1.68.0.js');
     expect(scalar.status).toBe(200);
     expect(scalar.headers.get('content-type')).toContain('javascript');
     expect(scalar.headers.get('cache-control')).toBe('public, max-age=31536000, immutable');
+
+    const font = await server.request(
+      '/v1/docs/assets/ibm-plex-sans-latin-wght-normal-5.3.0.woff2',
+    );
+    expect(font.status).toBe(200);
+    expect(font.headers.get('content-type')).toBe('font/woff2');
+    expect(font.headers.get('cache-control')).toBe('public, max-age=31536000, immutable');
 
     const loaderPath = /\/v1\/docs\/assets\/reference\.[a-z0-9]+\.js/.exec(html)?.[0];
     if (loaderPath === undefined) throw new Error('Reference loader path is missing');

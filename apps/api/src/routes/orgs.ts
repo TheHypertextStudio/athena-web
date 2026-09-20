@@ -138,20 +138,11 @@ const orgs = new Hono<AppEnv>()
       tag: 'Orgs',
       summary: 'Create an organization',
       response: OrgCreateResult,
-      description: `Create a new organization. This is the single un-nested write in the API: the org does not exist yet, so there is no \`orgId\` to guard and no capability is required beyond an authenticated session — the caller becomes the org's first **Owner**.
+      description: `Create an organization and make the signed-in person its first Owner. A team organization requires \`name\`. A personal space defaults its name to \`Personal\` and returns the caller's existing personal space instead of creating a second one.
 
-The handler runs ONE database transaction that seeds the entire tenant baseline so the org is immediately usable:
-- the \`organization\` row (name, resolved slug, purpose, \`isPersonal\`, and the chosen vocabulary skin);
-- the **four system roles** — Owner, Admin, Member, Guest (\`isSystem = true\`) — each with its seeded capability bundle and default visibility;
-- the creator's **Owner human Actor** (\`kind = 'human'\`, \`user_id\` = the caller), bound to the Owner role;
-- a default team named **"General"** (key \`GEN\`), its backing team Actor (\`kind = 'team'\`), and the Owner's membership in it;
-- the org-root **role grants** that materialize each role's org-wide base capability (Owner/Admin → \`manage\`, Member → \`contribute\`; Guest gets none, which is what makes guests grant-only).
+Every new organization includes the Owner, Admin, Member, and Guest roles plus a default team named \`General\`. An explicit \`slug\` must be available and returns **409** on conflict. Docket adds a numeric suffix when an automatically generated slug is already used.
 
-Two creation shapes (see \`OrgCreate\`): a **team org** (\`isPersonal: false\`, default) requires \`name\`; a **personal space** (\`isPersonal: true\`) is an org-of-one whose name defaults to \`'Personal'\`. Personal-space creation is **idempotent per user** — if the caller already owns an \`is_personal\` org, that existing org (with its default team + owner actor) is returned instead of seeding a duplicate.
-
-Slug handling: an explicitly supplied \`slug\` that collides on the unique org-slug index returns **409**; an auto-derived slug (from the name, or a per-user \`personal-<userId>\` slug for personal spaces) is silently disambiguated with a numeric suffix so a repeated workspace name still succeeds. This slug is the workspace's one identifier — it is also, unless a custom domain is set, the path segment the workspace's published briefs answer on by default, so it is screened against the same reserved-word list a brief address is. The slug is resolved BEFORE the transaction so a collision is a clean 409 rather than an opaque 500.
-
-Returns \`OrgCreateResult\` — the new org plus its seeded \`defaultTeam\` and \`ownerActorId\`, which the client needs to immediately scope subsequent \`/:orgId/*\` calls. See \`GET /\` to list memberships and \`POST /:orgId/members/invitations\` to grow a team org.`,
+Returns the organization with its \`defaultTeam\` and \`ownerActorId\`. Use the organization ID to scope later workspace requests. Related: \`GET /v1/orgs\` lists memberships, and \`POST /v1/orgs/:orgId/members/invitations\` invites members.`,
     }),
     zJson(OrgCreate),
     async (c) => {

@@ -5,6 +5,7 @@ import type { AppEnv } from './context';
 import {
   ADMIN_REFERENCE_SCRIPT,
   ADMIN_REFERENCE_SCRIPT_PATH,
+  REFERENCE_FONT_PATH,
   REFERENCE_CSS,
   REFERENCE_SCRIPT,
   REFERENCE_SCRIPT_PATH,
@@ -12,6 +13,7 @@ import {
   SCALAR_ASSET_PATH,
   adminReferenceHtml,
   publicReferenceHtml,
+  referenceFontFile,
   scalarBrowserScript,
 } from './openapi-reference';
 
@@ -41,6 +43,7 @@ export function registerReferenceAssets(server: Hono<AppEnv>): void {
   server.get(SCALAR_ASSET_PATH, () =>
     immutableAsset(scalarBrowserScript(), 'text/javascript; charset=utf-8'),
   );
+  server.get(REFERENCE_FONT_PATH, () => immutableAsset(referenceFontFile(), 'font/woff2'));
   server.get(REFERENCE_SCRIPT_PATH, () =>
     immutableAsset(REFERENCE_SCRIPT, 'text/javascript; charset=utf-8'),
   );

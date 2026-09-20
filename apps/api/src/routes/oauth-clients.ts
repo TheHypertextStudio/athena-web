@@ -53,7 +53,7 @@ const oauthClients = new Hono<AppEnv>().get(
     tag: 'OAuth',
     summary: 'Get an OAuth client’s display metadata',
     response: OAuthClientMetadataOut,
-    description: `Return the display \`name\`/\`icon\` Docket has on file for an OAuth client, for the consent page to render "X wants access to your account" safely. For a CIMD client (a URL-form \`client_id\`), this is the metadata the server itself fetched and validated during the authorize preflight (\`apps/api/src/mcp/cimd.ts\`) — **never** a live, browser-side fetch of the (attacker-controlled) \`client_id\` URL. \`clientId\` is percent-encoded in the path since CIMD client ids are full URLs. Session-only; **404** if the client hasn't been registered/authorized yet. **401** when unauthenticated.`,
+    description: `Return the validated display \`name\` and \`icon\` for an OAuth client. Docket fetches and validates CIMD metadata before this operation can return it; the browser never fetches the client-provided URL. Percent-encode URL-form \`clientId\` values in the path. Returns **404** when Docket has not registered or authorized the client.`,
   }),
   zParam(clientIdParam),
   async (c) => {

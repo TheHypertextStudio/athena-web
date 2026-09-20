@@ -28,6 +28,8 @@ import { addExamplesAndDescriptions } from './openapi-public-schema';
 
 /** Apply all public-reference rules to one generated OpenAPI document. */
 export function normalizePublicReference<T extends JsonObject>(document: T): T {
+  const paths = isObject(document['paths']) ? document['paths'] : undefined;
+  if (paths) delete paths['/v1/me/elicitations/samples'];
   if (isObject(document['info'])) document['info']['description'] = PUBLIC_API_OVERVIEW;
   cleanStrings(document);
   normalizeTags(document);

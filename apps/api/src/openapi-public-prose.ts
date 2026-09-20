@@ -86,31 +86,53 @@ export function sentenceCase(value: string): string {
   return value.length > 0 ? `${value[0]?.toUpperCase()}${value.slice(1)}` : value;
 }
 
+const IMPLEMENTATION_NARRATION =
+  /(?:\borgContextMiddleware\b|\bwhere-clause\b|\barchived_at\b|\bonConflictDoNothing\b|\bcomputeStats\b|\bapps\/api\/src\b|\btyped RPC client\b|\bBlobStore\b|\blocal disk\b|\blocal development\b|\bapplication code\b|\bin-process (?:Athena )?runner\b|\bper-membership fan-out\b)/i;
+
+function removeImplementationNarration(value: string): string {
+  return value
+    .split(/(?<=[.!?])(?=\s|$)/)
+    .filter((sentence) => !IMPLEMENTATION_NARRATION.test(sentence))
+    .join('')
+    .replace(/\n{3,}/g, '\n\n');
+}
+
 /** Remove source-only notation and stale wire names from public prose. */
 export function cleanPublicProse(value: string): string {
-  return value
-    .replace(/\{@link\s+([^}\s]+)(?:\s+[^}]*)?\}/g, (_match, target: string) => {
-      const name = target.split(/[.#/]/).at(-1) ?? target;
-      return `\`${name}\``;
-    })
-    .replaceAll('workflow_states', 'workflowStates')
-    .replace(/\*\*([^*]+)\*\*/g, '$1')
-    .replace(/\s+—\s+/g, '. ')
-    .replace(/[\u2013\u2014]/g, '-')
-    .replace(/\s*\(see\s+(?:docs|apps|packages|src)\/[^)]+\)/gi, '')
-    .replace(/\bthe atomic unit of work\b/gi, 'a task')
-    .replace(/\bthe heartbeat of\b/gi, 'the current status source for')
-    .replace(/\btwo front doors onto one system\b/gi, 'two interfaces to the same services')
-    .replace(/\bthe handler\b/gi, 'Docket')
-    .replace(/\bthis handler\b/gi, 'this operation')
-    .replace(/\bmiddleware\b/gi, 'authorization check')
-    .replace(/\bdatabase\b/gi, 'storage')
-    .replace(/\bDB error\b/gi, 'storage error')
-    .replace(/\bcockpit\b/gi, 'view')
-    .replace(/\bceremony\b/gi, 'flow')
-    .replace(/\bdeliberately\s+/gi, '')
-    .replace(/[ \t]{2,}/g, ' ')
-    .trim();
+  return removeImplementationNarration(
+    value
+      .replace(/\{@link\s+([^}\s]+)(?:\s+[^}]*)?\}/g, (_match, target: string) => {
+        const name = target.split(/[.#/]/).at(-1) ?? target;
+        return `\`${name}\``;
+      })
+      .replaceAll('workflow_states', 'workflowStates')
+      .replace(/\*\*([^*]+)\*\*/g, '$1')
+      .replace(/\s+—\s+/g, '. ')
+      .replace(/[\u2013\u2014]/g, '-')
+      .replace(/\s*\(see\s+(?:docs|apps|packages|src)\/[^)]+\)/gi, '')
+      .replace(/\s*\((?:apps|packages|src)\/[^)]+\)/gi, '')
+      .replace(/`?(?:apps|packages|src)\/[^`\s),]+`?/gi, 'Docket')
+      .replace(/\bthe atomic unit of work\b/gi, 'a task')
+      .replace(/\bthe heartbeat of\b/gi, 'the current status source for')
+      .replace(/\btwo front doors onto one system\b/gi, 'two interfaces to the same services')
+      .replace(/\bthe handler\b/gi, 'Docket')
+      .replace(/\bthis handler\b/gi, 'this operation')
+      .replace(/\bmiddleware\b/gi, 'authorization check')
+      .replace(/\bdatabase\b/gi, 'storage')
+      .replace(/\bDB error\b/gi, 'storage error')
+      .replace(/\bBlobStore(?:\.get)?(?: port)?\b/gi, 'object storage')
+      .replace(/\blocal disk in dev and Vercel Blob in production\b/gi, 'object storage')
+      .replace(/\blocal disk in dev, Vercel Blob in production\b/gi, 'object storage')
+      .replace(/\bin-memory\/local or real object storage\b/gi, 'object storage')
+      .replace(/\btyped RPC client\b/gi, 'JSON client')
+      .replace(/\bN\+1\b/g, 'per-item request pattern')
+      .replace(/\bapp code\b/gi, 'the response')
+      .replace(/\bcockpit\b/gi, 'view')
+      .replace(/\bceremony\b/gi, 'flow')
+      .replace(/\bdeliberately\s+/gi, '')
+      .replace(/[ \t]{2,}/g, ' ')
+      .trim(),
+  );
 }
 
 /** Clean every public description, summary, and title recursively. */

@@ -128,6 +128,9 @@ Quick-win files to process:
   - Graph annotation now delegates edge-tone derivation to a focused helper, clearing its final
     complexity excess while preserving all five graph annotation tests. The ledger is 757 files
     and 1,311 entries.
+  - Object context-menu subject resolution now delegates selection membership to a focused helper,
+    clearing its final complexity excess while preserving all 18 context-menu tests. The ledger is
+    756 files and 1,310 entries.
 
 ---
 

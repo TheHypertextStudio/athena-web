@@ -131,19 +131,26 @@ function emptyReferenceContext(): ActionContext {
   };
 }
 
+function objectsForSubject(
+  object: ObjectRef,
+  surface: ReturnType<typeof readSelectionSurfaceFor>,
+): readonly ObjectRef[] {
+  const inSelection =
+    surface?.selectedObjects.some((selected) => objectKey(selected) === objectKey(object)) ?? false;
+  return inSelection && surface !== null ? surface.selectedObjects : [object];
+}
+
 /** Resolve selection and action scope from the same marked object host. */
 function subjectForObjectHost(host: HTMLElement): ObjectMenuSubject | null {
   const object = readObjectTarget(host);
   if (object === null) return null;
   const hostActionScope = readObjectActionScope(host);
   const surface = readSelectionSurfaceFor(host);
-  const inSelection =
-    surface?.selectedObjects.some((selected) => objectKey(selected) === objectKey(object)) ?? false;
   const actionScope =
     hostActionScope === 'reference' || surface?.actionScope === 'reference' ? 'reference' : 'all';
   return {
     hostObjectIdentity: objectMenuIdentity(object),
-    objects: inSelection && surface !== null ? surface.selectedObjects : [object],
+    objects: objectsForSubject(object, surface),
     organizationId: object.organizationId ?? surface?.organizationId ?? null,
     surfaceId: surface?.surfaceId,
     actionScope,

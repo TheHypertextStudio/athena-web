@@ -12,7 +12,7 @@
 - **Status**: IN_PROGRESS
 - **Started**: 2026-09-18
 - **Priority**: P0
-- **Description**: Systematically eliminate complexity-debt.json violations. Phase 1 targets 176 files with 1-10 total excess points across all rules. Current total: 1,284 entries, 155,523 excess points across 734 files.
+- **Description**: Systematically eliminate complexity-debt.json violations. Phase 1 targets 176 files with 1-10 total excess points across all rules. Current total: 1,283 entries, 155,521 excess points across 733 files.
 
 #### Analysis Complete
 
@@ -199,6 +199,9 @@ Quick-win files to process:
     1,285 entries.
   - Day-highlight metadata now renders through a focused helper, clearing its final function-length
     excess while preserving the activity row behavior. The ledger is 734 files and 1,284 entries.
+  - Dense schedule cluster arrangement now lives in a focused helper, clearing its final two
+    complexity points while preserving all 10 dense-overflow tests. The ledger is 733 files and
+    1,283 entries.
 
 ---
 

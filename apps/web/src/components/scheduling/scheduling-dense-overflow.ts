@@ -58,6 +58,55 @@ function localOverflowBuckets(
   return buckets;
 }
 
+function arrangeDenseCluster(
+  clusterId: string,
+  cluster: readonly PositionedScheduleItem[],
+  capacity: number,
+  promotedItemId: string | undefined,
+): Pick<DenseScheduleArrangement, 'directItems' | 'overflowGroups'> {
+  const requiredColumns = Math.max(1, ...cluster.map(({ placement }) => placement.columnCount));
+  if (requiredColumns <= capacity) return { directItems: [...cluster], overflowGroups: [] };
+
+  const directColumnCount = capacity - 1;
+  const promotedColumn = cluster.find(({ item: candidate }) => candidate.id === promotedItemId)
+    ?.placement.columnIndex;
+  const sourceColumns = Array.from({ length: directColumnCount }, (_, index) => index);
+  if (promotedColumn !== undefined && promotedColumn >= directColumnCount) {
+    sourceColumns[directColumnCount - 1] = promotedColumn;
+  }
+  const displayedColumns = new Map(
+    sourceColumns.map((sourceColumn, displayedColumn) => [sourceColumn, displayedColumn]),
+  );
+  const direct = cluster.filter(({ placement }) => displayedColumns.has(placement.columnIndex));
+  const overflow = cluster.filter(({ placement }) => !displayedColumns.has(placement.columnIndex));
+  const directItems = direct.map((positioned) => ({
+    ...positioned,
+    placement: {
+      ...positioned.placement,
+      columnIndex: displayedColumns.get(positioned.placement.columnIndex) ?? 0,
+      columnCount: capacity,
+    },
+  }));
+  const overflowGroups: DenseScheduleOverflowGroup[] = [];
+  for (const [bucketIndex, items] of localOverflowBuckets(overflow).entries()) {
+    const first = items[0];
+    if (!first) continue;
+    const overflowId = `${clusterId}:overflow:${String(bucketIndex)}`;
+    overflowGroups.push({
+      clusterId: overflowId,
+      items,
+      top: first.top,
+      height: Math.min(40, first.height),
+      placement: {
+        id: overflowId,
+        columnIndex: directColumnCount,
+        columnCount: capacity,
+      },
+    });
+  }
+  return { directItems, overflowGroups };
+}
+
 /**
  * Keep dense collision layouts readable without hiding any underlying schedule item.
  *
@@ -87,54 +136,9 @@ export function arrangeDenseScheduleItems(
       options.leadingInsetByCluster?.get(clusterId) ?? 0,
       options.minimumReadableItemWidth ?? MINIMUM_READABLE_ITEM_WIDTH,
     );
-    const requiredColumns = Math.max(1, ...cluster.map(({ placement }) => placement.columnCount));
-    if (requiredColumns <= capacity) {
-      directItems.push(...cluster);
-      continue;
-    }
-
-    const directColumnCount = capacity - 1;
-    const promotedColumn = cluster.find(
-      ({ item: candidate }) => candidate.id === options.promotedItemId,
-    )?.placement.columnIndex;
-    const sourceColumns = Array.from({ length: directColumnCount }, (_, index) => index);
-    if (promotedColumn !== undefined && promotedColumn >= directColumnCount) {
-      sourceColumns[directColumnCount - 1] = promotedColumn;
-    }
-    const displayedColumns = new Map(
-      sourceColumns.map((sourceColumn, displayedColumn) => [sourceColumn, displayedColumn]),
-    );
-    const direct = cluster.filter(({ placement }) => displayedColumns.has(placement.columnIndex));
-    const overflow = cluster.filter(
-      ({ placement }) => !displayedColumns.has(placement.columnIndex),
-    );
-    directItems.push(
-      ...direct.map((positioned) => ({
-        ...positioned,
-        placement: {
-          ...positioned.placement,
-          columnIndex: displayedColumns.get(positioned.placement.columnIndex) ?? 0,
-          columnCount: capacity,
-        },
-      })),
-    );
-
-    for (const [bucketIndex, items] of localOverflowBuckets(overflow).entries()) {
-      const first = items[0];
-      if (!first) continue;
-      const overflowId = `${clusterId}:overflow:${String(bucketIndex)}`;
-      overflowGroups.push({
-        clusterId: overflowId,
-        items,
-        top: first.top,
-        height: Math.min(40, first.height),
-        placement: {
-          id: overflowId,
-          columnIndex: directColumnCount,
-          columnCount: capacity,
-        },
-      });
-    }
+    const arrangement = arrangeDenseCluster(clusterId, cluster, capacity, options.promotedItemId);
+    directItems.push(...arrangement.directItems);
+    overflowGroups.push(...arrangement.overflowGroups);
   }
 
   return { directItems, overflowGroups };

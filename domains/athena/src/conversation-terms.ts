@@ -130,6 +130,19 @@ const STOP_WORDS: ReadonlySet<string> = new Set([
   'your',
   'yours',
 ]);
+
+function applySuffixRule(stem: string, suffix: string): string {
+  const shortened = stem.slice(0, -suffix.length);
+  if (suffix === 'ies' || suffix === 'ied') return `${shortened}y`;
+  if (suffix.startsWith('ing') || suffix === 'ed' || suffix === 'edly') {
+    const last = shortened.at(-1) ?? '';
+    if (shortened.length > 2 && last === shortened.at(-2) && !'lszaeiou'.includes(last)) {
+      return shortened.slice(0, -1);
+    }
+  }
+  return shortened;
+}
+
 /**
  * Collapse a small set of English inflections without over-stemming unrelated topic words.
  */
@@ -151,14 +164,7 @@ export function stemWord(word: string): string {
     's',
   ]) {
     if (stem.length > suffix.length + 2 && stem.endsWith(suffix)) {
-      stem = stem.slice(0, -suffix.length);
-      if (suffix === 'ies' || suffix === 'ied') stem += 'y';
-      else if (suffix.startsWith('ing') || suffix === 'ed' || suffix === 'edly') {
-        const last = stem.at(-1) ?? '';
-        if (stem.length > 2 && last === stem.at(-2) && !'lszaeiou'.includes(last)) {
-          stem = stem.slice(0, -1);
-        }
-      }
+      stem = applySuffixRule(stem, suffix);
       break;
     }
   }

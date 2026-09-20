@@ -113,6 +113,9 @@ Quick-win files to process:
   - `route-match.ts` now delegates one-segment matching to a typed result helper, reducing route
     matching cognitive complexity without changing catch-all or parameter semantics. Its 15 tests
     pass; the ledger is 762 files and 1,316 entries.
+  - `domains/athena/src/conversation-terms.ts` now applies suffix normalization through a focused
+    helper, removing its final complexity excess while preserving the three lexical tests. The
+    ledger is 761 files and 1,315 entries.
 
 ---
 

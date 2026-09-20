@@ -4661,12 +4661,6 @@
       "excess": 3
     }
   },
-  "apps/web/src/components/templates/merge.ts": {
-    "sonarjs/cognitive-complexity": {
-      "max": 17,
-      "excess": 2
-    }
-  },
   "apps/web/src/components/templates/template-editor.tsx": {
     "complexity": {
       "max": 17,

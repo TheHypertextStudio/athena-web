@@ -19,6 +19,31 @@ function isBlank(value: unknown): boolean {
   return typeof value === 'string' ? value.trim().length === 0 : value === null;
 }
 
+function mergeDocumentField<T extends object>(
+  merged: Partial<T>,
+  current: T,
+  key: keyof T,
+  incoming: string,
+): void {
+  const existing = current[key];
+  const existingText = typeof existing === 'string' ? existing : '';
+  merged[key] = (
+    existingText.trim().length === 0 ? incoming : `${existingText}\n\n${incoming}`
+  ) as T[typeof key];
+}
+
+function mergeLabelField<T extends object>(
+  merged: Partial<T>,
+  current: T,
+  key: keyof T,
+  incoming: T[keyof T],
+  rule: TemplateMergeRule<T>,
+): boolean {
+  if (!rule.labels?.includes(key)) return false;
+  if (isBlank(current[key])) merged[key] = incoming;
+  return true;
+}
+
 /**
  * Merge template fields without removing authored text.
  *
@@ -44,18 +69,11 @@ export function templateMerge<T extends object>(
     if (incoming === undefined) continue;
 
     if (key === rule.document && typeof incoming === 'string') {
-      const existing = current[key];
-      const existingText = typeof existing === 'string' ? existing : '';
-      merged[key] = (
-        existingText.trim().length === 0 ? incoming : `${existingText}\n\n${incoming}`
-      ) as T[typeof key];
+      mergeDocumentField(merged, current, key, incoming);
       continue;
     }
 
-    if (rule.labels?.includes(key)) {
-      if (isBlank(current[key])) merged[key] = incoming;
-      continue;
-    }
+    if (mergeLabelField(merged, current, key, incoming, rule)) continue;
 
     merged[key] = incoming;
   }

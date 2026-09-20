@@ -80,11 +80,7 @@ export function titleFromNavigationSnapshot(ref: TabRef): string | null {
     case 'project':
     case 'program':
     case 'initiative': {
-      // These three snapshots differ only in their `target` tag, so one read serves all of them.
-      const snapshot = peekNavigationSnapshot(ref.type, ref.id);
-      return snapshot?.target === ref.type && snapshot.organizationId === ref.orgId
-        ? snapshot.name
-        : null;
+      return namedNavigationSnapshotTitle(ref);
     }
     // A cycle or session is never seeded into the navigation snapshot store; their tabs resolve by
     // cache or by request instead.
@@ -92,6 +88,16 @@ export function titleFromNavigationSnapshot(ref: TabRef): string | null {
     case 'session':
       return null;
   }
+}
+
+function namedNavigationSnapshotTitle(
+  ref: Extract<TabRef, { type: 'project' | 'program' | 'initiative' }>,
+): string | null {
+  // These three snapshots differ only in their `target` tag, so one read serves all of them.
+  const snapshot = peekNavigationSnapshot(ref.type, ref.id);
+  return snapshot?.target === ref.type && snapshot.organizationId === ref.orgId
+    ? snapshot.name
+    : null;
 }
 
 /**
@@ -117,6 +123,16 @@ async function sessionTitle(orgId: string, id: string): Promise<string | null> {
   return taskRes.ok ? `${(await taskRes.json()).title} · session` : null;
 }
 
+async function responseField(
+  request: () => Promise<{ ok: boolean; json: () => Promise<unknown> }>,
+  field: string,
+): Promise<string | null> {
+  const response = await request();
+  if (!response.ok) return null;
+  const body = (await response.json()) as Record<string, unknown>;
+  return typeof body[field] === 'string' ? body[field] : null;
+}
+
 /**
  * Resolve the human display title for an open-document ref.
  *
@@ -132,33 +148,33 @@ export async function resolveTabTitle(ref: TabRef): Promise<string | null> {
   const { orgId, id } = ref;
   try {
     switch (ref.type) {
-      case 'task': {
-        const res = await api.v1.orgs[':orgId'].tasks[':id'].$get({ param: { orgId, id } });
-        if (res.ok) return (await res.json()).title;
-        break;
-      }
-      case 'project': {
-        const res = await api.v1.orgs[':orgId'].projects[':id'].$get({ param: { orgId, id } });
-        if (res.ok) return (await res.json()).name;
-        break;
-      }
-      case 'initiative': {
-        const res = await api.v1.orgs[':orgId'].initiatives[':id'].$get({ param: { orgId, id } });
-        if (res.ok) return (await res.json()).name;
-        break;
-      }
-      case 'program': {
-        const res = await api.v1.orgs[':orgId'].programs[':id'].$get({ param: { orgId, id } });
-        if (res.ok) return (await res.json()).name;
-        break;
-      }
-      case 'cycle': {
-        const res = await api.v1.orgs[':orgId'].cycles[':id'].$get({ param: { orgId, id } });
+      case 'task':
+        return await responseField(
+          () => api.v1.orgs[':orgId'].tasks[':id'].$get({ param: { orgId, id } }),
+          'title',
+        );
+      case 'project':
+        return await responseField(
+          () => api.v1.orgs[':orgId'].projects[':id'].$get({ param: { orgId, id } }),
+          'name',
+        );
+      case 'initiative':
+        return await responseField(
+          () => api.v1.orgs[':orgId'].initiatives[':id'].$get({ param: { orgId, id } }),
+          'name',
+        );
+      case 'program':
+        return await responseField(
+          () => api.v1.orgs[':orgId'].programs[':id'].$get({ param: { orgId, id } }),
+          'name',
+        );
+      case 'cycle':
         // `displayName` is the author's name when set, else the cycle's window — never the
         // stored `number`, which is the auto-roll idempotency key and read as "Cycle 1000137".
-        if (res.ok) return (await res.json()).displayName;
-        break;
-      }
+        return await responseField(
+          () => api.v1.orgs[':orgId'].cycles[':id'].$get({ param: { orgId, id } }),
+          'displayName',
+        );
       case 'session':
         return await sessionTitle(orgId, id);
     }

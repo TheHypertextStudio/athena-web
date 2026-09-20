@@ -12,7 +12,7 @@
 - **Status**: IN_PROGRESS
 - **Started**: 2026-09-18
 - **Priority**: P0
-- **Description**: Systematically eliminate complexity-debt.json violations. Phase 1 targets 176 files with 1-10 total excess points across all rules. Current total: 1,282 entries, 155,519 excess points across 732 files.
+- **Description**: Systematically eliminate complexity-debt.json violations. Phase 1 targets 176 files with 1-10 total excess points across all rules. Current total: 1,281 entries, 155,517 excess points across 731 files.
 
 #### Analysis Complete
 
@@ -205,6 +205,9 @@ Quick-win files to process:
   - Search HTTP query option emission now uses focused parameter helpers, clearing its final two
     complexity points while preserving all five search URL-state tests. The ledger is 732 files and
     1,282 entries.
+  - Tab title snapshot and API response handling now use focused helpers, clearing both final
+    complexity entries while preserving 14 tab-title/recent-document/shortcut tests. The ledger is
+    731 files and 1,281 entries.
 
 ---
 

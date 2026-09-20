@@ -4507,12 +4507,6 @@
       "excess": 80
     }
   },
-  "apps/web/src/components/tabs/resolve-title.ts": {
-    "complexity": {
-      "max": 13,
-      "excess": 2
-    }
-  },
   "apps/web/src/components/task-detail/Subtasks.tsx": {
     "max-lines-per-function": {
       "max": 113,

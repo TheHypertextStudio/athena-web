@@ -5,18 +5,22 @@
  * API origin, while the small Docket loader owns document retries, errors, version headers, and
  * the reference's visual frame.
  */
-import { createRequire } from 'node:module';
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { API_REVISION, API_VERSION } from './api-version';
 import { env } from './env';
 
+/** Stable same-origin URL for the pinned Scalar browser bundle. */
 export const SCALAR_ASSET_PATH = '/v1/docs/assets/scalar-api-reference-1.68.0.js';
 const revisionLabel = API_REVISION === 'dev' ? 'dev' : API_REVISION.slice(0, 12);
 const assetRevision = revisionLabel.replace(/[^a-zA-Z0-9]/g, '') || 'dev';
+/** Revisioned same-origin URL for the public reference loader. */
 export const REFERENCE_SCRIPT_PATH = `/v1/docs/assets/reference.${assetRevision}.js`;
+/** Revisioned same-origin URL for the public reference styles. */
 export const REFERENCE_STYLE_PATH = `/v1/docs/assets/reference.${assetRevision}.css`;
+/** Revisioned same-origin URL for the private admin reference loader. */
 export const ADMIN_REFERENCE_SCRIPT_PATH = `/v1/docs/assets/admin-reference.${assetRevision}.js`;
 
 let scalarScript: Uint8Array | undefined;
@@ -24,7 +28,7 @@ let scalarScript: Uint8Array | undefined;
 /** Read the exact Scalar browser bundle installed with the API. */
 export function scalarBrowserScript(): Uint8Array {
   if (scalarScript) return scalarScript;
-  const entry = createRequire(import.meta.url).resolve('@scalar/api-reference');
+  const entry = fileURLToPath(import.meta.resolve('@scalar/api-reference'));
   scalarScript = readFileSync(resolve(dirname(entry), 'browser/standalone.js'));
   return scalarScript;
 }

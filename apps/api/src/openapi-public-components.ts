@@ -7,6 +7,7 @@ import {
   type JsonObject,
 } from './openapi-public-prose';
 
+/** Serialize JSON-like values with stable object-key ordering. */
 export function canonical(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(canonical).join(',')}]`;
   if (!isObject(value)) return JSON.stringify(value);
@@ -16,6 +17,7 @@ export function canonical(value: unknown): string {
     .join(',')}}`;
 }
 
+/** Build a safe component name from an operation and schema role. */
 export function componentName(operation: JsonObject, role: string): string {
   const id = stringValue(operation['operationId'], 'Operation');
   return `${id[0]?.toUpperCase() ?? 'O'}${id.slice(1)}${role}`.replace(/[^A-Za-z0-9]/g, '');
@@ -56,6 +58,7 @@ function installRepeatedSchema(
   for (const slot of entry.slots) slot.owner[slot.key] = { $ref: `#/components/schemas/${name}` };
 }
 
+/** Replace repeated large operation schemas with reusable components. */
 export function hoistRepeatedSchemas(document: JsonObject): void {
   const components = isObject(document['components']) ? document['components'] : {};
   const schemas = isObject(components['schemas']) ? components['schemas'] : {};
@@ -76,12 +79,14 @@ export function hoistRepeatedSchemas(document: JsonObject): void {
   document['components'] = components;
 }
 
+/** One replaceable schema location in the generated document. */
 export interface SchemaSlot {
   readonly schema: JsonObject;
   readonly name: string;
   readonly replace: (replacement: JsonObject) => void;
 }
 
+/** Return a deterministic short hexadecimal fingerprint. */
 export function shortHash(value: string): string {
   let hash = 2_166_136_261;
   for (let index = 0; index < value.length; index += 1) {
@@ -91,6 +96,7 @@ export function shortHash(value: string): string {
   return (hash >>> 0).toString(16).padStart(8, '0');
 }
 
+/** Rewrite references using the supplied exact-reference mapping. */
 export function rewriteLocalDefinitionRefs(
   value: unknown,
   references: ReadonlyMap<string, string>,
@@ -109,6 +115,7 @@ export function rewriteLocalDefinitionRefs(
   for (const child of Object.values(value)) rewriteLocalDefinitionRefs(child, references);
 }
 
+/** Sanitize a local definition name for use as an OpenAPI component key. */
 export function definitionComponentName(name: string): string {
   const safe = name.replace(/[^A-Za-z0-9._-]/g, '') || 'InlineSchema';
   return safe;
@@ -194,6 +201,7 @@ export function hoistInlineDefinitions(document: JsonObject): void {
   document['components'] = components;
 }
 
+/** Collect replaceable nested schemas beneath one schema root. */
 export function childSchemaSlots(
   schema: JsonObject,
   name: string,
@@ -229,6 +237,7 @@ export function childSchemaSlots(
   return slots;
 }
 
+/** Collect nested schemas from every public operation and component. */
 export function nestedSchemaSlots(document: JsonObject): readonly SchemaSlot[] {
   const slots: SchemaSlot[] = [];
   const addContent = (content: unknown, name: string) => {

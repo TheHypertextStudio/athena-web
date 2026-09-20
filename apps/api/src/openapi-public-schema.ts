@@ -9,6 +9,7 @@ import {
   type JsonObject,
 } from './openapi-public-prose';
 
+/** Build a useful fallback description for one schema property. */
 export function fallbackFieldDescription(name: string, schema: JsonObject): string {
   if (name === 'id') return 'The stable identifier for this resource.';
   if (name.endsWith('Id')) return `Identifies the referenced ${words(name.slice(0, -2))}.`;
@@ -51,6 +52,7 @@ export function fallbackFieldDescription(name: string, schema: JsonObject): stri
   return `${sentenceCase(words(name))} for this record.`;
 }
 
+/** Build a useful fallback description for one operation parameter. */
 export function fallbackParameterDescription(name: string, location: string): string {
   if (name === 'orgId')
     return 'Organization identifier from the URL. It must name a workspace the caller can access.';
@@ -83,6 +85,7 @@ function describeVariants(value: JsonObject, name: string): void {
   }
 }
 
+/** Fill missing property descriptions throughout a schema tree. */
 export function ensureDescriptions(value: unknown, name = 'value'): void {
   if (Array.isArray(value)) {
     value.forEach((item) => {
@@ -178,6 +181,7 @@ function typedExample(schema: JsonObject, components: JsonObject, depth: number)
   return schema['type'] === 'string' ? stringExample(schema['format']) : undefined;
 }
 
+/** Generate a deterministic minimal example from a JSON Schema. */
 export function exampleForSchema(schema: unknown, components: JsonObject, depth = 0): unknown {
   if (!isObject(schema) || depth > 8) return undefined;
   const referenced = referencedExample(schema, components, depth);
@@ -230,6 +234,7 @@ function decorateOperation(operation: JsonObject, components: JsonObject): void 
   }
 }
 
+/** Add missing descriptions and deterministic examples to public operations. */
 export function addExamplesAndDescriptions(document: JsonObject): void {
   const components = isObject(document['components']) ? document['components'] : {};
   const schemas = isObject(components['schemas']) ? components['schemas'] : {};

@@ -1,4 +1,4 @@
-import version from '../api-version.json';
+import version from './api-version.json';
 
 declare const __DOCKET_API_REVISION__: string;
 

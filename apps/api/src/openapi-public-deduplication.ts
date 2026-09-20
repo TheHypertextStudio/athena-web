@@ -14,6 +14,7 @@ import {
   type JsonObject,
 } from './openapi-public-prose';
 
+/** Hoist identical nested schemas that occur more than once. */
 export function deduplicateNestedSchemas(document: JsonObject): void {
   const components = isObject(document['components']) ? document['components'] : {};
   const schemas = isObject(components['schemas']) ? components['schemas'] : {};
@@ -47,6 +48,7 @@ export function deduplicateNestedSchemas(document: JsonObject): void {
   document['components'] = components;
 }
 
+/** Collapse identical named components and rewrite their references. */
 export function deduplicateComponentSchemas(document: JsonObject): void {
   const components = isObject(document['components']) ? document['components'] : {};
   const schemas = isObject(components['schemas']) ? components['schemas'] : {};
@@ -75,6 +77,7 @@ export function deduplicateComponentSchemas(document: JsonObject): void {
   document['components'] = components;
 }
 
+/** Store identical operation examples once on their referenced schema. */
 export function hoistReferencedExamples(document: JsonObject): void {
   const components = isObject(document['components']) ? document['components'] : {};
   const schemas = isObject(components['schemas']) ? components['schemas'] : {};
@@ -99,6 +102,7 @@ export function hoistReferencedExamples(document: JsonObject): void {
   }
 }
 
+/** Remove component schemas that no operation or component can reach. */
 export function pruneUnreferencedSchemas(document: JsonObject): void {
   const components = isObject(document['components']) ? document['components'] : {};
   const schemas = isObject(components['schemas']) ? components['schemas'] : {};
@@ -136,6 +140,7 @@ export function pruneUnreferencedSchemas(document: JsonObject): void {
   document['components'] = components;
 }
 
+/** Replace repeated operation parameters with reusable components. */
 export function hoistRepeatedParameters(document: JsonObject): void {
   const components = isObject(document['components']) ? document['components'] : {};
   const parameters = isObject(components['parameters']) ? components['parameters'] : {};
@@ -166,6 +171,7 @@ export function hoistRepeatedParameters(document: JsonObject): void {
   document['components'] = components;
 }
 
+/** Move parameters shared by every method to their common path item. */
 export function moveSharedPathParameters(document: JsonObject): void {
   const paths = isObject(document['paths']) ? document['paths'] : {};
   for (const pathItem of Object.values(paths)) {
@@ -194,6 +200,7 @@ export function moveSharedPathParameters(document: JsonObject): void {
   }
 }
 
+/** Replace repeated response objects with reusable components. */
 export function hoistRepeatedResponses(document: JsonObject): void {
   const components = isObject(document['components']) ? document['components'] : {};
   const responses = isObject(components['responses']) ? components['responses'] : {};
@@ -223,6 +230,7 @@ export function hoistRepeatedResponses(document: JsonObject): void {
   document['components'] = components;
 }
 
+/** Return component-schema references whose targets do not exist. */
 export function unresolvedSchemaReferences(document: JsonObject): readonly string[] {
   const components = isObject(document['components']) ? document['components'] : {};
   const schemas = isObject(components['schemas']) ? components['schemas'] : {};

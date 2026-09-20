@@ -21,13 +21,13 @@ const SEARCH_INTEGRATIONS: Readonly<Record<string, SearchIntegration>> = {
   'apps/web/src/app/(app)/orgs/[orgId]/my-work/my-work-client.tsx': {
     adapter: 'resident-complete',
     evidenceFile: 'apps/web/src/lib/my-work-defs.ts',
-    evidenceText: 'tasks.$get({ param: { orgId }, query: {} })',
+    evidenceText: 'fetchAllTasks(client, orgId)',
     primitive: 'ListView',
   },
   'apps/web/src/app/(app)/orgs/[orgId]/triage/page.tsx': {
     adapter: 'resident-complete',
     evidenceFile: 'apps/web/src/lib/use-triage.ts',
-    evidenceText: 'tasks.$get({ param: { orgId }, query: {} })',
+    evidenceText: 'fetchAllTasks(api, orgId)',
     primitive: 'ListView',
   },
   'apps/web/src/components/library/library-client.tsx': {
@@ -39,7 +39,7 @@ const SEARCH_INTEGRATIONS: Readonly<Record<string, SearchIntegration>> = {
   'apps/web/src/components/views/view-runner.tsx': {
     adapter: 'resident-complete',
     evidenceFile: 'apps/web/src/app/(app)/orgs/[orgId]/views/use-views-page.ts',
-    evidenceText: 'tasks.$get({ param: { orgId }, query: {} })',
+    evidenceText: 'fetchAllTasks(api, orgId)',
     primitive: 'ListView',
   },
   'apps/web/src/components/work-views/work-list.tsx': {

@@ -4,8 +4,10 @@ import { z } from 'zod';
 import { PROBLEM_CATALOG, PROBLEM_CODES, Problem } from './contracts/errors';
 import { PUBLIC_TAG_GROUPS, PUBLIC_TAGS, resolvePublicTagId } from './lib/public-api-tags';
 
+/** Mutable JSON object used while normalizing the generated document. */
 export type JsonObject = Record<string, unknown>;
 
+/** HTTP method keys that can own OpenAPI operations. */
 export const HTTP_METHODS = [
   'get',
   'put',
@@ -58,6 +60,7 @@ Queued work returns \`202\` with a monitor URL in \`Location\`. Server-sent even
 their event names, payloads, replay window, and reconnect behavior in the operation response.
 `.trim();
 
+/** Return whether a value is a non-array object. */
 export function isObject(value: unknown): value is JsonObject {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
@@ -67,6 +70,7 @@ export function stringValue(value: unknown, fallback = ''): string {
   return typeof value === 'string' ? value : fallback;
 }
 
+/** Convert an identifier into lowercase display words. */
 export function words(value: string): string {
   return value
     .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
@@ -77,6 +81,7 @@ export function words(value: string): string {
     .toLowerCase();
 }
 
+/** Capitalize the first character of display text. */
 export function sentenceCase(value: string): string {
   return value.length > 0 ? `${value[0]?.toUpperCase()}${value.slice(1)}` : value;
 }
@@ -110,6 +115,7 @@ export function cleanPublicProse(value: string): string {
     .trim();
 }
 
+/** Clean every public description, summary, and title recursively. */
 export function cleanStrings(value: unknown): void {
   if (Array.isArray(value)) {
     value.forEach(cleanStrings);
@@ -125,6 +131,7 @@ export function cleanStrings(value: unknown): void {
   }
 }
 
+/** Enumerate every operation in a generated OpenAPI document. */
 export function operations(document: JsonObject): readonly {
   path: string;
   method: string;
@@ -140,6 +147,7 @@ export function operations(document: JsonObject): readonly {
   });
 }
 
+/** Install the public tag registry and normalize each operation tag. */
 export function normalizeTags(document: JsonObject): void {
   document['tags'] = PUBLIC_TAGS.map((tag) => ({
     name: tag.id,
@@ -164,6 +172,7 @@ export function normalizeTags(document: JsonObject): void {
   }
 }
 
+/** Return the concrete response objects declared by an operation. */
 export function statusEntries(operation: JsonObject): readonly [string, JsonObject][] {
   const responses = isObject(operation['responses']) ? operation['responses'] : {};
   return Object.entries(responses).filter((entry): entry is [string, JsonObject] =>
@@ -171,6 +180,7 @@ export function statusEntries(operation: JsonObject): readonly [string, JsonObje
   );
 }
 
+/** Build an observable success description for an operation response. */
 export function successDescription(method: string, operation: JsonObject, status: string): string {
   const summary = stringValue(operation['summary'], 'complete the operation');
   if (status === '201')
@@ -188,6 +198,7 @@ export function successDescription(method: string, operation: JsonObject, status
   return 'Docket completed the action and returned its result.';
 }
 
+/** Replace generic success descriptions throughout the document. */
 export function normalizeSuccessDescriptions(document: JsonObject): void {
   for (const { method, operation } of operations(document)) {
     for (const [status, response] of statusEntries(operation)) {
@@ -201,6 +212,7 @@ export function normalizeSuccessDescriptions(document: JsonObject): void {
   }
 }
 
+/** Convert a stable Problem code into its component name. */
 export function problemComponentName(code: string): string {
   return `${code
     .split('_')
@@ -208,6 +220,7 @@ export function problemComponentName(code: string): string {
     .join('')}Problem`;
 }
 
+/** Build the specialized Problem schema for one stable code. */
 export function problemSchema(code: string): JsonObject {
   const definition = PROBLEM_CATALOG[code as keyof typeof PROBLEM_CATALOG];
   return {
@@ -228,6 +241,7 @@ export function problemSchema(code: string): JsonObject {
   };
 }
 
+/** Install reusable schemas and responses for every public Problem. */
 export function addProblemComponents(document: JsonObject): void {
   const components = isObject(document['components']) ? document['components'] : {};
   const schemas = isObject(components['schemas']) ? components['schemas'] : {};
@@ -247,6 +261,7 @@ export function addProblemComponents(document: JsonObject): void {
   document['components'] = components;
 }
 
+/** Return client recovery guidance for an HTTP failure status. */
 export function problemRecovery(status: number): string {
   const guidance: Readonly<Record<number, string>> = {
     401: 'Obtain a new credential before retrying.',
@@ -267,15 +282,18 @@ export function problemRecovery(status: number): string {
   return 'Correct the request using the Problem code and field issues before retrying.';
 }
 
+/** Return whether an operation declares a request body. */
 export function hasRequestBody(operation: JsonObject): boolean {
   return isObject(operation['requestBody']);
 }
 
+/** Return every security scheme named by an operation. */
 export function securitySchemes(operation: JsonObject): readonly string[] {
   if (!Array.isArray(operation['security'])) return [];
   return operation['security'].flatMap((item) => (isObject(item) ? Object.keys(item) : []));
 }
 
+/** Attach one reusable Problem response when its status is not already declared. */
 export function installProblem(operation: JsonObject, code: keyof typeof PROBLEM_CATALOG): void {
   const responses = isObject(operation['responses']) ? operation['responses'] : {};
   const status = String(PROBLEM_CATALOG[code].status);
@@ -284,6 +302,7 @@ export function installProblem(operation: JsonObject, code: keyof typeof PROBLEM
   operation['responses'] = responses;
 }
 
+/** Add the runtime failures applicable to each public operation. */
 export function addApplicableProblems(document: JsonObject): void {
   for (const { path, method, operation } of operations(document)) {
     const schemes = securitySchemes(operation);
@@ -302,6 +321,7 @@ export function addApplicableProblems(document: JsonObject): void {
   }
 }
 
+/** Describe credentials, scopes, capabilities, and tenancy for an operation. */
 export function accessText(path: string, operation: JsonObject): string {
   const schemes = securitySchemes(operation);
   const capability = stringValue(operation['x-docket-capability']);
@@ -321,6 +341,7 @@ export function accessText(path: string, operation: JsonObject): string {
     : access;
 }
 
+/** Remove access sentences that the generated access section already states. */
 export function withoutRepeatedAccess(value: string): string {
   return value
     .replace(
@@ -334,6 +355,7 @@ export function withoutRepeatedAccess(value: string): string {
     .trim();
 }
 
+/** Split legacy prose into the structured public narrative fields. */
 export function splitDescription(value: unknown): {
   purpose: string;
   inputs: readonly string[];
@@ -368,6 +390,7 @@ export function splitDescription(value: unknown): {
   };
 }
 
+/** Describe where a caller finds recovery guidance for an operation. */
 export function failureGuidance(operation: JsonObject): string {
   const hasFailure = statusEntries(operation).some(([status]) => !/^2\d\d$|^304$/.test(status));
   return hasFailure
@@ -375,6 +398,7 @@ export function failureGuidance(operation: JsonObject): string {
     : 'This operation declares no operation-specific failure.';
 }
 
+/** Render every operation description with the required public sections. */
 export function normalizeNarratives(document: JsonObject): void {
   for (const { path, operation } of operations(document)) {
     const current = stringValue(operation['description']);

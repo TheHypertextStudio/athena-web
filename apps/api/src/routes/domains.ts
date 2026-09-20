@@ -168,7 +168,7 @@ export function createPublishingAddressRoutes(lookupTxt: TxtLookup = resolveTxt)
         summary: 'List custom domains',
         capability: 'manage',
         response: pageOf(WorkspaceDomainOut),
-        description: `List every custom domain claimed by this workspace, oldest first, each with its current verification state and the exact DNS records to publish. Requires \`manage\`: domain configuration decides which host the entire workspace answers on, so it is an administrator's decision, not a member's. A non-admin member receives **403**; a member of another workspace receives **404** from the org-context gate before this handler runs.
+        description: `List the workspace's custom domains, oldest first. Each item includes its verification state and the exact DNS records to publish. Requires the \`manage\` capability. A caller without that permission receives 403, while an inaccessible workspace returns 404.
 
 Results use \`createdAt ASC, id ASC\`, default to 50 items, accept at most 100, and omit \`nextCursor\` at exhaustion. \`lastFailure\` is a stable code (\`lookup-failed\` / \`no-record\` / \`token-mismatch\`), never resolver output.`,
       }),
@@ -191,9 +191,9 @@ Results use \`createdAt ASC, id ASC\`, default to 50 items, accept at most 100, 
         status: 201,
         description: `Claim a domain for this workspace's published briefs. The submitted value is normalized first — a full URL, mixed case, a trailing dot, and a \`www.\` prefix all collapse to one canonical host — and **that normalized host is the uniqueness key**, so \`Example.COM\`, \`https://www.example.com/x\`, and \`example.com.\` are one claim, not three.
 
-The row is created **unverified** and serves nothing. The response carries the \`TXT\` record to publish (type, name, value, TTL) and, once a custom-domain target is configured, the \`CNAME\` that routes traffic. Call \`POST /domains/{id}/verify\` after publishing the \`TXT\`.
+The claim starts **unverified** and serves nothing. The response carries the \`TXT\` record to publish (type, name, value, TTL) and, once a custom-domain target is configured, the \`CNAME\` that routes traffic. Call \`POST /domains/{id}/verify\` after publishing the \`TXT\`.
 
-- A host already claimed by **any** workspace returns **409 \`domain_already_claimed\`** and writes nothing — a globally unique index backs this, so two simultaneous claims cannot both win.
+- A host already claimed by **any** workspace returns **409 \`domain_already_claimed\`** and writes nothing. Docket guarantees that only one simultaneous claim can succeed.
 - A malformed host, an IP literal, a wildcard, or one of Docket's own hosts returns **422** with a \`host\` field issue.
 
 Requires \`manage\`.`,
@@ -295,7 +295,7 @@ The response reports \`failure\` as a stable code and \`observedCount\` as **how
         summary: 'Remove a custom domain',
         capability: 'manage',
         response: WorkspaceDomainOut,
-        description: `Release a domain. The row is deleted outright — unlike a withdrawn brief, there is nothing to preserve, and leaving the row would keep the host locked against every other workspace forever. The host stops serving Docket content on the next request, and becomes claimable again by any workspace that can prove ownership. Requires \`manage\`.`,
+        description: `Release a custom domain. The host stops serving Docket content on the next request and becomes available to another workspace that can prove ownership. Requires the \`manage\` capability.`,
       }),
       zParam(domainIdParam),
       async (c) => {

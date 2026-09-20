@@ -168,7 +168,7 @@ const labels = new Hono<AppEnv>()
       summary: 'Create a label',
       capability: 'contribute',
       response: LabelOut,
-      description: `Create a label in the org. Requires \`contribute\` — not \`manage\` — because labels are mostly born inline from a picker by whoever is doing the work, and an admin gate there would defeat the affordance. Every label is created **workspace-wide**; narrowing it to a team is a later curation step via PATCH, so the create path never asks about org topology. \`color\` is optional: omit it and the server assigns the next palette token by rotation, which is why inline creation can be a single keystroke. \`name\` is matched case-insensitively against existing labels and a collision 409s, so \`Bug\` cannot become a near-duplicate beside \`bug\`. The \`organizationId\` is always derived from the verified context, never the body. Returns the created {@link LabelOut}.`,
+      description: `Create a workspace-wide label. Requires \`contribute\`. Omit \`color\` to let Docket choose the next palette color. Label names are unique without regard to letter case, so creating \`Bug\` when \`bug\` exists returns 409. Use the update operation to limit a label to a team later. Returns the created {@link LabelOut}.`,
     }),
     zJson(LabelCreate),
     async (c) => {
@@ -462,7 +462,7 @@ const labels = new Hono<AppEnv>()
       summary: 'Delete a label',
       capability: 'manage',
       response: LabelOut,
-      description: `Hard-delete a label from the org. Requires \`manage\`. This removes the label definition itself and every attachment to it cascades away (a label is a tag, not a row that owns work) — no work is deleted. Clients should show the label's \`usageCount\` in the confirmation, since the count is the only signal of how much this will change. To retire a duplicate without losing its attachments, use \`POST /:id/merge\` instead. The lookup is org-scoped, so a cross-org/unknown id 404s. Unusually for a delete, this returns the full deleted {@link LabelOut} row (not a bare acknowledgement) so the client can confirm exactly what was removed.`,
+      description: `Permanently delete a label and remove it from every attached record. No work is deleted. Requires \`manage\`. Show \`usageCount\` before confirmation so the user can see how many records will change. Use \`POST /:id/merge\` to replace a duplicate label without losing attachments. An absent or inaccessible label returns 404. Returns the deleted {@link LabelOut}.`,
     }),
     zParam(idParam),
     async (c) => {

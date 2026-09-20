@@ -247,7 +247,7 @@ const integrations = new Hono<AppEnv>()
       tag: 'Integrations',
       summary: 'List integrations',
       response: pageOf(IntegrationOut),
-      description: `List every integration connected to the active organization as a cursor page of {@link IntegrationOut}. Results use stable integration-id order, default to 50 items, accept at most 100, and omit \`nextCursor\` at exhaustion. Each row exposes connection health, sync mode, write-back state, and sync timestamps, but never the credential itself. A read; org membership suffices.`,
+      description: `List the organization's integrations in stable ID order. Each item reports connection health, sync mode, write-back state, and sync times. Credentials are never returned. Pages default to 50 items and accept at most 100. \`nextCursor\` is absent after the final page. Organization membership is required.`,
     }),
     zQuery(CursorQuery),
     async (c) => {
@@ -266,11 +266,11 @@ const integrations = new Hono<AppEnv>()
       summary: 'Connect an integration',
       capability: 'manage',
       response: IntegrationOut,
-      description: `Connect (or reconnect) an external provider to the organization and return the {@link IntegrationOut}. Connection is **idempotent per (org, provider, account)**: reconnecting reuses the existing integration row — refreshing its fields — so the integration id (and thus every mirrored task's \`sourceIntegrationId\`) stays stable across reconnects. With an \`externalAccountId\` an org can link several accounts of the same provider (one integration each); without one the original single-account row is matched.
+      description: `Connect or reconnect an external provider and return the {@link IntegrationOut}. Reconnecting the same provider account keeps the existing integration ID, so linked records keep a stable \`sourceIntegrationId\`. An organization can connect several accounts for providers that supply an \`externalAccountId\`.
 
 Critically, **health is never taken from the body**: a new or reconnected integration always starts \`pending\` and clears any prior error. It is only promoted to \`connected\` once \`POST /:id/verify\` (or a successful sync/import) validates a real credential — the spine of the "never report success when nothing happened" rule. \`writeBack\` defaults ON for connectors that support two-way sync (e.g. Google Tasks) unless the caller overrides it, so those connect two-way out of the box.
 
-Requires \`manage\` — wiring an external data source into the org is an administrative trust decision. Side effects: persists/refreshes the connection metadata (secret stored only by reference); no external call is made here (verification is a separate step). Note GitHub connects by installing the GitHub App — fetch its install URL via \`GET /:id/connect-url\` after creating the row. Related: \`POST /:id/verify\`, \`POST /:id/import\`, \`POST /:id/sync\`, \`GET /directory\`.`,
+Requires \`manage\`. This request saves the connection settings but does not contact the provider; verification is a separate step. For GitHub, get the installation URL from \`GET /:id/connect-url\` after creating the integration. Related: \`POST /:id/verify\`, \`POST /:id/import\`, \`POST /:id/sync\`, and \`GET /directory\`.`,
     }),
     zJson(IntegrationCreate),
     async (c) => {
@@ -433,7 +433,7 @@ Requires \`manage\` — it touches live provider credentials and configures sync
       tag: 'Integrations',
       summary: 'List integration sync runs',
       response: pageOf(SyncRunOut),
-      description: `List the most recent (up to 20) sync runs for an integration, newest-first, as a page of {@link SyncRunOut}. Each run is the **durable** record of one \`importWork\` pass — its \`status\` (\`running\`/\`succeeded\`/\`failed\`), \`trigger\` (\`manual\`/\`scheduled\`), \`processed\`/\`total\` counts, error reason, and start/finish timestamps — so a failed sync leaves a real, auditable trace instead of vanishing on restart (this replaced the former ephemeral in-memory job model). The org-scoped integration must exist (404 \`Integration not found\`). A read; org membership suffices. Related: \`POST /:id/sync\` (start a run), \`GET /:id\` (the integration's roll-up health).`,
+      description: `List the 20 most recent sync runs for an integration, newest first. Each run reports its status, trigger, processed and total counts, error reason, and start and finish times. Failed runs remain available for diagnosis. An absent or inaccessible integration returns 404. Organization membership is sufficient. Use \`POST /:id/sync\` to start a run and \`GET /:id\` to read integration health.`,
     }),
     zParam(integrationIdParam),
     async (c) => {
@@ -566,7 +566,7 @@ Unlike \`GET /:id/runs\`, which is capped at the 20 most recent runs, this addre
       summary: 'Disconnect an integration',
       capability: 'manage',
       response: IntegrationOut,
-      description: `Disconnect (delete) an integration from the organization, returning the deleted {@link IntegrationOut} as it was just before removal. A missing/cross-tenant id 404s (\`Integration not found\`). Requires \`manage\` — severing an external data source is an administrative decision. Removing the integration drops the org's link to that provider; tasks already mirrored into Docket persist as rows but their \`sourceIntegrationId\` no longer resolves to a live connection (a subsequent reconnect of the same provider/account reuses a fresh integration id). For \`github\`, this also best-effort uninstalls the GitHub App installation on GitHub's side (never blocks the disconnect on that call's outcome) — without it, a stale installation survives on GitHub and a later reconnect silently reuses it instead of prompting a fresh install. Related: \`POST /\` (reconnect), \`PATCH /:id\` (reconfigure instead of disconnecting), \`GET /:id/connect-url\` (the install ceremony this reverses).`,
+      description: `Disconnect an integration and return its final {@link IntegrationOut}. Existing imported or mirrored tasks remain, but their \`sourceIntegrationId\` no longer identifies an active connection. A later connection may receive a different integration ID. For GitHub, Docket also attempts to uninstall the GitHub App. A GitHub-side failure does not prevent the Docket connection from being removed. An absent or inaccessible integration returns 404. Requires \`manage\`. Use \`PATCH /:id\` to reconfigure a connection instead.`,
     }),
     zParam(integrationIdParam),
     async (c) => {
@@ -762,11 +762,11 @@ Requires \`manage\` — it exercises live credentials and mutates health. Side e
       summary: 'Import work from an integration',
       capability: 'contribute',
       response: pageOf(TaskOut),
-      description: `Pull work items from the provider into Docket as native {@link TaskOut} rows and return the created tasks. This is the Migration/onboarding path: it calls the connector's \`importWork\`, resolves the target team (\`resolveImportTeam\`), and materializes a task per imported item with provenance linking back to the source (\`sourceIntegrationId\`, \`externalId\`, \`externalUrl\`).
+      description: `Import provider work as Docket tasks. Each task retains \`sourceIntegrationId\`, \`externalId\`, and \`externalUrl\` so clients can identify its source.
 
-The optional body flag \`assignToImporter\` (default \`false\`) controls landing: onboarding passes \`true\` so the owner's freshly-mirrored work appears under My Work's "Assigned to me"; the general sync path omits it so imported work lands in Triage instead. On success the integration is proven healthy — set to \`connected\` with \`lastSyncStatus='succeeded'\` and a fresh \`lastSyncedAt\`. On failure (no live credential, or the connector throwing) the integration is demoted to \`error\` with the real reason and the request fails 409 — e.g. \`Sign in with <provider> to import…\` when the OAuth grant is missing, or \`Integration provider does not support import\` for a non-connector. A missing/cross-tenant id 404s.
+\`assignToImporter\` defaults to false. Set it to true to assign imported tasks to the caller; otherwise they enter triage. A successful import marks the integration connected and updates its last successful sync time. A missing credential, provider failure, or unsupported import returns 409 and marks the integration in error. An absent or inaccessible integration returns 404.
 
-Requires \`contribute\` (it creates tasks, the same bar as authoring work directly) — note this is a *lower* bar than the \`manage\`-gated \`POST /:id/sync\`, because import is a user pulling their own work in, whereas sync configures ongoing org-level mirroring. Related: \`POST /:id/sync\`, \`GET /:id/runs\`.`,
+Requires \`contribute\`. Ongoing organization-wide synchronization through \`POST /:id/sync\` requires \`manage\`. Use \`GET /:id/runs\` to inspect sync history.`,
     }),
     zParam(integrationIdParam),
     zJson(ImportBody),
@@ -880,7 +880,7 @@ Requires \`manage\` — triggering org-wide mirroring is an administrative actio
       tag: 'Integrations',
       summary: 'Get a provider connect URL',
       capability: 'manage',
-      description: `Return the **connect URL** the client redirects the user to in order to install a GitHub App integration. The response is \`{ url }\`. A missing/cross-tenant id 404s. Requires \`manage\`. Related: \`POST /\` (create the integration row first), \`POST /:id/sync\`.`,
+      description: `Return \`{ url }\` for installing a GitHub App integration. Create the integration first, then redirect the browser to this URL. The operation returns 409 for providers that do not use a connect URL or when GitHub App configuration is unavailable. An absent or inaccessible integration returns 404. Requires \`manage\`.`,
     }),
     zParam(integrationIdParam),
     async (c) => {
@@ -904,7 +904,7 @@ Requires \`manage\` — triggering org-wide mirroring is an administrative actio
       summary: 'List external actor identity mappings',
       capability: 'manage',
       response: pageOf(ExternalActorOut),
-      description: `List every \`external_actor\` identity mapping for this integration — one row per provider-side user (e.g. a Linear member) the sync engine has ever seen, as a page of {@link ExternalActorOut}. Includes matched AND unmatched rows: an unmatched row (\`actorId: null\`) is an explicit, queryable state, never hidden or fabricated. \`matchedBy\` distinguishes an automatic \`email\` match (re-evaluated on every sync) from a \`manual\` link (set via \`PATCH /:id/external-actors/:externalActorId\`, immune to re-matching). \`ignoredAt\` splits the unmatched rows again: non-null is a deliberate exclusion, also immune to re-matching, and null means nobody has decided yet. A missing/cross-tenant integration id 404s (\`Integration not found\`).
+      description: `List the provider users that this integration has discovered and their Docket identity mappings. \`actorId: null\` means the provider user is not linked. \`matchedBy: "email"\` means Docket may reevaluate the match during a later sync. \`matchedBy: "manual"\` preserves the explicit link. A non-null \`ignoredAt\` records an explicit exclusion and also prevents automatic matching. An absent or inaccessible integration returns 404.
 
 Results use stable external-actor-id order, default to 50 items, accept at most 100, and omit \`nextCursor\` at exhaustion. Reuse a cursor only for the same integration. Requires \`manage\` — reviewing/curating identity mappings is an administrative task, the same bar as the other integration-configuration routes.`,
     }),
@@ -927,9 +927,9 @@ Results use stable external-actor-id order, default to 50 items, accept at most 
       summary: 'Manually link or unlink an external actor mapping',
       capability: 'manage',
       response: ExternalActorOut,
-      description: `Manually override one \`external_actor\` identity mapping, returning the updated {@link ExternalActorOut}. Setting \`actorId\` to a Docket Actor id (which MUST belong to the caller's org — 404 \`Actor not found\` otherwise) links the mapping and marks it \`matchedBy: 'manual'\`: from that point on, \`POST /:id/sync\`'s email matching NEVER touches this row again, even if the provider user's email later disagrees or disappears — a human's explicit link always wins. Setting \`actorId\` to \`null\` unlinks it AND clears \`matchedBy\` back to \`null\` (an explicit manual unlink, not a re-match) — so the row returns to normal automatic matching and the next sync's email pass may re-match it. Either direction also clears \`ignoredAt\`, since deciding anything about a mapping supersedes an earlier decision to exclude it — and leaving the exclusion behind would keep the row immune to the re-matching an unlink promises to restore.
+      description: `Link or unlink one provider user. Set \`actorId\` to an actor in the organization to create a manual link. Later syncs preserve that link even when the provider email changes. Set \`actorId\` to null to remove the link and allow automatic email matching again. Either choice clears \`ignoredAt\` because it replaces any earlier exclusion.
 
-The integration must exist in the caller's org (404 \`Integration not found\`); the mapping row must belong to that integration (404 \`External actor not found\` otherwise — existence-hiding, same as a cross-tenant integration id). Requires \`manage\`. Related: \`GET /:id/external-actors\` (review current mappings), \`POST /:id/sync\` (where automatic email matching runs).`,
+The integration and mapping must be visible in the organization; otherwise the request returns 404. Requires \`manage\`. Use \`GET /:id/external-actors\` to review mappings and \`POST /:id/sync\` to run automatic matching.`,
     }),
     zParam(externalActorParam),
     zJson(ExternalActorPatch),

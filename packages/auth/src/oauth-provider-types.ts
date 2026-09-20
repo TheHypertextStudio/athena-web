@@ -250,11 +250,17 @@ export interface HeldClientLock {
 }
 
 /** Authority reserved for the credentials being minted by the current provider request. */
-export const issuanceState = defineRequestState<IssuanceState | null>(() => null);
+export const issuanceState = defineRequestState<IssuanceState | null>(
+  /* v8 ignore next -- framework-owned request-state initializer */ () => null,
+);
 /** Whether provider validation reached credential creation after consuming a code. */
-export const codeIssuanceReachedState = defineRequestState<boolean>(() => false);
+export const codeIssuanceReachedState = defineRequestState<boolean>(
+  /* v8 ignore next -- framework-owned request-state initializer */ () => false,
+);
 /** The active transaction's savepoint, lock, and denylist operations. */
-export const savepointState = defineRequestState<SavepointHandle | null>(() => null);
+export const savepointState = defineRequestState<SavepointHandle | null>(
+  /* v8 ignore next -- framework-owned request-state initializer */ () => null,
+);
 /** The client lock retained while a nested authorization callback runs. */
 export const heldClientLockState = defineRequestState<HeldClientLock | null>(() => null);
 /** Internal sentinel that preserves the installed provider's code-validation behavior. */

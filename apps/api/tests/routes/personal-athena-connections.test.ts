@@ -125,8 +125,12 @@ describe('personal Athena MCP connections', () => {
 
     const ownerApp = appWithSession(personalAthena, fakeSession(ownerUserId));
     const otherApp = appWithSession(personalAthena, fakeSession(otherUserId));
-    expect((await (await ownerApp.request('/connections')).json()) as unknown[]).toHaveLength(1);
-    expect((await (await otherApp.request('/connections')).json()) as unknown[]).toHaveLength(0);
+    expect(
+      ((await (await ownerApp.request('/connections')).json()) as { items: unknown[] }).items,
+    ).toHaveLength(1);
+    expect(
+      ((await (await otherApp.request('/connections')).json()) as { items: unknown[] }).items,
+    ).toHaveLength(0);
     expect(
       (await otherApp.request(`/connections/${created.id}/reconnect`, { method: 'POST' })).status,
     ).toBe(404);

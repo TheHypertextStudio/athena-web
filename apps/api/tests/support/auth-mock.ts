@@ -10,7 +10,7 @@ interface TestSession {
 interface TestJwtPayload {
   readonly sub: string;
   readonly scope: string;
-  readonly [claim: string]: unknown;
+  [claim: string]: unknown;
 }
 
 const mocks = vi.hoisted(() => ({
@@ -43,7 +43,54 @@ vi.mock('@docket/auth', async (importOriginal) => {
       },
       handler: mocks.handler,
     },
-    verifyAccessToken: mocks.verifyAccessToken,
+    verifyAccessToken: async (
+      token: string,
+      options: {
+        readonly verifyOptions?: { readonly issuer?: string; readonly audience?: string };
+      },
+    ) => {
+      const supplied = await mocks.verifyAccessToken(token, options);
+      const now = Math.floor(Date.now() / 1000);
+      const claims: TestJwtPayload = {
+        iss: options.verifyOptions?.issuer,
+        aud: options.verifyOptions?.audience,
+        iat: now - 5,
+        exp: now + 10 * 60,
+        ...supplied,
+      };
+      const grantClaim = 'https://clearthedocket.com/oauth/grant';
+      if (
+        !(grantClaim in claims) &&
+        typeof claims.sub === 'string' &&
+        claims.sub.length > 0 &&
+        typeof claims['azp'] === 'string'
+      ) {
+        const { seededGrantId } = await import('./oauth-grant');
+        let grantId = seededGrantId(claims['azp'], claims.sub);
+        if (!grantId) {
+          const [{ db, oauthResourceGrant }, { and, eq }] = await Promise.all([
+            import('@docket/db'),
+            import('drizzle-orm'),
+          ]);
+          const grants = await db
+            .select({ id: oauthResourceGrant.id })
+            .from(oauthResourceGrant)
+            .where(
+              and(
+                eq(oauthResourceGrant.clientId, claims['azp']),
+                eq(oauthResourceGrant.userId, claims.sub),
+              ),
+            )
+            .limit(2);
+          grantId = grants.length === 1 ? grants[0]?.id : undefined;
+        }
+        if (grantId) {
+          claims[grantClaim] = grantId;
+          claims['jti'] = `test-${grantId}`;
+        }
+      }
+      return claims;
+    },
   };
 });
 

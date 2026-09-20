@@ -137,7 +137,7 @@ async function dispatch(userId: string, body: Record<string, unknown>): Promise<
     headers: JSON_HEADERS,
     body: JSON.stringify(body),
   });
-  expect(created.status).toBe(200);
+  expect(created.status).toBe(201);
   const detail = (await created.json()) as { id: string; status: string };
   expect(detail.status).toBe('awaiting_approval');
   return detail.id;

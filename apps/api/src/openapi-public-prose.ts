@@ -86,53 +86,15 @@ export function sentenceCase(value: string): string {
   return value.length > 0 ? `${value[0]?.toUpperCase()}${value.slice(1)}` : value;
 }
 
-const IMPLEMENTATION_NARRATION =
-  /(?:\borgContextMiddleware\b|\bwhere-clause\b|\barchived_at\b|\bonConflictDoNothing\b|\bcomputeStats\b|\bapps\/api\/src\b|\btyped RPC client\b|\bBlobStore\b|\blocal disk\b|\blocal development\b|\bapplication code\b|\bin-process (?:Athena )?runner\b|\bper-membership fan-out\b)/i;
-
-function removeImplementationNarration(value: string): string {
-  return value
-    .split(/(?<=[.!?])(?=\s|$)/)
-    .filter((sentence) => !IMPLEMENTATION_NARRATION.test(sentence))
-    .join('')
-    .replace(/\n{3,}/g, '\n\n');
-}
-
-/** Remove source-only notation and stale wire names from public prose. */
+/** Convert source-only TSDoc links into readable schema names. */
 export function cleanPublicProse(value: string): string {
-  return removeImplementationNarration(
-    value
-      .replace(/\{@link\s+([^}\s]+)(?:\s+[^}]*)?\}/g, (_match, target: string) => {
-        const name = target.split(/[.#/]/).at(-1) ?? target;
-        return `\`${name}\``;
-      })
-      .replaceAll('workflow_states', 'workflowStates')
-      .replace(/\*\*([^*]+)\*\*/g, '$1')
-      .replace(/\s+—\s+/g, '. ')
-      .replace(/[\u2013\u2014]/g, '-')
-      .replace(/\s*\(see\s+(?:docs|apps|packages|src)\/[^)]+\)/gi, '')
-      .replace(/\s*\((?:apps|packages|src)\/[^)]+\)/gi, '')
-      .replace(/`?(?:apps|packages|src)\/[^`\s),]+`?/gi, 'Docket')
-      .replace(/\bthe atomic unit of work\b/gi, 'a task')
-      .replace(/\bthe heartbeat of\b/gi, 'the current status source for')
-      .replace(/\btwo front doors onto one system\b/gi, 'two interfaces to the same services')
-      .replace(/\bthe handler\b/gi, 'Docket')
-      .replace(/\bthis handler\b/gi, 'this operation')
-      .replace(/\bmiddleware\b/gi, 'authorization check')
-      .replace(/\bdatabase\b/gi, 'storage')
-      .replace(/\bDB error\b/gi, 'storage error')
-      .replace(/\bBlobStore(?:\.get)?(?: port)?\b/gi, 'object storage')
-      .replace(/\blocal disk in dev and Vercel Blob in production\b/gi, 'object storage')
-      .replace(/\blocal disk in dev, Vercel Blob in production\b/gi, 'object storage')
-      .replace(/\bin-memory\/local or real object storage\b/gi, 'object storage')
-      .replace(/\btyped RPC client\b/gi, 'JSON client')
-      .replace(/\bN\+1\b/g, 'per-item request pattern')
-      .replace(/\bapp code\b/gi, 'the response')
-      .replace(/\bcockpit\b/gi, 'view')
-      .replace(/\bceremony\b/gi, 'flow')
-      .replace(/\bdeliberately\s+/gi, '')
-      .replace(/[ \t]{2,}/g, ' ')
-      .trim(),
-  );
+  return value
+    .replace(/\{@link\s+([^}\s]+)(?:\s+[^}]*)?\}/g, (_match, target: string) => {
+      const name = target.split(/[.#/]/).at(-1) ?? target;
+      return `\`${name}\``;
+    })
+    .replace(/[ \t]{2,}/g, ' ')
+    .trim();
 }
 
 /** Clean every public description, summary, and title recursively. */
@@ -356,66 +318,80 @@ export function accessText(path: string, operation: JsonObject): string {
   const access = capability
     ? `${credential} The caller needs the \`${capability}\` workspace capability.`
     : credential;
-  return path.includes('/orgs/{orgId}')
-    ? `${access} The caller must belong to the Organization.`
-    : access;
+  return path.includes('/orgs/{orgId}') ? `${access} Organization membership is required.` : access;
 }
 
-/** Remove access sentences that the generated access section already states. */
-export function withoutRepeatedAccess(value: string): string {
-  return value
-    .replace(
-      /(^|(?<=[.!?])\s+)[^.!?]*\brequires? (?:the )?`[^`]+`(?: workspace)? capability[^.!?]*[.!?]/gi,
-      '$1',
-    )
-    .replace(
-      /(^|(?<=[.!?])\s+)[^.!?]*\brequires? (?:org|organization) membership[^.!?]*[.!?]/gi,
-      '$1',
-    )
-    .trim();
-}
-
-/** Split legacy prose into the structured public narrative fields. */
-export function splitDescription(value: unknown): {
-  purpose: string;
-  inputs: readonly string[];
-  effects: readonly string[];
-  related: readonly string[];
-} {
-  const paragraphs = cleanPublicProse(stringValue(value))
-    .split(/\n\s*\n/)
-    .map((paragraph) => paragraph.trim())
-    .filter(Boolean);
-  const related: string[] = [];
-  const content: string[] = [];
-  const effects: string[] = [];
-  for (const paragraph of paragraphs) {
-    const relatedAt = paragraph.search(/(?:^|\s)Related:\s*/i);
-    const withoutRelated = relatedAt >= 0 ? paragraph.slice(0, relatedAt).trim() : paragraph;
-    if (relatedAt >= 0) related.push(paragraph.slice(relatedAt).replace(/^\s*Related:\s*/i, ''));
-    if (!withoutRelated) continue;
-    if (/^(?:side effects?|result|returns?|on success):/i.test(withoutRelated)) {
-      effects.push(
-        withoutRelated.replace(/^(?:side effects?|result|returns?|on success):\s*/i, ''),
-      );
-    } else {
-      content.push(withoutRelated);
-    }
+function inputGuidance(operation: JsonObject): string {
+  const parameters = Array.isArray(operation['parameters']) ? operation['parameters'] : [];
+  const locations = new Set(
+    parameters
+      .filter(isObject)
+      .map((parameter) => stringValue(parameter['in']))
+      .filter(Boolean),
+  );
+  const requestBody = isObject(operation['requestBody']) ? operation['requestBody'] : undefined;
+  const content = requestBody && isObject(requestBody['content']) ? requestBody['content'] : {};
+  const mediaTypes = Object.keys(content);
+  const parts: string[] = [];
+  if (locations.size > 0) {
+    parts.push(`Supply the ${[...locations].join(', ')} values documented below.`);
   }
-  return {
-    purpose: content[0] ?? 'Perform the operation described by the summary.',
-    inputs: content.slice(1),
-    effects,
-    related,
-  };
+  if (requestBody) {
+    const requirement = requestBody['required'] === true ? 'required' : 'optional';
+    parts.push(
+      `The ${requirement} request body uses ${mediaTypes.map((type) => `\`${type}\``).join(' or ') || 'the documented media type'}.`,
+    );
+  }
+  return parts.join(' ') || 'This operation takes no path, query, header, or body input.';
 }
+
+function relatedGuidance(operation: JsonObject): string {
+  const related = Array.isArray(operation['x-docket-related-operations'])
+    ? operation['x-docket-related-operations'].filter(
+        (operationId): operationId is string => typeof operationId === 'string',
+      )
+    : [];
+  return related.length > 0
+    ? related.map((operationId) => `\`${operationId}\``).join(', ')
+    : 'No related operation is required to complete this request.';
+}
+
+function resultGuidance(operation: JsonObject): string {
+  return statusEntries(operation)
+    .filter(([status]) => /^2\d\d$|^304$/.test(status))
+    .map(([status, response]) => {
+      const description = stringValue(response['description'], 'The operation completed.');
+      return `\`${status}\` - ${description}`;
+    })
+    .join('\n\n');
+}
+
+const FAILURE_RECOVERY: Readonly<Record<string, string>> = {
+  '400': 'Correct the API version or malformed request and try again.',
+  '401': 'Authenticate again with a valid credential for this interface.',
+  '403': 'Request the required OAuth scope or workspace permission before retrying.',
+  '404': 'Verify the identifier and that the caller can access the resource.',
+  '406': 'Request one of the response media types documented for this operation.',
+  '409': 'Read the current resource state, resolve the conflict, and retry if appropriate.',
+  '412': 'Fetch the current representation and retry with its latest strong ETag.',
+  '413': 'Send a smaller request body.',
+  '415': 'Send the request with one of the documented content types.',
+  '422': 'Correct the fields listed in the Problem response and try again.',
+  '429': 'Wait for the Retry-After interval before retrying.',
+  '500': 'Retry with backoff. Include X-Request-Id when reporting a persistent failure.',
+  '503': 'Wait for the Retry-After interval or retry with backoff.',
+};
 
 /** Describe where a caller finds recovery guidance for an operation. */
 export function failureGuidance(operation: JsonObject): string {
-  const hasFailure = statusEntries(operation).some(([status]) => !/^2\d\d$|^304$/.test(status));
-  return hasFailure
-    ? 'See the Problem responses below.'
-    : 'This operation declares no operation-specific failure.';
+  const failures = statusEntries(operation).filter(([status]) => !/^2\d\d$|^304$/.test(status));
+  if (failures.length === 0) return 'No operation-specific failure is declared.';
+  return failures
+    .map(
+      ([status]) =>
+        `\`${status}\` - ${FAILURE_RECOVERY[status] ?? 'Use the Problem code to select recovery behavior.'}`,
+    )
+    .join('\n\n');
 }
 
 /** Render every operation description with the required public sections. */
@@ -423,23 +399,21 @@ export function normalizeNarratives(document: JsonObject): void {
   for (const { path, operation } of operations(document)) {
     const current = stringValue(operation['description']);
     if (current.includes('## Purpose') && current.includes('## Failures and recovery')) continue;
-    const { purpose, inputs: detail, effects, related } = splitDescription(current);
-    const cleanedPurpose = withoutRepeatedAccess(purpose);
-    const cleanedDetail = detail.map(withoutRepeatedAccess).filter(Boolean);
-    const cleanedEffects = effects.map(withoutRepeatedAccess).filter(Boolean);
+    const summary = stringValue(operation['summary'], 'Perform this operation').trim();
+    const purpose = `${summary.replace(/[.!?]+$/, '')}.`;
     operation['description'] = [
       '## Purpose',
-      cleanedPurpose || `Docket performs ${stringValue(operation['summary'], 'this operation')}.`,
+      purpose,
       '## Inputs and constraints',
-      cleanedDetail.join('\n\n') || 'See the request fields below.',
+      inputGuidance(operation),
       '## Result and side effects',
-      cleanedEffects.join('\n\n') || 'See the success response below.',
+      resultGuidance(operation),
       '## Access and permissions',
       accessText(path, operation),
       '## Failures and recovery',
       failureGuidance(operation),
       '## Related operations',
-      related.join('\n\n') || 'None.',
+      relatedGuidance(operation),
     ].join('\n\n');
   }
 }

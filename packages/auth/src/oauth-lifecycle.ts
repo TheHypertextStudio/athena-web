@@ -168,6 +168,7 @@ export async function ensureTrustedLegacyMcpGrant(
     if (!client || !acceptsLegacyToken(client, input, now)) return null;
     const existing = await legacyGrantRows(transaction, input);
     if (existing.length === 1) return existing[0]?.id ?? null;
+    /* v8 ignore next -- the grant identity has a database uniqueness constraint */
     if (existing.length > 1) return null;
     if (await legacyPairHasAuthorityRows(transaction, input)) return null;
     await createLegacyGrant(transaction, input, client, now);

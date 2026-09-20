@@ -281,7 +281,7 @@ Candidate queries are tenant-bounded and every Task, Project, and Initiative is 
       tag: 'Hub',
       summary: 'Get the cross-org inbox',
       response: HubInboxOut,
-      description: `Return the caller's notification feed across every organization they belong to, newest first, as the Hub's inbox pane. This is the same underlying cross-org notification set as \`GET /v1/me/notifications\`, scoped by the mandatory \`userId = session.user.id\` predicate and rendered for the Hub cockpit (each item carries its originating \`organizationId\` org chip). Unlike \`/v1/me/notifications\` it takes no narrowing filters — it is the full unread-first feed.
+      description: `Return the caller's notifications across all of their organizations, newest first. Each item includes its originating \`organizationId\`. This operation has no filters; use \`GET /v1/me/notifications\` when you need to narrow the feed.
 
 Read-only; session-only, no capability. 401 when unauthenticated. To mutate read state use the \`/v1/me/notifications/*\` read/act endpoints. Related: \`/hub/today\` surfaces the unread *count* in \`needsAttention.inbox\`.`,
     }),
@@ -360,7 +360,7 @@ Read-only; session-only, no capability. 401 when unauthenticated. To mutate read
       response: StreamPageOut,
       description: `Return the complete event timeline across every workspace the caller belongs to. This is a context-wide history rather than a personalized attention queue: every event in the caller's active workspace set is eligible, whether or not it names the caller as a recipient. Each event retains its organization id so workspace boundaries remain explicit, and \`actorIsViewer\` identifies actions performed by the caller without name matching.
 
-**Filtering & pagination:** supports attribute filters (an encoded \`filter\` expression compiled to SQL), plus \`system\`, \`kind\`, and \`entityKind\` narrowing. It is keyset-paginated on \`(occurredAt, eventId)\`, fetching \`limit + 1\` to detect more and returning an opaque \`nextCursor\` when another page exists; \`order=asc|desc\` flips the sort. A caller with no memberships gets an empty page. Session-only, no capability; 401 when unauthenticated.`,
+\`filter\`, \`system\`, \`kind\`, and \`entityKind\` narrow the results. The response returns an opaque \`nextCursor\` only when another page exists; keep the same filters when continuing. \`order=asc|desc\` controls the sort direction. A caller with no workspace memberships receives an empty page. This operation requires a Docket session.`,
     }),
     zQuery(StreamQuery),
     async (c) => {
@@ -419,9 +419,9 @@ Read-only; session-only, no capability. 401 when unauthenticated. To mutate read
       tag: 'Hub',
       summary: 'Get the cross-org portfolio',
       response: HubPortfolioOut,
-      description: `Return the caller's cross-org **portfolio timeline** — org swimlanes, each containing Program lanes and the Project bars (with milestone diamonds) beneath them, laid out on one shared timeline. Projects with no program hang directly off the org swimlane as \`unassigned\` bars. Optional \`from\`/\`to\` (ISO dates) bound the timeline window and \`initiativeId\` narrows to a single initiative's projects.
+      description: `Return the caller's portfolio timeline across organizations. Each organization contains program lanes, project bars, and project milestones. Projects without a program appear as \`unassigned\`. Use ISO \`from\` and \`to\` dates to set the window, or \`initiativeId\` to include only one initiative's projects.
 
-Built as a per-membership fan-out merged in application code: **tenant bands stay separate** — each swimlane carries its own \`OrgChip\` and bars carry their own \`organizationId\`, so this is a union of per-org rollups, never a cross-tenant join. Read-only; session-only, no capability. 401 when unauthenticated. Related: \`/hub/today\` (the day-level cockpit) vs this strategic, multi-week timeline view.`,
+Every timeline item retains its \`organizationId\`; data from separate organizations is never combined into one roll-up. This is a session-only read. Use \`/hub/today\` for the caller's day instead of the multi-week portfolio.`,
     }),
     zQuery(portfolioQuery),
     async (c) => {
@@ -441,7 +441,7 @@ Built as a per-membership fan-out merged in application code: **tenant bands sta
       tag: 'Hub',
       summary: 'Search across orgs',
       response: HubSearchOut,
-      description: `Cross-org semantic search for the Hub command palette and search page. Results are read from the durable \`search_document\` projection, scoped to the caller's active memberships and user-private documents, and returned as typed \`SearchResult\` rows with route, family, kind, snippet, source, subject, and facet metadata.`,
+      description: `Search work across the caller's active organization memberships and personal records. Each \`SearchResult\` includes its route, family, kind, snippet, source, subject, and filter facets. Results never include records the caller cannot currently access.`,
     }),
     zQuery(SearchHttpQuery),
     async (c) => {

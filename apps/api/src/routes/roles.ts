@@ -79,7 +79,7 @@ const roles = new Hono<AppEnv>()
       tag: 'Roles',
       summary: 'List roles',
       response: pageOf(RoleOut),
-      description: `List every role defined in the organization — the four seeded **system roles** (Owner, Admin, Member, Guest; \`isSystem: true\`) plus any custom roles the org has created. A role is a named, org-scoped capability bundle: a flat \`capabilities\` array (resolved by max-rank) plus a \`baseCapability\` that, when non-null, is materialized as a role-grant at the org root and becomes the holder's org-wide baseline (Owner/Admin → \`manage\`, Member → \`contribute\`, Guest → \`null\`, i.e. grant-only).
+      description: `List the Owner, Admin, Member, and Guest roles plus the workspace's custom roles. Each role defines a capability set, an optional workspace-wide base capability, and a default visibility policy. Higher capabilities include the permissions of lower capabilities.
 
 Results use stable role-id order, default to 50 items, accept at most 100, and omit \`nextCursor\` at exhaustion. Requires only org membership to read (no \`manage\`) — members need to see the role catalog to assign roles in invites. See \`POST /\` to create custom roles and \`GET /:id\` for a single role.`,
     }),
@@ -105,9 +105,9 @@ Results use stable role-id order, default to 50 items, accept at most 100, and o
       summary: 'Create a role',
       capability: 'manage',
       response: RoleOut,
-      description: `Create a custom role within the org — a named capability bundle members can be assigned. Requires the \`manage\` capability because a role mints reusable capability. \`organizationId\` is taken from the path, never the body. The new row is always \`isSystem: false\` (only the four seeded roles are system roles); its \`key\` is the stable identifier and must be unique within the org (the DB enforces \`(organization_id, key)\`).
+      description: `Create a custom role that can be assigned to workspace members. The \`key\` is a stable identifier and must be unique within the workspace. The workspace comes from the path and cannot be supplied in the request body.
 
-\`capabilities\` defaults to an empty array and \`baseCapability\` to \`null\` when omitted; \`defaultVisibility\` defaults at the DB level when not supplied. Per the self-escalation invariant (permissions §4.3/§4.5), a role should not confer capability greater than the creator's own org-wide capability — a Member (\`contribute\`) cannot mint a \`manage\` role. The five capability values, lowest→highest, are \`view\` < \`comment\` < \`contribute\` < \`assign\` < \`manage\` (higher implies all lower).
+\`capabilities\` defaults to an empty array and \`baseCapability\` defaults to \`null\`. A caller cannot create a role with more authority than the caller already has. Capability rank is \`view\` < \`comment\` < \`contribute\` < \`assign\` < \`manage\`; each level includes the levels below it.
 
 Returns the created \`RoleOut\`. Assign the role to members via the invitation \`roleId\` or \`PATCH /members/:actorId\`. See \`PATCH /:id\` to edit and \`DELETE /:id\` to remove (system roles cannot be deleted).`,
     }),
@@ -154,7 +154,7 @@ Returns the created \`RoleOut\`. Assign the role to members via the invitation \
       tag: 'Roles',
       summary: 'Get a role',
       response: RoleOut,
-      description: `Fetch a single role by id within the org, returning its full \`RoleOut\` — key, name, \`isSystem\` flag, capability bundle, \`baseCapability\`, default visibility, and creation time. The lookup is scoped to \`(id, orgId)\`, so a role id from another org returns **404** (existence-hiding) rather than leaking its existence. Requires only org membership to read. See \`GET /\` to list all roles.`,
+      description: `Return a role's key, name, system-role flag, capabilities, base capability, default visibility, and creation time. Any workspace member may read a role. Docket returns **404** when the role does not exist in this workspace or the caller cannot access it. See \`GET /\` to list all roles.`,
     }),
     zParam(idParam),
     async (c) => {
@@ -265,9 +265,9 @@ Notably the update body has **no \`key\` field**: a role's \`key\` is immutable 
       summary: 'Delete a role',
       capability: 'manage',
       response: RoleOut,
-      description: `Delete a custom role by id. Requires the \`manage\` capability. The role must exist in this org — otherwise **404** (existence-hiding). **System roles cannot be deleted**: if the target's \`isSystem\` is true (Owner/Admin/Member/Guest), the request is rejected with **409**, since the seeded bundles are structural to the permission model and the org's role grants.
+      description: `Delete a custom role by ID. The caller needs the \`manage\` capability. Docket returns **404** when the role does not exist in this workspace or the caller cannot access it. Owner, Admin, Member, and Guest roles cannot be deleted; attempting to delete one returns **409**.
 
-This is a hard delete of the \`role\` row and its role-subject grants. The role FK clears affected members' \`actor.roleId\`, so reassign members (via \`PATCH /members/:actorId\`) when they should retain an org-wide baseline. Returns the deleted \`RoleOut\` as a tombstone of what was removed.`,
+Deleting a custom role also removes permissions granted through that role and clears the role from affected members. Reassign those members first when they should retain workspace-wide access. The response contains the deleted role.`,
     }),
     zParam(idParam),
     async (c) => {

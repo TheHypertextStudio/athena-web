@@ -179,9 +179,9 @@ Results use stable team-id order, default to 50 items, accept at most 100, and o
       summary: 'Create a team',
       capability: 'manage',
       response: TeamDetail,
-      description: `Create a team within the org. Requires the \`manage\` capability (creating an org structural unit). \`organizationId\` is always taken from the path, never the body. The team's \`key\` must be unique among the org's teams: the handler checks availability first and returns **409** on a collision (surfacing the \`(organization_id, key)\` uniqueness constraint as a clean Problem rather than a raw DB error).
+      description: `Create a team within the organization. Requires the \`manage\` capability. The team's \`key\` must be unique within the organization; a duplicate returns **409**.
 
-Defaults applied when omitted: \`workflowStates\` seeds the canonical five-state workflow (Backlog › Todo › In Progress › Done › Canceled — the first state, \`backlog\`, is the new-task default); \`triageEnabled\` defaults to \`true\`; \`description\`, \`agentGuidance\`, and \`approvalRouting\` default to null. Returns the full \`TeamDetail\` (workflow states always materialized). Unlike the org-create transaction, this does NOT seed a team Actor membership set — it creates the team row only. See \`PATCH /:teamId\` to edit and \`DELETE /:teamId\` to archive.`,
+When omitted, \`workflowStates\` uses Backlog, Todo, In Progress, Done, and Canceled. Backlog becomes the default for new tasks. \`triageEnabled\` defaults to \`true\`, while \`description\`, \`agentGuidance\`, and \`approvalRouting\` default to null. Returns the full \`TeamDetail\`. See \`PATCH /:teamId\` to edit and \`DELETE /:teamId\` to archive.`,
     }),
     zJson(TeamCreate),
     async (c) => {
@@ -277,9 +277,9 @@ Results use stable \`teamId, actorId\` order, default to 50 items, accept at mos
       summary: 'Update a team',
       capability: 'manage',
       response: TeamDetail,
-      description: `Patch an active team's settings. Requires the \`manage\` capability. Every field is optional; only supplied fields change. The team must be active and in this org — otherwise **404** (the where-clause enforces \`(teamId, orgId)\` AND \`archived_at IS NULL\`). Changing \`key\` re-checks org-wide uniqueness and returns **409** on a collision with another team (the row being patched is excluded from the check).
+      description: `Update an active team's settings. Every field is optional, and omitted fields remain unchanged. The team must be active and visible in the organization; otherwise the request returns 404. A \`key\` already used by another team returns 409.
 
-Setting \`workflowStates\` **replaces the entire array** (it is not a merge). A cadence change accepts 1–365 calendar days, requires the loaded \`cycleCadenceRevision\`, preserves assigned windows, and returns 409 \`cadence_changed\` when that revision is stale. \`description\`, \`agentGuidance\`, and \`approvalRouting\` accept \`null\` to clear. An **empty patch body is a valid no-op**: since the DB rejects an empty \`SET\`, the handler re-reads the row (still enforcing the org-scoped existence check) and returns it unchanged. Returns the updated \`TeamDetail\`. To archive a team use \`DELETE /:teamId\`.`,
+ Setting \`workflowStates\` replaces the entire array. A cadence change accepts 1–365 calendar days and requires the current \`cycleCadenceRevision\`. Docket preserves assigned cycle windows and returns 409 \`cadence_changed\` when that revision is stale. Set \`description\`, \`agentGuidance\`, or \`approvalRouting\` to null to clear it. An empty body leaves the team unchanged. Requires the \`manage\` capability and returns the updated \`TeamDetail\`. Use \`DELETE /:teamId\` to archive the team.`,
     }),
     zParam(idParam),
     zJson(TeamUpdate),
@@ -352,9 +352,9 @@ Setting \`workflowStates\` **replaces the entire array** (it is not a merge). A 
       summary: 'Delete a team',
       capability: 'manage',
       response: TeamDeleteResult,
-      description: `Archive a team — a **soft delete** that stamps \`archived_at\` rather than removing the row, preserving the team's Cycles, tasks, and history for audit and possible restoration. Requires the \`manage\` capability. The update is scoped to \`(teamId, orgId)\` AND \`archived_at IS NULL\`, so deleting an already-archived team or one from another org returns **404**; this also makes the operation effectively idempotent (a second delete 404s rather than re-archiving).
+      description: `Archive a team without deleting its cycles, tasks, or history. An already archived, absent, or inaccessible team returns 404, so repeating a successful request returns 404 rather than the first result.
 
-After archival the team disappears from \`GET /\` and \`GET /:teamId\` (both filter \`archived_at IS NULL\`). Returns \`TeamDeleteResult\` — the archived team id plus the \`archivedAt\` timestamp. Note this endpoint does not block archiving the org's last/default team, nor does it reassign that team's tasks.`,
+The team disappears from active team reads. Tasks remain assigned to it. Docket allows archiving the organization's last or default team and does not choose a replacement. Requires the \`manage\` capability. Returns \`TeamDeleteResult\` with the team ID and archive time.`,
     }),
     zParam(idParam),
     async (c) => {
@@ -445,7 +445,7 @@ Requires only org membership. Unknown or archived team → **404**.`,
 
 \`role\` defaults to \`member\`. The role labels who runs the team; it grants nothing, because permissions resolve through grants and a role that quietly widened capability is the kind of thing nobody audits.
 
-**Any human actor in the org is eligible, account or not.** A volunteer who never signs in joins on exactly the same terms as staff — the handler checks \`kind = 'human'\` and tenancy, and nothing else (see \`docs/engineering/specs/people.md\`). An agent or team actor is rejected with **404**, as is an actor from another org.`,
+Any person in the workspace is eligible, whether or not they have a Docket account. Agents, teams, and people from another workspace return **404**.`,
     }),
     zParam(memberParam),
     zJson(TeamMemberUpsert),

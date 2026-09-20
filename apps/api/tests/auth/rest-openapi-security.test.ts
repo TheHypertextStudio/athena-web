@@ -25,16 +25,20 @@ interface SecurityDocument {
   >;
 }
 
-function route(summary: string) {
-  return describeRoute({ summary, responses: { 200: { description: 'Fixture response.' } } });
+function route(summary: string, tag: string) {
+  return describeRoute({
+    summary,
+    tags: [tag],
+    responses: { 200: { description: 'Fixture response.' } },
+  });
 }
 
 function fixtureApps(): { readonly app: AppInstance; readonly adminApp: AdminInstance } {
   const app = new Hono()
-    .get('/v1/config', route('Read configuration'), (c) => c.json({ ok: true }))
-    .get('/v1/orgs', route('List organizations'), (c) => c.json({ ok: true }))
-    .post('/v1/orgs', route('Create organization'), (c) => c.json({ ok: true }))
-    .get('/v1/me/account', route('Read account'), (c) => c.json({ ok: true }))
+    .get('/v1/config', route('Read configuration', 'Config'), (c) => c.json({ ok: true }))
+    .get('/v1/orgs', route('List organizations', 'Orgs'), (c) => c.json({ ok: true }))
+    .post('/v1/orgs', route('Create organization', 'Orgs'), (c) => c.json({ ok: true }))
+    .get('/v1/me/account', route('Read account', 'Me'), (c) => c.json({ ok: true }))
     .get(
       '/v1/contract-public',
       apiDoc({
@@ -62,8 +66,10 @@ function fixtureApps(): { readonly app: AppInstance; readonly adminApp: AdminIns
       }),
       (c) => c.json({ ok: true }),
     )
-    .get('/v1/public/time/status', route('Read shared time status'), (c) => c.json({ ok: true }));
-  const adminApp = new Hono().get('/admin/session', route('Read staff session'), (c) =>
+    .get('/v1/public/time/status', route('Read shared time status', 'Time'), (c) =>
+      c.json({ ok: true }),
+    );
+  const adminApp = new Hono().get('/admin/session', route('Read staff session', 'Admin'), (c) =>
     c.json({ ok: true }),
   );
   return {
@@ -111,7 +117,7 @@ describe('REST OpenAPI authentication contract', () => {
         type: 'apiKey',
         in: 'cookie',
         name: '__Secure-better-auth.session_token',
-        description: expect.stringContaining('better-auth.session_token'),
+        description: expect.stringContaining('first-party Docket browser session cookie'),
       },
       restOAuth: {
         type: 'oauth2',
@@ -161,7 +167,7 @@ describe('REST OpenAPI authentication contract', () => {
         type: 'apiKey',
         in: 'cookie',
         name: '__Secure-better-auth.session_token',
-        description: expect.stringContaining('better-auth.session_token'),
+        description: expect.stringContaining('first-party Docket browser session cookie'),
       },
     });
     expect(document.security).toEqual([{ sessionCookie: [] }]);

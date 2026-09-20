@@ -166,11 +166,11 @@ const agentSessions = new Hono<AppEnv>()
       summary: 'Start an agent session from a prompt',
       capability: 'contribute',
       response: AgentSessionOut,
-      description: `Create and dispatch an agent session from a freeform \`prompt\`. Personal Athena work returns \`202\` after production asynchronous admission, with the parent session \`running\` and its generation durably queued; local/test Athena and explicit registered agents return the created resource as \`201\`. This is the "ask Athena to plan" escalation of the hybrid Home prompt box; its sibling, plain quick-capture, lives at \`POST /v1/orgs/:orgId/capture\` and never invokes an agent.
+      description: `Create and start an agent session from a freeform \`prompt\`. Omit \`agentId\` to use the caller's personal Athena agent, or supply a registered agent in the organization. An unknown or inaccessible agent returns 404.
 
-Behavior: the session binds to the supplied \`agentId\` (validated to be a registered agent in this workspace, else 404 \`Agent not found\`) or, when omitted, to the caller's personal Athena executor. Athena stores the caller's user id as owner and this workspace only as context; no workspace agent or grant is created. The prompt is persisted as the session's first \`response\` activity (there is no schema brief column) and threaded through as the runtime task brief. \`trigger\` is recorded as \`delegation\`, and the caller becomes the session \`initiatorId\`.
+The prompt becomes the first activity and the instruction for the agent. Personal Athena sessions belong to the caller and use the organization as their work context. Registered-agent sessions use the selected agent's workspace permissions.
 
-Side effects: dispatches the executor against the runtime; each yielded activity is persisted and streams live over \`GET /:id/stream\`. Athena resolves the owner's current human Actor and permissions on every Docket call; a registered agent retains its own Actor. The approval gate may delay a call but never grants missing authority. Requires \`contribute\`. Related: \`POST /:id/run\`, \`PUT /:id/activity/:activityId/decision\` and \`POST /:id/activity/:activityId/reply\`, and the pause/resume/cancel lifecycle routes.`,
+The operation returns \`202\` with a monitor URL when work continues asynchronously, or \`201\` when it finishes creating the session before the response. Activities remain available through \`GET /:id/stream\`. Approval can pause a proposed action but never grants a permission the agent lacks. Requires \`contribute\`. Related operations run, pause, resume, cancel, approve, reject, and reply to the session.`,
     }),
     zJson(SessionFromPromptBody),
     async (c) => {
@@ -196,7 +196,7 @@ Side effects: dispatches the executor against the runtime; each yielded activity
       tag: 'Agents',
       summary: "Get (or create) the user's Athena chat thread",
       response: AgentSessionDetailOut,
-      description: `Return the caller's persistent personal Athena session (\`kind: 'chat'\`) with its full activity stream, creating it on first use and focusing it on the current workspace context. The thread belongs to the user and uses the same loop, transcript, toolbox, and approval gate as delegated work. No workspace agent or grant is created. This workspace route is a temporary compatibility door pending the personal Athena API.`,
+      description: `Return the caller's personal Athena chat session with its complete activity history. Docket creates the session on first use and focuses it on the current organization. The thread belongs to the caller and uses the same tools, permissions, and approval behavior as other Athena sessions.`,
     }),
     async (c) => {
       const { orgId, actorId } = c.get('actorCtx');
@@ -221,7 +221,7 @@ Side effects: dispatches the executor against the runtime; each yielded activity
       summary: 'Send a message to the Athena chat thread',
       capability: 'contribute',
       response: AgentSessionDetailOut,
-      description: `Append a natural-language message to the org's chat thread: the text lands as a visible \`response\` activity (author: user) and as the next user turn of the durable transcript. Eligible production work is admitted or woken asynchronously and returns \`202\`; local/test execution settles synchronously. A thread already awaiting approval or canceled remains parked and returns \`200\` without dispatch. Writes obey the same approval dial as any session. Requires \`contribute\` (chatting IS contributing).`,
+      description: `Add a message to the organization's Athena chat thread. The message appears in activity history and becomes the next user turn. The operation returns \`202\` with a monitor URL when Athena continues asynchronously. It returns \`200\` when the thread is already waiting for approval or has been canceled, because no new work starts. Requires the \`contribute\` capability.`,
     }),
     zJson(SessionReplyBody),
     async (c) => {
@@ -318,9 +318,9 @@ Side effects: dispatches the executor against the runtime; each yielded activity
       tag: 'Agents',
       summary: 'Run an agent session',
       response: AgentSessionOut,
-      description: `Run (or resume execution of) an existing session. Production personal Athena work returns \`202\` after durable admission; local/test Athena and registered agents return the settled \`200\` {@link AgentSessionOut}. Only a session in a *runnable* state — \`pending\` (created but not yet dispatched) or \`running\` — may be run; any other state yields 409 (\`Session is not in a runnable state\`). A missing/cross-tenant id returns 404, and a session whose agent has since been deregistered returns 404 (\`Agent not found\`).
+      description: `Run or continue a session whose status is \`pending\` or \`running\`. Any other status returns 409. An absent or inaccessible session returns 404, as does a session whose registered agent no longer exists.
 
-Behavior & side effects: atomically claims a durable \`agent_session_run\` generation before provider work. A fresh same-session lease rejects duplicate callers; an expired lease is recovered with a new fencing token, and healthy work renews indefinitely. The loop derives the task brief, consumes the runtime stream, persists activities and transcript checkpoints, and settles only on completion, a human wait, cancellation, or an actual error. For Athena, \`AGENT_MAX_TURNS\` starts the next durable generation instead of ending personal work. Activities stream live to \`GET /:id/stream\`. Personal Athena work requires its authenticated owner; registered-agent work requires \`contribute\`.`,
+Docket prevents two active runs for the same session. If an interrupted run stops renewing its claim, a later request can recover it. The session stops when it completes, fails, is canceled, or waits for a person. The operation returns \`202\` with a monitor URL when work continues asynchronously, or \`200\` with the settled session. Activities stream through \`GET /:id/stream\`. Personal Athena work requires its owner; registered-agent work requires \`contribute\`.`,
     }),
     zParam(idParam),
     zJson(z.object({})),
@@ -612,7 +612,7 @@ Side effect: when the session was parked in \`awaiting_input\` it is resumed to 
       tag: 'Agents',
       summary: 'Resume an agent session',
       response: AgentSessionOut,
-      description: `Resume a session that is parked in \`awaiting_input\`. Every Athena entry re-enters durable generation admission before provider execution, including rows whose transcript has not been initialized yet, so the owner's concurrency ceiling and same-session mutex always apply. Only transcript-free registered-agent legacy rows retain the compatibility status transition. Any other state yields 409, and missing or private work returns 404. Athena requires its authenticated owner; registered-agent work requires \`contribute\`.`,
+      description: `Resume a session whose status is \`awaiting_input\`. Any other status returns 409. Docket applies the owner's concurrency limit and prevents duplicate runs for the same session. The operation returns \`202\` with a monitor URL when work continues asynchronously, or \`200\` with the current session. An absent or inaccessible session returns 404. Personal Athena work requires its owner; registered-agent work requires \`contribute\`.`,
     }),
     zParam(idParam),
     async (c) => {
@@ -695,13 +695,13 @@ Side effect: when the session was parked in \`awaiting_input\` it is resumed to 
       tag: 'Agents',
       summary: 'Decide a session’s latest proposed action',
       response: AgentSessionOut,
-      description: `Decide the session's **latest** \`proposed\` action without naming it, and return the updated {@link AgentSessionOut}. This is the coarse shortcut: unlike \`PUT /:id/activity/:activityId/decision\` it does not identify which activity it decided, so it records less and cannot narrow scope.
+      description: `Approve or reject the session's latest proposed action without supplying an activity ID. Use the activity-specific decision endpoint when you need to select one proposal or narrow its scope.
 
-\`decision: "approved"\` flips that action to approved and moves the session from \`awaiting_approval\` back to \`running\`. \`decision: "rejected"\` moves the session to \`canceled\` and stamps \`endedAt\` — at this level a rejection ends the run rather than letting the agent adapt.
+\`decision: "approved"\` returns the session to \`running\`. \`decision: "rejected"\` cancels the session and sets \`endedAt\`.
 
 The session must be \`awaiting_approval\` (else 409 \`Session is not awaiting approval\`) with a proposed action present (else 409 \`No proposed action awaiting approval\`); a missing or cross-tenant id 404s.
 
-Athena requires its authenticated owner and reauthorizes the stored tool with that owner's current permissions; registered-agent work requires \`assign\`. Answers **202** when the durable runner takes the work rather than finishing inline. Prefer the activity-scoped decision for richer audit data and scope control.`,
+Athena requires its owner and checks the owner's current permissions again before executing the action. Registered-agent work requires \`assign\`. An approved action may return 202 with a monitor URL while work continues. A rejection is terminal and returns 200.`,
     }),
     zParam(idParam),
     zJson(ApprovalDecisionBody),

@@ -364,7 +364,7 @@ describe('owner-private Athena compatibility routes', () => {
       approvalStatus: 'proposed',
       body: { action: { kind: 'note', summary: 'Reject asynchronously' } },
     });
-    expect((await decide(ownerApp, `/${rejection}/decision`, 'rejected')).status).toBe(202);
+    expect((await decide(ownerApp, `/${rejection}/decision`, 'rejected')).status).toBe(200);
 
     const activityApproval = await seedAthena(seed, seed.owner, 'awaiting_approval');
     await seedWaitingRun(seed.owner, activityApproval);

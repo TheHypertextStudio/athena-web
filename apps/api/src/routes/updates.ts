@@ -277,7 +277,7 @@ Key side effect: when the post includes a \`health\`, the same transaction write
       response: UpdateRemoved,
       description: `Delete a status update. Requires \`contribute\` plus an authorship gate: a \`contribute\`-capable member may only delete their OWN update unless they hold \`manage\` (non-author without \`manage\` → 403). A cross-org/unknown id 404s.
 
-Because the latest update drives the subject's current health, deletion is not a plain row removal: within one transaction the update is hard-deleted (the table has no soft-delete column) and the subject's \`health\` is recomputed from the newest *remaining* health-bearing update — older healthless posts are skipped, and when no health-bearing update remains the subject health is cleared to null. The single transaction guarantees a concurrent read never sees the row gone but the stale health still attached. Returns an {@link UpdateRemoved} acknowledgement.`,
+After deletion, Docket recalculates the subject's health from its newest remaining health-bearing update. If none remains, Docket clears the health value. The deletion and health change succeed together or fail together. Returns an {@link UpdateRemoved} acknowledgement.`,
     }),
     zParam(idParam),
     async (c) => {

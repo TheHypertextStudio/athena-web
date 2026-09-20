@@ -28,6 +28,19 @@ import type * as DbModule from '@docket/db';
 export interface SeededClient {
   /** The registered `oauth_client.client_id` — the value a token carries as `azp`. */
   readonly clientId: string;
+  /** The audience-bound grant named by tokens issued for this client. */
+  readonly grantId?: string;
+}
+
+const seededGrantIds = new Map<string, string>();
+
+/** Return the grant claim created for a test client and user. */
+export function seededGrantId(clientId: string, userId: string): string | undefined {
+  return seededGrantIds.get(`${clientId}:${userId}`);
+}
+
+function rememberGrant(clientId: string, userId: string, grantId: string): void {
+  seededGrantIds.set(`${clientId}:${userId}`, grantId);
 }
 
 /** A short unique client id, so parallel suites never collide on the unique index. */
@@ -54,10 +67,27 @@ export async function seedConsentedClient(
     name: 'Docket Test Client',
     redirectUris: ['https://client.example/callback'],
   });
-  await schema.db
+  const [consent] = await schema.db
     .insert(schema.oauthConsent)
-    .values({ clientId, userId, scopes: [...scopes], createdAt: new Date() });
-  return { clientId };
+    .values({ clientId, userId, scopes: [...scopes], createdAt: new Date() })
+    .returning({ id: schema.oauthConsent.id });
+  if (!consent) throw new Error('OAuth consent fixture was not created.');
+  const { env } = await import('../../src/env');
+  const resourceUri = env.MCP_RESOURCE_URL ?? `${env.API_URL.replace(/\/+$/, '')}/mcp`;
+  const [grant] = await schema.db
+    .insert(schema.oauthResourceGrant)
+    .values({
+      clientId,
+      userId,
+      consentId: consent.id,
+      authorizationKind: 'consent',
+      resourceUri,
+      expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+    })
+    .returning({ id: schema.oauthResourceGrant.id });
+  if (!grant) throw new Error('OAuth resource grant fixture was not created.');
+  rememberGrant(clientId, userId, grant.id);
+  return { clientId, grantId: grant.id };
 }
 
 /**
@@ -70,7 +100,10 @@ export async function seedConsentedClient(
  * @param schema - The loaded `@docket/db` module (from `getMigratedDb()`).
  * @returns The seeded client id, to be used as the token's `azp` claim.
  */
-export async function seedSkipConsentClient(schema: typeof DbModule): Promise<SeededClient> {
+export async function seedSkipConsentClient(
+  schema: typeof DbModule,
+  userId?: string,
+): Promise<SeededClient> {
   const clientId = newClientId('firstparty');
   await schema.db.insert(schema.oauthClient).values({
     clientId,
@@ -78,5 +111,21 @@ export async function seedSkipConsentClient(schema: typeof DbModule): Promise<Se
     redirectUris: ['https://docket.test/callback'],
     skipConsent: true,
   });
-  return { clientId };
+  if (!userId) return { clientId };
+  const { env } = await import('../../src/env');
+  const resourceUri = env.MCP_RESOURCE_URL ?? `${env.API_URL.replace(/\/+$/, '')}/mcp`;
+  const [grant] = await schema.db
+    .insert(schema.oauthResourceGrant)
+    .values({
+      clientId,
+      userId,
+      consentId: null,
+      authorizationKind: 'trusted_mcp',
+      resourceUri,
+      expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+    })
+    .returning({ id: schema.oauthResourceGrant.id });
+  if (!grant) throw new Error('OAuth resource grant fixture was not created.');
+  rememberGrant(clientId, userId, grant.id);
+  return { clientId, grantId: grant.id };
 }

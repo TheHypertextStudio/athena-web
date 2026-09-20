@@ -49,7 +49,9 @@ const agents = new Hono<AppEnv>()
       tag: 'Agents',
       summary: 'List agents',
       response: pageOf(AgentOut),
-      description: `List every agent registered in the active organization as a cursor page of {@link AgentOut}. Results use stable agent-id order, default to 50 items, accept at most 100, and omit \`nextCursor\` at exhaustion. An agent is the persistent, org-scoped wrapper around an ephemeral external runtime (an MCP/A2A/webhook endpoint); each one IS an Actor (\`actor.kind = 'agent'\`) and so can be assigned work, appear in the activity feed, and run sessions exactly like a human member. No capability is required beyond org membership; this is a plain read. The response never includes the connection secret.`,
+      description: `List the agents registered in the workspace. Agents can be assigned work, appear in activity, and run supervised sessions. The response never includes connection secrets.
+
+Results use stable agent-ID order, default to 50 items, accept at most 100, and omit \`nextCursor\` at exhaustion. Any workspace member may read this list.`,
     }),
     zQuery(CursorQuery),
     async (c) => {
@@ -217,7 +219,7 @@ The \`manage\` capability is required because these settings govern how much aut
       summary: 'Delete an agent',
       capability: 'manage',
       response: AgentOut,
-      description: `Deregister an agent from the organization, returning the deleted {@link AgentOut} as it was just before removal. This removes the agent *registration*; the underlying \`agent\`-kind Actor is a distinct entity and is not necessarily destroyed here (the agent row is what is deleted). A missing/cross-tenant id returns 404 (\`Agent not found\`). Requires \`manage\` — revoking an autonomous Actor's standing to act in the org is an administrative trust decision. Deregistering stops the agent from being dispatched into new sessions; it does not retroactively rewrite history (past audit events and settled sessions remain). Related: \`POST /\` (register), \`PATCH /:id\` (reconfigure instead of removing).`,
+      description: `Remove an agent registration from the organization and return the deleted {@link AgentOut}. The agent can no longer start new sessions, while past activity and completed sessions remain in history. A missing or inaccessible agent returns 404. Requires the \`manage\` capability. Use \`PATCH /:id\` when you need to reconfigure the agent instead.`,
     }),
     zParam(idParam),
     async (c) => {

@@ -48,10 +48,10 @@ describe('ApiError subclasses', () => {
     expect(new CapabilityError('x').message).toBe('x');
   });
 
-  it('InsufficientScopeError → 403 forbidden carrying the required scope', () => {
+  it('InsufficientScopeError → 403 insufficient_scope carrying the required scope', () => {
     const e = new InsufficientScopeError('work:write');
     expect(e.status).toBe(403);
-    expect(e.code).toBe('forbidden');
+    expect(e.code).toBe('insufficient_scope');
     expect(e.requiredScope).toBe('work:write');
     expect(e.message).toContain('work:write');
     expect(new InsufficientScopeError('agents:run', 'custom msg').message).toBe('custom msg');

@@ -250,7 +250,7 @@ describe('search query — scope and org-narrowing edge cases', () => {
     );
   });
 
-  it('defaults the page size to twenty results when no limit is given', async () => {
+  it('defaults the page size to fifty results when no limit is given', async () => {
     const schema = await getDb();
     const { db } = schema;
     const userId = await seedUserWithHub(db, schema, 'DefaultLimitUser');
@@ -277,8 +277,8 @@ describe('search query — scope and org-narrowing edge cases', () => {
       caller: { kind: 'user', userId },
       params: { q: 'defaultlimit' },
     });
-    expect(result.items).toHaveLength(20);
-    expect(result.nextCursor).toEqual(expect.any(String));
+    expect(result.items).toHaveLength(25);
+    expect(result.nextCursor).toBeUndefined();
   });
 });
 

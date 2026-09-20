@@ -338,9 +338,9 @@ Publishing a record that was previously withdrawn restores it at its **original*
       summary: 'Withdraw a brief',
       capability: 'contribute',
       response: PublicationOut,
-      description: `Withdraw a published brief. The public URL begins returning **404** to logged-out visitors immediately — the serving guard is \`published_at IS NOT NULL\`, so there is no cache window on the authorization decision.
+      description: `Withdraw a published brief. The public URL begins returning **404** to logged-out visitors immediately.
 
-The row is deliberately **retained** with its address reserved, rather than deleted: re-publishing the same record later restores the identical URL, so a link already circulating in a deck or an email does not permanently rot because a brief was withdrawn for a week. Requires \`contribute\`.`,
+Docket reserves the address. Publishing the brief again restores the same URL, so existing links remain valid after republication. Requires \`contribute\`.`,
     }),
     zParam(publicationIdParam),
     async (c) => {

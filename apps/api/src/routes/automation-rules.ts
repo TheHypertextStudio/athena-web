@@ -178,7 +178,7 @@ A missing or cross-tenant id 404s. Requires \`manage\`.`,
       summary: 'Delete an automation rule',
       capability: 'manage',
       response: AutomationRuleRemoved,
-      description: `Permanently remove a rule and return {@link AutomationRuleRemoved}. Unlike work items, which archive, a rule is a piece of configuration with no history worth keeping, so the row is genuinely deleted. Work the rule already produced is untouched — deleting the rule stops future runs and rewrites nothing.
+      description: `Permanently remove a rule and return {@link AutomationRuleRemoved}. Work that the rule already produced remains unchanged, and no future runs occur.
 
 Deleting a seeded rule is allowed, and it does not come back on its own: the seeding step runs once per org when \`emailToTask\` is first enabled, not on every sync. To silence a rule you may want later, \`PATCH\` it with \`enabled: false\` instead.
 

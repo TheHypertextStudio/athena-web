@@ -360,7 +360,7 @@ Threading is single-level. Omit \`parentCommentId\` for a root comment; supply i
       response: CommentRemoved,
       description: `Hard-delete a comment. A task comment requires \`contribute\` on its current task; a non-task comment requires \`comment\`. Both retain the same authorship gate as edit: only the author, or an actor holding \`manage\`, may delete (non-author without \`manage\` → 403). A cross-org/unknown id 404s.
 
-Deleting a root comment must not orphan its replies into a dangling thread. \`parent_comment_id\` carries no foreign key (it is plain text), so within one transaction the handler first re-parents every reply pointing at this comment to null — promoting them to root comments — and then deletes the row, keeping a subsequent list read internally consistent. Returns a {@link CommentRemoved} acknowledgement.`,
+Replies to a deleted root comment become root comments, so the discussion remains readable. The deletion and reply updates succeed together or fail together. Returns a {@link CommentRemoved} acknowledgement.`,
     }),
     zParam(idParam),
     async (c) => {

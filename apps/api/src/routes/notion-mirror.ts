@@ -255,9 +255,9 @@ An empty list is a legitimate and common state, not an error: a public Notion in
       summary: 'Create the designed databases in Notion',
       capability: 'manage',
       response: SyncRunOut,
-      description: `Record the chosen parent page and run a full mirror pass: create every designed-but-missing database, read back any Notion edits, then project Docket's rows.
+      description: `Choose the parent page and run a complete mirror: create each missing designed database, import changes made in Notion, and publish Docket records back to Notion.
 
-Runs on the shared leased sync spine, so it returns a real {@link SyncRunOut} with the same durable history as every other sync — a failure is recorded rather than surfaced as an optimistic 200. A pass that exhausts its Notion write budget reports what it actually wrote and resumes on the next sweep instead of claiming completion.
+Returns {@link SyncRunOut}. A failed pass remains in sync history. If the pass reaches its Notion write limit, the result reports completed work and a later scheduled or manual sync resumes the remainder.
 
 Requires \`manage\`. Returns 409 when another run already holds the integration's lease.`,
     }),
@@ -316,11 +316,11 @@ Requires \`manage\`. Returns 409 when another run already holds the integration'
       summary: 'Run the Notion mirror now',
       capability: 'manage',
       response: SyncRunOut,
-      description: `Run one full mirror pass against the container page already chosen: create any designed-but-missing database, read back Notion's edits, then project Docket's rows. The same pass the background sweep runs, on demand.
+      description: `Run a complete mirror against the selected parent page. Docket creates missing designed databases, imports changes made in Notion, and publishes Docket records back to Notion.
 
 Distinct from \`POST /provision\`, which *chooses* the container page and rewrites the connection's config. This one only runs, so it is the safe repeat action — and the only way to re-run the mirror after setup, which is what makes a stalled sync recoverable without reconnecting.
 
-Runs on the shared leased sync spine, so it returns a real {@link SyncRunOut} with the same durable history as every other sync. **A failed run is a 200** carrying \`status: 'failed'\` — the outcome is reported, never optimistically swallowed — so a client must read \`status\` rather than treat the response code as success.
+Returns {@link SyncRunOut} and records the run in sync history. A completed request can contain \`status: "failed"\`, so clients must inspect \`status\` instead of relying on the HTTP status alone.
 
 Requires \`manage\`. Returns 409 when another run already holds the integration's lease, and 409 when no container page has been chosen yet: that is a setup step, not a sync failure, and running anyway would record a failure against a healthy connection and notify its owner about it.`,
     }),
@@ -353,7 +353,7 @@ Requires \`manage\`. Returns 409 when another run already holds the integration'
       summary: 'List Notion workspace members and their Docket matches',
       capability: 'manage',
       response: pageOf(NotionWorkspacePerson),
-      description: `Every Notion workspace member the sync engine has seen, with the Docket actor each is matched to. Reads the stored \`external_actor\` rows rather than calling Notion, so the people surface renders instantly and works while the connection is down; the rows are refreshed by the sync pass.
+      description: `List the Notion workspace members discovered by previous syncs and the Docket actor matched to each one. This read does not call Notion, so it remains available when the provider is unavailable. A sync refreshes the list.
 
 \`actorId: null\` is an explicit, queryable unmatched state — never hidden and never quietly defaulted to somebody. An unmatched person's assignments cannot reach Docket, which is what the surface has to make obvious.
 
@@ -406,7 +406,7 @@ Notion's own user list mixes integration bots in with people (a real workspace u
       response: NotionWorkspacePerson,
       description: `Resolve one Notion workspace member, returning the updated {@link NotionWorkspacePerson}.
 
-\`create_actor\` adds them to Docket as a person with **no account** — the same \`actor{kind:'human', user_id:null}\` row \`POST /orgs/:orgId/members\` creates — and links the mapping to it. That is the common case: most people in a Notion workspace are not Docket users, and refusing to represent them would make their assignments unroutable.
+\`create_actor\` adds the Notion member to Docket as a person without a Docket account and links future Notion assignments to that person.
 
 \`match_existing\` links them to an actor you name and marks the mapping \`manual\`, which makes it immune to the email re-matching every sync performs. A human's explicit decision always outranks an automatic one.
 
@@ -509,9 +509,9 @@ Requires \`manage\`. A missing mapping 404s (\`Person not found\`); \`match_exis
           .int()
           .describe('Docket humans with no matched Notion account, including account-less people.'),
       }),
-      description: `How many Docket people have no counterpart in the Notion workspace. They are not a problem to fix: they still get a row in the projected People database and can be assigned work there. Notion simply cannot @-mention them, because its native people property can only reference members of the Notion workspace.
+      description: `Count Docket people who have no matching member in the Notion workspace. They still appear in the mirrored People database and can own work there, but Notion cannot mention them through its native people property.
 
-Surfacing the count is what makes that limitation legible instead of looking like the sync dropped somebody.`,
+Use this count to distinguish that provider limitation from a missing sync record.`,
     }),
     zParam(mirrorParam),
     async (c) => {

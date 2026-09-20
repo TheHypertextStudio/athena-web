@@ -65,4 +65,11 @@ describe('OAuth resource contract', () => {
   it('rejects token-resource substitution', () => {
     expect(() => resolveTokenResource(MCP, REST, MCP, REST)).toThrow('invalid_target');
   });
+
+  it.each([undefined, null, '', 'https://api.example.test/v1'])(
+    'rejects an invalid stored token resource binding: %s',
+    (bound) => {
+      expect(() => resolveTokenResource(undefined, bound, MCP, REST)).toThrow('invalid_grant');
+    },
+  );
 });

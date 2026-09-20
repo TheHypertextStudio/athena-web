@@ -77,7 +77,7 @@ async function seedHubUser(): Promise<Seed> {
     .insert(schema.hub)
     .values({ userId: assertDefined(u).id })
     .returning({ id: schema.hub.id });
-  const { clientId } = await seedSkipConsentClient(schema);
+  const { clientId } = await seedSkipConsentClient(schema, assertDefined(u).id);
   return { userId: assertDefined(u).id, hubId: assertDefined(h).id, email, clientId };
 }
 

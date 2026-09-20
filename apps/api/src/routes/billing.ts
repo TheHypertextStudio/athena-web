@@ -528,9 +528,9 @@ Side effect: creates a checkout session. Docket Pro ownership changes only after
       summary: 'Generate a work-layer export',
       capability: 'manage',
       response: ExportOut,
-      description: `Generate a downloadable snapshot of the org's entire work layer and return {@link ExportOut} \`{ downloadUrl, expiresAt }\`. The handler scans the org's work-layer tables (\`collectWorkLayer\`), serializes them to a single JSON document, and writes it through the BlobStore **port** (in-memory/local or real object storage) under \`exports/<orgId>/<ulid>.json\`. \`downloadUrl\` is the API path \`GET /v1/orgs/:orgId/billing/export/file\` — a session and the \`manage\` capability are required to read it, and the 14-day \`expiresAt\` is enforced there on every read rather than advertised. Generating a new export deletes the object the previous one wrote.
+      description: `Generate a downloadable JSON snapshot of the organization's work data and return {@link ExportOut} with \`downloadUrl\` and \`expiresAt\`. The download requires a session and the \`manage\` capability. It remains available for 14 days. Generating a new export replaces the previous download.
 
-Side effect: stamps \`exportReadyAt\` so the API can enforce the 14-day download lifetime. Export remains available to administrators in every non-deleted billing state and does not schedule deletion. A missing or purged organization returns 404. Requires \`manage\`. Related: \`GET /lifecycle\`.`,
+The export remains available in every non-deleted billing state. A missing or purged organization returns 404. Requires \`manage\`. Related: \`GET /lifecycle\`.`,
     }),
     async (c) => {
       const { orgId } = c.get('actorCtx');

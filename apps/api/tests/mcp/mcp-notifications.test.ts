@@ -97,7 +97,7 @@ async function seedOrg(): Promise<Seed> {
     })
     .returning({ id: schema.task.id });
 
-  const { clientId } = await seedSkipConsentClient(schema);
+  const { clientId } = await seedSkipConsentClient(schema, userId);
   return { userId, orgId, teamId, actorId, roleId, taskId: assertDefined(task).id, clientId };
 }
 

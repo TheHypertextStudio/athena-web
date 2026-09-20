@@ -609,7 +609,7 @@ describe('detail aggregate routes', () => {
 
     const labels = await writer.request(`/${initiative.id}/labels`);
     expect(labels.status).toBe(200);
-    expect(await labels.json()).toEqual([]);
+    expect(await labels.json()).toEqual({ items: [] });
 
     const relationships = await writer.request(`/${initiative.id}/relationships`);
     expect(relationships.status).toBe(200);
@@ -938,7 +938,7 @@ describe('detail aggregate routes', () => {
 
     const labels = await writer.request(`/${initiative.id}/labels`);
     expect(labels.status).toBe(200);
-    expect(await labels.json()).toEqual([]);
+    expect(await labels.json()).toEqual({ items: [] });
   });
 
   it('loads hierarchy and connected work only after the Initiative relationship section opens', async () => {

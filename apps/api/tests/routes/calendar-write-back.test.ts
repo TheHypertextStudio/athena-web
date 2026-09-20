@@ -298,8 +298,8 @@ describe('calendar write-back — scope/capability/conflict gating (via the real
     });
     expect(res.status).toBe(403);
     const body = await json<{ code: string; title: string }>(res);
-    expect(body.code).toBe('forbidden');
-    expect(body.title).toBe(publicProblemTitle('forbidden'));
+    expect(body.code).toBe('insufficient_scope');
+    expect(body.title).toBe(publicProblemTitle('insufficient_scope'));
     expect(JSON.stringify(body)).not.toContain('write access');
 
     expect(await countWritesForItem(schema, fixture.itemId)).toBe(0);

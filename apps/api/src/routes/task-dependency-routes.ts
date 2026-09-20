@@ -393,7 +393,7 @@ Two invariants are enforced. A task cannot depend on itself (self-edge → 422 v
       summary: 'Remove a task dependency',
       capability: 'contribute',
       response: TaskRemoved,
-      description: `Remove the dependency edge between the path task \`:id\` and \`:depId\`, regardless of direction — the delete matches either orientation (\`id → depId\` or \`depId → id\`), so the caller need not know which task is the blocking side. This is a hard delete of the edge row only; neither task is affected. Requires \`contribute\`. The path task is loaded first (cross-org/unknown 404s); if no matching edge exists in the org the request 404s (\`Dependency edge not found\`). Returns a {@link TaskRemoved} acknowledgement.`,
+      description: `Remove the dependency between two tasks without deleting either task. The caller does not need to know which task is the blocking side. The request returns 404 when either task or the dependency is not visible in the organization. Requires the \`contribute\` capability and returns a {@link TaskRemoved} acknowledgement.`,
     }),
     zParam(depParam),
     async (c) => {

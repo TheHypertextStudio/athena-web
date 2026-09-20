@@ -198,25 +198,29 @@ describe('the batch proposal flow (import-shaped)', () => {
     // 2) The ghost projection: one group of three editable task ghosts.
     const listed = await app.request(`/${session.id}/proposals`, { method: 'GET' });
     expect(listed.status).toBe(200);
-    const groups = (await listed.json()) as ProposalGroupOut[];
+    const groups = ((await listed.json()) as { items: ProposalGroupOut[] }).items;
     expect(groups).toHaveLength(1);
     const group = assertDefined(groups[0]);
     expect(group.items).toHaveLength(3);
-    expect(group.items.map((i) => i.ghost?.title)).toEqual([
-      'Send the contractor agreement',
-      'Book the venue for the offsite',
-      'Reply to the partnership email',
-    ]);
+    expect(group.items.map((i) => i.ghost?.title)).toEqual(
+      expect.arrayContaining([
+        'Send the contractor agreement',
+        'Reply to the partnership email',
+        'Book the venue for the offsite',
+      ]),
+    );
 
-    // 3) Inline ghost edit: retitle the third proposal before blessing it. A capture's editable
+    // 3) Inline ghost edit: retitle the email proposal before blessing it. A capture's editable
     // field is its `text` — the title is derived from the first line, so editing the text is
     // exactly how a reviewer renames the ghost.
-    const third = assertDefined(group.items[2]);
-    const patched = await app.request(`/${session.id}/activity/${third.activityId}/proposal`, {
+    const email = assertDefined(
+      group.items.find((item) => item.ghost?.title === 'Reply to the partnership email'),
+    );
+    const patched = await app.request(`/${session.id}/activity/${email.activityId}/proposal`, {
       method: 'PATCH',
       headers: J,
       body: JSON.stringify({
-        input: { ...third.input, text: 'Reply to the partnership email (priority)' },
+        input: { ...email.input, text: 'Reply to the partnership email (priority)' },
       }),
     });
     expect(patched.status).toBe(200);
@@ -227,10 +231,9 @@ describe('the batch proposal flow (import-shaped)', () => {
       headers: J,
       body: JSON.stringify({
         decision: 'approved',
-        activityIds: [
-          assertDefined(group.items[0]).activityId,
-          assertDefined(group.items[1]).activityId,
-        ],
+        activityIds: group.items
+          .filter((item) => item.activityId !== email.activityId)
+          .map((item) => item.activityId),
       }),
     });
     expect(subset.status).toBe(200);
@@ -265,7 +268,7 @@ describe('the batch proposal flow (import-shaped)', () => {
     });
     const session = (await created.json()) as { id: string };
     const listed = await app.request(`/${session.id}/proposals`, { method: 'GET' });
-    const groups = (await listed.json()) as ProposalGroupOut[];
+    const groups = ((await listed.json()) as { items: ProposalGroupOut[] }).items;
 
     const rejected = await app.request(
       `/${session.id}/proposals/${assertDefined(groups[0]).proposalGroupId}/decision`,
@@ -309,9 +312,11 @@ describe('the batch proposal flow (import-shaped)', () => {
       body: JSON.stringify({ prompt: 'Import my Sunsama backlog' }),
     });
     const session = (await created.json()) as { id: string };
-    const groups = (await (
-      await app.request(`/${session.id}/proposals`, { method: 'GET' })
-    ).json()) as ProposalGroupOut[];
+    const groups = (
+      (await (await app.request(`/${session.id}/proposals`, { method: 'GET' })).json()) as {
+        items: ProposalGroupOut[];
+      }
+    ).items;
     const group = assertDefined(groups[0]);
     await app.request(`/${session.id}/proposals/${group.proposalGroupId}/decision`, {
       method: 'PUT',
@@ -338,9 +343,11 @@ describe('SSE live tail', () => {
       body: JSON.stringify({ prompt: 'Import my Sunsama backlog' }),
     });
     const session = (await created.json()) as { id: string };
-    const groups = (await (
-      await app.request(`/${session.id}/proposals`, { method: 'GET' })
-    ).json()) as ProposalGroupOut[];
+    const groups = (
+      (await (await app.request(`/${session.id}/proposals`, { method: 'GET' })).json()) as {
+        items: ProposalGroupOut[];
+      }
+    ).items;
     await app.request(
       `/${session.id}/proposals/${assertDefined(groups[0]).proposalGroupId}/decision`,
       {

@@ -474,7 +474,7 @@ export const meAccountExportDownload: Hono<AppEnv> = new Hono<AppEnv>().get(
   describeRoute({
     tags: ['Me'],
     summary: 'Download an account export file',
-    description: `Stream the generated ZIP file for a \`ready\` export — the **binary sub-resource** of an export job. Unlike the rest of the account surface this returns raw bytes (\`Content-Type: application/zip\`, \`Content-Disposition: attachment\`), not a JSON envelope. The settings screen opens this endpoint after passkey re-verification, so it is mounted **outside** the typed RPC \`AppType\` contract (same convention as cron/webhooks/stream). The bytes flow through the \`BlobStore.get\` port, so it works identically against local disk in dev and Vercel Blob in production.
+    description: `Download a completed account export as a ZIP file. The response returns raw bytes with \`Content-Type: application/zip\` and \`Content-Disposition: attachment\`, not a JSON envelope.
 
 **Authorization is implicit and per-user:** only the caller's own export is served — \`:exportId\` is verified to belong to the session user. A session older than five minutes receives **401** with \`reauth_required\`, then the settings screen asks for passkey verification before retrying. Errors: **404** when the export doesn't exist / isn't theirs, or when the underlying blob has already been swept; **409** when the export exists but isn't downloadable yet (\`pending\`), didn't finish (\`failed\`), or has \`expired\` (each with a status-specific message). Session-only, no capability.`,
   }),

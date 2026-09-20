@@ -11,6 +11,7 @@ async function document(surface: 'v1' | 'admin' = 'v1') {
   const app = new Hono().get(
     '/v1/example',
     describeRoute({
+      tags: ['Config'],
       responses: {
         200: { description: 'JSON' },
         204: { description: 'No content' },

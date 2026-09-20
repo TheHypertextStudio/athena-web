@@ -29,12 +29,16 @@ vi.mock('../../src/auth/oauth-bearer', async (importOriginal) => {
   return { ...actual, verifyRestBearer };
 });
 
-vi.mock('../../src/lib/idempotency', () => ({
-  idempotency: async (_context: unknown, next: () => Promise<void>): Promise<void> => {
+vi.mock('../../src/lib/idempotency', () => {
+  const middleware = async (_context: unknown, next: () => Promise<void>): Promise<void> => {
     idempotencyCalls();
     await next();
-  },
-}));
+  };
+  return {
+    idempotency: middleware,
+    idempotencyFor: () => middleware,
+  };
+});
 
 vi.mock('../../src/permissions/staff-guard', async (importOriginal) => {
   const actual = await importOriginal<typeof StaffGuardModule>();

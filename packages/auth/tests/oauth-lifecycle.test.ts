@@ -57,6 +57,44 @@ async function seedClient(
 }
 
 describe('OAuth lifecycle', () => {
+  it('rejects invalid sweep limits before opening a transaction', async () => {
+    for (const limit of [0, -1, 1_001, 1.5, Number.NaN]) {
+      await expect(sweepOAuthLifecycle(new Date(), limit)).rejects.toThrow(
+        'OAuth lifecycle sweep limit must be between 1 and 1000.',
+      );
+    }
+  });
+
+  it('treats missing client relationships as revocation no-ops', async () => {
+    await expect(
+      revokeConnectedOAuthClient('missing-user', 'missing-client', new Date()),
+    ).resolves.toBeUndefined();
+  });
+
+  it('does not materialize a legacy grant over an existing consent relationship', async () => {
+    const cutoff = new Date('2026-09-12T12:00:00.000Z');
+    const now = new Date('2026-09-12T12:05:00.000Z');
+    const userId = await seedUser('Consented legacy user');
+    const clientId = await seedClient({ skipConsent: true, legacyBefore: cutoff });
+    await db.insert(oauthConsent).values({
+      id: `consent_${randomUUID()}`,
+      clientId,
+      userId,
+      scopes: ['work:read'],
+      createdAt: now,
+    });
+    await expect(
+      ensureTrustedLegacyMcpGrant({
+        clientId,
+        userId,
+        issuedAtSeconds: Math.floor(cutoff.getTime() / 1000),
+        expiresAtSeconds: Math.floor(now.getTime() / 1000) + 300,
+        mcpResource: MCP,
+        now,
+      }),
+    ).resolves.toBeNull();
+  });
+
   it('materializes one eligible trusted legacy grant and never clears its revocation tombstone', async () => {
     const cutoff = new Date('2026-09-12T12:00:00.000Z');
     const now = new Date('2026-09-12T12:05:00.000Z');

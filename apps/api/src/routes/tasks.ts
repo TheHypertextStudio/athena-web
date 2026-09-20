@@ -1257,9 +1257,9 @@ Side effects: emits a \`created\` observation onto the org's activity stream, an
       tag: 'Tasks',
       summary: 'List tasks',
       response: pageOf(TaskOut),
-      description: `List the org's active (non-archived) tasks, newest-first. Ordering is a stable keyset on \`(createdAt DESC, id DESC)\`, so paging never skips or repeats a row even as tasks are created concurrently. Archived (soft-deleted) tasks are excluded — fetch those contexts via their parent/project surfaces, not here.
+      description: `List active tasks in the organization, newest first. Tasks use \`createdAt\` and then \`id\` for stable ordering. Archived tasks are excluded.
 
-\`limit\` defaults to 50 and accepts at most 100. Copy \`nextCursor\` unchanged into \`cursor\`; it is absent on the final page. Reuse a cursor only with the same \`programId\` and \`labelId\` filters. An optional \`labelId\` narrows the list to tasks carrying that label; an optional \`programId\` narrows the list to tasks under that Program — carrying its \`programId\` directly, or belonging to one of the Program's Projects (the same union a Program's own work view applies). Visibility filtering is applied before Docket decides whether the page is full, so inaccessible Tasks do not strand accessible Tasks behind a cursor boundary. Requires org membership (\`view\`); no extra capability. Each item is a {@link TaskOut} (the flat task shape without dependency/subtask edges — use \`GET /:id\` for those). Returns a cursor page of {@link TaskOut}.`,
+\`limit\` defaults to 50 and accepts at most 100. Reuse a cursor only with the same \`programId\` and \`labelId\` filters. \`labelId\` selects tasks with that label. \`programId\` selects tasks attached directly to the program or to one of its projects. Docket applies task visibility before filling the page. Organization membership is required. Each item is a {@link TaskOut}; use \`GET /:id\` for dependencies and subtasks.`,
     }),
     zQuery(TaskListQuery),
     async (c) => {
@@ -1428,11 +1428,12 @@ A cross-org or unknown id 404s (existence-hiding: another tenant's task is indis
       summary: 'Update a task',
       capability: 'contribute',
       response: TaskOut,
-      description: `Partially update a task's editable fields; only fields present in the body change, and an empty body is a valid no-op that returns the task unchanged (the storage layer rejects an empty \`SET\`, so the handler short-circuits). Base mutation requires \`contribute\`.
+      description: `Update selected task fields. Omitted fields remain unchanged, and an empty body returns the task unchanged. The base operation requires \`contribute\`.
 
-Reassigning (\`assigneeId\`) or delegating (\`delegateId\`) additionally requires the \`assign\` capability — \`contribute\` alone cannot move work onto another actor; without \`assign\` those two fields 403. Reparenting is RESTful: set \`parentTaskId\` to nest the task under another (its subtask) or null to detach to top-level; a task cannot be its own parent (422) or its own descendant (409 \`dependency_cycle\`), and the acyclic check + write run in one SERIALIZABLE transaction. Every referenced id (\`assigneeId\`, \`delegateId\`, \`projectId\`, \`programId\`, \`parentTaskId\`, \`cycleId\`, \`milestoneId\`) must live in the caller's org or the request 404s (existence-hiding tenant isolation). A target cycle must also belong to the task's team. When \`cycleCadenceRevision\` is supplied, a stale selection returns 409 \`cadence_changed\` before the move.
+Changing \`assigneeId\` or \`delegateId\` also requires \`assign\`; otherwise the request returns 403. Set \`parentTaskId\` to make the task a subtask, or null to move it to the top level. A task cannot be its own parent or descendant. Docket checks the hierarchy and applies the change together, so concurrent updates cannot create a cycle. Every referenced ID must identify a visible resource in the same organization; otherwise the request returns 404.
+ Changing \`assigneeId\` or \`delegateId\` also requires \`assign\`; otherwise the request returns 403. Set \`parentTaskId\` to make the task a subtask, or null to move it to the top level. A task cannot be its own parent or descendant. Docket checks the hierarchy and applies the change together, so concurrent updates cannot create a cycle. Every referenced ID must identify a visible resource in the same organization; otherwise the request returns 404. A selected cycle must belong to the task's team. When \`cycleCadenceRevision\` is present, a stale value returns 409 \`cadence_changed\` before Docket moves the task.
 
-Changing \`state\` runs the team's workflow-state transition: the key is validated against the team's \`workflow_states\`, and \`completedAt\`/\`canceledAt\` are derived (set when entering a terminal state, cleared when leaving one) — the timestamps are never client-supplied. Side effects: a state change emits a \`completed\` observation when it lands terminal, otherwise a \`status_change\`; setting an assignee emits an \`assignment\` observation. A missing/archived task 404s. Returns the updated {@link TaskOut}. To change only state, the dedicated \`POST /:id/state\` exists.`,
+\`state\` must be a key in the team's \`workflowStates\`. Docket sets or clears \`completedAt\` and \`canceledAt\` from the selected state; clients do not supply those timestamps. State changes create completion or status activity, and assigning a person creates assignment activity. An absent or archived task returns 404. Returns the updated {@link TaskOut}. Use \`POST /:id/state\` when changing only the state.`,
     }),
     zParam(idParam),
     zJson(TaskUpdate),
@@ -1764,9 +1765,9 @@ Changing \`state\` runs the team's workflow-state transition: the key is validat
       summary: 'Archive a task',
       capability: 'contribute',
       response: TaskArchived,
-      description: `Soft-delete a task by stamping \`archivedAt\`. This is an archive, not a hard delete: the row is retained for history/audit and simply filtered out of \`GET /\`, subtask listings, and the graph. Requires \`contribute\`.
+      description: `Archive a task without deleting its history. Archived tasks no longer appear in active task lists, subtask lists, or the task graph. Requires \`contribute\`.
 
-The write only matches a currently-active task in the caller's org (\`archivedAt IS NULL\`), so archiving an already-archived, cross-org, or unknown task 404s — and re-archiving is therefore not idempotent (the second call 404s). Child tasks and dependency edges are left intact in storage; they simply stop surfacing through active-task reads. Returns a {@link TaskArchived} acknowledgement with the \`id\` and the \`archivedAt\` timestamp.`,
+Archiving an already archived, inaccessible, or unknown task returns 404, so a repeated request does not return the first result. Child tasks and dependencies remain intact. Returns a {@link TaskArchived} acknowledgement with the task ID and archive time.`,
     }),
     zParam(idParam),
     async (c) => {

@@ -31,7 +31,7 @@ export const OrgCreate = z
       .min(1)
       .optional()
       .describe(
-        "The organization's display name. REQUIRED for a team org (`isPersonal: false`) and validated non-empty by a superRefine; OPTIONAL for a personal space (`isPersonal: true`), where the handler defaults it to 'Personal'. Also seeds the auto-derived slug when `slug` is omitted.",
+        "The organization's display name. A team organization requires a non-empty name. A personal workspace may omit it, in which case Docket uses 'Personal'. Docket also derives the slug from this name when `slug` is omitted.",
       ),
     purpose: z
       .string()

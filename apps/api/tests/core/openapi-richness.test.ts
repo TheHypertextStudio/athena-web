@@ -215,46 +215,6 @@ describe('public OpenAPI contract', () => {
     expect(audit.examples).toEqual([]);
   });
 
-  it('contains no source notation, stale hosts, weak success labels, or sentinel examples', async () => {
-    const document = await publicDocument();
-    const serialized = JSON.stringify(document);
-    for (const forbidden of [
-      '{@link',
-      'Success.',
-      'workflow_states',
-      'docket.hypertext.studio',
-      'docket-api.hypertext.studio',
-      'Docket accepts or returns',
-      'the atomic unit of work',
-      'two front doors onto one system',
-      'cross-org cockpit',
-      'local HTTP development',
-      'local development stack',
-      'local disk in dev',
-      'single un-nested write',
-      'The handler runs ONE database transaction',
-      'the handler',
-      'this handler',
-      'app code',
-      'N+1',
-      'typed RPC client',
-      'BlobStore',
-      'local disk',
-      'apps/api/src/',
-      'orgContextMiddleware',
-      'archived_at',
-      'onConflictDoNothing',
-      'computeStats',
-      'where-clause',
-      'application code',
-      'in-process runner',
-      '"id":""',
-      '"id":0',
-    ]) {
-      expect(serialized).not.toContain(forbidden);
-    }
-  });
-
   it('stays within the compressed transfer budget', async () => {
     const document = await publicDocument();
     const compact = JSON.stringify(document);

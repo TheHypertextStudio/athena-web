@@ -269,7 +269,7 @@ The \`kind\` determines the required fields, enforced at the schema edge: a \`ur
       summary: 'Upload a file attachment',
       capability: 'contribute',
       response: AttachmentOut,
-      description: `Upload a file and attach it to a task (a \`file\` attachment). **Multipart/form-data**, not JSON: a \`file\` part (required, non-empty, ≤ ${String(MAX_UPLOAD_MB)} MB) and an optional \`title\` (defaults to the filename). Requires \`contribute\`; the host task is loaded first (cross-org/unknown 404s). The bytes are written to blob storage through the \`BlobStore\` port (local disk in dev, Vercel Blob in production) under a per-attachment key; the row records \`fileName\`/\`mimeType\`/\`byteSize\`. Download the bytes via \`GET …/attachments/:attachmentId/download\`. Returns the created {@link AttachmentOut}.`,
+      description: `Upload a file and attach it to a task. Send \`multipart/form-data\` with a required, non-empty \`file\` part no larger than ${String(MAX_UPLOAD_MB)} MB. An optional \`title\` defaults to the filename. Requires the \`contribute\` capability. Download the file through \`GET …/attachments/:attachmentId/download\`. Returns the created {@link AttachmentOut}.`,
     }),
     zParam(taskParam),
     zForm(uploadForm),
@@ -332,7 +332,7 @@ The \`kind\` determines the required fields, enforced at the schema edge: a \`ur
     apiDoc({
       tag: 'Tasks',
       summary: 'Download a file attachment',
-      description: `Stream the bytes of a \`file\` attachment — the **binary sub-resource** of an attachment. Returns raw bytes (\`Content-Type\` from the stored \`mimeType\`, \`Content-Disposition: attachment\` so the browser saves rather than renders — no inline execution of uploaded HTML/SVG), not a JSON envelope, and is fetched via a plain \`<a href>\` link rather than the typed RPC client. The host task is loaded first (cross-org/unknown 404s); the attachment is then scoped to (\`organizationId\`, \`subjectType = task\`, \`subjectId = :id\`, \`kind = file\`), so a non-file or foreign id 404s. The bytes flow through the \`BlobStore.get\` port (local disk in dev, Vercel Blob in production). Requires org membership (\`view\`).`,
+      description: `Download a task attachment as raw bytes. The response uses the stored media type and \`Content-Disposition: attachment\`, so browsers download the file instead of rendering uploaded HTML or SVG. The request returns 404 when the task or attachment is not visible in the organization. Requires organization membership.`,
     }),
     zParam(attParam),
     async (c) => {

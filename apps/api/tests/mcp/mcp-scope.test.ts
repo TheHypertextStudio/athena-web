@@ -361,19 +361,14 @@ describe('resolveMcpContext — Bearer (OAuth RS) path', () => {
     });
   });
 
-  it('defaults name/email to null/empty when the token subject has no user row', async () => {
-    // A `skip_consent` client, because a consent row cannot exist for a subject that has no `user`
-    // row to hang off — and that branch is exactly how a first-party client stays authorized.
+  it('rejects a token whose subject no longer has an active user row', async () => {
     const { clientId } = await seedSkipConsentClient(schema);
     verifyAccessToken.mockResolvedValueOnce({
       sub: 'no-such-user',
       azp: clientId,
       scope: 'work:read',
     });
-    const ctx = await authMod.resolveMcpContext(bearer('tok-2'));
-    expect(ctx.principal.kind === 'user' ? ctx.principal.userName : 'x').toBeNull();
-    expect(ctx.principal.kind === 'user' ? ctx.principal.userEmail : 'x').toBe('');
-    expect(ctx.scopes).toEqual(['work:read']);
+    await expect(authMod.resolveMcpContext(bearer('tok-2'))).rejects.toMatchObject({ status: 401 });
   });
 
   it('rejects a verified token that names no OAuth client → 401', async () => {

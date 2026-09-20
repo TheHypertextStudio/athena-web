@@ -183,7 +183,7 @@ async function seedOrg(capabilities: readonly Capability[]): Promise<Seed> {
     principal: { kind: 'user', userId, userName: 'Ada', userEmail: email },
     scopes: ['work:read', 'work:write', 'agents:run', 'connectors:link'],
   };
-  const { clientId } = await seedSkipConsentClient(schema);
+  const { clientId } = await seedSkipConsentClient(schema, userId);
   return {
     userId,
     orgId,

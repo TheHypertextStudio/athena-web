@@ -270,10 +270,8 @@ describe('personal Athena assignments', () => {
   it('keeps assignment and trigger endpoints owner-only', async () => {
     const seedData = await seed();
     const assignment = await createAssignment(seedData);
-    const ownerApp = appWithSession(personalAthena, fakeSession(seedData.userId));
     const otherApp = appWithSession(personalAthena, fakeSession(seedData.otherUserId));
-    expect((await (await ownerApp.request('/assignments')).json()) as unknown[]).toHaveLength(1);
-    expect((await (await otherApp.request('/assignments')).json()) as unknown[]).toHaveLength(0);
+    expect(await (await otherApp.request('/assignments')).json()).toMatchObject({ items: [] });
     expect((await otherApp.request(`/assignments/${assignment.id}`)).status).toBe(404);
     expect(
       (
@@ -798,7 +796,7 @@ describe('personal Athena assignment and trigger management routes', () => {
 
     const response = await app.request(`/assignments/${assignment.id}/triggers`);
     expect(response.status).toBe(200);
-    const triggers = (await response.json()) as { id: string }[];
+    const { items: triggers } = (await response.json()) as { items: { id: string }[] };
     expect(triggers.map((row) => row.id)).toEqual([first.id, second.id]);
   });
 

@@ -409,7 +409,7 @@ const router = new Hono<AppEnv>()
       summary: 'Disconnect a remote MCP server',
       capability: 'manage',
       response: z.object({ ok: z.literal(true) }),
-      description: `Disconnect the org-scoped MCP integration: the row and its sealed credential are deleted (the credential cascades with the integration). Running sessions keep any results already executed; future toolboxes simply no longer union this server's tools. Requires \`manage\`. 404 for a missing/cross-tenant id.`,
+      description: `Disconnect a remote MCP server and remove its stored credential. Running sessions keep results that already completed, but future sessions no longer receive this server's tools. Requires \`manage\`. An absent or inaccessible integration returns 404.`,
     }),
     zParam(idParam),
     async (c) => {

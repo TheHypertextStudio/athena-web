@@ -462,9 +462,26 @@ describe('revoking the grant from the user’s own settings', () => {
       name: 'Docket E2E Agent',
       redirectUris: ['https://client.example/callback'],
     });
-    await db
-      .insert(schema.oauthConsent)
-      .values({ clientId, userId, scopes: [...OAUTH_ISSUABLE_SCOPES], createdAt: new Date() });
+    const consent = harness.one(
+      await db
+        .insert(schema.oauthConsent)
+        .values({ clientId, userId, scopes: [...OAUTH_ISSUABLE_SCOPES], createdAt: new Date() })
+        .returning({ id: schema.oauthConsent.id }),
+    );
+    const { env } = await import('../../src/env');
+    const grant = harness.one(
+      await db
+        .insert(schema.oauthResourceGrant)
+        .values({
+          clientId,
+          userId,
+          consentId: consent.id,
+          authorizationKind: 'consent',
+          resourceUri: env.MCP_RESOURCE_URL ?? `${env.API_URL.replace(/\/+$/, '')}/mcp`,
+          expiresAt: new Date(Date.now() + 3_600_000),
+        })
+        .returning({ id: schema.oauthResourceGrant.id }),
+    );
     const refreshId = harness.one(
       await db
         .insert(schema.oauthRefreshToken)
@@ -473,6 +490,7 @@ describe('revoking the grant from the user’s own settings', () => {
           clientId,
           userId,
           scopes: [...OAUTH_ISSUABLE_SCOPES],
+          docketGrantId: grant.id,
         })
         .returning({ id: schema.oauthRefreshToken.id }),
     ).id;

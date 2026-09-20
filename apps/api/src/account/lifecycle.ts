@@ -13,6 +13,7 @@
 import type { Database } from '@docket/db';
 import {
   activityDay,
+  apiIdempotencyReceipt,
   dailyDigest,
   contactPoint,
   event,
@@ -40,6 +41,7 @@ import { analyzeAccountOwnership, findSoleOccupiedOrgIds } from './blockers';
  * no-FK `user_id` table this list forgets.
  */
 export const USER_KEYED_NO_FK_TABLES = [
+  apiIdempotencyReceipt,
   contactPoint,
   notification,
   notificationPreference,

@@ -65,11 +65,11 @@ const members = new Hono<AppEnv>()
       tag: 'Members',
       summary: 'List members',
       response: pageOf(MemberOut),
-      description: `List the workspace's people — every **human Actor** (\`kind = 'human'\`) in the org, each carrying its display name, avatar, status (\`active\` | \`suspended\`), role id, and backing \`userId\`. Agents (\`kind = 'agent'\`) and team actors (\`kind = 'team'\`) are excluded; this endpoint is the people roster, not the full actor set. Both \`active\` and \`suspended\` people are returned so an admin can see and re-activate suspended seats.
+      description: `List the workspace's people with each person's display name, avatar, status, role ID, and optional Docket account ID. Agents and teams are not included. Both active and suspended people are returned so an administrator can review and reactivate suspended members.
 
 **Account-holders and account-less people are one list.** A person added by \`POST /\` carries \`userId: null\`; a person who redeemed an invitation carries their Better Auth user id. Nothing filters on that column, and the ordering is a plain case-insensitive sort by \`displayName\` — never by account presence, join date, or insertion order — so the two kinds interleave by name and no client can accidentally render them as two groups.
 
-The cursor preserves that name order with actor id as its stable tiebreaker. Pages default to 50 items, accept at most 100, and omit \`nextCursor\` at exhaustion. Requires only org membership (no \`manage\`): any member, resolved by \`orgContextMiddleware\`, may see who else is in the org. To enumerate non-human actors see the agents router; to see outstanding invitations (people not yet members) see \`GET /invitations\`.`,
+The cursor preserves that name order with person ID as its stable tiebreaker. Pages default to 50 items, accept at most 100, and omit \`nextCursor\` at exhaustion. Any workspace member may read the roster. Use \`GET /invitations\` to list people who have been invited but have not joined.`,
     }),
     zQuery(CursorQuery),
     async (c) => {
@@ -126,11 +126,11 @@ The cursor preserves that name order with actor id as its stable tiebreaker. Pag
       summary: 'Add a person without an account',
       capability: 'manage',
       response: MemberOut,
-      description: `Record a person this workspace tracks who does **not** hold a Docket account — a volunteer, a contractor, a colleague who will never sign in. It inserts a human Actor with \`user_id = null\`, which is the *only* difference from a member who accepted an invitation. That person is then assignable exactly like anyone else: \`task.assignee_id\`, \`project.lead_id\` and \`initiative.owner_id\` all reference \`actor.id\` and none of them consults \`user_id\`.
+      description: `Add a person who does not need a Docket account, such as a volunteer or contractor. The person can be assigned to tasks and named as a project lead or initiative owner like any other member.
 
-Requires the \`manage\` capability — adding someone to the roster is the same authority as inviting them. The \`organizationId\` comes from the verified actor context, never the body. A supplied \`roleId\` MUST belong to THIS org (404, existence-hiding, otherwise) for the same reason \`POST /invitations\` validates it: \`actor.role_id → role.id\` is a bare global FK, so an unvalidated cross-org role would confer another tenant's capabilities. When \`roleId\` is omitted the org's \`member\` role is used if it exists, so the person sorts and reads like every other member rather than as a role-less oddity.
+A supplied \`roleId\` must belong to this workspace; otherwise Docket returns **404**. When \`roleId\` is omitted, Docket assigns the workspace's Member role. The workspace comes from the path and cannot be supplied in the request body.
 
-Adding a person to a **personal organization** is rejected with **409**, matching \`POST /invitations\`: a personal workspace is an org-of-one and has no roster. Returns the created \`MemberOut\` — the identical shape \`GET /\` and \`POST /invitations/:token/accept\` return. To give this person an account later, invite their email; to edit their name use \`PATCH /:actorId/profile\`; to remove them use \`DELETE /:actorId\`.`,
+Adding a person to a personal workspace returns **409** because a personal workspace has no roster. The response contains the created member. To give the person account access later, invite their email. Use \`PATCH /:actorId/profile\` to edit their profile and \`DELETE /:actorId\` to remove them.`,
     }),
     zJson(PersonCreate),
     async (c) => {
@@ -239,9 +239,9 @@ Errors: **404** when no invitation matches the token in this org (existence-hidi
       tag: 'Members',
       summary: 'List pending invitations',
       response: pageOf(InvitationOut),
-      description: `List the org's **pending** invitations — outstanding offers not yet accepted, revoked, or expired. The query filters strictly on \`status = 'pending'\`, so accepted/revoked/expired rows never appear here even though they remain in the table for audit. Each \`InvitationOut\` carries the invited email, target role, \`asGuest\` flag, who invited them (\`invitedBy\`), and the \`expiresAt\` deadline.
+      description: `List invitations whose stored status is \`pending\`. Accepted and revoked invitations are excluded. Each \`InvitationOut\` includes the email, role, \`asGuest\` value, inviter, and expiration time.
 
-Results use stable invitation-id order, default to 50 items, accept at most 100, and omit \`nextCursor\` at exhaustion. Requires only org membership (no \`manage\`) to read — any member can see who's been invited; \`manage\` is only required to create or revoke. Note: an invitation whose \`expiresAt\` has passed but whose stored \`status\` is still \`pending\` will still appear here (expiry is enforced at accept time, not by a sweep); treat \`expiresAt < now\` as effectively expired on the client. See \`POST /invitations\` to create and \`DELETE /invitations/:id\` to revoke.`,
+Results use stable invitation-ID order. Pages default to 50 items and accept at most 100. Organization membership is sufficient to read; creating or revoking requires \`manage\`. An invitation can remain listed after \`expiresAt\`, but accepting it then returns 409. Use \`POST /invitations\` to create and \`DELETE /invitations/:id\` to revoke.`,
     }),
     zQuery(CursorQuery),
     async (c) => {
@@ -271,11 +271,11 @@ Results use stable invitation-id order, default to 50 items, accept at most 100,
       summary: 'Create an invitation',
       capability: 'manage',
       response: InvitationOut,
-      description: `Invite a person to the organization by email, bound to a role. Creates a pending \`invitation\` row with a freshly generated opaque \`token\`, \`status = 'pending'\`, and \`expiresAt\` 7 days out; redemption then materializes the invitee's human Actor (see \`POST /invitations/:token/accept\`).
+      description: `Invite a person by email and assign a role. The response contains a new opaque token, \`status: "pending"\`, and an expiration time seven days after creation. The invitee joins through \`POST /invitations/:token/accept\`.
 
-Requires the \`manage\` capability because issuing an invitation grants future org access. \`organizationId\` and \`invitedBy\` are sourced from the verified actor context, never the body — a caller cannot invite into another org or spoof the inviter. The target \`roleId\` MUST belong to this org; a foreign or unknown role returns **404** (existence-hiding), which also blocks a cross-org role from being attached to a new member. Set \`asGuest: true\` to mark the invitation as a guest seat (the Guest role is grant-only — the invitee sees nothing until explicit grants name resources for them).
+Requires \`manage\`. \`roleId\` must identify a role in the organization; otherwise the request returns 404. Set \`asGuest: true\` for a guest seat. Guests cannot see work until a grant gives them access to a resource.
 
-Inviting into a **personal organization** is rejected with **409** (org-of-one). This is the canonical create endpoint; \`POST /invite\` is a legacy alias with identical behavior. Email delivery of the accept link is handled downstream by the email boundary, not this handler — this call only persists the durable invitation. Related: \`GET /invitations\` (list pending), \`DELETE /invitations/:id\` (revoke).`,
+Personal organizations reject invitations with 409. This operation creates the invitation but does not promise email delivery. Use \`GET /invitations\` to list pending invitations and \`DELETE /invitations/:id\` to revoke one.`,
     }),
     zJson(MemberInvite),
     async (c) => {
@@ -290,11 +290,11 @@ Inviting into a **personal organization** is rejected with **409** (org-of-one).
       tag: 'Members',
       summary: 'Accept an invitation by token',
       response: MemberOut,
-      description: `Redeem a pending invitation by its opaque \`token\` (supplied in the path) and join the org as a **human Actor**. This is the canonical accept endpoint; \`POST /accept-invite\` is the legacy body-token alias with identical logic.
+      description: `Accept a pending invitation by its opaque path token and join the organization with the invitation's role.
 
-Requires only an authenticated session — possession of the valid token is the authorization (the token IS the secret). Runs one transaction: load the invitation by \`(token, orgId)\`, assert it is \`pending\` and unexpired, assert the caller is not already a member, insert the human Actor bound to the invitation's role, and flip the invitation to \`accepted\` with \`acceptedAt\` set.
+Requires an authenticated session and the valid token. The membership and invitation status change succeed together or fail together.
 
-Errors: **404** when no invitation matches the token in this org (existence-hiding); **409** when the invitation is no longer pending, has passed \`expiresAt\`, or the user is already a member. Returns the new \`MemberOut\`. The accepting user's session must already be authenticated for the org context to resolve; the new actor's capabilities derive from the invitation's role. Idempotency note: a second accept of the same token returns 409 (already accepted), so clients should treat 409-already-member as success.`,
+An unknown token returns 404. An expired, accepted, or revoked invitation returns 409, as does an existing membership. A repeated accept therefore returns 409. Returns the new \`MemberOut\`.`,
     }),
     zParam(tokenParam),
     async (c) => {
@@ -314,9 +314,9 @@ Errors: **404** when no invitation matches the token in this org (existence-hidi
       summary: 'Revoke an invitation',
       capability: 'manage',
       response: InvitationRevokeOut,
-      description: `Cancel a still-pending invitation by its id, flipping its \`status\` from \`pending\` to \`revoked\` so the token can no longer be redeemed. Requires the \`manage\` capability (the same gate as issuing one). The update is scoped to \`(id, orgId, status = 'pending')\`: only a pending invitation belonging to THIS org is affected, which both enforces tenant isolation and makes the operation a safe no-op-then-404 against already-accepted/revoked rows.
+      description: `Revoke a pending invitation so its token can no longer be accepted. Requires the \`manage\` capability.
 
-Returns **404** when no pending invitation with that id exists in the org (it was never created here, already accepted, or already revoked) — note this is keyed on the invitation **id**, not the token. On success returns \`{ id, revoked: true }\`. Revocation does not delete the row (it stays for audit) and does not affect a member who has already accepted — to remove an accepted member use \`DELETE /:actorId\`. See \`POST /invitations\` to create and \`GET /invitations\` to list pending ones.`,
+The path uses the invitation ID, not its token. An absent, accepted, or already revoked invitation returns 404. On success, Docket retains the invitation in history and returns \`{ id, revoked: true }\`. Revocation does not remove a member who already accepted; use \`DELETE /:actorId\` for that.`,
     }),
     zParam(invitationIdParam),
     async (c) => {
@@ -494,11 +494,11 @@ Returns the updated \`MemberOut\`. Note this endpoint does NOT change \`displayN
       summary: 'Remove a member',
       capability: 'manage',
       response: MemberRemoveOut,
-      description: `Remove a member from the organization by **actor id**, hard-deleting their human Actor row. Requires the \`manage\` capability. The target must be a human Actor in this org — otherwise **404** (existence-hiding). The delete is scoped to \`(actorId, orgId)\` so a caller can never reach into another tenant.
+      description: `Remove a member from the organization by **actor ID**. Requires the \`manage\` capability. The target must be a member of this organization; otherwise the request returns **404**.
 
-**Last-owner guard:** if the target is the org's last active Owner, removal is rejected with **409** — an org must always retain at least one active Owner (permissions §4.5), so the row is only deleted after the guard confirms another active Owner remains.
+The request returns **409** when the target is the organization's last active Owner because every organization must retain an Owner.
 
-Side effects: deleting the Actor cascades per the database's referential rules to the rows that key off it (e.g. team memberships); however, work the member authored that is owned by org-scoped resources is not deleted by this call. Returns \`{ id, removed: true }\`. To revoke access without deleting the seat, prefer \`PATCH /:actorId\` with \`status: 'suspended'\`; to cancel an invitation that was never accepted use \`DELETE /invitations/:id\` instead.`,
+The member loses team memberships, but organization-owned work they authored remains. Returns \`{ id, removed: true }\`. To revoke access without removing the member, update their status to \`suspended\`. To cancel an invitation that was never accepted, use \`DELETE /invitations/:id\`.`,
     }),
     zParam(actorIdParam),
     async (c) => {

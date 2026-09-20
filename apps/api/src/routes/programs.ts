@@ -252,7 +252,7 @@ const programs = new Hono<AppEnv>()
       tag: 'Programs',
       summary: 'Get program detail',
       response: ProgramDetail,
-      description: `Fetch a single program plus a roll-up of its child work. Beyond the flat {@link ProgramOut} fields, the response carries \`rollup: { projects, tasks }\`: \`projects\` counts the Projects whose \`program_id\` is this program, and \`tasks\` counts every active (non-archived) Task the caller can view under the program — meaning a Task attached directly via \`task.program_id\` OR belonging to one of those Projects (the union is de-duplicated by the query). This lets a detail card show the caller's accessible scope at a glance without a second round-trip. 404 (\`Program not found\`) when the id is absent or cross-tenant. Read-only; organization membership accesses the Program while task-derived fields use canonical task visibility. Returns {@link ProgramDetail}. See \`GET /:id/work\` for the actual tasks grouped by cycle and project.`,
+      description: `Fetch a program with counts of its visible projects and active tasks. The task count includes tasks attached directly to the program and tasks that belong to one of its projects. Docket applies the caller's task visibility before calculating the count. An absent or inaccessible program returns 404. Returns {@link ProgramDetail}. Use \`GET /:id/work\` to retrieve the tasks grouped by cycle and project.`,
     }),
     zParam(idParam),
     async (c) => {
@@ -394,7 +394,7 @@ const programs = new Hono<AppEnv>()
       summary: 'Delete a program',
       capability: 'manage',
       response: ProgramOut,
-      description: `Permanently delete a program, scoped to the caller's org (404 \`Program not found\` when absent or cross-tenant). Requires \`manage\`. This removes the program row; child Projects' and Tasks' \`program_id\` references are handled by the database's foreign-key rules rather than being deleted here, and \`initiative_program\` association edges are cascaded away. Because tearing down a top-level operational container is irreversible and reshapes the portfolio, prefer setting \`status\` to \`archived\` via PATCH to retire a program while keeping its history. Returns the deleted {@link ProgramOut} as a tombstone.`,
+      description: `Permanently delete a program. The program must belong to the organization, and the caller needs the \`manage\` capability. Projects and tasks are not deleted, but they no longer belong to the program. Initiative links are removed. To preserve the program and its history, update its \`status\` to \`archived\` instead. Returns the deleted {@link ProgramOut}.`,
     }),
     zParam(idParam),
     async (c) => {
@@ -416,7 +416,7 @@ const programs = new Hono<AppEnv>()
       tag: 'Programs',
       summary: 'Get program work',
       response: ProgramWorkOut,
-      description: `The work under a program, grouped by Cycle and then segmented by Project — the program's two-level work board. "Work under the program" is every active (non-archived) Task the caller can view that either carries the program's \`program_id\` directly or belongs to a Project whose \`program_id\` is the program. Tasks are first bucketed by their \`cycle_id\` (the \`null\`-keyed "no cycle" group holds unscheduled tasks), then within each group segmented by \`project_id\` (the \`null\`-keyed "no project" segment holds tasks attached straight to the program). Group/segment ordering is deterministic — tasks are read \`createdAt\` descending, so first-seen order is stable. Each cycle group carries a lightweight cycle ref (id, name, number, resolved from the real cycles referenced); each segment carries a project ref (id, name). Optional \`cycleId\` and/or \`projectId\` query filters narrow the board to a single cadence and/or project. The program must exist in the caller's org (404 \`Program not found\`). Read-only; task delivery uses canonical task visibility. Returns {@link ProgramWorkOut}.`,
+      description: `List the active tasks under a program, grouped by cycle and then by project. The result includes tasks attached directly to the program and tasks that belong to one of its projects. Unscheduled tasks appear in the no-cycle group, and tasks attached directly to the program appear in the no-project segment. Groups and segments preserve newest-task-first order. Use \`cycleId\` or \`projectId\` to narrow the result. Docket applies the caller's task visibility, and an absent or inaccessible program returns 404. Returns {@link ProgramWorkOut}.`,
     }),
     zParam(idParam),
     zQuery(ProgramWorkQuery),

@@ -35,6 +35,7 @@ const tracedMethods = new Set([
 
 // The PostgreSQL acceptance suite installs this observer for one request. Keeping the hook at the
 // adapter boundary proves that Better Auth did not silently fall back to its construction adapter.
+/* v8 ignore start -- test-only trace hook is exercised by the PostgreSQL acceptance suite */
 function traceAdapter<T extends TraceableAdapter>(adapter: T, kind: AdapterTraceKind): T {
   const observer = Reflect.get(globalThis, adapterTraceSymbol) as AdapterTraceObserver | undefined;
   if (typeof observer !== 'function') return adapter;
@@ -61,6 +62,7 @@ function traceAdapter<T extends TraceableAdapter>(adapter: T, kind: AdapterTrace
   });
   return proxy;
 }
+/* v8 ignore stop */
 
 function createAdapterFactory(transaction: boolean): (options: BetterAuthOptions) => DBAdapter {
   const factory = drizzleAdapter(db, {

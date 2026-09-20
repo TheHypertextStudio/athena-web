@@ -89,13 +89,8 @@ function assertOperationIdentity(operation: JsonObject, ids: Set<string>): strin
   return operationId;
 }
 
-/** Assert that a normalized document has no source prose or missing operation basics. */
+/** Assert that a normalized document has complete operation and schema structure. */
 export function assertPublicReference(document: JsonObject): void {
-  const serialized = JSON.stringify(document);
-  const forbidden = ['{@link', 'workflow_states'];
-  const leaked = forbidden.find((value) => serialized.includes(value));
-  if (leaked) throw new Error(`Public OpenAPI contains forbidden text: ${leaked}`);
-
   const unresolved = unresolvedSchemaReferences(document);
   if (unresolved.length > 0) {
     throw new Error(

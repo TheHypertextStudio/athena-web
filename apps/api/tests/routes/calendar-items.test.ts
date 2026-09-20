@@ -328,7 +328,7 @@ describe('native calendar block CRUD', () => {
     // No connection => resolveItemPermissions denies with 'provider_scope' => 403, not 422.
     expect(res.status).toBe(403);
     const body = await json<{ code: string }>(res);
-    expect(body.code).toBe('forbidden');
+    expect(body.code).toBe('insufficient_scope');
   });
 
   it('isolates ownership: another user gets 404 on GET/PATCH/DELETE', async () => {

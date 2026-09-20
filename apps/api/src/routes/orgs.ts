@@ -99,7 +99,7 @@ const orgs = new Hono<AppEnv>()
       tag: 'Orgs',
       summary: 'List organizations',
       response: pageOf(OrgSummary),
-      description: `List every organization the authenticated caller belongs to, as compact \`OrgSummary\` rows for workspace selection. Docket uses the selected session or OAuth principal's user identity and returns only organizations where that user has an active, unarchived human membership. Personal spaces (\`isPersonal: true\`) are included alongside team organizations. Results use stable organization-id order, default to 50 items, accept at most 100, and omit \`nextCursor\` at exhaustion. Copy the opaque cursor unchanged and keep the same caller identity. This is the only un-nested organization read because it spans workspaces; every other organization route lives under \`/:orgId\` and resolves one membership. A first-party session needs no extra capability. An OAuth client needs \`work:read\`, and Docket still applies the same membership filter after scope validation. See \`GET /:orgId\` for the full representation of one organization.`,
+      description: `List the organizations where the caller is an active member. The list includes personal spaces and team workspaces, ordered by organization ID. Pages contain 50 organizations by default and no more than 100. Pass \`nextCursor\` back as \`cursor\` with the same filters to read the next page. The final page omits \`nextCursor\`.`,
     }),
     zQuery(CursorQuery),
     async (c) => {
@@ -140,9 +140,7 @@ const orgs = new Hono<AppEnv>()
       response: OrgCreateResult,
       description: `Create an organization and make the signed-in person its first Owner. A team organization requires \`name\`. A personal space defaults its name to \`Personal\` and returns the caller's existing personal space instead of creating a second one.
 
-Every new organization includes the Owner, Admin, Member, and Guest roles plus a default team named \`General\`. An explicit \`slug\` must be available and returns **409** on conflict. Docket adds a numeric suffix when an automatically generated slug is already used.
-
-Returns the organization with its \`defaultTeam\` and \`ownerActorId\`. Use the organization ID to scope later workspace requests. Related: \`GET /v1/orgs\` lists memberships, and \`POST /v1/orgs/:orgId/members/invitations\` invites members.`,
+Every new organization includes the Owner, Admin, Member, and Guest roles plus a default team named \`General\`. An explicit \`slug\` must be available and returns **409** on conflict. Docket adds a numeric suffix when an automatically generated slug is already used. The response includes the default team and the new owner's actor ID so the client can make organization-scoped requests immediately.`,
     }),
     zJson(OrgCreate),
     async (c) => {
@@ -403,11 +401,7 @@ Returns the organization with its \`defaultTeam\` and \`ownerActorId\`. Use the 
       tag: 'Orgs',
       summary: 'Get an organization',
       response: OrgOut,
-      description: `Fetch the full \`OrgOut\` representation of a single organization — name, slug, purpose, avatar, \`isPersonal\`, the resolved vocabulary skin, lifecycle state, and creation time. The org id comes from the verified actor context, not a re-read of the path, so the response always reflects the org the caller is actually a member of.
-
-Membership is enforced by \`orgContextMiddleware\` (which runs before this handler for every \`/:orgId/*\` route): it loads the caller's human Actor for \`(session user, orgId)\` and **404s when no membership exists** — existence-hiding, so a non-member cannot even confirm the org exists. No explicit capability is required beyond membership; any role (including Guest) that has a resolved Actor in the org may read its top-level metadata. The post-middleware \`org\` lookup is purely defensive — middleware has already proven the org exists.
-
-Related: \`GET /\` lists all orgs the caller belongs to; the nested routers under this path (\`/teams\`, \`/members\`, \`/roles\`, \`/grants\`, …) expose the org's contents.`,
+      description: `Return an organization's name, slug, purpose, avatar, personal-space flag, terminology, lifecycle state, and creation time. Guests may read this metadata. Docket returns **404** for an unknown organization and for an organization the caller cannot access.`,
     }),
     async (c) => {
       const { orgId } = c.get('actorCtx');

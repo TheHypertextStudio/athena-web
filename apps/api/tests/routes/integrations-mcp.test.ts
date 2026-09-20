@@ -271,7 +271,7 @@ describe('remote MCP integrations', () => {
       .where(eq(schema.integrationCredential.integrationId, out.id));
     expect(creds).toHaveLength(0);
     const listed = await app.request('/', { method: 'GET' });
-    expect((await listed.json()) as unknown[]).toHaveLength(0);
+    expect(((await listed.json()) as { items: unknown[] }).items).toHaveLength(0);
   });
 
   it('defaults authMode to "none" when a legacy row config has no authMode field at all', async () => {
@@ -294,7 +294,7 @@ describe('remote MCP integrations', () => {
     const app = appFor(integrationsMcp, seed);
 
     const listed = await app.request('/', { method: 'GET' });
-    const items = (await listed.json()) as McpIntegrationOut[];
+    const items = ((await listed.json()) as { items: McpIntegrationOut[] }).items;
     const found = items.find((i) => i.id === assertDefined(row).id);
     expect(found?.authMode).toBe('none');
   });

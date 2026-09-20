@@ -6017,12 +6017,6 @@
       "excess": 8
     }
   },
-  "packages/integrations/src/mock-observer.ts": {
-    "complexity": {
-      "max": 14,
-      "excess": 2
-    }
-  },
   "packages/integrations/src/notion-mapping.ts": {
     "complexity": {
       "max": 14,

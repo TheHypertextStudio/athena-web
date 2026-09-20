@@ -12,7 +12,7 @@
 - **Status**: IN_PROGRESS
 - **Started**: 2026-09-18
 - **Priority**: P0
-- **Description**: Systematically eliminate complexity-debt.json violations. Phase 1 targets 176 files with 1-10 total excess points across all rules. Current total: 1,286 entries, 155,527 excess points across 736 files.
+- **Description**: Systematically eliminate complexity-debt.json violations. Phase 1 targets 176 files with 1-10 total excess points across all rules. Current total: 1,285 entries, 155,525 excess points across 735 files.
 
 #### Analysis Complete
 
@@ -194,6 +194,9 @@ Quick-win files to process:
   - Canvas selection state projection now uses a shared node-selection helper, clearing its final
     function-length excess while preserving all four selection-bridge tests. The ledger is 736 files
     and 1,286 entries.
+  - Mock observer entity and participant normalization now use focused helpers, clearing its final
+    two complexity points while preserving all 24 observer/index tests. The ledger is 735 files and
+    1,285 entries.
 
 ---
 

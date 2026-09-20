@@ -15,6 +15,7 @@ import { EventKind } from '@docket/connections/event-contract';
 import { genericDetail } from './event-detail';
 import { asRecord, str } from './json';
 import type {
+  EventActorRef,
   EventDraft,
   EventEntityRef,
   InboundRouting,
@@ -35,6 +36,22 @@ const SIGNATURE_HEADERS = [
   'x-hub-signature-256',
   'x-signature-ed25519',
 ] as const;
+
+function normalizeParticipants(value: unknown): readonly EventActorRef[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  return value.flatMap((participant) => {
+    if (typeof participant === 'string') return [{ externalId: participant }];
+    const externalId = str(asRecord(participant), 'externalId');
+    return externalId ? [{ externalId }] : [];
+  });
+}
+
+function normalizeEntity(body: Record<string, unknown>): EventEntityRef | undefined {
+  const externalId = str(body, 'id');
+  if (!externalId) return undefined;
+  const title = str(body, 'title');
+  return { kind: 'work_item', externalId, ...(title ? { title } : {}) };
+}
 
 /** A deterministic, offline {@link Observer} backed by the request payload itself. */
 export class MockObserver implements Observer {
@@ -78,20 +95,10 @@ export class MockObserver implements Observer {
     const kind: EventKind = EventKind.safeParse(str(body, 'kind')).data ?? 'mention';
     const title = str(body, 'title') ?? 'Mock observation';
     const summary = str(body, 'summary');
-    const externalId = str(body, 'id');
-    const fixtureTitle = str(body, 'title');
-    const entity: EventEntityRef | undefined = externalId
-      ? { kind: 'work_item', externalId, ...(fixtureTitle ? { title: fixtureTitle } : {}) }
-      : undefined;
+    const entity = normalizeEntity(body);
     // Optional fixture `participants`: an array of external actor ids (or `{ externalId }`), so a
     // test can drive the mention-attribution seam (mentioned users → recipients) deterministically.
-    const participants = Array.isArray(body['participants'])
-      ? (body['participants'] as unknown[]).flatMap((p) => {
-          if (typeof p === 'string') return [{ externalId: p }];
-          const id = str(asRecord(p), 'externalId');
-          return id ? [{ externalId: id }] : [];
-        })
-      : undefined;
+    const participants = normalizeParticipants(body['participants']);
     return [
       {
         kind,

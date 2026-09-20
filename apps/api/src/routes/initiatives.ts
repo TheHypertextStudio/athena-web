@@ -64,6 +64,7 @@ import {
   associatedPrograms,
   associatedProjects,
   buildInitiativeDetail,
+  collectInitiativeDescendants,
   idParam,
   loadInitiative,
   programLinkParam,
@@ -508,20 +509,7 @@ const initiatives = new Hono<AppEnv>()
           const removedIds = new Set<string>();
           for (const directChild of directChildren) {
             if (childOrganizations.get(directChild.childInitiativeId) === contextId) continue;
-            const descendants = new Set([directChild.childInitiativeId]);
-            let changed = true;
-            while (changed) {
-              changed = false;
-              for (const edge of edges) {
-                if (
-                  descendants.has(edge.parentInitiativeId) &&
-                  !descendants.has(edge.childInitiativeId)
-                ) {
-                  descendants.add(edge.childInitiativeId);
-                  changed = true;
-                }
-              }
-            }
+            const descendants = collectInitiativeDescendants(edges, directChild.childInitiativeId);
             removedIds.add(directChild.id);
             for (const edge of edges) {
               if (descendants.has(edge.parentInitiativeId)) removedIds.add(edge.id);

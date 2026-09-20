@@ -24,6 +24,32 @@ export type ProjectRow = typeof project.$inferSelect;
 /** ProgramRow is the selected database row shape consumed by these API route serializers. */
 export type ProgramRow = typeof program.$inferSelect;
 
+/** The hierarchy edge fields needed to walk an Initiative's descendants. */
+export interface InitiativeHierarchyEdge {
+  id: string;
+  parentInitiativeId: string;
+  childInitiativeId: string;
+}
+
+/** Collect every descendant reachable from an initiative within one hierarchy context. */
+export function collectInitiativeDescendants(
+  edges: readonly InitiativeHierarchyEdge[],
+  rootId: string,
+): Set<string> {
+  const descendants = new Set([rootId]);
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const edge of edges) {
+      if (descendants.has(edge.parentInitiativeId) && !descendants.has(edge.childInitiativeId)) {
+        descendants.add(edge.childInitiativeId);
+        changed = true;
+      }
+    }
+  }
+  return descendants;
+}
+
 /** Health verdicts ordered worst→best so the roll-up can pick the most severe. */
 const HEALTH_SEVERITY: readonly Health[] = ['off_track', 'at_risk', 'on_track'];
 

@@ -97,6 +97,18 @@ interface GmailHistoryResponse {
   historyId?: string;
 }
 
+/** Collect thread ids from one history page without coupling pagination to record shape. */
+function threadIdsFromHistory(history: readonly GmailHistoryRecord[]): ReadonlySet<string> {
+  const threadIds = new Set<string>();
+  for (const record of history) {
+    for (const added of record.messagesAdded ?? []) {
+      const threadId = added.message?.threadId;
+      if (threadId) threadIds.add(threadId);
+    }
+  }
+  return threadIds;
+}
+
 /** The RFC 5322 headers requested on every metadata `threads.get`. */
 const THREAD_METADATA_HEADERS =
   '&metadataHeaders=From&metadataHeaders=To&metadataHeaders=Subject&metadataHeaders=Date' +
@@ -238,12 +250,7 @@ export class GmailProviderClient
           `/users/me/history?startHistoryId=${cursor}&historyTypes=messageAdded&maxResults=100` +
             (pageToken ? `&pageToken=${pageToken}` : ''),
         );
-        for (const record of j.history ?? []) {
-          for (const added of record.messagesAdded ?? []) {
-            const threadId = added.message?.threadId;
-            if (threadId) threadIds.add(threadId);
-          }
-        }
+        for (const threadId of threadIdsFromHistory(j.history ?? [])) threadIds.add(threadId);
         historyId = j.historyId ?? historyId;
         pageToken = j.nextPageToken;
       } while (pageToken && threadIds.size < maxThreads);

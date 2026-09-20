@@ -12,7 +12,7 @@
 - **Status**: IN_PROGRESS
 - **Started**: 2026-09-18
 - **Priority**: P0
-- **Description**: Systematically eliminate complexity-debt.json violations. Phase 1 targets 176 files with 1-10 total excess points across all rules. Current total: 1,303 entries, 155,581 excess points across 749 files.
+- **Description**: Systematically eliminate complexity-debt.json violations. Phase 1 targets 176 files with 1-10 total excess points across all rules. Current total: 1,299 entries, 155,544 excess points across 748 files.
 
 #### Analysis Complete
 
@@ -152,6 +152,10 @@ Quick-win files to process:
   - Notion setup rendering now delegates the picker body and status messages to focused helpers,
     clearing its final complexity excess while preserving all seven Notion setup tests. The ledger
     is 749 files and 1,303 entries.
+  - Initiative hierarchy cleanup now walks descendants through a typed helper, removing the route's
+    final max-depth excess while preserving 53 hierarchy/detail tests. Gmail history extraction now
+    uses the same shallow page helper, clearing its max-depth entry while preserving all 26 Gmail
+    provider tests. The ledger is 748 files and 1,299 entries.
 
 ---
 

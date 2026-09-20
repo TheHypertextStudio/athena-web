@@ -564,23 +564,19 @@
   "apps/api/src/routes/initiatives.ts": {
     "complexity": {
       "max": 14,
-      "excess": 3
-    },
-    "max-depth": {
-      "max": 5,
-      "excess": 1
+      "excess": 2
     },
     "max-lines": {
-      "max": 807,
-      "excess": 307
+      "max": 795,
+      "excess": 295
     },
     "max-lines-per-function": {
       "max": 109,
-      "excess": 53
+      "excess": 52
     },
     "sonarjs/cognitive-complexity": {
-      "max": 31,
-      "excess": 16
+      "max": 18,
+      "excess": 3
     }
   },
   "apps/api/src/routes/integration-reconcile-graph.ts": {
@@ -5997,20 +5993,6 @@
     "max-lines": {
       "max": 561,
       "excess": 61
-    }
-  },
-  "packages/integrations/src/gmail.ts": {
-    "complexity": {
-      "max": 16,
-      "excess": 4
-    },
-    "max-depth": {
-      "max": 5,
-      "excess": 1
-    },
-    "sonarjs/cognitive-complexity": {
-      "max": 19,
-      "excess": 4
     }
   },
   "packages/integrations/src/google.ts": {

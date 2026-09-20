@@ -37,29 +37,13 @@ import { ComposerShell } from '@/components/composer/composer-shell';
 
 import { jsonResponse } from '../support/http';
 import { makeQueryWrapper } from '../support/query';
+import { mentionSearchResponse } from './mention-test-fixtures';
 import { installProseMirrorLayoutShims } from './prosemirror-jsdom';
 
 installProseMirrorLayoutShims();
 
 beforeEach(() => {
-  mentionSearch.mockReset().mockImplementation(({ param }: { param: { orgId: string } }) =>
-    Promise.resolve(
-      jsonResponse(true, {
-        items: [
-          {
-            origin: 'local',
-            id: `task_${param.orgId}`,
-            ref: { kind: 'entity', entityKind: 'task', entityId: `task_${param.orgId}` },
-            entityKind: 'task',
-            title: `Roadmap in ${param.orgId}`,
-            subtitle: null,
-            href: `/orgs/${param.orgId}/tasks/task_${param.orgId}`,
-            score: 1,
-          },
-        ],
-      }),
-    ),
-  );
+  mentionSearch.mockReset().mockImplementation(mentionSearchResponse);
   mentionExternal.mockReset().mockResolvedValue(jsonResponse(true, { items: [] }));
   mentionHydrate.mockReset().mockResolvedValue(jsonResponse(true, { items: [] }));
 });
@@ -154,6 +138,7 @@ describe('composer body editor parity', () => {
     );
     expect(createMore).toHaveClass('coarse:min-h-10');
     expect(expand.querySelector('[data-testid="OpenInFullIcon"]')).not.toBeNull();
+    expect(screen.queryByRole('tablist', { name: 'Composer sections' })).toBeNull();
 
     await user.click(expand);
 
@@ -161,6 +146,208 @@ describe('composer body editor parity', () => {
     expect(screen.getByRole('button', { name: 'Collapse editor' })).toContainElement(
       document.querySelector('[data-testid="CloseFullscreenIcon"]'),
     );
+  });
+
+  it('aligns supplemental editing sections between the identity fields and the body', async () => {
+    renderEditor(
+      <ComposerShell
+        open
+        onOpenChange={vi.fn()}
+        heading="New project"
+        title="Atlas"
+        onTitleChange={vi.fn()}
+        titlePlaceholder="Project name"
+        summary="A durable operating plan"
+        onSummaryChange={vi.fn()}
+        summaryPlaceholder="One-sentence summary"
+        body="Existing brief"
+        onBodyChange={vi.fn()}
+        bodyPlaceholder="Add a description"
+        supplementalSections={[
+          {
+            id: 'milestones',
+            label: 'Milestones',
+            accessibleLabel: 'Milestones',
+            count: 1,
+            body: <input aria-label="Milestone name" defaultValue="Launch" />,
+          },
+        ]}
+        propertyAriaLabel="Project properties"
+        creating={false}
+        canSubmit
+        onSubmit={vi.fn()}
+        submitLabel="Create Project"
+      >
+        <button type="button">Planned</button>
+      </ComposerShell>,
+    );
+
+    const title = screen.getByRole('textbox', { name: 'Project name' });
+    const sections = screen.getByRole('tablist', { name: 'Composer sections' });
+    const descriptionTab = screen.getByRole('tab', { name: 'Description' });
+    const milestonesTab = screen.getByRole('tab', { name: 'Milestones 1' });
+    const descriptionPanel = screen.getByRole('tabpanel', { name: 'Description' });
+    const milestonePanel = document.getElementById(
+      milestonesTab.getAttribute('aria-controls') ?? '',
+    );
+    const properties = screen.getByRole('group', { name: 'Project properties' });
+    const submit = screen.getByRole('button', { name: 'Create Project' });
+
+    expect(sections).toHaveClass('bg-surface-container');
+    expect(descriptionTab).toHaveAttribute('aria-selected', 'true');
+    expect(milestonesTab).toHaveAttribute('aria-selected', 'false');
+    expect(milestonePanel).toHaveAttribute('aria-hidden', 'true');
+    expect(milestonePanel).toHaveAttribute('inert');
+    expect(milestonePanel).toHaveAttribute('aria-labelledby', milestonesTab.id);
+    expect(descriptionTab.id).not.toBe('tab-description');
+    expect(title.compareDocumentPosition(sections) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(
+      sections.compareDocumentPosition(descriptionPanel) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(
+      descriptionPanel.compareDocumentPosition(properties) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(
+      properties.compareDocumentPosition(submit) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  it('keeps section drafts and the rich editor mounted while moving focus', async () => {
+    const user = userEvent.setup();
+
+    function Harness(): ReactElement {
+      const [body, setBody] = useState('Existing brief');
+      const [milestone, setMilestone] = useState('Launch');
+      return (
+        <ComposerShell
+          open
+          onOpenChange={vi.fn()}
+          heading="New project"
+          title="Atlas"
+          onTitleChange={vi.fn()}
+          titlePlaceholder="Project name"
+          body={body}
+          onBodyChange={setBody}
+          bodyPlaceholder="Add a description"
+          supplementalSections={[
+            {
+              id: 'milestones',
+              label: 'Milestones',
+              accessibleLabel: 'Milestones',
+              count: milestone.length > 0 ? 1 : 0,
+              body: (
+                <input
+                  aria-label="Milestone name"
+                  value={milestone}
+                  onChange={(event) => {
+                    setMilestone(event.target.value);
+                  }}
+                />
+              ),
+            },
+          ]}
+          propertyAriaLabel="Project properties"
+          creating={false}
+          canSubmit
+          onSubmit={vi.fn()}
+          submitLabel="Create Project"
+        >
+          <button type="button">Planned</button>
+        </ComposerShell>
+      );
+    }
+
+    renderEditor(<Harness />);
+    const editor = screen.getByRole('textbox', { name: 'Add a description' });
+    editor.scrollTop = 19;
+    await user.click(screen.getByRole('tab', { name: 'Milestones 1' }));
+    const milestone = screen.getByRole('textbox', { name: 'Milestone name' });
+    const milestonePanel = milestone.closest<HTMLElement>('[role="tabpanel"]');
+    expect(milestonePanel).not.toBeNull();
+    if (milestonePanel) milestonePanel.scrollTop = 31;
+    await waitFor(() => {
+      expect(milestone).toHaveFocus();
+    });
+    await user.clear(milestone);
+    await user.type(milestone, 'Beta');
+
+    await user.click(screen.getByRole('tab', { name: 'Description' }));
+    await waitFor(() => {
+      expect(editor).toHaveFocus();
+    });
+    expect(screen.getByRole('textbox', { name: 'Add a description' })).toBe(editor);
+    expect(editor).toHaveProperty('scrollTop', 19);
+
+    await user.click(screen.getByRole('tab', { name: 'Milestones 1' }));
+    expect(screen.getByRole('textbox', { name: 'Milestone name' })).toHaveValue('Beta');
+    await waitFor(() => {
+      expect(milestonePanel).toHaveProperty('scrollTop', 31);
+    });
+  });
+
+  it('returns to the description whenever the composer reopens', async () => {
+    const user = userEvent.setup();
+
+    function Harness(): ReactElement {
+      const [open, setOpen] = useState(true);
+      return (
+        <>
+          <button
+            type="button"
+            onClick={() => {
+              setOpen(true);
+            }}
+          >
+            Reopen composer
+          </button>
+          <ComposerShell
+            open={open}
+            onOpenChange={(next) => {
+              setOpen(next);
+            }}
+            heading="New project"
+            title=""
+            onTitleChange={vi.fn()}
+            titlePlaceholder="Project name"
+            body=""
+            onBodyChange={vi.fn()}
+            bodyPlaceholder="Add a description"
+            supplementalSections={[
+              {
+                id: 'milestones',
+                label: 'Milestones',
+                accessibleLabel: 'Milestones',
+                count: 0,
+                body: <input aria-label="Milestone name" />,
+              },
+            ]}
+            creating={false}
+            canSubmit={false}
+            onSubmit={vi.fn()}
+            submitLabel="Create Project"
+          >
+            <button type="button">Planned</button>
+          </ComposerShell>
+        </>
+      );
+    }
+
+    renderEditor(<Harness />);
+    await user.click(screen.getByRole('tab', { name: 'Milestones 0' }));
+    expect(screen.getByRole('tab', { name: 'Milestones 0' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Close' }));
+    await user.click(screen.getByRole('button', { name: 'Reopen composer' }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('tab', { name: 'Description' })).toHaveAttribute(
+        'aria-selected',
+        'true',
+      );
+    });
   });
 
   it('renders a composer contribution in the shared inline empty state', async () => {

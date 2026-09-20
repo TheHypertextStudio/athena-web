@@ -21,6 +21,10 @@ const SHOT_DIR = resolve(
   import.meta.dirname,
   '../../../../docs/design/audits/screenshots/2026-09-08-create-composers',
 );
+const PROJECT_BRIEF = Array.from(
+  { length: 32 },
+  (_, index) => `Project brief line ${String(index + 1)} keeps the writing surface scrollable.`,
+).join('\n');
 
 interface ComposerCase {
   readonly slug: string;
@@ -77,12 +81,19 @@ const COMPOSERS: readonly ComposerCase[] = [
 async function openComposer(page: Page, orgId: string, item: ComposerCase): Promise<Locator> {
   const path = item.path(orgId);
   const trigger = page.getByRole('button', { name: item.trigger }).first();
+  const offline = page.getByRole('heading', { name: "You're offline" });
+  const keepLooking = page.getByRole('button', { name: 'Not now' });
+  await page.goto(path, { waitUntil: 'domcontentloaded', timeout: TIMEOUTS.pageReady });
   // A first dev navigation can fall through to the service worker's offline shell while Next
-  // compiles the route. Retry the navigation itself so the now-warm route replaces that shell.
+  // compiles the route. Reload only that shell; repeatedly navigating a healthy cold route resets
+  // its hydration and can keep a visible entry point from ever satisfying the locator.
   await expect(async () => {
-    await page.goto(path, { waitUntil: 'domcontentloaded', timeout: TIMEOUTS.pageReady });
-    await expect(trigger).toBeVisible({ timeout: 5_000 });
-  }).toPass({ timeout: TIMEOUTS.sweep });
+    if (await keepLooking.isVisible()) await keepLooking.click();
+    if (await offline.isVisible()) {
+      await page.reload({ waitUntil: 'domcontentloaded', timeout: TIMEOUTS.pageReady });
+    }
+    await expect(trigger).toBeVisible({ timeout: 10_000 });
+  }).toPass({ timeout: TIMEOUTS.pageReady });
   const dialog = page.getByRole('dialog', { name: item.dialog });
   await expect(async () => {
     if (!(await dialog.isVisible())) {
@@ -121,11 +132,131 @@ async function expectSingleTitleToEditorGap(dialog: Locator): Promise<void> {
   const editor = dialog.locator('[data-editor-surface]');
   if ((await editor.count()) === 0) return;
   const titleBlock = dialog.getByRole('textbox').first().locator('..');
-  const [titleBox, editorBox] = await Promise.all([titleBlock.boundingBox(), editor.boundingBox()]);
-  expect(titleBox).not.toBeNull();
+  const sectionTabs = dialog.getByRole('tablist', { name: 'Composer sections' });
+  const headerAnchor = (await sectionTabs.count()) > 0 ? sectionTabs : titleBlock;
+  const [anchorBox, editorBox] = await Promise.all([
+    headerAnchor.boundingBox(),
+    editor.boundingBox(),
+  ]);
+  expect(anchorBox).not.toBeNull();
   expect(editorBox).not.toBeNull();
-  if (!titleBox || !editorBox) throw new Error('Composer title or editor has no layout box.');
-  expect(editorBox.y - (titleBox.y + titleBox.height)).toBeLessThanOrEqual(16);
+  if (!anchorBox || !editorBox) throw new Error('Composer header or editor has no layout box.');
+  expect(editorBox.y - (anchorBox.y + anchorBox.height)).toBeLessThanOrEqual(16);
+}
+
+async function expectProjectDescriptionHeight(dialog: Locator): Promise<void> {
+  const body = dialog.locator('[data-composer-body]');
+  const editor = dialog.locator('[data-editor-surface]');
+  const summary = dialog.getByRole('textbox', { name: 'One-sentence summary' });
+  const sectionTabs = dialog.getByRole('tablist', { name: 'Composer sections' });
+  const [summaryBox, sectionTabsBox, bodyBox, editorBox] = await Promise.all([
+    summary.boundingBox(),
+    sectionTabs.boundingBox(),
+    body.boundingBox(),
+    editor.boundingBox(),
+  ]);
+  expect(summaryBox).not.toBeNull();
+  expect(sectionTabsBox).not.toBeNull();
+  expect(bodyBox).not.toBeNull();
+  expect(editorBox).not.toBeNull();
+  if (!summaryBox || !sectionTabsBox || !bodyBox || !editorBox) {
+    throw new Error('Project composer identity, section, or body region has no layout box.');
+  }
+  expect(summaryBox.y + summaryBox.height).toBeLessThanOrEqual(sectionTabsBox.y);
+  expect(sectionTabsBox.y + sectionTabsBox.height).toBeLessThanOrEqual(bodyBox.y);
+  expect(editorBox.height).toBeGreaterThanOrEqual((bodyBox.height * 2) / 3);
+}
+
+async function expectPinnedProjectRegions(dialog: Locator): Promise<number> {
+  const body = dialog.locator('[data-composer-body]');
+  const header = body.locator('xpath=preceding-sibling::*[1]');
+  const footer = body.locator('xpath=following-sibling::*[1]');
+  const editor = dialog.locator('[data-editor-surface]');
+  const descriptionPanel = editor.locator('xpath=ancestor::*[@role="tabpanel"]');
+  const [headerBefore, bodyBox, footerBefore] = await Promise.all([
+    header.boundingBox(),
+    body.boundingBox(),
+    footer.boundingBox(),
+  ]);
+  expect(headerBefore).not.toBeNull();
+  expect(bodyBox).not.toBeNull();
+  expect(footerBefore).not.toBeNull();
+  if (!headerBefore || !bodyBox || !footerBefore) {
+    throw new Error('Project composer regions have no layout boxes.');
+  }
+  expect(headerBefore.y + headerBefore.height).toBeLessThanOrEqual(bodyBox.y + 1);
+  expect(bodyBox.y + bodyBox.height).toBeLessThanOrEqual(footerBefore.y + 1);
+
+  await expect(async () => {
+    await editor.evaluate((node) => {
+      node.scrollTop = node.scrollHeight;
+    });
+    await dialog.page().waitForTimeout(50);
+    expect(await editor.evaluate((node) => node.scrollTop)).toBeGreaterThan(0);
+  }).toPass();
+  const scrollPosition = await descriptionPanel.evaluate((node) =>
+    [node, ...node.querySelectorAll('*')].reduce(
+      (total, element) => total + (element instanceof HTMLElement ? element.scrollTop : 0),
+      0,
+    ),
+  );
+  const [headerAfter, footerAfter] = await Promise.all([
+    header.boundingBox(),
+    footer.boundingBox(),
+  ]);
+  expect(headerAfter?.y).toBeCloseTo(headerBefore.y, 0);
+  expect(footerAfter?.y).toBeCloseTo(footerBefore.y, 0);
+  return scrollPosition;
+}
+
+async function draftProjectSections(dialog: Locator): Promise<void> {
+  const descriptionTab = dialog.getByRole('tab', { name: 'Description' });
+  const milestoneTab = dialog.getByRole('tab', { name: 'Milestones 0' });
+  const editor = dialog.getByRole('textbox', { name: 'Add a description' });
+  await expect(descriptionTab).toHaveAttribute('aria-selected', 'true');
+  await expectProjectDescriptionHeight(dialog);
+  await editor.fill(PROJECT_BRIEF);
+  await editor.evaluate((node) => {
+    node.setAttribute('data-browser-editor-identity', 'project-description');
+  });
+  const descriptionScroll = await expectPinnedProjectRegions(dialog);
+
+  await milestoneTab.click();
+  const addMilestone = dialog.getByRole('textbox', { name: 'New milestone name' });
+  await expect(addMilestone).toBeFocused();
+  await addMilestone.fill('Beta');
+  await addMilestone.press('Enter');
+  await expect(dialog.getByRole('tab', { name: 'Milestones 1' })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  );
+
+  await descriptionTab.click();
+  await expect(editor).toContainText('Project brief line 1 keeps the writing surface scrollable.');
+  await expect(editor).toHaveAttribute('data-browser-editor-identity', 'project-description');
+  const descriptionPanel = editor.locator('xpath=ancestor::*[@role="tabpanel"]');
+  await expect
+    .poll(async () =>
+      descriptionPanel.evaluate((node) =>
+        [node, ...node.querySelectorAll('*')].reduce(
+          (total, element) => total + (element instanceof HTMLElement ? element.scrollTop : 0),
+          0,
+        ),
+      ),
+    )
+    .toBe(descriptionScroll);
+  await expectProjectDescriptionHeight(dialog);
+  await dialog.getByRole('tab', { name: 'Milestones 1' }).click();
+  await expect(dialog.getByRole('textbox', { name: 'Milestone name', exact: true })).toHaveValue(
+    'Beta',
+  );
+}
+
+async function closeComposer(dialog: Locator): Promise<void> {
+  await dialog.getByRole('button', { name: 'Close' }).click();
+  const discard = dialog.getByRole('button', { name: 'Discard' });
+  if (await discard.isVisible()) await discard.click();
+  await expect(dialog).toHaveCount(0);
 }
 
 async function expectMobileViewportComposer(dialog: Locator, page: Page): Promise<void> {
@@ -203,6 +334,14 @@ test('create composers fill phones and keep two explicit footer rows', async ({ 
     const dialog = await openComposer(page, orgId, item);
     await expect(dialog).toHaveCSS('max-width', '672px');
     await expectTwoFooterRows(dialog, item);
+    if (item.slug === 'project') {
+      await draftProjectSections(dialog);
+      await capture(page, 'project-milestones-desktop-light');
+      await setColorScheme(page, 'dark');
+      await capture(page, 'project-milestones-desktop-dark');
+      await dialog.getByRole('tab', { name: 'Description' }).click();
+      await setColorScheme(page, 'light');
+    }
     await capture(page, `${item.slug}-desktop-light`);
     await setColorScheme(page, 'dark');
     await capture(page, `${item.slug}-desktop-dark`);
@@ -213,12 +352,20 @@ test('create composers fill phones and keep two explicit footer rows', async ({ 
     await expectSingleTitleToEditorGap(dialog);
     await expectTwoFooterRows(dialog, item);
     await expectNoPageOverflow(page);
+    if (item.slug === 'project') {
+      await expectProjectDescriptionHeight(dialog);
+      await dialog.getByRole('tab', { name: 'Milestones 1' }).click();
+      await capture(page, 'project-milestones-mobile-light');
+      await setColorScheme(page, 'dark');
+      await capture(page, 'project-milestones-mobile-dark');
+      await dialog.getByRole('tab', { name: 'Description' }).click();
+      await setColorScheme(page, 'light');
+    }
     await capture(page, `${item.slug}-mobile-light`);
     await setColorScheme(page, 'dark');
     await capture(page, `${item.slug}-mobile-dark`);
 
-    await dialog.getByRole('button', { name: 'Close' }).click();
-    await expect(dialog).toHaveCount(0);
+    await closeComposer(dialog);
   }
 
   const initiative = COMPOSERS[2];
@@ -239,7 +386,7 @@ test('create composers fill phones and keep two explicit footer rows', async ({ 
   await capture(page, 'initiative-expanded-mobile-light');
   await setColorScheme(page, 'dark');
   await capture(page, 'initiative-expanded-mobile-dark');
-  await dialog.getByRole('button', { name: 'Close' }).click();
+  await closeComposer(dialog);
 
   await page.setViewportSize({ width: 320, height: 844 });
   await setColorScheme(page, 'light');
@@ -249,6 +396,22 @@ test('create composers fill phones and keep two explicit footer rows', async ({ 
   await expectMobileViewportComposer(mobileDialog, page);
   await expectNoPageOverflow(page);
   await capture(page, 'task-320-light');
+  await closeComposer(mobileDialog);
+
+  const project = COMPOSERS[1];
+  if (!project) throw new Error('Project composer case is missing.');
+  const narrowProjectDialog = await openComposer(page, orgId, project);
+  await expectMobileViewportComposer(narrowProjectDialog, page);
+  await draftProjectSections(narrowProjectDialog);
+  await expectNoPageOverflow(page);
+  await capture(page, 'project-milestones-320-light');
+  await setColorScheme(page, 'dark');
+  await capture(page, 'project-milestones-320-dark');
+  await narrowProjectDialog.getByRole('tab', { name: 'Description' }).click();
+  await capture(page, 'project-320-dark');
+  await setColorScheme(page, 'light');
+  await capture(page, 'project-320-light');
+  await closeComposer(narrowProjectDialog);
 });
 
 test.describe('coarse-pointer composer geometry', () => {
@@ -266,8 +429,7 @@ test.describe('coarse-pointer composer geometry', () => {
       await expectCoarsePointerGeometry(dialog, item);
       await expectNoPageOverflow(page);
       await capture(page, `${item.slug}-mobile-touch-light`);
-      await dialog.getByRole('button', { name: 'Close' }).click();
-      await expect(dialog).toHaveCount(0);
+      await closeComposer(dialog);
     }
   });
 });

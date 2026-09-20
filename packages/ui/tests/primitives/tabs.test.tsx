@@ -84,8 +84,18 @@ describe('Tabs (data-driven)', () => {
 
   it('renders a trailing count pill when count is supplied', () => {
     render(<DataDrivenTabs items={ITEMS} initial="overview" />);
-    const tasksTab = screen.getByRole('tab', { name: /Tasks/ });
+    const tasksTab = screen.getByRole('tab', { name: 'Tasks 4' });
     expect(tasksTab).toHaveTextContent('4');
+  });
+
+  it('combines an explicit accessible label with its visible count', () => {
+    render(
+      <DataDrivenTabs
+        items={[{ value: 'tasks', label: 'Work', ariaLabel: 'Tasks', count: 4 }]}
+        initial="tasks"
+      />,
+    );
+    expect(screen.getByRole('tab', { name: 'Tasks 4' })).toHaveTextContent('Work4');
   });
 
   it('renders a disabled tab that cannot be selected', () => {

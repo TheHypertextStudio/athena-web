@@ -100,13 +100,7 @@ export function QuickAddRow({
 
   return (
     <div className="flex flex-col gap-1">
-      <form
-        className="border-outline-variant focus-within:border-primary flex items-center gap-2 rounded-lg border border-dashed px-3 transition-colors"
-        onSubmit={(event) => {
-          event.preventDefault();
-          add();
-        }}
-      >
+      <div className="border-outline-variant focus-within:border-primary flex items-center gap-2 rounded-lg border border-dashed px-3 transition-colors">
         <Plus aria-hidden className="text-on-surface-variant size-4 shrink-0" />
         <input
           ref={inputRef}
@@ -125,7 +119,7 @@ export function QuickAddRow({
           }}
           className="text-body-medium text-on-surface placeholder:text-on-surface-variant h-11 flex-1 bg-transparent outline-none"
         />
-      </form>
+      </div>
 
       {refused.length === 0 ? null : (
         <ul aria-label={`Unsent ${noun}s`} className="flex flex-col gap-1">

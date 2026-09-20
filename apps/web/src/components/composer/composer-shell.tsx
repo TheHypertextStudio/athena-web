@@ -13,9 +13,9 @@
  * It is intentionally presentational and fully controlled: the host composer owns the
  * title/description Markdown and the `open` state, and supplies the property pickers as `children`.
  * Submit is driven by Enter on the title field (a fast path) as well as the action-bar button, and
- * the whole form is disabled while a create is in flight. Dismissing a *dirty* draft (a non-empty
- * title or description) asks for confirmation first, so an accidental Esc / backdrop / close never
- * silently discards typed work.
+ * the whole form is disabled while a create is in flight. Dismissing a *dirty* draft (non-empty
+ * identity, description, or supplemental input) asks for confirmation first, so an accidental Esc,
+ * backdrop click, or close action never silently discards typed work.
  *
  * The dialog carries no visible "New task" heading at all: the title field is the focus, and
  * `heading` exists to name the dialog for assistive tech (it renders `sr-only`), not to take up
@@ -27,33 +27,37 @@
 import {
   Button,
   Dialog,
-  DialogBody,
   DialogContent,
   DialogFooter,
-  DialogHeader,
   DialogTitle,
   type DialogPresentation,
 } from '@docket/ui/primitives';
 import { InlineBanner } from '@docket/ui/components';
 import { Maximize, Minimize } from '@docket/ui/icons';
-import { cn } from '@docket/ui/lib/utils';
-import { type JSX, type ReactNode, type RefObject, useId, useRef, useState } from 'react';
+import {
+  type JSX,
+  type ReactNode,
+  type RefObject,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+} from 'react';
 
-import { ComposerClosePrompt, type ComposerClosePromptProps } from './composer-close-prompt';
-import { ComposerDraftsChip } from './composer-drafts-chip';
 import { handleContinueChord } from './continue-chord';
 import type { ComposerDraftControls } from './use-composer-draft-persistence';
 import { useDiscardPrompt } from './use-discard-prompt';
 
-import {
-  DocumentContentsRail,
-  useDocumentContents,
-  type DocumentContents,
-} from '@/components/editor/document-contents';
+import { useDocumentContents } from '@/components/editor/document-contents';
 import { FreeformTextEditor } from '@/components/editor/freeform-text';
 import type { EditorContribution } from '@/components/editor/editor-contribution';
-import MentionHydrationProvider from '@/components/mentions/mention-hydration';
-import { EntityMetadataRow } from '@/components/views/entity-detail-layout';
+
+import {
+  ComposerActionRow,
+  ComposerBodyRegion,
+  ComposerIdentityHeader,
+  PropertyStrip,
+} from './composer-shell-regions';
 
 function composerPresentation(expanded: boolean): DialogPresentation {
   return {
@@ -71,6 +75,22 @@ export interface ComposerContinuation {
   onCheckedChange: (checked: boolean) => void;
   /** Create and continue regardless of the current checked state. */
   onSubmit: () => void;
+}
+
+/** One supplemental draft section that shares the composer's body with its description. */
+export interface ComposerSupplementalSection {
+  /** Stable section identity within this composer. */
+  readonly id: string;
+  /** Visible tab label. */
+  readonly label: string;
+  /** Accessible tab label when the visible copy needs added context. */
+  readonly accessibleLabel: string;
+  /** Optional live item count rendered with the label. */
+  readonly count?: number | undefined;
+  /** Whether this section contains unsaved input that must be protected on close. */
+  readonly dirty?: boolean | undefined;
+  /** Draft-aware controls rendered inside the section's body panel. */
+  readonly body: ReactNode;
 }
 
 /** Props for {@link ComposerShell}. */
@@ -111,17 +131,8 @@ export interface ComposerShellProps {
    * the thing it makes.
    */
   leadingFields?: ReactNode | undefined;
-  /**
-   * Extra fields rendered in the scrolling body, below the description.
-   *
-   * @remarks
-   * For a composer that also defines the entity's *contents* on the way in — the Project composer
-   * uses this to declare a new Project's milestones. These cannot go in `children`: that slot is the
-   * pinned footer pill strip, which is for one-value properties and which this composer still needs.
-   * They sit after the description because they are the last thing filled in, and inside the body's
-   * scroll because a list has no fixed height.
-   */
-  trailingFields?: ReactNode | undefined;
+  /** Supplemental draft sections that use the body without reducing the description's height. */
+  supplementalSections?: readonly ComposerSupplementalSection[] | undefined;
   /** The current title text. */
   title: string;
   /** Report a changed title. */
@@ -213,7 +224,7 @@ export function ComposerShell({
   propertyLayout = 'compact',
   continuation,
   leadingFields,
-  trailingFields,
+  supplementalSections = [],
   title,
   onTitleChange,
   titleInputRef,
@@ -241,9 +252,9 @@ export function ComposerShell({
   submitLabel,
 }: ComposerShellProps): JSX.Element {
   const formId = useId();
-  // Whether the user is being asked to confirm discarding a non-empty draft.
-  // Expansion belongs to one opening. Radix resets it through `onOpenAutoFocus` on every reopen.
+  // Expansion and section selection belong to one opening, not to the draft across openings.
   const [expanded, setExpanded] = useState(false);
+  const [activeSectionId, setActiveSectionId] = useState('description');
   const bodyColumnRef = useRef<HTMLDivElement>(null);
   // A draft owns no URL — the page under the dialog does — so the rail scrolls without a hash.
   const documentContents = useDocumentContents(bodyColumnRef, body);
@@ -251,10 +262,13 @@ export function ComposerShell({
   // nobody has to travel.
   const hasContents = bodyPlaceholder !== undefined && documentContents.headings.length >= 2;
 
-  // A draft worth protecting is one with typed text; bare default property picks are not.
+  // A draft worth protecting has typed text or supplemental input; default property picks are not.
   const isDirty =
     !draftCommitted &&
-    (title.trim().length > 0 || (summary ?? '').trim().length > 0 || body.trim().length > 0);
+    (title.trim().length > 0 ||
+      (summary ?? '').trim().length > 0 ||
+      body.trim().length > 0 ||
+      supplementalSections.some((section) => section.dirty === true));
   // The hook decides when the draft is locked. It is locked while its own create is in flight,
   // and that is the correct behavior for a one-draft composer: this request is *about* these
   // values, so a field edited after submitting would show a change the created object does not
@@ -272,6 +286,32 @@ export function ComposerShell({
   const hasLegacyIcon = icon !== undefined && icon !== null && icon !== false;
   const hasLegacyContext = context !== undefined && context !== null && context !== false;
   const legacyContextVisible = hasLegacyIcon || hasLegacyContext;
+  const hasSectionSwitcher = bodyPlaceholder !== undefined && supplementalSections.length > 0;
+  const sectionValue = (sectionId: string): string => `${formId}-${sectionId}`;
+
+  useEffect(() => {
+    if (!open) return;
+    setExpanded(false);
+    setActiveSectionId('description');
+  }, [open]);
+
+  /** Select a body section and enter its first useful draft control. */
+  const selectSection = (value: string): void => {
+    const nextSection = [
+      { id: 'description' },
+      ...supplementalSections.map((section) => ({ id: section.id })),
+    ].find((section) => sectionValue(section.id) === value);
+    if (!nextSection) return;
+    setActiveSectionId(nextSection.id);
+    window.requestAnimationFrame(() => {
+      document
+        .getElementById(`tabpanel-${value}`)
+        ?.querySelector<HTMLElement>(
+          'input:not(:disabled), textarea:not(:disabled), button:not(:disabled), [contenteditable="true"]',
+        )
+        ?.focus({ preventScroll: true });
+    });
+  };
 
   const bodyEditor =
     bodyPlaceholder === undefined ? null : (
@@ -305,9 +345,6 @@ export function ComposerShell({
         // The whole form goes inert while a create is in flight. Without this, assistive tech has
         // no way to tell that apart from a form that is simply not editable.
         aria-busy={creating}
-        onOpenAutoFocus={() => {
-          setExpanded(false);
-        }}
         onEscapeKeyDown={prompt.onEscapeKeyDown}
         onKeyDownCapture={(event) => {
           handleContinueChord(event, continuation, submittable);
@@ -346,81 +383,28 @@ export function ComposerShell({
           }}
           className="contents"
         >
-          <DialogHeader
-            inset="responsive"
-            controls={bodyPlaceholder !== undefined ? 'responsive-two' : 'one'}
-            className="min-w-0"
-          >
-            {contextRow !== undefined ? (
-              <div data-composer-context-row="" className="min-w-0">
-                <EntityMetadataRow
-                  ariaLabel="Composer context"
-                  className="text-label-large min-w-0"
-                >
-                  {contextRow}
-                </EntityMetadataRow>
-              </div>
-            ) : icon || context ? (
-              <div
-                className={cn(
-                  'flex items-center gap-2 pr-16 text-sm has-[>div:only-child:empty]:hidden',
-                  !legacyContextVisible && 'hidden',
-                )}
-              >
-                {icon ? (
-                  <span className="border-outline-variant text-on-surface-variant flex size-5 shrink-0 items-center justify-center rounded-md border [&_svg]:size-4">
-                    {icon}
-                  </span>
-                ) : null}
-                {context ? (
-                  <span className="text-on-surface-variant min-w-0 truncate">{context}</span>
-                ) : null}
-              </div>
-            ) : null}
-
-            {/* Content: the title + description own the bulk of the dialog. */}
-            <div
-              className={cn(
-                'flex min-h-0 flex-col',
-                contextRow !== undefined || legacyContextVisible ? 'pt-3' : '',
-              )}
-            >
-              {leadingFields ? (
-                <fieldset disabled={editDisabled} className="flex flex-col gap-3 pb-4">
-                  {leadingFields}
-                </fieldset>
-              ) : null}
-
-              {/* Header block: the title, and — when opted in — an inline subtitle, read as one document. */}
-              <div className="flex flex-col gap-1">
-                <input
-                  aria-label={titlePlaceholder}
-                  placeholder={titlePlaceholder}
-                  value={title}
-                  ref={prompt.titleRef}
-                  disabled={editDisabled}
-                  autoFocus
-                  onChange={(event) => {
-                    onTitleChange(event.target.value);
-                  }}
-                  className="placeholder:text-on-surface-variant text-on-surface text-headline-small w-full bg-transparent outline-none disabled:opacity-50"
-                />
-                {onSummaryChange ? (
-                  <input
-                    aria-label={summaryPlaceholder ?? 'Summary'}
-                    placeholder={summaryPlaceholder}
-                    maxLength={summaryMaxLength}
-                    value={summary ?? ''}
-                    disabled={editDisabled}
-                    onChange={(event) => {
-                      onSummaryChange(event.target.value);
-                    }}
-                    className="placeholder:text-on-surface-variant text-on-surface-variant text-body-large w-full bg-transparent outline-none disabled:opacity-50"
-                  />
-                ) : null}
-              </div>
-            </div>
-          </DialogHeader>
+          <ComposerIdentityHeader
+            contextRow={contextRow}
+            icon={icon}
+            context={context}
+            legacyContextVisible={legacyContextVisible}
+            bodyPlaceholder={bodyPlaceholder}
+            leadingFields={leadingFields}
+            editDisabled={editDisabled}
+            title={title}
+            onTitleChange={onTitleChange}
+            titleInputRef={prompt.titleRef}
+            titlePlaceholder={titlePlaceholder}
+            summary={summary}
+            onSummaryChange={onSummaryChange}
+            summaryPlaceholder={summaryPlaceholder}
+            summaryMaxLength={summaryMaxLength}
+            hasSectionSwitcher={hasSectionSwitcher}
+            activeSectionValue={sectionValue(activeSectionId)}
+            onSectionValueChange={selectSection}
+            supplementalSections={supplementalSections}
+            sectionValue={sectionValue}
+          />
 
           {/* `@container` goes on the body region and the columns on the child, because a
            *  container query never matches the element that declares the container. The rail needs
@@ -434,7 +418,9 @@ export function ComposerShell({
             contents={documentContents}
             hasContents={hasContents}
             freeformFields={propertyLayout === 'freeform' ? children : null}
-            trailingFields={trailingFields}
+            supplementalSections={supplementalSections}
+            activeSectionId={activeSectionId}
+            sectionValue={sectionValue}
             editDisabled={editDisabled}
           />
 
@@ -470,244 +456,5 @@ export function ComposerShell({
         </form>
       </DialogContent>
     </Dialog>
-  );
-}
-
-/** Props for {@link ComposerBodyRegion}. */
-interface ComposerBodyRegionProps {
-  /** The description editor, or null for a composer with no body. */
-  editor: ReactNode;
-  /** The organization whose entities the body may mention, when it may mention any. */
-  mentionOrgId?: string | undefined;
-  /** Ref for the column the contents rail reads headings from. */
-  columnRef: RefObject<HTMLDivElement | null>;
-  /** The tracked headings driving the rail. */
-  contents: DocumentContents;
-  /** Whether the draft has earned a rail. */
-  hasContents: boolean;
-  /** Fields a freeform composer places in the body rather than the footer. */
-  freeformFields: ReactNode;
-  /** Fields for follow-up work the composer also commits, below the description. */
-  trailingFields: ReactNode;
-  /** Whether the draft's own content is locked (a request in flight, or a committed draft). */
-  editDisabled: boolean;
-}
-
-/**
- * The body region: the description in its own column, with a contents rail beside it.
- *
- * @param props - The {@link ComposerBodyRegionProps}.
- * @returns the rendered body region.
- *
- * @remarks
- * `@container` goes on the region and the columns on the child, because a container query never
- * matches the element that declares the container — with both on the same element the rail drops
- * into a second row below the body instead of taking the column beside it. `@2xl` is also what
- * keeps the rail to the expanded panel: the collapsed tier has no 11rem to spare, so the shell
- * never has to know which tier it is in.
- */
-function ComposerBodyRegion({
-  editor,
-  mentionOrgId,
-  columnRef,
-  contents,
-  hasContents,
-  freeformFields,
-  trailingFields,
-  editDisabled,
-}: ComposerBodyRegionProps): JSX.Element {
-  return (
-    <DialogBody inset="responsive-inline" className="@container flex flex-col">
-      <div
-        className={cn(
-          // `minmax(0,1fr)`, not `1fr`. A bare `1fr` means `minmax(auto,1fr)`, whose auto floor is
-          // the content's height — the row grows past the region, the editor's rounded surface
-          // outgrows the scrollport, and the dialog body scrolls a box whose top and bottom
-          // corners are then sliced off. A zero floor clamps the row to the region so the editor
-          // stays inside its own scrollport and scrolls there, corners intact.
-          'grid min-h-0 flex-1 grid-rows-[minmax(0,1fr)] gap-4',
-          hasContents && '@2xl:grid-cols-[minmax(0,1fr)_11rem]',
-        )}
-      >
-        <div ref={columnRef} className="flex min-w-0 flex-col gap-4">
-          {/*
-           * The background/padding lives on the editor's own surface, not a wrapping div. A
-           * separate padded wrapper would look identical but leave its own inset dead: clicking
-           * there would land on this div instead of the editor. The surface makes its inset a
-           * writing target itself — see `placeCaretFromInset` in the editor. `p-3`, not
-           * `px-3 py-2`, so the inset reads the same on every side.
-           */}
-          {mentionOrgId === undefined ? (
-            editor
-          ) : (
-            <MentionHydrationProvider orgId={mentionOrgId}>{editor}</MentionHydrationProvider>
-          )}
-
-          {/* Freeform composers (e.g. team creation) place their own fields in the scrolling body;
-           *  compact composers keep their pills anchored in the footer below, out of the editor's
-           *  scroll — see PropertyStrip's placement there for why. */}
-          {freeformFields}
-
-          {/* Disabled on the same terms as every other field: a composer reads these when it
-           *  submits, so an edit made while that request is out would be dropped. */}
-          <fieldset disabled={editDisabled} className="flex flex-col gap-3">
-            {trailingFields}
-          </fieldset>
-        </div>
-
-        {hasContents ? (
-          <div className="entity-contents-desktop hidden @2xl:block">
-            <DocumentContentsRail contents={contents} showLabel density="compact" />
-          </div>
-        ) : null}
-      </div>
-    </DialogBody>
-  );
-}
-
-/** Props for {@link ComposerActionRow}. */
-interface ComposerActionRowProps {
-  /** Whether the discard confirmation should replace the ordinary actions. */
-  confirmingDiscard: boolean;
-  /** Cancel the discard confirmation and return to editing. */
-  onKeepEditing: () => void;
-  /** Close the composer once the prompt has been answered. */
-  onDiscard: () => void;
-  /** Saved-draft controls, when the composer keeps drafts. */
-  drafts?: ComposerDraftControls | undefined;
-  /** The noun an untitled draft is called by. */
-  draftNoun: string;
-  /** Shared create-and-continue state, when this composer offers it. */
-  continuation?: ComposerContinuation | undefined;
-  /** Whether draft content controls are disabled. */
-  editDisabled: boolean;
-  /** The id of the form the submit button targets. */
-  formId: string;
-  /** Whether a create is in flight. */
-  creating: boolean;
-  /** Whether the form may be submitted. */
-  canSubmit: boolean;
-  /** The Create button label. */
-  submitLabel: string;
-}
-
-/**
- * The footer's single row of ordinary actions, or the discard confirmation that replaces it.
- *
- * @param props - The {@link ComposerActionRowProps}.
- * @returns the rendered action row.
- */
-function ComposerActionRow({
-  confirmingDiscard,
-  onKeepEditing,
-  onDiscard,
-  drafts,
-  draftNoun,
-  continuation,
-  editDisabled,
-  formId,
-  creating,
-  canSubmit,
-  submitLabel,
-}: ComposerActionRowProps): JSX.Element {
-  if (confirmingDiscard) {
-    return (
-      <ComposerClosePrompt
-        onKeepEditing={onKeepEditing}
-        {...closePromptAnswers(drafts, onDiscard)}
-      />
-    );
-  }
-
-  return (
-    <div className="flex w-full flex-row items-center gap-2">
-      {drafts ? (
-        <ComposerDraftsChip drafts={drafts} noun={draftNoun} disabled={editDisabled} />
-      ) : null}
-      {continuation ? (
-        <button
-          type="button"
-          role="switch"
-          aria-checked={continuation.checked}
-          disabled={editDisabled}
-          onClick={() => {
-            continuation.onCheckedChange(!continuation.checked);
-          }}
-          className="text-on-surface-variant hover:bg-surface-container-high text-label-large coarse:min-h-10 mr-auto inline-flex h-8 items-center gap-2 rounded-md px-2 whitespace-nowrap disabled:opacity-50"
-        >
-          <span
-            aria-hidden="true"
-            className={cn(
-              'bg-outline-variant inline-flex h-4 w-7 shrink-0 items-center rounded-full p-0.5 transition-colors',
-              continuation.checked && 'bg-primary justify-end',
-            )}
-          >
-            <span className="bg-surface h-3 w-3 rounded-full" />
-          </span>
-          Create more
-        </button>
-      ) : null}
-      <Button
-        type="submit"
-        form={formId}
-        // Blocked only against submitting the same draft twice; `aria-busy` is what says the
-        // first one is under way, so the state is announced rather than merely drawn.
-        disabled={creating || !canSubmit}
-        aria-busy={creating}
-        className={cn(
-          'disabled:bg-surface-container-highest disabled:text-on-surface-variant disabled:opacity-100',
-          !continuation && 'ml-auto',
-        )}
-      >
-        {creating ? 'Creating…' : submitLabel}
-      </Button>
-    </div>
-  );
-}
-
-/** The close prompt's Discard and Save draft answers, each settling the draft before closing. */
-function closePromptAnswers(
-  drafts: ComposerDraftControls | undefined,
-  close: () => void,
-): Pick<ComposerClosePromptProps, 'onDiscard' | 'onSave'> {
-  if (!drafts) return { onDiscard: close };
-  return {
-    onDiscard: () => {
-      void drafts.onDiscard().then(close);
-    },
-    onSave: () => {
-      void drafts.onKeep().then(close);
-    },
-  };
-}
-
-/** Props for {@link PropertyStrip}. */
-interface PropertyStripProps {
-  /** Accessible label for the compact property controls. */
-  ariaLabel: string;
-  /** The compact property pickers laid out in one measured row. */
-  children: ReactNode;
-}
-
-/**
- * The inline, measured row of compact property pills.
- *
- * @remarks
- * Borderless tonal pills: each picker trigger gets a `surface-container-highest` fill (one
- * elevation step off the dialog panel, so it reads as a distinct chip in both themes without an
- * outline) and a fully-rounded shape; hover lifts to the indigo `secondary-container`. Measured
- * overflow moves later controls into More rather than wrapping the dialog taller.
- */
-function PropertyStrip({ ariaLabel, children }: PropertyStripProps): JSX.Element {
-  return (
-    <EntityMetadataRow
-      ariaLabel={ariaLabel}
-      // Scoped to the inline lane only: an unscoped `[&_button]` also matches the row's own
-      // ghost "More" overflow trigger, giving it the same tonal pill fill as the pickers it
-      // is meant to sit apart from.
-      className="[&_[data-entity-metadata-inline]_button]:bg-surface-container-highest [&_[data-entity-metadata-inline]_button:hover]:bg-secondary-container [&_[data-entity-metadata-inline]_button:hover]:text-on-secondary-container [&_[data-entity-metadata-inline]_button]:rounded-full"
-    >
-      {children}
-    </EntityMetadataRow>
   );
 }

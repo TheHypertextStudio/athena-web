@@ -68,7 +68,7 @@ import { invalidateWorkTargetQueries } from '@/lib/work-target-invalidation';
 import { ProjectComposerPickers } from './project-form-pickers';
 import {
   type DraftMilestone,
-  ProjectMilestonesField,
+  projectMilestonesSection,
 } from '@/components/projects/project-milestones-field';
 import { useProjectDraftPersistence } from './use-project-draft-persistence';
 
@@ -500,14 +500,11 @@ export const CreateProjectDialog = withComposerReset(function CreateProjectCompo
       mentionOrgId={orgId}
       drafts={persistence.controls}
       draftNoun={projectNounLower}
-      trailingFields={
-        <ProjectMilestonesField
-          value={draft.milestones}
-          onChange={(milestones) => {
-            setField('milestones', milestones);
-          }}
-        />
-      }
+      supplementalSections={[
+        projectMilestonesSection(draft.milestones, (milestones) => {
+          setField('milestones', milestones);
+        }),
+      ]}
       error={error ?? planningCalendar.error ?? globalCreation?.loadError ?? null}
       statusMessage={continuation.statusMessage}
       creating={creating}

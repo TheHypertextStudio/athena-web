@@ -18,7 +18,7 @@
  * Adding uses the shared {@link QuickAddRow}, which is the same control the Project Overview's
  * Milestones list uses, so a milestone is added the same way in both places.
  *
- * Nothing here takes a `disabled` prop: `ComposerShell` renders its trailing fields inside a
+ * Nothing here takes a `disabled` prop: `ComposerShell` renders supplemental sections inside a
  * `<fieldset disabled={creating}>`, which disables every control below in one place.
  */
 import { DatePicker } from '@docket/ui/components';
@@ -30,6 +30,7 @@ import { PROJECT_CREATE_MILESTONE_LIMIT } from '@/lib/contracts/project';
 import { QuickAddRow } from '@/components/views/quick-add-row';
 import { formatCalendarDate } from '@/lib/format-date';
 import { UserFacingError } from '@/lib/problem';
+import type { ComposerSupplementalSection } from '@/components/composer/composer-shell';
 
 /** One unsaved milestone in a Project draft. */
 export interface DraftMilestone {
@@ -56,6 +57,21 @@ export function newDraftMilestoneKey(): string {
   return `${String(Date.now())}-${Math.random().toString(36).slice(2, 9)}`;
 }
 
+/** Build the Project composer's counted, draft-aware Milestones section. */
+export function projectMilestonesSection(
+  value: readonly DraftMilestone[],
+  onChange: (next: readonly DraftMilestone[]) => void,
+): ComposerSupplementalSection {
+  return {
+    id: 'milestones',
+    label: 'Milestones',
+    accessibleLabel: 'Milestones',
+    count: value.length,
+    dirty: value.length > 0,
+    body: <ProjectMilestonesField value={value} onChange={onChange} />,
+  };
+}
+
 /** Build a draft from a typed name, with a key unique within this composer's lifetime. */
 function draftFrom(name: string): DraftMilestone {
   return { key: newDraftMilestoneKey(), name, targetDate: null, description: '' };
@@ -72,9 +88,7 @@ export function ProjectMilestonesField({
   };
 
   return (
-    <section aria-label="Milestones" className="flex flex-col gap-2">
-      <h3 className="text-on-surface-variant text-label-large">Milestones</h3>
-
+    <section aria-label="Milestone drafts" className="flex min-h-full flex-1 flex-col gap-2">
       {value.map((draft) => {
         // A row can be emptied after it is added, and an aria-label interpolating the name would
         // then read "Remove ". The noun is what the row still is when it has nothing else.

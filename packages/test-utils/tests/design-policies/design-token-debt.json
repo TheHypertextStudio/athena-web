@@ -196,10 +196,6 @@
     "raw-radius-utility": 2,
     "raw-type-utility": 4
   },
-  "apps/web/src/components/composer/composer-shell.tsx": {
-    "ad-hoc-border": 2,
-    "raw-type-utility": 1
-  },
   "apps/web/src/components/composer/template-menu.tsx": {
     "ad-hoc-border": 2
   },

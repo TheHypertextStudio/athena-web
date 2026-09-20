@@ -49,6 +49,23 @@ describe('overlay scroll ownership', () => {
     expect(screen.getByTestId('body')).toHaveClass('overflow-y-auto', 'overscroll-contain');
   });
 
+  it('lets a dialog body own a clipped region with nested scrollports', async () => {
+    render(
+      <Dialog defaultOpen>
+        <DialogContent>
+          <DialogTitle>Clipped body</DialogTitle>
+          <DialogBody scroll="hidden" data-testid="hidden-dialog-body">
+            Body
+          </DialogBody>
+        </DialogContent>
+      </Dialog>,
+    );
+
+    await screen.findByRole('dialog', { name: 'Clipped body' });
+    expect(screen.getByTestId('hidden-dialog-body')).toHaveClass('overflow-hidden');
+    expect(screen.getByTestId('hidden-dialog-body')).toHaveAttribute('data-overlay-scroll-owner');
+  });
+
   it('applies the same fallback to a panel popover', async () => {
     render(
       <Popover defaultOpen>

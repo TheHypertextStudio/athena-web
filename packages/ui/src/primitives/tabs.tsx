@@ -133,6 +133,8 @@ export interface TabsItem {
   readonly value: string;
   /** Visible tab label. */
   readonly label: React.ReactNode;
+  /** Accessible label when it must be more explicit than the visible label. */
+  readonly ariaLabel?: string;
   /** Optional count rendered as a trailing pill (e.g. an open-task count). */
   readonly count?: number;
   /** When `true`, the tab is present but not selectable. */
@@ -205,7 +207,13 @@ export function Tabs({
         ) : (
           <TabList label={label} className={className}>
             {items.map((item) => (
-              <Tab key={item.value} value={item.value} count={item.count} disabled={item.disabled}>
+              <Tab
+                key={item.value}
+                value={item.value}
+                count={item.count}
+                disabled={item.disabled}
+                ariaLabel={item.ariaLabel}
+              >
                 {item.label}
               </Tab>
             ))}
@@ -376,6 +384,30 @@ function fitVisibleValues(
   return tabs.filter((item) => next.has(item.value)).map((item) => item.value);
 }
 
+/** Render the tabs that fit in the measured overflow lane. */
+function OverflowVisibleTabs({
+  items,
+}: {
+  readonly items: readonly TabsItem[];
+}): React.JSX.Element {
+  return (
+    <>
+      {items.map((item) => (
+        <Tab
+          key={item.value}
+          value={item.value}
+          count={item.count}
+          disabled={item.disabled}
+          ariaLabel={item.ariaLabel}
+          className="max-w-full min-w-0 shrink overflow-hidden whitespace-nowrap"
+        >
+          {item.label}
+        </Tab>
+      ))}
+    </>
+  );
+}
+
 /** A measured detail-section tab lane that promotes the selected section before hiding others. */
 function OverflowTabList({
   label,
@@ -437,7 +469,6 @@ function OverflowTabList({
       observer.disconnect();
     };
   }, [recompute]);
-
   React.useLayoutEffect(() => {
     if (visibleSet.has(value)) return;
     setVisibleValues((current) =>
@@ -450,17 +481,7 @@ function OverflowTabList({
   return (
     <div ref={laneRef} className="flex min-w-0 items-center gap-1">
       <TabList label={label} className={cn('min-w-0 flex-1 overflow-hidden', className)}>
-        {visibleItems.map((item) => (
-          <Tab
-            key={item.value}
-            value={item.value}
-            count={item.count}
-            disabled={item.disabled}
-            className="max-w-full min-w-0 shrink overflow-hidden whitespace-nowrap"
-          >
-            {item.label}
-          </Tab>
-        ))}
+        <OverflowVisibleTabs items={visibleItems} />
       </TabList>
       {hiddenItems.length > 0 ? (
         <DropdownMenu>
@@ -579,12 +600,25 @@ function tabCountClass(tone: TabsTone, selected: boolean): string {
   return 'bg-surface-container-high text-on-surface-variant';
 }
 
+/** Resolve the optional explicit accessible name without stringifying arbitrary visible content. */
+function tabAccessibleLabel(
+  children: React.ReactNode,
+  count: number | undefined,
+  ariaLabel: string | undefined,
+): string | undefined {
+  const label = ariaLabel ?? (typeof children === 'string' ? children : undefined);
+  if (label === undefined) return undefined;
+  return count === undefined ? label : `${label} ${String(count)}`;
+}
+
 /** Props for {@link Tab}. */
 export interface TabProps {
   /** Stable tab value (also the `aria-controls`/`id` stem). */
   readonly value: string;
   /** Optional count rendered as a trailing pill. */
   readonly count?: number | undefined;
+  /** Accessible label when it must be more explicit than the visible label. */
+  readonly ariaLabel?: string | undefined;
   /** When `true`, the tab is present but not selectable. */
   readonly disabled?: boolean | undefined;
   /** Extra classes merged onto the tab button. */
@@ -599,7 +633,14 @@ export interface TabProps {
  * @param props - The {@link TabProps}.
  * @returns the rendered `role="tab"` button.
  */
-export function Tab({ value, count, disabled, className, children }: TabProps): React.JSX.Element {
+export function Tab({
+  value,
+  count,
+  ariaLabel,
+  disabled,
+  className,
+  children,
+}: TabProps): React.JSX.Element {
   const { value: selectedValue, onValueChange, tone, variant } = useTabsContext();
   const selected = value === selectedValue;
   const metrics = CONTROL[useControlSize(undefined, 'xl')];
@@ -613,6 +654,7 @@ export function Tab({ value, count, disabled, className, children }: TabProps): 
       id={`tab-${value}`}
       aria-controls={`tabpanel-${value}`}
       aria-selected={selected}
+      aria-label={tabAccessibleLabel(children, count, ariaLabel)}
       tabIndex={selected ? 0 : -1}
       disabled={disabled}
       onClick={() => {

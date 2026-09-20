@@ -301,10 +301,9 @@ describe('clicking an editor-shaped surface', () => {
       'overflow-y-auto',
       'overscroll-contain',
     );
-    expect(scrollOwner).toHaveClass('min-h-0', 'flex-1', 'overflow-y-auto', 'overscroll-contain');
-    // The row the editor sits in needs a zero floor. A bare `1fr` is `minmax(auto,1fr)`, whose
-    // auto minimum is the content height: the editor then outgrows the scrollport, the dialog body
-    // scrolls it, and the top and bottom of its rounded surface are sliced off.
+    expect(scrollOwner).toHaveClass('min-h-0', 'flex-1', 'overflow-hidden', 'grid');
+    // Mounted sections share a bounded cell. The active section owns scrolling, which keeps the
+    // composer chrome fixed and preserves each section's native scroll position.
     const bodyGrid = assertDefined(scrollSurface?.closest('.grid'));
     expect(bodyGrid.className).toContain('grid-rows-[minmax(0,1fr)]');
     expect(bodyGrid.className).not.toMatch(/grid-rows-\[1fr\]/);

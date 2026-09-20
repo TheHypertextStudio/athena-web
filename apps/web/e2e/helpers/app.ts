@@ -206,23 +206,27 @@ export async function signUp(page: Page, { name, email }: TestUser): Promise<voi
 
 /** Take the "Just me" onboarding fork; returns the personal org id it mints (from POST /v1/orgs). */
 async function onboardJustMe(page: Page): Promise<string> {
-  const orgIdFromResponse = waitForApiResponse(page, /\/v1\/orgs(\?|$)/, { method: 'POST' }).then(
-    async (r) => ((await r.json()) as { organization?: { id?: string } }).organization?.id,
-  );
+  const orgResponse = waitForApiResponse(page, /\/v1\/orgs(\?|$)/, { method: 'POST' });
 
-  // The Next dev HMR client can keep this intent card moving by subpixels after hydration. Force
-  // the click once the visible label exists because actionability stability adds no product signal.
-  await page.getByText('Just me', { exact: false }).first().click({ force: true });
+  // The server-rendered card can become visible before React attaches its click handler. Retry the
+  // forced click until the intent step leaves the DOM; this also tolerates the dev HMR client's
+  // subpixel movement without silently losing a pre-hydration click.
+  const personalIntent = page.getByRole('button', { name: /Just me/ });
+  await expect(async () => {
+    if (await personalIntent.isVisible()) await personalIntent.click({ force: true });
+    await expect(personalIntent).toBeHidden({ timeout: 1_000 });
+  }).toPass({ timeout: TIMEOUTS.pageReady });
+  const orgId = ((await (await orgResponse).json()) as { organization?: { id?: string } })
+    .organization?.id;
   // The personal fork creates its workspace as soon as the intent card is selected. Waiting for
-  // the connection step keeps this helper aligned with that transition and avoids targeting its
-  // disabled primary action while the organization request is still in flight.
+  // its response before using the connection step keeps the helper from clicking Skip while the
+  // workspace id is still null, which would make the button a no-op.
   await page.getByRole('button', { name: 'Skip for now' }).waitFor({
     state: 'visible',
     timeout: TIMEOUTS.sweep,
   });
   await page.getByRole('button', { name: 'Skip for now' }).click({ timeout: TIMEOUTS.sweep });
 
-  const orgId = await orgIdFromResponse;
   expect(orgId, 'onboarding did not return a personal org id').toBeTruthy();
   return assertDefined(orgId);
 }

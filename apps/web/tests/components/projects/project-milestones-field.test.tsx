@@ -7,7 +7,7 @@
  * becomes its `sort` when the composer creates it — so adding, editing and removing must all leave
  * the remaining drafts where they were.
  */
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { type JSX, useState } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -48,6 +48,15 @@ function add(name: string): void {
 }
 
 describe('ProjectMilestonesField', () => {
+  it('fills its active panel without adding duplicate section chrome', () => {
+    render(<Host />);
+
+    const section = screen.getByRole('region', { name: 'Milestone drafts' });
+    expect(section).toHaveClass('min-h-full', 'flex-1');
+    expect(within(section).queryByRole('heading', { name: 'Milestones' })).toBeNull();
+    expect(section.querySelector('hr')).toBeNull();
+  });
+
   it('appends each drafted milestone in the order it was typed', () => {
     const onChange = vi.fn();
     render(<Host onChange={onChange} />);

@@ -339,7 +339,7 @@ export function DialogBody({
   ...props
 }: React.ComponentProps<'div'> & {
   readonly inset?: DialogBodyInset | undefined;
-  readonly scroll?: 'auto' | 'visible' | undefined;
+  readonly scroll?: 'auto' | 'hidden' | 'visible' | undefined;
 }): React.JSX.Element {
   return (
     <div
@@ -347,9 +347,10 @@ export function DialogBody({
         'min-h-0 flex-1',
         overlayInsetClass(inset, 'body'),
         scroll === 'auto' && 'overflow-y-auto overscroll-contain',
+        scroll === 'hidden' && 'overflow-hidden',
         className,
       )}
-      {...(scroll === 'auto' ? { 'data-overlay-scroll-owner': '' } : {})}
+      {...(scroll === 'visible' ? {} : { 'data-overlay-scroll-owner': '' })}
       {...props}
     />
   );

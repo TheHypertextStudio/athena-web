@@ -1,11 +1,59 @@
 # Project Athena Work Log
 
 > **Purpose**: Comprehensive tracking of all work - past, present, and future.
-> **Last Updated**: 2026-09-19
+> **Last Updated**: 2026-09-20
 
 ---
 
 ## Active Tasks
+
+### [CI-RELEASE-001] Get CI green on main so Deploy main can ship
+
+- **Status**: IN_PROGRESS
+- **Started**: 2026-09-20
+- **Priority**: P0
+- **Description**: Production served the last green build, `e06120f29`, while 28 commits on `main`
+  did not ship. `Deploy main` runs from a `workflow_run` on CI and skips whenever CI does not
+  conclude `success`. CI had failed on every push since `19b801644`.
+- **Root causes**: Six independent failures on `6b5f7c681`.
+  - `pnpm format:check` failed on three files.
+  - `apiIdempotencyReceipt` appeared twice in `USER_KEYED_NO_FK_TABLES`, and the purge drift guard
+    compares against a de-duplicated schema scan.
+  - Migration 0139 added the unique index `cycle_native_start_uq` on `(team_id, starts_at)`. Two
+    API tests seeded two native cycles on one team with the same start.
+  - `WorkspaceActorPicker` read the member roster and roles at mount, which defeated the task
+    detail's deferred roster load and threw "No QueryClient set" in the masthead tests.
+  - `declareStreaming` set `Cache-Control: no-cache, no-transform` on the returned response.
+    When an earlier middleware had already created `c.res`, Hono copied that response's headers
+    over it, and `streamSSE` had put `Cache-Control: no-cache` there. The strict response contract
+    requires `no-transform`, so `GET /orgs/:org/sessions/:id/stream` answered 500 in the full app
+    while its bare-router test passed.
+  - The roster release spec demoted the signed-in Owner to make a viewer. The last-owner guard now
+    counts only account-backed Owners, so the request returned 409.
+- **Files changed**: `apps/api/src/lib/sse-headers.ts` and its four callers, the purge list in
+  `apps/api/src/account/lifecycle.ts`, `apps/web/src/components/people/workspace-actor-picker.tsx`,
+  the two cycle test helpers, the masthead test, the roster release spec and helper, and a new
+  policy test in `apps/web/tests/work-views/work-view-object.test.ts`.
+- **Decisions**: `declareStreaming` now takes the request context and writes its headers through
+  it, so every streaming route is covered rather than only the one that failed. The viewer segment
+  of the roster release spec is removed and its rules are pinned in a unit test. A test-only
+  invitation token echo was written and reverted, because the accept route is unreachable to a
+  non-member (see Learnings).
+- **Validation**: The regression test for the stream headers fails without the fix. The full
+  release e2e suite (5 tests) passes against a local stack, including the core-screen spec that
+  reproduced the 500. `prettier --check` and `complexity:check` pass repo-wide. The API build
+  (`tsc -p tsconfig.build.json`) passed after the header change. Every affected API and web test
+  file passed individually. Not run locally: the full `apps/api` typecheck and the full API and
+  web suites, because the memory guard kills them above roughly 3 GB. CI runs them on push.
+- **Blockers for launch**: Migration 0138 renames `team.cycle_cadence_weeks` to
+  `cycle_cadence_days`, and migrations run before the Cloud Run rollout, so the previous revision
+  reads a missing column until the rollout completes. Migration 0139 fails, and blocks the release
+  before any rollout, if production already has two native cycles with the same team and start.
+- **Learnings**: A route test that mounts a bare router does not see middleware that runs before
+  the handler, so header behavior needs a test that materializes `c.res` first. The members routes
+  mount after `orgContextMiddleware`, which requires an existing actor row, so no non-member can
+  reach `POST /members/invitations/:token/accept`, and nothing delivers the accept link. That
+  looks like a product gap in the account-invitation flow and needs its own task.
 
 ### [API-REFERENCE-002] Finish the public Scalar reference
 

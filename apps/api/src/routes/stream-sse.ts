@@ -34,6 +34,7 @@ const streamSse = new Hono<AppEnv>().get('/sse', apiDoc(personalActivityStreamOp
   rejectNonResumableCursor(c.req.header('last-event-id'));
 
   return declareStreaming(
+    c,
     streamSSE(c, async (stream) => {
       const signal = c.req.raw.signal;
       let pending: StreamEvent[] = [];

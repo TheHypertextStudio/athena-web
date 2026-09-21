@@ -710,6 +710,7 @@ async function streamOwnedActivity(c: Context<AppEnv>, session: SessionRow) {
   if (lastEventId && !resumedCursor) throw unknownStreamCursor();
   const terminal = new Set(['completed', 'failed', 'canceled']);
   return declareStreaming(
+    c,
     streamSSE(c, async (stream) => {
       let cursor = resumedCursor;
       const replay = cursor
@@ -832,6 +833,7 @@ const meAthena = new Hono<AppEnv>()
     const owner = requestOwner(c);
     rejectNonResumableCursor(c.req.header('last-event-id'));
     return declareStreaming(
+      c,
       streamSSE(c, async (stream) => {
         const queued: AgentUpdate[] = [];
         const detach = subscribeAgentUpdates({ ownerUserId: owner }, (update) =>

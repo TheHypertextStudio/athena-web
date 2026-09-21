@@ -69,6 +69,7 @@ export async function streamOrganizationActivity(
   const replay = await activitiesAfter(session.id, cursorAtOpen);
   const terminal = new Set(['completed', 'failed', 'canceled']);
   return declareStreaming(
+    c,
     streamSSE(c, async (stream) => {
       let cursor = cursorAtOpen;
       if (replay.length > 0) {

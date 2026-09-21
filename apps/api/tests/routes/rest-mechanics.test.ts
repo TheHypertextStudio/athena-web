@@ -347,6 +347,7 @@ describe('streaming responses', () => {
     const { streamSSE } = await import('hono/streaming');
     const probe = new Hono().get('/live', (c) =>
       declareStreaming(
+        c,
         streamSSE(c, async (stream) => {
           await stream.writeSSE({ event: 'ping', data: '1' });
         }),

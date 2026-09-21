@@ -31,21 +31,27 @@ async function json<T>(res: Response): Promise<T> {
   return (await res.json()) as T;
 }
 
-/** Insert a cycle row directly; returns its id. */
+/**
+ * Insert a cycle row directly; returns its id.
+ *
+ * Each number gets its own 14-day window because a team can hold only one native cycle per start
+ * (`cycle_native_start_uq`).
+ */
 async function makeCycle(
   orgId: string,
   teamId: string,
   actorId: string,
   number = 1,
 ): Promise<string> {
+  const startsAt = new Date(Date.UTC(2026, 0, 1 + (number - 1) * 14));
   const [row] = await db
     .insert(schema.cycle)
     .values({
       organizationId: orgId,
       teamId,
       number,
-      startsAt: new Date('2026-01-01T00:00:00.000Z'),
-      endsAt: new Date('2026-01-14T00:00:00.000Z'),
+      startsAt,
+      endsAt: new Date(startsAt.getTime() + 13 * 24 * 60 * 60 * 1000),
       status: 'active',
       createdBy: actorId,
     })

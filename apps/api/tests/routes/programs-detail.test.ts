@@ -70,12 +70,20 @@ const CYCLE_STARTS_AT = '2026-01-01';
 /** The end of {@link CYCLE_STARTS_AT}'s window. */
 const CYCLE_ENDS_AT = '2026-01-14';
 
-/** Insert a cycle on a team and return its id. `name` may be null (cycles allow it). */
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Insert a cycle on a team and return its id. `name` may be null (cycles allow it).
+ *
+ * `offsetDays` slides the window later; a team can hold only one native cycle per start
+ * (`cycle_native_start_uq`), so a second cycle on the same team needs its own window.
+ */
 async function seedCycle(
   orgId: string,
   teamId: string,
   number: number,
   name: string | null = `Cycle ${number}`,
+  offsetDays = 0,
 ): Promise<string> {
   const [cy] = await db
     .insert(schema.cycle)
@@ -84,8 +92,8 @@ async function seedCycle(
       teamId,
       number,
       name,
-      startsAt: new Date(CYCLE_STARTS_AT),
-      endsAt: new Date(CYCLE_ENDS_AT),
+      startsAt: new Date(new Date(CYCLE_STARTS_AT).getTime() + offsetDays * DAY_MS),
+      endsAt: new Date(new Date(CYCLE_ENDS_AT).getTime() + offsetDays * DAY_MS),
     })
     .returning({ id: schema.cycle.id });
   return assertDefined(cy).id;
@@ -297,7 +305,7 @@ describe('programs work view (GET /:id/work)', () => {
     const projA = await seedProject(orgId, teamId, programId, humanActorId, 'A');
     const projB = await seedProject(orgId, teamId, programId, humanActorId, 'B');
     const cycle1 = await seedCycle(orgId, teamId, 1);
-    const cycle2 = await seedCycle(orgId, teamId, 2);
+    const cycle2 = await seedCycle(orgId, teamId, 2, undefined, 14);
 
     await seedTask({ orgId, teamId, projectId: projA, cycleId: cycle1 });
     await seedTask({ orgId, teamId, projectId: projB, cycleId: cycle2 });

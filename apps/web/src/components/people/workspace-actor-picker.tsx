@@ -31,9 +31,12 @@ export function WorkspaceActorPicker(
 }
 
 function usePersonPickerCreation(orgId: string, props: ActorPickerProps) {
-  const { canContribute } = useCanManageOrg(orgId);
-  const addPerson = useAddPerson(orgId);
   const [open, setOpen] = useState(false);
+  // The roster and roles behind this answer are what a task detail defers until its assignee
+  // picker opens, so asking at mount would put two requests on every task open for a choice
+  // the person has not started making.
+  const { canContribute } = useCanManageOrg(orgId, { enabled: open });
+  const addPerson = useAddPerson(orgId);
   const [query, setQuery] = useState('');
   const [pending, setPending] = useState<{ name: string; requestId: string } | null>(null);
   const [error, setError] = useState<string | null>(null);

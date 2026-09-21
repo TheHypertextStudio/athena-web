@@ -22,6 +22,15 @@ import {
   EntityMetadataRow,
 } from '../../src/components/views/entity-detail-layout';
 import { mockWideMetadataRow } from '../support/metadata-row-layout';
+import { makeQueryWrapper } from '../support/query';
+
+const canManage = vi.hoisted(() =>
+  vi.fn((_orgId: string, _options?: { readonly enabled?: boolean }) => ({
+    canManage: false,
+    canContribute: false,
+  })),
+);
+vi.mock('@/components/settings/use-can-manage-org', () => ({ useCanManageOrg: canManage }));
 
 vi.mock('@/components/pickers/future-cycle-picker', () => ({
   FutureCyclePicker: ({ triggerClassName }: { triggerClassName?: string }) => (
@@ -115,6 +124,8 @@ function renderChips(
     ) : (
       row
     ),
+    // The assignee picker creates people through a mutation, which needs a query client.
+    { wrapper: makeQueryWrapper().wrapper },
   );
   const items = [
     ...document.querySelectorAll('[data-entity-metadata-inline] [data-entity-metadata-item]'),
@@ -195,6 +206,19 @@ describe('TaskMastheadProperties', () => {
     fireEvent.click(screen.getByRole('button', { name: /^Assignee —/ }));
 
     expect(model.onMembersOpenChange).toHaveBeenCalledWith(true);
+  });
+
+  it('leaves the roster and roles unread until the assignee picker opens', () => {
+    canManage.mockClear();
+    renderChips(modelFor());
+
+    // The picker's create permission reads the same roster the model defers, so it stays off at mount.
+    expect(canManage).toHaveBeenCalled();
+    expect(canManage.mock.calls.every(([, options]) => options?.enabled === false)).toBe(true);
+
+    fireEvent.click(screen.getByRole('button', { name: /^Assignee —/ }));
+
+    expect(canManage).toHaveBeenLastCalledWith(expect.any(String), { enabled: true });
   });
 
   it('shows every lead property as read-only when the viewer cannot edit', () => {

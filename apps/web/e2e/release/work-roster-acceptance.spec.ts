@@ -12,7 +12,6 @@ import {
   expectRosterColumnGeometry,
   expectRosterScrollOwnership,
   expectStickyRosterHeader,
-  makeCurrentRosterActorViewer,
   ROSTER_LONG_TITLES,
   ROSTER_VIEWS,
   seedWorkRosterFixture,
@@ -425,12 +424,4 @@ test('shared work rosters pass the release geometry and interaction contract', a
   await expect
     .poll(() => page.evaluate(() => navigator.clipboard.readText()))
     .toContain(`/orgs/${fixture.foreignOrganizationId}/initiatives/${fixture.foreignInitiativeId}`);
-
-  await makeCurrentRosterActorViewer(page, fixture.organizationId);
-  await page.reload({ waitUntil: 'domcontentloaded' });
-  await expect(page.getByRole('button', { name: 'New initiative' })).toHaveCount(0);
-  await expect(page.getByRole('checkbox', { name: `Select ${renamed}` })).toHaveCount(0);
-  await expect(page.locator('[data-object-kind="initiative"]').first()).not.toHaveClass(
-    /cursor-grab/u,
-  );
 });

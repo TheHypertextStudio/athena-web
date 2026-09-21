@@ -490,38 +490,3 @@ export async function expectStickyRosterHeader(grid: Locator): Promise<void> {
   if (!before || !after) throw new Error('Roster header is not measurable.');
   expect(Math.abs(before.y - after.y)).toBeLessThanOrEqual(1);
 }
-
-/** Create a backup Owner and downgrade the signed-in actor to a view-only custom role. */
-export async function makeCurrentRosterActorViewer(
-  page: Page,
-  organizationId: string,
-): Promise<void> {
-  const roles = await apiJson<{
-    items: readonly { readonly id: string; readonly key: string }[];
-  }>(page, `/v1/orgs/${organizationId}/roles`);
-  const ownerRoleId = roles.items.find(({ key }) => key === 'owner')?.id;
-  if (!ownerRoleId) throw new Error('The shared workspace has no Owner role.');
-  await apiJson(page, `/v1/orgs/${organizationId}/members`, {
-    method: 'POST',
-    body: { displayName: 'Release acceptance backup owner', roleId: ownerRoleId },
-  });
-  const viewerRole = await apiJson<CreatedEntity>(page, `/v1/orgs/${organizationId}/roles`, {
-    method: 'POST',
-    body: {
-      key: `release-viewer-${Date.now()}`,
-      name: 'Release viewer',
-      capabilities: ['view'],
-      baseCapability: 'view',
-      defaultVisibility: 'public',
-    },
-  });
-  const members = await apiJson<{
-    items: readonly { readonly actorId: string; readonly userId: string | null }[];
-  }>(page, `/v1/orgs/${organizationId}/members`);
-  const current = members.items.find(({ userId }) => userId !== null);
-  if (!current) throw new Error('The signed-in workspace Actor is missing.');
-  await apiJson(page, `/v1/orgs/${organizationId}/members/${current.actorId}`, {
-    method: 'PATCH',
-    body: { roleId: viewerRole.id },
-  });
-}

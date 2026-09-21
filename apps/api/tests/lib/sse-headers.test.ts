@@ -1,14 +1,11 @@
-import { Hono } from 'hono';
+import { type Context, Hono } from 'hono';
 import { streamSSE } from 'hono/streaming';
 import { describe, expect, it } from 'vitest';
 
 import { declareStreaming } from '../../src/lib/sse-headers';
 
 /** A route that streams one frame through {@link declareStreaming}, behind the given middleware. */
-function probe(
-  before?: (c: Parameters<Parameters<Hono['use']>[1]>[0]) => void,
-  seed: () => Response | null = () => null,
-): Hono {
+function probe(before?: (c: Context) => void, seed: () => Response | null = () => null): Hono {
   const app = new Hono();
   if (before) {
     app.use('*', async (c, next) => {

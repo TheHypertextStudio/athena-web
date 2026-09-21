@@ -16,8 +16,13 @@ import { API_TEST_ENV } from './tests/support/env';
 // trips its `jit_page_->allocations_.erase(addr) == 1` check and aborts the run with SIGILL
 // *after* the last test passes — which is what has been failing CI's `Test (api)` job while every
 // assertion in it succeeded. One process per worker gives each instance its own registry.
+// Roughly 400 of this package's files boot a PGlite, and `forks` gives each its own process, so
+// anything they do to prepare a database is paid once per file. The global setup migrates once and
+// snapshots the result; `tests/support/db.ts` boots each file's database from that snapshot rather
+// than replaying ~140 migrations (about 3 CPU-seconds, and the bulk of a 22-minute coverage run).
 export default docketVitest({
   env: API_TEST_ENV,
+  globalSetup: ['./tests/support/pglite-template.global.ts'],
   // 120s, not 60s: under an oversubscribed runner five files in this package have timed out at
   // 60s — `route-auth.test.ts` in its `beforeAll` (now inheriting the preset's 180s hook budget)
   // and four more in `it()` bodies, which land here. A timed-out file contributes no coverage, so

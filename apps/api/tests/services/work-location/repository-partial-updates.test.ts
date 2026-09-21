@@ -12,16 +12,13 @@
  * designation or the assertions that still point at it, because the rows that survive would
  * reference something a person can no longer see.
  */
-import { resolve } from 'node:path';
-
-import { PGlite } from '@electric-sql/pglite';
 import { fullSchema, hub, user, type Database } from '@docket/db';
 import type { WorkPlaceId } from '@docket/planning/ids';
 import { drizzle } from 'drizzle-orm/pglite';
-import { migrate } from 'drizzle-orm/pglite/migrator';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import { ConflictError, NotFoundError } from '../../../src/error';
+import { openMigratedPglite } from '../../support/pglite-template';
 import {
   archiveWorkPlace,
   createWorkLocationAssertion,
@@ -46,12 +43,8 @@ function firstRow<T>(rows: readonly T[], operation: string): T {
 }
 
 beforeAll(async () => {
-  const client = new PGlite('memory://');
-  const migrated = drizzle(client, { schema: fullSchema });
-  await migrate(migrated, {
-    migrationsFolder: resolve(import.meta.dirname, '../../../../../packages/db/drizzle'),
-  });
-  database = migrated;
+  const client = await openMigratedPglite();
+  database = drizzle(client, { schema: fullSchema });
 
   const owner = firstRow(
     await database

@@ -1,8 +1,6 @@
 /**
  * `@docket/api` — persisted process authoring, materialization, and completion advancement.
  */
-import { resolve } from 'node:path';
-
 import {
   actor,
   cycle,
@@ -31,10 +29,9 @@ import type * as DbModule from '@docket/db';
 import { ActorId, TeamId } from '@docket/identity-access/ids';
 import { CycleId, LabelId, MilestoneId, ProgramId, ProjectId, TaskId } from '@docket/work/ids';
 import { type ProcessDefinitionCreate } from '../../src/contracts/recurrence';
-import { PGlite } from '@electric-sql/pglite';
+import type { PGlite } from '@electric-sql/pglite';
 import { and, eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/pglite';
-import { migrate } from 'drizzle-orm/pglite/migrator';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import {
@@ -49,10 +46,9 @@ import {
 import { materializeOccurrence } from '../../src/lib/recurrence/materialize';
 import { advanceCompletedProcessTask } from '../../src/lib/recurrence/advance';
 import { loadGeneratedWorkRecurrence } from '../../src/lib/recurrence/series';
+import { openMigratedPglite } from '../support/pglite-template';
 import { seedStatuses, type StatusIdLookup } from '../support/routes-harness';
 import { assertDefined } from '@docket/test-utils';
-
-const MIGRATIONS = resolve(import.meta.dirname, '../../../../packages/db/drizzle');
 
 let client!: PGlite;
 let dbmod!: typeof DbModule;
@@ -184,10 +180,8 @@ async function calendarSeries(
 
 describe('process materialization', () => {
   beforeAll(async () => {
-    client = new PGlite('memory://');
-    const migrated = drizzle(client, { schema: fullSchema });
-    await migrate(migrated, { migrationsFolder: MIGRATIONS });
-    db = migrated;
+    client = await openMigratedPglite();
+    db = drizzle(client, { schema: fullSchema });
     dbmod = await import('@docket/db');
     organizationId = assertDefined(
       (

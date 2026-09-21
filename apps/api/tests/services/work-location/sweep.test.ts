@@ -9,9 +9,7 @@
  * inbound updates when it regresses: a watch that is never renewed simply expires, and the feed
  * goes quiet rather than failing.
  */
-import { resolve } from 'node:path';
-
-import { PGlite } from '@electric-sql/pglite';
+import type { PGlite } from '@electric-sql/pglite';
 import {
   account,
   calendarConnection,
@@ -23,9 +21,9 @@ import {
 } from '@docket/db';
 import { and, eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/pglite';
-import { migrate } from 'drizzle-orm/pglite/migrator';
 import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
+import { openMigratedPglite } from '../../support/pglite-template';
 import type { GoogleWorkingLocationEvent } from '../../../src/services/work-location/google';
 import {
   createWorkLocationAssertion,
@@ -159,12 +157,8 @@ async function seedUser(options: { email: string; withHub: boolean }): Promise<{
 
 describe('work-location sweep', () => {
   beforeAll(async () => {
-    client = new PGlite('memory://');
-    const migrated = drizzle(client, { schema: fullSchema });
-    await migrate(migrated, {
-      migrationsFolder: resolve(import.meta.dirname, '../../../../../packages/db/drizzle'),
-    });
-    database = migrated;
+    client = await openMigratedPglite();
+    database = drizzle(client, { schema: fullSchema });
   });
 
   beforeEach(() => {

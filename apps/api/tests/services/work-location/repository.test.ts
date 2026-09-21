@@ -1,6 +1,4 @@
-import { resolve } from 'node:path';
-
-import { PGlite } from '@electric-sql/pglite';
+import type { PGlite } from '@electric-sql/pglite';
 import {
   account,
   calendarConnection,
@@ -14,11 +12,11 @@ import {
 } from '@docket/db';
 import { and, eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/pglite';
-import { migrate } from 'drizzle-orm/pglite/migrator';
 import { CalendarConnectionId } from '@docket/planning/ids';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { ConflictError, NotFoundError } from '../../../src/error';
+import { openMigratedPglite } from '../../support/pglite-template';
 import {
   archiveWorkLocationAssertion,
   archiveWorkPlace,
@@ -53,12 +51,8 @@ function firstRow<T>(rows: readonly T[], operation: string): T {
 
 describe('work-location repository', () => {
   beforeAll(async () => {
-    client = new PGlite('memory://');
-    const migrated = drizzle(client, { schema: fullSchema });
-    await migrate(migrated, {
-      migrationsFolder: resolve(import.meta.dirname, '../../../../../packages/db/drizzle'),
-    });
-    database = migrated;
+    client = await openMigratedPglite();
+    database = drizzle(client, { schema: fullSchema });
 
     const owner = firstRow(
       await database

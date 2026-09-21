@@ -1,6 +1,4 @@
 /** Calendar-event bindings materialize the same reusable process for each provider occurrence. */
-import { resolve } from 'node:path';
-
 import {
   account,
   actor,
@@ -20,10 +18,9 @@ import {
 } from '@docket/db';
 import { ProcessDefinitionId } from '@docket/work/ids';
 import { TeamId } from '@docket/identity-access/ids';
-import { PGlite } from '@electric-sql/pglite';
+import type { PGlite } from '@electric-sql/pglite';
 import { eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/pglite';
-import { migrate } from 'drizzle-orm/pglite/migrator';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import {
@@ -31,20 +28,17 @@ import {
   materializeCalendarProcessBindings,
 } from '../../src/lib/recurrence/calendar-binding';
 import { createPublishedProcessDefinition } from '../../src/lib/recurrence/process-definition';
+import { openMigratedPglite } from '../support/pglite-template';
 import { one } from '../support/routes-harness';
 import { assertDefined } from '@docket/test-utils';
-
-const MIGRATIONS = resolve(import.meta.dirname, '../../../../packages/db/drizzle');
 
 let client!: PGlite;
 let db!: Database;
 
 describe('calendar process bindings', () => {
   beforeAll(async () => {
-    client = new PGlite('memory://');
-    const migrated = drizzle(client, { schema: fullSchema });
-    await migrate(migrated, { migrationsFolder: MIGRATIONS });
-    db = migrated;
+    client = await openMigratedPglite();
+    db = drizzle(client, { schema: fullSchema });
   });
 
   afterAll(async () => {

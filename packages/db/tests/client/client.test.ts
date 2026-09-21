@@ -161,6 +161,37 @@ describe('db client driver selection', () => {
     expect(clientMocks.PGlite).toHaveBeenCalledTimes(2);
   });
 
+  it('boots an in-memory pglite client from an installed template', async () => {
+    vi.stubEnv('DATABASE_URL', 'pglite://memory');
+    const template = new Blob(['snapshot']);
+    const { db, setPgliteTemplate } = await import('../../src/client');
+    setPgliteTemplate(template);
+    touch(db, 'select');
+    expect(clientMocks.PGlite).toHaveBeenCalledWith('memory://', { loadDataDir: template });
+  });
+
+  it('ignores a template for an on-disk pglite path, which already holds its own state', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'docket-client-'));
+    vi.stubEnv('DATABASE_URL', `pglite://${dir}`);
+    try {
+      const { db, setPgliteTemplate } = await import('../../src/client');
+      setPgliteTemplate(new Blob(['snapshot']));
+      touch(db, 'select');
+      expect(clientMocks.PGlite).toHaveBeenCalledWith(dir);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('refuses a template installed after the client exists, since it would be ignored', async () => {
+    vi.stubEnv('DATABASE_URL', 'pglite://memory');
+    const { db, setPgliteTemplate } = await import('../../src/client');
+    touch(db, 'select');
+    expect(() => {
+      setPgliteTemplate(new Blob(['snapshot']));
+    }).toThrow(/before the first use/);
+  });
+
   it('exposes the full schema namespace', async () => {
     const { fullSchema } = await import('../../src/client');
     expect(fullSchema).toHaveProperty('organization');

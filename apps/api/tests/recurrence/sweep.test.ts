@@ -1,6 +1,4 @@
 /** Rolling recurrence materialization, missed-work policy, and future-supersession behavior. */
-import { resolve } from 'node:path';
-
 import {
   fullSchema,
   organization,
@@ -16,10 +14,9 @@ import {
 import { ProcessDefinitionId } from '@docket/work/ids';
 import { type ProcessDefinitionCreate } from '../../src/contracts/recurrence';
 import { TeamId } from '@docket/identity-access/ids';
-import { PGlite } from '@electric-sql/pglite';
+import type { PGlite } from '@electric-sql/pglite';
 import { and, eq, gte, inArray } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/pglite';
-import { migrate } from 'drizzle-orm/pglite/migrator';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { createPublishedProcessDefinition } from '../../src/lib/recurrence/process-definition';
@@ -33,8 +30,7 @@ import {
   sweepRecurrenceMaterialization,
 } from '../../src/lib/recurrence/sweep';
 import { assertDefined } from '@docket/test-utils';
-
-const MIGRATIONS = resolve(import.meta.dirname, '../../../../packages/db/drizzle');
+import { openMigratedPglite } from '../support/pglite-template';
 
 let client!: PGlite;
 let db!: Database;
@@ -42,9 +38,8 @@ let organizationId!: string;
 let teamId!: ReturnType<typeof TeamId.parse>;
 
 beforeAll(async () => {
-  client = new PGlite('memory://');
+  client = await openMigratedPglite();
   db = drizzle(client, { schema: fullSchema });
-  await migrate(db as never, { migrationsFolder: MIGRATIONS });
   await installTestProductFixture(db);
   organizationId = assertDefined(
     (

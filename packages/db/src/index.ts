@@ -7,7 +7,14 @@
  * The `db` client is lazy, so importing this barrel is side-effect-free.
  */
 export { genId } from './id';
-export { closeDb, db, fullSchema, listenToChannel, setDatabaseQueryObserver } from './client';
+export {
+  closeDb,
+  db,
+  fullSchema,
+  listenToChannel,
+  setDatabaseQueryObserver,
+  setPgliteTemplate,
+} from './client';
 export type { Database, DatabaseQueryObserver } from './client';
 export * from './types';
 export * from './schema';

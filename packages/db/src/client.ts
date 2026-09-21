@@ -49,6 +49,28 @@ export function setDatabaseQueryObserver(observer: DatabaseQueryObserver | undef
   queryObserver = observer;
 }
 
+let pgliteTemplate: Blob | undefined;
+
+/**
+ * Boot the in-memory PGlite behind {@link db} from a migrated snapshot, or clear it with `undefined`.
+ *
+ * @remarks
+ * A test suite that runs one process per file would otherwise replay every migration in each of
+ * them. Dumping a migrated database once and loading it here costs about a fifth as much CPU as
+ * executing the schema SQL again. The client is built on first use of {@link db}, so the snapshot
+ * has to be installed before that.
+ *
+ * @param template - A `PGlite#dumpDataDir()` result.
+ * @throws when the client already exists, because the snapshot would be silently ignored and the
+ *   caller would go on to query an empty database.
+ */
+export function setPgliteTemplate(template: Blob | undefined): void {
+  if (cached) {
+    throw new Error('setPgliteTemplate must run before the first use of the database client.');
+  }
+  pgliteTemplate = template;
+}
+
 /** The drizzle client type, parameterized over the full Docket schema. */
 export type Database = PgDatabase<PgQueryResultHKT, typeof fullSchema>;
 
@@ -93,14 +115,19 @@ export function pgliteDataDir(url: string): string {
  * and the migration runner so both open the database identically.
  *
  * @param url - The `pglite:`-scheme `DATABASE_URL`.
+ * @param template - A `dumpDataDir()` snapshot to boot an in-memory database from instead of an
+ *   empty one. Ignored for an on-disk target, whose data dir is already its own state.
  * @returns a ready PGlite client.
  */
-export function openPglite(url: string): PGlite {
+export function openPglite(url: string, template?: Blob): PGlite {
   const dataDir = pgliteDataDir(url);
   if (dataDir !== 'memory://') {
     mkdirSync(dirname(dataDir), { recursive: true });
   }
-  const client = new PGlite(dataDir);
+  const client =
+    template && dataDir === 'memory://'
+      ? new PGlite(dataDir, { loadDataDir: template })
+      : new PGlite(dataDir);
   // Timestamp columns are `timestamp without time zone` defaulting to `now()`, and drizzle reads
   // them back as UTC. Postgres in production runs in UTC; PGlite follows the host's zone, so pin it
   // or every server-stamped time lands off by the host's offset. PGlite runs queries in order, so
@@ -117,7 +144,7 @@ function createDb(): Database {
   }
 
   if (url.startsWith('pglite:')) {
-    const client = openPglite(url);
+    const client = openPglite(url, pgliteTemplate);
     closeCached = () => client.close();
     listenerCached = async (channel, handler) => {
       const unsub = await client.listen(channel, handler);

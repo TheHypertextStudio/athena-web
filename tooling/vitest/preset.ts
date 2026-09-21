@@ -11,6 +11,12 @@ export interface DocketVitestOptions {
   react?: boolean;
   /** Extra setup files (relative to the package root). */
   setupFiles?: string[];
+  /**
+   * Modules Vitest runs once in the main process before any test file, for work every file would
+   * otherwise repeat (relative to the package root). `@docket/api` builds its migrated PGlite
+   * snapshot here rather than replaying the schema in each of its ~400 database-backed files.
+   */
+  globalSetup?: string[];
   /** Custom environment variables assigned by Vitest before running tests. */
   env?: Partial<NodeJS.ProcessEnv>;
   /**
@@ -80,8 +86,9 @@ export interface DocketVitestOptions {
 export function docketVitest(options: DocketVitestOptions = {}) {
   const {
     environment = 'node',
-    react: useReact = false,
+    react: useReact,
     setupFiles = [],
+    globalSetup = [],
     env = {},
     coverageThreshold = 90,
     coverageExclude = [],
@@ -98,6 +105,7 @@ export function docketVitest(options: DocketVitestOptions = {}) {
       globals: true,
       environment,
       setupFiles,
+      globalSetup,
       env,
       unstubEnvs: true,
       // Keep Vitest file parallelism, but avoid fork-worker startup starvation when

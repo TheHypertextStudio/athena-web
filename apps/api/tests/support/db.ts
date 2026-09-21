@@ -1,25 +1,10 @@
-import { readdirSync, readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
-
 import type * as DbModule from '@docket/db';
 import { PGlite } from '@electric-sql/pglite';
 
+import { loadPgliteTemplate } from './pglite-template';
 import { installTestProductEntitlementFixture } from './product-entitlement';
 
-const MIGRATIONS = resolve(import.meta.dirname, '../../../../packages/db/drizzle');
-
-let bootstrapSql: string | undefined;
 let migratedDb: Promise<typeof DbModule> | undefined;
-
-/** Read the generated migration SQL once per worker. */
-function loadBootstrapSql(): string {
-  bootstrapSql ??= readdirSync(MIGRATIONS)
-    .filter((file) => file.endsWith('.sql'))
-    .sort()
-    .map((file) => readFileSync(resolve(MIGRATIONS, file), 'utf8'))
-    .join('\n');
-  return bootstrapSql;
-}
 
 function pgliteClient(db: typeof DbModule.db): Pick<PGlite, 'exec'> {
   const client: unknown = Reflect.get(db, '$client');
@@ -35,18 +20,21 @@ export async function installTestProductFixture(db: typeof DbModule.db): Promise
 }
 
 /**
- * Load `@docket/db` once for a worker and bootstrap its PGlite schema.
+ * Load `@docket/db` once for a worker, backed by a PGlite that already holds the migrated schema.
  *
  * @remarks
- * Test databases do not need Drizzle's migration journal; they need the migrated schema.
- * Executing the generated SQL statements directly avoids the slower migrator bookkeeping
- * on every API route/MCP suite while preserving the exact schema SQL production uses.
+ * Every database-backed test file runs in its own process, so anything done here is paid once per
+ * file: about 400 times per run. Replaying the ~140 generated migrations cost about three CPU
+ * seconds each time, which is most of why the suite took over twenty minutes. The schema is built
+ * once by the global setup (see `pglite-template.ts`) and each worker boots from that snapshot
+ * instead. Test databases do not need Drizzle's migration journal, only the migrated schema, and
+ * the snapshot is produced from the exact SQL production runs. The product fixture stays per-file
+ * because it is one small statement, and not every suite that shares the snapshot wants it.
  */
 export async function getMigratedDb(): Promise<typeof DbModule> {
   migratedDb ??= (async () => {
     const dbmod = await import('@docket/db');
-    const client = pgliteClient(dbmod.db);
-    await client.exec(loadBootstrapSql());
+    dbmod.setPgliteTemplate(await loadPgliteTemplate());
     await installTestProductFixture(dbmod.db);
     return dbmod;
   })();

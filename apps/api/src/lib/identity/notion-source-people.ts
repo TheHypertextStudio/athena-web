@@ -136,9 +136,7 @@ export async function applyNotionTaskState(
 }
 
 /** Load active human records and their team links for the Notion People projection. */
-export async function loadNotionRoster(
-  orgId: string,
-): Promise<
+export async function loadNotionRoster(orgId: string): Promise<
   [
     (Pick<typeof actor.$inferSelect, 'id' | 'displayName' | 'title' | 'userId'> & {
       email: string | null;

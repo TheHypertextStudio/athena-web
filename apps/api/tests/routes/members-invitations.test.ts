@@ -302,10 +302,7 @@ describe('members router — member removal', () => {
     expect(out.id).toBe(memberId);
     expect(out.removed).toBe(true);
 
-    const rows = await db
-      .select()
-      .from(schema.actor)
-      .where(eq(schema.actor.id, memberId));
+    const rows = await db.select().from(schema.actor).where(eq(schema.actor.id, memberId));
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({
       userId: null,

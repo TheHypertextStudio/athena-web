@@ -66,6 +66,7 @@ match, group matches by relevance, and include saved Library resources.
 Generic Notion task imports require selected task databases in connection settings. An empty
 selection pauses task imports. Docket-owned mirror databases and pages are excluded from generic
 imports and writeback, including disabled mirrors. Typed Notion sync continues independently.
+
 ## People and workspace access
 
 Docket records people independently from account access. Contributors can create a person while

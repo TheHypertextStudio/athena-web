@@ -39,7 +39,7 @@ import {
   toRef,
   wouldCreateCycle,
 } from './task-helpers';
-import { resolveTaskStatus } from '../lib/work-status';
+import { landingStatus, resolveTaskStatus, terminalStampsFor } from '../lib/work-status';
 
 async function listVisibleSubtasks(
   organizationId: string,
@@ -149,7 +149,7 @@ export const taskDependencyRoutes = new Hono<AppEnv>()
       response: TaskOut,
       description: `Create a child task under the path task. The parent is loaded first (cross-org/unknown parent 404s), then the child is inserted with \`parentTaskId\` set to the parent and \`teamId\` inherited from the parent — a subtask always lives on the parent's team and cannot be re-teamed at creation. Requires \`contribute\`.
 
-The child inherits sensible defaults but can override them: \`state\` defaults to the parent's current state (not the team's first state), \`projectId\` defaults to the parent's project when omitted, and \`priority\` defaults to \`none\`. Body-provided references (\`assigneeId\`, \`projectId\`, \`cycleId\`, \`milestoneId\`) must belong to the same organization or the request returns 404. This operation does not add a task-created or assignment event to the activity feed. Returns the new child {@link TaskOut}.`,
+The child inherits sensible defaults but can override them: \`state\` defaults to the team's first workflow state (typically \`backlog\`), \`projectId\` defaults to the parent's project when omitted, and \`priority\` defaults to \`none\`. Body-provided references (\`assigneeId\`, \`projectId\`, \`cycleId\`, \`milestoneId\`) must belong to the same organization or the request returns 404. This operation does not add a task-created or assignment event to the activity feed. Returns the new child {@link TaskOut}.`,
     }),
     zParam(idParam),
     zJson(SubtaskCreate),
@@ -167,7 +167,14 @@ The child inherits sensible defaults but can override them: \`state\` defaults t
       await assertRefInOrg(cycle, orgId, body.cycleId, 'Cycle not found');
       await assertMilestoneInOrg(orgId, body.milestoneId, body.projectId ?? parent.projectId);
 
-      const inherited = await resolveTaskStatus(orgId, parent.teamId, body.state ?? parent.state);
+      const inherited =
+        body.state === undefined
+          ? await landingStatus(orgId, 'task', parent.teamId).then((status) => ({
+              statusId: status.id,
+              state: status.key,
+              ...terminalStampsFor(status.category),
+            }))
+          : await resolveTaskStatus(orgId, parent.teamId, body.state);
       // `SubtaskCreate.labels` was accepted and discarded here for the same reason
       // `TaskCreate.labels` was: nothing ever wrote the join. Resolve against the parent's team,
       // which the subtask inherits.

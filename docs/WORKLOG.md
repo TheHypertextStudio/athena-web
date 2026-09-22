@@ -196,6 +196,7 @@ routes/project-rollup.ts}`, `domains/work/src/contracts/{milestone,task}.ts`,
   after page CSS loads, so the owned theme must set the font on Scalar's root as well as the page.
 
 ### [PROVENANCE-001] Record and quietly surface where every change came from
+### [TASK-DETAIL-003] Task relationships editable in place; Linear-grade detail layout rules
 
 - **Status**: IN_PROGRESS
 - **Started**: 2026-09-22
@@ -221,6 +222,26 @@ routes/project-rollup.ts}`, `domains/work/src/contracts/{milestone,task}.ts`,
 - **Validation (slice 1)**: root typecheck, lint, complexity ledger, and format pass. API suite:
   6469 pass; the 9 failures (`permissions`, `route-auth`, `cycle-backfill`, `programs-detail`)
   fail identically on a clean `HEAD`. Web 4484 and work-domain 307 pass.
+- **Description**: The task page cannot add or remove blockers, attach or detach subtasks, set a
+  parent, or show related tasks, although the API supports every one of those writes. The page
+  also has five different right edges (a 752px description cap, an 11rem contents rail, tonal
+  section cards, and a 20rem aside), and it splits properties between header chips and the aside.
+  No written layout rules govern detail pages.
+- **Decisions (owner, 2026-09-22)**: On a wide pane every property lives in the right sidebar, and
+  on a narrow pane they are chips. Sections are flat, Linear-style: a heading row, then list rows,
+  with no card. This pass covers the task page and the written rules; project, initiative, and
+  program pages move onto the rules in a follow-up. Also in scope: a new subtask starts in the
+  workflow's first state, a Related section, and relation actions in the command palette.
+- **Plan**: `/Users/williecubed/.claude/plans/or-rather-plan-first-inherited-metcalfe.md`.
+- **Subtasks**:
+  - [ ] API: a new subtask lands in the team's first state and writes an activity event
+  - [ ] Task search picker, relation mutation hook, and `DetailSection`/relation rows
+  - [ ] Subtasks: inline composer, attach existing, detach with undo; Relations: blocked by,
+        blocking, related, with add and remove
+  - [ ] Sidebar holds every property; flat aligned sections; the document spans its column
+  - [ ] Layout reference `docs/design/references/detail-page-layout.md`
+  - [ ] Command palette "This task" section
+  - [ ] Tests, screenshots, and a design-review scorecard
 - **Blockers**: None.
 
 ---

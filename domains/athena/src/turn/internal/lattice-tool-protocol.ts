@@ -93,6 +93,25 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+/**
+ * Whether a validating keyword tells a model nothing the rest of its schema does not.
+ *
+ * @remarks
+ * Two generated forms dominated the rendered toolbox. Zod writes every `z.iso.date()` as
+ * `"format": "date"` plus a 226-character leap-year regex, and the recurrence tools alone carried
+ * nineteen of them, about 4,500 characters on every turn. The format already names the shape a
+ * model should write, so the regex is dropped when a format is present. Zod also bounds every
+ * `z.int()` at ±`Number.MAX_SAFE_INTEGER`, a limit no model will approach. Both keywords still
+ * validate the call, because the tool's server checks input against its own schema, not this
+ * rendering.
+ */
+function isRedundantBound(schema: Record<string, unknown>, key: string, value: unknown): boolean {
+  if (key === 'pattern') return typeof schema['format'] === 'string';
+  if (key === 'maximum') return value === Number.MAX_SAFE_INTEGER;
+  if (key === 'minimum') return value === Number.MIN_SAFE_INTEGER;
+  return false;
+}
+
 function compactSubschema(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(compactSubschema);
   return isRecord(value) ? compactToolSchema(value) : value;
@@ -104,6 +123,7 @@ function compactSubschema(value: unknown): unknown {
  *
  * Property names are never treated as keywords, so a property that happens to be called
  * `description` survives. Literal arrays such as `enum` and `required` are copied as they are.
+ * Bounds that {@link isRedundantBound} shows add nothing are dropped as well.
  *
  * @param schema - A tool's input schema as registered.
  * @returns The same schema with documentation-only keywords removed at every level.
@@ -111,7 +131,7 @@ function compactSubschema(value: unknown): unknown {
 export function compactToolSchema(schema: Record<string, unknown>): Record<string, unknown> {
   const compact: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(schema)) {
-    if (PROMPT_ONLY_SCHEMA_KEYS.has(key)) continue;
+    if (PROMPT_ONLY_SCHEMA_KEYS.has(key) || isRedundantBound(schema, key, value)) continue;
     if (NAMED_SUBSCHEMA_KEYS.has(key) && isRecord(value)) {
       compact[key] = Object.fromEntries(
         Object.entries(value).map(([name, subschema]) => [name, compactSubschema(subschema)]),

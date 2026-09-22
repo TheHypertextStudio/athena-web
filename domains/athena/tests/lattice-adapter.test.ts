@@ -270,6 +270,35 @@ describe('compactToolSchema', () => {
     compactToolSchema(schema);
     expect(JSON.stringify(schema)).toBe(before);
   });
+
+  it('drops a pattern its format already names, and safe-integer bounds, but no real limit', () => {
+    const compact = compactToolSchema({
+      type: 'object',
+      properties: {
+        due: { type: 'string', format: 'date', pattern: '^\\d{4}-\\d{2}-\\d{2}$' },
+        orgId: { type: 'string', pattern: '^[0-9A-HJKMNP-TV-Z]{26}$' },
+        count: {
+          type: 'integer',
+          minimum: Number.MIN_SAFE_INTEGER,
+          maximum: Number.MAX_SAFE_INTEGER,
+        },
+        limit: { type: 'integer', minimum: 1, maximum: 100 },
+      },
+    });
+
+    expect(at(compact, 'properties', 'due')).toEqual({ type: 'string', format: 'date' });
+    // Without a format, the pattern is the only statement of the shape, so it stays.
+    expect(at(compact, 'properties', 'orgId')).toEqual({
+      type: 'string',
+      pattern: '^[0-9A-HJKMNP-TV-Z]{26}$',
+    });
+    expect(at(compact, 'properties', 'count')).toEqual({ type: 'integer' });
+    expect(at(compact, 'properties', 'limit')).toEqual({
+      type: 'integer',
+      minimum: 1,
+      maximum: 100,
+    });
+  });
 });
 
 describe('renderToolInstructions', () => {

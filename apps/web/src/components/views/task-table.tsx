@@ -47,6 +47,7 @@ import {
 import { type JSX, type ReactNode, useMemo } from 'react';
 import { cn } from '@docket/ui/lib/utils';
 
+import { ObjectMoreButton } from '@/components/context-menu';
 import { EditableTitle } from '@/components/editor/editable-title';
 import {
   type WorkStatusDisplay,
@@ -68,12 +69,14 @@ import { objectKey, objectTargetProps, taskObjectRef } from '@/lib/actions';
 import { formatEstimate } from '@/lib/format-estimate';
 import { formatCalendarDate } from '@/lib/format-date';
 import { api } from '@/lib/api';
-import { apiQueryOptions, queryKeys, useApiQuery } from '@/lib/query';
+import { apiQueryOptions, queryKeys, useApiQuery, usePrefetchApi } from '@/lib/query';
+import { taskDetailDef } from '@/lib/use-task-detail';
 
 import { hierarchyRowAria } from '@/components/work-views/hierarchy-rails';
 
 import type { FieldCatalog } from './field-catalog';
 import { findField } from './field-catalog';
+import { PAGE_LIST_BLEED } from './page-layout';
 import { TASK_TABLE_INLINE_LINK_COLUMN_KEY, withTaskIdentity } from './task-identity-cell';
 import { nestTaskList, type TaskPositions } from './task-table-hierarchy';
 
@@ -270,14 +273,17 @@ export interface TaskTableProps {
   taskHref: (task: TaskOut) => string;
   /** Optional override for row activation (e.g. push via router); links navigate by default. */
   onOpenTask?: ((task: TaskOut) => void) | undefined;
-  /** Warm a task's detail cache on row hover/focus (prefetch-on-intent). Optional; no-op if unset. */
-  onRowPrefetch?: ((task: TaskOut) => void) | undefined;
   /** Accessible label for the grid. */
   label: string;
   /** Initial collapsed group ids (uncontrolled). */
   defaultCollapsed?: Iterable<string> | undefined;
   /** Extra classes merged onto the table's outer container. */
   className?: string | undefined;
+  /**
+   * Whether this table is its page's main list, which runs edge to edge on a narrow pane
+   * ({@link PAGE_LIST_BLEED}). Leave it off for a table inside a card or panel.
+   */
+  bleed?: boolean | undefined;
   /** Customized task identities composed through one workspace-wide display read. */
   displayByTaskId?: ReadonlyMap<string, EntityDisplayOut> | undefined;
   /**
@@ -332,10 +338,10 @@ export function TaskTable({
   groups,
   taskHref,
   onOpenTask,
-  onRowPrefetch,
   label,
   defaultCollapsed,
   className,
+  bleed = false,
   proposedByTaskId,
   highlightedIds,
 }: TaskTableProps): JSX.Element {
@@ -382,10 +388,9 @@ export function TaskTable({
         nested={nesting.nested}
         taskHref={taskHref}
         onOpenTask={onOpenTask}
-        onRowPrefetch={onRowPrefetch}
         label={label}
         defaultCollapsed={defaultCollapsed}
-        className={className}
+        className={cn(bleed && PAGE_LIST_BLEED, className)}
         displayByTaskId={displayByTaskId}
         proposedByTaskId={proposedByTaskId}
         highlightedIds={highlightedIds}
@@ -461,6 +466,28 @@ function TaskRowInteraction({
   );
 }
 
+/**
+ * The leading selection checkbox. It appears on hover, so a touch screen could never see it; there
+ * the column is dropped and its width goes to the title.
+ */
+const TASK_SELECTION_COLUMN: Column<TaskOut> = {
+  key: 'selection',
+  header: <SelectAllCheckbox />,
+  width: '1rem',
+  priority: 'always',
+  className: 'pointer-coarse:hidden',
+  render: (task) => <SelectionCheckbox object={taskObject(task)} />,
+};
+
+/** The trailing ⋯ that opens the row's action menu, the touch-screen route to right-click. */
+const TASK_MORE_COLUMN: Column<TaskOut> = {
+  key: 'more',
+  header: '',
+  width: '2rem',
+  priority: 'always',
+  render: (task) => <ObjectMoreButton title={task.title} />,
+};
+
 /** {@link TaskTableProps} plus the nesting {@link TaskTable} derived from them. */
 interface SelectableTaskTableProps extends TaskTableProps {
   /** Each row's place under its parent Task, keyed by row object. */
@@ -478,7 +505,6 @@ function SelectableTaskTable({
   nested,
   taskHref,
   onOpenTask,
-  onRowPrefetch,
   label,
   defaultCollapsed,
   className,
@@ -487,16 +513,15 @@ function SelectableTaskTable({
   highlightedIds,
 }: SelectableTaskTableProps): JSX.Element {
   const pickerOverlay = usePickerOverlay();
+  const prefetch = usePrefetchApi();
   const visibleTasks = taskTableRows(tasks, groups);
   const tableSelection = useEntityTableSelection<TaskOut>(taskObject);
+  // Warm a task's detail on hover or focus, so opening it is instant.
+  const onRowPrefetch = (task: TaskOut): void => {
+    prefetch(taskDetailDef(task.organizationId, task.id));
+  };
   const selectableColumns: readonly Column<TaskOut>[] = [
-    {
-      key: 'selection',
-      header: <SelectAllCheckbox />,
-      width: '1rem',
-      priority: 'always',
-      render: (task) => <SelectionCheckbox object={taskObject(task)} />,
-    },
+    TASK_SELECTION_COLUMN,
     ...withTaskIdentity(columns, {
       displayByTaskId,
       proposedByTaskId,
@@ -505,6 +530,7 @@ function SelectableTaskTable({
       onOpenTask,
       onRowPrefetch,
     }),
+    TASK_MORE_COLUMN,
   ];
   const openLabels = (task: TaskOut, anchor: HTMLElement | null): void => {
     const object = taskObject(task);
@@ -538,7 +564,7 @@ function SelectableTaskTable({
           {children}
         </TaskRowInteraction>
       )}
-      {...(onRowPrefetch !== undefined ? { onRowPrefetch } : {})}
+      onRowPrefetch={onRowPrefetch}
       {...(onOpenTask
         ? {
             onRowClick: (task: TaskOut) => {

@@ -79,6 +79,7 @@
   needs a 4 GB heap.
 
 ### [MILESTONES-MCP-001] Make milestones a first-class MCP and REST feature
+### [MOBILE-LIST-POLISH-001] Edge-to-edge lists and a visible row menu on mobile
 
 - **Status**: COMPLETED
 - **Started**: 2026-09-22
@@ -114,6 +115,38 @@ routes/project-rollup.ts}`, `domains/work/src/contracts/{milestone,task}.ts`,
 - **Learnings**: Descriptions on shared filter schemas are paid three times in the local-model
   tool budget (`list_work`, `update`, `archive`). The complexity ledger reads files from the git
   index, so mid-rebase conflict stages count a file more than once until it is staged.
+- **Description**: On a phone, task and work lists sat inside the 12px page gutter and then inset
+  their rows another 12px, and each task row reserved an invisible selection column. Row actions
+  opened only on right-click, Shift+F10, or the Menu key, none of which a phone has.
+- **Plan**:
+  - [x] Page-level lists (project, cycle, and program task lists; Tasks, Projects, Programs, and
+        Initiatives pages) run edge to edge below the 42rem pane step.
+  - [x] A ⋯ button on every task-table and roster row opens the existing object menu via
+        `openFor`; always visible on touch, on hover or focus with a mouse.
+  - [x] Hide the hover-only selection column on touch screens.
+  - [x] `TaskTable` owns its task-detail prefetch (every caller passed the same one).
+  - [x] Tests, root gates, seeded mobile and desktop captures.
+- **Decisions**:
+  - Edge-to-edge is opt-in (`PAGE_LIST_BLEED`, `TaskTable bleed`): the active-cycle overview puts a
+    task table inside a card, where stepping into the gutter would break the card.
+  - `WorkViewPage` clips its body with `overflow-hidden`; `PAGE_LIST_BLEED_CLIP` widens that box
+    into the gutter and pads it back, so only the list reaches the edge.
+  - A long-press menu was rejected: touch drag already starts on a 250ms press.
+  - The roster reserves the ⋯ column in both its CSS identity clamp and its column-shedding math,
+    so each metadata column sheds one breakpoint step earlier where it crosses a threshold.
+- **Validation**: Root typecheck, lint with the complexity ledger, and Prettier pass. Root
+  `test:coverage` passes every package except the 9 pre-existing `@docket/api` failures recorded
+  under TASK-HIERARCHY-LIST-001. A touch-emulated 390px browser showed the project Tasks tab, the
+  Tasks page, and the Projects page spanning the full width with no horizontal scroll, no selection
+  column, a visible 40px ⋯, and the task menu opening under the tapped button. Desktop captures keep
+  the inset panel, the checkboxes, and a hover-only ⋯.
+- **Follow-ups**: Board and card layouts, Today, Inbox, and calendar cards still open actions only
+  by right-click. The object menu renders as a dropdown on phones; a bottom sheet would suit a long
+  menu better.
+- **Blockers**: None.
+
+---
+
 ### [TASK-HIERARCHY-LIST-001] Nest subtasks in task lists and color project task rows
 
 - **Status**: COMPLETED

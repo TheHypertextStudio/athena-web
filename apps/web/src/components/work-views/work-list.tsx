@@ -20,6 +20,7 @@ import { useDraggable } from '@/components/dnd/use-draggable';
 import { useRelationDropTarget } from '@/components/dnd/use-relation-drop-target';
 import { useWorkStatusResolver } from '@/components/entity-display/use-work-status';
 import { useEntityTableSelection, useSelection } from '@/components/selection';
+import { PAGE_LIST_BLEED } from '@/components/views/page-layout';
 import type { ObjectRef } from '@/lib/actions';
 import { objectKey, objectTargetProps } from '@/lib/actions/object';
 import { buildEntityHref } from '@/lib/authenticated-route';
@@ -44,6 +45,7 @@ import {
   type HierarchyPosition,
   hierarchyRowAria,
 } from './hierarchy-rails';
+import { withWorkListMoreColumn } from './work-list-more-column';
 import type { WorkViewDefinitionFor } from './view-state';
 import type { WorkViewGroupPage, WorkViewGroupSummary, WorkViewRowFor } from './renderer-types';
 import {
@@ -278,20 +280,24 @@ export function WorkList<TTarget extends ViewTarget>({
   );
   const columns = useMemo(
     () =>
-      buildWorkListColumns({
-        target,
-        definition,
-        selectedIds,
-        selectionActive,
-        isWritable: (membership) =>
-          workViewSelectionObject(membership.row, organizationId) !== null,
-        onToggleSelection: toggleSelection,
-        statusOf,
-        positions,
-        rowHeight,
-      }),
+      withWorkListMoreColumn(
+        buildWorkListColumns({
+          target,
+          definition,
+          selectedIds,
+          selectionActive,
+          isWritable: (membership) =>
+            workViewSelectionObject(membership.row, organizationId) !== null,
+          onToggleSelection: toggleSelection,
+          statusOf,
+          positions,
+          rowHeight,
+        }),
+        (membership) => interactions.get(membership.key)?.object != null,
+      ),
     [
       definition,
+      interactions,
       organizationId,
       positions,
       rowHeight,
@@ -390,6 +396,7 @@ export function WorkList<TTarget extends ViewTarget>({
         }}
         className={cn(
           'h-full min-h-0 flex-1',
+          PAGE_LIST_BLEED,
           initiativeRoot.dropProps.className,
           initiativeRoot.dropState === 'accept' && 'ring-primary bg-primary/8 ring-2 ring-inset',
           initiativeRoot.dropState === 'reject' && `${REJECTED_DROP_CLASS} ring-inset`,

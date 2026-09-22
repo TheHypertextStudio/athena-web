@@ -132,11 +132,11 @@ describe('work-list column policy', () => {
 
     const metadata = columns().slice(1);
     expect(metadata.map(({ key, width, priority }) => ({ key, width, priority }))).toEqual([
-      { key: 'status', width: '128px', priority: 2 },
+      { key: 'status', width: '128px', priority: 3 },
       { key: 'priority', width: '80px', priority: 4 },
       { key: 'health', width: '96px', priority: 5 },
-      { key: 'owner', width: '176px', priority: 6 },
-      { key: 'leadTeam', width: '128px', priority: 7 },
+      { key: 'owner', width: '176px', priority: 7 },
+      { key: 'leadTeam', width: '128px', priority: 8 },
       { key: 'labels', width: '128px', priority: 9 },
       { key: 'targetDate', width: '112px', priority: 9 },
       { key: 'updateCadence', width: '128px', priority: 9 },

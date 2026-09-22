@@ -378,6 +378,9 @@ describe('TaskTable', () => {
     expect(row(TASK_1)).toHaveAttribute('data-drop-state', 'idle');
     expect(row(TASK_2)).toHaveAttribute('data-drop-state', 'idle');
     expect(row(TASK_3)).toHaveAttribute('data-drop-state', 'idle');
+    // Every row also offers its action menu through a visible button, for touch screens.
+    const more = within(row(TASK_3)).getByRole('button', { name: /Target/ });
+    expect(more).toHaveAttribute('aria-haspopup', 'menu');
   });
 
   it('renders the status glyph, title, assignee, formatted estimate, and a task-detail link', () => {

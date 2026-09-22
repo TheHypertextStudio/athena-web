@@ -47,8 +47,11 @@ export const WORK_ROSTER_ROW_HEIGHT = {
   comfortable: 56,
 } as const;
 
-/** Responsive minimum for the one shared identity header and cell. */
-export const WORK_ROSTER_IDENTITY_MIN_WIDTH = 'min(22rem, calc(100cqw - 1.5rem))';
+/**
+ * Responsive minimum for the one shared identity header and cell: the table width less the row
+ * inset (1.5rem) and the trailing ⋯ column with its gap (2.5rem).
+ */
+export const WORK_ROSTER_IDENTITY_MIN_WIDTH = 'min(22rem, calc(100cqw - 4rem))';
 
 /** Numeric widths for every work-view metadata field with a non-default contract. */
 export const WORK_ROSTER_FIELD_WIDTH_PX: Readonly<Record<string, number>> = {
@@ -88,7 +91,8 @@ const TARGET_LABEL = {
 } as const;
 
 const IDENTITY_FLOOR_PX = 352;
-const TABLE_INLINE_INSET_PX = 24;
+// The 24px row inset plus the trailing ⋯ column (32px) and its gap (8px), which never shed.
+const TABLE_INLINE_INSET_PX = 64;
 const COLUMN_GAP_PX = 8;
 const DEFAULT_FIELD_WIDTH_PX = 128;
 

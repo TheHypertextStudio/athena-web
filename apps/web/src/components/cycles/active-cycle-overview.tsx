@@ -35,8 +35,7 @@ import { buildTaskCatalog } from '@/components/views/task-catalog';
 import { resolveRelationLabel } from '@/components/views/field-catalog';
 import { buildTaskColumns, TaskTable } from '@/components/views/task-table';
 import { asNameMap, cycleDetailDef } from '@/lib/fetch-cycle-detail';
-import { useApiQuery, usePrefetchApi } from '@/lib/query';
-import { taskDetailDef } from '@/lib/use-task-detail';
+import { useApiQuery } from '@/lib/query';
 
 import { WorkStatusBadge } from '@/components/entity-display/work-status';
 
@@ -122,7 +121,6 @@ export function ActiveCycleOverview({
   cycleNoun,
 }: ActiveCycleOverviewProps): JSX.Element {
   const router = useRouter();
-  const prefetch = usePrefetchApi();
   const projectNoun = useVocabulary('project');
   const programNoun = useVocabulary('program');
   const cycleNounLower = cycleNoun.toLowerCase();
@@ -279,9 +277,6 @@ export function ActiveCycleOverview({
             columns={columns}
             tasks={preview}
             taskHref={(task) => `/orgs/${orgId}/tasks/${task.id}`}
-            onRowPrefetch={(task) => {
-              prefetch(taskDetailDef(orgId, task.id));
-            }}
             onOpenTask={(task) => {
               router.push(`/orgs/${orgId}/tasks/${task.id}`);
             }}

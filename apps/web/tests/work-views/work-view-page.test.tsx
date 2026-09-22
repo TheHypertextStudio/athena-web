@@ -100,6 +100,8 @@ vi.mock('../../src/components/in-page-search/in-page-search-provider', () => ({
 }));
 
 vi.mock('../../src/components/views/page-layout', () => ({
+  PAGE_LIST_BLEED: '',
+  PAGE_LIST_BLEED_CLIP: '',
   ListPageLayout: ({
     actions,
     toolbar,

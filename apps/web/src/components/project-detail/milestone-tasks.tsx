@@ -30,8 +30,6 @@ import type { ActorDirectory } from './actor-directory';
 import { buildTaskCatalog } from '@/components/views/task-catalog';
 import { buildTaskColumns, TaskTable } from '@/components/views/task-table';
 import { formatCalendarDate } from '@/lib/format-date';
-import { usePrefetchApi } from '@/lib/query';
-import { taskDetailDef } from '@/lib/use-task-detail';
 import { categoryRank, type CategoryOfState } from '@/lib/work-category';
 
 /** A task enriched with its resolved milestone association. */
@@ -143,7 +141,6 @@ export function MilestoneTasks({
   proposedByTaskId,
   highlightedIds,
 }: MilestoneTasksProps): JSX.Element {
-  const prefetch = usePrefetchApi();
   const registry = useStatusRegistry();
   const statuses = registry.statusesFor('task');
   const categoryOf = useCategoryOf('task');
@@ -215,12 +212,8 @@ export function MilestoneTasks({
           columns={columns}
           groups={groups}
           taskHref={(task) => `/orgs/${orgId}/tasks/${task.id}`}
-          onRowPrefetch={(task) => {
-            prefetch(taskDetailDef(orgId, task.id));
-          }}
-          onOpenTask={(task) => {
-            onOpenTask(task);
-          }}
+          onOpenTask={onOpenTask}
+          bleed
           proposedByTaskId={proposedByTaskId}
           highlightedIds={highlightedIds}
         />

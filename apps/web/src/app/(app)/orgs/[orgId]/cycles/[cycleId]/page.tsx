@@ -32,8 +32,7 @@ import { PageContainer } from '@/components/views/page-layout';
 import { buildTaskColumns, TaskTable } from '@/components/views/task-table';
 import { api } from '@/lib/api';
 import { asNameMap, cycleDetailDef } from '@/lib/fetch-cycle-detail';
-import { queryKeys, unwrap, useApiMutation, useApiQuery, usePrefetchApi } from '@/lib/query';
-import { taskDetailDef } from '@/lib/use-task-detail';
+import { queryKeys, unwrap, useApiMutation, useApiQuery } from '@/lib/query';
 import { EditableTitle } from '@/components/editor/editable-title';
 import { useCycleMutations } from '@/lib/use-cycle-mutations';
 import { useRenameTask } from '@/lib/use-rename-task';
@@ -106,7 +105,6 @@ export function cycleSubtitle(
 export default function CycleDetailPage(): JSX.Element {
   const params = useTypedRoute('/orgs/[orgId]/cycles/[cycleId]').params;
   const { orgId, cycleId } = params;
-  const prefetch = usePrefetchApi();
 
   const cycleNoun = useVocabulary('cycle');
   const cycleNounLower = cycleNoun.toLowerCase();
@@ -436,10 +434,8 @@ export default function CycleDetailPage(): JSX.Element {
               columns={columns}
               groups={taskGroups}
               taskHref={(task) => `/orgs/${orgId}/tasks/${task.id}`}
-              onRowPrefetch={(task) => {
-                prefetch(taskDetailDef(orgId, task.id));
-              }}
               onOpenTask={openTaskRecord}
+              bleed
             />
           )}
 

@@ -15,6 +15,30 @@
 import { cn } from '@docket/ui';
 import type { JSX, ReactNode } from 'react';
 
+/**
+ * Run a page's primary list edge to edge on a narrow pane.
+ *
+ * @remarks
+ * Below the `@2xl` step a page insets its content 12px (`p-3` in {@link PageContainer}, the base
+ * `--page-gutter` on detail pages), and a table then insets its rows another 12px inside its own
+ * rounded panel. On a phone that is 24px of margin before every title. This steps the table out
+ * through the gutter and squares its corners, so the rows' own inset is the only margin and row
+ * content lines up with the page title. Wider panes keep the inset, rounded panel. Apply it only to
+ * a list that is the page's main content, never to one nested in a card or panel.
+ */
+export const PAGE_LIST_BLEED = '@max-2xl:-mx-3 @max-2xl:w-auto @max-2xl:rounded-none';
+
+/**
+ * Let a clipping box between the page gutter and a {@link PAGE_LIST_BLEED} list pass the bleed.
+ *
+ * @remarks
+ * An `overflow-hidden` wrapper clips at its own edge, which sits inside the gutter, so the list's
+ * step outward would be cut off. This widens the wrapper into the gutter and pads its content back
+ * by the same amount: everything else inside stays where it was, and only the bleeding list reaches
+ * the pane's edge.
+ */
+export const PAGE_LIST_BLEED_CLIP = '@max-2xl:-mx-3 @max-2xl:px-3';
+
 /** Props for {@link PageContainer}. */
 export interface PageContainerProps {
   /** The page body. */

@@ -42,9 +42,8 @@ import {
   fetchAllRoles,
   fetchAllTasks,
 } from '@/lib/org-collection-pages';
-import { apiQueryOptions, queryKeys, STALE, useApiListQuery, usePrefetchApi } from '@/lib/query';
+import { apiQueryOptions, queryKeys, STALE, useApiListQuery } from '@/lib/query';
 import { useOrgCapability } from '@/lib/use-org-capability';
-import { taskDetailDef } from '@/lib/use-task-detail';
 import { useRenameTask } from '@/lib/use-rename-task';
 import { openTaskRecord } from '@/lib/local-first-navigation';
 
@@ -56,7 +55,6 @@ export interface ProgramWorkViewProps {
 
 /** This Program's task roster, filterable and groupable like every other list in the app. */
 export function ProgramWorkView({ orgId, programId }: ProgramWorkViewProps): JSX.Element {
-  const prefetch = usePrefetchApi();
   const projectNoun = useVocabulary('project');
   const programNoun = useVocabulary('program');
   const { state, setFilters, setGroupBy, setSort } = useViewState();
@@ -264,10 +262,8 @@ export function ProgramWorkView({ orgId, programId }: ProgramWorkViewProps): JSX
           columns={columns}
           {...(applied.groups ? { groups: applied.groups } : { tasks: applied.rows })}
           taskHref={(task) => `/orgs/${orgId}/tasks/${task.id}`}
-          onRowPrefetch={(task) => {
-            prefetch(taskDetailDef(orgId, task.id));
-          }}
           label="Work"
+          bleed
         />
       )}
     </div>

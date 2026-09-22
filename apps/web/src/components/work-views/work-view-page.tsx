@@ -40,7 +40,7 @@ import { useActiveOrg } from '@/components/active-org';
 import { LoadFailure } from '@/components/feedback';
 import { InPageSearchField } from '@/components/in-page-search/in-page-search-field';
 import { useInPageSearchTarget } from '@/components/in-page-search/in-page-search-provider';
-import { ListPageLayout } from '@/components/views/page-layout';
+import { ListPageLayout, PAGE_LIST_BLEED_CLIP } from '@/components/views/page-layout';
 import { SelectionProvider, useSelection } from '@/components/selection';
 import { useCanManageOrg } from '@/components/settings/use-can-manage-org';
 import { api } from '@/lib/api';
@@ -711,7 +711,7 @@ export function WorkViewPage<TTarget extends ViewTarget>({
           actionScope="all"
         >
           <WorkViewSelectionFrame>
-            <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+            <div className={`flex min-h-0 flex-1 flex-col overflow-hidden ${PAGE_LIST_BLEED_CLIP}`}>
               <WorkViewOperationFailures
                 title={copy.title}
                 contentFailed={contentFailed}

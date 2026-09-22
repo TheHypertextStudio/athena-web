@@ -13,3 +13,4 @@ export {
   type ObjectContextMenuProviderProps,
   useObjectContextMenu,
 } from './object-context-menu';
+export { ObjectMoreButton, type ObjectMoreButtonProps } from './object-more-button';

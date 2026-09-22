@@ -429,6 +429,24 @@ routes/project-rollup.ts}`, `domains/work/src/contracts/{milestone,task}.ts`,
     shape: a segmented track with the chosen view lifted out.
   - Rows inside a group should not repeat the group's name.
 
+### [EDITOR-ENTITIES-001] Read-only documents show the characters the author typed
+
+- **Status**: REVIEW
+- **Started**: 2026-09-22
+- **Priority**: P2
+- **Description**: The editor stores `&`, `<`, and `>` in prose as `&amp;`, `&lt;`, and `&gt;`, and
+  decodes them when it reads a document back. `marked` never decodes, so `StaticMarkdown` and the
+  hovercard `ExcerptMarkdown` showed a literal `&amp;` wherever an author typed `&`. The MCP card
+  work (MCP-RICH-TEXT-001) found this.
+- **Subtasks**:
+  - [x] Decode `text` tokens with `decodeEditorEntities` from `@docket/markdown-tree` in
+        `render-markdown-tokens.tsx`. `ExcerptMarkdown` renders its inlines through the same
+        `renderInline`, so one change covers both.
+  - [x] Code spans and code blocks stay exactly as stored.
+  - [x] Behaviour tests in `apps/web/tests/editor/markdown-entities.test.tsx`.
+- **Learnings**: The editor decodes only the entities it encodes, with `&amp;` last so a typed
+  `&lt;` survives. The shared decoder mirrors that order.
+
 ### [MCP-RICH-TEXT-001] MCP App cards render what people write as structure
 
 - **Status**: REVIEW

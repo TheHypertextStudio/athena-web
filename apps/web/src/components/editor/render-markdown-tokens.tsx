@@ -10,7 +10,11 @@ import type { Token, Tokens } from 'marked';
 import type { ReactNode } from 'react';
 import { Fragment } from 'react';
 
-import { parseDocumentFigureHtml, type DocumentFigure } from '@docket/markdown-tree';
+import {
+  decodeEditorEntities,
+  parseDocumentFigureHtml,
+  type DocumentFigure,
+} from '@docket/markdown-tree';
 
 import Link from '@/components/docket-link';
 
@@ -173,10 +177,15 @@ export function renderInline(
     const key = `${prefix}-${index}`;
     switch (token.type) {
       case 'text': {
+        // The editor stores `&`, `<` and `>` encoded and decodes them when it reads a document
+        // back; `marked` never does, so a read-only render has to, or `&amp;` shows up verbatim.
+        // Only prose is decoded: code spans and code blocks are stored exactly as written.
         const text = token as Tokens.Text;
         return (
           <Fragment key={key}>
-            {text.tokens ? renderInline(text.tokens, key, options) : text.text}
+            {text.tokens
+              ? renderInline(text.tokens, key, options)
+              : decodeEditorEntities(text.text)}
           </Fragment>
         );
       }
@@ -338,7 +347,13 @@ export function renderBlocks(
       }
       case 'text': {
         const text = token as Tokens.Text;
-        return <p key={key}>{text.tokens ? renderInline(text.tokens, key, options) : text.text}</p>;
+        return (
+          <p key={key}>
+            {text.tokens
+              ? renderInline(text.tokens, key, options)
+              : decodeEditorEntities(text.text)}
+          </p>
+        );
       }
       default: {
         const generic = token as Tokens.Generic;

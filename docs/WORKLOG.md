@@ -356,6 +356,26 @@ routes/project-rollup.ts}`, `domains/work/src/contracts/{milestone,task}.ts`,
 - **Blockers**: None.
 
 ---
+### [MCP-RICH-TEXT-001] MCP App cards render what people write as structure
+
+- **Status**: IN_PROGRESS
+- **Started**: 2026-09-22
+- **Priority**: P1
+- **Description**: A live `get_projects` call in Claude showed a project brief as one paragraph of
+  raw Markdown (`# … ## … - … *not* … &amp;`) that buried the project's state and work. Audit every
+  MCP App widget that carries authored text, then fix what it finds.
+- **Subtasks**:
+  - [x] Reproduce in the SEP-1865 harness with stored-shape Markdown; scorecard at
+        `docs/design/audits/2026-09-22-mcp-app-rich-text.md` (needs-work: typography 1, hierarchy
+        1, a11y and responsive gates red)
+  - [ ] Server-built block model in the tool result's `_meta`, rendered with DOM APIs only
+  - [ ] `summary` leads; brief excerpt clamped, full brief behind fullscreen
+  - [ ] Long-text diffs in the change report show a word-level excerpt
+  - [ ] Stored-shape Markdown fixtures and a no-raw-sigils assertion in `widget-shots.spec.ts`
+- **Blockers**: Implementation approach awaits the user's go-ahead (new server render channel).
+- **Learnings**: Every entity fixture carried `summary` and no `description`, and the one long
+  fixture was pre-flattened from a screenshot, so the 2026-08-05 review photographed a card real
+  data never produces. `markdownToPlainText` also leaks `&amp;`, so it is not a drop-in excerpt.
 
 ### [OAUTH-PROVIDER-COVERAGE-001] Restore the OAuth trust-spine coverage gate
 

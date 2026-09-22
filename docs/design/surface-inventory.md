@@ -164,9 +164,9 @@ They are user-facing surfaces by every definition GEN-10 uses, so they are count
 generator can find them by scanning `page.tsx`, which is one more reason the missing generator
 matters.
 
-| Surface id              | URL                         | Source                                   | Scorecard(s)                                |
-| ----------------------- | --------------------------- | ---------------------------------------- | ------------------------------------------- |
-| `mcp-app-change-report` | `ui://docket/change-report` | `apps/api/src/mcp/apps/change-report.ts` | `docs/design/audits/2026-08-05-mcp-apps.md` |
-| `mcp-app-work-list`     | `ui://docket/work-list`     | `apps/api/src/mcp/apps/work-list.ts`     | `docs/design/audits/2026-08-05-mcp-apps.md` |
-| `mcp-app-entity`        | `ui://docket/entity`        | `apps/api/src/mcp/apps/entity.ts`        | `docs/design/audits/2026-08-05-mcp-apps.md` |
-| `mcp-app-plan`          | `ui://docket/plan`          | `apps/api/src/mcp/apps/plan.ts`          | `docs/design/audits/2026-08-05-mcp-apps.md` |
+| Surface id              | URL                         | Source                                   | Scorecard(s)                                                                                      |
+| ----------------------- | --------------------------- | ---------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `mcp-app-change-report` | `ui://docket/change-report` | `apps/api/src/mcp/apps/change-report.ts` | `docs/design/audits/2026-08-05-mcp-apps.md`, `docs/design/audits/2026-09-22-mcp-app-rich-text.md` |
+| `mcp-app-work-list`     | `ui://docket/work-list`     | `apps/api/src/mcp/apps/work-list.ts`     | `docs/design/audits/2026-08-05-mcp-apps.md`                                                       |
+| `mcp-app-entity`        | `ui://docket/entity`        | `apps/api/src/mcp/apps/entity.ts`        | `docs/design/audits/2026-08-05-mcp-apps.md`, `docs/design/audits/2026-09-22-mcp-app-rich-text.md` |
+| `mcp-app-plan`          | `ui://docket/plan`          | `apps/api/src/mcp/apps/plan.ts`          | `docs/design/audits/2026-08-05-mcp-apps.md`                                                       |

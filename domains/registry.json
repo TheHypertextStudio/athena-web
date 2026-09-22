@@ -231,6 +231,7 @@
         "./subject-ref-contract",
         "./slug-contract",
         "./publish-contract",
+        "./provenance-contract",
         "./workflow"
       ],
       "allowedRuntimeDependencies": ["@docket/identity-access", "zod"],

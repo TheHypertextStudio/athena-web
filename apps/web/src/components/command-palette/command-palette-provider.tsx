@@ -12,6 +12,7 @@ import {
 } from 'react';
 
 import { CommandPalette } from './command-palette';
+import { PageCommandsProvider } from './page-commands';
 
 /** The command-palette controls exposed to the app shell. */
 export interface CommandPaletteValue {
@@ -118,7 +119,11 @@ export function CommandPaletteProvider({
     [visibleOpen, openPalette, closePalette, togglePalette],
   );
 
-  return <CommandPaletteContext.Provider value={value}>{children}</CommandPaletteContext.Provider>;
+  return (
+    <CommandPaletteContext.Provider value={value}>
+      <PageCommandsProvider>{children}</PageCommandsProvider>
+    </CommandPaletteContext.Provider>
+  );
 }
 
 /** Render the palette overlay inside the shell that owns persistent utility panels. */

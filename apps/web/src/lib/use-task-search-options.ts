@@ -17,18 +17,24 @@ import type { TaskRef } from '@docket/work/task-model';
 import { useCallback, useMemo, useState } from 'react';
 
 import { api } from './api';
-import type { SearchOut, SearchResult } from './contracts/search';
+import { type SearchOut, type SearchResult, searchFacetString } from './contracts/search';
 import { queryKeys, STALE } from './query';
 import { useRemoteSearch } from './use-remote-search';
 
 /** A browse-or-match page size: enough to scroll, small enough to answer quickly. */
-const SEARCH_LIMIT = '20';
+const SEARCH_LIMIT = 20;
+
+/** The search route's largest page. */
+const MAX_LIMIT = 100;
 
 /** Quiet period before a term reaches the server; the org route is an indexed local read. */
 const DEBOUNCE_MS = 120;
 
-/** How often an open picker with no rows asks again, while the index catches up. */
+/** How often an open picker with nothing to browse asks again, while the index catches up. */
 const EMPTY_RETRY_MS = 2_000;
+
+/** How many answers an empty browse waits through before it stops asking. */
+const EMPTY_RETRIES = 5;
 
 /** What {@link useTaskSearchOptions} needs. */
 export interface TaskSearchOptionsInput {
@@ -38,7 +44,7 @@ export interface TaskSearchOptionsInput {
   /** Task ids never offered: the subject task and every task already in the relation. */
   readonly exclude: ReadonlySet<string>;
   /** Build a row's leading glyph from the task's workflow-state key. */
-  readonly iconFor?: ((state: string | null) => PickerOption['icon']) | undefined;
+  readonly iconFor: (state: string | null) => PickerOption['icon'];
   /** Name a project id for the row's trailing hint; return `null` to show none. */
   readonly projectName?: ((projectId: string) => string | null) | undefined;
 }
@@ -55,12 +61,6 @@ export interface TaskSearchOptions {
   readonly error: string | null;
 }
 
-/** Read a string facet off a search hit, or `null`. */
-function facetString(hit: SearchResult, key: string): string | null {
-  const value = hit.facets[key];
-  return typeof value === 'string' ? value : null;
-}
-
 /**
  * Turn search hits into picker rows, dropping non-tasks and excluded ids.
  *
@@ -75,12 +75,12 @@ export function taskSearchOptions(
   const options: PickerOption[] = [];
   for (const hit of hits) {
     if (hit.kind !== 'task' || input.exclude.has(hit.entityId)) continue;
-    const projectId = facetString(hit, 'projectId');
+    const projectId = searchFacetString(hit, 'projectId');
     const hint = projectId && input.projectName ? input.projectName(projectId) : null;
     options.push({
       value: hit.entityId,
       label: hit.title,
-      ...(input.iconFor ? { icon: input.iconFor(facetString(hit, 'state')) } : {}),
+      icon: input.iconFor(searchFacetString(hit, 'state')),
       ...(hint ? { hint } : {}),
     });
   }
@@ -96,6 +96,9 @@ export function taskSearchOptions(
 export function useTaskSearchOptions(input: TaskSearchOptionsInput): TaskSearchOptions {
   const { orgId, enabled, exclude, iconFor, projectName } = input;
   const [query, setQuery] = useState('');
+  const browsing = query.trim().length === 0;
+  // Excluded tasks are dropped after the answer arrives, so ask for enough to fill a page anyway.
+  const limit = String(Math.min(MAX_LIMIT, SEARCH_LIMIT + exclude.size));
   const search = useRemoteSearch<SearchOut>({
     query,
     debounceMs: DEBOUNCE_MS,
@@ -105,16 +108,20 @@ export function useTaskSearchOptions(input: TaskSearchOptionsInput): TaskSearchO
       api.v1.orgs[':orgId'].search.$get({
         param: { orgId },
         // The default (`page`) surface: an empty box browses every task, newest first.
-        query: { ...(term.length > 0 ? { q: term } : {}), kinds: 'task', limit: SEARCH_LIMIT },
+        query: { ...(term.length > 0 ? { q: term } : {}), kinds: 'task', limit },
       }),
     fallbackMessage: 'Could not search tasks.',
-    // Read afresh each time a picker opens, and keep asking while an open picker has nothing to
-    // offer. The search index trails a write by a moment, so the task the person just created may
-    // not be searchable yet the first time they look.
+    // Read afresh each time a picker opens. While an empty box has nothing to browse, ask again a
+    // few times: the search index trails a write by a moment, so a workspace's first tasks may not
+    // be searchable yet the first time someone looks.
     options: {
       staleTime: STALE.realtime,
-      refetchInterval: (query) =>
-        (query.state.data?.items.length ?? 0) === 0 ? EMPTY_RETRY_MS : false,
+      refetchInterval: (cached) =>
+        browsing &&
+        (cached.state.data?.items.length ?? 0) === 0 &&
+        cached.state.dataUpdateCount < EMPTY_RETRIES
+          ? EMPTY_RETRY_MS
+          : false,
     },
   });
   const hits = search.data?.items;
@@ -122,14 +129,11 @@ export function useTaskSearchOptions(input: TaskSearchOptionsInput): TaskSearchO
     () => taskSearchOptions(hits ?? [], { exclude, iconFor, projectName }),
     [exclude, hits, iconFor, projectName],
   );
-  const refs = useMemo(() => new Map((hits ?? []).map((hit) => [hit.entityId, hit])), [hits]);
-  const refFor = useCallback(
-    (taskId: string): TaskRef | null => {
-      const hit = refs.get(taskId);
-      return hit ? taskRefOf(hit) : null;
-    },
-    [refs],
+  const refs = useMemo(
+    () => new Map((hits ?? []).map((hit) => [hit.entityId, taskRefOf(hit)])),
+    [hits],
   );
+  const refFor = useCallback((taskId: string): TaskRef | null => refs.get(taskId) ?? null, [refs]);
   return { options, refFor, query, setQuery, loading: search.pending, error: search.error };
 }
 
@@ -140,11 +144,11 @@ export function useTaskSearchOptions(input: TaskSearchOptionsInput): TaskSearchO
  * @returns its reference, with the state and project the hit's facets carry.
  */
 export function taskRefOf(hit: SearchResult): TaskRef {
-  const projectId = facetString(hit, 'projectId');
+  const projectId = searchFacetString(hit, 'projectId');
   return {
     id: TaskId.parse(hit.entityId),
     title: hit.title,
-    state: facetString(hit, 'state') ?? '',
+    state: searchFacetString(hit, 'state') ?? '',
     projectId: projectId === null ? null : ProjectId.parse(projectId),
   };
 }

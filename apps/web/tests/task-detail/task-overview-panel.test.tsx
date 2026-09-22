@@ -18,7 +18,6 @@ const mounted = vi.hoisted(() => ({ graph: vi.fn(), resources: vi.fn() }));
 vi.mock('../../src/lib/interactions/navigation', () => ({
   useAppRouter: () => ({ push: vi.fn() }),
 }));
-vi.mock('../../src/lib/use-rename-task', () => ({ useRenameTask: () => vi.fn() }));
 vi.mock('../../src/components/task-detail/task-details', () => ({
   TaskDetails: () => <div data-testid="description" />,
 }));
@@ -30,18 +29,6 @@ vi.mock('../../src/components/task-detail/Subtasks', () => ({
 }));
 vi.mock('../../src/components/task-detail/task-relations', () => ({
   TaskRelations: () => <div data-testid="relations" />,
-}));
-vi.mock('../../src/lib/use-task-relations', () => ({
-  useTaskRelations: () => ({
-    addDependency: vi.fn(),
-    removeDependency: vi.fn(),
-    addRelated: vi.fn(),
-    removeRelated: vi.fn(),
-    attachSubtask: vi.fn(),
-    detachSubtask: vi.fn(),
-    setParent: vi.fn(),
-    pending: false,
-  }),
 }));
 vi.mock('../../src/components/task-detail/task-activity-feed', () => ({
   TaskActivityFeed: () => <div data-testid="activity" />,
@@ -91,7 +78,6 @@ function renderSections(tab: TaskSectionsProps['tab']): void {
       tab={tab}
       orgId="org_1"
       task={task()}
-      detailKey={['task']}
       currentActorId={null}
       canEdit
       canComment

@@ -317,8 +317,14 @@ function ReadOnlyChips({ model }: SecondaryProps): JSX.Element {
   );
 }
 
-/** The metadata-row presentation: prioritized chips that demote into the row's overflow. */
-function SecondaryChips({ model }: SecondaryProps): JSX.Element {
+/**
+ * The task properties that follow the masthead's lead set, as prioritized chips that demote into
+ * the row's overflow.
+ *
+ * @param props - The page's property model.
+ * @returns the chips, for an `EntityMetadataRow`.
+ */
+export function TaskSecondaryProperties({ model }: SecondaryProps): JSX.Element {
   const field: FieldProps = { model, triggerClassName: ENTITY_METADATA_CHIP_CLASS };
   return (
     <>
@@ -345,14 +351,4 @@ function SecondaryChips({ model }: SecondaryProps): JSX.Element {
       <ReadOnlyChips model={model} />
     </>
   );
-}
-
-/**
- * The task properties that follow the masthead's lead set, as chips.
- *
- * @param props - The page's property model.
- * @returns the chips, for an `EntityMetadataRow`.
- */
-export function TaskSecondaryProperties({ model }: SecondaryProps): JSX.Element {
-  return <SecondaryChips model={model} />;
 }

@@ -13,14 +13,18 @@
  * Nothing is published to a viewer who cannot edit.
  */
 import { ArrowRight, Link, Plus, Workflow } from '@docket/ui/icons';
-import { type JSX, useMemo } from 'react';
+import { type JSX, useEffect, useMemo, useRef } from 'react';
 
 import { usePublishPageCommands } from '@/components/command-palette/page-commands';
 import type { PaletteItem } from '@/components/command-palette/types';
 import { useEntityDetailAside } from '@/components/views/entity-detail-layout';
 
 import type { TaskTab } from './task-masthead-slots';
-import { type TaskRelationCommand, useTaskRelationCommands } from './task-relation-commands';
+import {
+  LINK_COPY,
+  type TaskRelationCommand,
+  useTaskRelationControls,
+} from './task-relation-commands';
 
 /** One command: what it opens, how it reads, and its glyph. */
 interface CommandSpec {
@@ -33,29 +37,34 @@ interface CommandSpec {
 const OVERVIEW_COMMANDS: readonly CommandSpec[] = [
   { command: 'newSubtask', label: 'Add subtask', icon: Plus, keywords: ['child', 'checklist'] },
   {
-    command: 'existingSubtask',
-    label: 'Add existing task as subtask',
+    command: 'subtask',
+    label: LINK_COPY.subtask.add,
     icon: Link,
     keywords: ['child', 'attach', 'nest'],
   },
   {
     command: 'blockedBy',
-    label: 'Add blocker',
+    label: LINK_COPY.blockedBy.add,
     icon: ArrowRight,
     keywords: ['blocked by', 'dependency', 'depends on', 'waits on'],
   },
   {
     command: 'blocking',
-    label: 'Add blocked task',
+    label: LINK_COPY.blocking.add,
     icon: ArrowRight,
     keywords: ['blocks', 'dependency', 'dependent'],
   },
-  { command: 'related', label: 'Add related task', icon: Link, keywords: ['relate', 'link'] },
+  {
+    command: 'related',
+    label: LINK_COPY.related.add,
+    icon: Link,
+    keywords: ['relate', 'link'],
+  },
 ];
 
 const PARENT_COMMAND: CommandSpec = {
   command: 'parent',
-  label: 'Set parent task',
+  label: LINK_COPY.parent.add,
   icon: Workflow,
   keywords: ['move under', 'nest', 'parent'],
 };
@@ -78,8 +87,13 @@ export function TaskPaletteCommands({
   tab,
   onTabChange,
 }: TaskPaletteCommandsProps): JSX.Element | null {
-  const { setActive } = useTaskRelationCommands();
+  const { setActive } = useTaskRelationControls();
   const { docked } = useEntityDetailAside();
+  // Read when a command runs, so changing tabs does not republish the commands.
+  const tabs = useRef({ tab, onTabChange });
+  useEffect(() => {
+    tabs.current = { tab, onTabChange };
+  }, [onTabChange, tab]);
   const commands = useMemo(() => {
     const specs = canEdit ? [...OVERVIEW_COMMANDS, ...(docked ? [PARENT_COMMAND] : [])] : [];
     const items = specs.map((spec): PaletteItem => ({
@@ -89,7 +103,8 @@ export function TaskPaletteCommands({
       icon: spec.icon,
       keywords: spec.keywords,
       run: () => {
-        if (spec.command !== 'parent' && tab !== 'overview') onTabChange('overview');
+        const { tab: shown, onTabChange: showTab } = tabs.current;
+        if (spec.command !== 'parent' && shown !== 'overview') showTab('overview');
         // Open after the palette has closed, so its dismissal cannot close the control too.
         window.setTimeout(() => {
           setActive(spec.command);
@@ -97,7 +112,7 @@ export function TaskPaletteCommands({
       },
     }));
     return { label: 'This task', items };
-  }, [canEdit, docked, onTabChange, setActive, tab]);
+  }, [canEdit, docked, setActive]);
   usePublishPageCommands(commands);
   return null;
 }

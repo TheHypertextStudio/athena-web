@@ -10,45 +10,34 @@
  * closes it. Each row's status glyph is a checkbox, its title opens the subtask (a double-click
  * renames it), and its remove button moves the subtask back to the top level.
  */
-import type { TaskRef } from '@docket/work/task-model';
+import type { TaskDetail, TaskRef } from '@docket/work/task-model';
 import { StatusIcon } from '@docket/ui/components';
 import { Link as LinkIcon, Plus } from '@docket/ui/icons';
 import { cn } from '@docket/ui/lib/utils';
-import { Button, Input } from '@docket/ui/primitives';
+import { Button, focusRing, Input } from '@docket/ui/primitives';
 import { type JSX, useMemo, useState } from 'react';
 
 import { DetailSection } from '@/components/entity-detail/detail-section';
-import { useStatusRegistry } from '@/components/statuses/status-registry';
+import { SegmentedList, SegmentedListItem } from '@/components/entity-detail/segmented-list';
 import { useCategoryOf } from '@/components/entity-display/use-work-status';
+import { useStatusRegistry } from '@/components/statuses/status-registry';
 import { useTaskHierarchyDrop } from '@/components/tasks/task-hierarchy-drop';
-import type { ObjectRef } from '@/lib/actions';
+import type { TaskHierarchyItem } from '@/components/tasks/task-hierarchy-model';
+import { taskObjectRef } from '@/lib/actions';
+import type { TaskMutations } from '@/lib/use-task-mutations';
 
-import { useTaskRelationCommand } from './task-relation-commands';
+import { LINK_COPY, useTaskRelationControls } from './task-relation-commands';
 import { TaskRelationRow } from './task-relation-row';
 import { TaskSearchPopover } from './task-search-popover';
 
+/** The writes the section makes beyond linking: creating a subtask and ticking one off. */
+export type SubtaskMutations = Pick<TaskMutations, 'addSubtask' | 'toggleSubtask'>;
+
 /** Props for {@link Subtasks}. */
 export interface SubtasksProps {
-  /** Workspace that owns the parent and every subtask. */
-  readonly organizationId: string;
-  /** Parent task whose children are listed. */
-  readonly parentTaskId: string;
-  /** The parent's own ancestors and itself, which can never become its subtasks. */
-  readonly ineligibleIds: ReadonlySet<string>;
-  /** The parent task's subtask refs. */
-  readonly subtasks: readonly TaskRef[];
-  /** Create a subtask by title; rejects when the create fails. */
-  readonly onAdd: (title: string) => Promise<void>;
-  /** Make an existing task a subtask of this one. */
-  readonly onAttach: (task: TaskRef) => void;
-  /** Move a subtask back to the top level. */
-  readonly onDetach: (subtaskId: string) => void;
-  /** Toggle a subtask between done and its starting state. */
-  readonly onToggle: (subtask: TaskRef, done: boolean) => Promise<void>;
-  /** Navigate to a subtask's own detail view. */
-  readonly onOpen: (subtaskId: string) => void;
-  /** Rename a subtask in place. */
-  readonly onRename?: ((subtaskId: string, title: string) => void) | undefined;
+  /** The parent task; its subtasks are listed. */
+  readonly task: TaskDetail;
+  readonly mutations: SubtaskMutations;
   /** Whether the viewer may add, attach, detach, toggle, or rename. */
   readonly canEdit: boolean;
 }
@@ -59,29 +48,24 @@ export interface SubtasksProps {
  * @param props - See {@link SubtasksProps}.
  * @returns the section.
  */
-export function Subtasks(props: SubtasksProps): JSX.Element {
-  const { organizationId, subtasks, canEdit } = props;
+export function Subtasks({ task, mutations, canEdit }: SubtasksProps): JSX.Element {
   const categoryOf = useCategoryOf('task');
-  const [composerOpen, onComposerOpenChange] = useTaskRelationCommand('newSubtask');
-  const [attachOpen, setAttachOpen] = useTaskRelationCommand('existingSubtask');
+  const { active, setActive } = useTaskRelationControls();
+  const composerOpen = active === 'newSubtask';
+  const { subtasks } = task;
   const doneCount = subtasks.filter((s) => categoryOf(s.state) === 'completed').length;
-  const exclude = useMemo(
-    () => new Set([...props.ineligibleIds, ...subtasks.map((s) => s.id)]),
-    [props.ineligibleIds, subtasks],
+  // A drop onto a row nests the dragged task under that subtask; the drop checks this tree for loops.
+  const hierarchy = useMemo<readonly TaskHierarchyItem[]>(
+    () => [
+      { id: task.id, parentTaskId: null },
+      ...subtasks.map(({ id }) => ({ id, parentTaskId: task.id })),
+    ],
+    [subtasks, task.id],
   );
 
   const actions = canEdit ? (
     <>
-      <TaskSearchPopover
-        orgId={organizationId}
-        open={attachOpen}
-        onOpenChange={setAttachOpen}
-        anchor="trigger"
-        exclude={exclude}
-        onPick={props.onAttach}
-        searchPlaceholder="Add an existing task…"
-        ariaLabel="Existing task to add as a subtask"
-      >
+      <TaskSearchPopover task={task} links={['subtask']} anchor="trigger">
         <Button type="button" variant="ghost" size="sm" iconOnly aria-label="Add existing task">
           <LinkIcon className="size-4" />
         </Button>
@@ -94,7 +78,7 @@ export function Subtasks(props: SubtasksProps): JSX.Element {
         aria-label="Add subtask"
         aria-expanded={composerOpen}
         onClick={() => {
-          onComposerOpenChange(true);
+          setActive('newSubtask');
         }}
       >
         <Plus className="size-4" />
@@ -110,19 +94,26 @@ export function Subtasks(props: SubtasksProps): JSX.Element {
       actions={actions}
     >
       {subtasks.length > 0 || composerOpen ? (
-        <ul className="flex flex-col">
+        <SegmentedList>
           {subtasks.map((subtask) => (
-            <SubtaskRow key={subtask.id} subtask={subtask} {...props} />
+            <SubtaskRow
+              key={subtask.id}
+              parent={task}
+              subtask={subtask}
+              hierarchy={hierarchy}
+              onToggle={mutations.toggleSubtask}
+              canEdit={canEdit}
+            />
           ))}
           {canEdit && composerOpen ? (
             <SubtaskComposer
-              onAdd={props.onAdd}
+              onAdd={mutations.addSubtask}
               onClose={() => {
-                onComposerOpenChange(false);
+                setActive(null);
               }}
             />
           ) : null}
-        </ul>
+        </SegmentedList>
       ) : null}
     </DetailSection>
   );
@@ -138,36 +129,31 @@ interface SubtaskComposerProps {
  * The inline row that adds subtasks by title.
  *
  * @remarks
- * Enter creates the subtask and clears the field for the next one. A failed create keeps the typed
- * title so nothing is lost; the query layer has already told the person what went wrong.
+ * Enter creates the subtask and clears the field for the next one, without waiting for the server.
+ * A failed create puts the typed title back when the field is still empty, so nothing is lost; the
+ * query layer has already told the person what went wrong.
  */
 function SubtaskComposer({ onAdd, onClose }: SubtaskComposerProps): JSX.Element {
   const landing = useStatusRegistry().defaultOf('task')?.category ?? 'backlog';
   const [title, setTitle] = useState('');
-  const [adding, setAdding] = useState(false);
 
-  async function add(): Promise<void> {
+  const add = (): void => {
     const trimmed = title.trim();
-    if (trimmed.length === 0 || adding) return;
-    setAdding(true);
+    if (trimmed.length === 0) return;
     setTitle('');
-    try {
-      await onAdd(trimmed);
-    } catch {
+    onAdd(trimmed).catch(() => {
       setTitle((current) => (current.length === 0 ? trimmed : current));
-    } finally {
-      setAdding(false);
-    }
-  }
+    });
+  };
 
   return (
-    <li className="flex min-h-9 items-center gap-2 px-2">
+    <SegmentedListItem>
       <StatusIcon type={landing} />
       <form
         className="flex min-w-0 flex-1"
         onSubmit={(event) => {
           event.preventDefault();
-          void add();
+          add();
         }}
       >
         <Input
@@ -185,52 +171,46 @@ function SubtaskComposer({ onAdd, onClose }: SubtaskComposerProps): JSX.Element 
             }
           }}
           onBlur={() => {
-            if (title.trim().length === 0 && !adding) onClose();
+            if (title.trim().length === 0) onClose();
           }}
           className="h-8"
         />
       </form>
-    </li>
+    </SegmentedListItem>
   );
 }
 
 /** Props for {@link SubtaskRow}. */
-interface SubtaskRowProps extends SubtasksProps {
+interface SubtaskRowProps {
+  readonly parent: TaskDetail;
   readonly subtask: TaskRef;
+  /** The parent and its subtasks, for checking a drop onto this row. */
+  readonly hierarchy: readonly TaskHierarchyItem[];
+  readonly onToggle: SubtaskMutations['toggleSubtask'];
+  readonly canEdit: boolean;
 }
 
 /** One subtask: a status checkbox, the title, and a detach button. */
 function SubtaskRow({
+  parent,
   subtask,
-  subtasks,
-  organizationId,
-  parentTaskId,
-  canEdit,
+  hierarchy,
   onToggle,
-  onOpen,
-  onRename,
-  onDetach,
+  canEdit,
 }: SubtaskRowProps): JSX.Element {
   const categoryOf = useCategoryOf('task');
+  const { writes } = useTaskRelationControls();
   const [busy, setBusy] = useState(false);
-  const object = {
-    kind: 'task' as const,
-    id: subtask.id,
-    organizationId,
-    title: subtask.title,
-    meta: { parentTaskId },
-  } satisfies ObjectRef;
-  const hierarchyRows = [
-    { id: parentTaskId, parentTaskId: null },
-    ...subtasks.map(({ id }) => ({ id, parentTaskId })),
-  ];
-  const drop = useTaskHierarchyDrop(object, hierarchyRows);
+  const drop = useTaskHierarchyDrop(
+    taskObjectRef({ ...subtask, parentTaskId: parent.id }, parent.organizationId),
+    hierarchy,
+  );
   const type = categoryOf(subtask.state);
   const done = type === 'completed';
 
   const toggle = (): void => {
     setBusy(true);
-    onToggle(subtask, !done)
+    onToggle(subtask.id, !done)
       .catch(() => undefined)
       .finally(() => {
         setBusy(false);
@@ -239,20 +219,21 @@ function SubtaskRow({
 
   return (
     <TaskRelationRow
-      orgId={organizationId}
+      orgId={parent.organizationId}
       task={subtask}
       done={done}
-      onOpen={onOpen}
-      onRename={canEdit ? onRename : undefined}
-      onRemove={
+      onRename={canEdit ? writes.rename : undefined}
+      remove={
         canEdit
-          ? () => {
-              onDetach(subtask.id);
+          ? {
+              label: LINK_COPY.subtask.remove,
+              onRemove: () => {
+                writes.unlink('subtask', subtask.id);
+              },
             }
           : undefined
       }
-      removeLabel="Remove from subtasks"
-      rowProps={{ ...drop.rowProps, className: cn(drop.rowProps.className, drop.className) }}
+      drop={{ ...drop.rowProps, className: cn(drop.rowProps.className, drop.className) }}
       leading={
         <>
           <button
@@ -263,7 +244,7 @@ function SubtaskRow({
             aria-pressed={done}
             disabled={!canEdit || busy}
             onClick={toggle}
-            className="focus-visible:ring-ring rounded-full focus-visible:ring-1 focus-visible:outline-none disabled:opacity-50"
+            className={cn(focusRing, 'rounded-full disabled:opacity-50')}
           >
             <StatusIcon type={type} />
           </button>

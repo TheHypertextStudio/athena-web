@@ -8,7 +8,6 @@
  * someone opens that tab.
  */
 import type { TaskDetail } from '@docket/work/task-model';
-import type { QueryKey } from '@tanstack/react-query';
 import type { JSX } from 'react';
 
 import type { EntityMentionsData } from '@/lib/use-entity-mentions';
@@ -24,7 +23,6 @@ export interface TaskSectionsProps {
   readonly tab: TaskTab;
   readonly orgId: string;
   readonly task: TaskDetail;
-  readonly detailKey: QueryKey;
   readonly currentActorId: string | null;
   readonly canEdit: boolean;
   readonly canComment: boolean;

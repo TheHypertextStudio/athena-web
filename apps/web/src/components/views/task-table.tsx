@@ -65,7 +65,7 @@ import {
 } from '@/components/selection';
 import { useTaskHierarchyDrop } from '@/components/tasks/task-hierarchy-drop';
 import { TaskTimerButton } from '@/components/time-tracking';
-import { objectKey, objectTargetProps, type ObjectRef } from '@/lib/actions';
+import { objectKey, objectTargetProps, taskObjectRef } from '@/lib/actions';
 import { formatEstimate } from '@/lib/format-estimate';
 import { formatCalendarDate } from '@/lib/format-date';
 import { api } from '@/lib/api';
@@ -89,19 +89,9 @@ function headerFor<T>(catalog: FieldCatalog<T>, key: string, fallback: string): 
   return findField(catalog, key)?.label ?? fallback;
 }
 
-/**
- * Build the canonical `kind: 'task'` identity used by drag, selection, actions, and label editing.
- * The object stays intentionally small so each interaction reads the same stable facts instead of
- * copying a full Task record into UI-specific payloads.
- */
+/** A row's task as drag, selection, actions, and label editing see it. */
 function taskObject(task: TaskOut) {
-  return {
-    kind: 'task' as const,
-    id: task.id,
-    organizationId: task.organizationId,
-    title: task.title,
-    meta: { parentTaskId: task.parentTaskId ?? null },
-  } satisfies ObjectRef;
+  return taskObjectRef(task, task.organizationId);
 }
 
 /** Props for {@link buildTaskColumns}. */

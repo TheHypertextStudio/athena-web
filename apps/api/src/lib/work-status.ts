@@ -375,3 +375,19 @@ export async function landingStatus(
   if (status === undefined) throw new NotFoundError(`This workspace has no ${entityType} statuses`);
   return status;
 }
+
+/**
+ * The transition a new Task created without a status starts with: its team's landing status.
+ *
+ * @param orgId - The workspace.
+ * @param teamId - The new task's team.
+ * @returns the status id, its key, and the terminal timestamps, ready to write on the row.
+ * @throws {NotFoundError} When the workspace has no task statuses.
+ */
+export async function landingTaskTransition(
+  orgId: string,
+  teamId: string,
+): Promise<TaskStatusTransition> {
+  const status = await landingStatus(orgId, 'task', teamId);
+  return { statusId: status.id, state: status.key, ...terminalStampsFor(status.category) };
+}

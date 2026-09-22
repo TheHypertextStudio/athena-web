@@ -207,6 +207,8 @@ export const queryKeys = {
   // The dependency-graph read carries its scope (`org` / `project:<id>` / `task:<id>:<depth>`)
   // so each embed caches apart; the coarse `['org',orgId,'task-graph']` prefix invalidates all.
   taskGraph: (orgId: string, scopeKey: string) => ['org', orgId, 'task-graph', scopeKey] as const,
+  /** Every cached dependency-graph read in the org, whatever its scope. */
+  taskGraphs: (orgId: string) => ['org', orgId, 'task-graph'] as const,
   settings: (orgId: string, tab: string) => ['org', orgId, 'settings', tab] as const,
   billing: (orgId: string) => ['org', orgId, 'settings', 'billing'] as const,
   billingDiscounts: (orgId: string) => ['org', orgId, 'settings', 'billing', 'discounts'] as const,

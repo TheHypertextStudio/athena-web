@@ -69,7 +69,7 @@ function sectionLabel(
   section: { readonly section: PaletteSection; readonly label: string },
   context: SectionLabelContext,
 ): string {
-  if (section.section === 'page') return context.pageLabel;
+  if (section.section === 'page') return context.pageLabel || section.label;
   if (section.section !== 'results') return section.label;
   if (context.mode !== null) return PALETTE_MODES[context.mode]?.label ?? section.label;
   return context.hasQuery ? section.label : 'Recent';

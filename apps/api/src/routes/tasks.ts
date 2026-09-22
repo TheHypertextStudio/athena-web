@@ -65,7 +65,7 @@ import {
   finishTaskStateTransition,
 } from '../lib/task-state';
 import { encodeListCursor, pageResult, seekAfter } from '../lib/list-cursor';
-import { landingStatus, terminalStampsFor } from '../lib/work-status';
+import { landingStatus, landingTaskTransition } from '../lib/work-status';
 import { apiDoc } from '../lib/openapi-route';
 import { serializableTx } from '../lib/serializable-tx';
 import { assertTaskWindowOrdered, dayOf } from '../lib/task-window';
@@ -450,11 +450,7 @@ The new task appears in the organization's activity stream. An assigned task als
       // tenant guards above are.
       const transitionRead =
         body.state === undefined
-          ? landingStatus(orgId, 'task', body.teamId).then((status) => ({
-              statusId: status.id,
-              state: status.key,
-              ...terminalStampsFor(status.category),
-            }))
+          ? landingTaskTransition(orgId, body.teamId)
           : resolveStateTransition(orgId, body.teamId, body.state);
       const labelsRead = resolveLabelSet(orgId, body.labels, { teamId: body.teamId });
       await guardsInOrder([transitionRead, labelsRead]);

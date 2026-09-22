@@ -300,6 +300,15 @@ routes/project-rollup.ts}`, `domains/work/src/contracts/{milestone,task}.ts`,
   activity sentences for dependencies ("set Dependency to Blocked by …"); right-click "Create
   subtask" still creates a literal "New subtask"; description heading scale; the palette-surface
   browse with `kinds`.
+- **Second pass (2026-09-22)**: section rows became MD3 Expressive segmented lists
+  (`SegmentedList`); the expanded title sits 12px under its glyph; Track is a prominent tonal
+  button. The relationship writes moved into `TaskRelationsProvider` (no `relations` prop through
+  five components), dispatch through one `switch` on `optimisticPatch`, and refresh the task graph.
+  A search opened by a click records its owner, so the chip row's hidden measuring copy no longer
+  opens a second parent search. Page commands live in a provider under the palette's. Shared
+  `LINK_COPY`, `taskObjectRef`, `searchFacetString`, and API `landingTaskTransition` replace copies.
+  Main's red "Test (rest)" gate was two stale policy ledgers from the provenance commit (the new
+  `./provenance-contract` entrypoint, and `audit_event.created_at` moving files).
 - **Blockers**: None.
 
 ---

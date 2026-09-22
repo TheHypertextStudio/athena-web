@@ -39,7 +39,7 @@ import {
   toRef,
   wouldCreateCycle,
 } from './task-helpers';
-import { landingStatus, resolveTaskStatus, terminalStampsFor } from '../lib/work-status';
+import { landingTaskTransition, resolveTaskStatus } from '../lib/work-status';
 
 async function listVisibleSubtasks(
   organizationId: string,
@@ -169,11 +169,7 @@ The child inherits sensible defaults but can override them: \`state\` defaults t
 
       const inherited =
         body.state === undefined
-          ? await landingStatus(orgId, 'task', parent.teamId).then((status) => ({
-              statusId: status.id,
-              state: status.key,
-              ...terminalStampsFor(status.category),
-            }))
+          ? await landingTaskTransition(orgId, parent.teamId)
           : await resolveTaskStatus(orgId, parent.teamId, body.state);
       // `SubtaskCreate.labels` was accepted and discarded here for the same reason
       // `TaskCreate.labels` was: nothing ever wrote the join. Resolve against the parent's team,

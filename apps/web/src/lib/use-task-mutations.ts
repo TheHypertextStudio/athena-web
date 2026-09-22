@@ -25,6 +25,7 @@ import { api } from './api';
 import { userErrorMessage, UserFacingError } from './problem';
 import { queryKeys, unwrap, useApiMutation } from './query';
 import { cycleAssignmentRequest, isCycleCadenceConflict } from './task-cycle-mutation';
+import { withRef } from './task-refs';
 
 /** Fields accepted by the task patch mutation. All are optional; `null` clears the field. */
 export interface TaskPatch {
@@ -125,14 +126,13 @@ export function patchTaskAggregate(
  * @returns the parent with the subtask appended, or unchanged when it is already listed.
  */
 function withCreatedSubtask(task: TaskDetail, created: TaskOut): TaskDetail {
-  if (task.subtasks.some((subtask) => subtask.id === created.id)) return task;
   const ref = {
     id: created.id,
     title: created.title,
     state: created.state,
     projectId: created.projectId ?? null,
   };
-  return { ...task, subtasks: [...task.subtasks, ref] };
+  return { ...task, subtasks: withRef(task.subtasks, ref) };
 }
 
 /**
@@ -161,7 +161,7 @@ function useAddSubtaskMutation(orgId: string, taskId: string, detailKey: QueryKe
         patchTaskAggregate(current, (task) => withCreatedSubtask(task, created)),
       );
     },
-    invalidateKeys: [detailKey, queryKeys.tasks(orgId)],
+    invalidateKeys: [queryKeys.tasks(orgId), queryKeys.taskGraphs(orgId)],
   });
 }
 

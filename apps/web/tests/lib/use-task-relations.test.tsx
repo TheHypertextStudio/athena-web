@@ -118,7 +118,7 @@ describe('useTaskRelations — dependencies', () => {
     const { result, read } = mount();
 
     act(() => {
-      result.current.addDependency('blockedBy', BLOCKER);
+      result.current.link('blockedBy', BLOCKER);
     });
 
     await waitFor(() => {
@@ -135,7 +135,7 @@ describe('useTaskRelations — dependencies', () => {
     const { result } = mount();
 
     act(() => {
-      result.current.addDependency('blocking', RELATED);
+      result.current.link('blocking', RELATED);
     });
 
     await waitFor(() => {
@@ -151,7 +151,7 @@ describe('useTaskRelations — dependencies', () => {
     const { result, read } = mount();
 
     act(() => {
-      result.current.addDependency('blockedBy', BLOCKER);
+      result.current.link('blockedBy', BLOCKER);
     });
 
     const notice = await screen.findByRole('alert');
@@ -164,7 +164,7 @@ describe('useTaskRelations — dependencies', () => {
     const { result, read } = mount();
 
     act(() => {
-      result.current.removeDependency(DEPENDENT.id);
+      result.current.unlink('blocking', DEPENDENT.id);
     });
 
     await waitFor(() => {
@@ -182,7 +182,7 @@ describe('useTaskRelations — related tasks', () => {
     const { result, read } = mount();
 
     act(() => {
-      result.current.addRelated(RELATED);
+      result.current.link('related', RELATED);
     });
     await waitFor(() => {
       expect(read()?.relatedTasks.map((task) => task.id)).toEqual([RELATED.id]);
@@ -193,7 +193,7 @@ describe('useTaskRelations — related tasks', () => {
     });
 
     act(() => {
-      result.current.removeRelated(RELATED.id);
+      result.current.unlink('related', RELATED.id);
     });
     await waitFor(() => {
       expect(taskPatch).toHaveBeenLastCalledWith(
@@ -213,7 +213,7 @@ describe('useTaskRelations — hierarchy', () => {
     const { result, read } = mount();
 
     act(() => {
-      result.current.detachSubtask(CHILD.id);
+      result.current.unlink('subtask', CHILD.id);
     });
 
     await waitFor(() => {
@@ -231,7 +231,7 @@ describe('useTaskRelations — hierarchy', () => {
     const { result, read } = mount();
 
     act(() => {
-      result.current.attachSubtask(RELATED);
+      result.current.link('subtask', RELATED);
     });
 
     await waitFor(() => {
@@ -249,7 +249,7 @@ describe('useTaskRelations — hierarchy', () => {
     const { result } = mount();
 
     act(() => {
-      result.current.setParent(BLOCKER.id);
+      result.current.link('parent', BLOCKER);
     });
     await waitFor(() => {
       expect(reparentPost).toHaveBeenCalledWith(
@@ -260,7 +260,7 @@ describe('useTaskRelations — hierarchy', () => {
     });
 
     act(() => {
-      result.current.setParent(null);
+      result.current.unlink('parent', BLOCKER.id);
     });
     await waitFor(() => {
       expect(reparentPost).toHaveBeenLastCalledWith(

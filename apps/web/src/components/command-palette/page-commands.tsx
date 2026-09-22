@@ -6,10 +6,21 @@
  * @remarks
  * A page publishes its own actions (a task page's "Add blocker", "Add subtask") while it is
  * mounted, and the palette lists them first, under the page's own heading. One page publishes at a
- * time: the most recent publisher wins, and unmounting withdraws its commands. The store lives at
- * module scope because the palette and the page sit in unrelated parts of the tree.
+ * time: the most recent publisher wins, and unmounting withdraws its commands. The
+ * {@link PageCommandsProvider} sits in the command palette's provider, above both the palette and
+ * the page; outside it, publishing does nothing and nothing is read.
  */
-import { useEffect, useMemo, useSyncExternalStore } from 'react';
+import {
+  createContext,
+  type Dispatch,
+  type JSX,
+  type ReactNode,
+  type SetStateAction,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+} from 'react';
 
 import { filterCommands } from './filter';
 import type { PaletteItem } from './types';
@@ -24,19 +35,22 @@ export interface PageCommands {
 
 const NONE: PageCommands = { label: '', items: [] };
 
-let current: PageCommands = NONE;
-const listeners = new Set<() => void>();
+const PublishContext = createContext<Dispatch<SetStateAction<PageCommands>>>(() => undefined);
+const PageCommandsContext = createContext<PageCommands>(NONE);
 
-function publish(next: PageCommands): void {
-  current = next;
-  for (const listener of listeners) listener();
-}
-
-function subscribe(listener: () => void): () => void {
-  listeners.add(listener);
-  return () => {
-    listeners.delete(listener);
-  };
+/**
+ * Hold the commands the page on screen publishes.
+ *
+ * @param props - The subtree holding both the palette and the pages.
+ * @returns the provider.
+ */
+export function PageCommandsProvider({ children }: { readonly children: ReactNode }): JSX.Element {
+  const [commands, setCommands] = useState<PageCommands>(NONE);
+  return (
+    <PublishContext.Provider value={setCommands}>
+      <PageCommandsContext.Provider value={commands}>{children}</PageCommandsContext.Provider>
+    </PublishContext.Provider>
+  );
 }
 
 /**
@@ -45,12 +59,13 @@ function subscribe(listener: () => void): () => void {
  * @param commands - The heading and commands; pass a stable (memoized) value.
  */
 export function usePublishPageCommands(commands: PageCommands): void {
+  const publish = useContext(PublishContext);
   useEffect(() => {
     publish(commands);
     return () => {
-      if (current === commands) publish(NONE);
+      publish((current) => (current === commands ? NONE : current));
     };
-  }, [commands]);
+  }, [commands, publish]);
 }
 
 /**
@@ -59,11 +74,7 @@ export function usePublishPageCommands(commands: PageCommands): void {
  * @returns the published heading and commands; empty when no page publishes any.
  */
 export function usePageCommands(): PageCommands {
-  return useSyncExternalStore(
-    subscribe,
-    () => current,
-    () => NONE,
-  );
+  return useContext(PageCommandsContext);
 }
 
 /**

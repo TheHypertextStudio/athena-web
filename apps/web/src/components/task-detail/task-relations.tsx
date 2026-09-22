@@ -10,7 +10,7 @@
  * and its `+` alone. Every row removes its link (never the other task) and names its project only
  * when that differs from this task's.
  */
-import type { TaskRef } from '@docket/work/task-model';
+import type { TaskDetail, TaskRef } from '@docket/work/task-model';
 import { Plus } from '@docket/ui/icons';
 import {
   Button,
@@ -19,73 +19,37 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@docket/ui/primitives';
-import { type JSX, useMemo, useRef, useState } from 'react';
+import { type JSX, useRef } from 'react';
 
 import { DetailSection } from '@/components/entity-detail/detail-section';
-import type { DependencyDirection } from '@/lib/use-task-relations';
+import { SegmentedList } from '@/components/entity-detail/segmented-list';
+import type { TaskLink } from '@/lib/use-task-relations';
 
-import { type TaskRelationCommand, useTaskRelationCommands } from './task-relation-commands';
+import { LINK_COPY, useTaskRelationControls } from './task-relation-commands';
 import { TaskRelationRow } from './task-relation-row';
 import { TaskSearchPopover } from './task-search-popover';
 
-/** The three kinds of link, in the order the section lists them. */
-export type TaskRelationKind = DependencyDirection | 'related';
+/** The three kinds of link this section lists, in order. */
+const KINDS = ['blockedBy', 'blocking', 'related'] as const satisfies readonly TaskLink[];
 
-/** How each kind reads in the menu, the group label, the picker, and the remove button. */
-const KIND_COPY: Readonly<
-  Record<
-    TaskRelationKind,
-    { menu: string; group: string; search: string; picker: string; remove: string }
-  >
-> = {
-  blockedBy: {
-    menu: 'Add blocker',
-    group: 'Blocked by',
-    search: 'Find the task this one waits on…',
-    picker: 'Task that blocks this one',
-    remove: 'Remove blocker',
-  },
-  blocking: {
-    menu: 'Add blocked task',
-    group: 'Blocking',
-    search: 'Find a task this one blocks…',
-    picker: 'Task this one blocks',
-    remove: 'Remove blocked task',
-  },
-  related: {
-    menu: 'Add related task',
-    group: 'Related',
-    search: 'Find a related task…',
-    picker: 'Related task',
-    remove: 'Remove related task',
-  },
-};
+/** A kind of link this section lists. */
+type SectionLink = (typeof KINDS)[number];
 
-const KINDS: readonly TaskRelationKind[] = ['blockedBy', 'blocking', 'related'];
+/** The tasks linked as `kind`. */
+function linkedAs(task: TaskDetail, kind: SectionLink): readonly TaskRef[] {
+  if (kind === 'related') return task.relatedTasks;
+  return task[kind];
+}
+
+/** Names a linked task's project when it differs from this task's, else `null`. */
+type OtherProjectName = (projectId: string) => string | null;
 
 /** Props for {@link TaskRelations}. */
 export interface TaskRelationsProps {
-  readonly orgId: string;
-  /** The task the section belongs to; never offered as its own link. */
-  readonly taskId: string;
-  /** This task's project, so a row names a project only when it differs. */
-  readonly projectId: string | null;
-  readonly blockedBy: readonly TaskRef[];
-  readonly blocking: readonly TaskRef[];
-  readonly related: readonly TaskRef[];
+  readonly task: TaskDetail;
+  /** Name a project for a linked task that sits in a different one. */
   readonly projectName: (projectId: string) => string;
   readonly canEdit: boolean;
-  readonly onAdd: (kind: TaskRelationKind, task: TaskRef) => void;
-  readonly onRemove: (kind: TaskRelationKind, taskId: string) => void;
-  readonly onOpen: (taskId: string) => void;
-  readonly onRename?: ((taskId: string, title: string) => void) | undefined;
-}
-
-/** Narrow the page's open control to the kind of link this section adds, if it is one. */
-function relationKindOf(command: TaskRelationCommand | null): TaskRelationKind | null {
-  return command !== null && (KINDS as readonly string[]).includes(command)
-    ? (command as TaskRelationKind)
-    : null;
 }
 
 /**
@@ -94,24 +58,28 @@ function relationKindOf(command: TaskRelationCommand | null): TaskRelationKind |
  * @param props - See {@link TaskRelationsProps}.
  * @returns the section.
  */
-export function TaskRelations(props: TaskRelationsProps): JSX.Element {
-  const { blockedBy, blocking, related } = props;
-  const lists = useMemo<RelationLists>(
-    () => ({ blockedBy, blocking, related }),
-    [blockedBy, blocking, related],
-  );
-  const total = blockedBy.length + blocking.length + related.length;
+export function TaskRelations({ task, projectName, canEdit }: TaskRelationsProps): JSX.Element {
+  const shown = KINDS.filter((kind) => linkedAs(task, kind).length > 0);
+  const total = shown.reduce((sum, kind) => sum + linkedAs(task, kind).length, 0);
+  const otherProject: OtherProjectName = (projectId) =>
+    projectId === task.projectId ? null : projectName(projectId);
   return (
     <DetailSection
       id="relations"
       title="Relations"
       count={total > 0 ? total : undefined}
-      actions={props.canEdit ? <AddRelation {...props} lists={lists} /> : null}
+      actions={canEdit ? <AddRelation task={task} otherProject={otherProject} /> : null}
     >
-      {total > 0 ? (
-        <div className="flex flex-col gap-3">
-          {KINDS.filter((kind) => lists[kind].length > 0).map((kind) => (
-            <RelationGroup key={kind} kind={kind} tasks={lists[kind]} {...props} />
+      {shown.length > 0 ? (
+        <div className="flex flex-col gap-4">
+          {shown.map((kind) => (
+            <RelationGroup
+              key={kind}
+              kind={kind}
+              task={task}
+              otherProject={otherProject}
+              canEdit={canEdit}
+            />
           ))}
         </div>
       ) : null}
@@ -119,12 +87,10 @@ export function TaskRelations(props: TaskRelationsProps): JSX.Element {
   );
 }
 
-/** The task's links, by kind. */
-type RelationLists = Readonly<Record<TaskRelationKind, readonly TaskRef[]>>;
-
 /** Props for {@link AddRelation}. */
-interface AddRelationProps extends TaskRelationsProps {
-  readonly lists: RelationLists;
+interface AddRelationProps {
+  readonly task: TaskDetail;
+  readonly otherProject: OtherProjectName;
 }
 
 /**
@@ -133,36 +99,13 @@ interface AddRelationProps extends TaskRelationsProps {
  * @param props - See {@link AddRelationProps}.
  * @returns the menu button inside its search popover.
  */
-function AddRelation({ orgId, taskId, projectId, lists, ...props }: AddRelationProps): JSX.Element {
-  const commands = useTaskRelationCommands();
-  const requestedKind = relationKindOf(commands.active);
-  const [menuOpen, setMenuOpen] = useState(false);
-  const picked = useRef<TaskRelationKind | null>(null);
-  // A task already linked in any way is never offered again: linking a blocker as a blocked task
-  // would be a loop, and one link per pair keeps the section readable.
-  const exclude = useMemo(
-    () => new Set([taskId, ...KINDS.flatMap((kind) => lists[kind].map((ref) => ref.id))]),
-    [lists, taskId],
-  );
-  const copy = requestedKind === null ? null : KIND_COPY[requestedKind];
+function AddRelation({ task, otherProject }: AddRelationProps): JSX.Element {
+  const { setActive } = useTaskRelationControls();
+  const picked = useRef<SectionLink | null>(null);
   return (
-    <TaskSearchPopover
-      orgId={orgId}
-      open={requestedKind !== null}
-      onOpenChange={(open) => {
-        if (!open && requestedKind !== null) commands.setActive(null);
-      }}
-      anchor="anchor"
-      exclude={exclude}
-      onPick={(task) => {
-        if (requestedKind !== null) props.onAdd(requestedKind, task);
-      }}
-      projectName={(id) => (id === projectId ? null : props.projectName(id))}
-      searchPlaceholder={copy?.search ?? ''}
-      ariaLabel={copy?.picker ?? 'Task'}
-    >
+    <TaskSearchPopover task={task} links={KINDS} anchor="anchor" projectName={otherProject}>
       <span className="inline-flex">
-        <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
+        <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button type="button" variant="ghost" size="sm" iconOnly aria-label="Add relation">
               <Plus className="size-4" />
@@ -178,7 +121,7 @@ function AddRelation({ orgId, taskId, projectId, lists, ...props }: AddRelationP
               if (kind === null) return;
               event.preventDefault();
               picked.current = null;
-              commands.setActive(kind);
+              setActive(kind);
             }}
           >
             {KINDS.map((kind) => (
@@ -188,7 +131,7 @@ function AddRelation({ orgId, taskId, projectId, lists, ...props }: AddRelationP
                   picked.current = kind;
                 }}
               >
-                {KIND_COPY[kind].menu}
+                {LINK_COPY[kind].add}
               </DropdownMenuItem>
             ))}
           </DropdownMenuContent>
@@ -199,52 +142,48 @@ function AddRelation({ orgId, taskId, projectId, lists, ...props }: AddRelationP
 }
 
 /** Props for {@link RelationGroup}. */
-interface RelationGroupProps extends TaskRelationsProps {
-  readonly kind: TaskRelationKind;
-  readonly tasks: readonly TaskRef[];
+interface RelationGroupProps {
+  readonly kind: SectionLink;
+  readonly task: TaskDetail;
+  readonly otherProject: OtherProjectName;
+  readonly canEdit: boolean;
 }
 
 /**
- * One kind of link: its label, then a row per linked task.
+ * One kind of link: its label, then a segment per linked task.
  *
  * @param props - See {@link RelationGroupProps}.
  * @returns the labelled group.
  */
-function RelationGroup({
-  kind,
-  tasks,
-  orgId,
-  projectId,
-  canEdit,
-  ...props
-}: RelationGroupProps): JSX.Element {
-  const hintFor = (ref: TaskRef): string | null =>
-    ref.projectId && ref.projectId !== projectId ? props.projectName(ref.projectId) : null;
+function RelationGroup({ kind, task, otherProject, canEdit }: RelationGroupProps): JSX.Element {
+  const { writes } = useTaskRelationControls();
+  const copy = LINK_COPY[kind];
   return (
-    <div role="group" aria-label={KIND_COPY[kind].group} className="flex flex-col">
-      <h3 className="text-on-surface-variant text-label-medium flex h-7 items-center px-2">
-        {KIND_COPY[kind].group}
+    <div role="group" aria-label={copy.group} className="flex flex-col">
+      <h3 className="text-on-surface-variant text-label-medium flex h-7 items-center px-3">
+        {copy.group}
       </h3>
-      <ul className="flex flex-col">
-        {tasks.map((ref) => (
+      <SegmentedList>
+        {linkedAs(task, kind).map((ref) => (
           <TaskRelationRow
             key={ref.id}
-            orgId={orgId}
+            orgId={task.organizationId}
             task={ref}
-            hint={hintFor(ref)}
-            onOpen={props.onOpen}
-            onRename={canEdit ? props.onRename : undefined}
-            onRemove={
+            hint={ref.projectId ? otherProject(ref.projectId) : null}
+            onRename={canEdit ? writes.rename : undefined}
+            remove={
               canEdit
-                ? () => {
-                    props.onRemove(kind, ref.id);
+                ? {
+                    label: copy.remove,
+                    onRemove: () => {
+                      writes.unlink(kind, ref.id);
+                    },
                   }
                 : undefined
             }
-            removeLabel={KIND_COPY[kind].remove}
           />
         ))}
-      </ul>
+      </SegmentedList>
     </div>
   );
 }

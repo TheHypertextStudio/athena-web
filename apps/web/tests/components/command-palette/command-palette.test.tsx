@@ -10,7 +10,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AuthenticationInterlockProvider } from '@/components/authentication-interlock';
 import { CommandPalette } from '@/components/command-palette/command-palette';
-import { usePublishPageCommands } from '@/components/command-palette/page-commands';
+import {
+  PageCommandsProvider,
+  usePublishPageCommands,
+} from '@/components/command-palette/page-commands';
 import { SignOutCleanupError } from '@/lib/sign-out';
 import { makeQueryWrapper } from '../../support/query';
 
@@ -120,21 +123,32 @@ beforeEach(() => {
   signOutAndPurge.mockReset().mockResolvedValue();
 });
 
-function renderPalette() {
+/** Render the palette open, beside `page` (a page that publishes its own commands). */
+function renderPalette(page: ReactNode = null) {
   activeOrgState.activeOrgId = ORG;
   const { wrapper: QueryWrapper } = makeQueryWrapper();
   const onClose = vi.fn();
   const wrapper = ({ children }: { children: ReactNode }) => (
     <QueryWrapper>
       <AuthenticationInterlockProvider>
-        <ContextProvider initialContext={ORG}>{children}</ContextProvider>
+        <ContextProvider initialContext={ORG}>
+          <PageCommandsProvider>{children}</PageCommandsProvider>
+        </ContextProvider>
       </AuthenticationInterlockProvider>
     </QueryWrapper>
   );
-  const view = render(<CommandPalette open onClose={onClose} sessionOwnerUserId="user-1" />, {
-    wrapper,
-  });
-  return { onClose, view };
+  const palette = <CommandPalette open onClose={onClose} sessionOwnerUserId="user-1" />;
+  const view = render(
+    <>
+      {page}
+      {palette}
+    </>,
+    { wrapper },
+  );
+  const leavePage = (): void => {
+    view.rerender(palette);
+  };
+  return { onClose, view, leavePage };
 }
 
 describe('CommandPalette — sign-out recovery', () => {
@@ -347,27 +361,23 @@ describe('CommandPalette — the page on screen', () => {
 
   it('leads with the page’s own commands under the page’s heading, and runs them', () => {
     const run = vi.fn();
-    const publisher = render(<PublishesAddBlocker run={run} />);
-    renderPalette();
+    renderPalette(<PublishesAddBlocker run={run} />);
 
     const first = assertDefined(screen.getAllByRole('option')[0]);
     expect(first).toHaveAccessibleName(/Add blocker/);
     expect(screen.getByText('This task')).toBeInTheDocument();
     fireEvent.click(first);
     expect(run).toHaveBeenCalledTimes(1);
-
-    publisher.unmount();
   });
 
   it('matches the page’s commands by keyword, and drops them when the page unmounts', () => {
-    const publisher = render(<PublishesAddBlocker run={vi.fn()} />);
-    renderPalette();
+    const { leavePage } = renderPalette(<PublishesAddBlocker run={vi.fn()} />);
 
     fireEvent.change(screen.getByRole('combobox'), { target: { value: 'dependency' } });
     expect(screen.getByRole('option', { name: /Add blocker/ })).toBeInTheDocument();
 
     act(() => {
-      publisher.unmount();
+      leavePage();
     });
     expect(screen.queryByRole('option', { name: /Add blocker/ })).not.toBeInTheDocument();
   });

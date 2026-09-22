@@ -12,7 +12,6 @@
  * forced onto every trigger so the column reads as one type size. See
  * `docs/design/references/detail-page-layout.md`.
  */
-import type { QueryKey } from '@tanstack/react-query';
 import type { JSX } from 'react';
 
 import { formatCalendarDate } from '@/lib/format-date';
@@ -48,25 +47,13 @@ import {
  */
 const ROW_CONTROL_CLASS = 'h-9 text-body-medium max-w-full justify-start px-2';
 
-/** Props for {@link TaskPropertiesPanel}. */
-export interface TaskPropertiesPanelProps {
-  readonly orgId: string;
-  readonly model: TaskPropertyModel;
-  /** The task's detail cache key, patched when the parent changes. */
-  readonly detailKey: QueryKey;
-}
-
 /**
  * Render the properties sidebar.
  *
- * @param props - See {@link TaskPropertiesPanelProps}.
+ * @param props - The page's property model.
  * @returns the labelled property list.
  */
-export function TaskPropertiesPanel({
-  orgId,
-  model,
-  detailKey,
-}: TaskPropertiesPanelProps): JSX.Element {
+export function TaskPropertiesPanel({ model }: { readonly model: TaskPropertyModel }): JSX.Element {
   const { secondary } = model;
   const field = { model, triggerClassName: ROW_CONTROL_CLASS };
   return (
@@ -93,7 +80,7 @@ export function TaskPropertiesPanel({
           <ProjectField {...field} />
         </PropertyRow>
         <PropertyRow label="Parent">
-          <TaskParentField {...field} orgId={orgId} detailKey={detailKey} />
+          <TaskParentField {...field} />
         </PropertyRow>
         {/* A milestone belongs to a project, so the row appears once there is one to choose from. */}
         {model.task.projectId ? (

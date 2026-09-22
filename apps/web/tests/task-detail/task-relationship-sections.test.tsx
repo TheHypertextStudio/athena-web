@@ -2,19 +2,20 @@
  * The Subtasks and Relations sections: what a person can add, attach, link, and remove.
  *
  * @remarks
- * The task search itself is replaced by a stand-in that offers one fixed task, so these tests are
- * about the sections: which search opens, what it is told to leave out, and what a choice writes.
- * The search's own behavior is covered by `use-task-search-options.test.ts`.
+ * The task search is replaced by a stand-in that offers one fixed task, so these tests are about
+ * the sections: which search opens and what a choice writes. What the search offers is covered by
+ * `task-search-popover.test.tsx`.
  */
 import '@testing-library/jest-dom/vitest';
 
 import { TaskId } from '@docket/work/ids';
-import type { TaskRef } from '@docket/work/task-model';
+import type { TaskDetail, TaskRef } from '@docket/work/task-model';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import type { JSX, ReactElement } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { TaskSearchPopoverProps } from '../../src/components/task-detail/task-search-popover';
+import { stubRelations } from '../support/task-relations';
 
 const PICKED: TaskRef = {
   id: TaskId.parse('01BX5ZZKBKACTAV9WEVGEMMVP1'),
@@ -22,57 +23,56 @@ const PICKED: TaskRef = {
   state: 'todo',
 };
 
-const searches = vi.hoisted(() => ({ last: null as null | { exclude: ReadonlySet<string> } }));
-
-vi.mock('../../src/components/task-detail/task-search-popover', () => ({
-  TaskSearchPopover: ({
-    open,
-    children,
-    exclude,
-    onPick,
-    onOpenChange,
-    anchor,
-    ariaLabel,
-  }: TaskSearchPopoverProps): JSX.Element => {
-    if (open) searches.last = { exclude };
-    const opener =
-      anchor === 'trigger' ? (
-        <span
-          onClickCapture={() => {
-            onOpenChange(true);
-          }}
-        >
-          {children}
-        </span>
-      ) : (
-        children
+vi.mock('../../src/components/task-detail/task-search-popover', async () => {
+  const { useTaskRelationControls } =
+    await import('../../src/components/task-detail/task-relation-commands');
+  return {
+    TaskSearchPopover: ({ links, anchor, children }: TaskSearchPopoverProps): JSX.Element => {
+      const { writes, active, setActive } = useTaskRelationControls();
+      const link = links.find((kind) => kind === active);
+      const opener =
+        anchor === 'trigger' ? (
+          <span
+            onClickCapture={() => {
+              setActive(links[0]);
+            }}
+          >
+            {children}
+          </span>
+        ) : (
+          children
+        );
+      return (
+        <>
+          {opener}
+          {link ? (
+            <div role="dialog" aria-label={`Search: ${link}`}>
+              <button
+                type="button"
+                onClick={() => {
+                  writes.link(link, PICKED);
+                  setActive(null);
+                }}
+              >
+                {PICKED.title}
+              </button>
+            </div>
+          ) : null}
+        </>
       );
-    return (
-      <>
-        {opener}
-        {open ? (
-          <div role="dialog" aria-label={ariaLabel}>
-            <button
-              type="button"
-              onClick={() => {
-                onPick(PICKED);
-                onOpenChange(false);
-              }}
-            >
-              {PICKED.title}
-            </button>
-          </div>
-        ) : null}
-      </>
-    );
-  },
-}));
+    },
+  };
+});
 vi.mock('../../src/components/tasks/task-hierarchy-drop', () => ({
   useTaskHierarchyDrop: () => ({
     rowProps: { ref: () => undefined, 'data-drop-state': 'idle', className: '' },
     className: '',
     status: null,
   }),
+}));
+vi.mock('../../src/lib/interactions/navigation', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  useAppRouter: () => ({ push: vi.fn() }),
 }));
 vi.mock('next/link', () => ({
   default: ({ href, children, ...rest }: { href: string; children?: ReactElement }) => (
@@ -84,42 +84,59 @@ vi.mock('next/link', () => ({
 
 const { Subtasks } = await import('../../src/components/task-detail/Subtasks');
 const { TaskRelations } = await import('../../src/components/task-detail/task-relations');
-const { TaskRelationCommandsProvider } =
+const { TaskRelationsProvider } =
   await import('../../src/components/task-detail/task-relation-commands');
 
 afterEach(() => {
   cleanup();
-  searches.last = null;
 });
 
 function ref(suffix: string, title: string, state = 'todo'): TaskRef {
   return { id: TaskId.parse(`01BX5ZZKBKACTAV9WEVGEMMV${suffix}`), title, state };
 }
 
-const PARENT_ID = '01BX5ZZKBKACTAV9WEVGEMMVT0';
 const DONE = ref('S1', 'Collect quotes', 'done');
 const OPEN = ref('S2', 'Book the venue');
+const BLOCKER = { ...ref('R1', 'Write the brief'), projectId: null };
+const ELSEWHERE = {
+  ...ref('R2', 'Order signage'),
+  projectId: '01BX5ZZKBKACTAV9WEVGEMMVJ2',
+} as TaskRef;
 
-function renderSubtasks(overrides: Partial<Parameters<typeof Subtasks>[0]> = {}) {
-  const props = {
+/** A task with the given links; `overrides` swaps only what a case is about. */
+function task(overrides: Partial<TaskDetail> = {}): TaskDetail {
+  return {
+    id: '01BX5ZZKBKACTAV9WEVGEMMVT0',
     organizationId: 'org_1',
-    parentTaskId: PARENT_ID,
-    ineligibleIds: new Set([PARENT_ID]),
+    title: 'Plan the launch',
+    projectId: '01BX5ZZKBKACTAV9WEVGEMMVJ1',
+    parentTaskId: null,
     subtasks: [DONE, OPEN],
-    onAdd: vi.fn(() => Promise.resolve()),
-    onAttach: vi.fn(),
-    onDetach: vi.fn(),
-    onToggle: vi.fn(() => Promise.resolve()),
-    onOpen: vi.fn(),
-    canEdit: true,
+    blockedBy: [BLOCKER],
+    blocking: [],
+    relatedTasks: [ELSEWHERE],
     ...overrides,
+  } as TaskDetail;
+}
+
+function renderSubtasks(
+  options: { task?: TaskDetail; canEdit?: boolean; onAdd?: () => Promise<void> } = {},
+) {
+  const relations = stubRelations();
+  const mutations = {
+    addSubtask: vi.fn(options.onAdd ?? (() => Promise.resolve())),
+    toggleSubtask: vi.fn(() => Promise.resolve()),
   };
   render(
-    <TaskRelationCommandsProvider>
-      <Subtasks {...props} />
-    </TaskRelationCommandsProvider>,
+    <TaskRelationsProvider writes={relations}>
+      <Subtasks
+        task={options.task ?? task()}
+        mutations={mutations}
+        canEdit={options.canEdit ?? true}
+      />
+    </TaskRelationsProvider>,
   );
-  return props;
+  return { relations, mutations };
 }
 
 describe('Subtasks', () => {
@@ -132,7 +149,7 @@ describe('Subtasks', () => {
   });
 
   it('shows only its heading and add actions when there are none', () => {
-    renderSubtasks({ subtasks: [] });
+    renderSubtasks({ task: task({ subtasks: [] }) });
 
     const section = screen.getByRole('region', { name: /Subtasks/ });
     expect(within(section).queryByRole('list')).not.toBeInTheDocument();
@@ -142,7 +159,7 @@ describe('Subtasks', () => {
   });
 
   it('adds subtasks one after another from an inline row, and closes on Escape', async () => {
-    const { onAdd } = renderSubtasks();
+    const { mutations } = renderSubtasks();
 
     fireEvent.click(screen.getByRole('button', { name: 'Add subtask' }));
     const field = screen.getByRole('textbox', { name: 'New subtask title' });
@@ -151,7 +168,7 @@ describe('Subtasks', () => {
     fireEvent.change(field, { target: { value: 'Print badges' } });
     fireEvent.submit(field);
     await waitFor(() => {
-      expect(onAdd).toHaveBeenCalledWith('Print badges');
+      expect(mutations.addSubtask).toHaveBeenCalledWith('Print badges');
     });
     // Still open, and empty, for the next one.
     expect(screen.getByRole('textbox', { name: 'New subtask title' })).toHaveValue('');
@@ -163,8 +180,7 @@ describe('Subtasks', () => {
   });
 
   it('keeps the typed title when the create fails', async () => {
-    const onAdd = vi.fn(() => Promise.reject(new Error('refused')));
-    renderSubtasks({ onAdd });
+    renderSubtasks({ onAdd: () => Promise.reject(new Error('refused')) });
 
     fireEvent.click(screen.getByRole('button', { name: 'Add subtask' }));
     const field = screen.getByRole('textbox', { name: 'New subtask title' });
@@ -178,35 +194,31 @@ describe('Subtasks', () => {
     });
   });
 
-  it('attaches an existing task, never offering this task or its current subtasks', () => {
-    const { onAttach } = renderSubtasks();
+  it('attaches an existing task as a subtask', () => {
+    const { relations } = renderSubtasks();
 
     fireEvent.click(screen.getByRole('button', { name: 'Add existing task' }));
-    expect([...(searches.last?.exclude ?? [])].sort()).toEqual(
-      [PARENT_ID, DONE.id, OPEN.id].sort(),
-    );
     fireEvent.click(screen.getByRole('button', { name: PICKED.title }));
 
-    expect(onAttach).toHaveBeenCalledWith(PICKED);
+    expect(relations.link).toHaveBeenCalledWith('subtask', PICKED);
   });
 
   it('detaches a subtask and toggles one done', () => {
-    const { onDetach, onToggle } = renderSubtasks();
+    const { relations, mutations } = renderSubtasks();
 
     fireEvent.click(screen.getByRole('button', { name: `Remove from subtasks: ${OPEN.title}` }));
-    expect(onDetach).toHaveBeenCalledWith(OPEN.id);
+    expect(relations.unlink).toHaveBeenCalledWith('subtask', OPEN.id);
 
     fireEvent.click(screen.getByRole('button', { name: `Mark “${OPEN.title}” as done` }));
-    expect(onToggle).toHaveBeenCalledWith(OPEN, true);
+    expect(mutations.toggleSubtask).toHaveBeenCalledWith(OPEN.id, true);
   });
 
-  it('links every row to its task', () => {
+  it('links every row to its task, as one segment of a tonal list', () => {
     renderSubtasks();
 
-    expect(screen.getByRole('link', { name: OPEN.title })).toHaveAttribute(
-      'href',
-      `/orgs/org_1/tasks/${OPEN.id}`,
-    );
+    const link = screen.getByRole('link', { name: OPEN.title });
+    expect(link).toHaveAttribute('href', `/orgs/org_1/tasks/${OPEN.id}`);
+    expect(link.closest('li')).toHaveAttribute('data-surface-tone', 'card');
   });
 
   it('offers no way to change anything to a viewer who cannot edit', () => {
@@ -217,34 +229,18 @@ describe('Subtasks', () => {
   });
 });
 
-const TASK_ID = '01BX5ZZKBKACTAV9WEVGEMMVT9';
-const BLOCKER = { ...ref('R1', 'Write the brief'), projectId: null };
-const ELSEWHERE = {
-  ...ref('R2', 'Order signage'),
-  projectId: '01BX5ZZKBKACTAV9WEVGEMMVJ2',
-} as TaskRef;
-
-function renderRelations(overrides: Partial<Parameters<typeof TaskRelations>[0]> = {}) {
-  const props = {
-    orgId: 'org_1',
-    taskId: TASK_ID,
-    projectId: '01BX5ZZKBKACTAV9WEVGEMMVJ1',
-    blockedBy: [BLOCKER],
-    blocking: [],
-    related: [ELSEWHERE],
-    projectName: () => 'Signage',
-    canEdit: true,
-    onAdd: vi.fn(),
-    onRemove: vi.fn(),
-    onOpen: vi.fn(),
-    ...overrides,
-  };
+function renderRelations(options: { task?: TaskDetail; canEdit?: boolean } = {}) {
+  const relations = stubRelations();
   render(
-    <TaskRelationCommandsProvider>
-      <TaskRelations {...props} />
-    </TaskRelationCommandsProvider>,
+    <TaskRelationsProvider writes={relations}>
+      <TaskRelations
+        task={options.task ?? task()}
+        projectName={() => 'Signage'}
+        canEdit={options.canEdit ?? true}
+      />
+    </TaskRelationsProvider>,
   );
-  return props;
+  return { relations };
 }
 
 /** Choose one entry of the section's `+` menu. */
@@ -266,7 +262,7 @@ describe('TaskRelations', () => {
   });
 
   it('shows only its heading and its add action when the task has no links', () => {
-    renderRelations({ blockedBy: [], related: [] });
+    renderRelations({ task: task({ blockedBy: [], relatedTasks: [] }) });
 
     const section = screen.getByRole('region', { name: /Relations/ });
     expect(within(section).queryByRole('group')).not.toBeInTheDocument();
@@ -286,37 +282,25 @@ describe('TaskRelations', () => {
     ['Add blocker', 'blockedBy'],
     ['Add blocked task', 'blocking'],
     ['Add related task', 'related'],
-  ] as const)('%s searches for a task and adds it as %s', async (menu, kind) => {
-    const { onAdd } = renderRelations();
+  ] as const)('%s searches for a task and links it as %s', async (menu, kind) => {
+    const { relations } = renderRelations();
 
     await chooseFromMenu(menu);
     fireEvent.click(await screen.findByRole('button', { name: PICKED.title }));
 
-    expect(onAdd).toHaveBeenCalledWith(kind, PICKED);
-  });
-
-  it('never offers this task, or a task already linked to it in any way', async () => {
-    renderRelations();
-
-    await chooseFromMenu('Add blocked task');
-    await screen.findByRole('button', { name: PICKED.title });
-
-    // The blocker cannot also become a blocked task, and the related task is not offered twice.
-    expect([...(searches.last?.exclude ?? [])].sort()).toEqual(
-      [TASK_ID, BLOCKER.id, ELSEWHERE.id].sort(),
-    );
+    expect(relations.link).toHaveBeenCalledWith(kind, PICKED);
   });
 
   it('removes a link, never the task', () => {
-    const { onRemove } = renderRelations();
+    const { relations } = renderRelations();
 
     fireEvent.click(screen.getByRole('button', { name: `Remove blocker: ${BLOCKER.title}` }));
-    expect(onRemove).toHaveBeenCalledWith('blockedBy', BLOCKER.id);
+    expect(relations.unlink).toHaveBeenCalledWith('blockedBy', BLOCKER.id);
 
     fireEvent.click(
       screen.getByRole('button', { name: `Remove related task: ${ELSEWHERE.title}` }),
     );
-    expect(onRemove).toHaveBeenCalledWith('related', ELSEWHERE.id);
+    expect(relations.unlink).toHaveBeenCalledWith('related', ELSEWHERE.id);
   });
 
   it('offers no way to change links to a viewer who cannot edit', () => {

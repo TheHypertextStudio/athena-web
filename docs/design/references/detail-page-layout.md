@@ -59,28 +59,31 @@ row, and each list row all start at the column's left edge and end at its right 
 - Sidebar order: status, priority, assignee, delegate, project, parent, milestone, cycle, program,
   labels, due, anticipated start, estimate.
 
-### 4. Sections are flat
+### 4. Section headings are bare; the rows under them are segmented lists
 
-A section is a 36px heading row, then its content 8px below.
+A section is a 36px heading row, then its rows 8px below.
 
 - Heading row: the label in `text-title-small`, an optional count in `text-body-medium`
   `on-surface-variant`, then the section's actions (icon buttons, `ghost`, `size="sm"`) at the
-  right end.
-- Content: 36px list rows. A row has no background at rest and `surface-container-high` on hover
-  or focus.
-- No card, border, divider, or resting background around a section.
-- A sub-group inside a section is labelled by a 28px `text-label-medium` heading. Sub-groups are
-  12px apart.
+  right end. The heading row itself has no background.
+- Rows sit in a `SegmentedList` (`apps/web/src/components/entity-detail/segmented-list.tsx`), MD3
+  Expressive's segmented list. Each row is a 44px `card`-tone segment with 12px of inner inset,
+  2px from the next. The group's outer corners are `corner-lg` (16px) and the joins between rows
+  are `corner-xs` (4px). Hover and focus lift a row to `surface-container-high`.
+- No border, divider, or shadow anywhere in a section.
+- A sub-group inside a section is labelled by a 28px `text-label-medium` heading, inset 12px to
+  line up with the row content. Sub-groups are 16px apart.
 
 ### 5. Spacing
 
 | Between                                   | Space |
 | ----------------------------------------- | ----- |
 | Body sections (including the description) | 32px  |
-| A section's heading row and its content   | 8px   |
-| Rows in a list                            | 0     |
-| Sub-groups in a section                   | 12px  |
+| A section's heading row and its rows      | 8px   |
+| Segments in a list                        | 2px   |
+| Sub-groups in a section                   | 16px  |
 | Sidebar rows and the provenance footer    | 16px  |
+| The masthead glyph and the title below it | 12px  |
 
 Use only these values in a detail body. A new spacing value needs a new rule here first.
 

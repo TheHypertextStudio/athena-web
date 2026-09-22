@@ -6,9 +6,10 @@
  * @remarks
  * The frame every body section shares, per `docs/design/references/detail-page-layout.md`: a 36px
  * heading row carrying the label, an optional count, and the section's own actions at the end;
- * then the content, 8px below. The section is flat — no card, border, or resting background — so
- * its left and right edges are the body column's, and the description above it and every section
- * below share one alignment. An empty section is its heading and its actions, with no sentence.
+ * then the content, 8px below, usually a `SegmentedList` of tonal rows. The section itself draws no
+ * card, border, or background, so its left and right edges are the body column's, and the
+ * description above it and every section below share one alignment. An empty section is its
+ * heading and its actions, with no sentence.
  */
 import { cn } from '@docket/ui/lib/utils';
 import type { JSX, ReactNode } from 'react';
@@ -28,7 +29,7 @@ export interface DetailSectionProps {
 }
 
 /**
- * Render a flat detail-page section.
+ * Render a detail-page section.
  *
  * @param props - See {@link DetailSectionProps}.
  * @returns a labelled `section`.

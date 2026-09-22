@@ -17,7 +17,6 @@ import { SourceAwareActorPicker } from '@/components/people/source-person-refere
 import { DatePicker, EntityPicker, type PickerOption } from '@docket/ui/components';
 import { FolderKanban } from '@docket/ui/icons';
 import { cn } from '@docket/ui/lib/utils';
-import type { QueryKey } from '@tanstack/react-query';
 import type { JSX } from 'react';
 
 import { useCategoryOf } from '@/components/entity-display/use-work-status';
@@ -162,14 +161,6 @@ export function DueField({ model, triggerClassName }: LeadFieldProps): JSX.Eleme
   );
 }
 
-/** Props for {@link TaskMetadataRow}. */
-export interface TaskMetadataRowProps {
-  readonly orgId: string;
-  readonly model: TaskPropertyModel;
-  /** The task's detail cache key, patched when the parent changes. */
-  readonly detailKey: QueryKey;
-}
-
 /**
  * The masthead's labelled property row: every property as a prioritized chip.
  *
@@ -180,10 +171,10 @@ export interface TaskMetadataRowProps {
  * @returns the row, or `null` when the sidebar holds the properties.
  */
 export function TaskMetadataRow({
-  orgId,
   model,
-  detailKey,
-}: TaskMetadataRowProps): JSX.Element | null {
+}: {
+  readonly model: TaskPropertyModel;
+}): JSX.Element | null {
   const { docked } = useEntityDetailAside();
   if (docked) return null;
   const chip = { model, triggerClassName: ENTITY_METADATA_CHIP_CLASS };
@@ -207,7 +198,7 @@ export function TaskMetadataRow({
       </EntityMetadataItem>
       <TaskSecondaryProperties model={model} />
       <EntityMetadataItem priority={7} overflowOnly>
-        <TaskParentField {...chip} orgId={orgId} detailKey={detailKey} />
+        <TaskParentField {...chip} />
       </EntityMetadataItem>
     </EntityMetadataRow>
   );

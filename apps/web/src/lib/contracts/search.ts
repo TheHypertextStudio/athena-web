@@ -215,6 +215,18 @@ export const SearchResult = z
 export type SearchResult = z.infer<typeof SearchResult>;
 
 /**
+ * Read a non-empty string facet off a search hit.
+ *
+ * @param hit - The hit; its facet bag is typed `unknown` per key.
+ * @param key - The facet.
+ * @returns the value, or `null` when the facet is missing, empty, or not a string.
+ */
+export function searchFacetString(hit: SearchResult, key: string): string | null {
+  const value = hit.facets[key];
+  return typeof value === 'string' && value.length > 0 ? value : null;
+}
+
+/**
  * Parsed search query parameters used by Hub and org-scoped search routes.
  *
  * @remarks

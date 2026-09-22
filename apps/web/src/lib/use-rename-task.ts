@@ -12,6 +12,7 @@
  */
 import type { QueryKey } from '@tanstack/react-query';
 import type { TaskOut } from '@docket/work/task-model';
+import { useCallback } from 'react';
 
 import { api } from '@/lib/api';
 import { unwrap, useApiMutation } from '@/lib/query';
@@ -39,7 +40,11 @@ export function useRenameTask(
       ),
     invalidateKeys,
   });
-  return (taskId: string, title: string): void => {
-    mutation.mutate({ taskId, title });
-  };
+  const { mutate } = mutation;
+  return useCallback(
+    (taskId: string, title: string): void => {
+      mutate({ taskId, title });
+    },
+    [mutate],
+  );
 }

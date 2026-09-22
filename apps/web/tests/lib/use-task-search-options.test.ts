@@ -14,6 +14,7 @@ import { taskRefOf, taskSearchOptions } from '../../src/lib/use-task-search-opti
 const TASK_A = '01BX5ZZKBKACTAV9WEVGEMMVA1';
 const TASK_B = '01BX5ZZKBKACTAV9WEVGEMMVA2';
 const PROJECT = '01BX5ZZKBKACTAV9WEVGEMMVJ1';
+const noIcon = (): null => null;
 
 function hit(entityId: string, overrides: Partial<SearchResult> = {}): SearchResult {
   return {
@@ -29,14 +30,14 @@ describe('taskSearchOptions', () => {
   it('keeps search rank, drops excluded ids, and drops anything that is not a task', () => {
     const options = taskSearchOptions(
       [hit(TASK_B), hit(TASK_A), hit('01BX5ZZKBKACTAV9WEVGEMMVA3', { kind: 'project' })],
-      { exclude: new Set([TASK_A]) },
+      { exclude: new Set([TASK_A]), iconFor: noIcon },
     );
 
     expect(options.map((option) => option.value)).toEqual([TASK_B]);
     expect(options[0]?.label).toBe('Task A2');
   });
 
-  it('decorates a row with its state glyph and its project, when the caller asks', () => {
+  it('decorates a row with its state glyph and its project', () => {
     const [option] = taskSearchOptions([hit(TASK_A)], {
       exclude: new Set(),
       iconFor: (state) => `icon:${state ?? ''}`,
@@ -50,6 +51,7 @@ describe('taskSearchOptions', () => {
   it('leaves the hint off when the caller names no project for it', () => {
     const [option] = taskSearchOptions([hit(TASK_A)], {
       exclude: new Set(),
+      iconFor: noIcon,
       projectName: () => null,
     });
 

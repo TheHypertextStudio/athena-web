@@ -11,14 +11,10 @@
  * column, 32px apart (`docs/design/references/detail-page-layout.md`).
  */
 import type { TaskDetail } from '@docket/work/task-model';
-import type { QueryKey } from '@tanstack/react-query';
-import { type JSX, useMemo } from 'react';
+import type { JSX } from 'react';
 
 import { TaskRepeatingWorkBacklink } from '@/components/recurrence/repeating-work-backlink';
-import { useAppRouter } from '@/lib/interactions/navigation';
-import { useRenameTask } from '@/lib/use-rename-task';
 import type { TaskMutations } from '@/lib/use-task-mutations';
-import { useTaskRelations } from '@/lib/use-task-relations';
 
 import { Subtasks } from './Subtasks';
 import { TaskActivityFeed } from './task-activity-feed';
@@ -42,8 +38,6 @@ export interface TaskOverviewPanelProps {
   /** The name to show for a project id. */
   readonly projectName: (projectId: string) => string;
   readonly mutations: TaskOverviewMutations;
-  /** The task's detail cache key, which a subtask rename re-reads. */
-  readonly detailKey: QueryKey;
   readonly expansion: DescriptionExpansion;
 }
 
@@ -61,23 +55,9 @@ export function TaskOverviewPanel({
   canComment,
   projectName,
   mutations,
-  detailKey,
   expansion,
 }: TaskOverviewPanelProps): JSX.Element {
-  const router = useAppRouter();
-  // Rename any subtask or linked task in place (an arbitrary task by id), then re-read this task's
-  // detail so the refreshed titles flow back in.
-  const onRenameTask = useRenameTask(orgId, [detailKey]);
-  const relations = useTaskRelations(orgId, task.id, detailKey);
-  const onOpenTask = (id: string): void => {
-    router.push(`/orgs/${orgId}/tasks/${id}`);
-  };
   const taskId = task.id;
-  const parentTaskId = task.parentTaskId ?? null;
-  const ineligibleSubtasks = useMemo(
-    () => new Set(parentTaskId === null ? [taskId] : [taskId, parentTaskId]),
-    [parentTaskId, taskId],
-  );
   return (
     <div className="flex min-w-0 flex-col gap-8">
       <TaskDetails
@@ -91,39 +71,8 @@ export function TaskOverviewPanel({
         expansion={expansion}
       />
       <TaskRepeatingWorkBacklink orgId={orgId} entityId={taskId} />
-      <Subtasks
-        organizationId={orgId}
-        parentTaskId={taskId}
-        ineligibleIds={ineligibleSubtasks}
-        subtasks={task.subtasks}
-        onAdd={mutations.addSubtask}
-        onAttach={relations.attachSubtask}
-        onDetach={relations.detachSubtask}
-        onToggle={(subtask, done) => mutations.toggleSubtask(subtask.id, done)}
-        onOpen={onOpenTask}
-        onRename={onRenameTask}
-        canEdit={canEdit}
-      />
-      <TaskRelations
-        orgId={orgId}
-        taskId={taskId}
-        projectId={task.projectId ?? null}
-        blockedBy={task.blockedBy}
-        blocking={task.blocking}
-        related={task.relatedTasks}
-        projectName={projectName}
-        canEdit={canEdit}
-        onAdd={(kind, other) => {
-          if (kind === 'related') relations.addRelated(other);
-          else relations.addDependency(kind, other);
-        }}
-        onRemove={(kind, otherId) => {
-          if (kind === 'related') relations.removeRelated(otherId);
-          else relations.removeDependency(otherId);
-        }}
-        onOpen={onOpenTask}
-        onRename={onRenameTask}
-      />
+      <Subtasks task={task} mutations={mutations} canEdit={canEdit} />
+      <TaskRelations task={task} projectName={projectName} canEdit={canEdit} />
       <TaskActivityFeed
         orgId={orgId}
         taskId={taskId}

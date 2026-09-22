@@ -1,79 +1,108 @@
 'use client';
 
 /**
- * A searchable list of the workspace's tasks, opened from a task page control: add a blocker, a
- * blocked task, a related task, an existing subtask, or choose the task's parent.
+ * A searchable list of the workspace's tasks that links the chosen one to this task.
  *
  * @remarks
- * The popover is controlled, so a menu item can open it against a button it does not own. `anchor`
- * says how the child element relates to it: `trigger` makes the child open and close it, and
- * `anchor` only positions it (the Relations menu opens it after a choice). Tasks named in
- * `exclude` are never offered.
+ * Bound to one or more kinds of link. It opens while the page's open relationship control is one
+ * of them (so the section's button and the command palette open the same search), never offers a
+ * task that cannot take that link, and writes the link through the page's relationship writes.
+ * `anchor` says how the child element relates to it: `trigger` makes the child open it, and
+ * `anchor` only positions it, for a search opened from a menu.
  */
 import { PickerList, StatusIcon } from '@docket/ui/components';
 import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from '@docket/ui/primitives';
-import type { TaskRef } from '@docket/work/task-model';
-import { type JSX, type ReactElement, useCallback } from 'react';
+import type { TaskDetail } from '@docket/work/task-model';
+import { type JSX, type ReactElement, useCallback, useId, useMemo } from 'react';
 
 import { useCategoryOf } from '@/components/entity-display/use-work-status';
 import { OverlayErrorBanner } from '@/components/pickers/overlay-error-banner';
+import type { TaskLink } from '@/lib/use-task-relations';
 import { useTaskSearchOptions } from '@/lib/use-task-search-options';
+
+import { LINK_COPY, useTaskRelationControls } from './task-relation-commands';
+
+/**
+ * The tasks a search for `link` never offers.
+ *
+ * @remarks
+ * The task itself, anything it is already linked to by a dependency or a relation (one link per
+ * pair, and never a loop), and, for the hierarchy, the tasks already above or below it.
+ *
+ * @param task - This task.
+ * @param link - The kind of link being added.
+ * @returns the ids to leave out.
+ */
+export function excludedFor(task: TaskDetail, link: TaskLink): ReadonlySet<string> {
+  const ids = (refs: readonly { id: string }[]): string[] => refs.map((ref) => ref.id);
+  if (link === 'subtask' || link === 'parent') {
+    const parent = task.parentTaskId ? [task.parentTaskId] : [];
+    return new Set([task.id, ...parent, ...ids(task.subtasks)]);
+  }
+  return new Set([
+    task.id,
+    ...ids(task.blockedBy),
+    ...ids(task.blocking),
+    ...ids(task.relatedTasks),
+  ]);
+}
 
 /** Props for {@link TaskSearchPopover}. */
 export interface TaskSearchPopoverProps {
-  readonly orgId: string;
-  readonly open: boolean;
-  readonly onOpenChange: (open: boolean) => void;
-  /** The element the popover opens from. */
-  readonly children: ReactElement;
-  /** `trigger`: the child toggles the popover. `anchor`: the child only positions it. */
+  readonly task: TaskDetail;
+  /** The kinds of link this search adds; it is open while the page's control is one of them. */
+  readonly links: readonly [TaskLink, ...TaskLink[]];
+  /** `trigger`: the child toggles the search. `anchor`: the child only positions it. */
   readonly anchor: 'trigger' | 'anchor';
-  /** Task ids never offered. */
-  readonly exclude: ReadonlySet<string>;
-  /** Receive the chosen task. */
-  readonly onPick: (task: TaskRef) => void;
-  /** Name the project a row's task belongs to, or `null` for no hint. */
+  /** The element the search opens from. */
+  readonly children: ReactElement;
+  /** Name a project for a row's hint, or `null` for none. */
   readonly projectName?: ((projectId: string) => string | null) | undefined;
-  readonly searchPlaceholder: string;
-  readonly ariaLabel: string;
-  /** A "clear" row (e.g. "No parent"). Omit to offer none. */
-  readonly clear?: { readonly label: string; readonly onClear: () => void } | undefined;
 }
 
 /**
- * Render the task search popover around its opener.
+ * Render the task search around its opener.
  *
  * @param props - See {@link TaskSearchPopoverProps}.
  * @returns the popover.
  */
 export function TaskSearchPopover({
-  orgId,
-  open,
-  onOpenChange,
-  children,
+  task,
+  links,
   anchor,
-  exclude,
-  onPick,
+  children,
   projectName,
-  searchPlaceholder,
-  ariaLabel,
-  clear,
 }: TaskSearchPopoverProps): JSX.Element {
+  const id = useId();
+  const { writes, active, owner, setActive } = useTaskRelationControls();
+  const link = links.find((kind) => kind === active) ?? null;
+  const open = link !== null && (owner === null || owner === id);
+  // The kind the search reads as: the open one, or the first it serves while closed.
+  const shown = link ?? links[0];
   const categoryOf = useCategoryOf('task');
   const iconFor = useCallback(
     (state: string | null) => <StatusIcon type={categoryOf(state ?? '')} />,
     [categoryOf],
   );
-  const search = useTaskSearchOptions({ orgId, enabled: open, exclude, iconFor, projectName });
+  const exclude = useMemo(() => excludedFor(task, shown), [shown, task]);
+  const search = useTaskSearchOptions({
+    orgId: task.organizationId,
+    enabled: open,
+    exclude,
+    iconFor,
+    projectName,
+  });
   const close = (): void => {
-    onOpenChange(false);
+    if (open) setActive(null);
     search.setQuery('');
   };
+  const clearsParent = open && link === 'parent' ? task.parentTaskId : null;
+
   return (
     <Popover
       open={open}
       onOpenChange={(next) => {
-        if (next) onOpenChange(true);
+        if (next) setActive(shown, id);
         else close();
       }}
     >
@@ -88,23 +117,23 @@ export function TaskSearchPopover({
           options={search.options}
           selected={null}
           onSelect={(taskId) => {
-            const task = search.refFor(taskId);
-            if (task) onPick(task);
+            const picked = search.refFor(taskId);
+            if (picked) writes.link(shown, picked);
             close();
           }}
           query={search.query}
           onQueryChange={search.setQuery}
           filter="none"
           loading={search.loading}
-          searchPlaceholder={searchPlaceholder}
+          searchPlaceholder={LINK_COPY[shown].placeholder}
           emptyText="No matching tasks"
-          ariaLabel={ariaLabel}
+          ariaLabel={LINK_COPY[shown].searchLabel}
           clear={
-            clear
+            clearsParent
               ? {
-                  label: clear.label,
+                  label: 'No parent',
                   onClear: () => {
-                    clear.onClear();
+                    writes.unlink('parent', clearsParent);
                     close();
                   },
                 }

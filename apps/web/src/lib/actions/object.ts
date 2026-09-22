@@ -459,6 +459,33 @@ const OBJECT_ROUTE_SEGMENTS: Readonly<Record<ObjectKind, string | null>> = {
   calendar_slot: null,
 };
 
+/** The task fields a task's {@link ObjectRef} is built from. */
+export interface TaskObjectSource {
+  readonly id: string;
+  readonly title: string;
+  readonly parentTaskId?: string | null | undefined;
+}
+
+/**
+ * A task as drag, selection, actions, and menus see it.
+ *
+ * @remarks
+ * The parent rides along in `meta` so hierarchy actions can offer "Move to top level".
+ *
+ * @param task - The task.
+ * @param organizationId - Its workspace.
+ * @returns the task's object reference.
+ */
+export function taskObjectRef(task: TaskObjectSource, organizationId: string) {
+  return {
+    kind: 'task' as const,
+    id: task.id,
+    organizationId,
+    title: task.title,
+    meta: { parentTaskId: task.parentTaskId ?? null },
+  } satisfies ObjectRef;
+}
+
 /**
  * The canonical in-app path for one object.
  *

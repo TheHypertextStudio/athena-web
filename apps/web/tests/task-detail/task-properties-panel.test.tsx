@@ -104,10 +104,9 @@ function modelFor(overrides: CaseOverrides = {}): TaskPropertyModel {
 /** Render the sidebar; returns the panel element. */
 function renderPanel(overrides: CaseOverrides = {}): HTMLElement {
   const { wrapper } = makeQueryWrapper();
-  const { container } = render(
-    <TaskPropertiesPanel orgId="org_1" model={modelFor(overrides)} detailKey={['task']} />,
-    { wrapper },
-  );
+  const { container } = render(<TaskPropertiesPanel model={modelFor(overrides)} />, {
+    wrapper,
+  });
   const panel = container.firstElementChild;
   if (!panel) throw new Error('the properties did not render');
   return panel as HTMLElement;

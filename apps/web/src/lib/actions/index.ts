@@ -43,6 +43,8 @@ export {
   parseObjectKey,
   readObjectTarget,
   readObjectActionScope,
+  type TaskObjectSource,
+  taskObjectRef,
 } from './object';
 export {
   type ActionRegistry,

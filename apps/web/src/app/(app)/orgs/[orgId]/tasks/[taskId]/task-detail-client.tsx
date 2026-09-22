@@ -23,14 +23,14 @@ import {
 import { TaskMetadataRow } from '@/components/task-detail/task-masthead-properties';
 import { TaskPaletteCommands } from '@/components/task-detail/task-palette-commands';
 import { TaskPropertiesPanel } from '@/components/task-detail/task-properties-panel';
-import { TaskRelationCommandsProvider } from '@/components/task-detail/task-relation-commands';
+import { TaskRelationsProvider } from '@/components/task-detail/task-relation-commands';
 import { TaskSections } from '@/components/task-detail/task-sections';
 import { useDescriptionExpansion } from '@/components/task-detail/use-description-expansion';
 import { useTaskPropertyModel } from '@/components/task-detail/use-task-property-model';
 import { useTaskRosters } from '@/components/task-detail/use-task-rosters';
 import { EntityDetailLayout } from '@/components/views/entity-detail-layout';
 import { useDetailTab } from '@/components/views/use-detail-tab';
-import type { ObjectRef } from '@/lib/actions';
+import { taskObjectRef } from '@/lib/actions';
 import { useTypedRoute } from '@/lib/app-location';
 import {
   removeNavigationSnapshot,
@@ -39,6 +39,7 @@ import {
 import { useNavigationSnapshot } from '@/lib/use-navigation-snapshot';
 import { type TaskDetailData, useTaskDetail } from '@/lib/use-task-detail';
 import { useTaskMutations } from '@/lib/use-task-mutations';
+import { useTaskRelations } from '@/lib/use-task-relations';
 
 import { useTaskPageIdentity } from './use-task-page-identity';
 
@@ -49,22 +50,6 @@ interface TaskDetailReadyProps {
   readonly detail: TaskDetailData;
   readonly tab: TaskTab;
   readonly onTabChange: (tab: TaskTab) => void;
-}
-
-/**
- * The task as the shared action surface sees it.
- *
- * @remarks
- * The parent rides along so right-click on the header offers "Move to top level" for a subtask.
- */
-function taskObjectRef(orgId: string, task: TaskDetail): ObjectRef {
-  return {
-    kind: 'task',
-    id: task.id,
-    organizationId: orgId,
-    title: task.title,
-    ...(task.parentTaskId ? { meta: { parentTaskId: task.parentTaskId } } : {}),
-  };
 }
 
 /** The task page once its task has loaded: masthead, tabs, and the active section. */
@@ -80,6 +65,7 @@ function TaskDetailReady({
   const mutations = useTaskMutations(orgId, task.id, detail.detailKey, detail.activityKey);
   const expansion = useDescriptionExpansion(orgId, task.id);
   const rosters = useTaskRosters(orgId, task);
+  const relationWrites = useTaskRelations(orgId, task.id, detail.detailKey);
   const { model, projectName } = useTaskPropertyModel({
     orgId,
     task,
@@ -91,9 +77,9 @@ function TaskDetailReady({
   const project = task.projectId ? projectName(task.projectId) : null;
 
   return (
-    <TaskRelationCommandsProvider>
+    <TaskRelationsProvider writes={relationWrites}>
       <EntityDetailLayout
-        object={taskObjectRef(orgId, task)}
+        object={taskObjectRef(task, orgId)}
         printSummary={
           <TaskPrintSummary task={task} members={rosters.members} projectName={project} />
         }
@@ -111,10 +97,10 @@ function TaskDetailReady({
         metadata={
           <>
             <TaskPaletteCommands canEdit={canEdit} tab={tab} onTabChange={onTabChange} />
-            <TaskMetadataRow orgId={orgId} model={model} detailKey={detail.detailKey} />
+            <TaskMetadataRow model={model} />
           </>
         }
-        aside={<TaskPropertiesPanel orgId={orgId} model={model} detailKey={detail.detailKey} />}
+        aside={<TaskPropertiesPanel model={model} />}
         actions={
           <TaskActions
             orgId={orgId}
@@ -131,7 +117,6 @@ function TaskDetailReady({
           tab={tab}
           orgId={orgId}
           task={task}
-          detailKey={detail.detailKey}
           currentActorId={detail.currentActorId}
           canEdit={canEdit}
           canComment={detail.capabilities?.comment ?? false}
@@ -141,7 +126,7 @@ function TaskDetailReady({
           expansion={expansion}
         />
       </EntityDetailLayout>
-    </TaskRelationCommandsProvider>
+    </TaskRelationsProvider>
   );
 }
 

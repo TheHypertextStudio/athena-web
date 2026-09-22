@@ -11,50 +11,27 @@
  */
 import { PropertyTrigger } from '@docket/ui/components';
 import { Workflow } from '@docket/ui/icons';
-import type { QueryKey } from '@tanstack/react-query';
-import { type JSX, useMemo } from 'react';
+import type { JSX } from 'react';
 
 import { useApiQuery } from '@/lib/query';
 import { taskDetailDef } from '@/lib/use-task-detail';
-import { useTaskRelations } from '@/lib/use-task-relations';
 
-import type { TaskPropertyModel } from './task-masthead-properties';
-import { useTaskRelationCommand } from './task-relation-commands';
+import type { LeadFieldProps } from './task-masthead-properties';
 import { TaskSearchPopover } from './task-search-popover';
-
-/** Props for {@link TaskParentField}. */
-export interface TaskParentFieldProps {
-  readonly orgId: string;
-  readonly model: TaskPropertyModel;
-  /** The task's detail cache key, patched when the parent changes. */
-  readonly detailKey: QueryKey;
-  readonly triggerClassName: string;
-}
 
 /**
  * Render the parent picker.
  *
- * @param props - See {@link TaskParentFieldProps}.
+ * @param props - The page's property model and the trigger class its presentation wants.
  * @returns the trigger, wrapped in its search when the viewer can edit.
  */
-export function TaskParentField({
-  orgId,
-  model,
-  detailKey,
-  triggerClassName,
-}: TaskParentFieldProps): JSX.Element {
+export function TaskParentField({ model, triggerClassName }: LeadFieldProps): JSX.Element {
   const { task, canEdit } = model;
   const parentTaskId = task.parentTaskId ?? null;
   const parent = useApiQuery({
-    ...taskDetailDef(orgId, parentTaskId ?? ''),
+    ...taskDetailDef(task.organizationId, parentTaskId ?? ''),
     enabled: parentTaskId !== null,
   });
-  const relations = useTaskRelations(orgId, task.id, detailKey);
-  const [open, setOpen] = useTaskRelationCommand('parent');
-  const exclude = useMemo(
-    () => new Set([task.id, ...task.subtasks.map((subtask) => subtask.id)]),
-    [task.id, task.subtasks],
-  );
   const label = parentTaskId === null ? undefined : (parent.data?.title ?? 'Parent task');
   const trigger = (
     <PropertyTrigger
@@ -69,28 +46,7 @@ export function TaskParentField({
   );
   if (!canEdit) return trigger;
   return (
-    <TaskSearchPopover
-      orgId={orgId}
-      open={open}
-      onOpenChange={setOpen}
-      anchor="trigger"
-      exclude={exclude}
-      onPick={(picked) => {
-        relations.setParent(picked.id);
-      }}
-      searchPlaceholder="File this task under…"
-      ariaLabel="Parent task"
-      clear={
-        parentTaskId === null
-          ? undefined
-          : {
-              label: 'No parent',
-              onClear: () => {
-                relations.setParent(null);
-              },
-            }
-      }
-    >
+    <TaskSearchPopover task={task} links={['parent']} anchor="trigger">
       {trigger}
     </TaskSearchPopover>
   );

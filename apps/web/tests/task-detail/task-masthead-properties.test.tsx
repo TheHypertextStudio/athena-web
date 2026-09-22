@@ -102,7 +102,7 @@ function renderChips(
   withAside = false,
 ): { readonly priorities: readonly number[] } {
   const { wrapper } = makeQueryWrapper();
-  const row = <TaskMetadataRow orgId="org_1" model={model} detailKey={['task']} />;
+  const row = <TaskMetadataRow model={model} />;
   render(
     withAside ? (
       // A layout that holds an aside docks it on a wide pane and tells its slots so.

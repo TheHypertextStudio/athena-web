@@ -81,24 +81,30 @@ test('a task page adds and removes every kind of relationship in place', async (
   if (!teamId) throw new Error('Onboarding produced no team');
 
   const mainId = await createTask(page, orgId, teamId, 'Plan the launch event');
-  for (const title of [
+  const others = [
     'Confirm the venue',
     'Send the invitations',
     'Launch budget sheet',
     'Order name badges',
     'Quarterly events',
-  ]) {
+  ];
+  for (const title of others) {
     await createTask(page, orgId, teamId, title);
   }
   // The search index trails a write; the pickers read it, so wait until every task is findable.
   await expect
     .poll(
-      async () =>
-        (await apiJson<{ items: unknown[] }>(page, `/v1/orgs/${orgId}/search?kinds=task&limit=20`))
-          .items.length,
+      async () => {
+        const found = await apiJson<{ items: { title: string }[] }>(
+          page,
+          `/v1/orgs/${orgId}/search?kinds=task&limit=20`,
+        );
+        const indexed = new Set(found.items.map((item) => item.title));
+        return others.every((title) => indexed.has(title));
+      },
       { timeout: TIMEOUTS.pageReady },
     )
-    .toBeGreaterThanOrEqual(6);
+    .toBe(true);
 
   await page.goto(`${orgHref(orgId, 'tasks')}/${mainId}`, {
     waitUntil: 'domcontentloaded',

@@ -14,7 +14,7 @@ import {
   RESOURCE_PROVIDER_LABEL,
   type ResourceProvider,
 } from '@docket/connections/resource-provider-contract';
-import { type SearchResult } from '../../lib/contracts/search';
+import { type SearchResult, searchFacetString } from '../../lib/contracts/search';
 
 import type { FieldCatalog, FieldOption } from '@/components/views/field-catalog';
 
@@ -42,12 +42,6 @@ const ATTACHMENT_KIND_LABEL: Record<string, string> = {
   athena_email: 'Athena email',
 };
 
-/** Read a string off a result's facet bag, which is typed as unknown per key. */
-function facetString(row: SearchResult, key: string): string | null {
-  const value = row.facets[key];
-  return typeof value === 'string' && value.length > 0 ? value : null;
-}
-
 /**
  * The display name for a resource provider.
  *
@@ -64,14 +58,14 @@ export function providerLabel(value: string): string {
 
 /** The provider a row came from, or `null` for first-party rows that have none. */
 export function providerOf(row: SearchResult): string | null {
-  return facetString(row, 'provider');
+  return searchFacetString(row, 'provider');
 }
 
 /** Stable source value for provider resources and first-party attachment kinds. */
 export function sourceOf(row: SearchResult): string | null {
   const provider = providerOf(row);
   if (provider) return provider;
-  const attachmentKind = facetString(row, 'attachmentKind');
+  const attachmentKind = searchFacetString(row, 'attachmentKind');
   return attachmentKind ? `attachment:${attachmentKind}` : null;
 }
 

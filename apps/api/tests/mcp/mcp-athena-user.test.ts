@@ -110,9 +110,10 @@ describe('Athena internal user principal', () => {
 
     // A person's own device pays prompt processing for every token of every tool on every
     // turn. Rendered verbosely, this toolbox pushed a one-line turn to ~40k tokens, past a
-    // 32k-context model; compact, its 38 tools measured 57,508 characters (~14k tokens).
-    // The bound leaves room for a few more tools and fails first when one arrives with an
-    // oversized schema.
+    // 32k-context model; compact, its 38 tools measured 57,508 characters (~14k tokens). By 45
+    // tools it had reached 67,598, mostly from Zod's 226-character date regex repeated in every
+    // date field. With that and the safe-integer bounds dropped it measured 56,187. The bound
+    // leaves room for a few more tools and fails first when one arrives with an oversized schema.
     const length = system?.content.length ?? Number.POSITIVE_INFINITY;
     expect(toolbox.tools.length).toBeGreaterThan(10);
     expect(

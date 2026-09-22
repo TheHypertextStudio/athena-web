@@ -1,12 +1,82 @@
 # Project Athena Work Log
 
 > **Purpose**: Comprehensive tracking of all work - past, present, and future.
-> **Last Updated**: 2026-09-20
 > **Last Updated**: 2026-09-22
 
 ---
 
 ## Active Tasks
+
+### [MCP-CATALOG-001] Create and edit labels and templates over MCP
+
+- **Status**: COMPLETED
+- **Started**: 2026-09-22
+- **Priority**: P2
+- **Description**: The MCP surface could filter by label and apply a template to a plan draft, but
+  it could not create or edit either one, and it could not put a label on work. REST had all of
+  it, written inline in the route handlers.
+- **Approach**: Two tools and one field, not six CRUD tools, following the intent-shaped surface
+  in `docs/engineering/specs/mcp-surface.md` §3.2.
+  - `define_labels` reconciles groups and labels by name the way `organize` reconciles a plan.
+    An entry that would change nothing never asks for `manage`, so a contributor can re-run a call
+    that created labels without being refused.
+  - `define_template` creates or edits one template and resolves `labels` by name, refusing a
+    label the template's scope could never apply. REST stores unchecked label ids.
+  - `update` takes `set.labels` (`add`/`remove`, or `replace`) on tasks, projects, initiatives and
+    programs. A row outside a team-limited label's team is skipped whole as `label_out_of_scope`.
+- **Files changed**: The label and template write rules moved out of `routes/labels.ts` and
+  `routes/templates.ts` into `lib/label-catalog.ts` and `lib/templates/write.ts`, and both REST and
+  MCP call them. `routes/tasks.ts` uses `visibleTemplateWhere` instead of two hand-copied copies.
+  New MCP modules are `label-tools.ts`, `template-tools.ts`, their `*-contract.ts` files,
+  `update-labels.ts`, `catalog-rows.ts`, and three change-set companions (`change-set-labels.ts`,
+  `change-set-catalog.ts`, `change-set-companions.ts`). `update-tool.ts` now writes each row in its
+  own function. `change-set.ts` dropped its task-label special cases for the companion dispatch and
+  shrank by 60 lines.
+- **Decisions**:
+  - Delete and merge stay out of MCP. Labels and groups have no archived state, so undoing a
+    delete would need a snapshot of every attachment, and undoing a create has to delete the row.
+    Undo therefore deletes a created label or group only while nothing uses it, and reports it
+    `in_use` otherwise.
+  - A label set is recorded as one snapshot per subject (`task_labels`, `project_labels`, …), not
+    one edge per label. An exclusive group swaps a label out as a side effect, and per-edge records
+    cannot tell that swap from a removal someone asked for.
+  - Companion reverts return their search and image updates for the caller to run after commit.
+    Running them inside the undo transaction deadlocked the single-connection test database.
+  - Group names are unique per team, so `define_labels` matches a group by name within the given
+    team. Moving a group to another team takes `group`.
+  - Two REST fixes rode along in the shared code: a `teamId` from another workspace now returns 404,
+    and a unique-index race returns 409 instead of 500.
+  - The change-report card no longer re-cases a rename's old name, so "was bug" is no longer shown
+    as "was Bug".
+  - The two tools pushed Athena's local-model tool prompt to 67,598 characters, past the 64,000
+    budget in `mcp-athena-user.test.ts`. `main` already sat at about 63,800. The cause was
+    generated schema, not tool count: Zod writes every `z.iso.date()` as `format: date` plus a
+    226-character leap-year regex, and `repeat_task` and `schedule_process` carried nineteen of
+    them. Zod also bounds every `z.int()` at ±`Number.MAX_SAFE_INTEGER`. `compactToolSchema` in
+    `domains/athena` now drops a `pattern` beside a `format` and drops safe-integer bounds, and the
+    MCP server still validates both. The prompt measures 56,187 characters with the budget
+    unchanged.
+  - Rebased onto the provenance work (`e5d0db771`), so both tools record through `originFor` like
+    every other write. `change-set-undo.test.ts` had pinned plain `undo` skipping a `task_labels`
+    snapshot as `unsupported_kind`; it now asserts that `undo` puts the label set back.
+- **Validation**: New suites `mcp-label-tools`, `mcp-template-tools` and `mcp-update-tool-labels`
+  (32 tests), two REST cases in `labels-groups.test.ts`, and a compaction case in
+  `domains/athena/tests/lattice-adapter.test.ts`. After the rebase, the MCP, provenance, label,
+  template, task-expansion, Athena undo and infra suites pass (788 tests). Before the rebase the
+  full `apps/api` coverage run passed all 6,546 tests but measured 87.65% branch coverage against
+  the 88% gate. `main` itself measured 87.57% in CI on `7b54fe56a`, and `7f604083e` restored the
+  gate. `tsc --noEmit` and ESLint are clean for `apps/api`, and `complexity:check` passes with no
+  ledger growth. Widget screenshots for the three new card states are in
+  `docs/design/audits/screenshots/mcp-apps/` (`change-report-labels-defined-*`,
+  `change-report-template-edited-*`, `change-report-labels-applied-*`), captured at both widths in
+  both themes with the overflow check. Not run: a live dev-stack MCP session, because the
+  in-memory MCP client in the new tests drives the same tool code against the same schema.
+- **Learnings**: `tooling/eslint-config/complexity-debt.json` on `main` is stale. Regenerating it
+  lowers hundreds of entries in files this task never touched, so that belongs in its own commit.
+  A label's name is unique across the whole org regardless of team, while a group's name is unique
+  only within its team, and a reconciling tool has to match the two differently. A fresh worktree
+  fails `infra.test.ts` until `pnpm build` has written `dist/rpc-contract.d.ts`, and that build
+  needs a 4 GB heap.
 
 ### [CI-RELEASE-001] Get CI green on main so Deploy main can ship
 

@@ -91,6 +91,27 @@ export async function record(
   return id;
 }
 
+/**
+ * A task label-set snapshot, in the stored shape `change-set-labels.ts` records.
+ *
+ * @remarks
+ * Written out rather than built with `labelSetChange`, because importing that module statically
+ * would load the database client before `changeSetModules` has prepared it.
+ */
+export function taskLabels(
+  taskId: string,
+  before: readonly string[],
+  after: readonly string[],
+): ChangeSetModule.StoredChange {
+  return {
+    kind: 'task_labels',
+    id: taskId,
+    op: 'update',
+    before: { labelIds: [...before].sort() },
+    after: { labelIds: [...after].sort() },
+  };
+}
+
 /** Whether a change set has been marked undone. */
 export async function isUndone(changeSetId: string): Promise<boolean> {
   const { db, schema } = await changeSetModules();

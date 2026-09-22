@@ -22,6 +22,7 @@ import {
   db,
   initiative,
   label,
+  labelGroup,
   program,
   project,
   task as taskTable,
@@ -39,7 +40,7 @@ import { currentElicitor } from './request-context';
 
 /** The entity kinds a descriptor can name. */
 export type DescriptorKind =
-  'actor' | 'team' | 'project' | 'program' | 'initiative' | 'label' | 'cycle';
+  'actor' | 'team' | 'project' | 'program' | 'initiative' | 'label' | 'label_group' | 'cycle';
 
 /** How many candidate names an error lists before truncating. */
 const MAX_SUGGESTIONS = 12;
@@ -52,7 +53,7 @@ export const DESCRIPTOR_HINT =
   'Accepts the name or the id — "Platform Migration" works as well as the raw id.';
 
 /** One thing a descriptor could be referring to. */
-interface Candidate {
+export interface Candidate {
   readonly id: string;
   readonly label: string;
   /** A second exact-matchable handle, e.g. a team key or a member's email. */
@@ -100,12 +101,15 @@ function unresolved(
  * tier is accepted only when unambiguous; two equally good matches is a question for the caller,
  * not a coin flip.
  *
+ * Exported for kinds whose candidate set depends on who is asking, such as templates, which a
+ * caller resolves from the set visible to them rather than through {@link resolveDescriptor}.
+ *
  * @param field - The parameter being resolved, for the error.
  * @param value - The name the caller supplied.
  * @param candidates - Everything in scope it could refer to.
  * @returns the resolved id.
  */
-async function pick(
+export async function pick(
   field: string,
   value: string,
   candidates: readonly Candidate[],
@@ -215,27 +219,35 @@ async function candidatesFor(
         .select({ id: label.id, label: label.name })
         .from(label)
         .where(and(eq(label.organizationId, orgId), only(label.id)));
-    case 'cycle': {
-      // A cycle's name is nullable, so an unnamed cycle is named by its window (see
-      // `defaultCycleName`). The stored `number` is the auto-roll idempotency key — an
-      // epoch-anchored sequence like 1000137 — so it is neither shown nor offered as a handle;
-      // nobody would say it. The window doubles as the second matchable handle, so "Jul 27 – Aug 2"
-      // resolves a cycle even when its author has named it something else.
-      const rows = await db
-        .select({
-          id: cycle.id,
-          name: cycle.name,
-          startsAt: cycle.startsAt,
-          endsAt: cycle.endsAt,
-        })
-        .from(cycle)
-        .where(and(eq(cycle.organizationId, orgId), isNull(cycle.archivedAt), only(cycle.id)));
-      return rows.map((row) => {
-        const window = defaultCycleName(row.startsAt, row.endsAt);
-        return { id: row.id, label: row.name ?? window, alt: window };
-      });
-    }
+    case 'label_group':
+      return db
+        .select({ id: labelGroup.id, label: labelGroup.name })
+        .from(labelGroup)
+        .where(and(eq(labelGroup.organizationId, orgId), only(labelGroup.id)));
+    case 'cycle':
+      return cycleCandidates(orgId, only(cycle.id));
   }
+}
+
+/**
+ * Load the cycles a descriptor could name.
+ *
+ * @remarks
+ * A cycle's name is nullable, so an unnamed cycle is named by its window (see `defaultCycleName`).
+ * The stored `number` is the auto-roll idempotency key — an epoch-anchored sequence like 1000137 —
+ * so it is neither shown nor offered as a handle; nobody would say it. The window doubles as the
+ * second matchable handle, so "Jul 27 – Aug 2" resolves a cycle even when its author has named it
+ * something else.
+ */
+async function cycleCandidates(orgId: string, onlyId: SQL | undefined): Promise<Candidate[]> {
+  const rows = await db
+    .select({ id: cycle.id, name: cycle.name, startsAt: cycle.startsAt, endsAt: cycle.endsAt })
+    .from(cycle)
+    .where(and(eq(cycle.organizationId, orgId), isNull(cycle.archivedAt), onlyId));
+  return rows.map((row) => {
+    const window = defaultCycleName(row.startsAt, row.endsAt);
+    return { id: row.id, label: row.name ?? window, alt: window };
+  });
 }
 
 /**

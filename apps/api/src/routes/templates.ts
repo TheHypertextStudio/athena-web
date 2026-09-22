@@ -13,7 +13,7 @@
  *    them findable a fourth way would widen an enum the schema explicitly asks callers not to
  *    widen casually.
  */
-import { db, teamMember, template } from '@docket/db';
+import { db, template } from '@docket/db';
 import { CursorQuery, pageOf } from '../contracts/pagination';
 import {
   TemplateCreate,
@@ -21,61 +21,26 @@ import {
   TemplateTargetType,
   TemplateUpdate,
 } from '@docket/work/template-contract';
-import { and, asc, eq } from 'drizzle-orm';
+import { and, asc } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
 
 import type { AppEnv } from '../context';
-import { getDocumentImageReferenceReconciler } from '../content/document-image-reference-registry';
-import { NotFoundError, ValidationError } from '../error';
+import { NotFoundError } from '../error';
 import { seedDefaultTemplates } from '../lib/templates/defaults';
 import { visibleTemplateWhere } from '../lib/templates/visibility';
+import {
+  createTemplate,
+  reconcileTemplateImages,
+  requireVisibleTemplate,
+  toTemplateOut as toOut,
+  updateTemplate,
+} from '../lib/templates/write';
 import { created, ok } from '../lib/ok';
 import { pageResultById, seekAfterId } from '../lib/list-cursor';
 import { apiDoc } from '../lib/openapi-route';
 import { zJson, zParam, zQuery } from '../lib/validate';
 import { capabilityGuard } from '../permissions/capability-guard';
-
-type TemplateRow = typeof template.$inferSelect;
-
-/** Reconcile a template projection without turning a derived-state failure into a lost edit. */
-async function reconcileTemplateImages(
-  organizationId: string,
-  templateId: string,
-  operation: 'upsert' | 'delete',
-): Promise<void> {
-  try {
-    const reconciler = getDocumentImageReferenceReconciler();
-    if (operation === 'delete') {
-      await reconciler.deleteForSubject(organizationId, 'template', templateId);
-    } else {
-      await reconciler.reconcile(organizationId, 'template', templateId);
-    }
-  } catch (error) {
-    console.warn('Template document-image reconciliation failed', {
-      organizationId,
-      templateId,
-      operation,
-      error,
-    });
-  }
-}
-
-function toOut(t: TemplateRow): z.input<typeof TemplateOut> {
-  return {
-    id: t.id,
-    organizationId: t.organizationId,
-    targetType: t.targetType,
-    name: t.name,
-    description: t.description,
-    scope: t.scope,
-    ownerActorId: t.ownerActorId,
-    teamId: t.teamId,
-    payload: t.payload,
-    isSeed: t.isSeed,
-    createdAt: t.createdAt.toISOString(),
-  };
-}
 
 const idParam = z.object({ id: z.string() });
 
@@ -84,39 +49,6 @@ const listQuery = CursorQuery.extend({
     'Limit the list to templates that create this kind. Omit for every template in the org.',
   ),
 });
-
-async function requireAssignableScope(
-  orgId: string,
-  actorId: string,
-  scope: TemplateRow['scope'],
-  ownerActorId: string | null,
-  teamId: string | null,
-): Promise<void> {
-  if (scope === 'personal' && ownerActorId !== actorId) {
-    throw new ValidationError([
-      {
-        message: 'A personal template must belong to the calling actor.',
-        path: ['ownerActorId'],
-      },
-    ]);
-  }
-  if (scope !== 'team') return;
-  if (teamId === null) {
-    throw new ValidationError([{ message: 'A team template requires a team.', path: ['teamId'] }]);
-  }
-  const membership = await db
-    .select({ actorId: teamMember.actorId })
-    .from(teamMember)
-    .where(
-      and(
-        eq(teamMember.organizationId, orgId),
-        eq(teamMember.actorId, actorId),
-        eq(teamMember.teamId, teamId),
-      ),
-    )
-    .limit(1);
-  if (!membership[0]) throw new NotFoundError('Team not found');
-}
 
 /** Templates router: org-scoped CRUD over reusable create drafts; `contribute` to mutate. */
 const templates = new Hono<AppEnv>()
@@ -161,31 +93,7 @@ const templates = new Hono<AppEnv>()
     zJson(TemplateCreate),
     async (c) => {
       const { orgId, actorId } = c.get('actorCtx');
-      const body = c.req.valid('json');
-      const scope = body.scope ?? 'personal';
-      const ownerActorId = body.ownerActorId ?? actorId;
-      const teamId = scope === 'team' ? (body.teamId ?? null) : null;
-      await requireAssignableScope(orgId, actorId, scope, ownerActorId, teamId);
-      const inserted = await db
-        .insert(template)
-        .values({
-          organizationId: orgId,
-          targetType: body.targetType,
-          name: body.name,
-          description: body.description,
-          scope,
-          ownerActorId,
-          // A team id on a non-team-scoped template would be a reference nothing reads and
-          // everything has to remember to ignore.
-          teamId,
-          payload: body.payload,
-          createdBy: actorId,
-        })
-        .returning();
-      const row = inserted[0];
-      /* v8 ignore next -- @preserve defensive: insert always returns a row */
-      if (!row) throw new Error('template insert returned no row');
-      await reconcileTemplateImages(orgId, row.id, 'upsert');
+      const row = await createTemplate(orgId, actorId, c.req.valid('json'));
       return created(c, TemplateOut, toOut(row));
     },
   )
@@ -201,14 +109,7 @@ const templates = new Hono<AppEnv>()
     async (c) => {
       const { orgId, actorId } = c.get('actorCtx');
       const { id } = c.req.valid('param');
-      const rows = await db
-        .select()
-        .from(template)
-        .where(visibleTemplateWhere(orgId, actorId, { id }))
-        .limit(1);
-      const row = rows[0];
-      if (!row) throw new NotFoundError('Template not found');
-      return ok(c, TemplateOut, toOut(row));
+      return ok(c, TemplateOut, toOut(await requireVisibleTemplate(orgId, actorId, id)));
     },
   )
   .patch(
@@ -226,57 +127,8 @@ const templates = new Hono<AppEnv>()
     async (c) => {
       const { orgId, actorId } = c.get('actorCtx');
       const { id } = c.req.valid('param');
-      const body = c.req.valid('json');
-
-      const rows = await db
-        .select()
-        .from(template)
-        .where(visibleTemplateWhere(orgId, actorId, { id }))
-        .limit(1);
-      const current = rows[0];
-      if (!current) throw new NotFoundError('Template not found');
-
-      const nextScope = body.scope ?? current.scope;
-      const nextOwnerActorId =
-        body.scope === 'personal'
-          ? (body.ownerActorId ?? actorId)
-          : (body.ownerActorId ?? current.ownerActorId);
-      const nextTeamId = nextScope === 'team' ? (body.teamId ?? current.teamId) : null;
-      await requireAssignableScope(orgId, actorId, nextScope, nextOwnerActorId, nextTeamId);
-
-      if (body.payload && body.payload.targetType !== current.targetType) {
-        throw new ValidationError([
-          {
-            message: 'A template cannot change the kind it creates.',
-            path: ['payload', 'targetType'],
-          },
-        ]);
-      }
-
-      const updated = await db
-        .update(template)
-        .set({
-          ...(body.name !== undefined ? { name: body.name } : {}),
-          ...(body.description !== undefined ? { description: body.description } : {}),
-          ...(body.scope !== undefined ? { scope: body.scope, teamId: null } : {}),
-          ...(body.scope === 'personal'
-            ? { ownerActorId: nextOwnerActorId }
-            : body.ownerActorId !== undefined
-              ? { ownerActorId: body.ownerActorId }
-              : {}),
-          // Applied after the scope reset above so a move *to* team scope keeps its new team.
-          ...(body.teamId !== undefined && (body.scope ?? current.scope) === 'team'
-            ? { teamId: body.teamId }
-            : {}),
-          ...(body.payload !== undefined ? { payload: body.payload } : {}),
-        })
-        .where(visibleTemplateWhere(orgId, actorId, { id }))
-        .returning();
-      const row = updated[0];
-      /* v8 ignore next -- @preserve defensive: the select above proved the row exists */
-      if (!row) throw new NotFoundError('Template not found');
-      await reconcileTemplateImages(orgId, row.id, 'upsert');
-      return ok(c, TemplateOut, toOut(row));
+      const { after } = await updateTemplate(orgId, actorId, id, c.req.valid('json'));
+      return ok(c, TemplateOut, toOut(after));
     },
   )
   .delete(

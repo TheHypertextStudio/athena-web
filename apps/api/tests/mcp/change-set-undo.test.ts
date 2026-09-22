@@ -10,6 +10,7 @@ import type * as DbModule from '@docket/db';
 import type * as ChangeSetModule from '../../src/mcp/change-set';
 import { one, seedInitiative, seedProgram } from '../support/routes-harness';
 import {
+  attachLabel,
   changeSetModules,
   isUndone,
   labelsOf,
@@ -19,6 +20,7 @@ import {
   record,
   seedRawChangeSet,
   seedWorkspace,
+  taskLabels,
 } from './change-set-fixtures';
 
 let schema!: typeof DbModule;
@@ -369,17 +371,16 @@ describe('undoChangeSet entity reversal', () => {
     ]);
   });
 
-  it('skips a task-label snapshot, which only the atomic undo can reverse', async () => {
+  it('puts a task’s label set back, as the MCP update tool records it', async () => {
     const org = await seedWorkspace();
     const row = await makeTask(org);
-    const changeSetId = await record(org, [
-      { kind: 'task_labels', taskId: row.id, before: [], after: [] },
-    ]);
+    const labelId = await makeLabel(org, 'Added by update');
+    await attachLabel(org, row.id, labelId);
+    const changeSetId = await record(org, [taskLabels(row.id, [], [labelId])]);
 
     const { outcomes } = await changeSets.undoChangeSet(org.orgId, changeSetId);
 
-    expect(outcomes).toEqual([
-      { kind: 'task_labels', id: row.id, reverted: false, reason: 'unsupported_kind' },
-    ]);
+    expect(outcomes).toEqual([{ kind: 'task_labels', id: row.id, reverted: true }]);
+    expect(await labelsOf(row.id)).toEqual([]);
   });
 });

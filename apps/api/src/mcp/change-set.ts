@@ -36,6 +36,7 @@ import type { AnyPgColumn, PgTable } from 'drizzle-orm/pg-core';
 import type { RecordedOrigin } from '@docket/work/provenance-contract';
 
 import { ConflictError, NotFoundError } from '../error';
+import { isCompanionKind, revertCompanion } from './change-set-companions';
 import { serializableTx } from '../lib/serializable-tx';
 import {
   applySubtaskCompletionPolicyForParents,
@@ -147,7 +148,6 @@ const TRACKED: Record<RecordableKind, readonly string[]> = {
     'estimateMinutes',
     'startDate',
     'dueDate',
-    'estimate',
     'completedAt',
     'canceledAt',
     'autoCompletedBySubtasks',
@@ -225,27 +225,21 @@ export interface LinkRecord {
   readonly linked: boolean;
 }
 
-/** A complete task-label snapshot for one mutation that replaces the label set. */
-export interface TaskLabelsRecord {
-  readonly kind: 'task_labels';
-  readonly taskId: string;
-  /** Exact sorted label ids before the replacement. */
-  readonly before: readonly string[];
-  /** Exact sorted label ids after the replacement. */
-  readonly after: readonly string[];
+/** A change a companion module has already shaped as its stored entry (`change-set-companions`). */
+export interface StoredChange {
+  readonly kind: string;
+  readonly id: string;
+  readonly op: 'create' | 'update';
+  readonly before: Record<string, unknown> | null;
+  readonly after: Record<string, unknown> | null;
 }
 
 /** Anything a tool can record. */
-export type RecordedChange = ChangeRecord | LinkRecord | TaskLabelsRecord;
+export type RecordedChange = ChangeRecord | LinkRecord | StoredChange;
 
 /** Whether a recorded change describes a relation rather than an entity. */
 function isLinkRecord(change: RecordedChange): change is LinkRecord {
   return 'linked' in change;
-}
-
-/** Whether this entry is the explicit complete snapshot of a task's labels. */
-function isTaskLabelsRecord(change: RecordedChange): change is TaskLabelsRecord {
-  return change.kind === 'task_labels';
 }
 
 /** What an undo did, per entity. */
@@ -288,32 +282,23 @@ async function insertChangeSet(tx: Tx, id: string, input: ChangeSetWrite): Promi
   });
   if (input.changes.length === 0) return;
   const entries = input.changes.map((change) =>
-    isTaskLabelsRecord(change)
+    isLinkRecord(change)
       ? {
           changeSetId: id,
           entityKind: change.kind,
-          entityId: change.taskId,
-          op: 'update' as const,
-          before: { labelIds: [...change.before].sort() },
-          after: { labelIds: [...change.after].sort() },
+          entityId: edgeKey(change.from, change.to),
+          op: 'link' as const,
+          before: change.linked ? null : { from: change.from, to: change.to },
+          after: change.linked ? { from: change.from, to: change.to } : null,
         }
-      : isLinkRecord(change)
-        ? {
-            changeSetId: id,
-            entityKind: change.kind,
-            entityId: edgeKey(change.from, change.to),
-            op: 'link' as const,
-            before: change.linked ? null : { from: change.from, to: change.to },
-            after: change.linked ? { from: change.from, to: change.to } : null,
-          }
-        : {
-            changeSetId: id,
-            entityKind: change.kind,
-            entityId: change.id,
-            op: change.op,
-            before: change.before ?? null,
-            after: change.after ?? null,
-          },
+      : {
+          changeSetId: id,
+          entityKind: change.kind,
+          entityId: change.id,
+          op: change.op,
+          before: change.before ?? null,
+          after: change.after ?? null,
+        },
   );
   const batchSize = 500;
   for (let offset = 0; offset < entries.length; offset += batchSize) {
@@ -660,6 +645,7 @@ async function revertEntry(
   orgId: string,
 ): Promise<UndoOutcome> {
   if (isRelation(entry.entityKind)) return revertLink(entry.entityKind, entry, orgId);
+  if (isCompanionKind(entry.entityKind)) return revertCompanion(entry, orgId);
 
   const kind = entry.entityKind as RecordableKind;
   const ref = { kind: entry.entityKind, id: entry.entityId };
@@ -783,39 +769,6 @@ export async function undoChangeSetAtomically(
         throw new ConflictError('Expansion can no longer be undone');
       }
     }
-    const labelEntries = entries.filter((entry) => entry.entityKind === 'task_labels');
-    const labelTaskIds = [...new Set(labelEntries.map((entry) => entry.entityId))].sort();
-    const labelRows =
-      labelTaskIds.length === 0
-        ? []
-        : await tx
-            .select({ taskId: taskLabel.taskId, labelId: taskLabel.labelId })
-            .from(taskLabel)
-            .where(
-              and(eq(taskLabel.organizationId, orgId), inArray(taskLabel.taskId, labelTaskIds)),
-            )
-            .orderBy(taskLabel.taskId, taskLabel.labelId)
-            .for('update');
-    const labelsByTaskId = new Map<string, string[]>();
-    for (const row of labelRows) {
-      const ids = labelsByTaskId.get(row.taskId) ?? [];
-      ids.push(row.labelId);
-      labelsByTaskId.set(row.taskId, ids);
-    }
-    for (const entry of labelEntries) {
-      const expected = entry.after?.['labelIds'];
-      if (!Array.isArray(expected) || !expected.every((id) => typeof id === 'string')) {
-        throw new ConflictError('Expansion can no longer be undone');
-      }
-      const current = [...(labelsByTaskId.get(entry.entityId) ?? [])].sort();
-      if (
-        current.length !== expected.length ||
-        current.some((id, index) => id !== expected[index])
-      ) {
-        throw new ConflictError('Expansion can no longer be undone');
-      }
-    }
-
     const outcomes: UndoOutcome[] = [];
     const cascades: TaskStateMutation[] = [];
     for (const entry of [...entries].reverse()) {
@@ -841,24 +794,11 @@ export async function undoChangeSetAtomically(
         outcomes.push({ kind: entry.entityKind, id: entry.entityId, reverted: true });
         continue;
       }
-      if (entry.entityKind === 'task_labels') {
-        const labelIds = entry.before?.['labelIds'];
-        if (!Array.isArray(labelIds) || !labelIds.every((id) => typeof id === 'string')) {
-          throw new ConflictError('Expansion can no longer be undone');
-        }
-        await tx
-          .delete(taskLabel)
-          .where(and(eq(taskLabel.organizationId, orgId), eq(taskLabel.taskId, entry.entityId)));
-        if (labelIds.length > 0) {
-          await tx.insert(taskLabel).values(
-            labelIds.map((labelId) => ({
-              organizationId: orgId,
-              taskId: entry.entityId,
-              labelId,
-            })),
-          );
-        }
-        outcomes.push({ kind: entry.entityKind, id: entry.entityId, reverted: true });
+      if (isCompanionKind(entry.entityKind)) {
+        // The whole transaction rolls back on a refusal, so nothing is half-undone.
+        const outcome = await revertCompanion(entry, orgId, tx);
+        if (!outcome.reverted) throw new ConflictError('Expansion can no longer be undone');
+        outcomes.push(outcome);
         continue;
       }
       if (!isRelation(entry.entityKind))

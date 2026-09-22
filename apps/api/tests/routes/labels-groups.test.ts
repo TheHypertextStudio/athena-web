@@ -263,6 +263,35 @@ describe('label creation against a group', () => {
   });
 });
 
+describe('scope and name guards', () => {
+  it('404s a label or group scoped to another workspace’s team', async () => {
+    const { w } = await seed();
+    const other = await seedBaseOrg(db, schema);
+    const labelId = await mkLabel(w, 'bug');
+    const groupId = await mkGroup(w, 'Type');
+
+    for (const path of [`/${labelId}`, `/groups/${groupId}`]) {
+      const res = await w.request(path, {
+        method: 'PATCH',
+        headers: J,
+        body: JSON.stringify({ teamId: other.teamId }),
+      });
+      expect(res.status).toBe(404);
+    }
+  });
+
+  it('409s a group named like another in the same scope instead of failing', async () => {
+    const { w } = await seed();
+    await mkGroup(w, 'Type');
+    const res = await w.request('/groups', {
+      method: 'POST',
+      headers: J,
+      body: JSON.stringify({ name: 'Type' }),
+    });
+    expect(res.status).toBe(409);
+  });
+});
+
 describe('merge edge cases', () => {
   it('404s when the surviving label does not exist', async () => {
     const { w } = await seed();

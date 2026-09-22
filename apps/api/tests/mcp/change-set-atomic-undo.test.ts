@@ -21,6 +21,7 @@ import {
   record,
   seedRawChangeSet,
   seedWorkspace,
+  taskLabels,
 } from './change-set-fixtures';
 
 let schema!: typeof DbModule;
@@ -75,9 +76,7 @@ describe('undoChangeSetAtomically', () => {
     const org = await seedWorkspace();
     const row = await makeTask(org);
     const labelId = await makeLabel(org, 'Removed later');
-    const changeSetId = await record(org, [
-      { kind: 'task_labels', taskId: row.id, before: [], after: [labelId] },
-    ]);
+    const changeSetId = await record(org, [taskLabels(row.id, [], [labelId])]);
 
     await expect(changeSets.undoChangeSetAtomically(org.orgId, changeSetId)).rejects.toBeInstanceOf(
       ConflictError,
@@ -90,9 +89,7 @@ describe('undoChangeSetAtomically', () => {
     const row = await makeTask(org);
     const labelId = await makeLabel(org, 'Added');
     await attachLabel(org, row.id, labelId);
-    const changeSetId = await record(org, [
-      { kind: 'task_labels', taskId: row.id, before: [], after: [labelId] },
-    ]);
+    const changeSetId = await record(org, [taskLabels(row.id, [], [labelId])]);
 
     const { outcomes } = await changeSets.undoChangeSetAtomically(org.orgId, changeSetId);
 
@@ -107,9 +104,7 @@ describe('undoChangeSetAtomically', () => {
     const original = await makeLabel(org, 'Original');
     const replacement = await makeLabel(org, 'Replacement');
     await attachLabel(org, row.id, replacement);
-    const changeSetId = await record(org, [
-      { kind: 'task_labels', taskId: row.id, before: [original], after: [replacement] },
-    ]);
+    const changeSetId = await record(org, [taskLabels(row.id, [original], [replacement])]);
 
     await changeSets.undoChangeSetAtomically(org.orgId, changeSetId);
 

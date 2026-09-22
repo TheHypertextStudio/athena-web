@@ -6,6 +6,7 @@ import { WIDGET, widgetMeta } from './apps';
 import { DESCRIPTOR_HINT } from './descriptors';
 import { listWorkFilters, WORK_ENTITIES } from './list-work';
 import { orgIdParam } from './tools-shared';
+import { labelsSetField } from './update-labels';
 
 /** Every field `update` can set, uniform across entities. */
 export const updateSetFields = {
@@ -77,6 +78,7 @@ export const updateSetFields = {
   targetDateResolution: DateResolution.nullable()
     .optional()
     .describe('The broad target resolution; send it with targetDate.'),
+  labels: labelsSetField,
 };
 
 /** The MCP declaration for the bulk update operation. */
@@ -128,7 +130,7 @@ export const updateToolDefinition = {
     skipped: z
       .array(z.object({ id: z.string(), title: z.string(), reason: z.string() }))
       .describe(
-        'Items left alone, and why — `not_permitted` means the caller cannot write that one.',
+        'Items left alone, and why — `not_permitted` means the caller cannot write that one, and `label_out_of_scope` means a label is limited to a team the item is not in.',
       ),
     changeSetId: z
       .string()

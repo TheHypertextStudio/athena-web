@@ -92,6 +92,8 @@ export const TOOL_SCOPE: Readonly<Record<string, McpScope>> = {
   organize: 'work:write',
   link: 'work:write',
   archive: 'work:write',
+  define_labels: 'work:write',
+  define_template: 'work:write',
   plan_day: 'work:write',
   plan_start: 'work:read',
   plan_read: 'work:read',

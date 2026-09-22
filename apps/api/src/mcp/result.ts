@@ -85,7 +85,7 @@ function formatFieldIssue(field: string, issue: FieldIssue): string {
  * @param err - The domain error to describe.
  * @returns the multi-line failure description.
  */
-function describeApiError(err: ApiError): string {
+export function describeApiError(err: ApiError): string {
   const lines = [`${err.code}: ${publicProblemTitle(err.code)}`];
   if (err instanceof InsufficientScopeError) {
     lines.push(`  required scope: ${err.requiredScope}`);

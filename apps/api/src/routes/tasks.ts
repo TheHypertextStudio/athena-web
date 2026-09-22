@@ -16,7 +16,6 @@ import {
   taskLabel,
   taskRelatedTask,
   team,
-  teamMember,
   template,
 } from '@docket/db';
 import { pageOf } from '../contracts/pagination';
@@ -53,6 +52,7 @@ import {
 } from '../lib/labels';
 import { created, ok } from '../lib/ok';
 import { rawResultRows } from '../lib/raw-result';
+import { visibleTemplateWhere } from '../lib/templates/visibility';
 import {
   announceTaskChanges,
   diffTaskFields,
@@ -81,6 +81,7 @@ import {
   undoChangeSetAtomically,
   type RecordedChange,
 } from '../mcp/change-set';
+import { labelSetChange } from '../mcp/change-set-labels';
 
 import { emitEvent } from './event-emit';
 import { loadTaskExpansionResources } from './task-expansion-resources';
@@ -117,31 +118,7 @@ async function assertTaskTemplate(
   const rows = await db
     .select({ targetType: template.targetType })
     .from(template)
-    .where(
-      and(
-        eq(template.id, templateId),
-        eq(template.organizationId, orgId),
-        or(
-          eq(template.scope, 'organization'),
-          and(eq(template.scope, 'personal'), eq(template.ownerActorId, actorId)),
-          and(
-            eq(template.scope, 'team'),
-            exists(
-              db
-                .select({ one: sql`1` })
-                .from(teamMember)
-                .where(
-                  and(
-                    eq(teamMember.organizationId, orgId),
-                    eq(teamMember.actorId, actorId),
-                    eq(teamMember.teamId, template.teamId),
-                  ),
-                ),
-            ),
-          ),
-        ),
-      ),
-    )
+    .where(visibleTemplateWhere(orgId, actorId, { id: templateId }))
     .limit(1);
   const row = rows[0];
   if (!row) throw new NotFoundError('Template not found');
@@ -645,30 +622,10 @@ The new task appears in the organization's activity stream. An assigned task als
               .select({ payload: template.payload })
               .from(template)
               .where(
-                and(
-                  eq(template.id, before.templateId),
-                  eq(template.organizationId, orgId),
-                  eq(template.targetType, 'task'),
-                  or(
-                    eq(template.scope, 'organization'),
-                    and(eq(template.scope, 'personal'), eq(template.ownerActorId, actorId)),
-                    and(
-                      eq(template.scope, 'team'),
-                      exists(
-                        db
-                          .select({ one: sql`1` })
-                          .from(teamMember)
-                          .where(
-                            and(
-                              eq(teamMember.organizationId, orgId),
-                              eq(teamMember.actorId, actorId),
-                              eq(teamMember.teamId, template.teamId),
-                            ),
-                          ),
-                      ),
-                    ),
-                  ),
-                ),
+                visibleTemplateWhere(orgId, actorId, {
+                  id: before.templateId,
+                  targetType: 'task',
+                }),
               )
               .limit(1);
       if (before.templateId !== null && !templateRows[0])
@@ -852,12 +809,14 @@ The new task appears in the organization's activity stream. An assigned task als
         const insertedRelatedTaskIds: string[] = [];
         if (expandedLabels !== undefined) {
           await replaceLabels(tx, 'task', lockedBefore.id, orgId, expandedLabels);
-          changes.push({
-            kind: 'task_labels',
-            taskId: lockedBefore.id,
-            before: labels.map((label) => label.id),
-            after: expandedLabels.map((label) => label.id),
-          });
+          changes.push(
+            labelSetChange(
+              'task',
+              lockedBefore.id,
+              labels.map((label) => label.id),
+              expandedLabels.map((label) => label.id),
+            ),
+          );
         }
         for (const child of expansion.subtasks) {
           const [createdChild] = await tx

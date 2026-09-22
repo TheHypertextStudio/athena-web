@@ -219,26 +219,28 @@ earlier draft of this section listed twenty-six that mapped roughly 1:1 onto SQL
 surface could not express ordinary sentences ("reassign Sarah's open work to me" needed a name→id
 lookup, a filtered query, and a bulk write, and offered none of the three) and was replaced.
 
-| Tool             | readOnly | destructive | idempotent | openWorld | Scope             | Widget          |
-| ---------------- | :------: | :---------: | :--------: | :-------: | ----------------- | --------------- |
-| `workspaces`     |  **T**   |      F      |     T      |     F     | `work:read`       | —               |
-| `list_work`      |  **T**   |      F      |     T      |     F     | `work:read`       | `work-list`     |
-| `find`           |  **T**   |      F      |     T      |     F     | `work:read`       | —               |
-| `get`            |  **T**   |      F      |     T      |     F     | `work:read`       | —               |
-| `brief`          |  **T**   |      F      |     T      |     F     | `work:read`       | —               |
-| `retrospect`     |  **T**   |      F      |     T      |     F     | `work:read`       | —               |
-| `capture`        |    F     |      F      |     F      |     F     | `work:write`      | `change-report` |
-| `organize`       |    F     |      F      |   **T**    |     F     | `work:write`      | `change-report` |
-| `update`         |    F     |    **T**    |     T      |     F     | `work:write`      | `change-report` |
-| `link`           |    F     |    **T**    |     T      |     F     | `work:write`      | —               |
-| `archive`        |    F     |    **T**    |     T      |     F     | `work:write`      | `change-report` |
-| `comment`        |    F     |      F      |     F      |     F     | `work:write`      | —               |
-| `report_status`  |    F     |      F      |     F      |     F     | `work:write`      | —               |
-| `plan_day`       |    F     |      F      |     T      |     F     | `work:write`      | —               |
-| `undo`           |    F     |    **T**    |     T      |     F     | `work:write`      | —               |
-| `link_external`  |    F     |      F      |     T      |   **T**   | `connectors:link` | —               |
-| `run_agent`      |    F     |      F      |     F      |   **T**   | `agents:run`      | —               |
-| `manage_session` |    F     |    **T**    |     T      |     F     | `agents:run`      | —               |
+| Tool              | readOnly | destructive | idempotent | openWorld | Scope             | Widget          |
+| ----------------- | :------: | :---------: | :--------: | :-------: | ----------------- | --------------- |
+| `workspaces`      |  **T**   |      F      |     T      |     F     | `work:read`       | —               |
+| `list_work`       |  **T**   |      F      |     T      |     F     | `work:read`       | `work-list`     |
+| `find`            |  **T**   |      F      |     T      |     F     | `work:read`       | —               |
+| `get`             |  **T**   |      F      |     T      |     F     | `work:read`       | —               |
+| `brief`           |  **T**   |      F      |     T      |     F     | `work:read`       | —               |
+| `retrospect`      |  **T**   |      F      |     T      |     F     | `work:read`       | —               |
+| `capture`         |    F     |      F      |     F      |     F     | `work:write`      | `change-report` |
+| `organize`        |    F     |      F      |   **T**    |     F     | `work:write`      | `change-report` |
+| `update`          |    F     |    **T**    |     T      |     F     | `work:write`      | `change-report` |
+| `link`            |    F     |    **T**    |     T      |     F     | `work:write`      | —               |
+| `archive`         |    F     |    **T**    |     T      |     F     | `work:write`      | `change-report` |
+| `define_labels`   |    F     |      F      |   **T**    |     F     | `work:write`      | `change-report` |
+| `define_template` |    F     |      F      |     F      |     F     | `work:write`      | `change-report` |
+| `comment`         |    F     |      F      |     F      |     F     | `work:write`      | —               |
+| `report_status`   |    F     |      F      |     F      |     F     | `work:write`      | —               |
+| `plan_day`        |    F     |      F      |     T      |     F     | `work:write`      | —               |
+| `undo`            |    F     |    **T**    |     T      |     F     | `work:write`      | —               |
+| `link_external`   |    F     |      F      |     T      |   **T**   | `connectors:link` | —               |
+| `run_agent`       |    F     |      F      |     F      |   **T**   | `agents:run`      | —               |
+| `manage_session`  |    F     |    **T**    |     T      |     F     | `agents:run`      | —               |
 
 Two more are registered only for a user principal, never a workspace one, because they act on a
 private delegation rather than on shared work:
@@ -271,6 +273,12 @@ Notes on the less obvious entries:
   exists _in its parent's scope_ and creates only the rest, so re-running a plan does not duplicate
   it. Matching is never org-wide for anything with a parent — two projects called "Rollout" under
   different programs are two projects.
+- **`define_labels` is idempotent** for the same reason `organize` is: it matches each entry by
+  name and edits or leaves alone what exists. An entry that would change nothing never asks for
+  `manage`, so a contributor can re-run a call that created labels. Undoing a label or group it
+  created deletes the row, because neither has an archived state, and so undo refuses (`in_use`)
+  once work carries the label or the group has members. `define_template` and `define_labels`
+  never delete; deletion and merging stay in the settings pages.
 - **`update`, `archive`, and `undo` are destructive** in the annotation's sense: they rewrite or
   remove existing state in bulk, and a client should show the caller what will happen. `link` is
   marked destructive because `remove: true` takes a relation away.

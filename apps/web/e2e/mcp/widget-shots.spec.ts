@@ -30,6 +30,7 @@ import { CHANGE_REPORT_HTML } from '../../../api/src/mcp/apps/change-report';
 import { entityDocument, ENTITY_HTML } from '../../../api/src/mcp/apps/entity';
 import { PLAN_HTML } from '../../../api/src/mcp/apps/plan';
 import { WORK_LIST_HTML } from '../../../api/src/mcp/apps/work-list';
+import { CATALOG_CASES, type WidgetCase } from './widget-shot-cases';
 
 /** Where the craft review reads its evidence from. */
 const SHOT_DIR = join(
@@ -70,28 +71,6 @@ const HOST_VARIABLES: Readonly<Record<'light' | 'dark', Readonly<Record<string, 
     '--color-border-primary': '#3b3a39',
   },
 };
-
-/** One photographable situation: a widget, holding a particular result. */
-interface WidgetCase {
-  readonly name: string;
-  readonly html: string;
-  /**
-   * The tool the host says produced this card.
-   *
-   * @remarks
-   * Not cosmetic. One change-report document serves `capture`, `update`, `archive` and `organize`,
-   * and it reads the tool name out of `hostContext.toolInfo` to decide whether four rows were
-   * changed, archived, or filed. Getting this wrong in a fixture would photograph the wrong copy.
-   */
-  readonly tool: string;
-  readonly input: Readonly<Record<string, unknown>>;
-  /** `null` means the host never delivers a result, which is the loading state. */
-  readonly result: Readonly<Record<string, unknown>> | null;
-  /** Send `tool-cancelled` instead of `tool-result`, the way a host does on an abandoned call. */
-  readonly cancelled?: boolean;
-  /** Start the view fullscreen, so the expanded layout is photographed rather than assumed. */
-  readonly fullscreen?: boolean;
-}
 
 const CASES: readonly WidgetCase[] = [
   {
@@ -309,6 +288,7 @@ const CASES: readonly WidgetCase[] = [
       },
     },
   },
+  ...CATALOG_CASES,
   {
     name: 'change-report-failed',
     tool: 'update',

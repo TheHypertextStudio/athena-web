@@ -10,7 +10,8 @@ can change after consent or grant changes, so handle `notifications/tools/list_c
 
 The work and planning tools are `workspaces`, `find`, `list_work`, `brief`, `capture`, `organize`,
 `update`, `comment`, `report_status`, `link`, `archive`, `plan_day`, `undo`, `retrospect`,
-`define_process`, `schedule_process`, `repeat_task`, and `track`.
+`define_process`, `schedule_process`, `repeat_task`, `define_labels`, `define_template`, and
+`track`.
 
 The agent, session, connector, and directive tools are `run_agent`, `manage_session`,
 `link_external`, `acknowledge_directive`, `pause_athena_assignment_trigger`, and
@@ -56,6 +57,24 @@ or move work on its own.
     | `schedule_process` | Schedules a process to run. |
     | `repeat_task` | Makes a task recur. |
 
+### Labels and templates
+
+    | Tool | Does |
+    | --- | --- |
+    | `define_labels` | Creates or edits label groups and labels in one call. Entries match by name, so a re-run changes nothing. |
+    | `define_template` | Creates or edits one task, project, initiative, or program template. |
+
+    Put labels on work with `update`: `set.labels` takes `add` and `remove`, or `replace` on its
+    own. A label limited to one team only goes on that team's work, and anything else is reported
+    as `label_out_of_scope`.
+
+    Creating a label or a template needs `contribute` access. Renaming, recoloring, regrouping, or
+    rescoping a label, and any change to a label group, needs `manage` access. An entry the caller
+    may not write comes back in `skipped` while the rest of the call applies. Undoing a created
+    label or group deletes it only while nothing uses it, and reports it as `in_use` otherwise.
+    `define_labels` and `define_template` do not delete or merge labels and templates. Use the
+    settings pages for that.
+
 ### Agents, sessions, and connectors
 
     | Tool | Does |
@@ -70,12 +89,12 @@ or move work on its own.
 
 ### Scopes per tool
 
-| Scope             | Covers                                                                                                                                                                                                  |
-| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `work:read`       | `workspaces`, `find`, `list_work`, `get`, `brief`, and every resource read                                                                                                                              |
-| `work:write`      | `capture`, `organize`, `update`, `comment`, `report_status`, `link`, `archive`, `plan_day`, `undo`, `track`, `retrospect`, `acknowledge_directive`, `define_process`, `schedule_process`, `repeat_task` |
-| `agents:run`      | `run_agent`, `manage_session`, `pause_athena_assignment_trigger`, `remove_athena_assignment_trigger`, `review_work_destination`                                                                         |
-| `connectors:link` | `link_external`                                                                                                                                                                                         |
+| Scope             | Covers                                                                                                                                                                                                                                      |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `work:read`       | `workspaces`, `find`, `list_work`, `get`, `brief`, and every resource read                                                                                                                                                                  |
+| `work:write`      | `capture`, `organize`, `update`, `comment`, `report_status`, `link`, `archive`, `plan_day`, `undo`, `track`, `retrospect`, `acknowledge_directive`, `define_process`, `schedule_process`, `repeat_task`, `define_labels`, `define_template` |
+| `agents:run`      | `run_agent`, `manage_session`, `pause_athena_assignment_trigger`, `remove_athena_assignment_trigger`, `review_work_destination`                                                                                                             |
+| `connectors:link` | `link_external`                                                                                                                                                                                                                             |
 
 See [Authentication](/developers/authentication#request-the-smallest-scope) for requesting and stepping up scopes.
 

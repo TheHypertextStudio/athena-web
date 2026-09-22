@@ -49,18 +49,24 @@ const SCRIPT = String.raw`
     update: 'Changed',
     archive: 'Archived',
     organize: 'Filed',
+    define_labels: 'Saved',
+    define_template: 'Saved',
   };
   const NOTHING = {
     capture: 'Nothing captured',
     update: 'Nothing changed',
     archive: 'Nothing archived',
     organize: 'Nothing to file',
+    define_labels: 'Already set up',
+    define_template: 'Already set up',
   };
   const LEFT_ALONE = {
     capture: 'Not captured',
     update: 'Not changed',
     archive: 'Not archived',
     organize: 'Not filed',
+    define_labels: 'Not saved',
+    define_template: 'Not saved',
   };
 
   // Wire keys are not labels. Anything absent falls back to de-camel-casing, so a field added to a
@@ -85,6 +91,14 @@ const SCRIPT = String.raw`
     parentTaskId: 'Parent',
     health: 'Health',
     labels: 'Labels',
+    color: 'Color',
+    groupId: 'Group',
+    teamId: 'Team',
+    exclusive: 'Pick',
+    scope: 'Shared with',
+    draftTitle: 'Starting title',
+    draftName: 'Starting name',
+    body: 'Body',
   };
 
   function toolName() {
@@ -111,8 +125,11 @@ const SCRIPT = String.raw`
   function changeValue(field) {
     const value = document.createElement('dd');
     const from = document.createElement('span');
-    from.textContent = valueLabel(field.from);
-    if (field.field === 'title' || field.field === 'name') {
+    const renamed = field.field === 'title' || field.field === 'name';
+    // A name is what someone typed, so it is never re-cased: "was Bug" for a label called "bug"
+    // hides the very change a case-only rename made.
+    from.textContent = renamed ? String(field.from) : valueLabel(field.from);
+    if (renamed) {
       from.className = 'was';
       value.append('was ', from);
       return value;
@@ -156,12 +173,16 @@ const SCRIPT = String.raw`
     name.textContent = item.title || untitled(item);
     name.title = item.title || untitled(item);
     row.appendChild(name);
-    if (item.matched) {
+    // A label or template row says where it lives, since two labels called Bug in different teams
+    // are otherwise the same line.
+    if (item.note || item.matched) {
+      const facts = document.createElement('div');
+      facts.className = 'facts';
       // Shows that a repeat run reconciled instead of duplicating.
-      const already = document.createElement('div');
-      already.className = 'facts';
-      already.textContent = 'already there';
-      row.appendChild(already);
+      facts.textContent = [item.note, item.matched ? 'already there' : '']
+        .filter(Boolean)
+        .join(' · ');
+      row.appendChild(facts);
     }
     const open = window.docket.openButton(item);
     if (open) {
@@ -191,6 +212,10 @@ const SCRIPT = String.raw`
           not_archived: 'was not archived',
           changed_since: 'someone else changed it',
           gone: 'no longer exists',
+          label_out_of_scope: 'a label belongs to another team',
+          conflict: 'clashes with an existing name or team',
+          not_found: 'names something that is not there',
+          validation_error: 'the request was incomplete',
         },
         item.reason,
       ) || item.reason;
@@ -280,7 +305,8 @@ const SCRIPT = String.raw`
   // guess.
   function itemsOf(data) {
     if (Array.isArray(data.changes)) {
-      return data.changes.map((c) => ({ ...c, kind: data.entity }));
+      // A catalog row names its own kind, because one define_labels call mixes labels and groups.
+      return data.changes.map((c) => ({ ...c, kind: c.kind || data.entity }));
     }
     if (Array.isArray(data.items)) {
       // \`capture\` sends no \`entity\` and only ever makes tasks. Without the fallback the row has
@@ -318,9 +344,8 @@ const SCRIPT = String.raw`
     rest.hidden = shown.length === items.length || !data.listHref;
     rest.textContent = 'Open in Docket to see ' + String(items.length - shown.length) + ' more';
 
-    // \`skipped\` only ever comes from \`update\`/\`archive\`, both scoped to one \`entity\` — same
-    // reasoning as \`itemsOf\` above.
-    const left = (data.skipped || []).map((s) => ({ ...s, kind: data.entity }));
+    // \`update\`/\`archive\` scope skipped rows to one \`entity\`; catalog tools name each row's kind.
+    const left = (data.skipped || []).map((s) => ({ ...s, kind: s.kind || data.entity }));
     const skipped = el('skipped');
     skipped.replaceChildren();
     for (const item of left) {

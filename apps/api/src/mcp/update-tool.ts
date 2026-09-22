@@ -43,8 +43,9 @@ import { buildTaskViewFilter } from '../routes/task-helpers';
 import { enqueueSearchUpsert } from '../search/write-through';
 import type { McpContext } from './auth';
 import type { McpRegistrar } from './catalog';
-import { recordChangeSet, trackedFields, type ChangeRecord } from './change-set';
+import { recordChangeSet, trackedFields, type RecordedChange } from './change-set';
 import { resolveOptional } from './descriptors';
+import { applyLabelEdit, labelsFitRow, resolveLabelEdit, type LabelEdit } from './update-labels';
 import { isTaskRowVisible, listWork, listWorkFilters, type WorkEntity } from './list-work';
 import { authorize, jsonResult, runTool, scopedActor } from './result';
 import { resolveStateTransition } from './tools-shared';
@@ -91,6 +92,7 @@ const SETTABLE: Record<WorkEntity, readonly SetName[]> = {
     'program',
     'team',
     'dueDate',
+    'labels',
   ],
   project: [
     'title',
@@ -104,8 +106,9 @@ const SETTABLE: Record<WorkEntity, readonly SetName[]> = {
     'startDateResolution',
     'targetDate',
     'targetDateResolution',
+    'labels',
   ],
-  program: ['title', 'description', 'status', 'health', 'owner'],
+  program: ['title', 'description', 'status', 'health', 'owner', 'labels'],
   initiative: [
     'title',
     'description',
@@ -115,6 +118,7 @@ const SETTABLE: Record<WorkEntity, readonly SetName[]> = {
     'owner',
     'targetDate',
     'targetDateResolution',
+    'labels',
   ],
 };
 
@@ -392,6 +396,168 @@ function diff(
     .map((key) => ({ field: key, from: displayLine(before[key]), to: displayLine(after[key]) }));
 }
 
+/** Everything a row write needs that is the same for every row in the call. */
+interface RowContext {
+  readonly actorCtx: Awaited<ReturnType<typeof scopedActor>>;
+  readonly entity: WorkEntity;
+  readonly orgId: string;
+  readonly set: UpdateSet;
+  readonly refs: ResolvedRefs;
+  readonly fiscalYearStartMonth: number;
+  readonly containerStatus: { statusId: string; status: string } | undefined;
+  readonly labelEdit: LabelEdit | undefined;
+}
+
+/** One written row as the report card shows it. */
+interface RowReport {
+  readonly id: string;
+  readonly title: string;
+  readonly href: string;
+  readonly fields: ReturnType<typeof diff>;
+}
+
+/** One row left alone, and why. */
+interface RowSkip {
+  readonly id: string;
+  readonly title: string;
+  readonly reason: string;
+}
+
+/** What happened to one row: skipped, written, or null when it vanished mid-call. */
+type RowOutcome =
+  | { readonly skipped: RowSkip }
+  | { readonly report: RowReport; readonly changes: RecordedChange[] }
+  | null;
+
+/**
+ * Whether the caller may write this row.
+ *
+ * @remarks
+ * Changing who is accountable is an `assign`-level act, exactly as the tasks router gates it;
+ * everything else on this tool is `contribute`. A denial is data, not a failure: the caller asked
+ * about a set, and the answer is that part of it was theirs to change and part was not.
+ */
+async function permitted(rc: RowContext, id: string): Promise<boolean> {
+  const target = { kind: rc.entity, id, orgId: rc.orgId };
+  const needsAssign =
+    rc.entity === 'task' && (rc.set.assignee !== undefined || rc.set.delegate !== undefined);
+  try {
+    await authorize(rc.actorCtx, 'contribute', target);
+    if (needsAssign) await authorize(rc.actorCtx, 'assign', target);
+    return true;
+  } catch (err) {
+    if (!(err instanceof ApiError)) throw err;
+    return false;
+  }
+}
+
+/** Move a task to a new workflow state, with its timers and parent completion, then its fields. */
+async function writeTaskState(
+  rc: RowContext,
+  id: string,
+  patch: Record<string, unknown>,
+): Promise<Record<string, unknown> | null> {
+  const { statusId, state, completedAt, canceledAt, ...remainingPatch } = patch;
+  const where = and(eq(task.id, id), eq(task.organizationId, rc.orgId));
+  const result = await db.transaction(async (tx) => {
+    const [current] = await tx.select().from(task).where(where).for('update').limit(1);
+    if (!current) return null;
+    const mutation = await writeTaskStateTransition(tx, {
+      before: current,
+      statusId: String(statusId),
+      state: String(state),
+      completedAt: completedAt as Date | null,
+      canceledAt: canceledAt as Date | null,
+    });
+    if (!mutation) return null;
+    const timerStops = await closeCompletingUserTaskTimers(tx, rc.actorCtx.actorId, mutation);
+    const [after] =
+      Object.keys(remainingPatch).length === 0
+        ? [mutation.after]
+        : await tx.update(task).set(remainingPatch).where(where).returning();
+    if (!after) return null;
+    const finalMutation = { before: current, after };
+    const cascades = await applySubtaskCompletionPolicy(tx, finalMutation);
+    return { after, mutation: finalMutation, timerStops, cascades };
+  });
+  if (!result) return null;
+  await finishTaskStateTransition({ actorId: rc.actorCtx.actorId }, result.mutation);
+  await emitCompletedTaskTimerStops(result.timerStops);
+  for (const cascade of result.cascades)
+    await finishTaskStateTransition({ actorId: null }, cascade);
+  return result.after;
+}
+
+/** Write a row's column patch and return the row as it now is. */
+async function writeColumns(
+  rc: RowContext,
+  row: Record<string, unknown>,
+  patch: Record<string, unknown>,
+): Promise<Record<string, unknown> | null> {
+  const id = String(row['id']);
+  if (rc.entity === 'task' && rc.set.state !== undefined) return writeTaskState(rc, id, patch);
+  // A labels-only call has no columns to write, and Drizzle refuses an empty `set`.
+  if (Object.keys(patch).length === 0) return row;
+  const table = TABLES[rc.entity] as PgTable & {
+    id: typeof task.id;
+    organizationId: typeof task.organizationId;
+  };
+  const [updated] = await db
+    .update(table)
+    .set(patch)
+    .where(and(eq(table.id, id), eq(table.organizationId, rc.orgId)))
+    .returning();
+  return updated ?? null;
+}
+
+/** The team a row belongs to once this call's `team` change, if any, has landed. */
+function teamAfter(rc: RowContext, row: Record<string, unknown>): string | null {
+  const team = rc.refs.teamId ?? row['teamId'];
+  return typeof team === 'string' ? team : null;
+}
+
+/**
+ * Apply the whole patch to one row: its columns, then its labels.
+ *
+ * @remarks
+ * The label scope check runs before anything is written, so a row whose team cannot take a label
+ * is skipped whole rather than half-updated.
+ */
+async function updateRow(rc: RowContext, row: Record<string, unknown>): Promise<RowOutcome> {
+  const id = String(row['id']);
+  const title = titleOf(row, id);
+  if (!(await permitted(rc, id))) return { skipped: { id, title, reason: 'not_permitted' } };
+  if (rc.labelEdit && !labelsFitRow(rc.labelEdit, teamAfter(rc, row))) {
+    return { skipped: { id, title, reason: 'label_out_of_scope' } };
+  }
+  const { entity, orgId } = rc;
+  const patch = await buildPatch(
+    entity,
+    orgId,
+    row,
+    rc.set,
+    rc.refs,
+    rc.fiscalYearStartMonth,
+    rc.containerStatus,
+  );
+  const before = trackedFields(entity, row);
+  const next = await writeColumns(rc, row, patch);
+  /* v8 ignore next -- @preserve defensive: the row was just read in this call */
+  if (!next) return null;
+  const after = trackedFields(entity, next);
+  const fields = diff(before, after);
+  const changes: RecordedChange[] =
+    fields.length > 0 ? [{ kind: entity, id, op: 'update', before, after }] : [];
+  const labels = rc.labelEdit ? await applyLabelEdit(entity, orgId, id, rc.labelEdit) : null;
+  if (labels?.field && labels.change) {
+    fields.push(labels.field);
+    changes.push(labels.change);
+  }
+  if (changes.length > 0) await enqueueSearchUpsert(orgId, entity, id);
+  const href = entityHref(orgId, entity, id);
+  return { report: { id, title: titleOf(next, id), href, fields }, changes };
+}
+
 /** Register `update` on `server`. */
 export function registerUpdateTool(server: McpRegistrar, ctx: McpContext): void {
   server.registerTool('update', updateToolDefinition, (input) =>
@@ -472,131 +638,45 @@ export function registerUpdateTool(server: McpRegistrar, ctx: McpContext): void 
         .limit(1);
       /* v8 ignore next -- @preserve scopedActor proved the workspace exists */
       if (!workspaceSettings) throw new Error('workspace settings missing');
-      // Changing who is accountable is an `assign`-level act, exactly as the tasks router
-      // gates it; everything else on this tool is `contribute`.
-      const needsAssign =
-        entity === 'task' && (set.assignee !== undefined || set.delegate !== undefined);
-
-      const changes: ChangeRecord[] = [];
-      const report: {
-        id: string;
-        title: string;
-        href: string;
-        fields: ReturnType<typeof diff>;
-      }[] = [];
-      const skipped: { id: string; title: string; reason: string }[] = [];
-
+      const rowContext: RowContext = {
+        actorCtx,
+        entity,
+        orgId: input.orgId,
+        set,
+        refs,
+        fiscalYearStartMonth: workspaceSettings.fiscalYearStartMonth,
+        containerStatus,
+        labelEdit: await resolveLabelEdit(input.orgId, set.labels),
+      };
+      const changes: RecordedChange[] = [];
+      const report: RowReport[] = [];
+      const skipped: RowSkip[] = [];
       for (const row of visibleRows) {
-        const id = String(row['id']);
-        const title = titleOf(row, id);
-        try {
-          await authorize(actorCtx, 'contribute', { kind: entity, id, orgId: input.orgId });
-          if (needsAssign) {
-            await authorize(actorCtx, 'assign', { kind: entity, id, orgId: input.orgId });
-          }
-        } catch (err) {
-          // A per-row denial is data, not a failure: the caller asked about a set, and the
-          // answer is that part of it was theirs to change and part was not.
-          if (!(err instanceof ApiError)) throw err;
-          skipped.push({ id, title, reason: 'not_permitted' });
-          continue;
-        }
-
-        const patch = await buildPatch(
-          entity,
-          input.orgId,
-          row,
-          set,
-          refs,
-          workspaceSettings.fiscalYearStartMonth,
-          containerStatus,
-        );
-        const before = trackedFields(entity, row);
-        let next: Record<string, unknown> | undefined;
-        if (entity === 'task' && set.state !== undefined) {
-          const { statusId, state, completedAt, canceledAt, ...remainingPatch } = patch;
-          const result = await db.transaction(async (tx) => {
-            const locked = await tx
-              .select()
-              .from(task)
-              .where(and(eq(task.id, id), eq(task.organizationId, input.orgId)))
-              .for('update')
-              .limit(1);
-            const current = locked[0];
-            if (!current) return null;
-            const mutation = await writeTaskStateTransition(tx, {
-              before: current,
-              statusId: String(statusId),
-              state: String(state),
-              completedAt: completedAt as Date | null,
-              canceledAt: canceledAt as Date | null,
-            });
-            if (!mutation) return null;
-            const timerStops = await closeCompletingUserTaskTimers(tx, actorCtx.actorId, mutation);
-            const [after] =
-              Object.keys(remainingPatch).length === 0
-                ? [mutation.after]
-                : await tx
-                    .update(task)
-                    .set(remainingPatch)
-                    .where(and(eq(task.id, id), eq(task.organizationId, input.orgId)))
-                    .returning();
-            if (!after) return null;
-            const finalMutation = { before: current, after };
-            return {
-              after,
-              mutation: finalMutation,
-              timerStops,
-              cascades: await applySubtaskCompletionPolicy(tx, finalMutation),
-            };
-          });
-          if (!result) continue;
-          await finishTaskStateTransition({ actorId: actorCtx.actorId }, result.mutation);
-          await emitCompletedTaskTimerStops(result.timerStops);
-          for (const cascade of result.cascades) {
-            await finishTaskStateTransition({ actorId: null }, cascade);
-          }
-          next = result.after;
-        } else {
-          const updated = await db
-            .update(table)
-            .set(patch)
-            .where(and(eq(table.id, id), eq(table.organizationId, input.orgId)))
-            .returning();
-          next = updated[0];
-        }
-        /* v8 ignore next -- @preserve defensive: the row was just read in this call */
-        if (!next) continue;
-        const after = trackedFields(entity, next);
-
-        const fields = diff(before, after);
-        report.push({
-          id,
-          title: titleOf(next, id),
-          href: entityHref(input.orgId, entity, id),
-          fields,
-        });
-        if (fields.length > 0) {
-          changes.push({ kind: entity, id, op: 'update', before, after });
-          await enqueueSearchUpsert(input.orgId, entity, id);
+        const outcome = await updateRow(rowContext, row);
+        if (outcome === null) continue;
+        if ('skipped' in outcome) skipped.push(outcome.skipped);
+        else {
+          report.push(outcome.report);
+          changes.push(...outcome.changes);
         }
       }
+      const changedRows = report.filter((row) => row.fields.length > 0);
 
       const changeSetId = await recordChangeSet({
         orgId: input.orgId,
         actorId: actorCtx.actorId,
         origin: originFor('update'),
         summary:
-          changes.length === 1 && report[0]
-            ? `Updated "${report[0].title}"`
-            : `Updated ${changes.length} ${entity}s`,
+          changedRows.length === 1 && changedRows[0]
+            ? `Updated "${changedRows[0].title}"`
+            : `Updated ${changedRows.length} ${entity}s`,
         changes,
       });
 
       return jsonResult({
         matched: visibleRows.length,
         listHref: entityListHref(input.orgId, entity),
-        changed: changes.length,
+        changed: changedRows.length,
         entity,
         changes: report,
         skipped,

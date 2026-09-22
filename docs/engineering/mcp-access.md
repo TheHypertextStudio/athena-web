@@ -128,11 +128,12 @@ the normal action policy still decide whether Athena may execute it or must requ
 
 ## What's exposed
 
-- **Tools** (25) — named for what someone is trying to do, not for the table underneath:
+- **Tools** (27) — named for what someone is trying to do, not for the table underneath:
   - _Read_ — `workspaces` (which workspaces you belong to), `find` (ranked search), `list_work` (filtered sets), `get` (hydrate by id or name), `brief` (what needs me today).
   - _Write_ — `capture` (a sentence becomes a task), `organize` (a whole plan in one call, reconciled so a re-run does not duplicate), `update` (change work by describing which work), `link`, `archive`, `comment`, `report_status`, `plan_day`, `undo`.
   - _Time and reflection_ — `track`, `retrospect`.
   - _Repeating work_ — `define_process`, `schedule_process`, `repeat_task`.
+  - _Labels and templates_ — `define_labels` (create or edit label groups and labels, reconciled by name), `define_template` (create or edit one template). Putting labels on work is `update` with `set.labels`.
   - _Agents and connectors_ — `run_agent`, `manage_session`, `link_external`, `acknowledge_directive`, `pause_athena_assignment_trigger`, `remove_athena_assignment_trigger`.
 
   > This count was wrong for a long time — it read 15 while 25 were registered, and

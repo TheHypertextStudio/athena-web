@@ -78,6 +78,43 @@ test('a wide pane shows every property once in the sidebar, beside one aligned c
   expect(await overflowsSideways(page)).toBe(false);
 });
 
+test('the relationship controls work from the keyboard alone', async ({ page }) => {
+  await page.setViewportSize({ width: 1920, height: 1080 });
+  await openSeededTask(page);
+
+  // Add a subtask: the composer takes focus, Enter adds and stays open, Escape closes.
+  await page.getByRole('button', { name: 'Add subtask' }).focus();
+  await page.keyboard.press('Enter');
+  const composer = page.getByRole('textbox', { name: 'New subtask title' });
+  await expect(composer).toBeFocused();
+  await page.keyboard.type('Pick the share icon');
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('link', { name: 'Pick the share icon' })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(composer).toHaveCount(0);
+
+  // A row is one link, and its controls follow it in tab order, the remove button shown on focus.
+  const row = page.getByRole('link', { name: 'Render a 1080×1920 image' });
+  await row.focus();
+  await expect(row).toBeFocused();
+  await page.keyboard.press('Tab');
+  await page.keyboard.press('Tab');
+  const remove = page.getByRole('button', {
+    name: 'Remove from subtasks: Render a 1080×1920 image',
+  });
+  await expect(remove).toBeFocused();
+  await expect(remove).toHaveCSS('opacity', '1');
+
+  // The Relations menu opens from the keyboard, and a choice hands focus to its search.
+  await page.getByRole('button', { name: 'Add relation' }).focus();
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('menuitem', { name: 'Add blocker' })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.getByPlaceholder('Find the task this one waits on…')).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('listbox', { name: 'Task that blocks this one' })).toHaveCount(0);
+});
+
 test('a narrow pane carries every property as header chips and never scrolls sideways', async ({
   page,
 }) => {

@@ -196,7 +196,6 @@ routes/project-rollup.ts}`, `domains/work/src/contracts/{milestone,task}.ts`,
   after page CSS loads, so the owned theme must set the font on Scalar's root as well as the page.
 
 ### [PROVENANCE-001] Record and quietly surface where every change came from
-### [TASK-DETAIL-003] Task relationships editable in place; Linear-grade detail layout rules
 
 - **Status**: IN_PROGRESS
 - **Started**: 2026-09-22
@@ -222,6 +221,22 @@ routes/project-rollup.ts}`, `domains/work/src/contracts/{milestone,task}.ts`,
 - **Validation (slice 1)**: root typecheck, lint, complexity ledger, and format pass. API suite:
   6469 pass; the 9 failures (`permissions`, `route-auth`, `cycle-backfill`, `programs-detail`)
   fail identically on a clean `HEAD`. Web 4484 and work-domain 307 pass.
+- **Blockers**: None.
+
+---
+
+### [TASK-DETAIL-003] Task relationships editable in place; Linear-grade detail layout rules
+
+- **Status**: COMPLETED
+- **Started**: 2026-09-22
+- **Completed**: 2026-09-22
+- **Priority**: P1
+- **Validation**: root `pnpm typecheck`, `pnpm lint`, and `pnpm format:check` pass. Web coverage
+  passes (589 files) and API coverage passes (554 files). `@docket/test-utils` fails two workspace
+  policies (domain registry, timestamptz on `audit-event.ts`) that this branch does not touch; both
+  come from `origin/main`. `e2e/task-relations.spec.ts` and `e2e/task-detail-layout.spec.ts` pass
+  three repeats each against the dev stack, as does `e2e/task-hierarchy.spec.ts`. Scorecard:
+  `docs/design/audits/2026-09-22-task-detail-relations-layout.md` (ship).
 - **Description**: The task page cannot add or remove blockers, attach or detach subtasks, set a
   parent, or show related tasks, although the API supports every one of those writes. The page
   also has five different right edges (a 752px description cap, an 11rem contents rail, tonal

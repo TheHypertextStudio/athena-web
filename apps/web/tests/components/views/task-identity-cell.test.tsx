@@ -16,14 +16,20 @@ import { TaskHierarchyRails } from '../../../src/components/views/task-identity-
 import {
   HIERARCHY_DEPTH_PX,
   HIERARCHY_ELBOW_RADIUS_PX,
+  HIERARCHY_SLOT_CENTER_PX,
   type HierarchyPosition,
 } from '../../../src/components/work-views/hierarchy-rails';
 
 afterEach(cleanup);
 
-/** The rail x for a glyph at a one-based depth (the 20px glyph's center). */
+/** The rail x for an entity icon at a one-based depth (the icon slot's center). */
 function railX(depth: number): number {
-  return (depth - 1) * HIERARCHY_DEPTH_PX + 10;
+  return (depth - 1) * HIERARCHY_DEPTH_PX + HIERARCHY_SLOT_CENTER_PX;
+}
+
+/** The own-subtasks stub: from the bottom of the icon's center line down past the row. */
+function stub(depth: number): string {
+  return `M ${String(railX(depth))} ${String(HIERARCHY_SLOT_CENTER_PX)} V 1000`;
 }
 
 /** A position with the facts each case varies. */
@@ -64,7 +70,7 @@ describe('TaskHierarchyRails', () => {
     render(<TaskHierarchyRails position={position({ hasChildren: true })} />);
 
     expect(throughRailXs()).toEqual([]);
-    expect(paths()).toEqual([`M ${String(railX(1))} 10 V 1000`]);
+    expect(paths()).toEqual([stub(1)]);
   });
 
   it('carries the parent rail through a subtask that has later siblings', () => {
@@ -102,7 +108,7 @@ describe('TaskHierarchyRails', () => {
     // on to this row's later siblings; this row also starts its own rail down to its subtasks.
     expect(throughRailXs()).toEqual([railX(1), railX(2)]);
     expect(paths()).toHaveLength(2);
-    expect(paths()[1]).toBe(`M ${String(railX(3))} 10 V 1000`);
+    expect(paths()[1]).toBe(stub(3));
   });
 
   it('does not draw an ancestor rail whose branch has ended', () => {

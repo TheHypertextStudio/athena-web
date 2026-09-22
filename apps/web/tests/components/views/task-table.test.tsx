@@ -6,8 +6,8 @@
  * Every in-app task *list* (a project's tasks, a cycle's committed tasks) renders through this one
  * surface so they read identically. These pin the shared column vocabulary and its alignment:
  *
- * - the column set is the leading status glyph + a flexing Title + Assignee + Due date + Estimate
- *   + the universal Track affordance, with headers derived from the task catalog (so they stay
+ * - the column set is a flexing Title + Status + Labels + Assignee + Due date + Estimate + the
+ *   universal Track affordance, with headers derived from the task catalog (so they stay
  *   consistent with the FilterToolbar);
  * - the estimate cell renders `estimateMinutes` as a compact `1h 30m` duration (its own placeholder
  *   when unset), and the due-date cell renders a short calendar day (placeholder when unset);
@@ -188,8 +188,8 @@ describe('buildTaskColumns', () => {
   it('declares the shared column vocabulary with catalog-derived headers', () => {
     const keys = columns.map((c) => c.key);
     expect(keys).toEqual([
-      'glyph',
       'title',
+      'state',
       'labels',
       'assigneeId',
       'dueDate',
@@ -197,13 +197,12 @@ describe('buildTaskColumns', () => {
       'timer',
     ]);
 
-    // The leading glyph is always-kept and label-less; the title is the one flexing column.
-    const glyph = columns[0];
-    const title = columns[1];
-    expect(glyph?.priority).toBe('always');
-    expect(glyph?.header).toBe('');
+    // The title leads and is the one flexing column; status follows it, as on the Tasks page.
+    const title = columns[0];
+    const status = columns[1];
     expect(title?.flex).toBe(true);
     expect(title?.header).toBe('Title');
+    expect(status?.header).toBe(catalog.find((field) => field.key === 'state')?.label);
 
     // Property headers come straight from the catalog field labels.
     expect(columns.find((c) => c.key === 'assigneeId')?.header).toBe('Assignee');

@@ -126,29 +126,39 @@ export interface TaskColumnsDeps {
 /** A short, year-less day formatter for a task's due date (e.g. "Jun 21"). */
 const DUE_DATE_OPTIONS: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric' };
 
-/** Props for {@link TaskStatusGlyph}. */
-interface TaskStatusGlyphProps {
+/** Props for {@link TaskStatusCell}. */
+interface TaskStatusCellProps {
   /** The workspace's Task statuses. */
   readonly statuses: readonly WorkStatusDisplay[];
   /** The row's task. */
   readonly task: TaskOut;
 }
 
-/** The status glyph for a task, drawn from the workspace's statuses by the task's state key. */
-function TaskStatusGlyph({ statuses, task }: TaskStatusGlyphProps): JSX.Element {
+/**
+ * A task's status as the Tasks page shows it: the category-coloured glyph and the workspace's own
+ * name for the status, drawn from the workspace's statuses by the task's state key.
+ */
+function TaskStatusCell({ statuses, task }: TaskStatusCellProps): JSX.Element {
   const { name, category } =
     statuses.find((status) => status.key === task.state) ?? unknownStatus(task.state);
-  return <WorkStatusIcon name={name} category={category} />;
+  return (
+    <span className="text-on-surface-variant flex min-w-0 items-center gap-2">
+      <WorkStatusIcon name={name} category={category} />
+      <span className="truncate" aria-hidden="true">
+        {name}
+      </span>
+    </span>
+  );
 }
 
 /**
  * Build the shared aligned-column spec for a task list, derived from the task catalog.
  *
  * @remarks
- * Declaration order is the visual order: the leading status glyph (always kept), the flexing
- * title, then status, assignee, due date, and estimate in priority order (the lowest-priority
- * columns shed first as the table narrows). Headers come from the catalog field descriptors so
- * the table and the {@link FilterToolbar} above it read from one source of truth.
+ * Declaration order is the visual order: the flexing title (which the table leads with the task's
+ * entity icon), then status, labels, assignee, due date, and estimate in priority order (the
+ * lowest-priority columns shed first as the table narrows). Headers come from the catalog field
+ * descriptors so the table and the {@link FilterToolbar} above it read from one source of truth.
  *
  * @param deps - The task catalog + the assignee resolver.
  * @returns the ordered {@link Column} spec over {@link TaskOut}.
@@ -162,14 +172,6 @@ export function buildTaskColumns({
   onOpen,
 }: TaskColumnsDeps): Column<TaskOut>[] {
   return [
-    // Leading status glyph — coloured by the status's category, named by the workspace's own word.
-    {
-      key: 'glyph',
-      header: '',
-      width: '1.25rem',
-      priority: 'always',
-      render: (task) => <TaskStatusGlyph statuses={statuses} task={task} />,
-    },
     // Title — the one flexing, truncating column.
     {
       key: 'title',
@@ -198,14 +200,24 @@ export function buildTaskColumns({
           <span className="text-on-surface truncate">{task.title}</span>
         ),
     },
-    // Labels — the workspace's own vocabulary. Sheds first (priority 5, below a 768px table)
+    // Status — glyph plus the workspace's name for it, as on the Tasks page. The first fact a
+    // table adds (priority 2, from a 512px table); below that the row is its icon and title.
+    // Each later tier is placed so the title keeps at least ~230px as the columns arrive.
+    {
+      key: 'state',
+      header: headerFor(catalog, 'state', 'Status'),
+      width: '7rem',
+      priority: 2,
+      render: (task) => <TaskStatusCell statuses={statuses} task={task} />,
+    },
+    // Labels — the workspace's own vocabulary. Sheds first (priority 7, below a 1024px table)
     // because it is the most optional fact on a row, and a table beside the Athena panel needs
     // that width for titles.
     {
       key: 'labels',
       header: headerFor(catalog, 'labels', 'Labels'),
       minWidth: '7rem',
-      priority: 5,
+      priority: 7,
       render: (task) =>
         task.labels.length > 0 ? (
           <LabelChipRow labels={task.labels} />
@@ -213,15 +225,16 @@ export function buildTaskColumns({
           <span className="text-on-surface-variant">—</span>
         ),
     },
-    // Assignee — relation field; the avatar encodes the actor kind by shape.
+    // Assignee — relation field; the avatar encodes the actor kind by shape. From a 768px table
+    // (priority 5), after the due date.
     {
       key: 'assigneeId',
       header: headerFor(catalog, 'assigneeId', 'Assignee'),
       minWidth: '8rem',
-      priority: 2,
+      priority: 5,
       render: (task) => renderTaskAssignee(task, resolveActor),
     },
-    // Due date — end-aligned, tabular so dates line up.
+    // Due date — end-aligned, tabular so dates line up. From a 576px table (priority 3).
     {
       key: 'dueDate',
       header: headerFor(catalog, 'dueDate', 'Due date'),
@@ -234,13 +247,13 @@ export function buildTaskColumns({
       },
     },
     // Estimate — `estimateMinutes` formatted as "1h 30m"; end-aligned, tabular. Sheds after
-    // Labels (priority 4, below a 672px table).
+    // Labels (priority 6, below an 896px table).
     {
       key: 'estimate',
       header: 'Estimate',
       align: 'end',
       width: '4.5rem',
-      priority: 4,
+      priority: 6,
       render: (task) => {
         const estimate = formatEstimate(task.estimateMinutes);
         return <span className="text-on-surface-variant tabular-nums">{estimate ?? '—'}</span>;
@@ -248,7 +261,7 @@ export function buildTaskColumns({
     },
     // Track — the universal start-timer affordance: every task list is a place a task
     // is "represented", so every row offers it, icon-only to stay dense. Kept a tier longer than
-    // the metadata columns (priority 1 vs. 2/3) since it is an action, not a fact about the task.
+    // the metadata columns (priority 1, from a 448px table) since it is an action, not a fact.
     {
       key: 'timer',
       header: '',

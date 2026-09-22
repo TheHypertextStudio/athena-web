@@ -1,15 +1,17 @@
 'use client';
 
 /**
- * `views/task-identity-cell` — a task row's identity in the shared {@link TaskTable}: its identity
- * and status glyphs followed by its title, indented one step per level under a parent Task, with
- * the rails that connect a parent to its subtasks.
+ * `views/task-identity-cell` — a task row's identity in the shared {@link TaskTable}: its entity
+ * icon followed by its title, indented one step per level under a parent Task, with the rails that
+ * connect a parent to its subtasks.
  *
  * @remarks
- * The glyphs and the title share one cell so a subtask's whole identity moves in together, the way
- * a nested Initiative does in the work roster. The title carries its own link, which keeps the
- * status glyph out of the link's accessible name; the table points its link column at
- * {@link TASK_TABLE_INLINE_LINK_COLUMN_KEY} so it does not wrap the cell a second time.
+ * This is the Tasks page's identity cell in the task table's terms: the same 32px entity icon, the
+ * same gap to the title, and the same rail geometry ({@link HIERARCHY_LEADING_SLOT_PX}), so a task
+ * reads the same in a project's list as on the Tasks page. Status is its own column. The icon and
+ * title share one cell so a subtask's whole identity moves in together. The title carries its own
+ * link, which keeps the icon out of the link's accessible name; the table points its link column
+ * at {@link TASK_TABLE_INLINE_LINK_COLUMN_KEY} so it does not wrap the cell a second time.
  *
  * Rails draw in an `absolute inset-y-0` layer. No cell between it and the row is positioned, so the
  * layer spans the full row height (EntityTable rows are `relative`) while its horizontal static
@@ -28,7 +30,9 @@ import { EntityIconGlyph } from '@/components/entity-display/entity-icon-glyph';
 import {
   HIERARCHY_DEPTH_PX,
   HIERARCHY_ELBOW_RADIUS_PX,
+  HIERARCHY_LEADING_SLOT_PX,
   HIERARCHY_RAIL_STROKE_PX,
+  HIERARCHY_SLOT_CENTER_PX,
   type HierarchyPosition,
 } from '@/components/work-views/hierarchy-rails';
 
@@ -37,23 +41,14 @@ import type { TaskPositions } from './task-table-hierarchy';
 /** Link column key matching no column, so the table leaves the title's own link in charge. */
 export const TASK_TABLE_INLINE_LINK_COLUMN_KEY = '__task-table-inline-link';
 
-/** Diameter of the identity glyph; a parent's rail runs down its center. */
-const IDENTITY_GLYPH_PX = 20;
-
-/** Horizontal center of the identity glyph inside its slot. */
-const GLYPH_CENTER_PX = IDENTITY_GLYPH_PX / 2;
-
 /** A length past any row edge, so the outer SVG clips an open-ended segment at the boundary. */
 const RAIL_OVERRUN_PX = 1000;
 
-/** Width of the slot holding both glyphs; the header spacer uses it so "Title" lines up. */
-const GLYPH_SLOT_WIDTH_CLASSNAME = 'w-[3.25rem] shrink-0';
+/** Width of the entity icon's slot; the header spacer uses it so "Title" lines up. */
+const ICON_SLOT_CLASSNAME = 'flex size-8 shrink-0 items-center justify-center';
 
-/** The fixed slot holding both glyphs, so every title at one depth starts at the same x. */
-const GLYPH_SLOT_CLASSNAME = `flex items-center gap-1.5 ${GLYPH_SLOT_WIDTH_CLASSNAME}`;
-
-/** The glyph slot plus the gap after it, and enough title to read, before any indentation. */
-const IDENTITY_BASE_MIN_WIDTH = '6.75rem';
+/** The icon slot plus the gap after it, and enough title to read, before any indentation. */
+const IDENTITY_BASE_MIN_WIDTH = '5.75rem';
 
 /** Props for the rail layer of one task row. */
 interface TaskHierarchyRailsProps {
@@ -67,9 +62,9 @@ interface TaskIdentityHeaderProps {
   readonly label: ReactNode;
 }
 
-/** The rail x for a glyph at a one-based depth. */
+/** The rail x for an entity icon at a one-based depth. */
 function railX(depth: number): number {
-  return (depth - 1) * HIERARCHY_DEPTH_PX + GLYPH_CENTER_PX;
+  return (depth - 1) * HIERARCHY_DEPTH_PX + HIERARCHY_SLOT_CENTER_PX;
 }
 
 /** The parent's rail turning into this row, relative to the row's vertical center. */
@@ -117,7 +112,7 @@ export function TaskHierarchyRails({ position }: TaskHierarchyRailsProps): JSX.E
       aria-hidden="true"
       data-testid="hierarchy-rail"
       className="pointer-events-none absolute inset-y-0"
-      style={{ width: (depth - 1) * HIERARCHY_DEPTH_PX + IDENTITY_GLYPH_PX }}
+      style={{ width: (depth - 1) * HIERARCHY_DEPTH_PX + HIERARCHY_LEADING_SLOT_PX }}
     >
       <svg focusable="false" className="h-full w-full overflow-hidden">
         <g
@@ -132,7 +127,7 @@ export function TaskHierarchyRails({ position }: TaskHierarchyRailsProps): JSX.E
             {depth > 1 ? <path d={elbowPath(depth, isLastSibling)} /> : null}
             {hasChildren ? (
               <path
-                d={`M ${String(railX(depth))} ${String(GLYPH_CENTER_PX)} V ${String(RAIL_OVERRUN_PX)}`}
+                d={`M ${String(railX(depth))} ${String(HIERARCHY_SLOT_CENTER_PX)} V ${String(RAIL_OVERRUN_PX)}`}
               />
             ) : null}
           </svg>
@@ -143,15 +138,15 @@ export function TaskHierarchyRails({ position }: TaskHierarchyRailsProps): JSX.E
 }
 
 /**
- * The Title header, offset past the glyph slot so it lines up with top-level titles.
+ * The Title header, offset past the icon slot so it lines up with top-level titles.
  *
  * @param props - The header label.
  * @returns the header content.
  */
 export function TaskIdentityHeader({ label }: TaskIdentityHeaderProps): JSX.Element {
   return (
-    <span className="flex min-w-0 items-center gap-2">
-      <span aria-hidden="true" className={GLYPH_SLOT_WIDTH_CLASSNAME} />
+    <span className="flex min-w-0 items-center gap-3">
+      <span aria-hidden="true" className={ICON_SLOT_CLASSNAME} />
       <span className="truncate">{label}</span>
     </span>
   );
@@ -163,8 +158,6 @@ export interface TaskIdentityProps {
   readonly task: TaskOut;
   /** The task's customized identity, when it has one. */
   readonly display: EntityDisplayOut | undefined;
-  /** The status glyph drawn beside the identity glyph. */
-  readonly status: ReactNode;
   /** The row's place under its parent Task, when the list nests. */
   readonly position: HierarchyPosition | undefined;
   /** The task detail href. */
@@ -181,12 +174,11 @@ export interface TaskIdentityProps {
  * Render one task row's identity cell.
  *
  * @param props - See {@link TaskIdentityProps}.
- * @returns the glyphs and title link, indented by depth, with rails.
+ * @returns the entity icon and title link, indented by depth, with rails.
  */
 export function TaskIdentity({
   task,
   display,
-  status,
   position,
   href,
   onOpen,
@@ -196,17 +188,16 @@ export function TaskIdentity({
   const shown = display ?? defaultEntityDisplay('task', task.id);
   const indent = position === undefined ? 0 : (position.depth - 1) * HIERARCHY_DEPTH_PX;
   return (
-    <span className="flex min-w-0 items-center gap-2">
+    <span className="flex min-w-0 items-center gap-3">
       {position ? <TaskHierarchyRails position={position} /> : null}
-      <span className={GLYPH_SLOT_CLASSNAME} style={{ marginLeft: indent }}>
+      <span className={ICON_SLOT_CLASSNAME} style={{ marginLeft: indent }}>
         <EntityIconGlyph
           subjectType="task"
           glyph={shown.glyph}
           colorKey={shown.colorKey}
           customColor={shown.customColor}
-          size={IDENTITY_GLYPH_PX}
+          size={HIERARCHY_LEADING_SLOT_PX}
         />
-        {status}
       </span>
       <Link
         href={href}
@@ -255,8 +246,8 @@ function titleWithProposal(
 }
 
 /**
- * The identity column's minimum width: the glyph slot, the deepest row's indentation, and some
- * title, so a deep subtask's glyphs never spill into the next column on a narrow table.
+ * The identity column's minimum width: the icon slot, the deepest row's indentation, and some
+ * title, so a deep subtask's icon never spills into the next column on a narrow table.
  */
 function identityMinWidth(positions: TaskPositions): string {
   let deepest = 1;
@@ -265,39 +256,34 @@ function identityMinWidth(positions: TaskPositions): string {
 }
 
 /**
- * Fold the leading `glyph` column into the `title` column as one identity cell.
+ * Turn the `title` column into the identity cell: entity icon, indentation, rails, and title link.
  *
  * @param columns - Columns from `buildTaskColumns`.
  * @param deps - See {@link TaskIdentityDeps}.
- * @returns the columns with a single identity cell in the title's place.
+ * @returns the columns with the identity cell in the title's place.
  */
 export function withTaskIdentity(
   columns: readonly Column<TaskOut>[],
   deps: TaskIdentityDeps,
 ): readonly Column<TaskOut>[] {
-  const glyph = columns.find((column) => column.key === 'glyph');
-  return columns.flatMap((title) => {
-    if (title.key === 'glyph') return [];
-    if (title.key !== 'title') return [title];
-    return [
-      {
-        ...title,
-        header: <TaskIdentityHeader label={title.header} />,
-        minWidth: identityMinWidth(deps.positions),
-        render: (task: TaskOut) => (
-          <TaskIdentity
-            task={task}
-            display={deps.displayByTaskId?.get(task.id)}
-            status={glyph?.render(task)}
-            position={deps.positions.get(task)}
-            href={deps.taskHref(task)}
-            onOpen={deps.onOpenTask ? () => deps.onOpenTask?.(task) : undefined}
-            onPrefetch={deps.onRowPrefetch ? () => deps.onRowPrefetch?.(task) : undefined}
-          >
-            {titleWithProposal(title, task, deps.proposedByTaskId?.get(task.id))}
-          </TaskIdentity>
-        ),
-      },
-    ];
+  return columns.map((title) => {
+    if (title.key !== 'title') return title;
+    return {
+      ...title,
+      header: <TaskIdentityHeader label={title.header} />,
+      minWidth: identityMinWidth(deps.positions),
+      render: (task: TaskOut) => (
+        <TaskIdentity
+          task={task}
+          display={deps.displayByTaskId?.get(task.id)}
+          position={deps.positions.get(task)}
+          href={deps.taskHref(task)}
+          onOpen={deps.onOpenTask ? () => deps.onOpenTask?.(task) : undefined}
+          onPrefetch={deps.onRowPrefetch ? () => deps.onRowPrefetch?.(task) : undefined}
+        >
+          {titleWithProposal(title, task, deps.proposedByTaskId?.get(task.id))}
+        </TaskIdentity>
+      ),
+    };
   });
 }

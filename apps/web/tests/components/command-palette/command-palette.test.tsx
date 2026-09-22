@@ -1,14 +1,16 @@
 import '@testing-library/jest-dom/vitest';
 
+import { assertDefined } from '@docket/test-utils';
 import { ContextProvider } from '@docket/ui/components';
 import { LabelId } from '@docket/work/ids';
 import { OrganizationId } from '@docket/identity-access/ids';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import type { ReactNode } from 'react';
+import { type ReactNode, useMemo } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AuthenticationInterlockProvider } from '@/components/authentication-interlock';
 import { CommandPalette } from '@/components/command-palette/command-palette';
+import { usePublishPageCommands } from '@/components/command-palette/page-commands';
 import { SignOutCleanupError } from '@/lib/sign-out';
 import { makeQueryWrapper } from '../../support/query';
 
@@ -318,6 +320,56 @@ describe('CommandPalette — # label sub-mode', () => {
     const swatchWrapper = row.querySelector('span[aria-hidden="true"]');
     expect(swatchWrapper).not.toBeNull();
     expect(swatchWrapper).toHaveClass('flex');
+  });
+});
+
+describe('CommandPalette — the page on screen', () => {
+  function PublishesAddBlocker({ run }: { readonly run: () => void }): null {
+    const commands = useMemo(
+      () => ({
+        label: 'This task',
+        items: [
+          {
+            id: 'task-page:blockedBy',
+            section: 'page' as const,
+            label: 'Add blocker',
+            icon: null,
+            keywords: ['dependency'],
+            run,
+          },
+        ],
+      }),
+      [run],
+    );
+    usePublishPageCommands(commands);
+    return null;
+  }
+
+  it('leads with the page’s own commands under the page’s heading, and runs them', () => {
+    const run = vi.fn();
+    const publisher = render(<PublishesAddBlocker run={run} />);
+    renderPalette();
+
+    const first = assertDefined(screen.getAllByRole('option')[0]);
+    expect(first).toHaveAccessibleName(/Add blocker/);
+    expect(screen.getByText('This task')).toBeInTheDocument();
+    fireEvent.click(first);
+    expect(run).toHaveBeenCalledTimes(1);
+
+    publisher.unmount();
+  });
+
+  it('matches the page’s commands by keyword, and drops them when the page unmounts', () => {
+    const publisher = render(<PublishesAddBlocker run={vi.fn()} />);
+    renderPalette();
+
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: 'dependency' } });
+    expect(screen.getByRole('option', { name: /Add blocker/ })).toBeInTheDocument();
+
+    act(() => {
+      publisher.unmount();
+    });
+    expect(screen.queryByRole('option', { name: /Add blocker/ })).not.toBeInTheDocument();
   });
 });
 

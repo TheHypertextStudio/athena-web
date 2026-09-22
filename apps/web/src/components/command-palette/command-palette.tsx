@@ -31,6 +31,7 @@ import { ScopeToggle } from './scope-toggle';
 import { usePaletteKeyboard } from './use-palette-keyboard';
 import { filterCommands } from './filter';
 import { mergePaletteResults } from './merge-results';
+import { usePageCommandMatches } from './page-commands';
 import { useCapabilityItems } from './use-capability-items';
 import { useCommandActions } from './use-command-actions';
 import { useHubSearch } from './use-hub-search';
@@ -38,6 +39,8 @@ import { PALETTE_MODES, parsePrefix, useLabelPaletteMode } from './sub-modes';
 
 /** The display order + heading label for each section in the list. */
 const SECTION_ORDER: readonly { section: PaletteSection; label: string }[] = [
+  // Relabeled with the heading the page on screen publishes (e.g. "This task").
+  { section: 'page', label: 'This page' },
   { section: 'results', label: 'Best matches' },
   { section: 'navigation', label: 'Navigate' },
   { section: 'actions', label: 'Actions' },
@@ -45,6 +48,32 @@ const SECTION_ORDER: readonly { section: PaletteSection; label: string }[] = [
   { section: 'templates', label: 'Create from template' },
   { section: 'organizations', label: 'Switch workspace' },
 ];
+
+/** What decides a section heading beyond its default. */
+interface SectionLabelContext {
+  /** The heading the page on screen published for its own commands. */
+  readonly pageLabel: string;
+  /** The active prefix mode, or `null` outside one. */
+  readonly mode: string | null;
+  readonly hasQuery: boolean;
+}
+
+/**
+ * The heading one section shows.
+ *
+ * @remarks
+ * With an empty box the results are recents, not matches, and calling them "Best matches" would
+ * misdescribe them. While a mode is active the results carry the mode's own name (e.g. "Labels").
+ */
+function sectionLabel(
+  section: { readonly section: PaletteSection; readonly label: string },
+  context: SectionLabelContext,
+): string {
+  if (section.section === 'page') return context.pageLabel;
+  if (section.section !== 'results') return section.label;
+  if (context.mode !== null) return PALETTE_MODES[context.mode]?.label ?? section.label;
+  return context.hasQuery ? section.label : 'Recent';
+}
 
 /** Props for {@link CommandPalette}. */
 export interface CommandPaletteProps {
@@ -153,17 +182,20 @@ export function CommandPalette({
     () => (mode !== null ? [] : filterCommands([...capabilities, ...commands], query)),
     [mode, capabilities, commands, query],
   );
+  // The page on screen's own commands lead the list, above search results and global commands.
+  const pageCommands = usePageCommandMatches(query, mode === null);
+  const pageMatches = pageCommands.items;
 
-  // The flat, ordered item list the keyboard navigates: search results first, then commands, or —
-  // while a mode is active — that mode's own items instead.
+  // The flat, ordered item list the keyboard navigates: the page's commands, then search results,
+  // then commands, or — while a mode is active — that mode's own items instead.
   const items = useMemo<readonly PaletteItem[]>(
     () =>
       modeResult
         ? modeResult.items
         : query.trim().length > 0
-          ? mergePaletteResults(staticMatches, results, query)
-          : [...results, ...staticMatches],
-    [modeResult, query, results, staticMatches],
+          ? [...pageMatches, ...mergePaletteResults(staticMatches, results, query)]
+          : [...pageMatches, ...results, ...staticMatches],
+    [modeResult, pageMatches, query, results, staticMatches],
   );
 
   // Preserve the active result by id while asynchronous sources reorder the list.
@@ -223,15 +255,7 @@ export function CommandPalette({
 
   const grouped = SECTION_ORDER.map((s) => ({
     ...s,
-    // With an empty box these rows are recents, not matches, and calling them "Search results"
-    // would misdescribe what the reader is looking at. While a mode is active, the results
-    // section is relabeled to the mode's own name (e.g. "Labels") instead.
-    label:
-      mode !== null && s.section === 'results'
-        ? (PALETTE_MODES[mode]?.label ?? s.label)
-        : s.section === 'results' && !hasQuery
-          ? 'Recent'
-          : s.label,
+    label: sectionLabel(s, { pageLabel: pageCommands.label, mode, hasQuery }),
     rows: items.filter((it) => it.section === s.section),
   })).filter((g) => g.rows.length > 0);
 

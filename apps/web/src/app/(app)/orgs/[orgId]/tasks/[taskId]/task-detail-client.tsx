@@ -21,6 +21,7 @@ import {
   type TaskTab,
 } from '@/components/task-detail/task-masthead-slots';
 import { TaskMetadataRow } from '@/components/task-detail/task-masthead-properties';
+import { TaskPaletteCommands } from '@/components/task-detail/task-palette-commands';
 import { TaskPropertiesPanel } from '@/components/task-detail/task-properties-panel';
 import { TaskRelationCommandsProvider } from '@/components/task-detail/task-relation-commands';
 import { TaskSections } from '@/components/task-detail/task-sections';
@@ -107,7 +108,12 @@ function TaskDetailReady({
         }
         icon={<TaskIcon orgId={orgId} taskId={task.id} title={task.title} canEdit={canEdit} />}
         title={<TaskTitle title={task.title} canEdit={canEdit} onPatch={mutations.patchTask} />}
-        metadata={<TaskMetadataRow orgId={orgId} model={model} detailKey={detail.detailKey} />}
+        metadata={
+          <>
+            <TaskPaletteCommands canEdit={canEdit} tab={tab} onTabChange={onTabChange} />
+            <TaskMetadataRow orgId={orgId} model={model} detailKey={detail.detailKey} />
+          </>
+        }
         aside={<TaskPropertiesPanel orgId={orgId} model={model} detailKey={detail.detailKey} />}
         actions={
           <TaskActions

@@ -1176,6 +1176,12 @@
 
 .detail-title {
   grid-area: title;
+  /*
+   * The 12px between the expanded glyph and the title below it, so the two read as a stacked
+   * identity instead of the title touching the glyph. `detail-title-collapse` owns this value from
+   * here to the compact row's own inset, where the title moves up beside the glyph.
+   */
+  padding-block-start: 0.75rem;
   min-width: 0;
   min-height: 0;
   overflow: hidden;
@@ -1350,7 +1356,7 @@
 @keyframes detail-title-collapse {
   from {
     transform: translateY(0);
-    padding-block-start: 0;
+    padding-block-start: 0.75rem;
     padding-block-end: 0;
     padding-inline-start: 0;
     font-size: var(--text-headline-medium);

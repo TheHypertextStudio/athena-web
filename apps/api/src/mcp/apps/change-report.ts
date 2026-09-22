@@ -113,7 +113,28 @@ const SCRIPT = String.raw`
     );
   }
 
-  const valueLabel = (value) => window.docket.label(value);
+  // Only wire enums and dates are rewritten for reading, along with the server's "none" for an
+  // unset value. Everything else is text someone typed or a name the server already resolved, and
+  // re-casing it misstates it: "was Bug" for a label called "bug" hides a case-only rename.
+  const REWORDED = {
+    state: true,
+    status: true,
+    priority: true,
+    health: true,
+    scope: true,
+    color: true,
+    dueDate: true,
+    startDate: true,
+    targetDate: true,
+    startDateResolution: true,
+    targetDateResolution: true,
+  };
+
+  function valueLabel(field, value) {
+    return value === 'none' || window.docket.own(REWORDED, field)
+      ? window.docket.label(value)
+      : String(value);
+  }
 
   function text(node, value) { node.textContent = value; }
 
@@ -125,18 +146,15 @@ const SCRIPT = String.raw`
   function changeValue(field) {
     const value = document.createElement('dd');
     const from = document.createElement('span');
-    const renamed = field.field === 'title' || field.field === 'name';
-    // A name is what someone typed, so it is never re-cased: "was Bug" for a label called "bug"
-    // hides the very change a case-only rename made.
-    from.textContent = renamed ? String(field.from) : valueLabel(field.from);
-    if (renamed) {
+    from.textContent = valueLabel(field.field, field.from);
+    if (field.field === 'title' || field.field === 'name') {
       from.className = 'was';
       value.append('was ', from);
       return value;
     }
     const to = document.createElement('span');
     to.className = 'to';
-    to.textContent = valueLabel(field.to);
+    to.textContent = valueLabel(field.field, field.to);
     // A field that was unset has nothing to strike through, and an arrow with no left-hand side
     // reads as a rendering fault.
     if (from.textContent === '') {

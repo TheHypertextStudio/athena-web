@@ -8,17 +8,18 @@
  * work since, or a group that has gained members, is reported as `in_use` and left alone. Undoing
  * an edit restores the recorded fields, and only when nobody has edited them since.
  */
-import { label, labelGroup, template, type db } from '@docket/db';
+import { label, labelGroup, template } from '@docket/db';
 import { and, eq } from 'drizzle-orm';
 import type { AnyPgColumn, PgTable } from 'drizzle-orm/pg-core';
 
-import { labelUsageCounts } from '../lib/labels';
+import { labelInUse } from '../lib/labels';
 import { reconcileTemplateImages } from '../lib/templates/write';
 import { enqueueSearchDelete, enqueueSearchUpsert } from '../search/write-through';
-import type { StoredChange } from './change-set';
-import type { RevertResult, StoredEntry } from './change-set-labels';
+import type { CatalogKind } from './catalog-rows';
+import type { StoredChange, Tx } from './change-set';
+import type { RevertResult, StoredEntry } from './change-set-companions';
 
-/** The catalog entry kinds, mapped to their table and the fields a change records. */
+/** Each catalog kind's table and the fields a change records. */
 const CATALOG = {
   label: { table: label, fields: ['name', 'color', 'groupId', 'teamId'] },
   label_group: { table: labelGroup, fields: ['name', 'exclusive', 'sortOrder', 'teamId'] },
@@ -26,16 +27,10 @@ const CATALOG = {
     table: template,
     fields: ['name', 'description', 'scope', 'ownerActorId', 'teamId', 'payload'],
   },
-} as const;
-
-/** One catalog entry kind. */
-export type CatalogKind = keyof typeof CATALOG;
+} as const satisfies Record<CatalogKind, { table: PgTable; fields: readonly string[] }>;
 
 /** The columns every catalog table exposes to a revert. */
 type CatalogTable = PgTable & { id: AnyPgColumn; organizationId: AnyPgColumn };
-
-/** A database handle that may be the pool or an open transaction. */
-type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 /** Whether an entry kind is a catalog kind. */
 export function isCatalogKind(kind: string): kind is CatalogKind {
@@ -94,7 +89,7 @@ function unchanged(current: Record<string, unknown>, after: Record<string, unkno
 
 /** Whether a created row has picked up dependents that deleting it would take with it. */
 async function inUse(kind: CatalogKind, orgId: string, id: string, tx: Tx): Promise<boolean> {
-  if (kind === 'label') return ((await labelUsageCounts(orgId, tx)).get(id) ?? 0) > 0;
+  if (kind === 'label') return labelInUse(orgId, id, tx);
   if (kind !== 'label_group') return false;
   const members = await tx
     .select({ id: label.id })

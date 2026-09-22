@@ -552,6 +552,30 @@ export async function labelUsageCounts(orgId: string, dbh: Db = db): Promise<Map
 }
 
 /**
+ * Whether anything carries a label.
+ *
+ * @remarks
+ * Asks for at most one row per join, where {@link labelUsageCounts} counts every label in the org.
+ *
+ * @param orgId - The verified tenant id.
+ * @param labelId - The label to look for.
+ * @param dbh - Optional handle, to read inside an open transaction.
+ */
+export async function labelInUse(orgId: string, labelId: string, dbh: Db = db): Promise<boolean> {
+  const joins = [taskLabel, projectLabel, initiativeLabel, programLabel, resourceLabel] as const;
+  const hits = await Promise.all(
+    joins.map((join) =>
+      dbh
+        .select({ labelId: join.labelId })
+        .from(join)
+        .where(and(eq(join.labelId, labelId), eq(join.organizationId, orgId)))
+        .limit(1),
+    ),
+  );
+  return hits.some((rows) => rows.length > 0);
+}
+
+/**
  * Move every attachment from one label onto another, then delete the source.
  *
  * @remarks

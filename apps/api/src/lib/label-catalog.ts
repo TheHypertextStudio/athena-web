@@ -149,6 +149,26 @@ async function assertTeamInOrg(orgId: string, teamId: string | null | undefined)
   if (!row) throw new NotFoundError('Team not found');
 }
 
+/** Every label in the org; label sets are small and unpaginated by design. */
+function orgLabels(orgId: string): Promise<LabelRow[]> {
+  return db.select().from(label).where(eq(label.organizationId, orgId));
+}
+
+/** Whether a label carries `name`, by the org-wide rule that ignores case and spacing. */
+function namedAs(row: LabelRow, name: string): boolean {
+  return normalizeLabelName(row.name) === normalizeLabelName(name);
+}
+
+/**
+ * Find the label called `name`.
+ *
+ * @remarks
+ * Label names are unique across the org without regard to case, so a name match is the label.
+ */
+export async function findLabelByName(orgId: string, name: string): Promise<LabelRow | undefined> {
+  return (await orgLabels(orgId)).find((row) => namedAs(row, name));
+}
+
 /**
  * Refuse a label name another label in the org already has, ignoring case.
  *
@@ -156,12 +176,8 @@ async function assertTeamInOrg(orgId: string, teamId: string | null | undefined)
  * @throws {ConflictError} When the name is taken by a label other than `selfId`.
  */
 async function assertLabelNameFree(orgId: string, name: string, selfId?: string): Promise<number> {
-  const existing = await db
-    .select({ id: label.id, name: label.name })
-    .from(label)
-    .where(eq(label.organizationId, orgId));
-  const normalized = normalizeLabelName(name);
-  if (existing.some((row) => row.id !== selfId && normalizeLabelName(row.name) === normalized)) {
+  const existing = await orgLabels(orgId);
+  if (existing.some((row) => row.id !== selfId && namedAs(row, name))) {
     throw new ConflictError('A label with that name already exists');
   }
   return existing.length;

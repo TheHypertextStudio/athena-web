@@ -63,6 +63,11 @@ const LIST_ROUTE = {
   project: (orgId: string) => `/orgs/${orgId}/projects`,
   program: (orgId: string) => `/orgs/${orgId}/programs`,
   initiative: (orgId: string) => `/orgs/${orgId}/initiatives`,
+  // Labels and templates have no page of their own; their settings pages are where they are
+  // managed, so a catalog row's Open and the card's list link both land there.
+  label: (orgId: string) => `/orgs/${orgId}/settings/labels`,
+  label_group: (orgId: string) => `/orgs/${orgId}/settings/labels`,
+  template: (orgId: string) => `/orgs/${orgId}/settings/templates`,
 } as const;
 
 /**

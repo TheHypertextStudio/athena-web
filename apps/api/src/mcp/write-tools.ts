@@ -22,7 +22,8 @@ import { resolveLandingTarget } from '../lib/task-landing';
 import { enqueueSearchUpsert } from '../search/write-through';
 import type { McpContext } from './auth';
 import type { McpRegistrar } from './catalog';
-import { recordChangeSet, trackedFields, undoChangeSet } from './change-set';
+import { recordChangeSet, trackedFields, undoChangeSet, type UndoOutcome } from './change-set';
+import { isCompanionKind } from './change-set-companions';
 import { WIDGET, widgetMeta } from './apps';
 import { authorize, jsonResult, runTool, scopedActor } from './result';
 import { orgIdParam } from './tools-shared';
@@ -45,6 +46,18 @@ const MAX_CAPTURES = 100;
  * single PGlite connection, so the fan-out stays well inside both.
  */
 const SEARCH_PUBLISH_BATCH = 8;
+
+/**
+ * Whether undo should re-index a reverted entry by its kind.
+ *
+ * @remarks
+ * Label-set and catalog reverts re-index the tables they actually touched after their own commit,
+ * so publishing their entry kind (`task_labels`, `template`) here would only send the search index
+ * a table it does not have.
+ */
+function reindexes(outcome: UndoOutcome): boolean {
+  return outcome.reverted && !isCompanionKind(outcome.kind);
+}
 
 /** Register capture and undo on `server`. */
 export function registerWriteTools(server: McpRegistrar, ctx: McpContext): void {
@@ -230,7 +243,7 @@ export function registerWriteTools(server: McpRegistrar, ctx: McpContext): void 
 
         const { summary, outcomes } = await undoChangeSet(input.orgId, targetId);
         for (const outcome of outcomes) {
-          if (outcome.reverted) await enqueueSearchUpsert(input.orgId, outcome.kind, outcome.id);
+          if (reindexes(outcome)) await enqueueSearchUpsert(input.orgId, outcome.kind, outcome.id);
         }
 
         return jsonResult({

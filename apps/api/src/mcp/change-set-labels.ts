@@ -11,14 +11,18 @@
  * Entries are stored as `{ labelIds: sorted[] }` on both sides. The task expansion route reads
  * that shape directly, so it must not change.
  */
-import type { db } from '@docket/db';
-
-import { labelsForSubject, replaceLabels, resolveAttachedLabels } from '../lib/labels';
+import {
+  labelsForSubject,
+  replaceLabels,
+  resolveAttachedLabels,
+  type LabelableKind,
+} from '../lib/labels';
 import { enqueueSearchUpsert } from '../search/write-through';
-import type { StoredChange, UndoOutcome } from './change-set';
+import type { StoredChange, Tx } from './change-set';
+import type { RevertResult, StoredEntry } from './change-set-companions';
 
-/** The subjects whose label sets a change set can snapshot. */
-export type LabelSetSubject = 'task' | 'project' | 'initiative' | 'program';
+/** The subjects whose label sets a change set can snapshot: every labelable kind of work. */
+export type LabelSetSubject = Exclude<LabelableKind, 'resource'>;
 
 /** The entry kind each subject's label snapshot is stored under. */
 const KIND_OF: Record<LabelSetSubject, string> = {
@@ -32,39 +36,9 @@ const SUBJECT_OF = new Map(
   Object.entries(KIND_OF).map(([subject, kind]) => [kind, subject as LabelSetSubject]),
 );
 
-/** A database handle that may be the pool or an open transaction. */
-type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
-
-/** A stored change-set entry, as undo reads it back. */
-export interface StoredEntry {
-  readonly entityKind: string;
-  readonly entityId: string;
-  readonly op: string;
-  readonly before: Record<string, unknown> | null;
-  readonly after: Record<string, unknown> | null;
-}
-
-/**
- * What a companion revert did, plus the projection work to run once its transaction commits.
- *
- * @remarks
- * Search and document-image updates write through the database pool. Running them inside the
- * revert's transaction would wait on that transaction's own connection, which never frees on a
- * single-connection database, so they are handed back instead of run.
- */
-export interface RevertResult {
-  readonly outcome: UndoOutcome;
-  readonly settle?: () => Promise<void>;
-}
-
 /** Whether an entry kind is a label-set snapshot. */
 export function isLabelSetKind(kind: string): boolean {
   return SUBJECT_OF.has(kind);
-}
-
-/** The subject whose labels a snapshot kind covers, or undefined when it is not one. */
-export function labelSetSubject(kind: string): LabelSetSubject | undefined {
-  return SUBJECT_OF.get(kind);
 }
 
 /**
@@ -99,7 +73,7 @@ function idsOf(side: Record<string, unknown> | null): string[] | null {
 }
 
 /** Whether two sorted id lists hold the same ids. */
-function sameIds(a: readonly string[], b: readonly string[]): boolean {
+export function sameIds(a: readonly string[], b: readonly string[]): boolean {
   return a.length === b.length && a.every((id, index) => id === b[index]);
 }
 
@@ -123,7 +97,7 @@ export async function revertLabelSet(
   tx: Tx,
 ): Promise<RevertResult> {
   const ref = { kind: entry.entityKind, id: entry.entityId };
-  const subject = labelSetSubject(entry.entityKind);
+  const subject = SUBJECT_OF.get(entry.entityKind);
   const before = idsOf(entry.before);
   const after = idsOf(entry.after);
   if (!subject || !before || !after) {

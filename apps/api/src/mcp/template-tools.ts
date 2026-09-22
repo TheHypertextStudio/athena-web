@@ -28,10 +28,11 @@ import {
 } from '../lib/templates/write';
 import type { McpActor, McpContext } from './auth';
 import type { McpRegistrar } from './catalog';
-import { catalogHref, fieldDiffs, type CatalogRow } from './catalog-rows';
+import { fieldDiffs, nameOf, type CatalogRow } from './catalog-rows';
 import { recordChangeSet } from './change-set';
 import { catalogChange } from './change-set-catalog';
-import { pick, resolveDescriptor, resolveOptional } from './descriptors';
+import { isUlid, pick, resolveDescriptor, resolveOptional } from './descriptors';
+import { entityListHref } from './entity-href';
 import { authorize, jsonResult, runTool, scopedActor } from './result';
 import { defineTemplateDefinition } from './template-tools-contract';
 
@@ -41,12 +42,6 @@ type DefineTemplateInput = {
     (typeof defineTemplateDefinition.inputSchema)[K]
   >;
 };
-
-/** Every id in Docket is a 26-char ULID, so a name can never be mistaken for one. */
-const ULID = /^[0-9A-HJKMNP-TV-Z]{26}$/;
-
-/** The longest a diff value may run before it is cut. */
-const DISPLAY_LIMIT = 120;
 
 /** Payload keys renamed for the card, where they would otherwise read as the template's own. */
 const DRAFT_FIELD: Record<string, string> = {
@@ -63,7 +58,7 @@ function invalid(field: string, message: string): never {
 
 /** Find the template a caller named, from the ones visible to them. */
 async function findTemplate(actor: McpActor, orgId: string, value: string): Promise<TemplateRow> {
-  if (ULID.test(value)) return requireVisibleTemplate(orgId, actor.actorId, value);
+  if (isUlid(value)) return requireVisibleTemplate(orgId, actor.actorId, value);
   const visible = await db
     .select({ id: template.id, label: template.name })
     .from(template)
@@ -124,13 +119,14 @@ async function payloadToWrite(
   teamId: string | undefined,
 ): Promise<z.input<typeof TemplateDraft> | undefined> {
   const draft = draftToWrite(input, before);
+  if (draft === undefined) return undefined;
   const labelIds = await templateLabelIds(
     input.orgId,
     input.labels,
-    draft ?? before?.payload,
+    draft,
     labelTeam(input, before, teamId),
   );
-  if (draft?.targetType !== 'task' || labelIds === undefined) return draft;
+  if (draft.targetType !== 'task' || labelIds === undefined) return draft;
   return { ...draft, labelIds };
 }
 
@@ -179,7 +175,7 @@ async function writeTemplate(
 /** Flatten a template into the fields its card row compares, with ids turned into names. */
 function snapshot(row: TemplateRow, names: ReadonlyMap<string, string>): Record<string, unknown> {
   const named = (ids: readonly unknown[]): string =>
-    ids.map((id) => names.get(String(id)) ?? String(id)).join(', ');
+    ids.map((id) => nameOf(names, id, String(id))).join(', ');
   const draft = Object.entries(row.payload as Record<string, unknown>)
     .filter(([key]) => key !== 'targetType')
     .map(([key, value]): [string, unknown] => [
@@ -192,20 +188,15 @@ function snapshot(row: TemplateRow, names: ReadonlyMap<string, string>): Record<
     name: row.name,
     description: row.description,
     scope: row.scope,
-    teamId: row.teamId === null ? null : (names.get(row.teamId) ?? row.teamId),
+    teamId: nameOf(names, row.teamId, 'none'),
     ...Object.fromEntries(draft),
   };
 }
 
-/** Render one compared value, cut short so a long body cannot swamp the card. */
+/** Render one compared value in full; `fieldDiffs` shortens it only for display. */
 function show(_field: string, value: unknown): string {
-  const text =
-    value === null || value === undefined || value === ''
-      ? 'none'
-      : typeof value === 'string'
-        ? value
-        : JSON.stringify(value);
-  return text.length > DISPLAY_LIMIT ? `${text.slice(0, DISPLAY_LIMIT - 1).trimEnd()}…` : text;
+  if (value === null || value === undefined || value === '') return 'none';
+  return typeof value === 'string' ? value : JSON.stringify(value);
 }
 
 /** Where the template lives, said the way the picker groups it. */
@@ -226,30 +217,24 @@ async function rowFor(
   before: TemplateRow | null,
   after: TemplateRow,
 ): Promise<CatalogRow> {
-  const teams = await db
-    .select({ id: team.id, name: team.name })
-    .from(team)
-    .where(eq(team.organizationId, orgId));
   const labelIds = [before?.payload, after.payload].flatMap((p) =>
     p?.targetType === 'task' ? (p.labelIds ?? []) : [],
   );
-  const labels = await labelsFor(orgId, labelIds);
+  const [teams, labels] = await Promise.all([
+    db.select({ id: team.id, name: team.name }).from(team).where(eq(team.organizationId, orgId)),
+    resolveAttachedLabels(orgId, labelIds),
+  ]);
   const names = new Map([...teams, ...labels].map((r) => [r.id, r.name]));
   const fields = before ? fieldDiffs(snapshot(before, names), snapshot(after, names), show) : [];
   return {
     kind: 'template',
     id: after.id,
     title: after.name,
-    href: catalogHref(orgId, 'template'),
+    href: entityListHref(orgId, 'template'),
     note: noteFor(after, before === null, names),
     matched: before !== null && fields.length === 0,
     fields,
   };
-}
-
-/** Load label names for display, dropping any since deleted. */
-function labelsFor(orgId: string, ids: readonly string[]): Promise<{ id: string; name: string }[]> {
-  return resolveAttachedLabels(orgId, ids);
 }
 
 /** Register `define_template` on `server`. */
@@ -274,7 +259,7 @@ export function registerTemplateTools(server: McpRegistrar, ctx: McpContext): vo
       });
       return jsonResult({
         changed: changed ? 1 : 0,
-        listHref: catalogHref(input.orgId, 'template'),
+        listHref: entityListHref(input.orgId, 'template'),
         changes: [row],
         skipped: [],
         changeSetId,

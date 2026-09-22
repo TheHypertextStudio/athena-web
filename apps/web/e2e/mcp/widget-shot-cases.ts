@@ -79,7 +79,6 @@ export const CATALOG_CASES: readonly WidgetCase[] = [
         skipped: [
           {
             kind: 'label',
-            id: null,
             title: 'Design review',
             reason: 'not_permitted',
             detail: 'forbidden: Forbidden',

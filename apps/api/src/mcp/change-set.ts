@@ -36,7 +36,7 @@ import type { AnyPgColumn, PgTable } from 'drizzle-orm/pg-core';
 import type { RecordedOrigin } from '@docket/work/provenance-contract';
 
 import { ConflictError, NotFoundError } from '../error';
-import { isCompanionKind, revertCompanion } from './change-set-companions';
+import { isCompanionKind, revertCompanion, revertCompanionIn } from './change-set-companions';
 import { serializableTx } from '../lib/serializable-tx';
 import {
   applySubtaskCompletionPolicyForParents,
@@ -269,7 +269,7 @@ export interface RecordChangeSetInput {
 type ChangeSetWrite = Omit<RecordChangeSetInput, 'id' | 'recordEmpty'>;
 
 /** The database transaction handle used by reversible operations. */
-type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+export type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 /** Insert a change-set record and entries through an active transaction. */
 async function insertChangeSet(tx: Tx, id: string, input: ChangeSetWrite): Promise<void> {
@@ -771,6 +771,7 @@ export async function undoChangeSetAtomically(
     }
     const outcomes: UndoOutcome[] = [];
     const cascades: TaskStateMutation[] = [];
+    const settles: (() => Promise<void>)[] = [];
     for (const entry of [...entries].reverse()) {
       if (entry.entityKind === 'task') {
         const row = rowById.get(entry.entityId);
@@ -796,9 +797,10 @@ export async function undoChangeSetAtomically(
       }
       if (isCompanionKind(entry.entityKind)) {
         // The whole transaction rolls back on a refusal, so nothing is half-undone.
-        const outcome = await revertCompanion(entry, orgId, tx);
+        const { outcome, settle } = await revertCompanionIn(entry, orgId, tx);
         if (!outcome.reverted) throw new ConflictError('Expansion can no longer be undone');
         outcomes.push(outcome);
+        if (settle) settles.push(settle);
         continue;
       }
       if (!isRelation(entry.entityKind))
@@ -824,11 +826,12 @@ export async function undoChangeSetAtomically(
     }
     if (onReverted) await onReverted({ tx, entries, outcomes });
     await tx.update(changeSet).set({ undoneAt: new Date() }).where(eq(changeSet.id, changeSetId));
-    return { summary: set.summary, outcomes, cascades };
+    return { summary: set.summary, outcomes, cascades, settles };
   });
   for (const cascade of result.cascades) {
     await finishTaskStateTransition({ actorId: null }, cascade);
   }
+  for (const settle of result.settles) await settle();
   return { summary: result.summary, outcomes: result.outcomes };
 }
 

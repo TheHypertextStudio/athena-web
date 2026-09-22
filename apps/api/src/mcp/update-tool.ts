@@ -43,6 +43,7 @@ import { buildTaskViewFilter } from '../routes/task-helpers';
 import { enqueueSearchUpsert } from '../search/write-through';
 import type { McpContext } from './auth';
 import type { McpRegistrar } from './catalog';
+import { fieldDiffs, type FieldDiff } from './catalog-rows';
 import { recordChangeSet, trackedFields, type RecordedChange } from './change-set';
 import { resolveOptional } from './descriptors';
 import { applyLabelEdit, labelsFitRow, resolveLabelEdit, type LabelEdit } from './update-labels';
@@ -317,36 +318,11 @@ async function buildPatch(
 }
 
 /**
- * The longest a single side of a diff line may be.
- *
- * @remarks
- * A diff line says what moved; it is not the payload that moved. Editing a description used to put
- * the entire old text and the entire new text into one row — which broke the report card's layout,
- * and cost the model as much context as re-reading the entity would have. Anything that needs the
- * full value can read the entity, where it is authoritative rather than a snapshot.
- */
-const DISPLAY_LIMIT = 200;
-
-/**
- * Shorten one rendered value, marking the cut so nobody reads a truncation as the whole value.
- *
- * @remarks
- * Applied when a diff line is *built*, never when two values are compared. Clamping before the
- * comparison made any edit past this limit invisible: two 900-character descriptions sharing their
- * first 199 characters compared equal, so the field dropped out of the diff, the row never reached
- * `changes`, and the write landed with `changed: 0`, an empty change set (nothing for `undo` to
- * reverse) and no search reindex.
- */
-function clamp(text: string): string {
-  return text.length > DISPLAY_LIMIT ? text.slice(0, DISPLAY_LIMIT - 1).trimEnd() + '…' : text;
-}
-
-/**
  * Render one value for comparison, so a report card reads without a type switch.
  *
  * @remarks
- * Lossless on purpose — this is what decides whether a field moved. {@link displayLine} is the
- * presentation form.
+ * Lossless on purpose — this is what decides whether a field moved. {@link fieldDiffs} shortens it
+ * only for display.
  */
 function display(value: unknown): string {
   if (value === null || value === undefined) {
@@ -363,11 +339,6 @@ function display(value: unknown): string {
     return String(value);
   }
   return JSON.stringify(value);
-}
-
-/** The same value, shortened for the one place it is shown rather than compared. */
-function displayLine(value: unknown): string {
-  return clamp(display(value));
 }
 
 /**
@@ -387,13 +358,8 @@ function titleOf(row: Record<string, unknown>, fallback: string): string {
 }
 
 /** The fields that actually moved, as `from → to` pairs a person can check. */
-function diff(
-  before: Record<string, unknown>,
-  after: Record<string, unknown>,
-): { field: string; from: string; to: string }[] {
-  return Object.keys(after)
-    .filter((key) => display(before[key]) !== display(after[key]))
-    .map((key) => ({ field: key, from: displayLine(before[key]), to: displayLine(after[key]) }));
+function diff(before: Record<string, unknown>, after: Record<string, unknown>): FieldDiff[] {
+  return fieldDiffs(before, after, (_field, value) => display(value));
 }
 
 /** Everything a row write needs that is the same for every row in the call. */
@@ -413,7 +379,7 @@ interface RowReport {
   readonly id: string;
   readonly title: string;
   readonly href: string;
-  readonly fields: ReturnType<typeof diff>;
+  readonly fields: FieldDiff[];
 }
 
 /** One row left alone, and why. */
@@ -549,7 +515,7 @@ async function updateRow(rc: RowContext, row: Record<string, unknown>): Promise<
   const changes: RecordedChange[] =
     fields.length > 0 ? [{ kind: entity, id, op: 'update', before, after }] : [];
   const labels = rc.labelEdit ? await applyLabelEdit(entity, orgId, id, rc.labelEdit) : null;
-  if (labels?.field && labels.change) {
+  if (labels) {
     fields.push(labels.field);
     changes.push(labels.change);
   }
@@ -630,12 +596,15 @@ export function registerUpdateTool(server: McpRegistrar, ctx: McpContext): void 
         ? rows.filter((row) => isTaskRowVisible(row, canViewTask))
         : rows;
 
-      const refs = await resolveReferences(input.orgId, set);
-      const [workspaceSettings] = await db
-        .select({ fiscalYearStartMonth: organization.fiscalYearStartMonth })
-        .from(organization)
-        .where(eq(organization.id, input.orgId))
-        .limit(1);
+      const [refs, [workspaceSettings], labelEdit] = await Promise.all([
+        resolveReferences(input.orgId, set),
+        db
+          .select({ fiscalYearStartMonth: organization.fiscalYearStartMonth })
+          .from(organization)
+          .where(eq(organization.id, input.orgId))
+          .limit(1),
+        resolveLabelEdit(input.orgId, set.labels),
+      ]);
       /* v8 ignore next -- @preserve scopedActor proved the workspace exists */
       if (!workspaceSettings) throw new Error('workspace settings missing');
       const rowContext: RowContext = {
@@ -646,7 +615,7 @@ export function registerUpdateTool(server: McpRegistrar, ctx: McpContext): void 
         refs,
         fiscalYearStartMonth: workspaceSettings.fiscalYearStartMonth,
         containerStatus,
-        labelEdit: await resolveLabelEdit(input.orgId, set.labels),
+        labelEdit,
       };
       const changes: RecordedChange[] = [];
       const report: RowReport[] = [];

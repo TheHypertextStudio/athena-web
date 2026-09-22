@@ -48,6 +48,11 @@ const MAX_SUGGESTIONS = 12;
 /** Every id in Docket is a 26-char Crockford-base32 ULID, so a name can never be mistaken for one. */
 const ULID = /^[0-9A-HJKMNP-TV-Z]{26}$/;
 
+/** Whether a descriptor is an id rather than a name. */
+export function isUlid(value: string): boolean {
+  return ULID.test(value);
+}
+
 /** The sentence appended to every descriptor parameter's description. */
 export const DESCRIPTOR_HINT =
   'Accepts the name or the id — "Platform Migration" works as well as the raw id.';

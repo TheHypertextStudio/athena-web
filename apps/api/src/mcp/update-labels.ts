@@ -25,8 +25,9 @@ import {
   type ResolvedLabel,
   type ScopedResolvedLabel,
 } from '../lib/labels';
+import type { FieldDiff } from './catalog-rows';
 import type { StoredChange } from './change-set';
-import { labelSetChange, type LabelSetSubject } from './change-set-labels';
+import { labelSetChange, sameIds, type LabelSetSubject } from './change-set-labels';
 import { DESCRIPTOR_HINT, resolveDescriptor } from './descriptors';
 
 /** The `set.labels` wire field. */
@@ -58,10 +59,10 @@ export interface LabelEdit {
   readonly replace: readonly ScopedResolvedLabel[] | undefined;
 }
 
-/** What one row's label write did. */
+/** What one row's label write did: its diff line and its change-set entry. */
 export interface RowLabelResult {
-  readonly field: { field: string; from: string; to: string } | null;
-  readonly change: StoredChange | null;
+  readonly field: FieldDiff;
+  readonly change: StoredChange;
 }
 
 /** Resolve names or ids to labels, keeping the caller's order. */
@@ -140,21 +141,21 @@ function names(labels: readonly ResolvedLabel[]): string {
  * @param orgId - The organization.
  * @param subjectId - The row's id.
  * @param edit - The resolved edit.
- * @returns The diff line and change-set entry, both null when the set did not move.
+ * @returns The diff line and change-set entry, or null when the set did not move.
  */
 export async function applyLabelEdit(
   subject: LabelSetSubject,
   orgId: string,
   subjectId: string,
   edit: LabelEdit,
-): Promise<RowLabelResult> {
+): Promise<RowLabelResult | null> {
   return db.transaction(async (tx) => {
     const attachedIds = (await labelsForSubject(subject, orgId, subjectId, tx)).map((l) => l.id);
     const current = await resolveAttachedLabels(orgId, attachedIds, tx);
     const next = nextSet(edit, current);
     const beforeIds = current.map((l) => l.id).sort();
     const afterIds = next.map((l) => l.id).sort();
-    if (beforeIds.join() === afterIds.join()) return { field: null, change: null };
+    if (sameIds(beforeIds, afterIds)) return null;
     await replaceLabels(tx, subject, subjectId, orgId, next);
     return {
       field: { field: 'labels', from: names(current), to: names(next) },

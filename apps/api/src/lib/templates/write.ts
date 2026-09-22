@@ -71,7 +71,7 @@ export async function reconcileTemplateImages(
  *   names no team.
  * @throws {NotFoundError} When the caller is not a member of the named team.
  */
-export async function requireAssignableScope(
+async function requireAssignableScope(
   orgId: string,
   actorId: string,
   scope: TemplateRow['scope'],

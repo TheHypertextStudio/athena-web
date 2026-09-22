@@ -264,6 +264,37 @@ describe('define_template', () => {
     });
   });
 
+  it('records an edit to a long body even when it changes only past the display cut', async () => {
+    const seed = await seedMcpUpdateOrg(db, schema, ['view', 'contribute']);
+    const client = await connectCatalog(registerTools, seed.ctx);
+    const body1 = `${'Context. '.repeat(40)}Old ending.`;
+    const created = body<TemplateResult>(
+      await client.callTool({
+        name: 'define_template',
+        arguments: {
+          orgId: seed.orgId,
+          name: 'Brief',
+          payload: { targetType: 'project', description: body1 },
+        },
+      }),
+    );
+
+    const edited = body<TemplateResult>(
+      await client.callTool({
+        name: 'define_template',
+        arguments: {
+          orgId: seed.orgId,
+          template: String(created.changes[0]?.id),
+          payload: { targetType: 'project', description: body1.replace('Old', 'New') },
+        },
+      }),
+    );
+    expect(edited.changes[0]?.matched).toBe(false);
+    expect(edited.changes[0]?.fields.map((f) => f.field)).toEqual(['body']);
+    expect(edited.changes[0]?.fields[0]?.to.endsWith('…')).toBe(true);
+    expect(edited.changeSetId).not.toBeNull();
+  });
+
   it('refuses an edit that names nothing to change', async () => {
     const seed = await seedMcpUpdateOrg(db, schema, ['view', 'contribute']);
     const client = await connectCatalog(registerTools, seed.ctx);

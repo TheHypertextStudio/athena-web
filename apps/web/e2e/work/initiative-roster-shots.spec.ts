@@ -65,7 +65,7 @@ test('Initiative roster fits its columns and stops rails at subtree boundaries',
 
   const lastSiblingRail = page
     .locator(`[data-row-id="${fixture.laterSiblingId}"]`)
-    .getByTestId('initiative-hierarchy-rail');
+    .getByTestId('hierarchy-rail');
   await expect(lastSiblingRail).toBeVisible();
   expect(
     await lastSiblingRail

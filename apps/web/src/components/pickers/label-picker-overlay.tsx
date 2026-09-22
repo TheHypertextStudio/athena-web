@@ -70,14 +70,15 @@ interface ApplyLabelsVariables {
  * (which otherwise sends focus to `<body>`, dropping the person out of the grid entirely).
  *
  * @remarks
- * Prefers the anchor's enclosing `[role="grid"]` — the table the `L` hotkey fired from — so arrow
- * keys keep navigating the grid after Escape; falls back to the anchor element itself when there
- * is no enclosing grid (e.g. the right-click path, whose anchor may not sit inside an
- * `EntityTable`). Returns `null` when the anchor is not a real element (nothing to focus).
+ * Prefers the anchor's enclosing `[role="grid"]` or `[role="treegrid"]` (a list with subtasks) —
+ * the table the `L` hotkey fired from — so arrow keys keep navigating the grid after Escape; falls
+ * back to the anchor element itself when there is no enclosing grid (e.g. the right-click path,
+ * whose anchor may not sit inside an `EntityTable`). Returns `null` when the anchor is not a real
+ * element (nothing to focus).
  */
 export function resolveCloseFocusTarget(anchor: PopoverVirtualAnchor | null): HTMLElement | null {
   if (!(anchor instanceof HTMLElement)) return null;
-  const grid = anchor.closest<HTMLElement>('[role="grid"]');
+  const grid = anchor.closest<HTMLElement>('[role="grid"], [role="treegrid"]');
   return grid ?? anchor;
 }
 

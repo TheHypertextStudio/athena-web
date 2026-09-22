@@ -181,12 +181,11 @@ export function MilestoneTasks({
     });
     return buildTaskColumns({
       catalog,
+      statuses,
       resolveActor: (id) => resolveActor(id),
       canEdit,
       onRename,
-      onOpen: (task) => {
-        onOpenTask(task);
-      },
+      onOpen: onOpenTask,
     });
   }, [statuses, resolveActor, canEdit, onRename, onOpenTask]);
 

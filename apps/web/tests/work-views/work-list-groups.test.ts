@@ -5,7 +5,9 @@ import { TaskViewRow } from '@docket/work/work-view-contract';
 import {
   buildWorkListRootContinuation,
   buildWorkListRoster,
+  nestsHierarchy,
   workListMembershipKey,
+  workRowParent,
 } from '../../src/components/work-views/work-list-groups';
 
 function task(id: string, title: string) {
@@ -129,6 +131,37 @@ describe('buildWorkListRoster', () => {
       label: 'Retry Active',
       state: 'error',
     });
+  });
+
+  it('orders each subtask directly after its parent Task', () => {
+    const parent = task('01ARZ3NDEKTSV4RRFFQ69G5FC0', 'Parent');
+    const sibling = task('01ARZ3NDEKTSV4RRFFQ69G5FC1', 'Sibling');
+    const child = TaskViewRow.parse({
+      ...task('01ARZ3NDEKTSV4RRFFQ69G5FC2', 'Subtask'),
+      parent: parent.id,
+    });
+    const orphan = TaskViewRow.parse({
+      ...task('01ARZ3NDEKTSV4RRFFQ69G5FC3', 'Orphan'),
+      parent: '01ARZ3NDEKTSV4RRFFQ69G5FC9',
+    });
+
+    const roster = buildWorkListRoster({
+      target: 'task',
+      grouped: false,
+      rows: [parent, sibling, orphan, child],
+      summaries: [],
+      pages: [],
+    });
+
+    expect(roster.rows?.map(({ row }) => row.id)).toEqual([
+      parent.id,
+      child.id,
+      sibling.id,
+      orphan.id,
+    ]);
+    expect(nestsHierarchy('task')).toBe(true);
+    expect(nestsHierarchy('project')).toBe(false);
+    expect(workRowParent(child)).toBe(parent.id);
   });
 
   it('renders root continuation recovery through the same typed contract', () => {

@@ -11,7 +11,7 @@ import {
   type WorkViewRowFor,
   workViewGroupPathKey,
 } from './renderer-types';
-import { orderInitiativeTreeNodes, type InitiativeRailNode } from './initiative-rails';
+import { orderHierarchyNodes, type HierarchyRailNode } from './hierarchy-rails';
 
 /** One path-scoped occurrence of a work-view row. */
 export interface ListMembership<TTarget extends ViewTarget> {
@@ -76,7 +76,27 @@ export function workListEntityTableEntryKey<TTarget extends ViewTarget>(
   return group.length === 0 ? `r:${encodedMembership}` : `r:${group}:${encodedMembership}`;
 }
 
-/** Convert rows from one exact path into membership rows in visible Initiative hierarchy order. */
+/**
+ * Whether a target's rows nest under a parent of the same kind.
+ *
+ * @param target - The roster's work target.
+ * @returns `true` for Initiatives and Tasks, whose rows carry a `parent`.
+ */
+export function nestsHierarchy(target: ViewTarget): boolean {
+  return target === 'initiative' || target === 'task';
+}
+
+/**
+ * Read the parent a nesting row sits under.
+ *
+ * @param row - One projected work-view row.
+ * @returns the parent Initiative or Task id, or `null` for a top-level or non-nesting row.
+ */
+export function workRowParent(row: WorkViewRowFor<ViewTarget>): string | null {
+  return row.target === 'initiative' || row.target === 'task' ? row.parent : null;
+}
+
+/** Convert rows from one exact path into membership rows in visible hierarchy order. */
 function membershipsForPath<TTarget extends ViewTarget>(
   target: TTarget,
   path: readonly string[],
@@ -87,21 +107,19 @@ function membershipsForPath<TTarget extends ViewTarget>(
     path,
     row,
   }));
-  if (target !== 'initiative') return memberships;
+  if (!nestsHierarchy(target)) return memberships;
 
-  const byEntityId = new Map(memberships.map((membership) => [membership.row.id, membership]));
-  const nodes: InitiativeRailNode[] = memberships.map((membership) => {
-    const row = membership.row as WorkViewRowFor<'initiative'>;
+  const entityIds = new Set<string>(memberships.map(({ row }) => row.id));
+  const nodes: HierarchyRailNode[] = memberships.map((membership) => {
+    const parent = workRowParent(membership.row);
     return {
       key: membership.key,
       parentKey:
-        row.parent !== null && byEntityId.has(row.parent)
-          ? workListMembershipKey(path, row.parent)
-          : null,
+        parent !== null && entityIds.has(parent) ? workListMembershipKey(path, parent) : null,
     };
   });
   const byMembershipKey = new Map(memberships.map((membership) => [membership.key, membership]));
-  return orderInitiativeTreeNodes(nodes).flatMap((node) => {
+  return orderHierarchyNodes(nodes).flatMap((node) => {
     const membership = byMembershipKey.get(node.key);
     return membership === undefined ? [] : [membership];
   });

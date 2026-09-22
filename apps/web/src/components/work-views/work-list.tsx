@@ -34,13 +34,16 @@ import {
   buildWorkListRootContinuation,
   buildWorkListRoster,
   type ListMembership,
+  nestsHierarchy,
   workListMembershipKey,
+  workRowParent,
 } from './work-list-groups';
 import {
-  deriveInitiativeTreePositions,
-  INITIATIVE_LEADING_SLOT_PX,
-  type InitiativeTreePosition,
-} from './initiative-rails';
+  deriveHierarchyPositions,
+  HIERARCHY_LEADING_SLOT_PX,
+  type HierarchyPosition,
+  hierarchyRowAria,
+} from './hierarchy-rails';
 import type { WorkViewDefinitionFor } from './view-state';
 import type { WorkViewGroupPage, WorkViewGroupSummary, WorkViewRowFor } from './renderer-types';
 import {
@@ -76,8 +79,8 @@ export interface WorkListProps<TTarget extends ViewTarget> {
   readonly onToggleGroup?: ((key: string) => void) | undefined;
 }
 
-/** Return whether the candidate sits below the ancestor in the visible Initiative tree. */
-function isInitiativeDescendant(
+/** Return whether the candidate sits below the ancestor in the visible Initiative or Task tree. */
+function isHierarchyDescendant(
   parentById: ReadonlyMap<string, string | null>,
   ancestorId: string,
   candidateId: string,
@@ -184,17 +187,15 @@ function WorkListRowInteraction<TTarget extends ViewTarget>({
 }
 
 /** Derive path-scoped rail inputs from the exact visible membership set. */
-function initiativePositions<TTarget extends ViewTarget>(
+function hierarchyPositions<TTarget extends ViewTarget>(
   memberships: readonly ListMembership<TTarget>[],
-): ReadonlyMap<string, InitiativeTreePosition> {
+): ReadonlyMap<string, HierarchyPosition> {
   const membershipKeys = new Set(memberships.map(({ key }) => key));
-  return deriveInitiativeTreePositions(
+  return deriveHierarchyPositions(
     memberships.flatMap((membership) => {
-      if (membership.row.target !== 'initiative') return [];
-      const parentKey =
-        membership.row.parent === null
-          ? null
-          : workListMembershipKey(membership.path, membership.row.parent);
+      if (!nestsHierarchy(membership.row.target)) return [];
+      const parent = workRowParent(membership.row);
+      const parentKey = parent === null ? null : workListMembershipKey(membership.path, parent);
       return [
         {
           key: membership.key,
@@ -240,8 +241,8 @@ export function WorkList<TTarget extends ViewTarget>({
     [groupPages, grouped, groups, onLoadMore, rows, target],
   );
   const rowHeight = WORK_ROSTER_ROW_HEIGHT[definition.presentation.density];
-  const rowPaddingY = (rowHeight - INITIATIVE_LEADING_SLOT_PX) / 2;
-  const positions = useMemo(() => initiativePositions(roster.memberships), [roster.memberships]);
+  const rowPaddingY = (rowHeight - HIERARCHY_LEADING_SLOT_PX) / 2;
+  const positions = useMemo(() => hierarchyPositions(roster.memberships), [roster.memberships]);
   const interactions = useMemo(
     () =>
       new Map(
@@ -257,11 +258,11 @@ export function WorkList<TTarget extends ViewTarget>({
     [selection.selectedObjects],
   );
   const selectionActive = selection.count > 0;
-  const initiativeParentById = useMemo(
+  const parentById = useMemo(
     () =>
       new Map(
         roster.memberships.flatMap(({ row }) =>
-          row.target === 'initiative' ? [[row.id, row.parent] as const] : [],
+          nestsHierarchy(row.target) ? [[row.id, workRowParent(row)] as const] : [],
         ),
       ),
     [roster.memberships],
@@ -335,20 +336,10 @@ export function WorkList<TTarget extends ViewTarget>({
         {...(roster.groups === undefined ? { rows: roster.rows ?? [] } : { groups: roster.groups })}
         getRowKey={({ key }) => key}
         tone="tonal"
-        gridRole={target === 'initiative' ? 'treegrid' : 'grid'}
+        gridRole={nestsHierarchy(target) ? 'treegrid' : 'grid'}
         getRowAria={
-          target === 'initiative'
-            ? (membership) => {
-                const position = positions.get(membership.key);
-                return position
-                  ? {
-                      level: position.depth,
-                      posInSet: position.posInSet,
-                      setSize: position.setSize,
-                      ...(position.hasChildren ? { expanded: true } : {}),
-                    }
-                  : { level: 1, posInSet: 1, setSize: 1 };
-              }
+          nestsHierarchy(target)
+            ? (membership) => hierarchyRowAria(positions.get(membership.key))
             : undefined
         }
         rowHeight={rowHeight}
@@ -366,11 +357,11 @@ export function WorkList<TTarget extends ViewTarget>({
             workViewRowInteractionPolicy(membership.row, organizationId, canContribute);
           const baseObject = interaction.object;
           const wouldCreateCycle =
-            membership.row.target === 'initiative' &&
+            nestsHierarchy(membership.row.target) &&
             dragState.objects.some(
               (source) =>
-                source.kind === 'initiative' &&
-                isInitiativeDescendant(initiativeParentById, source.id, membership.row.id),
+                source.kind === membership.row.target &&
+                isHierarchyDescendant(parentById, source.id, membership.row.id),
             );
           const object =
             wouldCreateCycle && baseObject !== null

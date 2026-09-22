@@ -30,7 +30,7 @@ async function captureHierarchyEvidence(page: Page, orgId: string): Promise<void
     await expect(page.getByText('Frequent network', { exact: true })).toBeVisible({
       timeout: TIMEOUTS.pageReady,
     });
-    await expect(page.getByTestId('initiative-hierarchy-rail').first()).toBeVisible();
+    await expect(page.getByTestId('hierarchy-rail').first()).toBeVisible();
     for (const colorScheme of ['light', 'dark'] as const) {
       await page.emulateMedia({ colorScheme });
       await page.mouse.move(viewport.width - 4, 4);

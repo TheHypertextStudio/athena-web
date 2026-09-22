@@ -116,6 +116,9 @@ export function TaskTimerButton({
           <Button
             variant={timerVariant(emphasis, action)}
             iconOnly={!withLabel}
+            // An idle icon-only ghost has no colour of its own, so it would inherit the row's title
+            // ink; rest it at the metadata tone. The ghost variant lifts it to `on-surface` on hover.
+            className={action.tracking || withLabel ? undefined : 'text-on-surface-variant'}
             aria-label={action.label}
             aria-pressed={action.active}
             data-testid={`task-timer-${taskId}`}

@@ -49,7 +49,7 @@ const relationBindings = vi.hoisted(() => ({
 
 const dragContext = vi.hoisted(() => ({
   objects: [] as {
-    readonly kind: 'initiative';
+    readonly kind: 'initiative' | 'task';
     readonly id: string;
     readonly organizationId: string;
     readonly title: string;
@@ -243,7 +243,69 @@ function task(index: number) {
   });
 }
 
+/** A top-level Initiative row; each case overrides the fields it varies. */
+function initiativeRow(overrides: Readonly<Record<string, unknown>>) {
+  return InitiativeViewRow.parse({
+    target: 'initiative',
+    organizationId: '01ARZ3NDEKTSV4RRFFQ69G5FA0',
+    organization: '01ARZ3NDEKTSV4RRFFQ69G5FA0',
+    id: '01ARZ3NDEKTSV4RRFFQ69G5FC0',
+    name: 'Initiative',
+    status: 'planned',
+    priority: 'high',
+    health: null,
+    owner: null,
+    leadTeam: null,
+    labels: [],
+    targetDate: null,
+    updateCadence: 'monthly',
+    latestUpdate: null,
+    parent: null,
+    parentLinkId: null,
+    contributingProjects: [],
+    manualRank: 'a0',
+    isContext: false,
+    updatedAt: '2026-08-23T00:00:00.000Z',
+    ...overrides,
+  });
+}
+
 describe('WorkList', () => {
+  it('nests a subtask under its parent Task and refuses a drop that would make a cycle', () => {
+    const parent = task(0);
+    const child = TaskViewRow.parse({ ...task(2), title: 'Subtask', parent: parent.id });
+    dragContext.objects.push({
+      kind: 'task',
+      id: parent.id,
+      organizationId: ROUTE_ORGANIZATION_ID,
+      title: parent.title,
+    });
+    render(
+      <WorkList
+        target="task"
+        organizationId={ROUTE_ORGANIZATION_ID}
+        definition={taskDefinition}
+        rows={[parent, task(1), child]}
+        groups={[]}
+        groupPages={[]}
+        canContribute
+        onActivate={vi.fn()}
+      />,
+    );
+
+    const treegrid = screen.getByRole('treegrid', { name: 'Tasks' });
+    const rows = Array.from(treegrid.querySelectorAll('[role="row"][data-object-id]'));
+    expect(rows.map((row) => row.getAttribute('data-object-id'))).toEqual([
+      parent.id,
+      child.id,
+      task(1).id,
+    ]);
+    expect(rows[1]).toHaveAttribute('aria-level', '2');
+    expect(rows[1]?.querySelector('[data-testid="hierarchy-rail"]')).not.toBeNull();
+    const childTarget = relationBindings.options.filter(({ target }) => target.id === child.id);
+    expect(childTarget.at(-1)?.target.meta).toMatchObject({ wouldCreateCycle: true });
+  });
+
   it('renders through the bounded shared table and activates the active row with Enter', () => {
     const onActivate = vi.fn();
     render(
@@ -259,7 +321,7 @@ describe('WorkList', () => {
       />,
     );
 
-    const grid = screen.getByRole('grid', { name: 'Tasks' });
+    const grid = screen.getByRole('treegrid', { name: 'Tasks' });
     expect(grid).toHaveStyle({ '--row-py': '6px' });
     expect(screen.getByRole('columnheader', { name: 'Task' })).toBeVisible();
     expect(screen.getByRole('columnheader', { name: 'Status' })).toBeVisible();
@@ -373,7 +435,7 @@ describe('WorkList', () => {
     expect(parentRow).toHaveAttribute('aria-level', '1');
     expect(parentRow).toHaveAttribute('aria-posinset', '1');
     expect(parentRow).toHaveAttribute('aria-setsize', '1');
-    expect(parentRow).toHaveAttribute('aria-expanded', 'true');
+    expect(parentRow).not.toHaveAttribute('aria-expanded');
     expect(parentRow).toHaveAttribute('data-row-height', '56');
     expect(screen.getByRole('link', { name: 'Parent context' })).toHaveAttribute(
       'href',
@@ -635,28 +697,7 @@ describe('WorkList', () => {
         showEmptyGroups: false,
       },
     });
-    const parent = InitiativeViewRow.parse({
-      target: 'initiative',
-      organizationId: '01ARZ3NDEKTSV4RRFFQ69G5FA0',
-      organization: '01ARZ3NDEKTSV4RRFFQ69G5FA0',
-      id: '01ARZ3NDEKTSV4RRFFQ69G5FC0',
-      name: 'Parent first',
-      status: 'planned',
-      priority: 'high',
-      health: null,
-      owner: null,
-      leadTeam: null,
-      labels: [],
-      targetDate: null,
-      updateCadence: 'monthly',
-      latestUpdate: null,
-      parent: null,
-      parentLinkId: null,
-      contributingProjects: [],
-      manualRank: 'a0',
-      isContext: true,
-      updatedAt: '2026-08-23T00:00:00.000Z',
-    });
+    const parent = initiativeRow({ name: 'Parent first', isContext: true });
     const child = InitiativeViewRow.parse({
       ...parent,
       id: '01ARZ3NDEKTSV4RRFFQ69G5FC1',
@@ -703,28 +744,7 @@ describe('WorkList', () => {
         showEmptyGroups: false,
       },
     });
-    const parent = InitiativeViewRow.parse({
-      target: 'initiative',
-      organizationId: '01ARZ3NDEKTSV4RRFFQ69G5FA0',
-      organization: '01ARZ3NDEKTSV4RRFFQ69G5FA0',
-      id: '01ARZ3NDEKTSV4RRFFQ69G5FC0',
-      name: 'Parent',
-      status: 'planned',
-      priority: 'high',
-      health: null,
-      owner: null,
-      leadTeam: null,
-      labels: [],
-      targetDate: null,
-      updateCadence: 'monthly',
-      latestUpdate: null,
-      parent: null,
-      parentLinkId: null,
-      contributingProjects: [],
-      manualRank: 'a0',
-      isContext: false,
-      updatedAt: '2026-08-23T00:00:00.000Z',
-    });
+    const parent = initiativeRow({ name: 'Parent' });
     const child = InitiativeViewRow.parse({
       ...parent,
       id: '01ARZ3NDEKTSV4RRFFQ69G5FC1',
@@ -758,7 +778,7 @@ describe('WorkList', () => {
     expect(childRow).toHaveClass('cursor-grab');
     fireEvent.click(childRow);
     expect(onActivate).toHaveBeenCalledWith(child);
-    const rails = screen.getAllByTestId('initiative-hierarchy-rail');
+    const rails = screen.getAllByTestId('hierarchy-rail');
     expect(rails).not.toHaveLength(0);
     rails.forEach((rail) => {
       expect(rail).toHaveAttribute('aria-hidden', 'true');
@@ -778,28 +798,7 @@ describe('WorkList', () => {
         showEmptyGroups: false,
       },
     });
-    const root = InitiativeViewRow.parse({
-      target: 'initiative',
-      organizationId: '01ARZ3NDEKTSV4RRFFQ69G5FA0',
-      organization: '01ARZ3NDEKTSV4RRFFQ69G5FA0',
-      id: '01ARZ3NDEKTSV4RRFFQ69G5FC0',
-      name: 'Shared root',
-      status: 'planned',
-      priority: 'high',
-      health: null,
-      owner: null,
-      leadTeam: null,
-      labels: [],
-      targetDate: null,
-      updateCadence: 'monthly',
-      latestUpdate: null,
-      parent: null,
-      parentLinkId: null,
-      contributingProjects: [],
-      manualRank: 'a0',
-      isContext: true,
-      updatedAt: '2026-08-23T00:00:00.000Z',
-    });
+    const root = initiativeRow({ name: 'Shared root', isContext: true });
     const child = InitiativeViewRow.parse({
       ...root,
       id: '01ARZ3NDEKTSV4RRFFQ69G5FC1',
@@ -871,28 +870,7 @@ describe('WorkList', () => {
         showEmptyGroups: false,
       },
     });
-    const first = InitiativeViewRow.parse({
-      target: 'initiative',
-      organizationId: '01ARZ3NDEKTSV4RRFFQ69G5FA0',
-      organization: '01ARZ3NDEKTSV4RRFFQ69G5FA0',
-      id: '01ARZ3NDEKTSV4RRFFQ69G5FC0',
-      name: 'Cycle first',
-      status: 'planned',
-      priority: 'high',
-      health: null,
-      owner: null,
-      leadTeam: null,
-      labels: [],
-      targetDate: null,
-      updateCadence: 'monthly',
-      latestUpdate: null,
-      parent: '01ARZ3NDEKTSV4RRFFQ69G5FC1',
-      parentLinkId: null,
-      contributingProjects: [],
-      manualRank: 'a0',
-      isContext: false,
-      updatedAt: '2026-08-23T00:00:00.000Z',
-    });
+    const first = initiativeRow({ name: 'Cycle first', parent: '01ARZ3NDEKTSV4RRFFQ69G5FC1' });
     const second = InitiativeViewRow.parse({
       ...first,
       id: '01ARZ3NDEKTSV4RRFFQ69G5FC1',
@@ -948,7 +926,7 @@ describe('WorkList', () => {
     );
 
     expect(screen.getByRole('row', { name: 'Active101' })).toHaveTextContent('101');
-    const grid = screen.getByRole('grid', { name: 'Tasks' });
+    const grid = screen.getByRole('treegrid', { name: 'Tasks' });
     fireEvent.keyDown(grid, { key: 'End' });
     fireEvent.scroll(grid, { target: { scrollTop: 10_000 } });
     const loadMore = await screen.findByRole('button', { name: 'Load more Active' });

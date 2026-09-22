@@ -114,6 +114,61 @@ routes/project-rollup.ts}`, `domains/work/src/contracts/{milestone,task}.ts`,
 - **Learnings**: Descriptions on shared filter schemas are paid three times in the local-model
   tool budget (`list_work`, `update`, `archive`). The complexity ledger reads files from the git
   index, so mid-rebase conflict stages count a file more than once until it is staged.
+### [TASK-HIERARCHY-LIST-001] Nest subtasks in task lists and color project task rows
+
+- **Status**: COMPLETED
+- **Started**: 2026-09-22
+- **Completed**: 2026-09-22
+- **Priority**: P1
+- **Description**: The project Tasks tab rendered every task flat and grey. Subtasks never nested
+  under their parent in any task list, and the project tab drew every status as the neutral
+  backlog ring.
+- **Root causes**:
+  - `MilestoneTasks` never passed the workspace statuses to `buildTaskColumns`, so every row fell
+    back to `unknownStatus()` (backlog category, raw key as its name).
+  - `TaskTable` renders rows in the order given and ignores `parentTaskId`; the Tasks roster
+    (`WorkList`) nests only Initiatives although task rows carry `parent`.
+  - The row timer is a `ghost` button with no resting color, so it inherited `on-surface`.
+- **Plan**:
+  - [x] Pass statuses on the project Tasks tab; rest the timer at `on-surface-variant`.
+  - [x] Rename the Initiative rail model to a neutral hierarchy model shared by both lists.
+  - [x] Tree-order and rail task rows in the Tasks roster.
+  - [x] Nest `TaskTable` rows per group with an indented identity cell and height-agnostic rails.
+  - [x] Behavior tests, root gates, seeded screenshots.
+- **Decisions**:
+  - Nesting runs per group. A subtask whose parent is in another milestone (or outside the list)
+    stays at the top of its own group, so no task is hidden.
+  - The identity glyph, status glyph, and title form one indented cell, matching the nested
+    Initiative roster. The title keeps its own link so the status glyph stays out of the link name.
+  - `TaskTable` rails use percentage lines plus a nested SVG anchored at the row center, so they
+    join at any row height, including taller proposal rows.
+  - The outline around the selected section tab is the keyboard focus ring and was left alone.
+- **Files changed**: `views/task-table.tsx`, new `views/task-table-hierarchy.ts` and
+  `views/task-identity-cell.tsx`, `project-detail/milestone-tasks.tsx`,
+  `work-views/initiative-rails.ts` → `work-views/hierarchy-rails.ts`, `work-views/work-list.tsx`,
+  `work-views/work-list-groups.ts`, `work-views/work-list-columns.tsx`, the `hierarchy-rail` test id
+  in three e2e files, and tests under `tests/components/{views,project-detail}` and
+  `tests/work-views`.
+- **Validation**: Root typecheck (28/28), lint with the complexity ledger, and Prettier pass. The
+  touched suites pass 333 tests in 40 files. Seeded captures of the project Tasks tab and the Tasks
+  roster at 1440 and 390 px, light and dark, show nested rows joined by rails, colored status glyphs,
+  and the timer at the metadata tone; the 320 px overflow check passed. Root `pnpm test:coverage`
+  passes every package except `@docket/api`, where 9 tests in `permissions`, `route-auth`,
+  `cycle-backfill`, and `programs-detail` fail identically on a clean checkout of the base commit
+  `be756be9b` after `pnpm db:reset`; this change touches no API code.
+- **Review follow-ups**: The label picker now returns focus to an enclosing `treegrid` as well as a
+  `grid`. The Tasks roster marks a drop onto a task's own descendant as a cycle. Nesting positions
+  are keyed by row object, so a task shown in two label groups keeps each group's depth. The shared
+  tree model builds its index once in linear time and `TaskTable` memoizes nesting. Rows no longer
+  claim `aria-expanded` (nothing collapses), through one `hierarchyRowAria` helper shared with
+  Initiatives. `buildTaskColumns` requires `statuses`. The idle icon-only timer rests at the
+  metadata tone inside `TaskTimerButton`. The identity column reserves the deepest row's indent.
+  Rail geometry and roster task nesting have component tests. A second rail renderer for the
+  roster was left in place: the roster's e2e geometry checks parse its fixed-height path
+  coordinates.
+- **Learnings**: `MilestoneTasks` sits at its ledgered function ceiling, so even a one-line fix has
+  to pay for itself. The e2e files already reference the rail test id, so renaming it needs those
+  updated in the same change.
 - **Blockers**: None.
 
 ---

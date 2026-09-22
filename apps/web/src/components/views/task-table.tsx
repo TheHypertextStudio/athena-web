@@ -25,13 +25,15 @@ import { renderSourcePeople } from '@/components/people/source-person-references
  *
  * Grouping (by milestone for a project's tasks, by project/program for a cycle's tasks) is passed
  * as {@link EntityTableGroup}s so the full-width group headers span every column, consistent with
- * how a grouped entity roster renders. Activating a row opens the task detail via a real Next.js
- * `Link` (right-clickable / new-tab-openable), with the roving-tabindex keyboard navigation the
- * table owns. Pressing `L` on the focused row opens the shared label picker (via
- * {@link usePickerOverlay}) seeded with that row's own labels, since a task row already has them
- * in hand and needs no fetch to show them.
+ * how a grouped entity roster renders. Within each group a subtask sits directly under its parent
+ * Task, one level deeper, and the table becomes a treegrid ({@link nestTaskList}); the glyphs and
+ * title render as one indented identity cell with hierarchy rails ({@link withTaskIdentity}).
+ * Activating a row opens the task detail via a real Next.js `Link` (right-clickable /
+ * new-tab-openable), with the roving-tabindex keyboard navigation the table owns. Pressing `L` on
+ * the focused row opens the shared label picker (via {@link usePickerOverlay}) seeded with that
+ * row's own labels, since a task row already has them in hand and needs no fetch to show them.
  */
-import { defaultEntityDisplay, type EntityDisplayOut } from '@docket/work/entity-display-contract';
+import { type EntityDisplayOut } from '@docket/work/entity-display-contract';
 import { type TaskOut } from '@docket/work/task-model';
 import {
   ActorAvatar,
@@ -42,13 +44,10 @@ import {
   type EntityTableRowInteraction,
   LabelChipRow,
 } from '@docket/ui/components';
-import Link from '@/components/docket-link';
-import type { JSX, ReactNode } from 'react';
-import { withoutUndefinedValues } from '@docket/ui';
+import { type JSX, type ReactNode, useMemo } from 'react';
 import { cn } from '@docket/ui/lib/utils';
 
 import { EditableTitle } from '@/components/editor/editable-title';
-import { EntityIconGlyph } from '@/components/entity-display/entity-icon-glyph';
 import {
   type WorkStatusDisplay,
   unknownStatus,
@@ -71,8 +70,12 @@ import { formatCalendarDate } from '@/lib/format-date';
 import { api } from '@/lib/api';
 import { apiQueryOptions, queryKeys, useApiQuery } from '@/lib/query';
 
+import { hierarchyRowAria } from '@/components/work-views/hierarchy-rails';
+
 import type { FieldCatalog } from './field-catalog';
 import { findField } from './field-catalog';
+import { TASK_TABLE_INLINE_LINK_COLUMN_KEY, withTaskIdentity } from './task-identity-cell';
+import { nestTaskList, type TaskPositions } from './task-table-hierarchy';
 
 /** The minimal resolved-actor shape the assignee column renders (name + kind + optional avatar). */
 export interface TaskTableActor {
@@ -103,10 +106,10 @@ export interface TaskColumnsDeps {
    *
    * @remarks
    * A row's `state` is a key into this set, and the glyph's colour comes from the matching
-   * status's category. Omit it and every row draws the neutral backlog ring, which is the right
-   * answer for a table rendered before the set has arrived.
+   * status's category. Required so a list cannot silently fall back to grey: pass `[]` only while
+   * the set has not arrived, which draws every row as the neutral backlog ring.
    */
-  statuses?: readonly WorkStatusDisplay[];
+  statuses: readonly WorkStatusDisplay[];
   /** Resolve a task's assignee actor id to its display name + kind for the avatar column. */
   resolveActor: (actorId: string) => TaskTableActor;
   /** Whether the viewer may rename a task in place (double-click the title). */
@@ -119,6 +122,21 @@ export interface TaskColumnsDeps {
 
 /** A short, year-less day formatter for a task's due date (e.g. "Jun 21"). */
 const DUE_DATE_OPTIONS: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric' };
+
+/** Props for {@link TaskStatusGlyph}. */
+interface TaskStatusGlyphProps {
+  /** The workspace's Task statuses. */
+  readonly statuses: readonly WorkStatusDisplay[];
+  /** The row's task. */
+  readonly task: TaskOut;
+}
+
+/** The status glyph for a task, drawn from the workspace's statuses by the task's state key. */
+function TaskStatusGlyph({ statuses, task }: TaskStatusGlyphProps): JSX.Element {
+  const { name, category } =
+    statuses.find((status) => status.key === task.state) ?? unknownStatus(task.state);
+  return <WorkStatusIcon name={name} category={category} />;
+}
 
 /**
  * Build the shared aligned-column spec for a task list, derived from the task catalog.
@@ -134,15 +152,12 @@ const DUE_DATE_OPTIONS: Intl.DateTimeFormatOptions = { month: 'short', day: 'num
  */
 export function buildTaskColumns({
   catalog,
-  statuses = [],
+  statuses,
   resolveActor,
   canEdit,
   onRename,
   onOpen,
 }: TaskColumnsDeps): Column<TaskOut>[] {
-  const statusOf = (task: TaskOut): WorkStatusDisplay =>
-    statuses.find((status) => status.key === task.state) ?? unknownStatus(task.state);
-
   return [
     // Leading status glyph — coloured by the status's category, named by the workspace's own word.
     {
@@ -150,10 +165,7 @@ export function buildTaskColumns({
       header: '',
       width: '1.25rem',
       priority: 'always',
-      render: (task) => {
-        const { name, category } = statusOf(task);
-        return <WorkStatusIcon name={name} category={category} />;
-      },
+      render: (task) => <TaskStatusGlyph statuses={statuses} task={task} />,
     },
     // Title — the one flexing, truncating column.
     {
@@ -327,7 +339,9 @@ export function TaskTable({
   proposedByTaskId,
   highlightedIds,
 }: TaskTableProps): JSX.Element {
-  const visibleTasks = taskTableRows(tasks, groups);
+  // Subtasks sit directly under their parent, so selection order follows the rendered order.
+  const nesting = useMemo(() => nestTaskList(tasks, groups), [tasks, groups]);
+  const visibleTasks = taskTableRows(nesting.tasks, nesting.groups);
   const objects = visibleTasks.map(taskObject);
   const organizationId = objects[0]?.organizationId ?? null;
   const selectionSurfaceId = taskTableSurfaceId(organizationId, label);
@@ -363,7 +377,9 @@ export function TaskTable({
     >
       <SelectableTaskTable
         columns={columns}
-        {...(groups ? { groups } : { tasks: tasks ?? [] })}
+        {...(nesting.groups ? { groups: nesting.groups } : { tasks: nesting.tasks ?? [] })}
+        positions={nesting.positions}
+        nested={nesting.nested}
         taskHref={taskHref}
         onOpenTask={onOpenTask}
         onRowPrefetch={onRowPrefetch}
@@ -445,54 +461,12 @@ function TaskRowInteraction({
   );
 }
 
-/** Deps {@link resolveSelectableColumn} needs to wrap the glyph and title columns in place. */
-interface SelectableColumnDeps {
-  readonly displayByTaskId: ReadonlyMap<string, EntityDisplayOut> | undefined;
-  readonly proposedByTaskId: ReadonlyMap<string, string> | undefined;
-}
-
-/** Wrap the glyph column with the identity icon, and the title column with a proposal's sentence. */
-function resolveSelectableColumn(
-  column: Column<TaskOut>,
-  deps: SelectableColumnDeps,
-): Column<TaskOut> {
-  if (column.key === 'glyph') {
-    return {
-      ...column,
-      width: '3.25rem',
-      render: (task: TaskOut) => {
-        const display = deps.displayByTaskId?.get(task.id) ?? defaultEntityDisplay('task', task.id);
-        return (
-          <span className="flex items-center gap-1.5">
-            <EntityIconGlyph
-              subjectType="task"
-              glyph={display.glyph}
-              colorKey={display.colorKey}
-              customColor={display.customColor}
-              size={20}
-            />
-            {column.render(task)}
-          </span>
-        );
-      },
-    };
-  }
-  if (column.key === 'title') {
-    return {
-      ...column,
-      render: (task: TaskOut) => {
-        const sentence = deps.proposedByTaskId?.get(task.id);
-        if (sentence === undefined) return column.render(task);
-        return (
-          <span className="flex min-w-0 flex-col gap-0.5">
-            {column.render(task)}
-            <span className="text-body-small text-on-surface-variant truncate">{sentence}</span>
-          </span>
-        );
-      },
-    };
-  }
-  return column;
+/** {@link TaskTableProps} plus the nesting {@link TaskTable} derived from them. */
+interface SelectableTaskTableProps extends TaskTableProps {
+  /** Each row's place under its parent Task, keyed by row object. */
+  readonly positions: TaskPositions;
+  /** Whether any row nests, which makes the grid a treegrid. */
+  readonly nested: boolean;
 }
 
 /** The table body rendered inside its selection provider. */
@@ -500,6 +474,8 @@ function SelectableTaskTable({
   columns,
   tasks,
   groups,
+  positions,
+  nested,
   taskHref,
   onOpenTask,
   onRowPrefetch,
@@ -509,7 +485,7 @@ function SelectableTaskTable({
   displayByTaskId,
   proposedByTaskId,
   highlightedIds,
-}: TaskTableProps): JSX.Element {
+}: SelectableTaskTableProps): JSX.Element {
   const pickerOverlay = usePickerOverlay();
   const visibleTasks = taskTableRows(tasks, groups);
   const tableSelection = useEntityTableSelection<TaskOut>(taskObject);
@@ -521,9 +497,14 @@ function SelectableTaskTable({
       priority: 'always',
       render: (task) => <SelectionCheckbox object={taskObject(task)} />,
     },
-    ...columns.map((column) =>
-      resolveSelectableColumn(column, { displayByTaskId, proposedByTaskId }),
-    ),
+    ...withTaskIdentity(columns, {
+      displayByTaskId,
+      proposedByTaskId,
+      positions,
+      taskHref,
+      onOpenTask,
+      onRowPrefetch,
+    }),
   ];
   const openLabels = (task: TaskOut, anchor: HTMLElement | null): void => {
     const object = taskObject(task);
@@ -542,9 +523,11 @@ function SelectableTaskTable({
       columns={selectableColumns}
       {...(groups ? { groups } : { rows: tasks ?? [] })}
       getRowKey={(task) => task.id}
+      gridRole={nested ? 'treegrid' : 'grid'}
+      getRowAria={nested ? (task) => hierarchyRowAria(positions.get(task)) : undefined}
       {...tableSelection}
       rowHref={(task) => taskHref(task)}
-      rowLinkColumnKey="title"
+      rowLinkColumnKey={TASK_TABLE_INLINE_LINK_COLUMN_KEY}
       renderRowInteraction={({ row, children }) => (
         <TaskRowInteraction
           row={row}
@@ -554,13 +537,6 @@ function SelectableTaskTable({
         >
           {children}
         </TaskRowInteraction>
-      )}
-      renderRowLink={({ children, ...linkProps }) => (
-        // Spread rather than cherry-pick: a dropped `draggable`/`onDragStart` would silently turn
-        // the row back into an undraggable one with no type error. `withoutUndefinedValues` keeps
-        // that guarantee while dropping the explicit-`undefined` values Link's own prop types
-        // (unlike ours) don't accept under exactOptionalPropertyTypes.
-        <Link {...withoutUndefinedValues(linkProps)}>{children}</Link>
       )}
       {...(onRowPrefetch !== undefined ? { onRowPrefetch } : {})}
       {...(onOpenTask

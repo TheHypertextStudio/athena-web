@@ -396,9 +396,9 @@ describe('LabelPickerOverlay', () => {
  * target-resolution logic the handler calls directly.
  */
 describe('resolveCloseFocusTarget', () => {
-  it('prefers the anchor element\'s enclosing [role="grid"]', () => {
+  it.each(['grid', 'treegrid'])('prefers the anchor element\'s enclosing [role="%s"]', (role) => {
     const grid = document.createElement('div');
-    grid.setAttribute('role', 'grid');
+    grid.setAttribute('role', role);
     const row = document.createElement('div');
     const anchor = document.createElement('a');
     row.appendChild(anchor);

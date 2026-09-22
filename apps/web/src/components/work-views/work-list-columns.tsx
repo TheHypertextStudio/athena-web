@@ -24,13 +24,13 @@ import { entityNavigationSnapshotFromWorkViewRow } from '@/lib/contracts/entity-
 import { seedNavigationSnapshot } from '@/lib/navigation-snapshot-runtime';
 
 import {
-  INITIATIVE_DEPTH_PX,
-  INITIATIVE_ELBOW_RADIUS_PX,
-  INITIATIVE_LEADING_SLOT_PX,
-  INITIATIVE_RAIL_STROKE_PX,
-  INITIATIVE_SLOT_CENTER_PX,
-  type InitiativeTreePosition,
-} from './initiative-rails';
+  HIERARCHY_DEPTH_PX,
+  HIERARCHY_ELBOW_RADIUS_PX,
+  HIERARCHY_LEADING_SLOT_PX,
+  HIERARCHY_RAIL_STROKE_PX,
+  HIERARCHY_SLOT_CENTER_PX,
+  type HierarchyPosition,
+} from './hierarchy-rails';
 import type { ListMembership } from './work-list-groups';
 import {
   formatWorkViewValue,
@@ -143,7 +143,7 @@ function IdentityGlyph({ row }: { readonly row: WorkViewRowFor<ViewTarget> }): J
       glyph={display.glyph}
       colorKey={display.colorKey}
       customColor={display.customColor}
-      size={INITIATIVE_LEADING_SLOT_PX}
+      size={HIERARCHY_LEADING_SLOT_PX}
     />
   );
 }
@@ -214,22 +214,22 @@ function HierarchyRails({
   position,
   rowHeight,
 }: {
-  readonly position: InitiativeTreePosition;
+  readonly position: HierarchyPosition;
   readonly rowHeight: number;
 }): JSX.Element | null {
   const { depth, ancestorRailContinues, hasChildren, isLastSibling } = position;
   if (depth === 1 && !hasChildren && !ancestorRailContinues.some(Boolean)) return null;
-  const targetLeft = (depth - 1) * INITIATIVE_DEPTH_PX;
-  const iconCenter = targetLeft + INITIATIVE_SLOT_CENTER_PX;
+  const targetLeft = (depth - 1) * HIERARCHY_DEPTH_PX;
+  const iconCenter = targetLeft + HIERARCHY_SLOT_CENTER_PX;
   const branchY = rowHeight / 2;
-  const parentRailX = iconCenter - INITIATIVE_DEPTH_PX;
-  const slotTop = (rowHeight - INITIATIVE_LEADING_SLOT_PX) / 2;
-  const slotBottom = slotTop + INITIATIVE_LEADING_SLOT_PX;
+  const parentRailX = iconCenter - HIERARCHY_DEPTH_PX;
+  const slotTop = (rowHeight - HIERARCHY_LEADING_SLOT_PX) / 2;
+  const slotBottom = slotTop + HIERARCHY_LEADING_SLOT_PX;
   return (
     <svg
       aria-hidden="true"
       focusable="false"
-      data-testid="initiative-hierarchy-rail"
+      data-testid="hierarchy-rail"
       className="pointer-events-none absolute inset-0 h-full w-full overflow-visible"
       height={rowHeight}
       width="100%"
@@ -237,7 +237,7 @@ function HierarchyRails({
       <g
         className="stroke-outline-variant"
         fill="none"
-        strokeWidth={INITIATIVE_RAIL_STROKE_PX}
+        strokeWidth={HIERARCHY_RAIL_STROKE_PX}
         strokeLinecap="round"
         strokeLinejoin="round"
       >
@@ -246,9 +246,9 @@ function HierarchyRails({
             <line
               key={index}
               data-ancestor-rail={index}
-              x1={index * INITIATIVE_DEPTH_PX + INITIATIVE_SLOT_CENTER_PX}
+              x1={index * HIERARCHY_DEPTH_PX + HIERARCHY_SLOT_CENTER_PX}
               y1={0}
-              x2={index * INITIATIVE_DEPTH_PX + INITIATIVE_SLOT_CENTER_PX}
+              x2={index * HIERARCHY_DEPTH_PX + HIERARCHY_SLOT_CENTER_PX}
               y2={rowHeight}
             />
           ) : null,
@@ -259,10 +259,10 @@ function HierarchyRails({
               x1={parentRailX}
               y1={0}
               x2={parentRailX}
-              y2={isLastSibling ? branchY - INITIATIVE_ELBOW_RADIUS_PX : rowHeight}
+              y2={isLastSibling ? branchY - HIERARCHY_ELBOW_RADIUS_PX : rowHeight}
             />
             <path
-              d={`M ${String(parentRailX)} ${String(branchY - INITIATIVE_ELBOW_RADIUS_PX)} Q ${String(parentRailX)} ${String(branchY)} ${String(parentRailX + INITIATIVE_ELBOW_RADIUS_PX)} ${String(branchY)} H ${String(targetLeft)}`}
+              d={`M ${String(parentRailX)} ${String(branchY - HIERARCHY_ELBOW_RADIUS_PX)} Q ${String(parentRailX)} ${String(branchY)} ${String(parentRailX + HIERARCHY_ELBOW_RADIUS_PX)} ${String(branchY)} H ${String(targetLeft)}`}
             />
           </>
         ) : null}
@@ -303,7 +303,7 @@ function IdentityCell<TTarget extends ViewTarget>({
   readonly selected: boolean;
   readonly selectionActive: boolean;
   readonly onToggle: () => void;
-  readonly position: InitiativeTreePosition | undefined;
+  readonly position: HierarchyPosition | undefined;
   readonly rowHeight: number;
 }): JSX.Element {
   const row = membership.row as WorkViewRowFor<ViewTarget>;
@@ -314,7 +314,7 @@ function IdentityCell<TTarget extends ViewTarget>({
       {position ? <HierarchyRails position={position} rowHeight={rowHeight} /> : null}
       <span
         className="relative flex min-w-0 items-center gap-3"
-        style={position ? { paddingLeft: (position.depth - 1) * INITIATIVE_DEPTH_PX } : undefined}
+        style={position ? { paddingLeft: (position.depth - 1) * HIERARCHY_DEPTH_PX } : undefined}
       >
         <SelectionIdentity
           row={row}
@@ -511,14 +511,14 @@ export interface BuildWorkListColumnsOptions<TTarget extends ViewTarget> {
   readonly isWritable: (membership: ListMembership<TTarget>) => boolean;
   readonly onToggleSelection: (rowId: string) => void;
   readonly statusOf: (key: string) => WorkStatusDisplay;
-  readonly positions: ReadonlyMap<string, InitiativeTreePosition>;
+  readonly positions: ReadonlyMap<string, HierarchyPosition>;
   readonly rowHeight: number;
 }
 
 /**
  * Build one shared header-and-cell column array from numeric field widths.
  *
- * @param options - Target definition, selection state, status resolver, and Initiative geometry.
+ * @param options - Target definition, selection state, status resolver, and hierarchy geometry.
  * @returns the aligned EntityTable columns for path-scoped memberships.
  */
 export function buildWorkListColumns<TTarget extends ViewTarget>({

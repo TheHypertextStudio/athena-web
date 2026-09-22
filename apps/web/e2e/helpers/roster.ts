@@ -456,7 +456,7 @@ export async function expectInitiativeDensity(
   const box = await row.boundingBox();
   if (!box) throw new Error('Initiative density row is not measurable.');
   expect(Math.abs(box.height - expectedHeight)).toBeLessThanOrEqual(1);
-  const path = row.getByTestId('initiative-hierarchy-rail').locator('path').first();
+  const path = row.getByTestId('hierarchy-rail').locator('path').first();
   const d = await path.getAttribute('d');
   expect(d).not.toBeNull();
   const numbers = d?.match(/-?\d+(?:\.\d+)?/gu)?.map(Number) ?? [];

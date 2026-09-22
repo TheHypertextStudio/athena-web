@@ -1,14 +1,17 @@
 import { describe, expect, it } from 'vitest';
 
-import { deriveInitiativeTreePositions } from '../../src/components/work-views/initiative-rails';
+import {
+  deriveHierarchyPositions,
+  hierarchyRowAria,
+} from '../../src/components/work-views/hierarchy-rails';
 
 function node(key: string, parentKey: string | null) {
   return { key, parentKey };
 }
 
-describe('deriveInitiativeTreePositions', () => {
+describe('deriveHierarchyPositions', () => {
   it('derives continuation rails above the immediate-parent branch', () => {
-    const positions = deriveInitiativeTreePositions([
+    const positions = deriveHierarchyPositions([
       node('root-a', null),
       node('a-1', 'root-a'),
       node('a-1-i', 'a-1'),
@@ -38,7 +41,7 @@ describe('deriveInitiativeTreePositions', () => {
   });
 
   it('continues an ancestor rail when the next path node has a later sibling', () => {
-    const positions = deriveInitiativeTreePositions([
+    const positions = deriveHierarchyPositions([
       node('root', null),
       node('first', 'root'),
       node('first-grandchild', 'first'),
@@ -56,7 +59,7 @@ describe('deriveInitiativeTreePositions', () => {
   });
 
   it('does not continue a single-child ancestor rail because another root follows', () => {
-    const positions = deriveInitiativeTreePositions([
+    const positions = deriveHierarchyPositions([
       node('root-a', null),
       node('only-child', 'root-a'),
       node('grandchild', 'only-child'),
@@ -70,7 +73,7 @@ describe('deriveInitiativeTreePositions', () => {
   });
 
   it('treats a missing or collapsed parent as a visible root', () => {
-    const positions = deriveInitiativeTreePositions([node('visible-child', 'collapsed-parent')]);
+    const positions = deriveHierarchyPositions([node('visible-child', 'collapsed-parent')]);
 
     expect(positions.get('visible-child')).toEqual({
       depth: 1,
@@ -83,7 +86,7 @@ describe('deriveInitiativeTreePositions', () => {
   });
 
   it('keys duplicate context paths independently', () => {
-    const positions = deriveInitiativeTreePositions([
+    const positions = deriveHierarchyPositions([
       node('active:root', null),
       node('active:child', 'active:root'),
       node('active:grandchild', 'active:child'),
@@ -98,7 +101,7 @@ describe('deriveInitiativeTreePositions', () => {
   });
 
   it('breaks a corrupt cycle at the first displayed membership', () => {
-    const positions = deriveInitiativeTreePositions([
+    const positions = deriveHierarchyPositions([
       node('cycle-a', 'cycle-b'),
       node('cycle-b', 'cycle-a'),
     ]);
@@ -127,5 +130,27 @@ describe('deriveInitiativeTreePositions', () => {
         },
       ],
     ]);
+  });
+});
+
+describe('hierarchyRowAria', () => {
+  it('describes a row by level and sibling position, without claiming it can collapse', () => {
+    const positions = deriveHierarchyPositions([
+      node('parent', null),
+      node('first', 'parent'),
+      node('second', 'parent'),
+    ]);
+
+    expect(hierarchyRowAria(positions.get('parent'))).toEqual({
+      level: 1,
+      posInSet: 1,
+      setSize: 1,
+    });
+    expect(hierarchyRowAria(positions.get('second'))).toEqual({
+      level: 2,
+      posInSet: 2,
+      setSize: 2,
+    });
+    expect(hierarchyRowAria(undefined)).toEqual({ level: 1, posInSet: 1, setSize: 1 });
   });
 });

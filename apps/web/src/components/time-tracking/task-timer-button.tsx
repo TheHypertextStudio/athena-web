@@ -41,6 +41,20 @@ export interface TaskTimerButtonProps {
   readonly controlSize?: ControlSize;
   /** Show the word beside the glyph. Dense list rows pass `false`. */
   readonly withLabel?: boolean;
+  /**
+   * `quiet` (default) is a text button for rows and cards. `prominent` is the page's own primary
+   * action: filled tonal at rest, filled primary while the timer runs.
+   */
+  readonly emphasis?: 'quiet' | 'prominent';
+}
+
+/** The button style for an emphasis and a timer state. */
+function timerVariant(
+  emphasis: 'quiet' | 'prominent',
+  action: Pick<TaskTimerAction, 'active' | 'tracking'>,
+): 'default' | 'secondary' | 'ghost' {
+  if (emphasis === 'prominent') return action.active ? 'default' : 'secondary';
+  return action.tracking ? 'secondary' : 'ghost';
 }
 
 /** Props for the task-specific timer row inside an action menu. */
@@ -91,6 +105,7 @@ export function TaskTimerButton({
   title,
   controlSize,
   withLabel = true,
+  emphasis = 'quiet',
 }: TaskTimerButtonProps): JSX.Element {
   const action = useTaskTimerAction(taskId, title);
 
@@ -99,7 +114,7 @@ export function TaskTimerButton({
       <Tooltip>
         <TooltipTrigger asChild>
           <Button
-            variant={action.tracking ? 'secondary' : 'ghost'}
+            variant={timerVariant(emphasis, action)}
             iconOnly={!withLabel}
             aria-label={action.label}
             aria-pressed={action.active}

@@ -141,7 +141,7 @@ export function TaskActions({
   return (
     <>
       <ControlGroup controlSize="xl">
-        <TaskTimerButton taskId={task.id} title={task.title} />
+        <TaskTimerButton taskId={task.id} title={task.title} emphasis="prominent" />
         <TaskOverflowMenu
           orgId={orgId}
           task={task}

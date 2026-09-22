@@ -6,11 +6,10 @@
  * Every in-app task *list* (a project's tasks, a cycle's committed tasks) renders through this one
  * surface so they read identically. These pin the shared column vocabulary and its alignment:
  *
- * - the column set is a flexing Title + Status + Labels + Assignee + Due date + Estimate + the
- *   universal Track affordance, with headers derived from the task catalog (so they stay
- *   consistent with the FilterToolbar);
- * - the estimate cell renders `estimateMinutes` as a compact `1h 30m` duration (its own placeholder
- *   when unset), and the due-date cell renders a short calendar day (placeholder when unset);
+ * - the column set is a flexing Title + Status + Labels + Assignee + Due date + Time, with
+ *   headers derived from the task catalog (so they stay consistent with the FilterToolbar);
+ * - the Time cell renders `estimateMinutes` as a compact `1h 30m` duration beside the timer (its
+ *   own placeholder when unset), and the due-date cell renders a short calendar day;
  * - the assignee cell resolves the actor id to a named avatar, with a neutral placeholder when a
  *   task is unassigned;
  * - rows are real links to the task detail, and grouped tasks render full-width group headers;
@@ -187,15 +186,7 @@ function task(fixture: TaskFixture): TaskOut {
 describe('buildTaskColumns', () => {
   it('declares the shared column vocabulary with catalog-derived headers', () => {
     const keys = columns.map((c) => c.key);
-    expect(keys).toEqual([
-      'title',
-      'state',
-      'labels',
-      'assigneeId',
-      'dueDate',
-      'estimate',
-      'timer',
-    ]);
+    expect(keys).toEqual(['title', 'state', 'labels', 'assigneeId', 'dueDate', 'time']);
 
     // The title leads and is the one flexing column; status follows it, as on the Tasks page.
     const title = columns[0];
@@ -210,7 +201,7 @@ describe('buildTaskColumns', () => {
 
     // The numeric columns are end-aligned so values line up against the row's end.
     expect(columns.find((c) => c.key === 'dueDate')?.align).toBe('end');
-    expect(columns.find((c) => c.key === 'estimate')?.align).toBe('end');
+    expect(columns.find((c) => c.key === 'time')?.align).toBe('end');
   });
 });
 

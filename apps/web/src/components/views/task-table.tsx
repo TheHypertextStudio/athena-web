@@ -11,9 +11,9 @@ import { renderSourcePeople } from '@/components/people/source-person-references
  * This is the task-side application of the design decision (the user's mandate) that
  * Initiatives, Projects, and Tasks must read as the *same* surface — aligned rows under a light
  * header, Linear-style. {@link TaskTable} renders tasks through the design-system
- * {@link EntityTable} primitive with one shared column vocabulary: a leading status glyph, a
+ * {@link EntityTable} primitive with one shared column vocabulary: the entity icon and a
  * flexing/truncating **title**, then the task's key properties in **aligned** columns — status,
- * assignee, due date, and time estimate ({@link formatEstimate | `1h 30m`}). Because it is the
+ * labels, assignee, due date, and Time (the viewer's timer beside the estimate, {@link TaskTimeCell}). Because it is the
  * same {@link EntityTable} an entity roster uses, a task list and a project/initiative roster
  * share the exact row chrome (density, hover/active/selected tone, inset focus ring, hairline
  * dividers) and the same responsive column-priority strategy (low-priority columns shed first,
@@ -64,9 +64,8 @@ import {
   useSelection,
 } from '@/components/selection';
 import { useTaskHierarchyDrop } from '@/components/tasks/task-hierarchy-drop';
-import { TaskTimerButton } from '@/components/time-tracking';
+import { useTimerRecord } from '@/components/time-tracking';
 import { objectKey, objectTargetProps, taskObjectRef } from '@/lib/actions';
-import { formatEstimate } from '@/lib/format-estimate';
 import { formatCalendarDate } from '@/lib/format-date';
 import { api } from '@/lib/api';
 import { apiQueryOptions, queryKeys, useApiQuery, usePrefetchApi } from '@/lib/query';
@@ -78,6 +77,7 @@ import type { FieldCatalog } from './field-catalog';
 import { findField } from './field-catalog';
 import { PAGE_LIST_BLEED } from './page-layout';
 import { TASK_TABLE_INLINE_LINK_COLUMN_KEY, withTaskIdentity } from './task-identity-cell';
+import { TaskTimeCell } from './task-time-cell';
 import { nestTaskList, type TaskPositions } from './task-table-hierarchy';
 
 /** The minimal resolved-actor shape the assignee column renders (name + kind + optional avatar). */
@@ -246,30 +246,16 @@ export function buildTaskColumns({
         return <span className="text-on-surface-variant tabular-nums">{due ?? '—'}</span>;
       },
     },
-    // Estimate — `estimateMinutes` formatted as "1h 30m"; end-aligned, tabular. Sheds after
-    // Labels (priority 6, below an 896px table).
+    // Time — the viewer's timer beside the estimate ("1h 30m"), which becomes the live pill while
+    // the task is tracked. An action as well as a fact, so it arrives first (priority 1, from a
+    // 448px table); below that a tracked task's pill sits beside its title instead.
     {
-      key: 'estimate',
-      header: 'Estimate',
+      key: 'time',
+      header: 'Time',
       align: 'end',
-      width: '4.5rem',
-      priority: 6,
-      render: (task) => {
-        const estimate = formatEstimate(task.estimateMinutes);
-        return <span className="text-on-surface-variant tabular-nums">{estimate ?? '—'}</span>;
-      },
-    },
-    // Track — the universal start-timer affordance: every task list is a place a task
-    // is "represented", so every row offers it, icon-only to stay dense. Kept a tier longer than
-    // the metadata columns (priority 1, from a 448px table) since it is an action, not a fact.
-    {
-      key: 'timer',
-      header: '',
-      width: '2.25rem',
+      width: '6rem',
       priority: 1,
-      render: (task) => (
-        <TaskTimerButton taskId={task.id} title={task.title} controlSize="sm" withLabel={false} />
-      ),
+      render: (task) => <TaskTimeCell task={task} />,
     },
   ];
 }
@@ -418,6 +404,30 @@ const PROPOSED_ROW_CLASSNAME = 'bg-primary-container/25 opacity-80';
 /** The tone a row renders with while a hovered proposal names it as its target. */
 const HIGHLIGHTED_ROW_CLASSNAME = 'bg-surface-container-high';
 
+/**
+ * The light tonal step on the row the viewer is tracking, matched to its timer pill. It marks the
+ * viewer's own clock only; selection keeps its stronger fill.
+ */
+const TRACKED_ROW_CLASSNAME = 'bg-secondary-container/35';
+
+/** What {@link taskRowTone} reads to pick a row's tonal state. */
+interface TaskRowToneState {
+  readonly taskId: string;
+  readonly selected: boolean;
+  readonly proposed: boolean;
+  readonly trackedTaskId: string | null | undefined;
+  readonly highlightedIds: ReadonlySet<string> | undefined;
+}
+
+/** A row's tonal state classes: proposed, tracked by the viewer, or named by a hovered proposal. */
+function taskRowTone(state: TaskRowToneState): string {
+  return cn(
+    state.proposed && PROPOSED_ROW_CLASSNAME,
+    state.trackedTaskId === state.taskId && !state.selected && TRACKED_ROW_CLASSNAME,
+    state.highlightedIds?.has(state.taskId) === true && HIGHLIGHTED_ROW_CLASSNAME,
+  );
+}
+
 /** Row render-prop bridge that binds the application selection model inside generic UI. */
 function TaskRowInteraction({
   row,
@@ -443,7 +453,7 @@ function TaskRowInteraction({
   });
   const drop = useTaskHierarchyDrop(object, tasks);
   const proposed = proposedByTaskId?.has(row.id) ?? false;
-  const highlighted = highlightedIds?.has(row.id) ?? false;
+  const trackedTaskId = useTimerRecord().record?.taskId;
   return (
     <>
       {children({
@@ -466,8 +476,7 @@ function TaskRowInteraction({
           drop.className,
           drop.rowProps.className,
           drag.className,
-          proposed && PROPOSED_ROW_CLASSNAME,
-          highlighted && HIGHLIGHTED_ROW_CLASSNAME,
+          taskRowTone({ taskId: row.id, selected, proposed, trackedTaskId, highlightedIds }),
         ),
       })}
       {drop.status ? (

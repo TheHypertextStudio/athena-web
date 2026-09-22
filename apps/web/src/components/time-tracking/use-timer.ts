@@ -202,6 +202,33 @@ export function useTimerStatus(): TimerStatus {
   };
 }
 
+/** The live record and its phase, without the clock. */
+export interface TimerRecordState {
+  /** The live record, or null when nothing is being tracked. */
+  readonly record: TimeRecordOut | null;
+  /** Where the record is in its lifecycle. */
+  readonly phase: TimerPhase;
+}
+
+/**
+ * Read which record is live, and its phase, without subscribing to the clock.
+ *
+ * @remarks
+ * For controls repeated on every row of a list (a task's timer button, the row tint that marks
+ * the tracked task): they need to know *which* task is tracked, not the elapsed seconds, so they
+ * re-render on start, pause, resume, and stop only. The one readout that shows the seconds reads
+ * {@link useTimerState} itself.
+ *
+ * @returns the live record and its phase.
+ */
+export function useTimerRecord(): TimerRecordState {
+  const query = useActiveTimeQuery();
+  return {
+    record: query.data?.record ?? null,
+    phase: statusOf(query.data, query.isPending).phase,
+  };
+}
+
 /**
  * Read the caller's one tracker, with the elapsed clock.
  *

@@ -21,9 +21,11 @@ export { formatClock, formatDuration, spokenDuration } from './format-duration';
 export {
   type TimerControls,
   type TimerPhase,
+  type TimerRecordState,
   type TimerState,
   type TimerStatus,
   useTimerControls,
+  useTimerRecord,
   useTimerState,
   useTimerStatus,
 } from './use-timer';

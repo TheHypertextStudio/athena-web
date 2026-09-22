@@ -9,9 +9,10 @@
  * This is the Tasks page's identity cell in the task table's terms: the same 32px entity icon, the
  * same gap to the title, and the same rail geometry ({@link HIERARCHY_LEADING_SLOT_PX}), so a task
  * reads the same in a project's list as on the Tasks page. Status is its own column. The icon and
- * title share one cell so a subtask's whole identity moves in together. The title carries its own
- * link, which keeps the icon out of the link's accessible name; the table points its link column
- * at {@link TASK_TABLE_INLINE_LINK_COLUMN_KEY} so it does not wrap the cell a second time.
+ * title share one cell so a subtask's whole identity moves in together; on a table too narrow for
+ * the Time column, the tracked task's timer pill sits after its title. The title carries its own
+ * link, which keeps the icon and timer out of the link's accessible name; the table points its link
+ * column at {@link TASK_TABLE_INLINE_LINK_COLUMN_KEY} so it does not wrap the cell a second time.
  *
  * Rails draw in an `absolute inset-y-0` layer. No cell between it and the row is positioned, so the
  * layer spans the full row height (EntityTable rows are `relative`) while its horizontal static
@@ -27,6 +28,7 @@ import type { JSX, ReactNode } from 'react';
 
 import Link from '@/components/docket-link';
 import { EntityIconGlyph } from '@/components/entity-display/entity-icon-glyph';
+import { TaskTimerButton, useTimerRecord } from '@/components/time-tracking';
 import {
   HIERARCHY_DEPTH_PX,
   HIERARCHY_ELBOW_RADIUS_PX,
@@ -49,6 +51,12 @@ const ICON_SLOT_CLASSNAME = 'flex size-8 shrink-0 items-center justify-center';
 
 /** The icon slot plus the gap after it, and enough title to read, before any indentation. */
 const IDENTITY_BASE_MIN_WIDTH = '5.75rem';
+
+/**
+ * Below an `@md` table the Time column is shed, so the tracked task's pill moves beside its title
+ * there; from `@md` up it lives in the Time column and this slot is empty.
+ */
+const NARROW_TIMER_SLOT_CLASSNAME = 'flex shrink-0 items-center @md/table:hidden';
 
 /** Props for the rail layer of one task row. */
 interface TaskHierarchyRailsProps {
@@ -187,6 +195,7 @@ export function TaskIdentity({
 }: TaskIdentityProps): JSX.Element {
   const shown = display ?? defaultEntityDisplay('task', task.id);
   const indent = position === undefined ? 0 : (position.depth - 1) * HIERARCHY_DEPTH_PX;
+  const tracked = useTimerRecord().record?.taskId === task.id;
   return (
     <span className="flex min-w-0 items-center gap-3">
       {position ? <TaskHierarchyRails position={position} /> : null}
@@ -210,6 +219,11 @@ export function TaskIdentity({
       >
         {children}
       </Link>
+      {tracked ? (
+        <span className={NARROW_TIMER_SLOT_CLASSNAME}>
+          <TaskTimerButton taskId={task.id} title={task.title} controlSize="sm" withLabel={false} />
+        </span>
+      ) : null}
     </span>
   );
 }

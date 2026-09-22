@@ -17,6 +17,18 @@
  * row's `<Link>`, a `ListRow`'s click-to-open — so the click handler always stops the native event
  * before it can bubble. Without this the control would both start the timer AND navigate away
  * (for an anchor-wrapped row) or open the task (for a `ListRow`), on every single click.
+ *
+ * It is the viewer's own clock and nothing else. Time is per actor: an agent or another person
+ * working the same task runs an independent clock, several tasks can be live at once across those
+ * actors, and a person controls only the tracking they have authority over. So "tracking" here
+ * means the caller's one human record is on this task; another actor's activity never lights this
+ * control, and this control never pauses or resumes anyone else's clock.
+ *
+ * Shape follows state, MD3 Expressive style: idle it is a round icon button with a timer glyph;
+ * while the viewer tracks this task it becomes a tonal, rounded-square pill carrying pause or
+ * resume and the live elapsed time, and pressing it tightens its corners. Only that pill reads the
+ * ticking clock ({@link TrackedElapsed}), so a list of rows re-renders once a second, not once per
+ * row.
  */
 import {
   Button,
@@ -26,11 +38,13 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@docket/ui/primitives';
-import { Pause, Play } from '@docket/ui/icons';
+import { Pause, Play, Timer } from '@docket/ui/icons';
+import { cn } from '@docket/ui/lib/utils';
 import type { ControlSize } from '@docket/ui/primitives';
 import type { JSX } from 'react';
 
-import { useTimerControls, useTimerState } from './use-timer';
+import { formatClock } from './format-duration';
+import { useTimerControls, useTimerRecord, useTimerState } from './use-timer';
 
 /** Props for {@link TaskTimerButton}. */
 export interface TaskTimerButtonProps {
@@ -57,6 +71,16 @@ function timerVariant(
   return action.tracking ? 'secondary' : 'ghost';
 }
 
+/** Morph corners and tone with the emphasized curve; pressing tightens the corners. */
+const TIMER_SHAPE =
+  'transition-[border-radius,background-color,color] duration-(--dur-base) ease-(--ease-emphasized-decel) active:rounded-corner-sm motion-reduce:transition-none';
+
+/** The live elapsed time of the viewer's current session; the one reader of the ticking clock. */
+function TrackedElapsed(): JSX.Element {
+  const { elapsedMs } = useTimerState();
+  return <span className="tabular-nums">{formatClock(elapsedMs)}</span>;
+}
+
 /** Props for the task-specific timer row inside an action menu. */
 export type TaskTimerMenuItemProps = Pick<TaskTimerButtonProps, 'taskId' | 'title'>;
 
@@ -68,9 +92,50 @@ interface TaskTimerAction {
   readonly run: () => Promise<void>;
 }
 
+/** Where the viewer's clock stands for one task. */
+interface TimerStateProps {
+  /** The viewer's clock is running on this task. */
+  readonly active: boolean;
+  /** The viewer's current session is on this task, running or paused. */
+  readonly tracking: boolean;
+}
+
+/** Pause while running, resume while paused, and the timer glyph when this task is not tracked. */
+function TimerGlyph({ active, tracking }: TimerStateProps): JSX.Element {
+  if (active) return <Pause aria-hidden="true" />;
+  if (tracking) return <Play aria-hidden="true" />;
+  return <Timer aria-hidden="true" />;
+}
+
+/** Props for {@link TimerText}. */
+interface TimerTextProps extends TimerStateProps {
+  /** Whether the placement shows a word beside the glyph. */
+  readonly withLabel: boolean;
+}
+
+/**
+ * The text beside the glyph: a labelled placement shows its verb, and a dense row's control shows
+ * the elapsed time only while this task is tracked.
+ */
+function TimerText({ active, tracking, withLabel }: TimerTextProps): JSX.Element | null {
+  if (!withLabel) return tracking ? <TrackedElapsed /> : null;
+  if (active) return <>Tracking</>;
+  if (tracking) return <>Resume</>;
+  return <>Track</>;
+}
+
+/**
+ * The control's shape and tone: round and at the metadata tone while idle (an icon-only ghost has
+ * no colour of its own and would inherit a row's title ink), and a rounded square while tracked.
+ */
+function timerButtonClassName(tracking: boolean, withLabel: boolean): string {
+  if (tracking) return cn(TIMER_SHAPE, 'rounded-corner-md');
+  return cn(TIMER_SHAPE, 'rounded-corner-full', !withLabel && 'text-on-surface-variant');
+}
+
 /** Keep button and menu placements on one timer state machine. */
 function useTaskTimerAction(taskId: string, title: string): TaskTimerAction {
-  const { record, phase } = useTimerState();
+  const { record, phase } = useTimerRecord();
   const controls = useTimerControls(record?.id ?? null);
   const tracking = record?.taskId === taskId;
   const active = tracking && phase === 'running';
@@ -115,12 +180,12 @@ export function TaskTimerButton({
         <TooltipTrigger asChild>
           <Button
             variant={timerVariant(emphasis, action)}
-            iconOnly={!withLabel}
-            // An idle icon-only ghost has no colour of its own, so it would inherit the row's title
-            // ink; rest it at the metadata tone. The ghost variant lifts it to `on-surface` on hover.
-            className={action.tracking || withLabel ? undefined : 'text-on-surface-variant'}
+            iconOnly={!withLabel && !action.tracking}
+            className={timerButtonClassName(action.tracking, withLabel)}
             aria-label={action.label}
             aria-pressed={action.active}
+            // Lets a host keep the tracked task's control visible where it hides idle ones.
+            data-tracking={action.tracking ? '' : undefined}
             data-testid={`task-timer-${taskId}`}
             // Only its own transitions disable it. A single shared `busy` meant starting a timer
             // anywhere greyed out every row's control at once.
@@ -135,8 +200,8 @@ export function TaskTimerButton({
               void action.run();
             }}
           >
-            {action.active ? <Pause aria-hidden="true" /> : <Play aria-hidden="true" />}
-            {withLabel ? (action.active ? 'Tracking' : action.tracking ? 'Resume' : 'Track') : null}
+            <TimerGlyph active={action.active} tracking={action.tracking} />
+            <TimerText active={action.active} tracking={action.tracking} withLabel={withLabel} />
           </Button>
         </TooltipTrigger>
         <TooltipContent>{action.label}</TooltipContent>
@@ -156,7 +221,7 @@ export function TaskTimerMenuItem({ taskId, title }: TaskTimerMenuItemProps): JS
         void action.run();
       }}
     >
-      {action.active ? <Pause aria-hidden="true" /> : <Play aria-hidden="true" />}
+      <TimerGlyph active={action.active} tracking={action.tracking} />
       {action.label}
     </DropdownMenuItem>
   );

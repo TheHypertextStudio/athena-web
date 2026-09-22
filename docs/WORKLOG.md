@@ -79,6 +79,47 @@
   needs a 4 GB heap.
 
 ### [MILESTONES-MCP-001] Make milestones a first-class MCP and REST feature
+### [TASK-TIMER-EXPRESSIVE-001] The row timer shows state through shape
+
+- **Status**: COMPLETED
+- **Started**: 2026-09-22
+- **Completed**: 2026-09-22
+- **Priority**: P2
+- **Description**: Every task row carried a heavy ▶ that read as media playback and gave no sign of
+  which task was being tracked.
+- **Decision** (user-approved mockup): an MD3 Expressive toggle. Idle, a round timer-glyph button.
+  While the viewer tracks the task, a tonal rounded-square pill with pause or resume and the live
+  elapsed time; pressing tightens the corners; the tracked row takes a light tonal tint. Motion uses `--ease-emphasized-decel` and the
+  MD3 corner tokens and stops under reduced motion.
+- **Time model**: time is per actor. An agent or another person on the same task runs an
+  independent clock; several tasks can be live at once; a person controls only what they have
+  authority over. This control and tint therefore reflect only the viewer's own human record. The
+  active-time read exposes the viewer's record and the agent executions they started (with no task
+  on the execution), and nothing about other people's clocks; the server lets a person track any
+  task they can view. Showing other actors' live time on rows needs a per-task activity read.
+- **Performance**: rows read `useTimerRecord` (no clock); only the tracked pill reads the ticking
+  `useTimerState`, so a running timer re-renders one control per second, not every row.
+- **Placement**: a first cut gave the timer its own 88px column so the pill had room, which left
+  ~140px of blank space on every idle row (with the ⋯ column). A second put a hover-only timer
+  after the title, which the user rejected on larger screens; they asked for a persistent control
+  that replaces existing UI. The timer now shares the Estimate column as **Time**: the timer glyph
+  (the start control) beside the estimate, and the pill in its place while tracked. The column
+  arrives first (priority 1, a 448px table); below that, the tracked task's pill sits beside its
+  title.
+- **Files changed**: `time-tracking/task-timer-button.tsx`, `time-tracking/use-timer.ts`,
+  `time-tracking/index.ts`, `views/task-table.tsx`, `views/task-identity-cell.tsx`,
+  new `views/task-time-cell.tsx`, `tests/time-tracking/task-timer-button.test.tsx`,
+  `tests/components/views/task-table.test.tsx`.
+- **Validation**: Root typecheck, lint with the complexity ledger, Prettier, and `test:coverage`
+  pass apart from the 9 pre-existing `@docket/api` failures. A seeded capture with a live timer
+  shows the tinted row and the pause pill ticking, in light and dark.
+- **Learnings**: `tests/calendar/calendar-item-drawer.test.tsx` ("edits an all-day item via date
+  inputs") fails intermittently under the full-suite load (2 of 5 root runs today, one before this
+  change) and passes in isolation; it does not touch timer code.
+- **Blockers**: None.
+
+---
+
 ### [MOBILE-LIST-POLISH-002] Task-row icons match the Tasks page; no tab row on phones
 
 - **Status**: COMPLETED

@@ -69,6 +69,56 @@ const NOTHING_TRACKED = {
   activeAgentExecutions: [],
 };
 
+/** The viewer's own running session on a task, opened at `startedAt`. */
+function tracking(taskId: string, startedAt: Date) {
+  const at = startedAt.toISOString();
+  return {
+    ...NOTHING_TRACKED,
+    record: {
+      id: 'rec_live',
+      hubId: 'hub_1',
+      taskId,
+      organizationId: 'org_1',
+      title: 'Tracked task',
+      outcomeNote: null,
+      status: 'open',
+      categoryId: null,
+      captureSource: 'live',
+      startedAt: at,
+      endedAt: null,
+      createdAt: at,
+      updatedAt: at,
+      closedAt: null,
+      intervals: [
+        {
+          id: 'int_1',
+          timeRecordId: 'rec_live',
+          taskId,
+          actorKind: 'human',
+          userId: 'user_1',
+          agentExecutionId: null,
+          mode: 'human_active',
+          source: 'user_timer',
+          startedAt: at,
+          endedAt: null,
+          supersededById: null,
+          createdAt: at,
+          closedAt: null,
+        },
+      ],
+      contexts: [],
+      allocations: [],
+      measures: {
+        elapsedMs: 0,
+        humanEffortMs: 0,
+        agentEffortMs: 0,
+        combinedEffortMs: 0,
+        operationalWaitMs: 0,
+      },
+    },
+  };
+}
+
 /** Render the button as it is actually used: nested inside an activatable ancestor. */
 function renderInsideActivatableRow(options: {
   readonly taskId: string;
@@ -168,55 +218,7 @@ describe('TaskTimerButton', () => {
   });
 
   it('switches cleanly when a different task is already being tracked', async () => {
-    activeGet.mockResolvedValue(
-      jsonResponse({
-        record: {
-          id: 'rec_other',
-          hubId: 'hub_1',
-          taskId: 'task_other',
-          organizationId: 'org_1',
-          title: 'Some other task',
-          outcomeNote: null,
-          status: 'open',
-          categoryId: null,
-          captureSource: 'live',
-          startedAt: new Date().toISOString(),
-          endedAt: null,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-          closedAt: null,
-          intervals: [
-            {
-              id: 'int_1',
-              timeRecordId: 'rec_other',
-              taskId: 'task_other',
-              actorKind: 'human',
-              userId: 'user_1',
-              agentExecutionId: null,
-              mode: 'human_active',
-              source: 'user_timer',
-              startedAt: new Date().toISOString(),
-              endedAt: null,
-              supersededById: null,
-              createdAt: new Date().toISOString(),
-              closedAt: null,
-            },
-          ],
-          contexts: [],
-          allocations: [],
-          measures: {
-            elapsedMs: 0,
-            humanEffortMs: 0,
-            agentEffortMs: 0,
-            combinedEffortMs: 0,
-            operationalWaitMs: 0,
-          },
-        },
-        serverNow: new Date().toISOString(),
-        suggestion: null,
-        activeAgentExecutions: [],
-      }),
-    );
+    activeGet.mockResolvedValue(jsonResponse(tracking('task_other', new Date())));
     recordsPost.mockResolvedValue(jsonResponse({ id: 'rec_new' }));
     const onRowActivate = vi.fn();
     renderInsideActivatableRow({ taskId: 'task_1', title: 'Ship it', onRowActivate });
@@ -232,6 +234,19 @@ describe('TaskTimerButton', () => {
         json: { context: { label: 'Ship it', taskId: 'task_1' } },
       });
     });
+  });
+
+  it("shows the viewer's live elapsed time on the task being tracked", async () => {
+    activeGet.mockResolvedValue(
+      jsonResponse(tracking('task_1', new Date(Date.now() - 12 * 60_000 - 4_000))),
+    );
+    renderInsideActivatableRow({ taskId: 'task_1', title: 'Ship it', onRowActivate: vi.fn() });
+
+    const button = await screen.findByTestId('task-timer-task_1');
+    await waitFor(() => {
+      expect(button).toHaveAttribute('aria-pressed', 'true');
+    });
+    expect(button).toHaveTextContent(/^12:0\d$/);
   });
 
   it('starts the same task from a real overflow menu item', async () => {

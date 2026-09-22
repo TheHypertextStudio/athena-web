@@ -46,13 +46,13 @@ range, and that range changes while these keyframes reduce the header's height. 
 showed the endpoint moving during sampling even after adding overflow; absolute pixel progress does
 not have that circular dependency.
 
-Those animated rows reduce the header's layout height. If nothing compensated for that loss, a
-short page could reduce its own maximum scroll offset before reaching the animation endpoint and
-become stranded half-collapsed. The nested `.detail-body` grid therefore has a minimum block size
-derived from the pane height and the selected collapse range. It extends only the end of a short
-panel; it adds no space between the header and the panel. The scroll owner also opts out of scroll
-anchoring so the browser does not counteract this intentional height change. Both variants can
-always reach their compact endpoint while visible content rises beneath the sticky header.
+Those animated rows reduce the header's layout height. A page shorter than the pane does not
+scroll, so its header stays expanded; `.detail-body` carries only its bottom inset and no minimum
+block size (the 2026-08-28 mobile audit removed the fake height that used to force a collapse). The
+scroll owner opts out of scroll anchoring so the browser does not counteract the intentional height
+change while visible content rises beneath the sticky header.
+
+The body below the tab bar follows [`detail-page-layout.md`](./detail-page-layout.md).
 
 ## Motion and fallback
 

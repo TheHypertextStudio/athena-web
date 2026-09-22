@@ -234,14 +234,57 @@ routes/project-rollup.ts}`, `domains/work/src/contracts/{milestone,task}.ts`,
   workflow's first state, a Related section, and relation actions in the command palette.
 - **Plan**: `/Users/williecubed/.claude/plans/or-rather-plan-first-inherited-metcalfe.md`.
 - **Subtasks**:
-  - [ ] API: a new subtask lands in the team's first state and writes an activity event
-  - [ ] Task search picker, relation mutation hook, and `DetailSection`/relation rows
-  - [ ] Subtasks: inline composer, attach existing, detach with undo; Relations: blocked by,
-        blocking, related, with add and remove
-  - [ ] Sidebar holds every property; flat aligned sections; the document spans its column
-  - [ ] Layout reference `docs/design/references/detail-page-layout.md`
-  - [ ] Command palette "This task" section
-  - [ ] Tests, screenshots, and a design-review scorecard
+  - [x] API: a new subtask lands in the team's first state (the parent's Activity already lists
+        child creation, so no new event was needed)
+  - [x] Task search picker, relation mutation hook, and `DetailSection`/relation rows
+  - [x] Subtasks: inline composer, attach existing, detach with undo; Relations: blocked by,
+        blocking, related, with add and remove; Parent as a sidebar row
+  - [x] Sidebar holds every property; flat aligned sections; the document spans its column
+  - [x] Layout reference `docs/design/references/detail-page-layout.md`
+  - [x] Command palette "This task" section
+  - [x] Tests, screenshots, and a design-review scorecard
+- **Files changed**:
+  - API: `apps/api/src/routes/task-dependency-routes.ts`,
+    `apps/api/tests/routes/task-subtask-state.test.ts`.
+  - Relationship editing: `apps/web/src/lib/use-task-relations.ts`,
+    `apps/web/src/lib/use-task-search-options.ts`, `apps/web/src/lib/use-task-mutations.ts`,
+    `apps/web/src/components/task-detail/{Subtasks,task-relations,task-relation-row,task-search-popover,task-parent-field,task-relation-commands}.tsx`,
+    `apps/web/src/components/tasks/use-task-hierarchy-mutation.ts`. `Dependencies.tsx` and
+    `task-section.tsx` are removed.
+  - Layout: `apps/web/src/components/entity-detail/detail-section.tsx`,
+    `apps/web/src/components/task-detail/{task-properties-panel,task-masthead-properties,task-secondary-properties,task-overview-panel,task-activity-feed,task-delegated-work,task-details,StatusPicker}.tsx`,
+    `apps/web/src/components/editor/entity-document.tsx`,
+    `apps/web/src/components/entity-detail/resources-tab.tsx`, the task page client.
+  - Palette: `apps/web/src/components/command-palette/{page-commands.ts,command-palette.tsx,types.ts}`,
+    `apps/web/src/components/task-detail/task-palette-commands.tsx`.
+  - Docs: `docs/design/references/detail-page-layout.md` (new), `docs/design/design-system.md`,
+    `docs/design/references/entity-detail-hierarchy.md`, `docs/engineering/specs/design-system.md`,
+    `docs/design/audits/2026-09-22-task-detail-relations-layout.md`.
+  - Tests: `apps/web/tests/task-detail/{task-relationship-sections,task-properties-panel,task-search-popover,task-palette-commands}.test.tsx`,
+    `apps/web/tests/lib/{use-task-relations,use-task-search-options}.test.*`, updates to the
+    masthead, secondary-properties, overview, mutations, hierarchy, and palette tests;
+    `apps/web/e2e/{task-relations,task-detail-layout}.spec.ts`.
+- **Learnings**:
+  - The shared hierarchy mutation patched `parentTaskId` onto every cached object whose id matched
+    the moved task, including the task page's strict navigation snapshot, so moving a task from
+    its own page crashed the page. Right-click "Make subtask of…" on the task header already
+    reached this. The patch now touches only records that already carry `parentTaskId`.
+  - The search index trails writes by a second or two, and slower under parallel load. A picker
+    that caches its first empty-box answer can offer nothing for the rest of the page's life. The
+    task search refetches on every open and re-asks while it is empty.
+  - Org search browse with `surface=palette` and `kinds=task` returns no rows, while the same
+    request without `surface` returns every task. The task search uses the default surface; the
+    palette-surface behaviour is a follow-up.
+  - Opening a popover from a Radix dropdown item: the closing menu takes focus on pointer movement
+    during its exit animation, which the new popover reads as focus leaving it. Open the popover
+    from the menu's `onCloseAutoFocus`, which fires after the menu unmounts.
+  - At 1440px with the calendar rail open the pane is under the 896px docking width, so the task
+    page shows one column with chips. The sidebar docks at 1920px, or with the rail closed.
+- **Follow-ups**: move project, initiative, and program pages onto `DetailSection` and the rules
+  (bordered LatestUpdate/OverviewSummary/FlowSnapshot cards, the milestones explainer sentence);
+  activity sentences for dependencies ("set Dependency to Blocked by …"); right-click "Create
+  subtask" still creates a literal "New subtask"; description heading scale; the palette-surface
+  browse with `kinds`.
 - **Blockers**: None.
 
 ---

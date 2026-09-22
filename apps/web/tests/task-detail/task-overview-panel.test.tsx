@@ -28,8 +28,20 @@ vi.mock('../../src/components/recurrence/repeating-work-backlink', () => ({
 vi.mock('../../src/components/task-detail/Subtasks', () => ({
   Subtasks: () => <div data-testid="subtasks" />,
 }));
-vi.mock('../../src/components/task-detail/Dependencies', () => ({
-  Dependencies: () => <div data-testid="dependencies" />,
+vi.mock('../../src/components/task-detail/task-relations', () => ({
+  TaskRelations: () => <div data-testid="relations" />,
+}));
+vi.mock('../../src/lib/use-task-relations', () => ({
+  useTaskRelations: () => ({
+    addDependency: vi.fn(),
+    removeDependency: vi.fn(),
+    addRelated: vi.fn(),
+    removeRelated: vi.fn(),
+    attachSubtask: vi.fn(),
+    detachSubtask: vi.fn(),
+    setParent: vi.fn(),
+    pending: false,
+  }),
 }));
 vi.mock('../../src/components/task-detail/task-activity-feed', () => ({
   TaskActivityFeed: () => <div data-testid="activity" />,
@@ -69,6 +81,7 @@ function task(): TaskDetail {
     blocking: [],
     blockedBy: [],
     subtasks: [],
+    relatedTasks: [],
   } as unknown as TaskDetail;
 }
 
@@ -84,7 +97,6 @@ function renderSections(tab: TaskSectionsProps['tab']): void {
       canComment
       mentions={{ external: [], entities: [], isPending: false }}
       projectName={() => 'Atlas'}
-      projectLabel="Project"
       mutations={{
         patchTask: vi.fn(),
         addSubtask: vi.fn(),
@@ -97,10 +109,10 @@ function renderSections(tab: TaskSectionsProps['tab']): void {
 }
 
 describe('TaskSections overview', () => {
-  it('orders the description, backlink, subtasks, dependencies, then activity last', () => {
+  it('orders the description, backlink, subtasks, relations, then activity last', () => {
     renderSections('overview');
 
-    const order = ['description', 'backlink', 'subtasks', 'dependencies', 'activity'].map((id) =>
+    const order = ['description', 'backlink', 'subtasks', 'relations', 'activity'].map((id) =>
       screen.getByTestId(id),
     );
     for (const [index, element] of order.slice(1).entries()) {

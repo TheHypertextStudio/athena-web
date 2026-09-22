@@ -73,13 +73,17 @@ export function EntityDocument({
     <div
       className={cn(
         'grid min-w-0 flex-1 gap-4',
-        hasContents && '@4xl:grid-cols-[minmax(0,calc(75ch+2rem))_11rem]',
+        hasContents && '@4xl:grid-cols-[minmax(0,1fr)_11rem]',
       )}
     >
       {/*
        * The body is the first (left) column, so its edge stays flush with the masthead and the
        * sibling sections — the contents live in their own column to the *right*, never indenting
        * the body. Below @4xl the rail collapses into a compact disclosure above the body.
+       *
+       * The body's surface spans its column, so its right edge is the column's, the same edge
+       * every section below it ends on. Line length is held by the editor inside it (75ch), never
+       * by the surface (`docs/design/references/detail-page-layout.md`, rule 2).
        */}
       <div className="flex min-w-0 flex-col">
         {hasContents ? <DocumentContentsDisclosure contents={documentContents} /> : null}
@@ -90,7 +94,7 @@ export function EntityDocument({
           // `body-medium` plus the padding — comfortably that. At 224px a one-line description
           // rendered inside an empty box two-thirds of it tall, which reads as a loading state
           // that never resolved; it was the largest empty region on the task detail page.
-          className="entity-document bg-surface-container-low flex min-h-32 w-full max-w-[calc(75ch+2rem)] flex-1 flex-col rounded-xl p-4 sm:min-w-[32rem] print:bg-transparent print:p-0"
+          className="entity-document bg-surface-container-low flex min-h-32 w-full min-w-0 flex-1 flex-col rounded-xl p-4 print:bg-transparent print:p-0"
         >
           <EditableFreeformText
             value={value}

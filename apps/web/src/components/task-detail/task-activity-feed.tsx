@@ -26,7 +26,7 @@ import { apiInfiniteQueryOptions, queryKeys, useInfiniteApiQuery } from '@/lib/q
 
 import { activityActorName, activitySentence } from './format-activity';
 import { TaskDelegatedWork } from './task-delegated-work';
-import { TaskSection } from './task-section';
+import { DetailSection } from '@/components/entity-detail/detail-section';
 
 const ALL_CATEGORIES = 'all';
 type ActivityFilter = TaskActivityCategory | typeof ALL_CATEGORIES;
@@ -176,13 +176,13 @@ export function TaskActivityFeed({
 
   // placeholder: this task's comments and activity, at the chosen filter.
   return (
-    <div className="flex flex-col gap-6">
+    <>
       <TaskDelegatedWork orgId={orgId} taskId={taskId} />
-      <TaskSection
+      <DetailSection
         id="activity"
         title="Activity"
-        gap={4}
-        headerEnd={<ActivityFilterMenu filter={filter} onFilterChange={setFilter} />}
+        actions={<ActivityFilterMenu filter={filter} onFilterChange={setFilter} />}
+        className="gap-4"
       >
         {query.isPending ? (
           <div className="flex flex-col gap-3" aria-hidden="true">
@@ -257,7 +257,7 @@ export function TaskActivityFeed({
             </Surface>
           </form>
         ) : null}
-      </TaskSection>
-    </div>
+      </DetailSection>
+    </>
   );
 }

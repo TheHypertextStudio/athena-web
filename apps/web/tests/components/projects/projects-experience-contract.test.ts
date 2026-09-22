@@ -195,10 +195,12 @@ describe('Projects experience contract', () => {
     const document = source(documentPath);
     const editor = source(editorPath);
     // The contents rail sits in a right-hand column and the body is the first column, so the body
-    // stays flush with the masthead instead of being indented by a left rail.
-    expect(document).toContain('@4xl:grid-cols-[minmax(0,calc(75ch+2rem))_11rem]');
+    // stays flush with the masthead instead of being indented by a left rail. The body's surface
+    // spans its column (docs/design/references/detail-page-layout.md, rule 2); the editor inside
+    // it holds the 75ch line length.
+    expect(document).toContain('@4xl:grid-cols-[minmax(0,1fr)_11rem]');
     expect(document).toContain('grid min-w-0 flex-1 gap-4');
-    expect(document).toContain('max-w-[calc(75ch+2rem)]');
+    expect(document).not.toContain('max-w-[calc(75ch+2rem)]');
     expect(document).toContain('max-w-[75ch]');
     expect(document).not.toContain('max-w-none');
     expect(document).not.toContain('grid-cols-[9rem');

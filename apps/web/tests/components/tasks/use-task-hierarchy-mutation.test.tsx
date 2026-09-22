@@ -77,6 +77,37 @@ describe('useTaskHierarchyMutation', () => {
     );
   });
 
+  it('patches the task inside its page aggregate but never the navigation snapshot beside it', async () => {
+    REPARENT.mockReturnValue(new Promise(() => undefined));
+    const { client, wrapper } = makeQueryWrapper();
+    // The task page's cached read: a strict navigation snapshot keyed by the same id, and the task.
+    client.setQueryData(queryKeys.task(ORG, 'a'), {
+      snapshot: { kind: 'task', id: 'a', title: 'A' },
+      defaultView: { task: { id: 'a', parentTaskId: null } },
+    });
+    const { result } = renderHook(() => useTaskHierarchyMutation(), { wrapper });
+
+    act(() => {
+      result.current.reparent({
+        organizationId: ORG,
+        moves: [{ taskId: 'a', parentTaskId: 'b' }],
+        preserveSelectedSubtrees: true,
+      });
+    });
+
+    await waitFor(() => {
+      expect(client.getQueryData(queryKeys.task(ORG, 'a'))).toMatchObject({
+        defaultView: { task: { parentTaskId: 'b' } },
+      });
+    });
+    expect(client.getQueryData(queryKeys.task(ORG, 'a'))).toMatchObject({
+      snapshot: { kind: 'task', id: 'a', title: 'A' },
+    });
+    expect(
+      client.getQueryData<{ snapshot: object }>(queryKeys.task(ORG, 'a'))?.snapshot,
+    ).not.toHaveProperty('parentTaskId');
+  });
+
   it('rolls every optimistic cache entry back when the atomic write fails', async () => {
     REPARENT.mockResolvedValue(problemResponse('internal database detail'));
     const { client, wrapper } = makeQueryWrapper();

@@ -49,6 +49,7 @@ export function TaskDetails({
         canEdit={canEdit}
         onSave={onSave}
         placeholder="Add a description…"
+        contents={false}
       />
       {expansion.notice ? (
         <div className="flex flex-wrap items-center gap-2" role="status" aria-live="polite">

@@ -25,7 +25,7 @@ import type { PersonalAthenaSessionSummary } from '@/lib/athena/presentation';
 import { personalAthenaQueueDef, type PersonalAthenaQueuePayload } from '@/lib/athena/query-defs';
 import { useLiveApiQuery } from '@/lib/query';
 
-import { TaskSection } from './task-section';
+import { DetailSection } from '@/components/entity-detail/detail-section';
 
 /** How often the task page re-reads the workspace's queue for work delegated from this task. */
 const QUEUE_INTERVAL_MS = 10_000;
@@ -100,7 +100,7 @@ export function TaskDelegatedWork({ orgId, taskId }: TaskDelegatedWorkProps): JS
   if (jobs.length === 0) return null;
 
   return (
-    <TaskSection id="delegated-work" title="Delegated work" gap={4}>
+    <DetailSection id="delegated-work" title="Delegated work">
       {railShowsWork ? (
         <ul className="flex flex-col gap-1">
           {jobs.map((job) => (
@@ -114,6 +114,6 @@ export function TaskDelegatedWork({ orgId, taskId }: TaskDelegatedWorkProps): JS
           ))}
         </div>
       )}
-    </TaskSection>
+    </DetailSection>
   );
 }

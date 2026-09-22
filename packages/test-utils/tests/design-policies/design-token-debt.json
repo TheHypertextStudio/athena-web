@@ -448,9 +448,6 @@
   "apps/web/src/components/task-detail/PriorityGlyph.tsx": {
     "raw-radius-utility": 1
   },
-  "apps/web/src/components/task-detail/Subtasks.tsx": {
-    "raw-radius-utility": 1
-  },
   "apps/web/src/components/task-detail/task-activity-feed.tsx": {
     "raw-radius-utility": 2
   },

@@ -118,6 +118,54 @@ export function patchTaskAggregate(
 }
 
 /**
+ * List a just-created subtask on its parent, once.
+ *
+ * @param task - The parent as cached.
+ * @param created - The subtask the create returned.
+ * @returns the parent with the subtask appended, or unchanged when it is already listed.
+ */
+function withCreatedSubtask(task: TaskDetail, created: TaskOut): TaskDetail {
+  if (task.subtasks.some((subtask) => subtask.id === created.id)) return task;
+  const ref = {
+    id: created.id,
+    title: created.title,
+    state: created.state,
+    projectId: created.projectId ?? null,
+  };
+  return { ...task, subtasks: [...task.subtasks, ref] };
+}
+
+/**
+ * Create a subtask by title under the task on screen.
+ *
+ * @param orgId - The active organization id.
+ * @param taskId - The parent task.
+ * @param detailKey - The parent's detail cache key.
+ * @returns the create mutation.
+ */
+function useAddSubtaskMutation(orgId: string, taskId: string, detailKey: QueryKey) {
+  const queryClient = useQueryClient();
+  return useApiMutation<TaskOut, string>({
+    mutationFn: (title) =>
+      unwrap(
+        () =>
+          api.v1.orgs[':orgId'].tasks[':id'].subtasks.$post({
+            param: { orgId, id: taskId },
+            json: { title },
+          }),
+        'Could not add the subtask.',
+      ),
+    // The created row is the subtask: list it now instead of after the detail's re-read.
+    onSuccess: (created) => {
+      queryClient.setQueryData<TaskDetailAggregate>(detailKey, (current) =>
+        patchTaskAggregate(current, (task) => withCreatedSubtask(task, created)),
+      );
+    },
+    invalidateKeys: [detailKey, queryKeys.tasks(orgId)],
+  });
+}
+
+/**
  * All write operations for the task detail page.
  *
  * @param orgId - The active organization id.
@@ -169,6 +217,7 @@ export function useTaskMutations(
           blocking: task.blocking,
           blockedBy: task.blockedBy,
           subtasks: task.subtasks,
+          relatedTasks: task.relatedTasks,
         })),
       );
     },
@@ -320,18 +369,7 @@ export function useTaskMutations(
     ],
   });
 
-  const addSubtaskMutation = useApiMutation<TaskOut, string>({
-    mutationFn: (title) =>
-      unwrap(
-        () =>
-          api.v1.orgs[':orgId'].tasks[':id'].subtasks.$post({
-            param: { orgId, id: taskId },
-            json: { title },
-          }),
-        'Could not add the subtask.',
-      ),
-    invalidateKeys: [detailKey, queryKeys.tasks(orgId)],
-  });
+  const addSubtaskMutation = useAddSubtaskMutation(orgId, taskId, detailKey);
 
   const toggleSubtaskMutation = useApiMutation<
     TaskOut,

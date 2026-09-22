@@ -2,7 +2,7 @@
 
 import type { WorkflowState } from '@docket/work/workflow';
 import { StatusIcon, type WorkflowStateType } from '@docket/ui/components';
-import { Check, ChevronDown } from '@docket/ui/icons';
+import { Check } from '@docket/ui/icons';
 import { cn } from '@docket/ui/lib/utils';
 import {
   Button,
@@ -85,7 +85,6 @@ export function StatusPicker({
         >
           <StatusIcon type={type} />
           {label}
-          <ChevronDown className="text-on-surface-variant" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" width="md">

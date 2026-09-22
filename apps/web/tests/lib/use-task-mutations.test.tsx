@@ -27,10 +27,11 @@ import { act, cleanup, renderHook, screen, waitFor } from '@testing-library/reac
 import type { JSX, ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { objectCommandsPost, statePost, taskPatch } = vi.hoisted(() => ({
+const { objectCommandsPost, statePost, taskPatch, subtaskPost } = vi.hoisted(() => ({
   objectCommandsPost: vi.fn(),
   statePost: vi.fn(),
   taskPatch: vi.fn(),
+  subtaskPost: vi.fn(),
 }));
 
 vi.mock('../../src/lib/api', () => ({
@@ -44,7 +45,7 @@ vi.mock('../../src/lib/api', () => ({
               state: { $post: statePost },
               $patch: taskPatch,
               $delete: vi.fn(),
-              subtasks: { $post: vi.fn() },
+              subtasks: { $post: subtaskPost },
             },
           },
           comments: { $post: vi.fn() },
@@ -176,6 +177,7 @@ beforeEach(() => {
   objectCommandsPost.mockReset();
   statePost.mockReset();
   taskPatch.mockReset();
+  subtaskPost.mockReset();
 });
 
 afterEach(() => {
@@ -401,6 +403,25 @@ describe('useTaskMutations — assignee and dates', () => {
     // A partial rollback would be worse than none: the whole patch is one edit, so it reverts as one.
     expect(read()?.assigneeId).toBeNull();
     expect(read()?.dueDate).toBeNull();
+  });
+});
+
+describe('useTaskMutations — subtask creation', () => {
+  it('lists the created subtask as soon as the create answers, once', async () => {
+    const created = { id: TaskId.parse('01BX5ZZKBKACTAV9WEVGEMMVS4'), title: 'Print badges' };
+    subtaskPost.mockResolvedValue(
+      okResponse({ ...created, state: 'backlog', projectId: null, labels: [] }),
+    );
+    const { result, read } = mountMutations();
+
+    await act(() => result.current.addSubtask('Print badges'));
+
+    expect(subtaskPost).toHaveBeenCalledWith({
+      param: { orgId: ORG_ID, id: TASK_ID },
+      json: { title: 'Print badges' },
+    });
+    expect(read()?.subtasks.map((subtask) => subtask.id)).toEqual([SUBTASK_ID, created.id]);
+    expect(read()?.subtasks.at(-1)).toMatchObject({ title: 'Print badges', state: 'backlog' });
   });
 });
 

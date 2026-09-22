@@ -286,8 +286,8 @@ type DetailBodyProps = Pick<EntityDetailLayoutProps, 'printSummary' | 'aside' | 
  */
 function DetailBody({ printSummary, aside, docked, children }: DetailBodyProps): JSX.Element {
   return (
-    // This nested grid preserves the page measure while guaranteeing enough stable block-size
-    // for the scroll-linked header to reach its compact endpoint on short panels.
+    // This nested grid preserves the page measure. Its columns, edges, and spacing are specified in
+    // `docs/design/references/detail-page-layout.md`.
     <div className="detail-body page-bleed page-grid gap-y-4 @2xl:gap-y-5">
       {printSummary ? <div className="detail-print-summary">{printSummary}</div> : null}
       {aside === undefined ? (

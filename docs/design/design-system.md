@@ -829,6 +829,10 @@ the other, which makes the bunched-at-the-leading-edge layout inexpressible. Bot
 `ControlGroup`s sharing one size, so the tabs on the left and the Display button on the right are
 the same height.
 
+Entity detail pages have their own layout rules: columns, edges, the properties sidebar, section
+framing, spacing, and empty sections. See
+[`references/detail-page-layout.md`](./references/detail-page-layout.md).
+
 ```tsx
 <Toolbar
   controlSize="md"

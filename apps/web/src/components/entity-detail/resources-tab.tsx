@@ -171,7 +171,7 @@ export function ResourcesTab({
   const hasDerived = derivedExternal.length > 0 || mentionedEntities.length > 0;
 
   return (
-    <div className="mx-auto flex w-full max-w-4xl flex-col gap-4">
+    <div className="flex w-full min-w-0 flex-col gap-4">
       <div className="flex items-center justify-between gap-3">
         <h2 className="text-on-surface text-title-small">Resources</h2>
         {canEdit ? (

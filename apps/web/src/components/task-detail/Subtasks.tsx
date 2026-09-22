@@ -1,209 +1,218 @@
 'use client';
 
+/**
+ * The task's subtasks: a checklist of its direct children, with ways to add, attach, and detach.
+ *
+ * @remarks
+ * The heading row carries the `done/total` count and two actions: `+` opens an inline composer for
+ * a new subtask, and the link button attaches a task that already exists. The composer stays open
+ * after each subtask so a list can be typed out one line after another; Escape or an empty blur
+ * closes it. Each row's status glyph is a checkbox, its title opens the subtask (a double-click
+ * renames it), and its remove button moves the subtask back to the top level.
+ */
 import type { TaskRef } from '@docket/work/task-model';
 import { StatusIcon } from '@docket/ui/components';
-import { Plus } from '@docket/ui/icons';
-import { Button, Input } from '@docket/ui/primitives';
+import { Link as LinkIcon, Plus } from '@docket/ui/icons';
 import { cn } from '@docket/ui/lib/utils';
+import { Button, Input } from '@docket/ui/primitives';
 import { type JSX, useMemo, useState } from 'react';
 
-import { EditableTitle } from '@/components/editor/editable-title';
+import { DetailSection } from '@/components/entity-detail/detail-section';
+import { useStatusRegistry } from '@/components/statuses/status-registry';
 import { useCategoryOf } from '@/components/entity-display/use-work-status';
 import { useTaskHierarchyDrop } from '@/components/tasks/task-hierarchy-drop';
 import type { ObjectRef } from '@/lib/actions';
-import type { CategoryOfState } from '@/lib/work-category';
 
-import { TaskSection } from './task-section';
+import { useTaskRelationCommand } from './task-relation-commands';
+import { TaskRelationRow } from './task-relation-row';
+import { TaskSearchPopover } from './task-search-popover';
 
 /** Props for {@link Subtasks}. */
-interface SubtasksProps {
+export interface SubtasksProps {
   /** Workspace that owns the parent and every subtask. */
-  organizationId: string;
+  readonly organizationId: string;
   /** Parent task whose children are listed. */
-  parentTaskId: string;
-  /** The parent task's subtask refs (carry id/title/state). */
-  subtasks: readonly TaskRef[];
-  /** Add a subtask by title; resolves when the create round-trip completes. */
-  onAdd: (title: string) => Promise<void>;
-  /** Toggle a subtask between done and todo by its current completion. */
-  onToggle: (subtask: TaskRef, done: boolean) => Promise<void>;
+  readonly parentTaskId: string;
+  /** The parent's own ancestors and itself, which can never become its subtasks. */
+  readonly ineligibleIds: ReadonlySet<string>;
+  /** The parent task's subtask refs. */
+  readonly subtasks: readonly TaskRef[];
+  /** Create a subtask by title; rejects when the create fails. */
+  readonly onAdd: (title: string) => Promise<void>;
+  /** Make an existing task a subtask of this one. */
+  readonly onAttach: (task: TaskRef) => void;
+  /** Move a subtask back to the top level. */
+  readonly onDetach: (subtaskId: string) => void;
+  /** Toggle a subtask between done and its starting state. */
+  readonly onToggle: (subtask: TaskRef, done: boolean) => Promise<void>;
   /** Navigate to a subtask's own detail view. */
-  onOpen: (subtaskId: string) => void;
-  /**
-   * Rename a subtask in place. When provided (and {@link SubtasksProps.canEdit}), the title becomes
-   * an inline editor: a single click opens the subtask, a double-click renames it. Omitted → the
-   * title stays a plain open affordance.
-   */
-  onRename?: (subtaskId: string, title: string) => void;
-  /** Whether the caller may add or rename subtasks (hides the composer / inline rename when false). */
-  canEdit: boolean;
+  readonly onOpen: (subtaskId: string) => void;
+  /** Rename a subtask in place. */
+  readonly onRename?: ((subtaskId: string, title: string) => void) | undefined;
+  /** Whether the viewer may add, attach, detach, toggle, or rename. */
+  readonly canEdit: boolean;
 }
 
 /**
- * The inline subtasks checklist shown under the task description.
+ * Render the Subtasks section.
  *
- * @remarks
- * Each subtask renders as a toggle row: its {@link StatusIcon} doubles as a checkbox
- * that moves the subtask between the workspace's completed and starting statuses (through the
- * API's `POST /:id/state`), with the title linking to that subtask's own detail. A progress
- * count (`done / total`) heads the list and a composer at the foot adds new subtasks by
- * title. Optimism is owned by the parent screen, which re-reads after each mutation.
+ * @param props - See {@link SubtasksProps}.
+ * @returns the section.
  */
-export function Subtasks({
-  organizationId,
-  parentTaskId,
-  subtasks,
-  onAdd,
-  onToggle,
-  onOpen,
-  onRename,
-  canEdit,
-}: SubtasksProps): JSX.Element {
-  const [busyId, setBusyId] = useState<string | null>(null);
+export function Subtasks(props: SubtasksProps): JSX.Element {
+  const { organizationId, subtasks, canEdit } = props;
   const categoryOf = useCategoryOf('task');
-
-  const doneCount = useMemo(
-    () => subtasks.filter((s) => categoryOf(s.state) === 'completed').length,
-    [subtasks, categoryOf],
+  const [composerOpen, onComposerOpenChange] = useTaskRelationCommand('newSubtask');
+  const [attachOpen, setAttachOpen] = useTaskRelationCommand('existingSubtask');
+  const doneCount = subtasks.filter((s) => categoryOf(s.state) === 'completed').length;
+  const exclude = useMemo(
+    () => new Set([...props.ineligibleIds, ...subtasks.map((s) => s.id)]),
+    [props.ineligibleIds, subtasks],
   );
 
-  async function toggle(subtask: TaskRef): Promise<void> {
-    const isDone = categoryOf(subtask.state) === 'completed';
-    setBusyId(subtask.id);
-    try {
-      await onToggle(subtask, !isDone);
-    } finally {
-      setBusyId(null);
-    }
-  }
+  const actions = canEdit ? (
+    <>
+      <TaskSearchPopover
+        orgId={organizationId}
+        open={attachOpen}
+        onOpenChange={setAttachOpen}
+        anchor="trigger"
+        exclude={exclude}
+        onPick={props.onAttach}
+        searchPlaceholder="Add an existing task…"
+        ariaLabel="Existing task to add as a subtask"
+      >
+        <Button type="button" variant="ghost" size="sm" iconOnly aria-label="Add existing task">
+          <LinkIcon className="size-4" />
+        </Button>
+      </TaskSearchPopover>
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        iconOnly
+        aria-label="Add subtask"
+        aria-expanded={composerOpen}
+        onClick={() => {
+          onComposerOpenChange(true);
+        }}
+      >
+        <Plus className="size-4" />
+      </Button>
+    </>
+  ) : null;
 
   return (
-    <TaskSection
+    <DetailSection
       id="subtasks"
       title="Subtasks"
-      gap={2}
-      headerAlign="baseline"
-      headerEnd={
-        subtasks.length > 0 ? (
-          <span className="text-on-surface-variant text-body-small tabular-nums">
-            {doneCount}/{subtasks.length}
-          </span>
-        ) : null
-      }
+      count={subtasks.length > 0 ? `${doneCount}/${subtasks.length}` : undefined}
+      actions={actions}
     >
-      {subtasks.length === 0 ? (
-        <p className="text-on-surface-variant text-body-medium">No subtasks yet.</p>
-      ) : (
+      {subtasks.length > 0 || composerOpen ? (
         <ul className="flex flex-col">
           {subtasks.map((subtask) => (
-            <SubtaskRow
-              key={subtask.id}
-              subtask={subtask}
-              subtasks={subtasks}
-              organizationId={organizationId}
-              parentTaskId={parentTaskId}
-              canEdit={canEdit}
-              busy={busyId === subtask.id}
-              categoryOf={categoryOf}
-              onToggle={() => {
-                void toggle(subtask);
-              }}
-              onOpen={() => {
-                onOpen(subtask.id);
-              }}
-              {...(onRename
-                ? {
-                    onRename: (title: string) => {
-                      onRename(subtask.id, title);
-                    },
-                  }
-                : {})}
-            />
+            <SubtaskRow key={subtask.id} subtask={subtask} {...props} />
           ))}
+          {canEdit && composerOpen ? (
+            <SubtaskComposer
+              onAdd={props.onAdd}
+              onClose={() => {
+                onComposerOpenChange(false);
+              }}
+            />
+          ) : null}
         </ul>
-      )}
-
-      {canEdit ? <SubtaskComposer onAdd={onAdd} /> : null}
-    </TaskSection>
+      ) : null}
+    </DetailSection>
   );
 }
 
-/** The composer at the foot of the list: a title and an Add button. */
-function SubtaskComposer({
-  onAdd,
-}: {
+/** Props for {@link SubtaskComposer}. */
+interface SubtaskComposerProps {
   readonly onAdd: (title: string) => Promise<void>;
-}): JSX.Element {
+  readonly onClose: () => void;
+}
+
+/**
+ * The inline row that adds subtasks by title.
+ *
+ * @remarks
+ * Enter creates the subtask and clears the field for the next one. A failed create keeps the typed
+ * title so nothing is lost; the query layer has already told the person what went wrong.
+ */
+function SubtaskComposer({ onAdd, onClose }: SubtaskComposerProps): JSX.Element {
+  const landing = useStatusRegistry().defaultOf('task')?.category ?? 'backlog';
   const [title, setTitle] = useState('');
   const [adding, setAdding] = useState(false);
 
   async function add(): Promise<void> {
     const trimmed = title.trim();
-    if (trimmed.length === 0) return;
+    if (trimmed.length === 0 || adding) return;
     setAdding(true);
+    setTitle('');
     try {
       await onAdd(trimmed);
-      setTitle('');
+    } catch {
+      setTitle((current) => (current.length === 0 ? trimmed : current));
     } finally {
       setAdding(false);
     }
   }
 
   return (
-    <form
-      className="flex gap-2"
-      onSubmit={(event) => {
-        event.preventDefault();
-        void add();
-      }}
-    >
-      <Input
-        aria-label="New subtask title"
-        placeholder="Add a subtask…"
-        value={title}
-        onChange={(event) => {
-          setTitle(event.target.value);
+    <li className="flex min-h-9 items-center gap-2 px-2">
+      <StatusIcon type={landing} />
+      <form
+        className="flex min-w-0 flex-1"
+        onSubmit={(event) => {
+          event.preventDefault();
+          void add();
         }}
-        className="h-8"
-      />
-      <Button
-        type="submit"
-        size="sm"
-        variant="secondary"
-        disabled={adding || title.trim().length === 0}
-        className="gap-1"
       >
-        <Plus className="size-4" />
-        {adding ? 'Adding…' : 'Add'}
-      </Button>
-    </form>
+        <Input
+          autoFocus
+          aria-label="New subtask title"
+          placeholder="Subtask title"
+          value={title}
+          onChange={(event) => {
+            setTitle(event.target.value);
+          }}
+          onKeyDown={(event) => {
+            if (event.key === 'Escape') {
+              event.preventDefault();
+              onClose();
+            }
+          }}
+          onBlur={() => {
+            if (title.trim().length === 0 && !adding) onClose();
+          }}
+          className="h-8"
+        />
+      </form>
+    </li>
   );
 }
 
-/** One inline subtask row that can accept another task as its child. */
+/** Props for {@link SubtaskRow}. */
+interface SubtaskRowProps extends SubtasksProps {
+  readonly subtask: TaskRef;
+}
+
+/** One subtask: a status checkbox, the title, and a detach button. */
 function SubtaskRow({
   subtask,
   subtasks,
   organizationId,
   parentTaskId,
   canEdit,
-  busy,
-  categoryOf,
   onToggle,
   onOpen,
   onRename,
-}: {
-  readonly subtask: TaskRef;
-  readonly subtasks: readonly TaskRef[];
-  readonly organizationId: string;
-  readonly parentTaskId: string;
-  readonly canEdit: boolean;
-  readonly busy: boolean;
-  readonly categoryOf: CategoryOfState;
-  readonly onToggle: () => void;
-  readonly onOpen: () => void;
-  readonly onRename?: (title: string) => void;
-}): JSX.Element {
+  onDetach,
+}: SubtaskRowProps): JSX.Element {
+  const categoryOf = useCategoryOf('task');
+  const [busy, setBusy] = useState(false);
   const object = {
     kind: 'task' as const,
     id: subtask.id,
@@ -218,60 +227,53 @@ function SubtaskRow({
   const drop = useTaskHierarchyDrop(object, hierarchyRows);
   const type = categoryOf(subtask.state);
   const done = type === 'completed';
+
+  const toggle = (): void => {
+    setBusy(true);
+    onToggle(subtask, !done)
+      .catch(() => undefined)
+      .finally(() => {
+        setBusy(false);
+      });
+  };
+
   return (
-    <li
-      {...drop.rowProps}
-      className={cn(
-        'group hover:bg-surface-container-high -mx-2 flex items-center gap-2 rounded-md px-2 py-1.5',
-        drop.rowProps.className,
-        drop.className,
-      )}
-    >
-      <button
-        type="button"
-        aria-label={done ? `Mark “${subtask.title}” as todo` : `Mark “${subtask.title}” as done`}
-        aria-pressed={done}
-        disabled={!canEdit || busy}
-        onClick={onToggle}
-        className="focus-visible:ring-ring rounded-full focus-visible:ring-1 focus-visible:outline-none disabled:opacity-50"
-      >
-        <StatusIcon type={type} />
-      </button>
-      {canEdit && onRename ? (
-        <EditableTitle
-          value={subtask.title}
-          onSave={(title) => {
-            onRename(title);
-          }}
-          canEdit
-          activate="doubleClick"
-          onActivate={() => {
-            onOpen();
-          }}
-          ariaLabel="Subtask title"
-          className={cn(
-            'text-body-medium min-w-0 flex-1 truncate',
-            done ? 'text-on-surface-variant line-through' : 'text-on-surface',
-          )}
-        />
-      ) : (
-        <button
-          type="button"
-          onClick={() => {
-            onOpen();
-          }}
-          className="focus-visible:ring-ring text-body-medium min-w-0 flex-1 truncate rounded text-left hover:underline focus-visible:ring-1 focus-visible:outline-none"
-        >
-          <span className={done ? 'text-on-surface-variant line-through' : ''}>
-            {subtask.title}
-          </span>
-        </button>
-      )}
-      {drop.status ? (
-        <span className="sr-only" role="status">
-          {drop.status}
-        </span>
-      ) : null}
-    </li>
+    <TaskRelationRow
+      orgId={organizationId}
+      task={subtask}
+      done={done}
+      onOpen={onOpen}
+      onRename={canEdit ? onRename : undefined}
+      onRemove={
+        canEdit
+          ? () => {
+              onDetach(subtask.id);
+            }
+          : undefined
+      }
+      removeLabel="Remove from subtasks"
+      rowProps={{ ...drop.rowProps, className: cn(drop.rowProps.className, drop.className) }}
+      leading={
+        <>
+          <button
+            type="button"
+            aria-label={
+              done ? `Mark “${subtask.title}” as todo` : `Mark “${subtask.title}” as done`
+            }
+            aria-pressed={done}
+            disabled={!canEdit || busy}
+            onClick={toggle}
+            className="focus-visible:ring-ring rounded-full focus-visible:ring-1 focus-visible:outline-none disabled:opacity-50"
+          >
+            <StatusIcon type={type} />
+          </button>
+          {drop.status ? (
+            <span className="sr-only" role="status">
+              {drop.status}
+            </span>
+          ) : null}
+        </>
+      }
+    />
   );
 }

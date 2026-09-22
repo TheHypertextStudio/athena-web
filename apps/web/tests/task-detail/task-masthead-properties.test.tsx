@@ -14,13 +14,10 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
-  TaskMastheadProperties,
+  TaskMetadataRow,
   type TaskPropertyModel,
 } from '../../src/components/task-detail/task-masthead-properties';
-import {
-  EntityDetailLayout,
-  EntityMetadataRow,
-} from '../../src/components/views/entity-detail-layout';
+import { EntityDetailLayout } from '../../src/components/views/entity-detail-layout';
 import { mockWideMetadataRow } from '../support/metadata-row-layout';
 import { makeQueryWrapper } from '../support/query';
 
@@ -99,16 +96,13 @@ function modelFor(overrides: Partial<TaskPropertyModel> = {}): TaskPropertyModel
   };
 }
 
-/** Render the chips inside the row they are built for; returns each item's declared priority. */
+/** Render the row; returns each chip's declared priority. */
 function renderChips(
   model: TaskPropertyModel,
   withAside = false,
 ): { readonly priorities: readonly number[] } {
-  const row = (
-    <EntityMetadataRow ariaLabel="Task properties">
-      <TaskMastheadProperties model={model} />
-    </EntityMetadataRow>
-  );
+  const { wrapper } = makeQueryWrapper();
+  const row = <TaskMetadataRow orgId="org_1" model={model} detailKey={['task']} />;
   render(
     withAside ? (
       // A layout that holds an aside docks it on a wide pane and tells its slots so.
@@ -124,8 +118,8 @@ function renderChips(
     ) : (
       row
     ),
-    // The assignee picker creates people through a mutation, which needs a query client.
-    { wrapper: makeQueryWrapper().wrapper },
+    // The assignee picker creates people and the parent picker searches, both through a query client.
+    { wrapper },
   );
   const items = [
     ...document.querySelectorAll('[data-entity-metadata-inline] [data-entity-metadata-item]'),
@@ -135,14 +129,14 @@ function renderChips(
   };
 }
 
-describe('TaskMastheadProperties', () => {
+describe('TaskMetadataRow', () => {
   it('leads with status and priority, then assignee, project, and due date, then the secondary set', () => {
     const { priorities } = renderChips(modelFor());
 
     // Status, priority, assignee, project, due; then estimate, labels, cycle; then the overflow-only
-    // set (milestone, program, start, created).
+    // set (milestone, program, start, created, parent).
     expect(priorities.slice(0, 5)).toEqual([0, 0, 1, 2, 3]);
-    expect(priorities.slice(5)).toEqual([4, 5, 6, 7, 7, 7, 7]);
+    expect(priorities.slice(5)).toEqual([4, 5, 6, 7, 7, 7, 7, 7]);
   });
 
   it('states each lead property as its own labelled control', () => {
@@ -155,20 +149,21 @@ describe('TaskMastheadProperties', () => {
     expect(screen.getByRole('button', { name: 'Due — Oct 1, 2026' })).toBeVisible();
   });
 
-  it('leaves the secondary set out when the layout has docked its aside', () => {
+  it('renders no chips at all when the layout has docked its sidebar, which holds every property', () => {
     const { priorities } = renderChips(modelFor(), true);
 
-    expect(priorities).toEqual([0, 0, 1, 2, 3]);
-    expect(screen.queryByRole('button', { name: /^Labels/ })).not.toBeInTheDocument();
+    expect(priorities).toEqual([]);
+    expect(screen.queryByRole('group', { name: 'Task properties' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Status —/ })).not.toBeInTheDocument();
     expect(screen.getByRole('complementary', { name: 'Details' })).toBeInTheDocument();
   });
 
-  it('keeps the secondary set in the row when the pane is too narrow to dock the aside', () => {
+  it('carries every property in the row when the pane is too narrow to dock the sidebar', () => {
     vi.restoreAllMocks();
     mockWideMetadataRow(800);
     const { priorities } = renderChips(modelFor(), true);
 
-    expect(priorities).toEqual([0, 0, 1, 2, 3, 4, 5, 6, 7, 7, 7, 7]);
+    expect(priorities).toEqual([0, 0, 1, 2, 3, 4, 5, 6, 7, 7, 7, 7, 7]);
     expect(screen.queryByRole('complementary')).not.toBeInTheDocument();
   });
 

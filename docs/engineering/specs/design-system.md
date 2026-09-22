@@ -312,8 +312,9 @@ IBM Plex Sans for UI; IBM Plex Mono for IDs/keys/timestamps. Sizes (rem, 16px ro
 - **Row vertical padding:** comfortable `8px`, **compact `6px`**, **spacious `12px`** (density modes, §1.7).
 - **Panel gutter:** `16px` (`px-4`).
 - **Rail width:** `56px` fixed. **Sidebar width:** `240px` default, resizable `200–320px`, collapsible to `0`.
-- **Properties panel width:** `300px` default, resizable `260–420px`.
-- **Detail content max‑width:** `760px` (reading measure) when no properties panel; full‑bleed for List/Timeline.
+- **Properties panel width and detail content width:** superseded by
+  [`docs/design/references/detail-page-layout.md`](../../design/references/detail-page-layout.md)
+  (a 20rem sidebar; the body spans its column and prose holds its own 75ch measure).
 
 ### 1.4 Radius
 

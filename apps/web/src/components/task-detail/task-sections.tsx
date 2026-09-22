@@ -30,7 +30,6 @@ export interface TaskSectionsProps {
   readonly canComment: boolean;
   readonly mentions: EntityMentionsData;
   readonly projectName: (projectId: string) => string;
-  readonly projectLabel: string;
   readonly mutations: TaskOverviewMutations;
   readonly expansion: DescriptionExpansion;
 }

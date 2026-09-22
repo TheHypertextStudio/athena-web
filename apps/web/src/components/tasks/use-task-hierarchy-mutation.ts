@@ -51,17 +51,31 @@ interface CacheSnapshot {
 
 const UNDO_WINDOW_MS = 6000;
 
-/** Patch the parent field wherever a cached task graph or task row carries it. */
+/** The id of `record` when it is a task row this move reparents, else `null`. */
+function movedTaskRowId(
+  record: Record<string, unknown>,
+  parents: ReadonlyMap<string, string | null>,
+): string | null {
+  const id = record['id'];
+  return typeof id === 'string' && parents.has(id) && 'parentTaskId' in record ? id : null;
+}
+
+/**
+ * Patch the parent field wherever a cached task graph or task row carries it.
+ *
+ * @remarks
+ * Only a record that already has a `parentTaskId` field is a task row. Other records share a task's
+ * id without being one — the task page's navigation snapshot is keyed by it — and their schemas
+ * reject a field they do not declare, so adding one would break the page reading them.
+ */
 function patchHierarchyData(data: unknown, parents: ReadonlyMap<string, string | null>): unknown {
   if (data === null || typeof data !== 'object') return data;
   if (Array.isArray(data)) return data.map((item) => patchHierarchyData(item, parents));
 
   const record = data as Record<string, unknown>;
   let next: Record<string, unknown> = record;
-  const id = typeof record['id'] === 'string' ? record['id'] : null;
-  if (id !== null && parents.has(id)) {
-    next = { ...next, parentTaskId: parents.get(id) ?? null };
-  }
+  const id = movedTaskRowId(record, parents);
+  if (id !== null) next = { ...next, parentTaskId: parents.get(id) ?? null };
   for (const [key, value] of Object.entries(next)) {
     if (key === 'edges') continue;
     const patched = patchHierarchyData(value, parents);

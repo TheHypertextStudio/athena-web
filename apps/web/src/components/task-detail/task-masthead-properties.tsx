@@ -1,13 +1,14 @@
 'use client';
 
 /**
- * The task's property chips, laid into the masthead's {@link EntityMetadataRow}.
+ * The task's lead properties — status, priority, assignee, project, due date — as fields shared by
+ * the masthead's chip row and the properties sidebar.
  *
  * @remarks
- * The lead set (status, priority, assignee, project, due date) carries priorities 0 to 3, so it is
- * the last thing the row gives up as the pane narrows. The secondary set follows at priorities 4
- * and up, through {@link TaskSecondaryProperties}, unless the page docks those properties beside
- * the body, in which case they are the aside's and this row leads with the primary set alone.
+ * Each property appears exactly once on screen. While the page docks its sidebar, every property
+ * is a sidebar row and {@link TaskMetadataRow} renders nothing. On a narrower pane the sidebar is
+ * gone and the row carries every property as chips: the lead set at priorities 0 to 3, so it is the
+ * last thing the row gives up, and the rest through {@link TaskSecondaryProperties} at 4 and up.
  */
 import type { Priority } from '@docket/work/task-contract';
 import type { TaskDetail } from '@docket/work/task-model';
@@ -16,6 +17,7 @@ import { SourceAwareActorPicker } from '@/components/people/source-person-refere
 import { DatePicker, EntityPicker, type PickerOption } from '@docket/ui/components';
 import { FolderKanban } from '@docket/ui/icons';
 import { cn } from '@docket/ui/lib/utils';
+import type { QueryKey } from '@tanstack/react-query';
 import type { JSX } from 'react';
 
 import { useCategoryOf } from '@/components/entity-display/use-work-status';
@@ -30,6 +32,7 @@ import type { TaskPatch } from '@/lib/use-task-mutations';
 
 import { PriorityPicker } from './PriorityPicker';
 import { StatusPicker } from './StatusPicker';
+import { TaskParentField } from './task-parent-field';
 import { TaskSecondaryProperties, type TaskSecondaryModel } from './task-secondary-properties';
 
 /** The geometry a status or priority menu trigger needs to sit beside the other chips. */
@@ -60,22 +63,67 @@ export interface TaskPropertyModel {
   readonly secondary: TaskSecondaryModel;
 }
 
-/** The masthead's labelled property row, holding the chips for `model`. */
-export function TaskMetadataRow({ model }: { readonly model: TaskPropertyModel }): JSX.Element {
+/** What one lead field renders from: the model plus the trigger class its presentation wants. */
+export interface LeadFieldProps {
+  readonly model: TaskPropertyModel;
+  readonly triggerClassName: string;
+}
+
+/** The task's workflow state. */
+export function StatusField({ model, triggerClassName }: LeadFieldProps): JSX.Element {
+  const categoryOf = useCategoryOf('task');
   return (
-    <EntityMetadataRow ariaLabel="Task properties">
-      <TaskMastheadProperties model={model} />
-    </EntityMetadataRow>
+    <StatusPicker
+      current={model.task.state}
+      states={model.workflowStates}
+      currentType={categoryOf(model.task.state)}
+      onSelect={model.onSetState}
+      pending={model.statusPending}
+      disabled={!model.canEdit}
+      triggerVariant="ghost"
+      triggerClassName={triggerClassName}
+    />
   );
 }
 
-/** Props for {@link TaskMastheadProperties}. */
-export interface TaskMastheadPropertiesProps {
-  readonly model: TaskPropertyModel;
+/** The task's priority. */
+export function PriorityField({ model, triggerClassName }: LeadFieldProps): JSX.Element {
+  return (
+    <PriorityPicker
+      current={model.task.priority}
+      onSelect={model.onSetPriority}
+      pending={model.priorityPending}
+      disabled={!model.canEdit}
+      triggerVariant="ghost"
+      triggerClassName={triggerClassName}
+    />
+  );
+}
+
+/** Who the task is assigned to. */
+export function AssigneeField({ model, triggerClassName }: LeadFieldProps): JSX.Element {
+  return (
+    <SourceAwareActorPicker
+      entity={model.task}
+      field="assignee"
+      options={model.memberOptions}
+      value={model.task.assigneeId ?? null}
+      onChange={(assigneeId) => {
+        model.onPatch({ assigneeId });
+      }}
+      placeholder="Assign"
+      clearLabel="Unassigned"
+      ariaLabel="Assignee"
+      readOnly={!model.canEdit}
+      loading={model.membersLoading}
+      onOpenChange={model.onMembersOpenChange}
+      triggerClassName={triggerClassName}
+    />
+  );
 }
 
 /** The task's project, under the workspace's own noun for one. */
-function ProjectPicker({ model }: { readonly model: TaskPropertyModel }): JSX.Element {
+export function ProjectField({ model, triggerClassName }: LeadFieldProps): JSX.Element {
   const noun = model.projectLabel.toLowerCase();
   return (
     <EntityPicker
@@ -92,84 +140,75 @@ function ProjectPicker({ model }: { readonly model: TaskPropertyModel }): JSX.El
       readOnly={!model.canEdit}
       loading={model.projectLoading}
       onOpenChange={model.onProjectOpenChange}
-      triggerClassName={ENTITY_METADATA_CHIP_CLASS}
+      triggerClassName={triggerClassName}
     />
   );
 }
 
+/** When the task is due. */
+export function DueField({ model, triggerClassName }: LeadFieldProps): JSX.Element {
+  return (
+    <DatePicker
+      value={isoDateOf(model.task.dueDate)}
+      onChange={(dueDate) => {
+        model.onPatch({ dueDate });
+      }}
+      placeholder="Set due date"
+      formatLabel={(value) => formatCalendarDate(value) ?? undefined}
+      ariaLabel="Due"
+      readOnly={!model.canEdit}
+      triggerClassName={triggerClassName}
+    />
+  );
+}
+
+/** Props for {@link TaskMetadataRow}. */
+export interface TaskMetadataRowProps {
+  readonly orgId: string;
+  readonly model: TaskPropertyModel;
+  /** The task's detail cache key, patched when the parent changes. */
+  readonly detailKey: QueryKey;
+}
+
 /**
- * Render the task's properties as prioritized metadata chips.
+ * The masthead's labelled property row: every property as a prioritized chip.
  *
  * @remarks
- * While the layout has docked its aside, the secondary set lives there, so this row leads with the
- * five lead properties alone and no property is mounted twice.
+ * Renders nothing while the page docks its sidebar, which then holds every property.
  *
- * @param props - See {@link TaskMastheadPropertiesProps}.
- * @returns the chips, to be placed inside an `EntityMetadataRow`.
+ * @param props - The page's property model.
+ * @returns the row, or `null` when the sidebar holds the properties.
  */
-export function TaskMastheadProperties({ model }: TaskMastheadPropertiesProps): JSX.Element {
-  const { task, canEdit, onPatch } = model;
+export function TaskMetadataRow({
+  orgId,
+  model,
+  detailKey,
+}: TaskMetadataRowProps): JSX.Element | null {
   const { docked } = useEntityDetailAside();
-  const categoryOf = useCategoryOf('task');
+  if (docked) return null;
+  const chip = { model, triggerClassName: ENTITY_METADATA_CHIP_CLASS };
+  const menuChip = { model, triggerClassName: MENU_CHIP_CLASS };
   return (
-    <>
+    <EntityMetadataRow ariaLabel="Task properties">
       <EntityMetadataItem priority={0}>
-        <StatusPicker
-          current={task.state}
-          states={model.workflowStates}
-          currentType={categoryOf(task.state)}
-          onSelect={model.onSetState}
-          pending={model.statusPending}
-          disabled={!canEdit}
-          triggerVariant="ghost"
-          triggerClassName={MENU_CHIP_CLASS}
-        />
+        <StatusField {...menuChip} />
       </EntityMetadataItem>
       <EntityMetadataItem priority={0}>
-        <PriorityPicker
-          current={task.priority}
-          onSelect={model.onSetPriority}
-          pending={model.priorityPending}
-          disabled={!canEdit}
-          triggerVariant="ghost"
-          triggerClassName={MENU_CHIP_CLASS}
-        />
+        <PriorityField {...menuChip} />
       </EntityMetadataItem>
       <EntityMetadataItem priority={1}>
-        <SourceAwareActorPicker
-          entity={task}
-          field="assignee"
-          options={model.memberOptions}
-          value={task.assigneeId ?? null}
-          onChange={(assigneeId) => {
-            onPatch({ assigneeId });
-          }}
-          placeholder="Assign"
-          clearLabel="Unassigned"
-          ariaLabel="Assignee"
-          readOnly={!canEdit}
-          loading={model.membersLoading}
-          onOpenChange={model.onMembersOpenChange}
-          triggerClassName={ENTITY_METADATA_CHIP_CLASS}
-        />
+        <AssigneeField {...chip} />
       </EntityMetadataItem>
       <EntityMetadataItem priority={2}>
-        <ProjectPicker model={model} />
+        <ProjectField {...chip} />
       </EntityMetadataItem>
       <EntityMetadataItem priority={3}>
-        <DatePicker
-          value={isoDateOf(task.dueDate)}
-          onChange={(dueDate) => {
-            onPatch({ dueDate });
-          }}
-          placeholder="Set due date"
-          formatLabel={(value) => formatCalendarDate(value) ?? undefined}
-          ariaLabel="Due"
-          readOnly={!canEdit}
-          triggerClassName={ENTITY_METADATA_CHIP_CLASS}
-        />
+        <DueField {...chip} />
       </EntityMetadataItem>
-      {docked ? null : <TaskSecondaryProperties presentation="chips" model={model} />}
-    </>
+      <TaskSecondaryProperties model={model} />
+      <EntityMetadataItem priority={7} overflowOnly>
+        <TaskParentField {...chip} orgId={orgId} detailKey={detailKey} />
+      </EntityMetadataItem>
+    </EntityMetadataRow>
   );
 }

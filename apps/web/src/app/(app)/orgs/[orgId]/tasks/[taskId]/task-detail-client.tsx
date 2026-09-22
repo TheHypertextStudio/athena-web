@@ -21,13 +21,15 @@ import {
   type TaskTab,
 } from '@/components/task-detail/task-masthead-slots';
 import { TaskMetadataRow } from '@/components/task-detail/task-masthead-properties';
-import { TaskSecondaryProperties } from '@/components/task-detail/task-secondary-properties';
+import { TaskPropertiesPanel } from '@/components/task-detail/task-properties-panel';
+import { TaskRelationCommandsProvider } from '@/components/task-detail/task-relation-commands';
 import { TaskSections } from '@/components/task-detail/task-sections';
 import { useDescriptionExpansion } from '@/components/task-detail/use-description-expansion';
 import { useTaskPropertyModel } from '@/components/task-detail/use-task-property-model';
 import { useTaskRosters } from '@/components/task-detail/use-task-rosters';
 import { EntityDetailLayout } from '@/components/views/entity-detail-layout';
 import { useDetailTab } from '@/components/views/use-detail-tab';
+import type { ObjectRef } from '@/lib/actions';
 import { useTypedRoute } from '@/lib/app-location';
 import {
   removeNavigationSnapshot,
@@ -46,6 +48,22 @@ interface TaskDetailReadyProps {
   readonly detail: TaskDetailData;
   readonly tab: TaskTab;
   readonly onTabChange: (tab: TaskTab) => void;
+}
+
+/**
+ * The task as the shared action surface sees it.
+ *
+ * @remarks
+ * The parent rides along so right-click on the header offers "Move to top level" for a subtask.
+ */
+function taskObjectRef(orgId: string, task: TaskDetail): ObjectRef {
+  return {
+    kind: 'task',
+    id: task.id,
+    organizationId: orgId,
+    title: task.title,
+    ...(task.parentTaskId ? { meta: { parentTaskId: task.parentTaskId } } : {}),
+  };
 }
 
 /** The task page once its task has loaded: masthead, tabs, and the active section. */
@@ -72,51 +90,52 @@ function TaskDetailReady({
   const project = task.projectId ? projectName(task.projectId) : null;
 
   return (
-    <EntityDetailLayout
-      object={{ kind: 'task', id: task.id, organizationId: orgId, title: task.title }}
-      printSummary={
-        <TaskPrintSummary task={task} members={rosters.members} projectName={project} />
-      }
-      eyebrow={
-        <TaskBreadcrumb
-          orgId={orgId}
-          projectId={task.projectId ?? null}
-          projectName={project}
-          projectLabel={projectLabel}
-          parentTaskId={task.parentTaskId ?? null}
-        />
-      }
-      icon={<TaskIcon orgId={orgId} taskId={task.id} title={task.title} canEdit={canEdit} />}
-      title={<TaskTitle title={task.title} canEdit={canEdit} onPatch={mutations.patchTask} />}
-      metadata={<TaskMetadataRow model={model} />}
-      aside={<TaskSecondaryProperties presentation="rows" model={model} />}
-      actions={
-        <TaskActions
+    <TaskRelationCommandsProvider>
+      <EntityDetailLayout
+        object={taskObjectRef(orgId, task)}
+        printSummary={
+          <TaskPrintSummary task={task} members={rosters.members} projectName={project} />
+        }
+        eyebrow={
+          <TaskBreadcrumb
+            orgId={orgId}
+            projectId={task.projectId ?? null}
+            projectName={project}
+            projectLabel={projectLabel}
+            parentTaskId={task.parentTaskId ?? null}
+          />
+        }
+        icon={<TaskIcon orgId={orgId} taskId={task.id} title={task.title} canEdit={canEdit} />}
+        title={<TaskTitle title={task.title} canEdit={canEdit} onPatch={mutations.patchTask} />}
+        metadata={<TaskMetadataRow orgId={orgId} model={model} detailKey={detail.detailKey} />}
+        aside={<TaskPropertiesPanel orgId={orgId} model={model} detailKey={detail.detailKey} />}
+        actions={
+          <TaskActions
+            orgId={orgId}
+            task={task}
+            canEdit={canEdit}
+            canManage={detail.capabilities?.manage ?? false}
+            mutations={mutations}
+            expansion={expansion}
+          />
+        }
+        tabs={<TaskTabs tab={tab} onTabChange={onTabChange} />}
+      >
+        <TaskSections
+          tab={tab}
           orgId={orgId}
           task={task}
+          detailKey={detail.detailKey}
+          currentActorId={detail.currentActorId}
           canEdit={canEdit}
-          canManage={detail.capabilities?.manage ?? false}
+          canComment={detail.capabilities?.comment ?? false}
+          mentions={detail.entityMentions}
+          projectName={projectName}
           mutations={mutations}
           expansion={expansion}
         />
-      }
-      tabs={<TaskTabs tab={tab} onTabChange={onTabChange} />}
-    >
-      <TaskSections
-        tab={tab}
-        orgId={orgId}
-        task={task}
-        detailKey={detail.detailKey}
-        currentActorId={detail.currentActorId}
-        canEdit={canEdit}
-        canComment={detail.capabilities?.comment ?? false}
-        mentions={detail.entityMentions}
-        projectName={projectName}
-        projectLabel={projectLabel}
-        mutations={mutations}
-        expansion={expansion}
-      />
-    </EntityDetailLayout>
+      </EntityDetailLayout>
+    </TaskRelationCommandsProvider>
   );
 }
 

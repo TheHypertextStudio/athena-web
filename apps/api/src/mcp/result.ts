@@ -22,14 +22,17 @@ import { type McpScope, requireScope } from './scope';
  * Build a successful tool result carrying a JSON payload as pretty-printed text.
  *
  * @param data - The structured payload to return to the caller.
+ * @param meta - Result `_meta` for a widget to render from. The MCP Apps specification forwards it
+ *   to the view and keeps it out of the model's context, so it never appears in the text block.
  * @returns the MCP {@link CallToolResult} with a single text block.
  */
-export function jsonResult(data: unknown): CallToolResult {
+export function jsonResult(data: unknown, meta?: Record<string, unknown>): CallToolResult {
   return {
     content: [{ type: 'text', text: JSON.stringify(data, null, 2) }],
     ...(data !== null && typeof data === 'object' && !Array.isArray(data)
       ? { structuredContent: data as Record<string, unknown> }
       : {}),
+    ...(meta ? { _meta: meta } : {}),
   };
 }
 

@@ -5,6 +5,9 @@ import { type SearchCaller, searchWorkspace } from '../search/query';
 import type { McpContext } from './auth';
 import { registerOptionalTaskTool, type McpRegistrar } from './catalog';
 import { WIDGET, widgetMeta } from './apps';
+import { entityRenderMeta, type EntityReadResult } from './apps/entity-render';
+import type { ProjectWorkIndex } from './project-work';
+import type { ReadSink } from './resource-work-hydrators';
 import { authorize, jsonResult, runTool, scopedActor } from './result';
 import { createTaskToolHandler } from './task-tools';
 import { ApiError } from '../error';
@@ -70,30 +73,62 @@ function withEntityHref(
   return { ...item, href: entityHref(orgId, type, id) };
 }
 
+/**
+ * Read a same-type batch and return it as a tool result: the payload for the model, and its render
+ * model in `_meta` for the card.
+ */
+async function readResult(
+  ctx: McpContext,
+  orgId: string,
+  type: ReadableType,
+  refs: readonly string[],
+): Promise<ReturnType<typeof jsonResult>> {
+  const { data, work } = await readEntities(ctx, orgId, type, refs);
+  return jsonResult(data, entityRenderMeta(data.items, work));
+}
+
+/** A same-type batch, and what its card gets beside it. */
+interface EntityRead {
+  readonly data: EntityReadResult;
+  /**
+   * A single project's browsable work, keyed by project id, for its card only.
+   *
+   * @remarks
+   * A project read names its first few open tasks, which is what the model needs. The card needs
+   * the whole list to browse, so it gets it in `_meta`, where the model never reads it. The project
+   * read builds it from the rows it already loaded. A batch shows one row per project and gets none.
+   */
+  readonly work: Record<string, ProjectWorkIndex> | undefined;
+}
+
 /** Read a same-type batch with the same resolution and authorization semantics as legacy `get`. */
 async function readEntities(
   ctx: McpContext,
   orgId: string,
   type: ReadableType,
   refs: readonly string[],
-): Promise<Record<string, unknown>> {
+): Promise<EntityRead> {
   const kind = NAMEABLE[type];
   const settled = await Promise.all(
     refs.map(async (ref) => {
       try {
         const id = kind ? await resolveDescriptor(orgId, kind, ref, 'refs') : ref;
-        return {
-          ok: true as const,
-          value: withEntityHref(await readEntity(ctx, orgId, type, id), orgId, type),
-        };
+        const sink: ReadSink = {};
+        const value = withEntityHref(await readEntity(ctx, orgId, type, id, sink), orgId, type);
+        return { ok: true as const, id, value, workIndex: sink.workIndex };
       } catch (err) {
         return { ok: false as const, ref, reason: err instanceof ApiError ? err.code : 'internal' };
       }
     }),
   );
+  const found = settled.filter((row) => row.ok);
+  const only = found.length === 1 ? found[0] : undefined;
   return {
-    items: settled.filter((row) => row.ok).map((row) => row.value),
-    missing: settled.filter((row) => !row.ok).map(({ ref, reason }) => ({ ref, reason })),
+    data: {
+      items: found.map((row) => row.value),
+      missing: settled.filter((row) => !row.ok).map(({ ref, reason }) => ({ ref, reason })),
+    },
+    work: only?.workIndex ? { [only.id]: only.workIndex } : undefined,
   };
 }
 import { listWork, listWorkFilters, WORK_ENTITIES, WorkRow } from './list-work';
@@ -291,8 +326,7 @@ export function registerViewPlanTools(server: McpRegistrar, ctx: McpContext): vo
           openWorldHint: false,
         },
       },
-      (input) =>
-        runTool(async () => jsonResult(await readEntities(ctx, input.orgId, type, input.refs))),
+      (input) => runTool(() => readResult(ctx, input.orgId, type, input.refs)),
     );
   }
 
@@ -323,8 +357,7 @@ export function registerViewPlanTools(server: McpRegistrar, ctx: McpContext): vo
         openWorldHint: false,
       },
     },
-    (input) =>
-      runTool(async () => jsonResult(await readEntities(ctx, input.orgId, input.type, input.refs))),
+    (input) => runTool(() => readResult(ctx, input.orgId, input.type, input.refs)),
   );
 
   server.registerTool(

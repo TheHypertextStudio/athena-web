@@ -2,33 +2,11 @@
  * Cases for `widget-shots.spec.ts` that live outside the spec.
  *
  * @remarks
- * The spec is pinned at its size in the complexity ledger, so cases for newer tools are declared
- * here and spread into its list. The spec photographs them exactly like its own.
+ * The label and template receipts, spread into the spec's list beside the fixtures in
+ * `widget-fixtures.ts`. The spec photographs them exactly like its own.
  */
 import { CHANGE_REPORT_HTML } from '../../../api/src/mcp/apps/change-report';
-
-/** One photographable situation: a widget, holding a particular result. */
-export interface WidgetCase {
-  readonly name: string;
-  readonly html: string;
-  /**
-   * The tool the host says produced this card.
-   *
-   * @remarks
-   * Not cosmetic. One change-report document serves `capture`, `update`, `archive`, `organize`,
-   * `define_labels` and `define_template`, and it reads the tool name out of
-   * `hostContext.toolInfo` to decide whether rows were changed, archived, filed, or saved. Getting
-   * this wrong in a fixture would photograph the wrong copy.
-   */
-  readonly tool: string;
-  readonly input: Readonly<Record<string, unknown>>;
-  /** `null` means the host never delivers a result, which is the loading state. */
-  readonly result: Readonly<Record<string, unknown>> | null;
-  /** Send `tool-cancelled` instead of `tool-result`, the way a host does on an abandoned call. */
-  readonly cancelled?: boolean;
-  /** Start the view fullscreen, so the expanded layout is photographed rather than assumed. */
-  readonly fullscreen?: boolean;
-}
+import type { WidgetCase } from './widget-fixtures';
 
 /** The change-report states for label and template writes. */
 export const CATALOG_CASES: readonly WidgetCase[] = [

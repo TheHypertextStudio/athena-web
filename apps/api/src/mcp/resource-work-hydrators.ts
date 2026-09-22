@@ -1,4 +1,5 @@
 import {
+  actor,
   cycle,
   db,
   initiative,
@@ -23,19 +24,20 @@ import { NotFoundError } from '../error';
 import type { ViewableTaskParts } from '../routes/task-helpers';
 import { milestoneProgressOf } from '../lib/milestone-writes';
 import { originOf } from './change-set';
+import { entityHref } from './entity-href';
+import { taskRefGroups, taskRefsWithState, withHrefs } from './hydrated-refs';
+import { projectWorkOf, type ProjectWorkIndex } from './project-work';
 import { stateOptionsOf, stateTypeOf, teamWorkflows } from './workflow-states';
 
 /** The canonical predicate for task references included in a hydrated MCP resource. */
 export type TaskViewFilter = (task: ViewableTaskParts) => boolean;
 
-/** A lightweight task ref shared by hydrated DTOs (dependencies, subtasks). */
-export function taskRef(t: {
-  id: string;
-  title: string;
-  state: string;
-  projectId: string | null;
-}): { id: string; title: string; state: string; projectId: string | null } {
-  return { id: t.id, title: t.title, state: t.state, projectId: t.projectId };
+/**
+ * What a read hands its card beside the payload. A project read fills in its browsable work here,
+ * so the card can have it without a second query and the model never reads it.
+ */
+export interface ReadSink {
+  workIndex?: ProjectWorkIndex;
 }
 
 /** Where a hydrated task came from: the normalized provenance of the change that created it. */
@@ -68,7 +70,7 @@ export function hydratedOrigin(
 }
 
 /** Load the relations that turn a task row into its hydrated MCP projection. */
-async function taskRelations(orgId: string, id: string, t: typeof task.$inferSelect) {
+async function taskRelations(orgId: string, id: string) {
   const cols = {
     id: task.id,
     title: task.title,
@@ -108,9 +110,6 @@ async function taskRelations(orgId: string, id: string, t: typeof task.$inferSel
         and(eq(task.parentTaskId, id), eq(task.organizationId, orgId), isNull(task.archivedAt)),
       ),
     originOf('task', id),
-    // Concurrent with the dependency reads rather than after them: the state type depends only on
-    // the task row already in hand, so serialising it would add a round trip for nothing.
-    teamWorkflows(orgId, [t.teamId]),
   ]);
 }
 
@@ -140,8 +139,10 @@ export async function latestUpdateFor(
       health: update.health,
       body: update.body,
       createdAt: update.createdAt,
+      author: actor.displayName,
     })
     .from(update)
+    .leftJoin(actor, eq(actor.id, update.authorId))
     .where(
       and(
         eq(update.organizationId, orgId),
@@ -153,7 +154,14 @@ export async function latestUpdateFor(
     .limit(1);
   const u = rows[0];
   if (!u) return null;
-  return { id: u.id, health: u.health, body: u.body, createdAt: u.createdAt.toISOString() };
+  return {
+    id: u.id,
+    health: u.health,
+    body: u.body,
+    createdAt: u.createdAt.toISOString(),
+    author: u.author === null ? null : { displayName: u.author },
+    href: entityHref(orgId, 'update', u.id),
+  };
 }
 
 /** Exact task read with archive state and only active, visible related tasks. */
@@ -170,10 +178,21 @@ export async function hydrateTask(
   const t = rows[0];
   if (!t) throw new NotFoundError();
 
-  const [[blocking, blockedBy, subtasks, origin, workflows], onMilestone] = await Promise.all([
-    taskRelations(orgId, id, t),
+  const [[blocking, blockedBy, subtasks, origin], onMilestone] = await Promise.all([
+    taskRelations(orgId, id),
     milestoneRefOf(orgId, t.milestoneId),
   ]);
+  const groups = {
+    blocking: blocking.filter(canViewTask),
+    blockedBy: blockedBy.filter(canViewTask),
+    subtasks: subtasks.filter(canViewTask),
+  };
+  // One lookup for the task's own team and every related task's team, which is usually the same.
+  const relatedTeams = [...groups.blocking, ...groups.blockedBy, ...groups.subtasks].map(
+    (row) => row.teamId,
+  );
+  const workflows = await teamWorkflows(orgId, [t.teamId, ...relatedTeams]);
+  const related = await taskRefGroups(orgId, groups, workflows);
 
   return {
     id: t.id,
@@ -214,11 +233,32 @@ export async function hydrateTask(
     // mirrored from an external system, this says which channel, performer, and conversation made
     // it. Null when no recorded change created the task or its origin cannot be placed.
     origin: hydratedOrigin(origin),
-    blocking: blocking.filter(canViewTask).map(taskRef),
-    blockedBy: blockedBy.filter(canViewTask).map(taskRef),
-    subtasks: subtasks.filter(canViewTask).map(taskRef),
+    blocking: related.blocking,
+    blockedBy: related.blockedBy,
+    subtasks: related.subtasks,
     createdAt: t.createdAt.toISOString(),
   };
+}
+
+/** A project's unarchived tasks, with what its card, its milestones, and the view filter read. */
+function projectTaskRows(projectId: string) {
+  return db
+    .select({
+      id: task.id,
+      title: task.title,
+      state: task.state,
+      teamId: task.teamId,
+      projectId: task.projectId,
+      programId: task.programId,
+      milestoneId: task.milestoneId,
+      completedAt: task.completedAt,
+      visibility: task.visibility,
+      dueDate: task.dueDate,
+      assignee: actor.displayName,
+    })
+    .from(task)
+    .leftJoin(actor, eq(actor.id, task.assigneeId))
+    .where(and(eq(task.projectId, projectId), isNull(task.archivedAt)));
 }
 
 /** Project: overview, health, milestones, linked initiatives, latest update. */
@@ -226,6 +266,7 @@ export async function hydrateProject(
   orgId: string,
   id: string,
   canViewTask: TaskViewFilter,
+  sink?: ReadSink,
 ): Promise<unknown> {
   const rows = await db
     .select()
@@ -247,21 +288,7 @@ export async function hydrateProject(
       .from(milestone)
       .where(eq(milestone.projectId, id))
       .orderBy(asc(milestone.sort), asc(milestone.id)),
-    db
-      .select({
-        id: task.id,
-        title: task.title,
-        state: task.state,
-        teamId: task.teamId,
-        projectId: task.projectId,
-        programId: task.programId,
-        milestoneId: task.milestoneId,
-        completedAt: task.completedAt,
-        visibility: task.visibility,
-      })
-      .from(task)
-      .where(and(eq(task.projectId, id), isNull(task.archivedAt)))
-      .orderBy(asc(task.dueDate), asc(task.createdAt)),
+    projectTaskRows(id),
     db
       .select({ id: initiative.id, name: initiative.name })
       .from(initiativeProject)
@@ -272,6 +299,8 @@ export async function hydrateProject(
 
   const visibleTasks = taskRows.filter(canViewTask);
   const progress = milestoneProgressOf(visibleTasks);
+  const work = await projectWorkOf(orgId, visibleTasks);
+  if (sink) sink.workIndex = work.index;
 
   return {
     id: p.id,
@@ -290,7 +319,8 @@ export async function hydrateProject(
     targetDateResolution: p.targetDateResolution,
     targetDateFiscalYearStartMonth: p.targetDateFiscalYearStartMonth,
     taskCount: visibleTasks.length,
-    tasks: visibleTasks.slice(0, 4).map(taskRef),
+    work: work.summary,
+    tasks: work.next,
     milestones: milestones.map((m) => ({
       id: m.id,
       name: m.name,
@@ -299,7 +329,7 @@ export async function hydrateProject(
       sort: m.sort,
       progress: progress.get(m.id) ?? { total: 0, completed: 0 },
     })),
-    initiatives: initiativeRows,
+    initiatives: withHrefs(orgId, 'initiative', initiativeRows),
     latestUpdate,
     createdAt: p.createdAt.toISOString(),
   };
@@ -360,9 +390,9 @@ export async function hydrateProgram(
     status: p.status,
     health: p.health,
     ownerId: p.ownerId,
-    projects: projectRows,
+    projects: withHrefs(orgId, 'project', projectRows),
     rollup: { projects: projectRows.length, tasks: visibleTasks.length },
-    initiatives: initiativeRows,
+    initiatives: withHrefs(orgId, 'initiative', initiativeRows),
     latestUpdate,
     createdAt: p.createdAt.toISOString(),
   };
@@ -416,8 +446,8 @@ export async function hydrateInitiative(orgId: string, id: string): Promise<unkn
     targetDateResolution: i.targetDateResolution,
     targetDateFiscalYearStartMonth: i.targetDateFiscalYearStartMonth,
     childMix: { projects: projectRows.length, programs: programRows.length },
-    projects: projectRows,
-    programs: programRows,
+    projects: withHrefs(orgId, 'project', projectRows),
+    programs: withHrefs(orgId, 'program', programRows),
     createdAt: i.createdAt.toISOString(),
   };
 }
@@ -463,6 +493,6 @@ export async function hydrateCycle(
     status: cy.status,
     startsAt: cy.startsAt.toISOString(),
     endsAt: cy.endsAt.toISOString(),
-    tasks: taskRows.filter(canViewTask).map(taskRef),
+    tasks: await taskRefsWithState(orgId, taskRows.filter(canViewTask)),
   };
 }

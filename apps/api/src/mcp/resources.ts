@@ -52,6 +52,7 @@ import {
   hydrateProgram,
   hydrateProject,
   hydrateTask,
+  type ReadSink,
   type TaskViewFilter,
 } from './resource-work-hydrators';
 import { authorize, scopedActor } from './result';
@@ -275,6 +276,7 @@ export async function authorizeResourceUri(ctx: McpContext, uri: string): Promis
  * @param orgId - The organization the entity lives in.
  * @param type - The entity type.
  * @param id - The entity id.
+ * @param sink - Receives what the read builds for a card beside the payload.
  * @returns the hydrated DTO.
  * @throws {NotFoundError} When it does not exist or is below the caller's view.
  */
@@ -283,11 +285,12 @@ export async function readEntity(
   orgId: string,
   type: string,
   id: string,
+  sink?: ReadSink,
 ): Promise<unknown> {
   const actorCtx = await authorizeEntity(ctx, orgId, type, id);
   /* v8 ignore next -- @preserve authorizeEntity rejects an unknown type before this runs */
   if (!isReadableType(type)) throw new NotFoundError();
-  return hydrate(type, orgId, id, await buildTaskViewFilter(orgId, actorCtx.actorId));
+  return hydrate(type, orgId, id, await buildTaskViewFilter(orgId, actorCtx.actorId), sink);
 }
 
 /**
@@ -309,6 +312,7 @@ async function hydrate(
   orgId: string,
   id: string,
   canViewTask: TaskViewFilter,
+  sink?: ReadSink,
 ): Promise<unknown> {
   switch (type) {
     case 'org':
@@ -316,7 +320,7 @@ async function hydrate(
     case 'task':
       return hydrateTask(orgId, id, canViewTask);
     case 'project':
-      return hydrateProject(orgId, id, canViewTask);
+      return hydrateProject(orgId, id, canViewTask, sink);
     case 'program':
       return hydrateProgram(orgId, id, canViewTask);
     case 'initiative':

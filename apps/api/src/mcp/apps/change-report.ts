@@ -2,416 +2,368 @@
  * `@docket/api` — the change-report widget.
  *
  * @remarks
- * This surface executes writes immediately instead of proposing them, which means the report card
- * is the only place a person ever sees what actually happened. So it shows **diffs, not end
- * states** — "Priority: High → Low" rather than "Priority: Low", because the second is not
- * checkable — and it gives `skipped` items the same visual weight as changed ones. A bulk write
- * routinely half-succeeds, and the half that did not is precisely the part prose buries.
+ * This surface executes writes immediately instead of proposing them, so this card is the only
+ * place a person sees what actually happened. It shows **diffs, not end states** — "Priority: High →
+ * Low" rather than "Priority: Low", because only the first is checkable — and gives what was left
+ * alone its own section, because a bulk write routinely half-succeeds and prose buries that half.
  *
- * Undo lives here rather than in the transcript because taking a change back is a decision about a
- * specific set, and the card is the only place that set is visible.
+ * One card serves `capture`, `update`, `archive`, `organize`, `plan_commit`, `define_labels`, and
+ * `define_template`. It reports an event,
+ * so it is built as a receipt rather than a resource card:
+ * - a status glyph and a one-line summary of what happened, with a chip for where it landed;
+ * - a section of rows anchored by what was done to each (added, edited, archived);
+ * - a section for what was left alone;
+ * - Undo in a footer, under what it would take back.
+ *
+ * A filed plan is a tree, so its card shows the top level with each item's child count inline and
+ * the whole tree in fullscreen. Printing thirty rows at equal weight hides the shape the reader
+ * needs to check.
+ *
+ * Field values arrive in `structuredContent` as the model reads them. The result's `_meta` carries
+ * how a person should read them (see `change-render.ts`): names instead of ids, a state change as one
+ * field instead of three, and a rewrite of long text as the words that changed.
  */
 import { appDocument } from './runtime';
 
-/** The widget's markup: a headline, the diff rows, what was skipped, and two actions. */
-const BODY = `
-<div class="headline" id="headline" aria-live="polite"></div>
-<div class="rows" id="rows"></div>
-<div class="group-label" id="skipped-label" hidden></div>
-<div class="rows skipped" id="skipped"></div>
-<button id="rest" class="rest quiet" hidden></button>
-<div class="actions">
-  <button id="undo" hidden>Undo</button>
-</div>`;
-
-/**
- * The widget's script.
- *
- * @remarks
- * Reads `structuredContent`, which every write tool on this surface declares an `outputSchema` for
- * — so the card renders from the same contract the model reads, and the two cannot disagree about
- * what happened.
- *
- * Waiting, stalling, cancellation and failure are the runtime's, not this file's. `onData` runs
- * only when there is a change set to draw.
- */
 const SCRIPT = String.raw`
 (() => {
-  const el = (id) => document.getElementById(id);
-  const INLINE_ROWS = 3;
-  let state = null;
+  const d = window.docket;
+  /**
+   * How much a receipt shows inline. It sits in a conversation beside the model's own account of
+   * the write, so it confirms and offers Undo; fullscreen shows every row and every field.
+   */
+  const INLINE_ROWS = 5;
+  const INLINE_CHANGED = 3;
+  const INLINE_SKIPPED = 2;
+  const INLINE_FIELDS = 2;
+  const INLINE_FIELDS_SINGLE = 4;
+  let data = null;
+  let undone = false;
 
-  // One card serves capture, update, archive and organize, so the verb comes from the tool the
-  // host says it rendered rather than from the payload. "Changed 1 item" for an archive is not
-  // wrong so much as useless: the person needs to know which of four things just happened.
   const VERB = {
-    capture: 'Captured',
-    update: 'Changed',
-    archive: 'Archived',
-    organize: 'Filed',
-    define_labels: 'Saved',
-    define_template: 'Saved',
-  };
-  const NOTHING = {
-    capture: 'Nothing captured',
-    update: 'Nothing changed',
-    archive: 'Nothing archived',
-    organize: 'Nothing to file',
-    define_labels: 'Already set up',
-    define_template: 'Already set up',
+    capture: 'Captured', update: 'Changed', archive: 'Archived', organize: 'Filed', plan_commit: 'Filed',
+    define_labels: 'Saved', define_template: 'Saved',
   };
   const LEFT_ALONE = {
-    capture: 'Not captured',
-    update: 'Not changed',
-    archive: 'Not archived',
-    organize: 'Not filed',
-    define_labels: 'Not saved',
-    define_template: 'Not saved',
+    capture: 'Not captured', update: 'Not changed', archive: 'Not archived', organize: 'Not filed',
+    define_labels: 'Not saved', define_template: 'Not saved',
   };
-
-  // Wire keys are not labels. Anything absent falls back to de-camel-casing, so a field added to a
-  // write tool reads acceptably on the day it ships rather than as 'targetDate'.
+  const NOTHING = {
+    capture: 'Nothing captured', update: 'Nothing changed', archive: 'Nothing archived', organize: 'Nothing to file',
+    plan_commit: 'Nothing to file', define_labels: 'Already set up', define_template: 'Already set up',
+  };
+  const REASON = {
+    not_permitted: 'You cannot edit this one',
+    already_archived: 'Already archived',
+    not_archived: 'Was not archived',
+    changed_since: 'Someone else changed it',
+    gone: 'No longer exists',
+    label_out_of_scope: 'A label belongs to another team',
+    conflict: 'Clashes with an existing name or team',
+    not_found: 'Names something that is not there',
+    validation_error: 'The request was incomplete',
+  };
   const FIELD_LABEL = {
-    state: 'State',
-    status: 'Status',
-    dueDate: 'Due',
-    startDate: 'Start',
-    targetDate: 'Target',
-    priority: 'Priority',
-    title: 'Title',
-    name: 'Name',
-    description: 'Description',
-    estimate: 'Estimate',
-    assigneeId: 'Assignee',
-    delegateId: 'Delegate',
-    projectId: 'Project',
-    programId: 'Program',
-    milestoneId: 'Milestone',
-    cycleId: 'Cycle',
-    parentTaskId: 'Parent',
-    health: 'Health',
-    labels: 'Labels',
-    color: 'Color',
-    groupId: 'Group',
-    teamId: 'Team',
-    exclusive: 'Pick',
-    scope: 'Shared with',
-    draftTitle: 'Starting title',
-    draftName: 'Starting name',
-    body: 'Body',
+    state: 'State', status: 'Status', statusId: 'Status', dueDate: 'Due', startDate: 'Start',
+    targetDate: 'Target', priority: 'Priority', title: 'Title', name: 'Name', summary: 'Summary',
+    description: 'Description', estimate: 'Estimate', assigneeId: 'Assignee', delegateId: 'Delegate',
+    leadId: 'Lead', ownerId: 'Owner', projectId: 'Project', programId: 'Program',
+    milestoneId: 'Milestone', cycleId: 'Cycle', parentTaskId: 'Parent', health: 'Health', labels: 'Labels',
+    color: 'Color', groupId: 'Group', teamId: 'Team', exclusive: 'Pick', scope: 'Shared with',
+    draftTitle: 'Starting title', draftName: 'Starting name', body: 'Body',
   };
-
-  function toolName() {
-    const info = window.docket.hostContext.toolInfo;
-    return (info && info.tool && info.tool.name) || '';
-  }
-
-  function fieldLabel(field) {
-    return (
-      window.docket.own(FIELD_LABEL, field) ||
-      String(field).replace(/([a-z0-9])([A-Z])/g, '$1 $2').replace(/^./, (c) => c.toUpperCase())
-    );
-  }
-
-  // Only wire enums and dates are rewritten for reading, along with the server's "none" for an
-  // unset value. Everything else is text someone typed or a name the server already resolved, and
-  // re-casing it misstates it: "was Bug" for a label called "bug" hides a case-only rename.
+  // Only wire enums and dates are reworded for reading, with the server's "none" for an unset value.
+  // Anything else is text someone typed or a name the server resolved, and re-casing it misstates
+  // it: "was Bug" for a label called "bug" hides a case-only rename.
   const REWORDED = {
-    state: true,
-    status: true,
-    priority: true,
-    health: true,
-    scope: true,
-    color: true,
-    dueDate: true,
-    startDate: true,
-    targetDate: true,
-    startDateResolution: true,
-    targetDateResolution: true,
+    state: true, status: true, priority: true, health: true, scope: true, color: true, dueDate: true,
+    startDate: true, targetDate: true, startDateResolution: true, targetDateResolution: true,
   };
 
-  function valueLabel(field, value) {
-    return value === 'none' || window.docket.own(REWORDED, field)
-      ? window.docket.label(value)
-      : String(value);
+  /** What each write did to a row, as the icon that anchors it. */
+  const ACTION_ICON = { capture: 'added', update: 'edited', archive: 'archived', organize: 'added', plan_commit: 'added' };
+
+  const tool = () => {
+    const info = d.hostContext.toolInfo;
+    return (info && info.tool && info.tool.name) || '';
+  };
+  const { plural, capital, noun: nounOf } = d;
+  const fieldLabel = (field) =>
+    d.own(FIELD_LABEL, field) || capital(String(field).replace(/([a-z0-9])([A-Z])/g, '$1 $2').toLowerCase());
+  const blank = (value) => value === null || value === undefined || value === '' || value === 'none';
+  const valueLabel = (field, value) => (d.own(REWORDED, field) ? d.label(value) : String(value));
+
+  /** How a person should read one field, from the render model when the server sent one. */
+  function fieldRender(itemId, field) {
+    const changes = d.renderModel().changes;
+    const fields = changes && d.own(changes, itemId);
+    return (fields && d.own(fields, field.field)) || {};
   }
 
-  function text(node, value) { node.textContent = value; }
-
-  function untitled(item) {
-    return window.docket.untitled(item.kind);
+  function rewriteValue(rewrite) {
+    const dd = d.el('dd');
+    const counts = [];
+    if (rewrite.wordsAdded) counts.push('+' + rewrite.wordsAdded);
+    if (rewrite.wordsRemoved) counts.push('−' + rewrite.wordsRemoved);
+    dd.appendChild(d.el('span', 'now', 'Rewritten'));
+    if (counts.length > 0) dd.appendChild(d.el('span', 'excerpt', counts.join(' ') + ' words'));
+    const excerpt = d.el('div', 'excerpt full');
+    if (rewrite.lead) excerpt.appendChild(document.createTextNode((rewrite.leadCut ? '…' : '') + rewrite.lead + ' '));
+    if (rewrite.removed) excerpt.appendChild(d.el('del', '', rewrite.removed));
+    if (rewrite.removed && rewrite.inserted) excerpt.appendChild(document.createTextNode(' '));
+    if (rewrite.inserted) excerpt.appendChild(d.el('ins', '', rewrite.inserted));
+    if (rewrite.tail) excerpt.appendChild(document.createTextNode(' ' + rewrite.tail + (rewrite.tailCut ? '…' : '')));
+    dd.appendChild(excerpt);
+    return dd;
   }
 
-  /** A rename shows only the old title; the row above already shows the new one. */
-  function changeValue(field) {
-    const value = document.createElement('dd');
-    const from = document.createElement('span');
-    from.textContent = valueLabel(field.field, field.from);
+  /** Writing a card never prints whole: it is Markdown, and it can run to pages. */
+  const LONG_TEXT = { description: true, summary: true, body: true };
+
+  /** One field's value: was → now, or only "was" for a rename, whose new name heads the row. */
+  function changeValue(field, render) {
+    if (render.rewrite) return rewriteValue(render.rewrite);
+    const dd = d.el('dd');
+    if (d.own(LONG_TEXT, field.field) && render.to === undefined) {
+      dd.appendChild(d.el('span', 'now', blank(field.to) ? 'Removed' : 'Rewritten'));
+      return dd;
+    }
+    const from = render.from !== undefined ? render.from : field.from;
+    const to = render.to !== undefined ? render.to : field.to;
     if (field.field === 'title' || field.field === 'name') {
-      from.className = 'was';
-      value.append('was ', from);
-      return value;
+      dd.append('was ', d.el('span', 'was', from));
+      return dd;
     }
-    const to = document.createElement('span');
-    to.className = 'to';
-    to.textContent = valueLabel(field.field, field.to);
-    // A field that was unset has nothing to strike through, and an arrow with no left-hand side
-    // reads as a rendering fault.
-    if (from.textContent === '') {
-      value.appendChild(to);
-      return value;
-    }
-    from.className = 'from';
-    value.append(from, ' → ', to);
-    return value;
+    if (!blank(from)) dd.append(d.el('span', 'was', valueLabel(field.field, from)), '→');
+    dd.appendChild(d.el('span', 'now', blank(to) ? 'None' : valueLabel(field.field, to)));
+    return dd;
   }
 
-  /** One line per changed field, with both values. */
-  function diffLine(fields) {
-    const list = document.createElement('dl');
-    list.className = 'changes';
-    for (const field of fields) {
-      const label = document.createElement('dt');
-      label.textContent = fieldLabel(field.field);
-      list.append(label, changeValue(field));
+  /** The fields that changed on one row, up to limit inline, then how many more there are. */
+  function changeList(item, limit) {
+    const list = d.el('dl', 'changes');
+    const fields = visibleFields(item);
+    const shown = d.fullscreen ? fields : fields.slice(0, limit);
+    for (const field of shown) {
+      list.appendChild(d.el('dt', '', fieldLabel(field.field)));
+      list.appendChild(changeValue(field, fieldRender(item.id, field)));
     }
-    return list;
+    if (fields.length > shown.length) {
+      list.appendChild(d.el('dt', ''));
+      list.appendChild(d.el('dd', 'excerpt', plural(fields.length - shown.length, 'more field')));
+    }
+    return list.childElementCount > 0 ? list : null;
   }
 
-  function diffRow(item) {
-    const row = document.createElement('div');
-    row.className = item.matched ? 'row matched' : 'row';
-    // The indent is what makes "a project under this initiative, three tasks under that project"
-    // checkable at a glance.
-    if (item.depth) {
-      row.style.paddingLeft = String(item.depth * 16) + 'px';
-    }
-    const name = document.createElement('span');
-    name.className = 'name';
-    name.textContent = item.title || untitled(item);
-    name.title = item.title || untitled(item);
-    row.appendChild(name);
-    // A label or template row says where it lives, since two labels called Bug in different teams
-    // are otherwise the same line.
-    if (item.note || item.matched) {
-      const facts = document.createElement('div');
-      facts.className = 'facts';
-      // Shows that a repeat run reconciled instead of duplicating.
-      facts.textContent = [item.note, item.matched ? 'already there' : '']
-        .filter(Boolean)
-        .join(' · ');
-      row.appendChild(facts);
-    }
-    const open = window.docket.openButton(item);
-    if (open) {
-      row.appendChild(open);
-    }
-    if (item.fields && item.fields.length > 0) {
-      row.appendChild(diffLine(item.fields));
-    }
-    return row;
-  }
-
-  function skippedRow(item) {
-    const row = document.createElement('div');
-    row.className = 'row';
-    const name = document.createElement('span');
-    name.className = 'name';
-    name.textContent = item.title || untitled(item);
-    name.title = item.title || untitled(item);
-    const reason = document.createElement('span');
-    reason.className = 'reason';
-    // Spelled out, because "not_permitted" is a wire value, not something to show a person.
-    reason.textContent =
-      window.docket.own(
-        {
-          not_permitted: 'you cannot edit this one',
-          already_archived: 'already archived',
-          not_archived: 'was not archived',
-          changed_since: 'someone else changed it',
-          gone: 'no longer exists',
-          label_out_of_scope: 'a label belongs to another team',
-          conflict: 'clashes with an existing name or team',
-          not_found: 'names something that is not there',
-          validation_error: 'the request was incomplete',
-        },
-        item.reason,
-      ) || item.reason;
-    row.append(name, reason);
-    return row;
-  }
-
-  function headlineFor(data) {
-    const tool = toolName();
-    const verb = window.docket.own(VERB, tool) || 'Changed';
-
-    if (typeof data.changed === 'number') {
-      const n = data.changed;
-      if (n === 0) {
-        return window.docket.own(NOTHING, tool) || 'Nothing changed';
-      }
-      // The single row names the item, so the verb alone is enough.
-      return n === 1 ? verb : verb + ' ' + n + ' items';
-    }
-    if (Array.isArray(data.placed)) {
-      // Name what the plan built rather than counting its nodes.
-      const roots = data.placed.filter((p) => !p.parent);
-      if (roots.length === 0) {
-        return window.docket.own(NOTHING, tool) || 'Nothing to do';
-      }
-      return verb + ' ' + roots.map((r) => '“' + (r.title || r.ref) + '”').join(', ');
-    }
-    if (Array.isArray(data.items)) {
-      // The count matters only once the card folds and some rows are off screen.
-      if (data.items.length === 0) return window.docket.own(NOTHING, tool) || 'Nothing captured';
-      return data.items.length === 1 ? verb : verb + ' ' + data.items.length + ' items';
-    }
-    return 'Done';
+  function undoFooter() {
+    if (!data.changeSetId || undone) return null;
+    return d.footer([d.iconButton('undo', 'Undo', undo, { tonal: true })]);
   }
 
   /**
-   * Flatten what \`organize\` placed back into the shape it was written as: a tree.
-   *
-   * \`ref\` is the handle the model invented so a child could name its parent inside one call. It is
-   * not a name — rendering it is how this card came to show rows reading "t-date" — but it is
-   * exactly the pointer needed to rebuild the nesting, which is the one thing a caller of this tool
-   * has to check and the one thing a flat list destroys.
-   *
-   * Matched rows stay in, dimmed. They are the evidence that a second run of the same plan
-   * reconciled instead of duplicating, and dropping them makes an idempotent call look like it did
-   * less than it did.
+   * A filed row's anchor: the arrow that says it sits under the row above, the mark that says it
+   * was added, or its own kind when it was already there.
    */
-  function treeOf(placed) {
+  function treeAnchor(node, depth) {
+    if (depth > 0) return 'child';
+    return node.created === false ? node.kind : 'added';
+  }
+
+  /** What one node's children are called: a task's are subtasks, anything else's are their kind. */
+  function childNoun(node, kids) {
+    if (node.kind === 'task') return 'subtask';
+    return nounOf(kids[0] && kids[0].kind);
+  }
+
+  /** Fields a person reads on a row, after folding the ones that ride along with another. */
+  function visibleFields(item) {
+    return (item.fields || []).filter((field) => !fieldRender(item.id, field).hidden);
+  }
+
+  /** A count of kinds, said as a list: "1 project and 3 tasks". */
+  function countsPhrase(counts) {
+    const parts = counts.filter(([count]) => count > 0).map(([count, noun]) => plural(count, noun));
+    if (parts.length <= 1) return parts.join('');
+    return parts.slice(0, -1).join(', ') + ' and ' + parts[parts.length - 1];
+  }
+
+  /** The receipt's status: everything done, some left alone, or nothing at all. */
+  function statusOf(changed, skipped) {
+    if (changed === 0) return 'none';
+    return skipped > 0 ? 'partial' : 'done';
+  }
+
+  /** The one-line summary of a flat write. */
+  function flatSummary(verb, count, single, kind, rows) {
+    if (count === 0) return d.own(NOTHING, tool()) || 'Nothing changed';
+    if (single && tool() === 'update') {
+      const fields = visibleFields(single).length;
+      return fields > 0 ? verb + ' ' + plural(fields, 'field') : verb;
+    }
+    return verb + ' ' + (kind ? plural(count, nounOf(kind)) : kindsPhrase(rows));
+  }
+
+  /**
+   * What a flat report's rows are. update and archive name one entity; capture names none and only
+   * makes tasks; a catalog tool names each row's kind, and one define_labels call can mix labels and
+   * label groups, which reads as '' here.
+   */
+  function kindOf(rows) {
+    if (data.entity) return data.entity;
+    const kinds = new Set(rows.map((row) => row.kind).filter(Boolean));
+    if (kinds.size === 0) return 'task';
+    return kinds.size === 1 ? [...kinds][0] : '';
+  }
+
+  /** "1 label group and 2 labels": each kind's count, in the order the rows name them. */
+  function kindsPhrase(rows) {
+    const kinds = [...new Set(rows.map((row) => row.kind))];
+    return countsPhrase(kinds.map((kind) => [rows.filter((row) => row.kind === kind).length, nounOf(kind)]));
+  }
+
+  /** The flat reports: capture, update, archive. */
+  function flat() {
+    const rows = data.changes || data.items || [];
+    const skipped = data.skipped || [];
+    const kind = kindOf(rows);
+    const verb = d.own(VERB, tool()) || 'Changed';
+    const count = typeof data.changed === 'number' ? data.changed : rows.length;
+    const single = rows.length === 1 ? rows[0] : null;
+    const view = d.canvas();
+    view.appendChild(d.receipt({
+      status: statusOf(count, skipped.length),
+      summary: flatSummary(verb, count, single, kind, rows),
+      place: single ? { kind: kind || single.kind, title: single.title || d.untitled(kind), href: single.href } : null,
+      detail: skipped.length > 0 ? plural(skipped.length, nounOf(kindOf(skipped))) + ' left alone' : '',
+    }));
+    const list = single ? changeList(single, INLINE_FIELDS_SINGLE) : null;
+    if (list) {
+      const section = d.section({ label: 'Changes' });
+      section.body.appendChild(list);
+      view.appendChild(section.node);
+    } else if (!single && rows.length > 0) {
+      // A catalog row names its own kind, because one define_labels call mixes labels and groups,
+      // and says where it lives, because two labels called Bug in different teams are one line.
+      view.appendChild(rowSection(kind ? capital(nounOf(kind)) + 's' : 'Items', rows.map((item) => ({
+        anchor: d.kindIcon(d.own(ACTION_ICON, tool()) || 'edited'), title: item.title, kind: item.kind || kind,
+        href: item.href, meta: [item.note, item.matched && 'Already there'], extra: changeList(item, INLINE_FIELDS),
+      })), data.listHref, INLINE_CHANGED));
+    }
+    if (skipped.length > 0) {
+      view.appendChild(rowSection(d.own(LEFT_ALONE, tool()) || 'Not changed', skipped.map((item) => ({
+        anchor: d.kindIcon('alert'), title: item.title, kind: item.kind || kind,
+        trailing: d.el('span', 'reason', d.own(REASON, item.reason) || d.label(item.reason)),
+      })), data.listHref, INLINE_SKIPPED));
+    }
+    const foot = undoFooter();
+    if (foot) view.appendChild(foot);
+  }
+
+  function rowSection(label, rows, listHref, inline) {
+    const shown = d.fullscreen ? rows : rows.slice(0, inline);
+    const more = rows.length > shown.length ? d.overflowAction('Show all', listHref) : null;
+    const section = d.section({ label, count: rows.length > shown.length ? shown.length + ' of ' + rows.length : rows.length, action: more });
+    for (const row of shown) section.body.appendChild(d.row(row));
+    return section.node;
+  }
+
+  /** The existing place every top-level item was filed into, when they share one. */
+  function sharedContainer(roots) {
+    const ids = new Set(roots.map((node) => node.container && node.container.id));
+    return ids.size === 1 && roots[0] && roots[0].container ? roots[0].container : null;
+  }
+
+  /** "9 tasks and 17 subtasks", or each kind's count when a plan mixes kinds. */
+  function planPhrase(placed, roots) {
+    if (placed.every((node) => node.kind === 'task')) {
+      return countsPhrase([[roots.length, 'task'], [placed.length - roots.length, 'subtask']]);
+    }
+    const kinds = ['initiative', 'program', 'project', 'task'];
+    return countsPhrase(kinds.map((kind) => [placed.filter((node) => node.kind === kind).length, kind]));
+  }
+
+  /** The one-line summary of a filed plan. */
+  function planSummary(placed, roots) {
+    if (roots.length === 0) return d.own(NOTHING, tool()) || 'Nothing to file';
+    return (d.own(VERB, tool()) || 'Filed') + ' ' + planPhrase(placed, roots);
+  }
+
+  /** A filed plan: what was filed and where, then the top level with child counts. */
+  function tree() {
+    const placed = data.placed;
     const children = new Map();
     for (const node of placed) {
       const key = node.parent || '';
-      const bucket = children.get(key);
-      if (bucket) {
-        bucket.push(node);
-      } else {
-        children.set(key, [node]);
-      }
+      children.set(key, (children.get(key) || []).concat([node]));
     }
+    const roots = children.get('') || [];
+    const matched = placed.filter((node) => node.created === false).length;
+    const container = sharedContainer(roots);
+    const rootKind = roots.length > 0 && roots.every((node) => node.kind === roots[0].kind) ? roots[0].kind : '';
+    const view = d.canvas();
+    view.appendChild(d.receipt({
+      status: roots.length === 0 ? 'none' : 'done',
+      summary: planSummary(placed, roots),
+      place: container,
+      detail: matched > 0 ? String(matched) + ' already there' : '',
+    }));
+    if (roots.length === 0) return;
     const rows = [];
-    const walk = (parentRef, depth) => {
-      // Depth is capped rather than unbounded: past three levels the indent eats the title, and
-      // \`organize\` cannot nest deeper than initiative → program → project → task anyway.
-      for (const node of children.get(parentRef) || []) {
-        rows.push({
-          id: node.id,
-          title: node.title || node.ref,
-          href: node.href,
-          kind: node.kind,
-          matched: node.created === false,
-          depth: Math.min(depth, 3),
-        });
-        walk(node.ref, depth + 1);
-      }
+    const walk = (node, depth) => {
+      const kids = children.get(node.ref) || [];
+      rows.push({
+        anchor: d.kindIcon(treeAnchor(node, depth)), title: node.title || d.untitled(node.kind), kind: node.kind,
+        href: node.href, depth, dim: node.created === false,
+        meta: [node.created === false && 'Already there', !d.fullscreen && kids.length > 0 && plural(kids.length, childNoun(node, kids))],
+      });
+      if (d.fullscreen) for (const kid of kids) walk(kid, depth + 1);
     };
-    // A single root is already named in the headline, so the tree starts under it rather than
-    // printing it twice — the card said “Filed “Q3 transit access”” and then, immediately below,
-    // “Q3 transit access”.
-    const roots = placed.filter((node) => !node.parent);
-    const only = roots.length === 1 ? roots[0] : null;
-    walk(only ? only.ref : '', 0);
-    return rows;
+    const shownRoots = d.fullscreen ? roots : roots.slice(0, INLINE_ROWS);
+    for (const root of shownRoots) walk(root, 0);
+    const hidden = !d.fullscreen && placed.length > shownRoots.length;
+    const section = d.section({
+      label: rootKind ? capital(nounOf(rootKind)) + 's' : 'Items',
+      count: roots.length > shownRoots.length ? shownRoots.length + ' of ' + roots.length : roots.length,
+      action: hidden ? d.overflowAction('Show all', container && container.href) : null,
+    });
+    for (const row of rows) section.body.appendChild(d.row(row));
+    view.appendChild(section.node);
+    const foot = undoFooter();
+    if (foot) view.appendChild(foot);
   }
 
-  // Every source names its own kind somewhere — \`update\`/\`archive\` scope the whole call to one
-  // \`entity\`, \`organize\` tags each placed node with its \`kind\`, and \`capture\` only ever makes a
-  // task — so every row below carries a real \`kind\` rather than leaving the title's fallback to
-  // guess.
-  function itemsOf(data) {
-    if (Array.isArray(data.changes)) {
-      // A catalog row names its own kind, because one define_labels call mixes labels and groups.
-      return data.changes.map((c) => ({ ...c, kind: c.kind || data.entity }));
-    }
-    if (Array.isArray(data.items)) {
-      // \`capture\` sends no \`entity\` and only ever makes tasks. Without the fallback the row has
-      // no kind, and the open action has no path to build.
-      return data.items.map((i) => ({ ...i, kind: data.entity || 'task' }));
-    }
-    if (Array.isArray(data.placed)) {
-      return treeOf(data.placed);
-    }
-    return [];
-  }
-
-  function render(data) {
-    state = data;
-    const isPlan = Array.isArray(data.placed);
-
-    const headline = el('headline');
-    text(headline, headlineFor(data));
-    // A headline that names what was made is the card's title. A bare verb is context for the rows
-    // below, so it takes the caption weight instead of the loudest type on the card.
-    headline.className = isPlan ? 'headline' : 'headline scope';
-
-    const rows = el('rows');
-    rows.replaceChildren();
-    // Indentation is a plan's structure, so its rows sit closer than a flat list's.
-    rows.className = isPlan ? 'rows tree' : 'rows';
-    const items = itemsOf(data);
-    // A tree truncated mid-branch misstates the shape, so a plan is shown whole. A flat change list
-    // still folds.
-    const shown = isPlan ? items : items.slice(0, INLINE_ROWS);
-    for (const item of shown) {
-      rows.appendChild(diffRow(item));
-    }
-    const rest = el('rest');
-    rest.hidden = shown.length === items.length || !data.listHref;
-    rest.textContent = 'Open in Docket to see ' + String(items.length - shown.length) + ' more';
-
-    // \`update\`/\`archive\` scope skipped rows to one \`entity\`; catalog tools name each row's kind.
-    const left = (data.skipped || []).map((s) => ({ ...s, kind: s.kind || data.entity }));
-    const skipped = el('skipped');
-    skipped.replaceChildren();
-    for (const item of left) {
-      skipped.appendChild(skippedRow(item));
-    }
-    // A bulk write routinely half-succeeds. Without a heading the untouched half reads as more of
-    // the same list, which is the one reading that makes the card actively misleading.
-    const skippedLabel = el('skipped-label');
-    skippedLabel.hidden = left.length === 0;
-    // The heading names what the rows under it are; counting them says nothing the rows do not,
-    // since every one of them is on screen.
-    skippedLabel.textContent =
-      left.length === 0 ? '' : window.docket.own(LEFT_ALONE, toolName()) || 'Not changed';
-
-    el('undo').hidden = !data.changeSetId;
-  }
-
-  el('undo').addEventListener('click', async () => {
-    if (!state || !state.changeSetId) {
+  function draw() {
+    if (!data) return;
+    if (undone) {
+      d.canvas().appendChild(d.receipt({ status: 'undone', summary: 'Undone' }));
       return;
     }
-    const button = el('undo');
+    if (Array.isArray(data.placed)) tree();
+    else flat();
+  }
+
+  async function undo(event) {
+    const button = event.currentTarget;
     button.disabled = true;
     try {
-      await window.docket.call('undo', {
-        orgId: window.docket.input.orgId,
-        changeSetId: state.changeSetId,
-      });
-      text(el('headline'), 'Undone');
-      el('rows').replaceChildren();
-      el('skipped').replaceChildren();
-      el('skipped-label').hidden = true;
-      button.hidden = true;
+      await d.call('undo', { orgId: d.input.orgId, changeSetId: data.changeSetId });
+      undone = true;
+      d.notice('');
+      draw();
     } catch {
-      // The message stays beside the rows rather than replacing them: what could not be undone is
-      // exactly the thing the person needs to still be looking at.
-      window.docket.notice('That could not be undone. Open Docket to check it.', 'error');
+      // The rows stay: what could not be undone is exactly what the person needs to still see.
+      d.notice('That could not be undone. Open Docket to check it.', 'error');
       button.disabled = false;
     }
-  });
+  }
 
-  el('rest').addEventListener('click', () => {
-    if (state && state.listHref) window.docket.link(state.listHref);
+  d.onDisplayMode(draw);
+  d.onData((next) => {
+    data = next;
+    draw();
   });
-
-  window.docket.onData(render);
 })();
 `;
 
 /** The rendered change-report document. */
-export const CHANGE_REPORT_HTML = appDocument('Change report', BODY, SCRIPT, { skeletonRows: 2 });
+export const CHANGE_REPORT_HTML = appDocument('Change report', SCRIPT, { skeletonRows: 2 });

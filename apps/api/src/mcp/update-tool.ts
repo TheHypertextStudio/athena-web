@@ -44,11 +44,17 @@ import { enqueueSearchUpsert } from '../search/write-through';
 import type { McpContext } from './auth';
 import type { McpRegistrar } from './catalog';
 import { fieldDiffs, type FieldDiff } from './catalog-rows';
-import { recordChangeSet, trackedFields, type RecordedChange } from './change-set';
+import {
+  recordChangeSet,
+  trackedFields,
+  type ChangeRecord,
+  type RecordedChange,
+} from './change-set';
 import { resolveOptional } from './descriptors';
 import { applyLabelEdit, labelsFitRow, resolveLabelEdit, type LabelEdit } from './update-labels';
 import { isTaskRowVisible, listWork, listWorkFilters, type WorkEntity } from './list-work';
-import { authorize, jsonResult, runTool, scopedActor } from './result';
+import { updateReportResult } from './apps/change-render';
+import { authorize, runTool, scopedActor } from './result';
 import { resolveStateTransition } from './tools-shared';
 import { entityHref, entityListHref } from './entity-href';
 import { taskMilestoneDecisions, type MilestoneDecision } from './task-milestone';
@@ -652,15 +658,20 @@ export function registerUpdateTool(server: McpRegistrar, ctx: McpContext): void 
         changes,
       });
 
-      return jsonResult({
-        matched: visibleRows.length,
-        listHref: entityListHref(input.orgId, entity),
-        changed: changedRows.length,
-        entity,
-        changes: report,
-        skipped,
-        changeSetId,
-      });
+      return updateReportResult(
+        input.orgId,
+        {
+          matched: visibleRows.length,
+          listHref: entityListHref(input.orgId, entity),
+          changed: changedRows.length,
+          entity,
+          changes: report,
+          skipped,
+          changeSetId,
+        },
+        // The rows' own before and after; label sets are recorded separately and read from the report.
+        changes.filter((change): change is ChangeRecord => change.kind === entity),
+      );
     }),
   );
 }

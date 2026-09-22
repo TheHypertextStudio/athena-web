@@ -1,7 +1,7 @@
 ---
 surfaces: ['mcp-app-entity', 'mcp-app-change-report']
 date: 2026-09-22
-verdict: needs-work
+verdict: superseded
 scores:
   brand: 2
   typography: 1

@@ -667,12 +667,6 @@
       "excess": 1
     }
   },
-  "apps/api/src/mcp/apps/entity.ts": {
-    "max-lines-per-function": {
-      "max": 364,
-      "excess": 284
-    }
-  },
   "apps/api/src/mcp/apps/host-routes.ts": {
     "complexity": {
       "max": 13,
@@ -681,8 +675,8 @@
   },
   "apps/api/src/mcp/apps/runtime.ts": {
     "max-lines": {
-      "max": 945,
-      "excess": 445
+      "max": 551,
+      "excess": 51
     }
   },
   "apps/api/src/mcp/archive-tool.ts": {
@@ -783,8 +777,8 @@
       "excess": 6
     },
     "max-lines-per-function": {
-      "max": 149,
-      "excess": 96
+      "max": 132,
+      "excess": 79
     },
     "sonarjs/cognitive-complexity": {
       "max": 16,
@@ -867,20 +861,20 @@
   },
   "apps/api/src/mcp/update-tool.ts": {
     "complexity": {
-      "max": 30,
-      "excess": 27
+      "max": 26,
+      "excess": 23
     },
     "max-lines-per-function": {
-      "max": 197,
-      "excess": 336
+      "max": 189,
+      "excess": 312
     },
     "max-params": {
       "max": 7,
       "excess": 2
     },
     "sonarjs/cognitive-complexity": {
-      "max": 39,
-      "excess": 35
+      "max": 35,
+      "excess": 31
     }
   },
   "apps/api/src/mcp/view-plan-tools.ts": {
@@ -2843,12 +2837,6 @@
     "max-lines-per-function": {
       "max": 149,
       "excess": 69
-    }
-  },
-  "apps/web/e2e/mcp/widget-shots.spec.ts": {
-    "max-lines": {
-      "max": 1034,
-      "excess": 534
     }
   },
   "apps/web/e2e/settings/settings-audit-shots.spec.ts": {

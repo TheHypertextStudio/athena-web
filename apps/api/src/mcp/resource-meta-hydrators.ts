@@ -16,6 +16,7 @@ import {
 import { and, asc, eq, isNull } from 'drizzle-orm';
 
 import { NotFoundError } from '../error';
+import { subjectRefOf } from './hydrated-refs';
 import type { TaskViewFilter } from './resource-work-hydrators';
 
 /** Org summary + entity counts. */
@@ -86,6 +87,7 @@ export async function hydrateUpdate(orgId: string, id: string): Promise<unknown>
     authorId: u.authorId,
     subjectType: u.subjectType,
     subjectId: u.subjectId,
+    subject: await subjectRefOf(orgId, u.subjectType, u.subjectId),
     author,
     health: u.health,
     body: u.body,
@@ -135,6 +137,7 @@ export async function hydrateComment(
     authorId: c.authorId,
     subjectType: c.subjectType,
     subjectId: c.subjectId,
+    subject: await subjectRefOf(orgId, c.subjectType, c.subjectId),
     author,
     body: c.body,
     parentCommentId: c.parentCommentId,

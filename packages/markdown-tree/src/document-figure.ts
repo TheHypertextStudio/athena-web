@@ -1,3 +1,4 @@
+import { decodeEditorEntities } from './text';
 import { Lexer, type Token } from 'marked';
 
 /** The only Docket semantic-figure representation currently accepted in saved Markdown. */
@@ -46,14 +47,6 @@ const FIGCAPTION_PATTERN =
 const ATTRIBUTION_PATTERN =
   /^(?:<span data-docket-credit itemprop="creditText">([^<]*)<\/span>)?(?:<a data-docket-source href="([^"]*)">Source<\/a>)?(?:(?:<a data-docket-license href="([^"]*)"(?: data-docket-generated-label="(true)")? rel="license" itemprop="license">([^<]*)<\/a>)|(?:<span data-docket-license itemprop="license">([^<]*)<\/span>))?$/;
 
-const HTML_ENTITIES: Readonly<Record<string, string>> = {
-  '&amp;': '&',
-  '&lt;': '<',
-  '&gt;': '>',
-  '&quot;': '"',
-  '&#39;': "'",
-};
-
 /** Escape authored content before it enters an HTML text or attribute position. */
 function escapeHtml(value: string): string {
   return value
@@ -64,10 +57,8 @@ function escapeHtml(value: string): string {
     .replaceAll("'", '&#39;');
 }
 
-/** Decode only the five entities emitted by {@link escapeHtml}. */
-function unescapeHtml(value: string): string {
-  return value.replaceAll(/&(amp|lt|gt|quot|#39);/g, (entity) => HTML_ENTITIES[entity] ?? entity);
-}
+/** Decode the five entities emitted by {@link escapeHtml}, with the package's one decoder. */
+const unescapeHtml = decodeEditorEntities;
 
 /** Return whether an image source is safe to place in an `img` element. */
 function isSafeImageSource(value: string): boolean {

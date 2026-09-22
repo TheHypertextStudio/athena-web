@@ -127,7 +127,9 @@ docket://{org}/{type}/{id}
 `session`, `agent`, `view`, or `org`. Docket returns an unreadable resource as not found.
 
 MCP Apps clients can also render `ui://docket/*` resources. Other clients receive structured tool
-and resource results.
+and resource results. Results from the `get_*` tools and `update` can include
+`_meta["docket/render"]`, a display model the app draws from. Clients that do not render apps can
+ignore it.
 
 ## Prompts and notifications
 

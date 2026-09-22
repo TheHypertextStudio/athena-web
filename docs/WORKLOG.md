@@ -356,26 +356,125 @@ routes/project-rollup.ts}`, `domains/work/src/contracts/{milestone,task}.ts`,
 - **Blockers**: None.
 
 ---
-### [MCP-RICH-TEXT-001] MCP App cards render what people write as structure
 
-- **Status**: IN_PROGRESS
+### [MCP-CARDS-003] Inline cards keep to a height budget, and long lists page
+
+- **Status**: REVIEW
 - **Started**: 2026-09-22
 - **Priority**: P1
-- **Description**: A live `get_projects` call in Claude showed a project brief as one paragraph of
-  raw Markdown (`# … ## … - … *not* … &amp;`) that buried the project's state and work. Audit every
-  MCP App widget that carries authored text, then fix what it finds.
+- **Description**: The user asked whether anything is paginated and what the limits are. Nothing
+  was paginated, no card had an overall height limit, and the project card was 1265px tall inline.
+  An inline card sits in a chat transcript and must not be unwieldy.
 - **Subtasks**:
-  - [x] Reproduce in the SEP-1865 harness with stored-shape Markdown; scorecard at
-        `docs/design/audits/2026-09-22-mcp-app-rich-text.md` (needs-work: typography 1, hierarchy
-        1, a11y and responsive gates red)
-  - [ ] Server-built block model in the tool result's `_meta`, rendered with DOM APIs only
-  - [ ] `summary` leads; brief excerpt clamped, full brief behind fullscreen
-  - [ ] Long-text diffs in the change report show a word-level excerpt
-  - [ ] Stored-shape Markdown fixtures and a no-raw-sigils assertion in `widget-shots.spec.ts`
-- **Blockers**: Implementation approach awaits the user's go-ahead (new server render channel).
-- **Learnings**: Every entity fixture carried `summary` and no `description`, and the one long
-  fixture was pre-flattened from a screenshot, so the 2026-08-05 review photographed a card real
-  data never produces. `markdownToPlainText` also leaks `&amp;`, so it is not a drop-in excerpt.
+  - [x] Budget: inline ≤ 520px at 720px and ≤ 680px at 320px, asserted on every capture.
+  - [x] Inline cards recomposed as glances. Fullscreen, reached from an expand button, shows
+        everything.
+  - [x] Fullscreen pagination: 25 per state group in the project Work view; the work list follows
+        `nextCursor` through `list_work`.
+  - [x] A host `maxHeight` smaller than the card cuts it to fit, with a pinned "Show everything".
+  - [x] Phone-width layout: trailing values move under titles, and actions share the kind's line.
+  - [x] Code-review fixes:
+    - A line break (Markdown or `<br>`) separates words in plain text and in the card's prose.
+    - `@docket/markdown-tree` now has one entity decoder, which the figure codec shares.
+    - A project read builds its browsable index from the rows it already loads. It no longer
+      runs a second task scan and filter.
+    - A task read looks up its workflows once.
+    - The clip fade is a mask, so the host frame shows through it.
+    - The card refits when the host changes its height.
+    - A refused fullscreen request leaves the card on the Overview.
+    - A result with no task index falls back to the Overview.
+    - `plural`, `noun` and `capital` live once on `window.docket`.
+  - [x] A project's and a cycle's task sections are labelled "Tasks", not "Work", because they
+        hold only tasks. That covers the section, the fullscreen tab, search, filters, and the
+        milestone actions.
+  - [x] Evidence photographs each expandable card after pressing "Show everything"
+        (`entity-*-expanded-*`). A fullscreen capture now shows the whole card instead of the
+        host's first 876px.
+  - [x] Rebased onto the milestone, provenance, and label/template work on `main`:
+    - Project milestones carry `main`'s progress (`total`, `completed`), and the card reads it.
+    - Receipts cover `define_labels` and `define_template`. Each row names its own kind and
+      where it lives, and only wire enums are reworded.
+    - `organize` keeps a milestone's `projectId`, and a milestone filed into a project names it
+      as its container.
+- **Learnings**: A budget asserted in the evidence suite is what made the cuts honest. Every
+  "just one more section" failed the test until something moved to fullscreen.
+
+### [MCP-CARDS-002] Receipts for writes, and project cards that scale
+
+- **Status**: REVIEW
+- **Started**: 2026-09-22
+- **Priority**: P1
+- **Description**: This is the user's review of the first structure pass (MCP-RICH-TEXT-001).
+  - The filed-plan report read as a resource called "Filed", with Open and Undo competing at the
+    top. Things that serve different functions should have different structures.
+  - A project needs a way to browse a hundred tasks.
+  - Milestones should be actionable.
+  - The latest update should be more than bullet points.
+- **Subtasks**:
+  - [x] Write reports rebuilt as receipts: a status glyph, a one-line summary, a chip for where
+        the work landed, rows anchored by action, and Undo in a footer (`change-report.ts`,
+        `runtime-controls.ts`).
+  - [x] Project work on the server (`project-work.ts`): a state breakdown, the five open tasks to
+        lead with, per-milestone progress, and a browsable index of up to 200 tasks in `_meta`.
+  - [x] The Work view in fullscreen: an Overview/Work switch, state filter chips, a milestone
+        filter, search, and grouped rows (`project-card.ts`).
+  - [x] Milestones: a progress ring, a relative date, overdue in red, the next one marked, and
+        each row opening its tasks.
+  - [x] The latest update as a post: author, how long ago, health, and the body on a lifted
+        surface. The server names the author.
+  - [x] Evidence: 280 captures, including the Work view and milestone filter reached by pressing
+        their controls.
+- **Learnings**:
+  - A tab row and a filter row styled alike read as one control. The view switch needs its own
+    shape: a segmented track with the chosen view lifted out.
+  - Rows inside a group should not repeat the group's name.
+
+### [MCP-RICH-TEXT-001] MCP App cards render what people write as structure
+
+- **Status**: REVIEW
+- **Started**: 2026-09-22
+- **Priority**: P1
+- **Description**: Two live screenshots from Claude showed the same failure. A project brief
+  appeared as one paragraph of raw Markdown, and a filed plan appeared as 33 undifferentiated rows
+  under a five-line headline of titles. The user's diagnosis: every card is text with no structure,
+  containers, or information hierarchy. The fix gives every MCP App card a shared structure that
+  takes its skin from the host.
+- **Subtasks**:
+  - [x] Reproduce in the SEP-1865 harness with stored-shape Markdown. The first scorecard,
+        `docs/design/audits/2026-09-22-mcp-app-rich-text.md`, is now superseded.
+  - [x] A shared structure (`runtime-ui.ts`, `runtime-css.ts`): header, tonal sections, anchored
+        rows, chips, and prose. Every size and colour comes from the MCP Apps host variables, and
+        `prefersBorder: true` lets the client draw its native frame.
+  - [x] A server-built block model in result `_meta` (`rich-text.ts`, `entity-render.ts`), drawn
+        with DOM calls only.
+  - [x] Entity cards rebuilt. The summary leads, the brief is clamped at a block boundary, work shows
+        state names and glyphs, and updates and comments name their subject.
+  - [x] Change report rebuilt. A filed plan folds to its top level and says where it was filed. An
+        update names people and projects, folds a state change into one field, and shows a rewrite
+        as the words that changed.
+  - [x] Work list grouped by board state; day plan anchored by its ticks.
+  - [x] `markdownToPlainText` decodes the editor's entities and stops adding a space around
+        inline tokens.
+  - [x] Evidence: stored-shape fixtures, render models built by the server's own functions, and
+        structural assertions (no Markdown sigils, no borders, anchored rows, a section-height
+        budget). 264 captures; re-scored at `2026-09-22-mcp-app-structure.md` (ship).
+  - [ ] A live check in Claude after the next deploy.
+- **Files changed**: `apps/api/src/mcp/apps/*` (runtime split into `runtime.ts`, `runtime-css.ts`,
+  and `runtime-ui.ts`; new `rich-text.ts`, `entity-render.ts`, `change-render.ts`, `text-diff.ts`,
+  and `icons.ts`), `apps/api/src/mcp/{hydrated-refs,organize-containers,resource-work-hydrators,resource-meta-hydrators,view-plan-tools,update-tool,organize-tool,result,workflow-states}.ts`,
+  `apps/api/src/content/markdown-links.ts`, `packages/markdown-tree/src/text.ts`, and
+  `apps/web/e2e/mcp/*`. The tests are in `apps/api/tests/mcp/` and `packages/markdown-tree/tests/`.
+- **Learnings**:
+  - Every entity fixture carried `summary` and no `description`, and the one long fixture was
+    pre-flattened from a screenshot. So the 2026-08-05 review photographed a card that real data
+    never produces.
+  - `marked` never decodes entities. The editor stores `&` as `&amp;` and decodes it on read, so
+    every reader that walks tokens has to do the same. The web app's static renderer still does
+    not, and a follow-up task is flagged for it.
+  - `Object.assign` copies a getter's value, not the getter. That pinned every card's
+    `docket.fullscreen` to false until it was defined with `Object.defineProperty`.
+  - A file that fails to parse measures as having no complexity violations. The ledger regenerated
+    "clean" over a stray paren, and only the build caught it.
 
 ### [OAUTH-PROVIDER-COVERAGE-001] Restore the OAuth trust-spine coverage gate
 

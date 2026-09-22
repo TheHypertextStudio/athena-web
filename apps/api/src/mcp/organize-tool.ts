@@ -21,9 +21,9 @@ import { z } from 'zod';
 
 import { NotFoundError } from '../error';
 import {
-  KINDS,
   MAX_ITEMS,
   OrganizeItem,
+  type ItemRefs,
   type Placed,
   assertPriorities,
   inParentOrder,
@@ -43,6 +43,7 @@ import type { McpContext } from './auth';
 import type { McpRegistrar } from './catalog';
 import { recordChangeSet, type ChangeRecord } from './change-set';
 import { WIDGET, widgetMeta } from './apps';
+import { placedOutputSchema, placedWithContainers } from './organize-containers';
 import { authorize, jsonResult, runTool, scopedActor } from './result';
 import { orgIdParam, resolveStateTransition } from './tools-shared';
 
@@ -58,6 +59,13 @@ function summaryOf(created: number, changed: number, firstTitle: string | undefi
   const attached = changed - created;
   if (attached === 0) return `Created ${created} items`;
   return `Created ${created} items and attached ${attached} to milestones`;
+}
+
+/** Each prepared item's resolved references, by the `ref` the caller gave it. */
+function refsByItem(
+  prepared: readonly { item: { ref: string }; refs: ItemRefs }[],
+): Map<string, ItemRefs> {
+  return new Map(prepared.map(({ item, refs }) => [item.ref, refs]));
 }
 
 /** Register `organize` on `server`. */
@@ -77,25 +85,7 @@ export function registerOrganizeTool(server: McpRegistrar, ctx: McpContext): voi
           .describe('The plan. Order does not matter — parents are placed first either way.'),
       },
       outputSchema: {
-        placed: z
-          .array(
-            z.object({
-              ref: z.string().describe('The handle you gave it.'),
-              kind: z.enum(KINDS),
-              id: z.string().describe('Its real id.'),
-              title: z.string().describe('What it is called.'),
-              href: z.string().describe('Where it lives in the product app.'),
-              parent: z
-                .string()
-                .optional()
-                .describe('The `ref` of the item in this call it was placed under, when any.'),
-              created: z
-                .boolean()
-                .describe('False when an existing item of that name was matched instead.'),
-              projectId: z.string().optional().describe('For a milestone, the project it is in.'),
-            }),
-          )
-          .describe('Every item, in the order it was placed.'),
+        placed: z.array(placedOutputSchema).describe('Every item, in the order it was placed.'),
         created: z.number().int().describe('How many were new.'),
         matched: z.number().int().describe('How many already existed.'),
         changeSetId: z
@@ -205,7 +195,7 @@ export function registerOrganizeTool(server: McpRegistrar, ctx: McpContext): voi
         });
 
         return jsonResult({
-          placed,
+          placed: await placedWithContainers(input.orgId, placed, refsByItem(prepared)),
           created,
           matched: placed.length - created,
           changeSetId,

@@ -155,6 +155,31 @@ describe('markdownToPlainText', () => {
     );
   });
 
+  it('keeps punctuation and mid-word emphasis against the words they belong to', () => {
+    expect(markdownToPlainText('See [the roster](https://x.y). It is **bold**ly done.')).toBe(
+      'See the roster. It is boldly done.',
+    );
+  });
+
+  it('shows the characters the editor encoded, not their entities', () => {
+    expect(markdownToPlainText('Institutional &amp; Agency Coalitions &lt;draft&gt;')).toBe(
+      'Institutional & Agency Coalitions <draft>',
+    );
+  });
+
+  it('keeps words on either side of a line break apart', () => {
+    expect(markdownToPlainText('Hosts confirmed  \nStickers ordered')).toBe(
+      'Hosts confirmed Stickers ordered',
+    );
+    expect(markdownToPlainText('line one<br>line two')).toBe('line one line two');
+  });
+
+  it('keeps code spans exactly as written', () => {
+    expect(markdownToPlainText('Type `&amp;` for an ampersand.')).toBe(
+      'Type &amp; for an ampersand.',
+    );
+  });
+
   it('includes list item text without bullet markup', () => {
     const markdown = ['Goals:', '', '- Ship the launch', '- Write the retro'].join('\n');
     expect(markdownToPlainText(markdown)).toBe('Goals: Ship the launch Write the retro');

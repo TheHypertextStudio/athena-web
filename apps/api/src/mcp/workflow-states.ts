@@ -92,6 +92,25 @@ export function stateTypeOf(
 }
 
 /**
+ * The name a team gives one task's state, such as "To do" for the key `todo`.
+ *
+ * @param workflows - The mapping from {@link teamWorkflows}.
+ * @param teamId - The task's owning team.
+ * @param stateKey - The value stored on `task.state`.
+ * @returns the state's display name, when it resolves.
+ */
+export function stateNameOf(
+  workflows: TeamWorkflows,
+  teamId: string | null,
+  stateKey: string | null,
+): string | undefined {
+  if (!teamId || !stateKey) {
+    return undefined;
+  }
+  return workflows.get(teamId)?.find((state) => state.key === stateKey)?.name;
+}
+
+/**
  * The states a task on this team may be moved to, in board order.
  *
  * @remarks

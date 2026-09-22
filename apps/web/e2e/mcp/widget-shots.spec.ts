@@ -22,15 +22,21 @@
 import { mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { expect, test } from '@playwright/test';
+import { expect, test, type FrameLocator, type Locator, type Page } from '@playwright/test';
 
-import { shiftDate, todayDate } from '../helpers/calendar-fixtures';
+import { ENTITY_CASES } from './widget-entity-fixtures';
+import { REPORT_CASES, type WidgetCase } from './widget-fixtures';
+import { LIST_CASES } from './widget-list-fixtures';
+import { CATALOG_CASES } from './widget-shot-cases';
 
-import { CHANGE_REPORT_HTML } from '../../../api/src/mcp/apps/change-report';
-import { entityDocument, ENTITY_HTML } from '../../../api/src/mcp/apps/entity';
-import { PLAN_HTML } from '../../../api/src/mcp/apps/plan';
-import { WORK_LIST_HTML } from '../../../api/src/mcp/apps/work-list';
-import { CATALOG_CASES, type WidgetCase } from './widget-shot-cases';
+declare global {
+  interface Window {
+    /** Every link the card asked the harness host to open. */
+    receivedLinks: string[];
+    /** Grow the host's frame to a height, for photographing a whole fullscreen card. */
+    growFrame(height: number): void;
+  }
+}
 
 /** Where the craft review reads its evidence from. */
 const SHOT_DIR = join(
@@ -38,823 +44,61 @@ const SHOT_DIR = join(
   '../../../../docs/design/audits/screenshots/mcp-apps',
 );
 
-/** Relative rather than fixed, so "3 days late" stays three days late as the fixture ages. */
-function day(offset: number): string {
-  return shiftDate(todayDate(), offset);
-}
-
-/** The description edit from the original bug report, verbatim in length and shape. */
-const LONG_DESCRIPTION =
-  '# Executive Summary The LVBT Campus Engagement Program is our dedicated program for staying ' +
-  'in touch with students to build stronger relationships with young people and to leverage ' +
-  'their support for lasting change in the valley. # Overview Our Campus Engagement Program ' +
-  'consolidates all work to getting college students throughout all of Southern Nevada engaged ' +
-  'in transit advocacy and better urbanism. It serves as much of a role in educating students as ' +
-  'much as it does attracting them and turning them into a (metaphorical) army for real change. ' +
-  '## Motivation There are about 75,000 students in higher education in Southern Nevada across ' +
-  'UNLV, CSN, and NSU. Most of these are traditional students in the 18-29 age demographic.';
-
-/** A host palette shaped like a real one: the spec vocabulary, and only part of it. */
+/**
+ * A host palette shaped like Claude's: the spec vocabulary a real client supplies — colours, radii,
+ * and the type scale — so the themed captures show a card the way it looks native in that client.
+ */
 const HOST_VARIABLES: Readonly<Record<'light' | 'dark', Readonly<Record<string, string>>>> = {
   light: {
     '--color-background-primary': '#ffffff',
-    '--color-background-secondary': '#f7f6f3',
-    '--color-text-primary': '#1f1e1c',
-    '--color-text-secondary': '#6a6862',
-    '--color-border-primary': '#e6e4df',
+    '--color-background-secondary': '#f5f4ef',
+    '--color-background-tertiary': '#ecebe4',
+    '--color-text-primary': '#1f1e1d',
+    '--color-text-secondary': '#6b6a66',
+    '--color-text-tertiary': '#8a8984',
+    '--color-border-primary': '#e5e3dc',
+    '--font-text-md-size': '1rem',
+    '--font-text-md-line-height': '1.5',
+    '--font-text-sm-size': '0.875rem',
+    '--font-text-sm-line-height': '1.45',
+    '--font-heading-sm-size': '1.1875rem',
+    '--border-radius-md': '8px',
+    '--border-radius-lg': '12px',
   },
   dark: {
-    '--color-background-primary': '#21201d',
-    '--color-background-secondary': '#2b2a26',
-    '--color-text-primary': '#f5f4f1',
-    '--color-text-secondary': '#a8a59d',
-    '--color-border-primary': '#3b3a39',
+    '--color-background-primary': '#262624',
+    '--color-background-secondary': '#30302e',
+    '--color-background-tertiary': '#3a3a37',
+    '--color-text-primary': '#f5f4ef',
+    '--color-text-secondary': '#a6a39b',
+    '--color-text-tertiary': '#8f8d86',
+    '--color-border-primary': '#3d3d3a',
+    '--font-text-md-size': '1rem',
+    '--font-text-md-line-height': '1.5',
+    '--font-text-sm-size': '0.875rem',
+    '--font-text-sm-line-height': '1.45',
+    '--font-heading-sm-size': '1.1875rem',
+    '--border-radius-md': '8px',
+    '--border-radius-lg': '12px',
   },
 };
 
+/** Every case the suite photographs. */
 const CASES: readonly WidgetCase[] = [
-  {
-    name: 'change-report-loading',
-    tool: 'update',
-    html: CHANGE_REPORT_HTML,
-    input: { orgId: 'org_1' },
-    result: null,
-  },
-  {
-    name: 'change-report-long-diff',
-    tool: 'update',
-    html: CHANGE_REPORT_HTML,
-    input: { orgId: 'org_1' },
-    result: {
-      structuredContent: {
-        changed: 1,
-        changeSetId: 'cs_1',
-        changes: [
-          {
-            id: 't_1',
-            title: 'LVBT Campus Engagement Program',
-            fields: [
-              { field: 'description', from: LONG_DESCRIPTION, to: 'A shorter, rewritten summary.' },
-            ],
-          },
-        ],
-      },
-    },
-  },
-  {
-    name: 'change-report-bulk-with-skips',
-    tool: 'update',
-    html: CHANGE_REPORT_HTML,
-    input: { orgId: 'org_1' },
-    result: {
-      structuredContent: {
-        changed: 4,
-        entity: 'task',
-        listHref: '/orgs/org_1/tasks',
-        changeSetId: 'cs_2',
-        changes: [
-          {
-            id: 't_1',
-            href: '/orgs/org_1/tasks/t_1',
-            title: 'Draft the Q3 service change memo',
-            fields: [{ field: 'state', from: 'todo', to: 'in_progress' }],
-          },
-          {
-            id: 't_2',
-            href: '/orgs/org_1/tasks/t_2',
-            title: 'Review campus outreach budget',
-            fields: [{ field: 'priority', from: 'none', to: 'high' }],
-          },
-          {
-            id: 't_3',
-            href: '/orgs/org_1/tasks/t_3',
-            title: 'Send the RTC coordination follow-up',
-            fields: [{ field: 'dueDate', from: 'none', to: '2026-08-14' }],
-          },
-          {
-            id: 't_4',
-            href: '/orgs/org_1/tasks/t_4',
-            title: 'Book the NSU tabling slot',
-            fields: [{ field: 'state', from: 'todo', to: 'done' }],
-          },
-        ],
-        skipped: [
-          { id: 't_5', title: 'Board packet — September', reason: 'not_permitted' },
-          { id: 't_6', title: 'Archived pilot retro', reason: 'already_archived' },
-        ],
-      },
-    },
-  },
-  {
-    // A rename, which is the most common single edit and the one the card handled worst: it printed
-    // the new title in the row and again as the right-hand side of the diff, truncating the row's
-    // copy to make room for the duplicate.
-    name: 'change-report-renamed',
-    tool: 'update',
-    html: CHANGE_REPORT_HTML,
-    input: { orgId: 'org_1' },
-    result: {
-      structuredContent: {
-        changed: 1,
-        entity: 'task',
-        listHref: '/orgs/org_1/tasks',
-        changeSetId: 'cs_9',
-        changes: [
-          {
-            id: 't_1',
-            href: '/orgs/org_1/tasks/t_1',
-            title: 'Write down what to change for Dallas',
-            fields: [
-              {
-                field: 'title',
-                from: 'Write down what worked, for the Dallas version',
-                to: 'Write down what to change for Dallas',
-              },
-              { field: 'priority', from: 'none', to: 'high' },
-              { field: 'dueDate', from: 'none', to: '2026-09-12' },
-            ],
-          },
-        ],
-      },
-    },
-  },
-  {
-    name: 'change-report-nothing-changed',
-    tool: 'update',
-    html: CHANGE_REPORT_HTML,
-    input: { orgId: 'org_1' },
-    result: { structuredContent: { changed: 0, changes: [] } },
-  },
-  {
-    // Same document, same payload shape, different tool. The headline and the skipped heading both
-    // have to follow the verb, or one card silently reports an archive as an edit.
-    name: 'change-report-archived',
-    tool: 'archive',
-    html: CHANGE_REPORT_HTML,
-    input: { orgId: 'org_1' },
-    result: {
-      structuredContent: {
-        changed: 2,
-        changeSetId: 'cs_3',
-        changes: [
-          { id: 't_1', title: 'Legacy pass reconciliation', fields: [] },
-          { id: 't_2', title: 'Pilot retro notes', fields: [] },
-        ],
-        skipped: [{ id: 't_3', title: 'Board packet — September', reason: 'already_archived' }],
-      },
-    },
-  },
-  {
-    // The one case nothing photographed, and the one that shipped wrong: `organize` returns
-    // `placed` rather than `changes`, and the card rendered each row's `ref` — the handle the model
-    // invented so children could name a parent in one call — as its title. Four kinds in one call,
-    // none of them carrying a diff, so this is also the case where a row is only a name.
-    name: 'change-report-organized',
-    tool: 'organize',
-    html: CHANGE_REPORT_HTML,
-    input: { orgId: 'org_1' },
-    result: {
-      structuredContent: {
-        created: 4,
-        matched: 1,
-        changeSetId: 'cs_5',
-        placed: [
-          {
-            ref: 'init',
-            kind: 'initiative',
-            title: 'Q3 transit access',
-            id: 'i_1',
-            href: '/orgs/org_1/initiatives/i_1',
-            created: true,
-          },
-          {
-            ref: 'proj',
-            kind: 'project',
-            title: 'Campus tabling',
-            parent: 'init',
-            id: 'p_1',
-            href: '/orgs/org_1/projects/p_1',
-            created: true,
-          },
-          {
-            ref: 't-date',
-            kind: 'task',
-            title: 'Pick the NSU date',
-            parent: 'proj',
-            id: 't_1',
-            href: '/orgs/org_1/tasks/t_1',
-            created: true,
-          },
-          {
-            ref: 't-rules',
-            kind: 'task',
-            title: 'Read the tabling rules',
-            parent: 'proj',
-            id: 't_2',
-            href: '/orgs/org_1/tasks/t_2',
-            created: true,
-          },
-          {
-            ref: 'ppt',
-            kind: 'task',
-            title: 'Build the deck',
-            parent: 'proj',
-            id: 't_3',
-            href: '/orgs/org_1/tasks/t_3',
-            created: false,
-          },
-        ],
-      },
-    },
-  },
-  {
-    name: 'change-report-captured',
-    tool: 'capture',
-    html: CHANGE_REPORT_HTML,
-    input: { orgId: 'org_1' },
-    result: {
-      structuredContent: {
-        items: [
-          {
-            id: 't_9',
-            title: 'Chase the RTC coordination reply',
-            href: '/orgs/org_1/tasks/t_9',
-            state: 'Backlog',
-            teamId: 'team_1',
-          },
-        ],
-        listHref: '/orgs/org_1/tasks',
-        changeSetId: 'cs_4',
-      },
-    },
-  },
+  ...REPORT_CASES,
   ...CATALOG_CASES,
-  {
-    name: 'change-report-failed',
-    tool: 'update',
-    html: CHANGE_REPORT_HTML,
-    input: { orgId: 'org_1' },
-    result: {
-      isError: true,
-      content: [{ type: 'text', text: 'TypeError: cannot read x of undefined' }],
-    },
-  },
-  {
-    name: 'change-report-cancelled',
-    tool: 'update',
-    html: CHANGE_REPORT_HTML,
-    input: { orgId: 'org_1' },
-    result: null,
-    cancelled: true,
-  },
-  {
-    // The real shape of a "what am I working on" answer: one person, mixed states, and the facts
-    // that separate one row from another. Due dates are relative to the run so the card is
-    // photographed with a genuine overdue row rather than a date that ages into one.
-    name: 'work-list-populated',
-    tool: 'list_work',
-    html: WORK_LIST_HTML,
-    input: { orgId: 'org_1', assignee: 'Sarah Okafor', state: ['in_progress', 'todo'] },
-    result: {
-      structuredContent: {
-        entity: 'task',
-        listHref: '/orgs/org_1/tasks',
-        items: [
-          {
-            id: 't_1',
-            href: '/orgs/org_1/tasks/t_1',
-            title: 'Draft the Q3 service change memo',
-            state: 'in_progress',
-            stateType: 'started',
-            project: 'Campus tabling',
-            assignee: 'Sarah Okafor',
-            dueDate: day(-3),
-          },
-          {
-            id: 't_2',
-            href: '/orgs/org_1/tasks/t_2',
-            title: 'Review campus outreach budget',
-            state: 'todo',
-            stateType: 'unstarted',
-            project: 'Bus Buddies',
-            assignee: 'Sarah Okafor',
-            cycle: 'Cycle 12',
-            dueDate: day(0),
-          },
-          {
-            id: 't_3',
-            href: '/orgs/org_1/tasks/t_3',
-            title: 'Send the RTC coordination follow-up',
-            state: 'todo',
-            stateType: 'unstarted',
-            parent: 'RTC quarterly review',
-            assignee: 'Sarah Okafor',
-            dueDate: day(3),
-          },
-          {
-            id: 't_4',
-            href: '/orgs/org_1/tasks/t_4',
-            title: 'Book the NSU tabling slot',
-            state: 'backlog',
-            stateType: 'backlog',
-            project: 'Campus tabling',
-            assignee: 'Sarah Okafor',
-            dueDate: day(19),
-          },
-          {
-            id: 't_5',
-            href: '/orgs/org_1/tasks/t_5',
-            title: 'Reconcile the UNLV headcount',
-            state: 'todo',
-            project: 'Campus tabling',
-            assignee: 'Sarah Okafor',
-          },
-        ],
-      },
-    },
-  },
-  {
-    name: 'work-list-every-state-type',
-    tool: 'list_work',
-    html: WORK_LIST_HTML,
-    input: { orgId: 'org_1' },
-    result: {
-      structuredContent: {
-        entity: 'task',
-        items: [
-          // Deliberately renamed state keys against canonical types: the glyph must follow the
-          // type, and the text must follow whatever the team calls it.
-          { id: 't_1', title: 'Icebox: fare capping pilot', state: 'icebox', stateType: 'backlog' },
-          {
-            id: 't_2',
-            title: 'Queued: Maryland Pkwy counts',
-            state: 'queued',
-            stateType: 'unstarted',
-          },
-          {
-            id: 't_3',
-            title: 'Doing: Q3 service change memo',
-            state: 'doing',
-            stateType: 'started',
-          },
-          {
-            id: 't_4',
-            title: 'Shipped: NSU tabling slot',
-            state: 'shipped',
-            stateType: 'completed',
-          },
-          {
-            id: 't_5',
-            title: 'Dropped: legacy pass reconcile',
-            state: 'dropped',
-            stateType: 'canceled',
-          },
-        ],
-      },
-    },
-  },
-  {
-    name: 'work-list-fullscreen',
-    tool: 'list_work',
-    html: WORK_LIST_HTML,
-    input: { orgId: 'org_1' },
-    fullscreen: true,
-    result: {
-      structuredContent: {
-        entity: 'task',
-        listHref: '/orgs/org_1/tasks',
-        items: [
-          {
-            id: 't_1',
-            href: '/orgs/org_1/tasks/t_1',
-            title: 'Draft the Q3 service change memo',
-            state: 'doing',
-            stateType: 'started',
-          },
-          {
-            id: 't_2',
-            title: 'Reconcile the UNLV headcount',
-            state: 'doing',
-            stateType: 'started',
-          },
-          {
-            id: 't_3',
-            title: 'Review campus outreach budget',
-            state: 'queued',
-            stateType: 'unstarted',
-          },
-          {
-            id: 't_4',
-            title: 'Send the RTC coordination follow-up',
-            state: 'queued',
-            stateType: 'unstarted',
-          },
-          { id: 't_5', title: 'Fare capping pilot scoping', state: 'icebox', stateType: 'backlog' },
-          {
-            id: 't_6',
-            title: 'Book the NSU tabling slot',
-            state: 'shipped',
-            stateType: 'completed',
-          },
-          { id: 't_7', title: 'Legacy pass reconcile', state: 'dropped', stateType: 'canceled' },
-          { id: 't_8', title: 'Orphaned by a workflow edit', state: 'retired' },
-        ],
-      },
-    },
-  },
-  {
-    name: 'work-list-empty',
-    tool: 'list_work',
-    html: WORK_LIST_HTML,
-    input: { orgId: 'org_1' },
-    result: { structuredContent: { entity: 'task', items: [] } },
-  },
-  {
-    name: 'entity-populated',
-    tool: 'get_tasks',
-    html: entityDocument('task'),
-    input: { orgId: 'org_1' },
-    result: {
-      structuredContent: {
-        items: [
-          {
-            id: 't_1',
-            href: '/orgs/org_1/tasks/t_1',
-            title: 'Draft the Q3 service change memo',
-            href: '/orgs/org_1/tasks/t_1',
-            state: 'doing',
-            stateType: 'started',
-            // Deliberately a team that renamed everything: the picker has to offer these labels
-            // and send these keys, not a hardcoded todo/in_progress/done.
-            stateOptions: [
-              { key: 'icebox', name: 'Icebox', type: 'backlog' },
-              { key: 'queued', name: 'Queued', type: 'unstarted' },
-              { key: 'doing', name: 'Doing', type: 'started' },
-              { key: 'shipped', name: 'Shipped', type: 'completed' },
-              { key: 'dropped', name: 'Dropped', type: 'canceled' },
-            ],
-            priority: 'high',
-            dueDate: '2026-08-14',
-            blockedBy: ['t_9'],
-            origin: { client: 'Claude', at: '2026-08-01T10:00:00Z' },
-          },
-        ],
-      },
-    },
-  },
-  {
-    name: 'entity-projects-batch',
-    tool: 'get_projects',
-    html: entityDocument('project'),
-    input: { orgId: 'org_1' },
-    result: {
-      structuredContent: {
-        items: [
-          {
-            id: 'p_1',
-            name: 'Bus Buddies',
-            summary: 'Pairs riders with reliable transit guidance.',
-            status: 'active',
-            health: 'on_track',
-            taskCount: 12,
-            href: '/orgs/org_1/projects/p_1',
-          },
-          {
-            id: 'p_2',
-            name: 'Corridor Fellowship',
-            summary: 'Supports people making a difference along the corridor.',
-            status: 'active',
-            health: 'at_risk',
-            taskCount: 7,
-            href: '/orgs/org_1/projects/p_2',
-          },
-          {
-            id: 'p_3',
-            name: 'Urbanist Book Club',
-            summary: 'A monthly place to learn and plan together.',
-            status: 'planned',
-            taskCount: 3,
-            href: '/orgs/org_1/projects/p_3',
-          },
-        ],
-        missing: [{ ref: 'Old program', reason: 'not_found' }],
-      },
-    },
-  },
-  {
-    name: 'entity-legacy-projects-batch',
-    tool: 'get',
-    html: ENTITY_HTML,
-    input: { orgId: 'org_1', type: 'project' },
-    result: {
-      structuredContent: {
-        items: [
-          {
-            id: 'p_1',
-            name: 'Bus Buddies',
-            summary: 'Pairs riders with reliable transit guidance.',
-            status: 'active',
-            health: 'on_track',
-            taskCount: 12,
-            href: '/orgs/org_1/projects/p_1',
-          },
-          {
-            id: 'p_2',
-            name: 'Corridor Fellowship',
-            summary: 'Supports people making a difference along the corridor.',
-            status: 'active',
-            health: 'at_risk',
-            taskCount: 7,
-            href: '/orgs/org_1/projects/p_2',
-          },
-          {
-            id: 'p_3',
-            name: 'Urbanist Book Club',
-            summary: 'A monthly place to learn and plan together.',
-            status: 'planned',
-            taskCount: 3,
-            href: '/orgs/org_1/projects/p_3',
-          },
-        ],
-      },
-    },
-  },
-  {
-    name: 'entity-project',
-    tool: 'get_projects',
-    html: entityDocument('project'),
-    input: { orgId: 'org_1' },
-    result: {
-      structuredContent: {
-        items: [
-          {
-            id: 'p_1',
-            name: 'Bus Buddies',
-            summary: 'Pairs riders with reliable transit guidance.',
-            status: 'active',
-            health: 'on_track',
-            targetDate: '2026-11-01',
-            taskCount: 12,
-            tasks: [{ id: 't_1', title: 'Recruit volunteer navigators', state: 'doing' }],
-            milestones: [{ id: 'm_1', name: 'Volunteer launch', targetDate: '2026-09-01' }],
-            initiatives: [{ id: 'i_1', name: 'Transit access' }],
-            latestUpdate: { body: 'Recruiting is on schedule.' },
-            href: '/orgs/org_1/projects/p_1',
-          },
-        ],
-        missing: [],
-      },
-    },
-  },
-  {
-    name: 'entity-program',
-    tool: 'get_programs',
-    html: entityDocument('program'),
-    input: { orgId: 'org_1' },
-    result: {
-      structuredContent: {
-        items: [
-          {
-            id: 'pg_1',
-            name: 'Community access',
-            summary: 'Practical access to transit.',
-            status: 'active',
-            health: 'on_track',
-            rollup: { projects: 3, tasks: 22 },
-            projects: [{ id: 'p_1', name: 'Bus Buddies' }],
-            initiatives: [{ id: 'i_1', name: 'Transit access' }],
-            latestUpdate: { body: 'The program is on schedule.' },
-            href: '/orgs/org_1/programs/pg_1',
-          },
-        ],
-        missing: [],
-      },
-    },
-  },
-  {
-    name: 'entity-initiative',
-    tool: 'get_initiatives',
-    html: entityDocument('initiative'),
-    input: { orgId: 'org_1' },
-    result: {
-      structuredContent: {
-        items: [
-          {
-            id: 'i_1',
-            name: 'Transit access',
-            summary: 'A city where everyone can get where they need to go.',
-            status: 'active',
-            health: 'on_track',
-            targetDate: '2027-01-01',
-            childMix: { projects: 2, programs: 1 },
-            projects: [{ id: 'p_1', name: 'Bus Buddies' }],
-            programs: [{ id: 'pg_1', name: 'Community access' }],
-            href: '/orgs/org_1/initiatives/i_1',
-          },
-        ],
-        missing: [],
-      },
-    },
-  },
-  {
-    name: 'entity-cycle',
-    tool: 'get_cycles',
-    html: entityDocument('cycle'),
-    input: { orgId: 'org_1' },
-    result: {
-      structuredContent: {
-        items: [
-          {
-            id: 'c_1',
-            displayName: 'August cycle',
-            status: 'active',
-            startsAt: '2026-08-01',
-            endsAt: '2026-08-31',
-            tasks: [{ id: 't_1', title: 'Publish volunteer guide' }],
-            href: '/orgs/org_1/cycles/c_1',
-          },
-        ],
-        missing: [],
-      },
-    },
-  },
-  {
-    name: 'entity-team',
-    tool: 'get_teams',
-    html: entityDocument('team'),
-    input: { orgId: 'org_1' },
-    result: {
-      structuredContent: {
-        items: [
-          {
-            id: 'tm_1',
-            name: 'Programs',
-            key: 'PROG',
-            description: 'Runs public programs.',
-            triageEnabled: true,
-            workflowStates: [{ key: 'todo', name: 'Ready' }],
-            members: [{ id: 'a_1', name: 'Ada' }],
-            href: '/orgs/org_1/teams',
-          },
-        ],
-        missing: [],
-      },
-    },
-  },
-  {
-    name: 'entity-update',
-    tool: 'get_updates',
-    html: entityDocument('update'),
-    input: { orgId: 'org_1' },
-    result: {
-      structuredContent: {
-        items: [
-          {
-            id: 'u_1',
-            body: 'Volunteer recruitment is ahead of schedule.',
-            health: 'on_track',
-            createdAt: '2026-08-01T12:00:00Z',
-            author: { id: 'a_1', displayName: 'Marisol' },
-            href: '/orgs/org_1/search?kind=update&id=u_1',
-          },
-        ],
-        missing: [],
-      },
-    },
-  },
-  {
-    name: 'entity-comment',
-    tool: 'get_comments',
-    html: entityDocument('comment'),
-    input: { orgId: 'org_1' },
-    result: {
-      structuredContent: {
-        items: [
-          {
-            id: 'cm_1',
-            body: 'The library can host the next meeting.',
-            createdAt: '2026-08-02T12:00:00Z',
-            editedAt: '2026-08-03T12:00:00Z',
-            author: { id: 'a_1', displayName: 'Marisol' },
-            href: '/orgs/org_1/search?kind=comment&id=cm_1',
-          },
-        ],
-        missing: [],
-      },
-    },
-  },
-  {
-    name: 'entity-session',
-    tool: 'get_sessions',
-    html: entityDocument('session'),
-    input: { orgId: 'org_1' },
-    result: {
-      structuredContent: {
-        items: [
-          {
-            id: 's_1',
-            status: 'waiting',
-            trigger: 'manual',
-            startedAt: '2026-08-04T12:00:00Z',
-            agent: { id: 'ag_1', displayName: 'Marisol' },
-            task: { id: 't_1', title: 'Publish volunteer guide' },
-            activities: [
-              { id: 'a_1', type: 'message', body: { text: 'Waiting for the final venue notes.' } },
-            ],
-            href: '/orgs/org_1/sessions/s_1',
-          },
-        ],
-        missing: [],
-      },
-    },
-  },
-  {
-    name: 'entity-agent',
-    tool: 'get_agents',
-    html: entityDocument('agent'),
-    input: { orgId: 'org_1' },
-    result: {
-      structuredContent: {
-        items: [
-          {
-            id: 'ag_1',
-            displayName: 'Marisol',
-            guidance: 'Keep riders informed about service changes.',
-            approvalPolicy: 'act_with_approval',
-            connection: { protocol: 'mcp' },
-            href: '/orgs/org_1/agents',
-          },
-        ],
-        missing: [],
-      },
-    },
-  },
-  {
-    name: 'entity-view',
-    tool: 'get_views',
-    html: entityDocument('view'),
-    input: { orgId: 'org_1' },
-    result: {
-      structuredContent: {
-        items: [
-          {
-            id: 'v_1',
-            name: 'Volunteer follow-up',
-            scope: 'organization',
-            grouping: 'project',
-            href: '/orgs/org_1/views?viewId=v_1',
-          },
-        ],
-        missing: [],
-      },
-    },
-  },
-  {
-    name: 'entity-organization',
-    tool: 'get_organizations',
-    html: entityDocument('org'),
-    input: { orgId: 'org_1' },
-    result: {
-      structuredContent: {
-        items: [
-          {
-            id: 'org_1',
-            name: 'Las Vegans for Transit',
-            counts: { teams: 3, projects: 7, programs: 2 },
-            href: '/orgs/org_1',
-          },
-        ],
-        missing: [],
-      },
-    },
-  },
-  {
-    name: 'plan-populated',
-    tool: 'plan_day',
-    html: PLAN_HTML,
-    input: { orgId: 'org_1' },
-    result: {
-      structuredContent: {
-        date: '2026-08-05',
-        items: [
-          {
-            taskId: 't_1',
-            title: 'Deep work: service memo',
-            status: 'todo',
-            startsAt: '2026-08-05T16:00:00Z',
-          },
-          {
-            taskId: 't_2',
-            title: 'Campus outreach sync',
-            status: 'done',
-            startsAt: '2026-08-05T18:30:00Z',
-          },
-          { taskId: 't_3', title: 'Inbox and follow-ups', status: 'todo' },
-        ],
-      },
-    },
-  },
+  ...LIST_CASES,
+  ...ENTITY_CASES,
 ];
+
+/** Markdown that reached a reader as characters instead of structure. */
+const RAW_MARKDOWN = /(^|\s)#{1,6}\s|\*\*|&amp;|\]\(/;
+
+/**
+ * The tallest an inline card may be, by frame width. An inline card sits in a chat transcript next
+ * to the model's own answer, so it is a glance: what does not fit goes to fullscreen, or to Docket.
+ */
+const INLINE_BUDGET_PX: Readonly<Record<string, number>> = { wide: 520, narrow: 680 };
 
 /** Which of the runtime's four states this case should settle in. */
 function expectedState(testCase: WidgetCase): string {
@@ -892,19 +136,29 @@ function harnessPage(
     theme,
     displayMode: testCase.fullscreen ? 'fullscreen' : 'inline',
     availableDisplayModes: ['inline', 'fullscreen'],
-    containerDimensions: { maxHeight: 640 },
+    // A fullscreen host hands the view a fixed height and scrolls nothing itself; an inline one
+    // lets the card grow to what it reports.
+    containerDimensions: testCase.fullscreen
+      ? { height: 876 }
+      : { maxHeight: testCase.maxHeight ?? 4000 },
     locale: 'en-US',
     platform: 'web',
     toolInfo: { tool: { name: testCase.tool } },
     ...(variables ? { styles: { variables } } : {}),
   };
 
+  // Every Docket widget declares \`prefersBorder: true\`, so this host draws the frame the way a
+  // client does: its own border and background around the app, from its own palette.
+  const frame = variables ?? {};
+  const border = frame['--color-border-primary'] ?? 'light-dark(#e4e4e7, #3a3a44)';
+  const surface = frame['--color-background-primary'] ?? 'light-dark(#ffffff, #1c1c20)';
+
   return `<!doctype html>
 <html lang="en">
 <head><meta charset="utf-8"><style>
-  html { color-scheme: light dark; }
-  body { margin: 0; padding: 12px; background: light-dark(#ececf0, #131316); }
-  iframe { width: 100%; border: 0; display: block; background: transparent; }
+  html { color-scheme: ${theme}; }
+  body { margin: 0; padding: 12px; background: light-dark(#f4f3ee, #1a1a18); }
+  iframe { width: 100%; display: block; box-sizing: border-box; border: 1px solid ${border}; border-radius: 14px; background: ${surface}; }
 </style></head>
 <body>
 <iframe id="view" sandbox="allow-scripts" srcdoc="${testCase.html.replace(/"/g, '&quot;')}"></iframe>
@@ -914,7 +168,14 @@ const CONTEXT = ${JSON.stringify(context)};
 const INPUT = ${JSON.stringify(testCase.input)};
 const RESULT = ${JSON.stringify(testCase.result)};
 const CANCELLED = ${JSON.stringify(Boolean(testCase.cancelled))};
+const NEXT_PAGE = ${JSON.stringify(testCase.nextPage ?? null)};
 window.receivedLinks = [];
+// Fullscreen scrolls inside the host's frame. For the photograph, the frame grows to the whole card,
+// so everything "Show everything" shows is on one image.
+window.growFrame = (height) => {
+  CONTEXT.containerDimensions = { height };
+  view.style.height = height + 'px';
+};
 
 window.addEventListener('message', (event) => {
   if (event.source !== view.contentWindow) {
@@ -949,19 +210,29 @@ window.addEventListener('message', (event) => {
     return;
   }
   if (msg.method === 'ui/notifications/size-changed') {
-    view.style.height = msg.params.height + 'px';
+    view.style.height = (CONTEXT.containerDimensions.height || msg.params.height) + 'px';
     view.dataset.reportedHeight = String(msg.params.height);
     return;
   }
   if (msg.method === 'ui/request-display-mode') {
     // The spec allows the answer to differ from the request, and requires the host to return the
-    // mode it actually applied. This harness always grants, but it must still say so.
+    // mode it actually applied. This harness always grants, but it must still say so, and a
+    // fullscreen host hands the view the whole viewport the way it does for a card that starts there.
+    if (msg.params.mode === 'fullscreen') {
+      CONTEXT.containerDimensions = { height: 876 };
+      view.style.height = '876px';
+      post({ jsonrpc: '2.0', method: 'ui/notifications/host-context-changed', params: { containerDimensions: { height: 876 } } });
+    }
     post({ jsonrpc: '2.0', id: msg.id, result: { mode: msg.params.mode } });
     return;
   }
   if (msg.method === 'ui/open-link') {
     window.receivedLinks.push(msg.params.url);
     post({ jsonrpc: '2.0', id: msg.id, result: {} });
+    return;
+  }
+  if (msg.method === 'tools/call' && NEXT_PAGE) {
+    post({ jsonrpc: '2.0', id: msg.id, result: { content: [], structuredContent: NEXT_PAGE } });
     return;
   }
   if (msg.id !== undefined) {
@@ -971,6 +242,68 @@ window.addEventListener('message', (event) => {
 </script>
 </body>
 </html>`;
+}
+
+/**
+ * The structure every ready card must have, whatever it shows.
+ *
+ * @remarks
+ * These are the failures the 2026-09-22 review found in production, each one a card that rendered
+ * without error and read as a wall of text: authored Markdown shown as characters, a border drawn
+ * where the design system uses tonal steps, a row with nothing at its left edge for the eye to run
+ * down, and an inline section tall enough to push everything after it out of view.
+ */
+async function expectStructure(body: Locator, testCase: WidgetCase, width: string): Promise<void> {
+  if ((await body.getAttribute('data-state')) !== 'ready') return;
+  const text = await body.evaluate((node) => (node as HTMLElement).innerText);
+  expect(text, 'raw Markdown on the card').not.toMatch(RAW_MARKDOWN);
+  const bordered = await body.evaluate((node) =>
+    [...node.querySelectorAll('*')]
+      .filter((element) => {
+        const style = getComputedStyle(element);
+        const box = element.getBoundingClientRect();
+        const sides = [
+          style.borderTopWidth,
+          style.borderRightWidth,
+          style.borderBottomWidth,
+          style.borderLeftWidth,
+        ];
+        return (
+          box.width > 0 &&
+          style.borderStyle !== 'none' &&
+          sides.some((side) => parseFloat(side) > 0)
+        );
+      })
+      .map((element) => element.outerHTML.slice(0, 60)),
+  );
+  expect(bordered, 'elements drawing a border').toEqual([]);
+  const unanchored = await body
+    .locator('.row')
+    .evaluateAll((rows) =>
+      rows
+        .filter((row) => !row.querySelector('.row-anchor > *'))
+        .map((row) => row.textContent.slice(0, 40)),
+    );
+  expect(unanchored, 'rows without a leading anchor').toEqual([]);
+  const inline = (await body.getAttribute('data-display-mode')) !== 'fullscreen';
+  if (inline) {
+    // The card sits in a conversation beside the model's answer: a glance, never a page.
+    const reported = await body.evaluate((node) => node.scrollHeight);
+    const budget = Math.min(INLINE_BUDGET_PX[width] ?? 520, testCase.maxHeight ?? Infinity);
+    expect(reported, 'inline card height').toBeLessThanOrEqual(budget);
+  }
+}
+
+/** Every row that names something opens it, and in the order the card lists them. */
+async function expectEveryRowOpens(
+  page: Page,
+  frame: FrameLocator,
+  hrefs: readonly string[],
+): Promise<void> {
+  const rows = frame.locator('.row[role="link"]');
+  expect(await rows.count()).toBe(hrefs.length);
+  for (const row of await rows.all()) await row.click({ position: { x: 24, y: 12 } });
+  await expect.poll(() => page.evaluate(() => window.receivedLinks)).toEqual([...hrefs]);
 }
 
 test.beforeAll(() => {
@@ -1038,77 +371,45 @@ for (const palette of PALETTES) {
               await expect(body).toContainText('State not recognised');
             }
 
+            if (testCase.click) {
+              await body.getByRole('button', { name: testCase.click }).first().click();
+              await expect(body).toHaveAttribute('data-display-mode', 'fullscreen');
+            }
+            if (testCase.maxHeight !== undefined) {
+              // A host with less room than the card: cut to fit, with the way into fullscreen.
+              await expect(
+                body.getByRole('button', { name: 'Show everything' }).last(),
+              ).toBeVisible();
+            }
+            if (testCase.nextPage) {
+              const before = await body.locator('.row').count();
+              await body.getByRole('button', { name: 'Load more' }).click();
+              await expect.poll(() => body.locator('.row').count()).toBeGreaterThan(before);
+            }
+            await expectStructure(body, testCase, width.name);
+
             // Every control is reachable and says what it is. The rubric's a11y gate asks for
             // keyboard operability and labelled controls, and a card whose only affordance is an
             // unnamed glyph button fails it — which is what the day plan's ticks used to be.
             const controls = body.locator(
               'button:not([hidden]), select:not([hidden]), input:not([hidden])',
             );
-            if (testCase.name === 'entity-populated') {
+            if (testCase.name === 'entity-task') {
               // Asserting a filtered list is empty passes just as well when the locator matched
               // nothing. This is the case with the most controls, so it is the one that proves the
               // check is looking at something.
-              expect(await controls.count()).toBeGreaterThanOrEqual(3);
-              await body.getByRole('button', { name: 'Open in Docket' }).click();
+              expect(await controls.count()).toBeGreaterThanOrEqual(4);
+              await body.getByRole('button', { name: /^Open .* in Docket$/ }).click();
               await expect
                 .poll(() => page.evaluate(() => window.receivedLinks))
                 .toEqual(['/orgs/org_1/tasks/t_1']);
             }
-            if (testCase.name === 'entity-project') {
-              await expect(body.locator('.entity-title')).toHaveText('Bus Buddies');
-              await expect(body.locator('.entity-narrative')).toContainText(
-                'Pairs riders with reliable transit guidance.',
-              );
-              await expect(
-                body.locator('.entity-section', { hasText: 'Active work' }),
-              ).toContainText('Recruit volunteer navigators');
-              await expect(body.locator('.entity-facts')).not.toContainText('Associated work');
-              await expect(body.locator('#state')).toBeHidden();
-            }
-            if (
-              testCase.name === 'entity-projects-batch' ||
-              testCase.name === 'entity-legacy-projects-batch'
-            ) {
-              // The motivating regression: generic `get` silently rendered only its first item.
-              // Both the semantic project view and the compatibility document must leave every
-              // requested project visible and hand each one to its own Docket route.
-              await expect(body).toContainText('Bus Buddies');
-              await expect(body).toContainText('Pairs riders with reliable transit guidance.');
-              await expect(body).toContainText('Corridor Fellowship');
-              await expect(body).toContainText('Urbanist Book Club');
-              // A project row is a compact briefing rather than a stack of generic fields: its
-              // description says what the work is, and its status/health plus task count say
-              // where that work stands right now.
-              await expect(body).toContainText('Active · On track · 12 tasks');
-              await expect(body).toContainText('Active · At risk · 7 tasks');
-              await expect(body).toContainText('Planned · 3 tasks');
-              if (testCase.name === 'entity-projects-batch') {
-                await expect(body).toContainText('Some requested items could not be shown.');
-              } else {
-                await expect(body).not.toContainText('Some requested items could not be shown.');
-              }
-              const openBusBuddies = body.getByRole('button', {
-                name: 'Open Bus Buddies in Docket',
-              });
-              const openCorridorFellowship = body.getByRole('button', {
-                name: 'Open Corridor Fellowship in Docket',
-              });
-              const openUrbanistBookClub = body.getByRole('button', {
-                name: 'Open Urbanist Book Club in Docket',
-              });
-              expect(await openBusBuddies.count()).toBe(1);
-              expect(await openCorridorFellowship.count()).toBe(1);
-              expect(await openUrbanistBookClub.count()).toBe(1);
-              await openBusBuddies.click();
-              await openCorridorFellowship.click();
-              await openUrbanistBookClub.click();
-              await expect
-                .poll(() => page.evaluate(() => window.receivedLinks))
-                .toEqual([
-                  '/orgs/org_1/projects/p_1',
-                  '/orgs/org_1/projects/p_2',
-                  '/orgs/org_1/projects/p_3',
-                ]);
+            if (testCase.name.endsWith('projects-batch')) {
+              await expectEveryRowOpens(page, view.contentFrame(), [
+                '/orgs/org_1/projects/p_1',
+                '/orgs/org_1/projects/p_2',
+                '/orgs/org_1/projects/p_3',
+              ]);
             }
             const unnamed = await controls.evaluateAll((nodes) =>
               nodes
@@ -1122,7 +423,18 @@ for (const palette of PALETTES) {
             );
             expect(unnamed, 'controls with no accessible name').toEqual([]);
 
+            if ((await body.getAttribute('data-display-mode')) === 'fullscreen') {
+              const full = await body.evaluate(
+                () => document.querySelector('.card')?.scrollHeight ?? 0,
+              );
+              await page.evaluate((height) => {
+                window.growFrame(height);
+              }, full);
+            }
+            // Off the card, so a hover hint left by a click above is not photographed as layout.
+            await page.mouse.move(0, 0);
             await page.screenshot({
+              fullPage: true,
               path: join(SHOT_DIR, `${testCase.name}-${palette}-${theme}-${width.name}.png`),
             });
           });

@@ -17,7 +17,9 @@ import {
   EXCERPT_SKIP_TOKEN_TYPES,
   type TextualToken,
   childTokensOf,
+  decodeEditorEntities,
   documentFigurePlainText,
+  isLineBreakHtml,
   parseDocumentFigureHtml,
 } from '@docket/markdown-tree';
 
@@ -161,26 +163,56 @@ function collectPlainText(
   return false;
 }
 
+/**
+ * Token types that end a run of words. Everything inside one of these is joined with nothing, so a
+ * link, an emphasis, or an escape mid-sentence does not grow a space around itself ("See roster ."),
+ * and a space goes only where one block ends and the next begins.
+ */
+const BLOCK_TOKEN_TYPES: ReadonlySet<string> = new Set([
+  'paragraph',
+  'heading',
+  'list',
+  'list_item',
+  'blockquote',
+]);
+
 /** Reduce one token to visible plain text and report whether it exhausted the walk budget. */
 function collectPlainTextToken(
   token: Token,
   out: string[],
   budget: { charsRemaining: number },
 ): boolean {
+  // A hard break, as Markdown or as `<br>`, separates words the way a block boundary does.
+  if (token.type === 'br' || (token.type === 'html' && isLineBreakHtml(token.raw))) {
+    out.push(' ');
+    return false;
+  }
   if (token.type === 'html') {
     const figure = parseDocumentFigureHtml(token.raw);
-    return appendPlainText(figure ? documentFigurePlainText(figure) : '', out, budget);
+    if (!figure) return false;
+    const exhausted = appendPlainText(documentFigurePlainText(figure), out, budget);
+    out.push(' ');
+    return exhausted;
   }
   if (EXCERPT_SKIP_TOKEN_TYPES.has(token.type)) return false;
 
   const children = childTokensOf(token);
-  if (children.length > 0) return collectPlainText(children, out, budget);
-
-  const candidate: TextualToken = token;
-  return appendPlainText(typeof candidate.text === 'string' ? candidate.text : '', out, budget);
+  if (children.length > 0) {
+    const exhausted = collectPlainText(children, out, budget);
+    if (BLOCK_TOKEN_TYPES.has(token.type)) out.push(' ');
+    return exhausted;
+  }
+  return appendPlainText(leafText(token), out, budget);
 }
 
-/** Append one visible text fragment and account for the separator used by the final join. */
+/** A leaf's visible text: prose runs decode the editor's entities, code is written unencoded. */
+function leafText(token: Token): string {
+  const candidate: TextualToken = token;
+  if (typeof candidate.text !== 'string') return '';
+  return token.type === 'text' ? decodeEditorEntities(candidate.text) : candidate.text;
+}
+
+/** Append one visible text fragment and charge it, plus a separator's worth, to the budget. */
 function appendPlainText(text: string, out: string[], budget: { charsRemaining: number }): boolean {
   if (text === '') return false;
   out.push(text);
@@ -204,9 +236,9 @@ function appendPlainText(text: string, out: string[], budget: { charsRemaining: 
  * @param markdown - The stored Markdown field, which may be empty.
  * @param maxLength - Longest excerpt to return, in characters. Defaults to 280, matching the
  *   product's own authored-summary length convention.
- * @returns Plain text with headings, emphasis, and links flattened to words, blocks joined by a
- *   single space, and — only when the source exceeds `maxLength` — truncated with a trailing
- *   ellipsis.
+ * @returns Plain text with headings, emphasis, and links flattened to words, the editor's entities
+ *   decoded, blocks joined by a single space, and — only when the source exceeds `maxLength` —
+ *   truncated with a trailing ellipsis.
  *
  * @example
  * ```typescript
@@ -221,5 +253,5 @@ export function markdownToPlainText(markdown: string, maxLength = 280): string {
   // length to find a real word boundary to break on, rather than being handed a string already
   // cut exactly at the limit.
   collectPlainText(new Lexer().lex(markdown), parts, { charsRemaining: maxLength * 2 });
-  return snippetOf(parts.join(' '), maxLength) ?? '';
+  return snippetOf(parts.join(''), maxLength) ?? '';
 }

@@ -162,12 +162,13 @@ const DOCUMENTS: Readonly<Record<string, { title: string; description: string; h
  * @remarks
  * Emitted under both spellings for the same reason {@link widgetMeta} is.
  *
- * `prefersBorder: false` is the whole payload today, and it is not cosmetic: the document draws its
- * own card, so a host that also draws one nests two borders around the same content. Declaring the
- * preference is how a host knows to stay out of the way. Nothing here asks for a CSP relaxation or
- * a browser permission — a widget that needed either would be doing something these four do not.
+ * `prefersBorder: true` asks the host to draw the card's frame — its own border and background —
+ * so a Docket card sits in the same native container as every other app in that client. The
+ * document draws no frame of its own; its structure is tonal sections inside the host's frame, which
+ * still reads in a host that ignores the preference. Nothing here asks for a CSP relaxation or a
+ * browser permission.
  */
-const RESOURCE_META: McpUiResourceMeta = { prefersBorder: false };
+const RESOURCE_META: McpUiResourceMeta = { prefersBorder: true };
 
 /** Register every `ui://` widget resource on `server`. */
 export function registerApps(server: McpRegistrar): void {

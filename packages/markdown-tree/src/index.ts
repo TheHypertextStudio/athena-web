@@ -25,6 +25,7 @@ export {
   serializeDocumentFigure,
   type DocumentFigure,
 } from './document-figure';
+export { decodeEditorEntities, isLineBreakHtml, safeLinkHref } from './text';
 
 /** A token that may carry inline children, which is most of them. */
 interface TokenWithChildren {

@@ -6,296 +6,185 @@
  * *scan* before acting on it, and reading twenty titles back as prose is how an agent gets told to
  * go ahead with a change nobody actually checked.
  *
- * So this renders the count and the first few rows inline, and nothing else — no filter controls,
- * no sort, no text entry. The scope came from the sentence; changing it is another sentence, not a
- * form. What the widget adds over prose is that the set is *visible* and countable at a glance.
+ * The header restates the question the list answers, read back from the tool's arguments, because a
+ * person cannot trust a list without knowing what was asked for. The rows are grouped the way the
+ * team's board groups them — in progress, not started, backlog, done — each group its own section,
+ * so the set has a shape before a single title is read. Inline shows the first few rows in board
+ * order; fullscreen shows every row.
  *
- * It stays read-only, unlike the entity card, and not by preference. A row here carries its state
- * key but not its team's workflow, so there is no way to know what "done" is called on the team
- * that owns it — `update` takes a per-team key, and the same list can span every team in the org.
- * Ticking a row off would mean either guessing a key or shipping every team's workflow down with
- * every page. The entity card, which is about one task on one team, is where that edit belongs.
+ * It stays read-only. A row carries its state key but not its team's workflow, and one list can
+ * span every team in the org, so there is no way to know what "done" is called on the team that
+ * owns a row. The entity card, which is about one task on one team, is where that edit belongs.
  */
 import { appDocument } from './runtime';
 
-const BODY = `
-<div class="head">
-  <div class="headline scope" id="headline" aria-live="polite"></div>
-  <button id="expand" class="quiet" hidden></button>
-</div>
-<div class="rows" id="rows"></div>
-<button id="rest" class="rest quiet" hidden></button>`;
-
 const SCRIPT = String.raw`
 (() => {
-  const el = (id) => document.getElementById(id);
-  const INLINE_ROWS = 4;
+  const d = window.docket;
+  const INLINE_ROWS = 5;
   let state = null;
 
+  const GROUP_ORDER = ['started', 'unstarted', 'backlog', 'completed', 'canceled'];
+  const GROUP_NAME = { started: 'In progress', unstarted: 'Not started', backlog: 'Backlog', completed: 'Done', canceled: 'Canceled' };
+  const { plural, noun: nounOf } = d;
+
   /**
-   * The facts under a row's title, in the order they answer "should I look at this one".
-   *
-   * When it lands comes first and is the only thing here worth colour. Then where it lives, which
-   * is what tells two similarly-named tasks apart. Then who owns it, but only when the list spans
-   * more than one person — on "my tasks" every row says the same name, and a column that repeats
-   * is a column that has stopped carrying information.
-   *
-   * The workflow state is the same argument. It is the row's own word, so it is worth showing when
-   * it varies across the page and is pure noise when it does not — the card that started this
-   * rework printed "Backlog" four times down its right edge and nothing else.
+   * The facts under a row's title, in the order they answer "should I look at this one": when it
+   * lands (the only fact worth colour), where it lives, and who owns it when the list spans people.
    */
   function factsOf(item, varying) {
     const facts = [];
-    const due = window.docket.due(item.dueDate);
-    if (due) {
-      facts.push({ text: due.text, late: due.late });
-    }
-    const where = item.project || item.parent;
-    if (where) {
-      facts.push({ text: where });
-    }
-    if (item.cycle) {
-      facts.push({ text: item.cycle });
-    }
-    if (varying.assignee && item.assignee) {
-      facts.push({ text: item.assignee });
-    }
-    const badge = item.state || item.status;
-    if (varying.state && badge) {
-      facts.push({ text: window.docket.label(badge) });
-    }
+    const due = d.due(item.dueDate);
+    if (due) facts.push({ text: due.text, late: due.late });
+    if (item.project || item.parent) facts.push(item.project || item.parent);
+    if (item.cycle) facts.push(item.cycle);
+    if (varying && item.assignee) facts.push(item.assignee);
     return facts;
   }
 
-  /** Which columns actually differ across the page, and are therefore worth a row's width. */
-  function varyingFields(items) {
-    const distinct = (pick) => new Set(items.map(pick).filter(Boolean)).size;
-    return {
-      assignee: distinct((item) => item.assignee) > 1,
-      state: distinct((item) => item.state || item.status) > 1,
-    };
+  /**
+   * Board groups for tasks, keyed by the canonical type and never by the per-team key, so a state
+   * its team no longer lists lands in its own group instead of passing for a real one. Containers
+   * group by their own status.
+   */
+  function groupKey(item) {
+    if (state.entity === 'task') return item.stateType || '';
+    return item.status || item.state || '';
   }
 
-  function row(item, varying) {
-    const node = document.createElement('div');
-    node.className = 'row';
-
-    // Tasks carry a canonical state type; containers do not, so the glyph appears on one and not
-    // the other rather than being faked for both.
-    const glyph = window.docket.stateGlyph(item.stateType);
-    if (glyph) {
-      node.appendChild(glyph);
-    }
-
-    // Every row in one response is the same kind, so a missing title can name what it's missing
-    // — "Untitled project" reads as a real fact about the row, not a shrug.
-    const untitled = window.docket.untitled(state && state.entity);
-    const name = document.createElement('span');
-    name.className = 'name';
-    name.textContent = item.title || untitled;
-    name.title = item.title || untitled;
-    node.appendChild(name);
-
-    const facts = factsOf(item, varying);
-    if (facts.length > 0) {
-      const line = document.createElement('div');
-      line.className = 'facts';
-      facts.forEach((fact, index) => {
-        if (index > 0) {
-          const sep = document.createElement('span');
-          sep.className = 'sep';
-          sep.textContent = '·';
-          line.appendChild(sep);
-        }
-        const span = document.createElement('span');
-        if (fact.late) {
-          span.className = 'late';
-        }
-        span.textContent = fact.text;
-        line.appendChild(span);
-      });
-      node.appendChild(line);
-    }
-
-    // One link per row, not one per card. A card-level action that lands on the whole list makes
-    // the reader find the row again in a second place.
-    const open = window.docket.openButton(item);
-    if (open) {
-      node.appendChild(open);
-    }
-    return node;
-  }
-
-  // Board order, so an expanded list reads the way the team's board does rather than alphabetically
-  // or by whatever the query happened to return.
-  const GROUP_ORDER = ['started', 'unstarted', 'backlog', 'completed', 'canceled'];
-  const GROUP_NAME = {
-    started: 'In progress',
-    unstarted: 'Not started',
-    backlog: 'Backlog',
-    completed: 'Done',
-    canceled: 'Canceled',
-  };
-
-  function renderInline(rows, items, varying) {
-    for (const item of items.slice(0, INLINE_ROWS)) {
-      rows.appendChild(row(item, varying));
-    }
-  }
-
-  function group(rows, heading, items, varying) {
-    const node = document.createElement('div');
-    node.className = 'group-label';
-    node.textContent = heading;
-    rows.appendChild(node);
+  function groupsOf(items) {
+    const groups = new Map();
     for (const item of items) {
-      rows.appendChild(row(item, varying));
+      const key = groupKey(item);
+      groups.set(key, (groups.get(key) || []).concat([item]));
     }
+    const keys = [...groups.keys()].sort((a, b) => rank(a) - rank(b));
+    return keys.map((key) => ({ key, name: groupName(key), items: groups.get(key) }));
   }
 
-  function renderGrouped(rows, items, varying) {
-    // Grouping is the whole reason to go fullscreen: forty rows in query order is not more useful
-    // than four, it is just longer. One pass into buckets rather than a scan per group — this is
-    // the code path built for the large result sets.
-    const buckets = new Map();
-    const loose = [];
-    for (const item of items) {
-      if (GROUP_ORDER.indexOf(item.stateType) === -1) {
-        loose.push(item);
-        continue;
-      }
-      const bucket = buckets.get(item.stateType);
-      if (bucket) {
-        bucket.push(item);
-      } else {
-        buckets.set(item.stateType, [item]);
-      }
-    }
+  function rank(key) {
+    const index = GROUP_ORDER.indexOf(key);
+    return index === -1 ? GROUP_ORDER.length : index;
+  }
 
-    for (const type of GROUP_ORDER) {
-      const inGroup = buckets.get(type);
-      if (inGroup) {
-        group(rows, GROUP_NAME[type], inGroup, varying);
-      }
-    }
-
-    if (loose.length === 0) {
-      return;
-    }
-    // Only tasks carry a canonical state type. A container list — projects, programs, initiatives
-    // — has none by design, and heading all of them "State not recognised" would report ordinary
-    // data as damage. That warning is reserved for a task whose team dropped its state key.
-    if ((state && state.entity) === 'task') {
-      group(rows, 'State not recognised', loose, varying);
-      return;
-    }
-    for (const item of loose) {
-      rows.appendChild(row(item, varying));
-    }
+  function groupName(key) {
+    if (d.own(GROUP_NAME, key)) return d.own(GROUP_NAME, key);
+    if (!key) return (state && state.entity) === 'task' ? 'State not recognised' : 'No status';
+    return d.label(key);
   }
 
   /**
-   * The question this card is the answer to, read back from the arguments the tool was called with.
-   *
-   * A person cannot trust a list without knowing what was asked for. The count that used to sit
-   * here — "5 tasks" — told them nothing they could not see, and said nothing about whether the
-   * agent understood them; "Assigned to Sarah · due before Sep 12" is the thing they can check.
-   *
-   * Only filters that were passed as words are rendered. Every descriptor filter takes a name or
-   * an id, and an id on this line would be worse than an empty one.
+   * The question this card answers, read back from the arguments the tool was called with. Only
+   * filters passed as words are shown: an id here would say less than nothing.
    */
   function scopeOf(input) {
     const parts = [];
-    // Docket ids are bare 26-character ULIDs, so the test is on that shape and not on a prefix.
-    // An id here would say less than an empty line does.
-    const named = (value) =>
-      typeof value === 'string' && value !== '' && !/^[0-9A-HJKMNP-TV-Z]{26}$/.test(value);
-    if (named(input.assignee)) parts.push('assigned to ' + input.assignee);
-    if (named(input.delegate)) parts.push('delegated to ' + input.delegate);
-    if (named(input.lead)) parts.push('led by ' + input.lead);
-    if (named(input.owner)) parts.push('owned by ' + input.owner);
-    if (named(input.project)) parts.push('in ' + input.project);
-    if (named(input.program)) parts.push('under ' + input.program);
-    if (named(input.initiative)) parts.push('under ' + input.initiative);
-    if (named(input.team)) parts.push('on ' + input.team);
-    if (named(input.cycle)) parts.push('in ' + input.cycle);
-    if (named(input.label)) parts.push('labelled ' + input.label);
+    const named = (value) => typeof value === 'string' && value !== '' && !/^[0-9A-HJKMNP-TV-Z]{26}$/.test(value);
+    const phrases = [
+      ['assignee', 'assigned to '], ['delegate', 'delegated to '], ['lead', 'led by '], ['owner', 'owned by '],
+      ['project', 'in '], ['program', 'under '], ['initiative', 'under '], ['team', 'on '], ['cycle', 'in '],
+      ['label', 'labelled '],
+    ];
+    for (const [key, phrase] of phrases) if (named(input[key])) parts.push(phrase + input[key]);
     const states = [].concat(input.state || [], input.status || [], input.priority || []);
-    if (states.length > 0) parts.push(states.map((value) => window.docket.label(value)).join(' or '));
+    if (states.length > 0) parts.push(states.map((value) => d.label(value)).join(' or '));
     if (input.blocked === true) parts.push('blocked');
     if (input.unfiled === true) parts.push('not filed anywhere');
     if (input.archived === true) parts.push('archived');
-    if (named(input.dueBefore)) parts.push('due before ' + window.docket.label(input.dueBefore));
-    if (named(input.dueAfter)) parts.push('due after ' + window.docket.label(input.dueAfter));
-    if (parts.length === 0) return '';
+    if (named(input.dueBefore)) parts.push('due before ' + d.label(input.dueBefore));
+    if (named(input.dueAfter)) parts.push('due after ' + d.label(input.dueAfter));
     const line = parts.join(' · ');
     return line.charAt(0).toUpperCase() + line.slice(1);
   }
 
-  function render() {
-    if (!state) {
-      return;
-    }
-    const items = state.items || [];
-    const full = window.docket.displayMode === 'fullscreen';
-    const varying = varyingFields(items);
-
-    const headline = el('headline');
-    const scope = scopeOf(window.docket.input || {});
-    // "Nothing matched" is worth saying because an empty card is otherwise indistinguishable from
-    // a broken one. A populated card says what was asked, or says nothing and lets the rows talk.
-    headline.textContent = items.length === 0 ? 'Nothing matched' + (scope ? ' — ' + scope.toLowerCase() : '') : scope;
-    headline.hidden = headline.textContent === '';
-
-    const rows = el('rows');
-    rows.replaceChildren();
-    if (full) {
-      renderGrouped(rows, items, varying);
-    } else {
-      renderInline(rows, items, varying);
-    }
-
-    const expand = el('expand');
-    const hidden = items.length - INLINE_ROWS;
-    // A page is capped, so what this card holds is not always the whole set. The trailing + says
-    // the remainder runs past the page too, which a bare count would state as complete.
-    const more = String(hidden) + (state.nextCursor ? '+' : '');
-    // Offered only when the host says it can honour it AND there is something behind the fold.
-    // A control that expands four rows into four rows is noise.
-    expand.hidden = !window.docket.canDisplay('fullscreen') || (!full && hidden <= 0);
-    // The count earns its place here and nowhere else on this card: it is what the reader gets by
-    // clicking, which is the one thing they cannot already see.
-    expand.textContent = full ? 'Show less' : 'Show ' + more + ' more';
-    // When the host cannot expand, the rest of the list is only reachable in Docket — so the card
-    // says so instead of dropping the remainder on the floor behind a count.
-    const rest = el('rest');
-    rest.hidden = full || hidden <= 0 || !state.listHref || window.docket.canDisplay('fullscreen');
-    rest.textContent = 'Open in Docket to see ' + more + ' more';
+  /** "12 tasks", or "50+ tasks" when the page runs past what this card holds. */
+  function countLabel(count, noun) {
+    if (state.nextCursor) return String(count) + '+ ' + noun + 's';
+    return plural(count, noun);
   }
 
-  el('expand').addEventListener('click', () => {
-    void window.docket.requestDisplayMode(
-      window.docket.displayMode === 'fullscreen' ? 'inline' : 'fullscreen',
-    );
-  });
+  /** The question the list answers, or its size when it was asked with no filters. */
+  function headerTitle(count, scope, countText) {
+    if (count === 0) return 'Nothing matched';
+    return scope || countText;
+  }
 
-  // The host can move the view without being asked, so the mode drives the render rather than the
-  // click doing so directly.
-  window.docket.onDisplayMode(render);
+  function row(item, varying) {
+    return {
+      anchor: d.stateGlyph(item.stateType) || d.kindIcon(state.entity),
+      title: item.title, kind: state.entity, href: item.href,
+      meta: factsOf(item, varying),
+    };
+  }
 
-  window.docket.onData((data) => {
+  function draw() {
+    if (!state) return;
+    const items = state.items || [];
+    const noun = nounOf(state.entity);
+    const scope = scopeOf(d.input || {});
+    const count = countLabel(items.length, noun);
+    const view = d.canvas();
+    view.appendChild(d.header({
+      kind: state.entity, kicker: noun.charAt(0).toUpperCase() + noun.slice(1) + 's',
+      title: headerTitle(items.length, scope, count),
+      chips: [items.length > 0 && scope ? count : ''],
+      lede: items.length === 0 ? scope : '',
+    }));
+    if (items.length === 0) return;
+    const varying = new Set(items.map((item) => item.assignee).filter(Boolean)).size > 1;
+    if (d.fullscreen) {
+      for (const group of groupsOf(items)) {
+        const section = d.section({ label: group.name, count: group.items.length });
+        for (const item of group.items) section.body.appendChild(d.row(row(item, varying)));
+        view.appendChild(section.node);
+      }
+      const foot = d.footer([state.nextCursor ? loadMore() : null]);
+      if (foot) view.appendChild(foot);
+      return;
+    }
+    // Inline, the first rows in board order as one list: each row's glyph already says its state,
+    // and a heading per group would spend the card's height on labels.
+    const ordered = groupsOf(items).flatMap((group) => group.items);
+    const section = d.section({});
+    for (const item of ordered.slice(0, INLINE_ROWS)) section.body.appendChild(d.row(row(item, varying)));
+    view.appendChild(section.node);
+    const rest = items.length - INLINE_ROWS;
+    if (rest > 0 || state.nextCursor) {
+      const more = d.overflowAction('Show all ' + countLabel(items.length, noun), state.listHref);
+      const foot = d.footer([more]);
+      if (foot) view.appendChild(foot);
+    }
+  }
+
+  /**
+   * The next page, fetched by calling list_work again with the cursor the last page returned. A
+   * host that cannot run the call, or a page that fails, leaves the rest one link away in Docket.
+   */
+  function loadMore() {
+    return d.button('Load more', async (event) => {
+      const button = event.currentTarget;
+      button.disabled = true;
+      try {
+        const result = await d.call('list_work', Object.assign({}, d.input, { cursor: state.nextCursor }));
+        const page = result && result.structuredContent;
+        if (!page || !Array.isArray(page.items)) throw new Error('empty page');
+        state = Object.assign({}, state, { items: (state.items || []).concat(page.items), nextCursor: page.nextCursor });
+        d.notice('');
+        draw();
+      } catch {
+        button.disabled = false;
+        d.notice('The next page could not be loaded. Open Docket to see the rest.', 'error');
+      }
+    }, { tonal: true });
+  }
+
+  d.onDisplayMode(draw);
+  d.onData((data) => {
     state = data;
-    render();
-  });
-
-  el('rest').addEventListener('click', () => {
-    if (state && state.listHref) window.docket.link(state.listHref);
+    draw();
   });
 })();
 `;
 
 /** The rendered work-list document. */
-export const WORK_LIST_HTML = appDocument('Work list', BODY, SCRIPT, {
-  skeletonRows: 4,
-  displayModes: ['inline', 'fullscreen'],
-});
+export const WORK_LIST_HTML = appDocument('Work list', SCRIPT, { skeletonRows: 4 });

@@ -2,10 +2,17 @@
  * `@docket/api` — semantic entity widgets.
  *
  * @remarks
- * Entity tools share a safe MCP App runtime, never a generic information architecture. A project
- * needs a briefing; a comment needs its writing; a session needs the work in motion. This document
- * factory therefore shares responsive primitives while every entity owns its composition.
+ * One document per readable type, sharing the builders in `runtime-ui.ts` but never a generic
+ * layout: a project leads with its brief and its work, an update with its writing, a session with
+ * the work in motion. Every card is a header — kind, title, qualifying chips, its one action — and
+ * then sections, each a tonal container of anchored rows or rendered prose. Nothing is text stacked
+ * on text.
+ *
+ * Authored fields (a brief, a description, an update's body) arrive as stored Markdown in the
+ * payload and as a block model in the result's `_meta` (see `entity-render.ts`). The card draws only
+ * the block model; a host that drops `_meta` gets the summary and never raw Markdown.
  */
+import { PROJECT_SCRIPT } from './project-card';
 import { appDocument } from './runtime';
 
 /** Every type the type-specific read tools can render. */
@@ -23,437 +30,385 @@ export type EntityDocumentType =
   | 'view'
   | 'org';
 
-const BODY = `
-<section class="entity-header">
-  <div class="entity-kicker muted" id="kicker" hidden></div>
-  <h1 class="entity-title" id="title" aria-live="polite"></h1>
-  <p class="entity-narrative" id="narrative" hidden></p>
-  <div class="entity-context" id="context" hidden></div>
-</section>
-<div class="entity-facts" id="details" hidden></div>
-<div class="entity-sections" id="related"></div>
-<div class="edits" id="edits" hidden>
-  <label class="field">
-    <span class="field-label" id="state-label">State</span>
-    <select id="state"></select>
-  </label>
-  <label class="field">
-    <span class="field-label">Due</span>
-    <input id="due" type="date">
-  </label>
-</div>
-<div class="actions" id="single-actions">
-  <button id="open" class="quiet" hidden>Open in Docket</button>
-</div>
-<div class="batch-list" id="batch" hidden></div>
-<p class="muted" id="missing" hidden></p>`;
-
-function scriptFor(entityType?: EntityDocumentType): string {
-  return (
-    `const entityType = ${JSON.stringify(entityType ?? null)};\n` +
-    String.raw`
+const SCRIPT = String.raw`
 (() => {
-  const el = (id) => document.getElementById(id);
-  let entity = null;
-  let type = entityType || '';
+  const d = window.docket;
+  const P = window.docketProject;
+  /**
+   * Rows per section inline. A card sits in a conversation beside the model's answer, so inline it
+   * is a glance: a few rows per section and a way into fullscreen, where every section shows all of
+   * itself.
+   */
+  const INLINE_ROWS = 3;
+  let items = [];
+  let missing = [];
+  let type = '';
 
-  const labelFor = {
-    task: 'Task', project: 'Project', program: 'Program', initiative: 'Initiative',
-    cycle: 'Cycle', team: 'Team', update: 'Update', comment: 'Comment', session: 'Session',
-    agent: 'Agent', view: 'Saved view', org: 'Organization',
+  const PRIORITIES = ['urgent', 'high', 'medium', 'low', 'none'];
+
+  const text = (value) => (value === null || value === undefined ? '' : String(value));
+  const labelOf = (kind) => d.capital(d.noun(kind));
+  const pluralOf = (kind) => d.noun(kind) + 's';
+  const nameOf = (item) => text(item && (item.title || item.name || item.displayName));
+  const day = (value) => (text(value) ? d.label(text(value).slice(0, 10)) : '');
+  const plural = d.plural;
+
+  /** The status a container carries, as its own words. */
+  function statusChip(item) {
+    const state = item.state || item.status;
+    return state ? d.chip(d.label(state)) : null;
+  }
+
+  /** Show the whole card in fullscreen, where every section shows all of itself. */
+  function expandAction() {
+    if (d.fullscreen || !d.canDisplay('fullscreen')) return null;
+    return d.iconOnly('expand', 'Show everything', () => void d.requestDisplayMode('fullscreen'));
+  }
+
+  /** Leave the card for the thing's own page: the one action a resource card offers. */
+  function openAction(item) {
+    if (!item.href) return null;
+    const button = d.button('Open', () => d.link(item.href), { tonal: true, label: 'Open ' + (nameOf(item) || labelOf(type)) + ' in Docket' });
+    const out = d.kindIcon('outward');
+    if (out) button.appendChild(out);
+    return button;
+  }
+
+  /** Rows in a section, capped inline; "Show all" opens fullscreen or Docket for the rest. */
+  function listSection(label, rows, options) {
+    if (!rows || rows.length === 0) return null;
+    const total = (options && options.total) || rows.length;
+    const inline = (options && options.inline) || INLINE_ROWS;
+    const shown = d.fullscreen && total === rows.length ? rows : rows.slice(0, inline);
+    const count = total > shown.length ? shown.length + ' of ' + total : String(total);
+    let action = null;
+    if (total > rows.length && options && options.href) action = d.button('Show all', () => d.link(options.href));
+    else if (total > shown.length) action = d.overflowAction('Show all', options && options.href);
+    const section = d.section({ label, count, action });
+    for (const row of shown) section.body.appendChild(d.row(row));
+    return section.node;
+  }
+
+  /** Authored prose in its own section, clamped inline with a way to read the rest. */
+  function proseSection(label, rich, options) {
+    if (!rich || rich.blocks.length === 0) return null;
+    const section = d.section({ label });
+    section.body.appendChild(d.clamped(rich, options));
+    return section.node;
+  }
+
+  /** A related task on one line: its glyph, its title, and its state in the team's words. */
+  function taskRow(task) {
+    return {
+      anchor: d.stateGlyph(task.stateType) || d.kindIcon('task'),
+      title: task.title, kind: 'task',
+      trailing: task.stateName || d.label(task.state),
+      href: task.href,
+    };
+  }
+
+  function refRow(kind, ref) {
+    const anchor = d.kindIcon(kind);
+    const tone = d.healthTone(ref.health);
+    if (anchor && tone) anchor.classList.add('tone-' + tone);
+    return {
+      anchor, title: nameOf(ref), kind,
+      meta: [ref.status && d.label(ref.status), ref.health && { text: d.label(ref.health), tone }],
+      href: ref.href,
+    };
+  }
+
+  /** What a container is for, in two lines: its summary, or the first paragraph of its brief. */
+  function ledeOf(item) {
+    const rich = d.rich(item.id, 'description');
+    return text(item.summary) || (rich ? rich.excerpt : '');
+  }
+
+  function containerHeader(item, chips) {
+    return d.header({
+      kind: type, kicker: labelOf(type), title: nameOf(item) || d.untitled(type),
+      chips: [statusChip(item), d.healthChip(item.health)].concat(chips || []),
+      lede: ledeOf(item), actions: [expandAction(), openAction(item)],
+    });
+  }
+
+  function brief(item) {
+    return proseSection('Brief', d.rich(item.id, 'description'), { lines: 6, href: item.href });
+  }
+
+  /**
+   * Inline, a project is a glance: what it is, how its work divides, and the latest word on it. In
+   * fullscreen it is the whole record, with a Tasks view to browse every task.
+   */
+  function project(item) {
+    const header = containerHeader(item, [item.targetDate && 'Target ' + day(item.targetDate), P.milestoneChip(item)]);
+    if (!d.fullscreen) return [header, P.workSection(item, INLINE_ROWS), P.updateRow(item)];
+    const tasks = P.view === 'tasks' ? P.browser(item) : null;
+    if (tasks) return [header, P.viewTabs(item), ...tasks];
+    return [
+      header,
+      P.viewTabs(item),
+      brief(item),
+      P.workSection(item, 5),
+      P.milestoneSection(item),
+      P.updatePost(item),
+      listSection('Initiatives', (item.initiatives || []).map((ref) => refRow('initiative', ref))),
+    ];
+  }
+
+  /** Inline, a program is its projects and the latest word on it; fullscreen adds the rest. */
+  function program(item) {
+    const rollup = item.rollup && plural(item.rollup.projects, 'project') + ' · ' + plural(item.rollup.tasks, 'task');
+    const projects = listSection('Projects', (item.projects || []).map((ref) => refRow('project', ref)));
+    if (!d.fullscreen) return [containerHeader(item, [rollup]), projects, P.updateRow(item)];
+    return [
+      containerHeader(item, [rollup]),
+      brief(item),
+      projects,
+      P.updatePost(item),
+      listSection('Initiatives', (item.initiatives || []).map((ref) => refRow('initiative', ref))),
+    ];
+  }
+
+  /** A relation, said on the right of a one-line row. */
+  function relation(text, late) {
+    return d.el('span', late ? 'late' : '', text);
+  }
+
+  /**
+   * What a task is tied to, in one list of one-line rows: what blocks it, what it blocks, and its
+   * subtasks. The glyph carries each task's state; the right edge says how it relates.
+   */
+  function related(item) {
+    const row = (task, how) => Object.assign(taskRow(task), { trailing: how });
+    const rows = []
+      .concat((item.blockedBy || []).map((task) => row(task, relation('Blocks this', true))))
+      .concat((item.blocking || []).map((task) => row(task, relation('Waiting on this'))))
+      .concat((item.subtasks || []).map((task) => row(task, relation('Subtask'))));
+    return listSection('Related', rows);
+  }
+
+  function task(item) {
+    const header = d.header({
+      kind: 'task', kicker: labelOf('task'), title: nameOf(item) || d.untitled('task'),
+      chips: Array.isArray(item.stateOptions) ? [] : [statusChip(item), item.dueDate && 'Due ' + day(item.dueDate)],
+      actions: [expandAction(), openAction(item)],
+    });
+    const description = proseSection('Description', d.rich(item.id, 'description'), { lines: 3, href: item.href });
+    if (!d.fullscreen) return [header, propertyBar(item), description, related(item)];
+    return [
+      header,
+      properties(item),
+      description,
+      listSection('Blocked by', (item.blockedBy || []).map(taskRow)),
+      listSection('Blocking', (item.blocking || []).map(taskRow)),
+      listSection('Subtasks', (item.subtasks || []).map(taskRow)),
+    ];
+  }
+
+  const SINGLE = {
+    project,
+    program,
+    initiative: (item) => [
+      containerHeader(item, [item.targetDate && 'Target ' + day(item.targetDate)]),
+      d.fullscreen ? brief(item) : null,
+      listSection('Projects', (item.projects || []).map((ref) => refRow('project', ref))),
+      listSection('Programs', (item.programs || []).map((ref) => refRow('program', ref)), { inline: 2 }),
+    ],
+    task,
+    cycle: (item) => [
+      containerHeader(item, [item.startsAt && day(item.startsAt) + (item.endsAt ? ' – ' + day(item.endsAt) : '')]),
+      listSection('Tasks', (item.tasks || []).map(taskRow)),
+    ],
+    team: (item) => [
+      d.header({ kind: 'team', kicker: labelOf('team'), title: nameOf(item), lede: text(item.description), chips: [item.triageEnabled ? 'Triage on' : ''] }),
+      listSection('People', (item.members || []).map((member) => ({ anchor: d.kindIcon('team'), title: nameOf(member) }))),
+      listSection('Workflow', (item.workflowStates || []).map((state) => ({ anchor: d.stateGlyph(state.type), title: state.name || state.key }))),
+    ],
+    update: (item) => writing(item, 'update', [d.healthChip(item.health)]),
+    comment: (item) => writing(item, 'comment', [item.editedAt && 'Edited ' + day(item.editedAt)]),
+    session: (item) => [
+      d.header({
+        kind: 'session', kicker: labelOf('session'), title: text(item.task && item.task.title) || 'Agent session',
+        chips: [statusChip(item), text(item.agent && item.agent.displayName), item.trigger && d.label(item.trigger), item.startedAt && 'Started ' + day(item.startedAt)],
+        actions: [openAction(item)],
+      }),
+      listSection('Recent activity', (item.activities || []).slice().reverse().map((activity) => ({
+        anchor: d.kindIcon('session'), title: d.label(activity.type), note: text(activity.body && activity.body.text),
+      }))),
+    ],
+    agent: (item) => [
+      d.header({ kind: 'agent', kicker: labelOf('agent'), title: nameOf(item), chips: [item.approvalPolicy && d.label(item.approvalPolicy), item.connection && item.connection.protocol && d.label(item.connection.protocol)], actions: [openAction(item)] }),
+      proseSection('Guidance', d.rich(item.id, 'guidance'), { lines: 4, href: item.href }),
+    ],
+    view: (item) => [
+      d.header({ kind: 'view', kicker: labelOf('view'), title: nameOf(item), chips: [item.scope && d.label(item.scope), item.grouping && 'Grouped by ' + d.label(item.grouping)], actions: [openAction(item)] }),
+    ],
+    org: (item) => [
+      d.header({ kind: 'org', kicker: labelOf('org'), title: nameOf(item), chips: item.counts ? [plural(item.counts.teams, 'team'), plural(item.counts.projects, 'project'), plural(item.counts.programs, 'program')] : [], actions: [openAction(item)] }),
+    ],
   };
 
-  function text(value) {
-    return value === null || value === undefined || value === '' ? '' : String(value);
+  /** An update or comment: named after what it is about, its writing as the body. */
+  function writing(item, kind, extra) {
+    const subject = item.subject || {};
+    const by = text(item.author && item.author.displayName);
+    return [
+      d.header({
+        kind, kicker: labelOf(kind) + (subject.type ? ' on ' + labelOf(subject.type).toLowerCase() : ''),
+        title: text(subject.name) || labelOf(kind),
+        chips: [by, day(item.createdAt)].concat(extra),
+        actions: [expandAction(), openAction(subject.href ? subject : item)],
+      }),
+      proseSection('', d.rich(item.id, 'body'), { lines: 8, href: item.href }),
+    ];
   }
 
-  function label() {
-    return labelFor[type] || 'Docket item';
+  /** The task's own fields, each a working editor. */
+  /** The task's three editable fields, each as [icon, label, control]. */
+  function editors(item) {
+    const state = select(item.stateOptions.map((o) => [o.key, o.name]), item.state, 'State', (value, control) =>
+      save(control, 'state', value, item.state, () => {
+        const chosen = item.stateOptions.find((o) => o.key === value);
+        item.stateType = chosen ? chosen.type : undefined;
+        draw();
+      }));
+    const due = d.el('input');
+    due.type = 'date';
+    due.setAttribute('aria-label', 'Due');
+    due.value = item.dueDate ? String(item.dueDate).slice(0, 10) : '';
+    due.addEventListener('change', () => save(due, 'dueDate', due.value || null, item.dueDate ? String(item.dueDate).slice(0, 10) : ''));
+    const priority = select(PRIORITIES.map((p) => [p, p === 'none' ? 'No priority' : d.label(p)]), item.priority || 'none', 'Priority', (value, control) =>
+      save(control, 'priority', value, item.priority || 'none', () => draw()));
+    return [
+      [d.stateGlyph(item.stateType), 'State', state],
+      [d.kindIcon('due'), 'Due', due],
+      [d.priorityGlyph(item.priority), 'Priority', priority],
+    ];
   }
 
-  function nameOf(item) {
-    return text(item && (item.title || item.name || item.displayName)) || label();
-  }
-
-  function date(value) {
-    const raw = text(value);
-    return raw ? window.docket.label(raw.slice(0, 10)) : '';
-  }
-
-  function stateText(item) {
-    const state = item && (item.state || item.status);
-    return state ? window.docket.label(state) : '';
-  }
-
-  function appendText(parent, className, value) {
-    const raw = text(value);
-    if (!raw) return null;
-    const node = document.createElement('div');
-    node.className = className;
-    node.textContent = raw;
-    parent.appendChild(node);
-    return node;
-  }
-
-  function renderHeader(title, narrative, context, kicker) {
-    el('title').textContent = title || label();
-    el('kicker').textContent = text(kicker);
-    el('kicker').hidden = !text(kicker);
-    el('narrative').textContent = text(narrative);
-    el('narrative').hidden = !text(narrative);
-    const root = el('context');
-    root.replaceChildren();
-    for (const item of context || []) {
-      const value = text(item);
-      if (value) appendText(root, 'entity-context-item', value);
+  /** Inline: the editable fields as one row of compact editors, each led by its icon. */
+  function propertyBar(item) {
+    if (!Array.isArray(item.stateOptions)) return null;
+    const bar = d.el('div', 'props-bar');
+    for (const [icon, , control] of editors(item)) {
+      const pill = d.el('label', 'prop-pill');
+      if (icon) pill.appendChild(icon);
+      pill.appendChild(control);
+      bar.appendChild(pill);
     }
-    root.hidden = root.childElementCount === 0;
+    return bar;
   }
 
-  function addFact(labelText, value) {
-    const raw = text(value);
-    if (!raw) return;
-    const root = el('details');
-    const item = document.createElement('div');
-    item.className = 'entity-fact';
-    const key = document.createElement('span');
-    key.className = 'entity-fact-label';
-    key.textContent = labelText;
-    const detail = document.createElement('span');
-    detail.className = 'entity-fact-value';
-    detail.textContent = raw;
-    item.append(key, detail);
-    root.appendChild(item);
-    root.hidden = false;
+  /** Fullscreen: the same editors as labelled rows. */
+  function properties(item) {
+    if (!Array.isArray(item.stateOptions)) return null;
+    const section = d.section({ label: 'Properties' });
+    for (const [icon, label, control] of editors(item)) section.body.appendChild(property(anchorOf(icon), label, control));
+    return section.node;
   }
 
-  function previewContext(value) {
-    if (!value || typeof value !== 'object') return '';
-    const parts = [];
-    const state = stateText(value);
-    if (state) parts.push(state);
-    if (value.health) parts.push(window.docket.label(value.health));
-    if (value.targetDate) parts.push(date(value.targetDate));
-    if (value.dueDate) parts.push(date(value.dueDate));
-    return parts.join(' · ');
+  function anchorOf(node) {
+    const anchor = d.el('span', 'row-anchor');
+    if (node) anchor.appendChild(node);
+    return anchor;
   }
 
-  function appendSection(heading, values, options) {
-    const visible = (values || []).filter(Boolean);
-    if (visible.length === 0) return;
-    const section = document.createElement('section');
-    section.className = 'entity-section';
-    const title = document.createElement('h2');
-    title.className = 'entity-section-title';
-    title.textContent = heading;
-    section.appendChild(title);
-    const list = document.createElement('div');
-    list.className = 'entity-preview-list';
-    for (const value of visible) {
-      const item = document.createElement('div');
-      item.className = 'entity-preview';
-      const copy = document.createElement('div');
-      copy.className = 'entity-preview-copy';
-      const name = document.createElement('div');
-      name.className = 'entity-preview-title';
-      name.textContent = typeof value === 'string' ? value : nameOf(value);
-      copy.appendChild(name);
-      const secondary = typeof value === 'object' && options && options.secondary
-        ? options.secondary(value)
-        : previewContext(value);
-      if (secondary) appendText(copy, 'entity-preview-secondary', secondary);
-      item.appendChild(copy);
-      if (typeof value === 'object' && value.href) {
-        const open = document.createElement('button');
-        open.className = 'quiet entity-preview-action';
-        open.textContent = 'Open';
-        open.setAttribute('aria-label', 'Open ' + nameOf(value) + ' in Docket');
-        open.addEventListener('click', () => window.docket.link(value.href));
-        item.appendChild(open);
-      }
-      list.appendChild(item);
+  function property(anchor, label, control) {
+    const row = d.el('label', 'prop');
+    row.appendChild(anchor);
+    row.appendChild(d.el('span', 'prop-label', label));
+    const box = d.el('span', 'prop-control');
+    box.appendChild(control);
+    row.appendChild(box);
+    return row;
+  }
+
+  function select(options, current, label, onChange) {
+    const control = d.el('select');
+    control.setAttribute('aria-label', label);
+    for (const [value, name] of options) {
+      const option = d.el('option', '', name);
+      option.value = value;
+      option.selected = value === current;
+      control.appendChild(option);
     }
-    section.appendChild(list);
-    el('related').appendChild(section);
+    control.addEventListener('change', () => onChange(control.value, control));
+    return control;
   }
 
-  function appendNarrativeSection(heading, body) {
-    const raw = text(body);
-    if (!raw) return;
-    const section = document.createElement('section');
-    section.className = 'entity-section';
-    const title = document.createElement('h2');
-    title.className = 'entity-section-title';
-    title.textContent = heading;
-    const prose = document.createElement('p');
-    prose.className = 'entity-section-narrative';
-    prose.textContent = raw;
-    section.append(title, prose);
-    el('related').appendChild(section);
-  }
-
-  function clearDetail() {
-    el('details').replaceChildren();
-    el('details').hidden = true;
-    el('related').replaceChildren();
-  }
-
-  function renderProject(item) {
-    renderHeader(nameOf(item), item.description || item.summary, [
-      stateText(item), item.health && window.docket.label(item.health), item.targetDate && 'Target ' + date(item.targetDate),
-    ], 'Project');
-    appendSection('Active work', item.tasks);
-    appendSection('Milestones', item.milestones, { secondary: (value) => value.targetDate ? 'Target ' + date(value.targetDate) : '' });
-    appendSection('Initiatives', item.initiatives);
-    appendNarrativeSection('Latest update', item.latestUpdate && item.latestUpdate.body);
-    if (typeof item.taskCount === 'number') addFact('Work items', item.taskCount + ' tasks');
-  }
-
-  function renderProgram(item) {
-    renderHeader(nameOf(item), item.description || item.summary, [
-      stateText(item), item.health && window.docket.label(item.health),
-    ], 'Program');
-    appendSection('Projects', item.projects);
-    appendSection('Initiatives', item.initiatives);
-    appendNarrativeSection('Latest update', item.latestUpdate && item.latestUpdate.body);
-    if (item.rollup) addFact('Portfolio', item.rollup.projects + ' projects · ' + item.rollup.tasks + ' tasks');
-  }
-
-  function renderInitiative(item) {
-    renderHeader(nameOf(item), item.description || item.summary, [
-      stateText(item), item.health && window.docket.label(item.health), item.targetDate && 'Target ' + date(item.targetDate),
-    ], 'Initiative');
-    appendSection('Projects', item.projects);
-    appendSection('Programs', item.programs);
-  }
-
-  function renderTask(item) {
-    renderHeader(nameOf(item), item.description, [stateText(item)], 'Task');
-    if (!Array.isArray(item.stateOptions)) addFact('State', stateText(item));
-    addFact('Priority', item.priority && item.priority !== 'none' ? window.docket.label(item.priority) : '');
-    if (!Array.isArray(item.stateOptions)) addFact('Due', date(item.dueDate));
-    appendSection('Blocking', item.blocking);
-    appendSection('Subtasks', item.subtasks);
-  }
-
-  function renderCycle(item) {
-    renderHeader(nameOf(item), '', [
-      stateText(item), item.startsAt && (date(item.startsAt) + (item.endsAt ? ' – ' + date(item.endsAt) : '')),
-    ], 'Cycle');
-    appendSection('Current work', item.tasks);
-  }
-
-  function renderTeam(item) {
-    renderHeader(nameOf(item), item.description, [], 'Team');
-    appendSection('People', item.members);
-    appendSection('Workflow', (item.workflowStates || []).map((state) => ({ name: state.name || state.key })));
-    addFact('Triage', item.triageEnabled ? 'Enabled' : 'Disabled');
-  }
-
-  function renderUpdate(item) {
-    renderHeader('Update', item.body, [
-      item.author && item.author.displayName && 'By ' + item.author.displayName,
-      item.health && window.docket.label(item.health),
-      item.createdAt && date(item.createdAt),
-    ], 'Status update');
-  }
-
-  function renderComment(item) {
-    renderHeader('Comment', item.body, [
-      item.author && item.author.displayName && 'By ' + item.author.displayName,
-      item.createdAt && date(item.createdAt),
-      item.editedAt && 'Edited ' + date(item.editedAt),
-    ], 'Comment');
-  }
-
-  function renderSession(item) {
-    const taskTitle = item.task && item.task.title;
-    const agentName = item.agent && item.agent.displayName;
-    renderHeader(taskTitle || 'Agent session', agentName ? agentName + ' is working on this.' : '', [
-      stateText(item), item.trigger && window.docket.label(item.trigger), item.startedAt && 'Started ' + date(item.startedAt),
-    ], 'Session');
-    appendSection('Recent activity', (item.activities || []).slice(-4).map((activity) => ({
-      name: window.docket.label(activity.type),
-      summary: activity.body && activity.body.text,
-    })), { secondary: (activity) => text(activity.summary) });
-  }
-
-  function renderAgent(item) {
-    renderHeader(nameOf(item), item.guidance, [
-      item.approvalPolicy && window.docket.label(item.approvalPolicy),
-      item.connection && item.connection.protocol && window.docket.label(item.connection.protocol),
-    ], 'Agent');
-  }
-
-  function renderView(item) {
-    renderHeader(nameOf(item), item.grouping ? 'Grouped by ' + window.docket.label(item.grouping) + '.' : '', [
-      item.scope && window.docket.label(item.scope),
-    ], 'Saved view');
-  }
-
-  function renderOrg(item) {
-    renderHeader(nameOf(item), '', [], 'Organization');
-    if (item.counts) addFact('Planning work', item.counts.teams + ' teams · ' + item.counts.projects + ' projects · ' + item.counts.programs + ' programs');
-  }
-
-  function renderEntity(item) {
-    clearDetail();
-    switch (type) {
-      case 'project': return renderProject(item);
-      case 'program': return renderProgram(item);
-      case 'initiative': return renderInitiative(item);
-      case 'task': return renderTask(item);
-      case 'cycle': return renderCycle(item);
-      case 'team': return renderTeam(item);
-      case 'update': return renderUpdate(item);
-      case 'comment': return renderComment(item);
-      case 'session': return renderSession(item);
-      case 'agent': return renderAgent(item);
-      case 'view': return renderView(item);
-      case 'org': return renderOrg(item);
-      default: return renderHeader(nameOf(item), item.summary || item.description, [], label());
-    }
-  }
-
-  function batchNarrative(item) {
-    return text(item.description || item.summary || (item.latestUpdate && item.latestUpdate.body));
-  }
-
-  function batchStatus(item) {
-    const parts = [stateText(item), item.health && window.docket.label(item.health)];
-    if (type === 'project' && typeof item.taskCount === 'number') parts.push(item.taskCount + ' tasks');
-    if (type === 'program' && item.rollup) parts.push(item.rollup.projects + ' projects · ' + item.rollup.tasks + ' tasks');
-    if (type === 'initiative' && item.childMix) parts.push(item.childMix.projects + ' projects · ' + item.childMix.programs + ' programs');
-    if (type === 'cycle' && Array.isArray(item.tasks)) parts.push(item.tasks.length + ' tasks');
-    if (type === 'session' && Array.isArray(item.activities)) parts.push(item.activities.length + ' activities');
-    if (type === 'org' && item.counts) parts.push(item.counts.projects + ' projects · ' + item.counts.programs + ' programs');
-    return parts.filter(Boolean).join(' · ');
-  }
-
-  function renderBatch(items) {
-    const batch = el('batch');
-    batch.replaceChildren();
-    for (const item of items) {
-      const row = document.createElement('article');
-      row.className = 'batch-item';
-      const copy = document.createElement('div');
-      copy.className = 'batch-copy';
-      const name = document.createElement('div');
-      name.className = 'batch-title';
-      name.textContent = nameOf(item);
-      copy.appendChild(name);
-      const narrative = batchNarrative(item);
-      if (narrative) appendText(copy, 'batch-context muted', narrative);
-      const status = batchStatus(item);
-      if (status) appendText(copy, 'batch-meta muted', status);
-      row.appendChild(copy);
-      if (item.href) {
-        const open = document.createElement('button');
-        open.className = 'quiet batch-action';
-        open.textContent = 'Open';
-        open.setAttribute('aria-label', 'Open ' + nameOf(item) + ' in Docket');
-        open.addEventListener('click', () => window.docket.link(item.href));
-        row.appendChild(open);
-      }
-      batch.appendChild(row);
-    }
-    batch.hidden = false;
-  }
-
-  function isTask() {
-    return type === 'task' && entity && Array.isArray(entity.stateOptions);
-  }
-
-  function renderEdits() {
-    const options = (entity && entity.stateOptions) || [];
-    const select = el('state');
-    select.replaceChildren();
-    for (const option of options) {
-      const node = document.createElement('option');
-      node.value = option.key; node.textContent = option.name; node.selected = option.key === entity.state;
-      select.appendChild(node);
-    }
-    const stateLabel = el('state-label');
-    stateLabel.replaceChildren();
-    const glyph = entity && window.docket.stateGlyph(entity.stateType);
-    if (glyph) stateLabel.appendChild(glyph);
-    stateLabel.appendChild(document.createTextNode('State'));
-    el('due').value = entity && entity.dueDate ? String(entity.dueDate).slice(0, 10) : '';
-    el('edits').hidden = !isTask();
-  }
-
-  async function edit(control, field, value, previous, after) {
-    if (!isTask()) return;
+  async function save(control, field, value, previous, after) {
+    const item = items[0];
     control.disabled = true;
     try {
-      await window.docket.call('update', { orgId: window.docket.input.orgId, entity: 'task', scope: { ids: [entity.id] }, set: { [field]: value } });
-      entity[field] = value;
+      await d.call('update', { orgId: d.input.orgId, entity: 'task', scope: { ids: [item.id] }, set: { [field]: value } });
+      item[field] = value;
+      d.notice('');
       if (after) after();
-      window.docket.notice('');
     } catch {
       control.value = previous;
-      window.docket.notice('That could not be saved. Open Docket to check it.', 'error');
+      d.notice('That could not be saved. Open Docket to check it.', 'error');
     } finally {
       control.disabled = false;
     }
   }
 
-  el('state').addEventListener('change', async (event) => {
-    if (!entity) return;
-    const select = event.target;
-    const selected = (entity.stateOptions || []).find((option) => option.key === select.value);
-    await edit(select, 'state', select.value, entity.state, () => {
-      entity.stateType = selected ? selected.type : undefined; renderEdits();
+  function batchRow(item) {
+    const row = refRow(type, item);
+    const counts = [];
+    if (typeof item.taskCount === 'number') counts.push(plural(item.taskCount, 'task'));
+    if (item.rollup) counts.push(plural(item.rollup.projects, 'project'));
+    if (item.childMix) counts.push(plural(item.childMix.projects, 'project'));
+    const rich = d.rich(item.id, 'description') || d.rich(item.id, 'body');
+    return Object.assign(row, {
+      meta: row.meta.concat(counts),
+      note: text(item.summary) || (rich ? rich.excerpt : ''),
+      title: nameOf(item) || text(item.subject && item.subject.name) || d.untitled(type),
     });
-  });
+  }
 
-  el('due').addEventListener('change', async (event) => {
-    if (!entity) return;
-    const input = event.target;
-    const previous = entity.dueDate ? String(entity.dueDate).slice(0, 10) : '';
-    await edit(input, 'dueDate', input.value || null, previous);
-  });
+  /** A batch is one list under the header that already names and counts it. */
+  function batchSection(list) {
+    // A batch is the whole card, so it can hold more rows than a section among others.
+    const shown = d.fullscreen ? list : list.slice(0, 5);
+    const more = list.length > shown.length ? d.overflowAction('Show all') : null;
+    const section = d.section({ label: more ? shown.length + ' of ' + list.length : '', action: more });
+    for (const item of shown) section.body.appendChild(d.row(batchRow(item)));
+    return section.node;
+  }
 
-  el('open').addEventListener('click', () => {
-    if (entity && entity.href) window.docket.link(entity.href);
-  });
-
-  window.docket.onData((data) => {
-    const items = Array.isArray(data.items) ? data.items : [];
-    type = entityType || window.docket.input.type || type;
-    el('missing').hidden = !Array.isArray(data.missing) || data.missing.length === 0;
-    if (!el('missing').hidden) el('missing').textContent = 'Some requested items could not be shown.';
+  function draw() {
+    const view = d.canvas();
     if (items.length === 0) {
-      renderHeader('Nothing to show', 'Nothing here matches that any more.', [], '');
-      clearDetail();
-      return;
+      view.appendChild(d.header({ kind: type, title: 'Nothing found' }));
+    } else if (items.length === 1) {
+      const build = d.own(SINGLE, type);
+      const parts = build ? build(items[0]) : [d.header({ kind: type, kicker: labelOf(type), title: nameOf(items[0]) })];
+      for (const part of parts) if (part) view.appendChild(part);
+    } else {
+      view.appendChild(d.header({ kind: type, title: plural(items.length, labelOf(type).toLowerCase()) }));
+      view.appendChild(batchSection(items));
     }
-    if (items.length > 1) {
-      entity = null;
-      renderHeader(items.length + ' ' + label().toLowerCase() + (items.length === 1 ? '' : 's'), '', [], '');
-      el('details').hidden = true;
-      el('related').replaceChildren();
-      el('edits').hidden = true;
-      el('single-actions').hidden = true;
-      renderBatch(items);
-      return;
-    }
-    entity = items[0];
-    el('batch').hidden = true;
-    el('single-actions').hidden = false;
-    renderEntity(entity);
-    renderEdits();
-    el('open').hidden = !entity.href;
+    if (missing.length > 0) view.appendChild(d.el('p', 'empty', plural(missing.length, 'item') + ' could not be found'));
+  }
+
+  P.setRedraw(() => draw());
+  d.onDisplayMode((mode) => {
+    P.onMode(mode);
+    if (items.length > 0 || missing.length > 0) draw();
   });
-})();`
-  );
-}
+  d.onData((data) => {
+    type = entityType || d.input.type || type;
+    items = Array.isArray(data.items) ? data.items : [];
+    missing = Array.isArray(data.missing) ? data.missing : [];
+    draw();
+  });
+})();`;
 
 /** Build the legacy generic entity document or a document dedicated to one readable entity type. */
 export function entityDocument(entityType?: EntityDocumentType): string {
-  return appDocument(entityType ? `${entityType} details` : 'Entity', BODY, scriptFor(entityType), {
-    skeletonRows: 1,
-  });
+  const script = `${PROJECT_SCRIPT}\nconst entityType = ${JSON.stringify(entityType ?? null)};\n${SCRIPT}`;
+  return appDocument(entityType ? `${entityType} details` : 'Entity', script, { skeletonRows: 3 });
 }
 
 /** The generic document retained for direct callers of the legacy `get` tool. */

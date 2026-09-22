@@ -48,6 +48,8 @@ projects
 # every write and shown on demand.
 provenance
 sidebar
+# tabs: the open-document tab row above the page and its switcher.
+tabs
 takeout
 tasks
 templates

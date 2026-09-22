@@ -270,40 +270,22 @@ test('the open-document switcher stays dense, reachable, and touch-safe', async 
   await expect(search).toBeFocused();
 
   await dismissSwitcher(page);
-  await page.setViewportSize({ width: 390, height: 844 });
-  await openSwitcher(page, 12);
-  const narrowWidth = (await switcher.boundingBox())?.width ?? 0;
-  // The compact 352px rule remains intact, while collision keeps the 12px edge gutter on a phone.
-  expect(narrowWidth).toBeGreaterThanOrEqual(338);
-  expect(narrowWidth).toBeLessThanOrEqual(352);
-  await setColorScheme(page, 'light');
-  const narrowLongTitle = results.getByRole('listitem', { name: LONG_BACKGROUND_TITLE });
-  const narrowLongTitleText = narrowLongTitle.locator('span.truncate');
-  await expect(narrowLongTitleText).toHaveText(LONG_BACKGROUND_TITLE);
-  const narrowTitleMetrics = await narrowLongTitleText.evaluate((node) => ({
-    clientWidth: node.clientWidth,
-    scrollWidth: node.scrollWidth,
-  }));
-  expect(narrowTitleMetrics.scrollWidth).toBeGreaterThan(narrowTitleMetrics.clientWidth);
-  await narrowLongTitle.getByRole('link', { name: LONG_BACKGROUND_TITLE }).hover();
-  await expect(page.getByRole('tooltip')).toHaveText(LONG_BACKGROUND_TITLE);
-  await page.mouse.move(0, 0);
-  await expect(page.getByRole('tooltip')).toHaveCount(0);
-  await page.screenshot({ path: resolve(SHOT_ROOT, 'switcher-390x844-light.png') });
-  await setColorScheme(page, 'dark');
-  await page.screenshot({ path: resolve(SHOT_ROOT, 'switcher-390x844-dark.png') });
-  await dismissSwitcher(page);
+  // Below `lg` the phone layout has no tab row: the strip gives its height back to the page.
+  for (const viewport of [
+    { width: 390, height: 844 },
+    { width: 320, height: 720 },
+  ]) {
+    await page.setViewportSize(viewport);
+    await expect(page.getByRole('tablist', { name: 'Open documents' })).toBeHidden();
+    await expectNoHorizontalOverflow(page);
+  }
 
-  await page.setViewportSize({ width: 320, height: 720 });
-  await openSwitcher(page, 12);
-  await expectNoHorizontalOverflow(page);
-  await dismissSwitcher(page);
-
+  // A touch tablet is wide enough for the strip, so its switcher still needs touch-sized targets.
   const storageState = await page.context().storageState();
   const touchContext = await browser.newContext({
     baseURL: ORIGIN,
     storageState,
-    viewport: { width: 390, height: 844 },
+    viewport: { width: 1280, height: 800 },
     hasTouch: true,
     isMobile: true,
     ignoreHTTPSErrors: true,

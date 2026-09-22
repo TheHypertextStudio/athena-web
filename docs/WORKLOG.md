@@ -79,6 +79,31 @@
   needs a 4 GB heap.
 
 ### [MILESTONES-MCP-001] Make milestones a first-class MCP and REST feature
+### [MOBILE-LIST-POLISH-002] Task-row icons match the Tasks page; no tab row on phones
+
+- **Status**: COMPLETED
+- **Started**: 2026-09-22
+- **Completed**: 2026-09-22
+- **Priority**: P1
+- **Description**: Task-table rows led with a 20px entity icon beside a status icon, which read as
+  two cramped bullets and did not match the Tasks page's 32px icon. On phones the document tab row
+  cost 40px of screen height.
+- **Decision**: The user chose "Match the Tasks page": one 32px entity icon on the shared slot and
+  rail geometry (`HIERARCHY_LEADING_SLOT_PX`), and status as its own column with the status name.
+  Columns re-tier so the title keeps roughly 230px as each arrives: status from a 512px table, due
+  date 576, assignee 768, estimate 896, labels 1024. The tab strip hides below `lg`, where the shell
+  switches to the mobile top bar; open documents are still recorded.
+- **Files changed**: `views/task-table.tsx`, `views/task-identity-cell.tsx`,
+  `packages/ui/src/components/shell/TabBar.tsx`, `e2e/work/open-document-switcher-evidence.spec.ts`,
+  task-table and rail tests, `COMMIT_SCOPES.txt` (`tabs`).
+- **Validation**: Root typecheck, lint with the complexity ledger, Prettier, and `test:coverage`
+  pass apart from the 9 pre-existing `@docket/api` failures. Captures at 1440px show full titles
+  beside Status and Due date with the calendar rail open; a touch-emulated 390px capture shows no
+  tab row and 32px icons joined by rails.
+- **Blockers**: None.
+
+---
+
 ### [MOBILE-LIST-POLISH-001] Edge-to-edge lists and a visible row menu on mobile
 
 - **Status**: COMPLETED

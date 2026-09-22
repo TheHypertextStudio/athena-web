@@ -59,7 +59,7 @@ import { TYPE_LABEL, tabLabel } from './tab-types';
 export type { OpenTab, TabDocType, TabRenderLink };
 export { TYPE_LABEL, tabLabel };
 
-/** The shared 40px block occupied by a visible desktop or mobile document-tab row. */
+/** The shared 40px block occupied by the visible (desktop) document-tab row. */
 export const TAB_BAR_BLOCK_SIZE_CLASS = 'h-10';
 
 /** Props for {@link TabBar}. */
@@ -82,6 +82,10 @@ export interface TabBarProps {
  * strip scrolls horizontally only (vertical overflow is clipped so the chrome never grows a
  * second row), and pins an {@link OverflowMenu} at the right edge that filters every open
  * document locally — so a bar with dozens of tabs stays navigable.
+ *
+ * It is a desktop affordance: below `lg`, where the shell trades its sidebar for the mobile top
+ * bar, the strip is hidden so the page keeps the screen height. Open documents are still recorded,
+ * and reappear the moment the window is wide enough.
  */
 export function TabBar({
   tabs,
@@ -94,21 +98,20 @@ export function TabBar({
   return (
     <TooltipProvider delayDuration={400}>
       {/*
-        No horizontal inset at `lg`: the first pill's left edge and the overflow trigger's right
-        edge sit flush with the content column, so the strip lines up with the panel (and any
-        banner) below instead of floating 8px inside them. Mobile keeps a small inset because the
-        panel is full-bleed there and a pill hugging the bezel has no breathing room.
+        No horizontal inset: the first pill's left edge and the overflow trigger's right edge sit
+        flush with the content column, so the strip lines up with the panel (and any banner) below
+        instead of floating 8px inside them.
       */}
       <div
         className={cn(
           surfaceToneColor('canvas'),
-          `no-print flex ${TAB_BAR_BLOCK_SIZE_CLASS} shrink-0 items-center overflow-hidden pr-2 lg:pr-0`,
+          `no-print flex ${TAB_BAR_BLOCK_SIZE_CLASS} shrink-0 items-center overflow-hidden max-lg:hidden`,
         )}
       >
         <div
           role="tablist"
           aria-label="Open documents"
-          className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto overflow-y-hidden px-2 lg:px-0"
+          className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto overflow-y-hidden"
         >
           {tabs.map((tab) => (
             <TabItem

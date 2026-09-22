@@ -6,7 +6,14 @@ import { useTaskHierarchyMutation } from '@/components/tasks/use-task-hierarchy-
 import { queryKeys } from '@/lib/query';
 import { makeQueryWrapper, okResponse, problemResponse } from '../../support/query';
 
-const { REPARENT } = vi.hoisted(() => ({ REPARENT: vi.fn() }));
+const { REPARENT, OFFER_REOPEN } = vi.hoisted(() => ({
+  REPARENT: vi.fn(),
+  OFFER_REOPEN: vi.fn(),
+}));
+
+vi.mock('@/lib/use-parent-reopen-offer', () => ({
+  useParentReopenOffer: () => OFFER_REOPEN,
+}));
 
 vi.mock('@/lib/api', () => ({
   api: {
@@ -178,5 +185,39 @@ describe('useTaskHierarchyMutation', () => {
         preserveSelectedSubtrees: false,
       },
     });
+  });
+
+  it('offers to reopen the parents a move lands under, and not the parents an Undo restores', async () => {
+    REPARENT.mockResolvedValueOnce(
+      okResponse({
+        moves: [
+          { taskId: 'a', previousParentTaskId: 'old-a', parentTaskId: 'target' },
+          { taskId: 'b', previousParentTaskId: 'target', parentTaskId: null },
+        ],
+      }),
+    );
+    REPARENT.mockResolvedValueOnce(okResponse({ moves: [] }));
+    const { wrapper } = makeQueryWrapper();
+    const { result } = renderHook(() => useTaskHierarchyMutation(), { wrapper });
+
+    act(() => {
+      result.current.reparent({
+        organizationId: ORG,
+        moves: [
+          { taskId: 'a', parentTaskId: 'target' },
+          { taskId: 'b', parentTaskId: null },
+        ],
+        preserveSelectedSubtrees: true,
+      });
+    });
+    await waitFor(() => {
+      expect(OFFER_REOPEN).toHaveBeenCalledWith(ORG, ['target']);
+    });
+
+    act(() => result.current.undo?.undo());
+    await waitFor(() => {
+      expect(REPARENT).toHaveBeenCalledTimes(2);
+    });
+    expect(OFFER_REOPEN).toHaveBeenCalledTimes(1);
   });
 });

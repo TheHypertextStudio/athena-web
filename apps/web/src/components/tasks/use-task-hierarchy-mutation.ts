@@ -8,6 +8,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '@/lib/api';
 import { userErrorMessage } from '@/lib/problem';
 import { queryKeys, unwrap, useApiMutation } from '@/lib/query';
+import { useParentReopenOffer } from '@/lib/use-parent-reopen-offer';
 
 /** One task-parent assignment. */
 export interface TaskHierarchyMove {
@@ -120,12 +121,18 @@ function optimisticHierarchyPatch(
   };
 }
 
+/** The parents a batch of moves files tasks under; a move to the top level has none. */
+function landingParents(moves: readonly TaskHierarchyMove[]): string[] {
+  return moves.flatMap(({ parentTaskId }) => (parentTaskId === null ? [] : [parentTaskId]));
+}
+
 /** Build the atomic hierarchy mutation and six-second Undo treatment. */
 export function useTaskHierarchyMutation(): TaskHierarchyMutationController {
   const queryClient = useQueryClient();
   const [error, setError] = useState<string | null>(null);
   const [undo, setUndo] = useState<TaskHierarchyUndo | null>(null);
   const undoTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const offerReopen = useParentReopenOffer();
 
   const clearUndo = useCallback(() => {
     if (undoTimer.current !== null) clearTimeout(undoTimer.current);
@@ -155,6 +162,7 @@ export function useTaskHierarchyMutation(): TaskHierarchyMutationController {
     },
     onSuccess: (result, variables) => {
       if (!variables.offerUndo || result.moves.length === 0) return;
+      offerReopen(variables.organizationId, landingParents(variables.moves));
       clearUndo();
       const label = result.moves.length === 1 ? 'Task moved' : `${result.moves.length} tasks moved`;
       const previous = result.moves.map(({ taskId, previousParentTaskId }) => ({

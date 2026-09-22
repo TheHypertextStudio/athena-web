@@ -158,6 +158,36 @@ test('a task page adds and removes every kind of relationship in place', async (
   await captureEvidence(page);
 });
 
+test('adding a subtask to a finished task offers to reopen it', async ({ page }) => {
+  const { orgId } = await signUpAndOnboard(page, 'TaskReopen');
+  const teams = await apiJson<{ items: { id: string }[] }>(page, `/v1/orgs/${orgId}/teams`);
+  const teamId = teams.items[0]?.id;
+  if (!teamId) throw new Error('Onboarding produced no team');
+  const taskId = await createTask(page, orgId, teamId, 'Ship the brochure');
+  await apiJson(page, `/v1/orgs/${orgId}/tasks/${taskId}/state`, {
+    method: 'POST',
+    body: { state: 'done' },
+  });
+
+  await page.goto(`${orgHref(orgId, 'tasks')}/${taskId}`, {
+    waitUntil: 'domcontentloaded',
+    timeout: TIMEOUTS.pageReady,
+  });
+  await page.getByRole('button', { name: 'Add subtask' }).click();
+  const composer = page.getByRole('textbox', { name: 'New subtask title' });
+  await composer.fill('Proofread the copy');
+  await composer.press('Enter');
+
+  await page.getByRole('button', { name: 'Reopen' }).click({ timeout: TIMEOUTS.pageReady });
+  await expect
+    .poll(
+      async () =>
+        (await apiJson<{ state: string }>(page, `/v1/orgs/${orgId}/tasks/${taskId}`)).state,
+      { timeout: TIMEOUTS.pageReady },
+    )
+    .toBe('in_progress');
+});
+
 /** Save the populated page in both themes when `CAPTURE_TASK_DETAIL_EVIDENCE=1`. */
 async function captureEvidence(page: Page): Promise<void> {
   if (process.env['CAPTURE_TASK_DETAIL_EVIDENCE'] !== '1') return;

@@ -27,11 +27,16 @@ import { act, cleanup, renderHook, screen, waitFor } from '@testing-library/reac
 import type { JSX, ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { objectCommandsPost, statePost, taskPatch, subtaskPost } = vi.hoisted(() => ({
+const { objectCommandsPost, statePost, taskPatch, subtaskPost, offerReopen } = vi.hoisted(() => ({
   objectCommandsPost: vi.fn(),
   statePost: vi.fn(),
   taskPatch: vi.fn(),
   subtaskPost: vi.fn(),
+  offerReopen: vi.fn(),
+}));
+
+vi.mock('../../src/lib/use-parent-reopen-offer', () => ({
+  useParentReopenOffer: () => offerReopen,
 }));
 
 vi.mock('../../src/lib/api', () => ({
@@ -178,6 +183,7 @@ beforeEach(() => {
   statePost.mockReset();
   taskPatch.mockReset();
   subtaskPost.mockReset();
+  offerReopen.mockReset();
 });
 
 afterEach(() => {
@@ -422,6 +428,30 @@ describe('useTaskMutations — subtask creation', () => {
     });
     expect(read()?.subtasks.map((subtask) => subtask.id)).toEqual([SUBTASK_ID, created.id]);
     expect(read()?.subtasks.at(-1)).toMatchObject({ title: 'Print badges', state: 'backlog' });
+    // The parent is open, so there is nothing to reopen and no extra read.
+    expect(offerReopen).not.toHaveBeenCalled();
+  });
+
+  it('offers to reopen the parent when it was closed', async () => {
+    subtaskPost.mockResolvedValue(
+      okResponse({
+        id: TaskId.parse('01BX5ZZKBKACTAV9WEVGEMMVS4'),
+        title: 'Print badges',
+        state: 'backlog',
+        projectId: null,
+        labels: [],
+      }),
+    );
+    const { client, detailKey, result } = mountMutations();
+    client.setQueryData<TaskDetailAggregate>(detailKey, (current) =>
+      current
+        ? { ...current, defaultView: { task: { ...current.defaultView.task, state: 'done' } } }
+        : current,
+    );
+
+    await act(() => result.current.addSubtask('Print badges'));
+
+    expect(offerReopen).toHaveBeenCalledWith(ORG_ID, [TASK_ID]);
   });
 });
 

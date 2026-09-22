@@ -117,6 +117,8 @@ When the viewer can contribute, each relationship on the page can be added and r
   row's remove button removes the link and leaves the other task unchanged.
 - Parent: a sidebar row with a task search and a "No parent" choice.
 - Each of these is also a command-palette action on the task page.
+- Open work added under a parent a person closed offers Reopen in a notice naming the parent. A
+  parent the workspace closed from its subtasks reopens on its own.
 
 ## Checking a page
 

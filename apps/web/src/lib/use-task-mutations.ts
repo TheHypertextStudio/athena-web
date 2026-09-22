@@ -12,6 +12,7 @@ import { LabelId, MilestoneId, ProgramId, ProjectId, TaskId } from '@docket/work
 import { type ObjectCommandResult } from './contracts/object-command';
 import { TaskSubjectRef } from '@docket/work/subject-ref-contract';
 import { TaskStatusKey } from '@docket/work/work-view-contract';
+import { isTerminalCategory } from '@docket/work/work-status-contract';
 import { type TaskArchived, type TaskDetail, type TaskOut } from '@docket/work/task-model';
 import { type TaskDetailAggregate } from './contracts/detail-aggregate';
 import type { Priority } from '@docket/work/task-contract';
@@ -26,6 +27,7 @@ import { userErrorMessage, UserFacingError } from './problem';
 import { queryKeys, unwrap, useApiMutation } from './query';
 import { cycleAssignmentRequest, isCycleCadenceConflict } from './task-cycle-mutation';
 import { withRef } from './task-refs';
+import { useParentReopenOffer } from './use-parent-reopen-offer';
 
 /** Fields accepted by the task patch mutation. All are optional; `null` clears the field. */
 export interface TaskPatch {
@@ -145,6 +147,8 @@ function withCreatedSubtask(task: TaskDetail, created: TaskOut): TaskDetail {
  */
 function useAddSubtaskMutation(orgId: string, taskId: string, detailKey: QueryKey) {
   const queryClient = useQueryClient();
+  const statuses = useStatusRegistry();
+  const offerReopen = useParentReopenOffer();
   return useApiMutation<TaskOut, string>({
     mutationFn: (title) =>
       unwrap(
@@ -157,9 +161,14 @@ function useAddSubtaskMutation(orgId: string, taskId: string, detailKey: QueryKe
       ),
     // The created row is the subtask: list it now instead of after the detail's re-read.
     onSuccess: (created) => {
+      const parent = queryClient.getQueryData<TaskDetailAggregate>(detailKey)?.defaultView.task;
       queryClient.setQueryData<TaskDetailAggregate>(detailKey, (current) =>
         patchTaskAggregate(current, (task) => withCreatedSubtask(task, created)),
       );
+      // Only a closed parent can need reopening; an open one skips the extra read.
+      if (parent && isTerminalCategory(statuses.categoryOf('task', parent.state, parent.teamId))) {
+        offerReopen(orgId, [taskId]);
+      }
     },
     invalidateKeys: [queryKeys.tasks(orgId), queryKeys.taskGraphs(orgId)],
   });

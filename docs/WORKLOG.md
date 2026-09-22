@@ -309,6 +309,12 @@ routes/project-rollup.ts}`, `domains/work/src/contracts/{milestone,task}.ts`,
   `LINK_COPY`, `taskObjectRef`, `searchFacetString`, and API `landingTaskTransition` replace copies.
   Main's red "Test (rest)" gate was two stale policy ledgers from the provenance commit (the new
   `./provenance-contract` entrypoint, and `audit_event.created_at` moving files).
+- **Reopen offer (2026-09-22)**: Linear documents only two team toggles (close the parent when
+  every sub-issue is done; close sub-issues when the parent closes) and leaves a closed parent
+  closed when open work arrives. Docket already reopens parents its own policy closed; for a
+  parent a person closed, `useParentReopenOffer` re-reads it after a subtask create or any
+  hierarchy move and offers Reopen (first `started` status, else the landing status). No new
+  setting: a manual close is a deliberate choice, and a dialog would interrupt fast subtask entry.
 - **Blockers**: None.
 
 ---

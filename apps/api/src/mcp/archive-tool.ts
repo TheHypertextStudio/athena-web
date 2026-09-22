@@ -24,6 +24,7 @@ import {
 import { enqueueSearchUpsert } from '../search/write-through';
 import type { McpContext } from './auth';
 import type { McpRegistrar } from './catalog';
+import { originFor } from '../lib/provenance/context';
 import { recordChangeSet, trackedFields, type ChangeRecord } from './change-set';
 import {
   isTaskRowVisible,
@@ -58,11 +59,7 @@ function reject(field: string, message: string, options: readonly string[]): nev
 }
 
 /** Register `archive` on `server`. */
-export function registerArchiveTool(
-  server: McpRegistrar,
-  ctx: McpContext,
-  sessionId: string | null,
-): void {
+export function registerArchiveTool(server: McpRegistrar, ctx: McpContext): void {
   server.registerTool(
     'archive',
     {
@@ -237,11 +234,7 @@ export function registerArchiveTool(
         const changeSetId = await recordChangeSet({
           orgId: input.orgId,
           actorId: actorCtx.actorId,
-          origin: {
-            tool: 'archive',
-            ...(sessionId ? { sessionId } : {}),
-            ...(ctx.principal.kind === 'agent' ? { client: ctx.principal.displayName } : {}),
-          },
+          origin: originFor('archive'),
           summary: `${restore ? 'Restored' : 'Archived'} ${items.length} ${entity}s`,
           changes,
         });

@@ -33,6 +33,8 @@ import { createHash } from 'node:crypto';
 import { and, eq, inArray, isNull } from 'drizzle-orm';
 import type { AnyPgColumn, PgTable } from 'drizzle-orm/pg-core';
 
+import type { RecordedOrigin } from '@docket/work/provenance-contract';
+
 import { ConflictError, NotFoundError } from '../error';
 import { serializableTx } from '../lib/serializable-tx';
 import {
@@ -263,26 +265,20 @@ export interface RecordChangeSetInput {
   recordEmpty?: boolean;
   readonly orgId: string;
   readonly actorId: string;
-  readonly origin: ChangeOrigin;
+  /** Where the change came from; build it with `originFor`. */
+  readonly origin: RecordedOrigin;
   readonly summary: string;
   readonly changes: readonly RecordedChange[];
 }
+
+/** The fields every change-set write takes. */
+type ChangeSetWrite = Omit<RecordChangeSetInput, 'id' | 'recordEmpty'>;
 
 /** The database transaction handle used by reversible operations. */
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 /** Insert a change-set record and entries through an active transaction. */
-async function insertChangeSet(
-  tx: Tx,
-  id: string,
-  input: {
-    orgId: string;
-    actorId: string;
-    origin: ChangeOrigin;
-    summary: string;
-    changes: readonly RecordedChange[];
-  },
-): Promise<void> {
+async function insertChangeSet(tx: Tx, id: string, input: ChangeSetWrite): Promise<void> {
   await tx.insert(changeSet).values({
     id,
     organizationId: input.orgId,
@@ -331,13 +327,7 @@ async function insertChangeSet(
 /** Record a whole reversible operation in the same transaction as its writes. */
 export async function recordChangeSetInTransaction(
   tx: Tx,
-  input: {
-    orgId: string;
-    actorId: string;
-    origin: ChangeOrigin;
-    summary: string;
-    changes: readonly RecordedChange[];
-  },
+  input: ChangeSetWrite,
 ): Promise<string | null> {
   if (input.changes.length === 0) return null;
   const id = genId();
@@ -357,13 +347,7 @@ export async function recordChangeSetInTransaction(
  * @param input - The org, acting actor, origin, summary, and the entities touched.
  * @returns the new change-set id, or null when nothing was touched.
  */
-export async function recordChangeSet(input: {
-  orgId: string;
-  actorId: string;
-  origin: ChangeOrigin;
-  summary: string;
-  changes: readonly RecordedChange[];
-}): Promise<string | null> {
+export async function recordChangeSet(input: ChangeSetWrite): Promise<string | null> {
   if (input.changes.length === 0) return null;
   const id = genId();
   await db.transaction(async (tx) => {

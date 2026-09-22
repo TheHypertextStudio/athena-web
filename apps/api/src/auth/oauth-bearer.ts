@@ -29,8 +29,16 @@ export { OAUTH_GRANT_CLAIM };
 /** A stored resource grant required by the live bearer check. */
 export type OAuthBearerGrantState = SharedOAuthBearerGrantState;
 
-/** The current database state used to decide whether a signed token still grants access. */
-export type OAuthBearerLiveState = SharedOAuthBearerLiveState<AuthUser>;
+/**
+ * The current database state used to decide whether a signed token still grants access.
+ *
+ * @remarks
+ * `clientName` is the display name the client registered with. It plays no part in authorization;
+ * it rides along because the client row is already loaded, and provenance names the client by it.
+ */
+export type OAuthBearerLiveState = SharedOAuthBearerLiveState<AuthUser> & {
+  readonly clientName?: string | null;
+};
 
 /** Inputs a live-state adapter needs after cryptographic claims have been checked. */
 export interface OAuthBearerStateLookup {
@@ -212,6 +220,7 @@ function authorizeLiveState(
       userId: authorized.userId,
       user: authorized.user,
       clientId: authorized.clientId,
+      clientName: state.clientName ?? null,
       scopes: authorized.scopes,
     };
   } catch {
@@ -286,6 +295,7 @@ async function loadLiveState(lookup: OAuthBearerStateLookup): Promise<OAuthBeare
   return {
     user: currentUser,
     clientId: client.clientId,
+    clientName: client.name,
     clientDisabled: client.disabled === true,
     clientSkipConsent: client.skipConsent === true,
     clientScopes: effectiveOAuthClientScopes(client.scopes),

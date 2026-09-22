@@ -29,6 +29,8 @@ export type CallerPrincipal =
       readonly userId: string;
       readonly user: AuthUser;
       readonly clientId: string;
+      /** The name the client registered with, when it gave one. Attribution only. */
+      readonly clientName?: string | null;
       readonly scopes: readonly OAuthCapabilityScope[];
     };
 

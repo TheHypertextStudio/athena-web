@@ -17,6 +17,7 @@ import { z } from 'zod';
 
 import { NotFoundError } from '../error';
 import { deriveCaptureTitle } from '../lib/capture-title';
+import { originFor } from '../lib/provenance/context';
 import { resolveLandingTarget } from '../lib/task-landing';
 import { enqueueSearchUpsert } from '../search/write-through';
 import type { McpContext } from './auth';
@@ -46,18 +47,7 @@ const MAX_CAPTURES = 100;
 const SEARCH_PUBLISH_BATCH = 8;
 
 /** Register capture and undo on `server`. */
-export function registerWriteTools(
-  server: McpRegistrar,
-  ctx: McpContext,
-  sessionId: string | null,
-): void {
-  /** The origin stamped on everything these tools record. */
-  const originFor = (tool: string) => ({
-    tool,
-    ...(sessionId ? { sessionId } : {}),
-    ...(ctx.principal.kind === 'agent' ? { client: ctx.principal.displayName } : {}),
-  });
-
+export function registerWriteTools(server: McpRegistrar, ctx: McpContext): void {
   server.registerTool(
     'capture',
     {

@@ -31,6 +31,7 @@ import {
   placeItem,
   resolveItem,
 } from '../lib/organize/place';
+import { originFor } from '../lib/provenance/context';
 import { resolveLandingTarget } from '../lib/task-landing';
 import { serializableTx } from '../lib/serializable-tx';
 import {
@@ -46,11 +47,7 @@ import { authorize, jsonResult, runTool, scopedActor } from './result';
 import { orgIdParam, resolveStateTransition } from './tools-shared';
 
 /** Register `organize` on `server`. */
-export function registerOrganizeTool(
-  server: McpRegistrar,
-  ctx: McpContext,
-  sessionId: string | null,
-): void {
+export function registerOrganizeTool(server: McpRegistrar, ctx: McpContext): void {
   server.registerTool(
     'organize',
     {
@@ -192,11 +189,7 @@ export function registerOrganizeTool(
         const changeSetId = await recordChangeSet({
           orgId: input.orgId,
           actorId: actorCtx.actorId,
-          origin: {
-            tool: 'organize',
-            ...(sessionId ? { sessionId } : {}),
-            ...(ctx.principal.kind === 'agent' ? { client: ctx.principal.displayName } : {}),
-          },
+          origin: originFor('organize'),
           summary:
             created === 1 && placed[0]
               ? `Created "${ordered[0]?.title}"`

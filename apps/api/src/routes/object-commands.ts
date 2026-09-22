@@ -64,6 +64,7 @@ import { apiDoc } from '../lib/openapi-route';
 import { MAX_OBJECT_COMMAND_BYTES } from '../lib/http-limits';
 import { rawResultRowCount } from '../lib/raw-result';
 import { assertSharedWorkWritable } from '../product-capability';
+import { originFor } from '../lib/provenance/context';
 import { serializableTx } from '../lib/serializable-tx';
 import { zJson } from '../lib/validate';
 import {
@@ -1645,7 +1646,9 @@ async function executeForward(
       id: objectCommandChangeSetId(orgId, actorId, command.commandId),
       orgId,
       actorId,
-      origin: { tool: 'canvas', client: 'web', sessionId: command.commandId },
+      // `tool: 'canvas'` is what replay recognizes a stored command by; the app surface that sent
+      // the command comes from the request's provenance scope.
+      origin: originFor('canvas', { ref: { commandId: command.commandId } }),
       summary: command.operation.type.replaceAll('_', ' '),
       changes: audit,
       recordEmpty: true,

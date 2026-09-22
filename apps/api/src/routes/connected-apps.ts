@@ -29,7 +29,7 @@ import { pageResultByKey, seekAfterId } from '../lib/list-cursor';
 import { ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
 import { zParam, zQuery } from '../lib/validate';
-import { fallbackClientName } from './oauth-clients';
+import { fallbackClientName } from '../lib/provenance/clients';
 
 /** One authorized OAuth client returned by the list endpoint. */
 const ConnectedAppOut = z.object({

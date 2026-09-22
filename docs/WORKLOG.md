@@ -2,6 +2,7 @@
 
 > **Purpose**: Comprehensive tracking of all work - past, present, and future.
 > **Last Updated**: 2026-09-20
+> **Last Updated**: 2026-09-22
 
 ---
 
@@ -83,6 +84,36 @@
   whether prose sounds like a database comment. The final browser and editorial passes removed
   source terminology without adding a brittle keyword blacklist. Scalar applies its own font token
   after page CSS loads, so the owned theme must set the font on Scalar's root as well as the page.
+
+### [PROVENANCE-001] Record and quietly surface where every change came from
+
+- **Status**: IN_PROGRESS
+- **Started**: 2026-09-22
+- **Priority**: P1
+- **Description**: Every task, project, and initiative write records a typed provenance (channel +
+  performer, beside the authorizing actor). The app keeps it out of the way: the Created row opens
+  an origin card on hover, the activity feed names the real performer, and a Show origin action
+  reaches it from the palette and context menu.
+- **Subtasks**:
+  - [x] Taxonomy contract, `ChangeOrigin` v2, request-scoped recorder, MCP/Athena/REST entry points
+  - [ ] Record on every REST create/mutation and every worker path; `audit_event.origin`
+  - [ ] Provenance read endpoint and activity-row origin
+  - [ ] Origin card, truthful activity rows, Show origin action
+- **Decisions**: `ChangeOrigin` v2 stays a superset of v1 (`tool`, `client`, `sessionId`,
+  `planId`, `planOwnerUserId` keep their top-level spelling) because phone summaries, Athena undo,
+  and canvas replay read those keys, one of them through raw SQL. `createdBy` keeps meaning the
+  authorizing human; the performer lives only in the origin. The taxonomy is specified in
+  `docs/engineering/specs/provenance.md`. Change sets take a required `RecordedOrigin` built by
+  `originFor`, which throws outside a provenance scope. The OAuth client's registered name rides
+  on the bearer principal (the client row is already loaded), so naming a client costs no query.
+  `audit_event` moved to `schema/audit-event.ts` because `crosscutting.ts` sits at its
+  `max-lines` ceiling.
+- **Validation (slice 1)**: root typecheck, lint, complexity ledger, and format pass. API suite:
+  6469 pass; the 9 failures (`permissions`, `route-auth`, `cycle-backfill`, `programs-detail`)
+  fail identically on a clean `HEAD`. Web 4484 and work-domain 307 pass.
+- **Blockers**: None.
+
+---
 
 ### [OAUTH-PROVIDER-COVERAGE-001] Restore the OAuth trust-spine coverage gate
 

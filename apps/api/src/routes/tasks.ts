@@ -43,6 +43,7 @@ import { ConflictError, NotFoundError, ValidationError } from '../error';
 import { deferAfterResponse } from '../lib/after-response';
 import { detailCapabilities } from '../lib/detail-capabilities';
 import { guardsInOrder } from '../lib/guards-in-order';
+import { originFor } from '../lib/provenance/context';
 import {
   applyExclusivity,
   labelsForSubject,
@@ -945,7 +946,7 @@ The new task appears in the organization's activity stream. An assigned task als
         const undoToken = await recordChangeSetInTransaction(tx, {
           orgId,
           actorId,
-          origin: { tool: 'task_description_expansion' },
+          origin: originFor('task_description_expansion'),
           summary: `Expanded "${updated.title}"`,
           changes,
         });

@@ -21,6 +21,7 @@ import {
   applySubtaskCompletionPolicyForParents,
   finishTaskStateTransition,
 } from '../lib/task-state';
+import { originFor } from '../lib/provenance/context';
 import { serializableTx } from '../lib/serializable-tx';
 import { enqueueSearchUpsert } from '../search/write-through';
 import type { McpContext } from './auth';
@@ -37,11 +38,7 @@ const RELATIONS = ['blocks', 'contributes_to', 'subtask_of'] as const;
 type Relation = (typeof RELATIONS)[number];
 
 /** Register `link` on `server`. */
-export function registerLinkTool(
-  server: McpRegistrar,
-  ctx: McpContext,
-  sessionId: string | null,
-): void {
+export function registerLinkTool(server: McpRegistrar, ctx: McpContext): void {
   server.registerTool(
     'link',
     {
@@ -105,11 +102,7 @@ export function registerLinkTool(
           ? await recordChangeSet({
               orgId: input.orgId,
               actorId: actorCtx.actorId,
-              origin: {
-                tool: 'link',
-                ...(sessionId ? { sessionId } : {}),
-                ...(ctx.principal.kind === 'agent' ? { client: ctx.principal.displayName } : {}),
-              },
+              origin: originFor('link'),
               summary: remove
                 ? `Unlinked ${input.relation.replace(/_/g, ' ')}`
                 : `Linked ${input.relation.replace(/_/g, ' ')}`,

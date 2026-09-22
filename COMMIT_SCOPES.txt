@@ -43,6 +43,9 @@ permissions
 planning
 programs
 projects
+# provenance: where a change came from — the app, Athena, an MCP client, a sync — recorded on
+# every write and shown on demand.
+provenance
 sidebar
 takeout
 tasks

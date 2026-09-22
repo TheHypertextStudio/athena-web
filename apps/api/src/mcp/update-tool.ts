@@ -29,6 +29,7 @@ import { z } from 'zod';
 
 import { ApiError, ValidationError } from '../error';
 import { clearableTextPatch } from '../lib/clearable-text';
+import { originFor } from '../lib/provenance/context';
 import { assertPlanningDateRange, planningDatePatch } from '../lib/planning-timeframe';
 import {
   applySubtaskCompletionPolicy,
@@ -392,11 +393,7 @@ function diff(
 }
 
 /** Register `update` on `server`. */
-export function registerUpdateTool(
-  server: McpRegistrar,
-  ctx: McpContext,
-  sessionId: string | null,
-): void {
+export function registerUpdateTool(server: McpRegistrar, ctx: McpContext): void {
   server.registerTool('update', updateToolDefinition, (input) =>
     runTool(async () => {
       const actorCtx = await scopedActor(ctx, input.orgId, 'work:write');
@@ -588,11 +585,7 @@ export function registerUpdateTool(
       const changeSetId = await recordChangeSet({
         orgId: input.orgId,
         actorId: actorCtx.actorId,
-        origin: {
-          tool: 'update',
-          ...(sessionId ? { sessionId } : {}),
-          ...(ctx.principal.kind === 'agent' ? { client: ctx.principal.displayName } : {}),
-        },
+        origin: originFor('update'),
         summary:
           changes.length === 1 && report[0]
             ? `Updated "${report[0].title}"`

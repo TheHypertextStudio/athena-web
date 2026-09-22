@@ -32,6 +32,7 @@ import { z } from 'zod';
 
 import { NotFoundError } from '../error';
 import { commitPlanNodes } from '../lib/plan-draft/commit';
+import { originFor } from '../lib/provenance/context';
 import {
   attachPlanSession,
   createOrReopenPlan,
@@ -112,7 +113,7 @@ export function registerPlanDraftTools(
   registerPlanStart(server, ctx, sessionId);
   registerPlanRead(server, ctx);
   registerPlanDraft(server, ctx);
-  registerPlanCommit(server, ctx, sessionId);
+  registerPlanCommit(server, ctx);
 }
 
 /** Register plan_start: open or resume the plan this conversation shapes. */
@@ -263,7 +264,7 @@ function registerPlanDraft(server: McpRegistrar, ctx: McpContext): void {
 }
 
 /** Register plan_commit: confirm part of the plan into real records. */
-function registerPlanCommit(server: McpRegistrar, ctx: McpContext, sessionId: string | null): void {
+function registerPlanCommit(server: McpRegistrar, ctx: McpContext): void {
   server.registerTool(
     PLAN_TOOL_NAMES.commit,
     {
@@ -313,11 +314,7 @@ function registerPlanCommit(server: McpRegistrar, ctx: McpContext, sessionId: st
           row,
           refs: input.refs,
           actorId: actorCtx.actorId,
-          origin: {
-            tool: PLAN_TOOL_NAMES.commit,
-            ...(sessionId ? { sessionId } : {}),
-            ...(ctx.principal.kind === 'agent' ? { client: ctx.principal.displayName } : {}),
-          },
+          origin: originFor(PLAN_TOOL_NAMES.commit),
         });
         const created = result.placed.filter((item) => item.created).length;
         return jsonResult({

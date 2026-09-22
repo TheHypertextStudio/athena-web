@@ -42,6 +42,7 @@ import {
   safeMethodsOnly,
 } from './lib/http-limits';
 import { mediaTypes } from './lib/media-types';
+import { provenanceMiddleware } from './lib/provenance/rest-middleware';
 import { idempotency } from './lib/idempotency';
 import { conditionalWriteFor } from './lib/work-schedule-conditional';
 import dailyPlan from './routes/daily-plan';
@@ -135,6 +136,10 @@ app.use('*', replayOwnerSessionMiddleware);
 // `.route()` chain so it applies to all children; it does not participate in the `AppType`
 // chain (membership/capability authz still layer on top per-route).
 app.use('*', requireAuth);
+
+// Every write below here records where it came from: the app surface for a session, the client
+// for an OAuth token.
+app.use('*', provenanceMiddleware);
 
 // Strict contracts negotiate at their route-local declaration after org/resource guards. This
 // temporary global adapter covers only declarations Task 4 has not migrated yet.

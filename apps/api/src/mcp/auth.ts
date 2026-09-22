@@ -85,6 +85,8 @@ export interface McpContext {
    * authorization input; the scope and grant layers alone decide what a call may do.
    */
   readonly clientId?: string | null;
+  /** The name {@link McpContext.clientId} registered with, when it gave one. Attribution only. */
+  readonly clientName?: string | null;
 }
 
 /**
@@ -197,6 +199,7 @@ async function resolveBearerContext(token: string): Promise<McpContext> {
     },
     scopes: principal.scopes,
     clientId: principal.clientId,
+    clientName: principal.clientName ?? null,
   };
 }
 

@@ -16,9 +16,12 @@ resetSlowTool();
 
 vi.mock('../../src/mcp/auth', () => ({
   resolveMcpContext: vi.fn(async () => ({
-    userId: 'user_test',
-    userName: 'Ada',
-    userEmail: 'ada@example.com',
+    principal: {
+      kind: 'user',
+      userId: 'user_test',
+      userName: 'Ada',
+      userEmail: 'ada@example.com',
+    },
     scopes: ['work:read', 'work:write', 'agents:run', 'connectors:link'],
   })),
 }));

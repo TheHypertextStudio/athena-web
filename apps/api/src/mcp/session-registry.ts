@@ -18,6 +18,7 @@ import { and, eq, inArray, isNull, lt, sql } from 'drizzle-orm';
 import { NotFoundError } from '../error';
 import type { McpContext } from './auth';
 import { principalKey } from './principal';
+import type { DeclaredClientInfo } from './provenance';
 
 /** How long a session survives without being seen before the sweep reaps it. */
 const IDLE_TTL_MS = 24 * 60 * 60 * 1000;
@@ -25,22 +26,33 @@ const IDLE_TTL_MS = 24 * 60 * 60 * 1000;
 /** The header carrying the session id, per the Streamable HTTP transport. */
 export const SESSION_HEADER = 'mcp-session-id';
 
+/** A live session a request presented, confirmed to belong to its caller. */
+export interface LiveSession {
+  readonly id: string;
+  /** What the client declared about itself on `initialize`. */
+  readonly clientInfo: DeclaredClientInfo;
+}
+
 /**
  * Mint a session for a caller completing `initialize`.
  *
  * @param ctx - The authenticated caller.
  * @param protocolVersion - The protocol version the client negotiated, when it sent one.
+ * @param clientInfo - The `clientInfo` the client declared, kept for provenance.
  * @returns the new session id.
  */
 export async function createSession(
   ctx: McpContext,
   protocolVersion: string | null,
+  clientInfo: DeclaredClientInfo | null = null,
 ): Promise<string> {
   const id = crypto.randomUUID();
   await db.insert(mcpSession).values({
     id,
     principalKey: principalKey(ctx),
     ...(protocolVersion ? { protocolVersion } : {}),
+    ...(clientInfo?.name ? { clientName: clientInfo.name } : {}),
+    ...(clientInfo?.version ? { clientVersion: clientInfo.version } : {}),
   });
   return id;
 }
@@ -55,10 +67,11 @@ export async function createSession(
  *
  * @param ctx - The authenticated caller.
  * @param sessionId - The id presented in the request header.
- * @returns the session id, confirmed live and owned by this caller.
+ * @returns the session, confirmed live and owned by this caller, with the `clientInfo` it
+ *   declared on `initialize`.
  * @throws {NotFoundError} When no live session with that id belongs to this caller.
  */
-export async function resolveSession(ctx: McpContext, sessionId: string): Promise<string> {
+export async function resolveSession(ctx: McpContext, sessionId: string): Promise<LiveSession> {
   // The touch rides the same statement as the lookup: `lastSeenAt` only matters at the reaper's
   // 24-hour granularity, so a separate UPDATE per request would be a round trip and a WAL write
   // for nothing.
@@ -72,10 +85,14 @@ export async function resolveSession(ctx: McpContext, sessionId: string): Promis
         isNull(mcpSession.endedAt),
       ),
     )
-    .returning({ id: mcpSession.id });
+    .returning({
+      id: mcpSession.id,
+      clientName: mcpSession.clientName,
+      clientVersion: mcpSession.clientVersion,
+    });
   const row = rows[0];
   if (!row) throw new NotFoundError('Session not found');
-  return row.id;
+  return { id: row.id, clientInfo: { name: row.clientName, version: row.clientVersion } };
 }
 
 /**

@@ -1,4 +1,4 @@
-import { Hono } from 'hono';
+import { Hono, type MiddlewareHandler } from 'hono';
 
 import type * as DbModule from '@docket/db';
 import { CaptureMailer } from '@docket/mail';
@@ -10,6 +10,8 @@ import type { ActorCtx, AppEnv, AuthSession, CallerPrincipal } from '../../src/c
 import { getContainer } from '../../src/container';
 import { onError } from '../../src/error';
 import { flushDeferredWork } from '../../src/lib/after-response';
+import { appProvenance, runWithProvenance } from '../../src/lib/provenance/context';
+import { provenanceMiddleware } from '../../src/lib/provenance/rest-middleware';
 import './auth-mock';
 import { getMigratedDb } from './db';
 
@@ -104,6 +106,7 @@ export function appWithActor(
     c.set('actorCtx', ctx);
     await next();
   });
+  app.use('*', orgRouteProvenance);
   // The router default export is a Hono instance; route it under root.
   app.route('/', router as never);
   app.onError(onError);
@@ -142,10 +145,30 @@ export function appWithSession(router: unknown, session: AuthSession) {
     c.set('principal', principalForSession(session));
     await next();
   });
+  // Exactly the production middleware: an anonymous request declares no provenance, so a route
+  // that records a change without a caller fails here as it would in production.
+  app.use('*', provenanceMiddleware);
   app.route('/', router as never);
   app.onError(onError);
   return drainingDeferredWork(app);
 }
+
+/**
+ * Declare provenance for an org route mounted with an injected actor.
+ *
+ * @remarks
+ * Production reaches an org route only through `orgContextMiddleware`, which requires a caller,
+ * so an org request always runs inside the caller's provenance. {@link appWithActor} injects the
+ * actor context without a caller; this stands in for the session principal production would have,
+ * recording what `provenanceMiddleware` records for a session with no surface header.
+ */
+const orgRouteProvenance: MiddlewareHandler<AppEnv> = async (c, next) => {
+  if (c.get('principal')) {
+    await provenanceMiddleware(c, next);
+    return;
+  }
+  await runWithProvenance(appProvenance(), next);
+};
 
 /** Build a minimal fake Better Auth session for a user id. */
 export function fakeSession(userId: string, name = 'Ada', email = 'ada@example.com'): AuthSession {

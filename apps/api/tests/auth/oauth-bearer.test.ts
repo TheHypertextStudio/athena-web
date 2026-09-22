@@ -26,6 +26,7 @@ function live(overrides: Partial<OAuthBearerLiveState> = {}): OAuthBearerLiveSta
   return {
     user: USER,
     clientId: 'client_1',
+    clientName: 'Claude',
     clientDisabled: false,
     clientSkipConsent: false,
     clientScopes: ['work:read', 'work:write', 'offline_access'],
@@ -91,6 +92,7 @@ describe('verifyOAuthBearerWith', () => {
       userId: USER.id,
       user: USER,
       clientId: 'client_1',
+      clientName: 'Claude',
       scopes: ['work:read'],
     });
   });

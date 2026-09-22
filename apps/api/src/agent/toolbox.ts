@@ -36,6 +36,7 @@ import { and, eq } from 'drizzle-orm';
 
 import { getContainer } from '../container';
 import { sealCredential, unsealCredential } from '../lib/credentials';
+import { athenaProvenance, type ProvenanceBase } from '../lib/provenance/context';
 import { internalAgentContext, internalUserContext } from '../mcp/internal-session';
 import { buildServer } from '../mcp/server';
 import type { ToolAnnotationHints, ToolAnnotationSource } from './approval-policy';
@@ -215,6 +216,8 @@ export type ToolboxExecutor =
       readonly kind: 'athena';
       /** Better Auth user id persisted on the session. */
       readonly ownerUserId: string;
+      /** The session's framing: a conversational `chat` or a delegated `job`. Defaults to chat. */
+      readonly sessionKind?: 'chat' | 'job';
     }
   | {
       /** A separately registered, workspace-owned agent. */
@@ -283,6 +286,23 @@ function firstPartyHints(tool: ListedFirstPartyTool): ToolAnnotationHints | unde
 }
 
 /**
+ * The provenance an executor's tool calls record, when it differs from what the server derives.
+ *
+ * @param executor - Who is calling.
+ * @param sessionId - The hosting agent session, when there is one.
+ * @returns Athena's provenance — `chat` for a conversation, `session` for a delegated job — or
+ *   undefined for a registered agent, whose provenance comes from its principal.
+ */
+function executorProvenance(
+  executor: ToolboxExecutor,
+  sessionId: string | null,
+): ProvenanceBase | undefined {
+  if (executor.kind !== 'athena') return undefined;
+  const surface = executor.sessionKind === 'job' ? 'session' : 'chat';
+  return athenaProvenance(surface, sessionId ?? undefined);
+}
+
+/**
  * Open the toolbox for one executor: the catalog tools it may call, with first-party hints
  * attached, and the session id the plan tools bind a plan to.
  *
@@ -299,8 +319,9 @@ export async function openToolbox(
       ? await internalUserContext(executor.ownerUserId)
       : await internalAgentContext(executor.organizationId, executor.agentId);
   // The Athena session id rides into the server so a tool that creates a conversation-owned
-  // artifact (a plan draft) can attach itself to the conversation that opened it.
-  const server = buildServer(ctx, sessionId);
+  // artifact (a plan draft) can attach itself to the conversation that opened it. Athena runs
+  // with its owner's authority but records itself as the performer.
+  const server = buildServer(ctx, sessionId, executorProvenance(executor, sessionId));
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
   await server.connect(serverTransport);
   const client = new Client({ name: 'athena-loop', version: '1.0.0' });

@@ -15,9 +15,11 @@
  * per mcp-surface.md §3.2 — Docket's own DB is a closed world (`openWorldHint:false`)
  * except `link_external` and `run_agent` which touch external systems.
  */
-import type { McpRegistrar } from './catalog';
+import { type McpRegistrar, ProvenanceRegistrar } from './catalog';
 
 import type { McpContext } from './auth';
+import type { ProvenanceBase } from '../lib/provenance/context';
+import { mcpProvenance } from './provenance';
 import { registerArchiveTool } from './archive-tool';
 import { registerContentTools } from './content-tools';
 import { registerDirectiveTools } from './directive-tools';
@@ -46,24 +48,30 @@ import { registerWorkDestinationReviewTool } from './work-destination-review-too
  * authorizes via the permission engine before any write — `org`/`user` come strictly
  * from the verified token (never from tool arguments).
  *
- * @param server - The per-request {@link McpServer} to register tools on.
+ * Every tool runs inside the caller's provenance ({@link mcpProvenance}), so each change it
+ * records names Athena, the connected client, or the registered agent that made it.
+ *
+ * @param registrar - The per-request {@link McpServer} to register tools on.
  * @param ctx - The authenticated MCP caller.
  * @param sessionId - The caller's MCP session, stamped onto recorded change sets so a change can
  *   be traced back to the conversation that made it. Null when the client holds no session.
+ * @param provenance - Where the caller's changes come from; derived from `ctx` when omitted.
  */
 export function registerTools(
-  server: McpRegistrar,
+  registrar: McpRegistrar,
   ctx: McpContext,
   sessionId: string | null = null,
+  provenance: ProvenanceBase = mcpProvenance(ctx, sessionId),
 ): void {
+  const server = new ProvenanceRegistrar(registrar, provenance);
   registerContentTools(server, ctx);
   registerSessionTools(server, ctx);
   registerViewPlanTools(server, ctx);
-  registerWriteTools(server, ctx, sessionId);
-  registerUpdateTool(server, ctx, sessionId);
-  registerOrganizeTool(server, ctx, sessionId);
-  registerLinkTool(server, ctx, sessionId);
-  registerArchiveTool(server, ctx, sessionId);
+  registerWriteTools(server, ctx);
+  registerUpdateTool(server, ctx);
+  registerOrganizeTool(server, ctx);
+  registerLinkTool(server, ctx);
+  registerArchiveTool(server, ctx);
   registerPlanTools(server, ctx);
   registerPlanDraftTools(server, ctx, sessionId);
   registerRetrospectTools(server, ctx);

@@ -33,6 +33,7 @@ import { and, eq } from 'drizzle-orm';
 import type { z } from 'zod';
 
 import { ConflictError } from '../error';
+import { type ProvenanceBase, runWithProvenance } from '../lib/provenance/context';
 import type { McpContext } from './auth';
 import { authorizeResourceUri } from './resources';
 import { setSessionLogLevel } from './session-registry';
@@ -114,6 +115,33 @@ type ListToolsRequest = z.infer<typeof ListToolsRequestSchema>;
 interface CatalogOptions {
   readonly pageSize?: number;
   readonly tasksEnabled?: boolean;
+}
+
+/** Any callback handed to the SDK. */
+type AnyCallback = (...args: never[]) => unknown;
+
+/** Run a callback inside `base`, so every change it records names the caller. */
+function withProvenance<T extends AnyCallback>(base: ProvenanceBase, callback: T): T {
+  return ((...args: Parameters<T>) => runWithProvenance(base, () => callback(...args))) as T;
+}
+
+/** A registrar that can register task-capable tools. */
+interface TaskRegistrar extends McpRegistrar {
+  readonly tasksEnabled: boolean;
+  registerTaskTool<
+    OutputArgs extends ToolOutputSchema,
+    InputArgs extends ToolInputSchema = undefined,
+  >(
+    name: string,
+    config: TaskToolConfig<InputArgs, OutputArgs>,
+    handler: ToolTaskHandler<InputArgs>,
+    fallback: ToolCallback<InputArgs>,
+  ): RegisteredTool;
+}
+
+/** Whether a registrar can register task-capable tools. */
+function isTaskRegistrar(server: McpRegistrar): server is TaskRegistrar {
+  return 'registerTaskTool' in server && 'tasksEnabled' in server;
 }
 
 type TaskToolConfig<InputArgs extends ToolInputSchema, OutputArgs extends ToolOutputSchema> = Omit<
@@ -363,6 +391,63 @@ export function createMcpCatalog(server: McpServer, options?: CatalogOptions): M
   return new McpCatalog(server, options);
 }
 
+/**
+ * A registrar whose tools run inside one provenance scope.
+ *
+ * @remarks
+ * Every tool call records changes, and every change must say where it came from. Wrapping at
+ * registration means no tool body has to remember; resources and prompts only read, so they pass
+ * straight through. The task body runs from `createTask`, which starts the work and returns; the
+ * scope set there follows that work however long it outlives the request.
+ */
+export class ProvenanceRegistrar implements McpRegistrar {
+  constructor(
+    private readonly inner: McpRegistrar,
+    private readonly base: ProvenanceBase,
+  ) {}
+
+  /** Whether the wrapped registrar registers task-capable tools. */
+  get tasksEnabled(): boolean {
+    return isTaskRegistrar(this.inner) && this.inner.tasksEnabled;
+  }
+
+  registerTool<OutputArgs extends ToolOutputSchema, InputArgs extends ToolInputSchema = undefined>(
+    name: string,
+    config: ToolConfig<InputArgs, OutputArgs>,
+    cb: ToolCallback<InputArgs>,
+  ): RegisteredTool {
+    return this.inner.registerTool(name, config, withProvenance(this.base, cb));
+  }
+
+  registerTaskTool<
+    OutputArgs extends ToolOutputSchema,
+    InputArgs extends ToolInputSchema = undefined,
+  >(
+    name: string,
+    config: TaskToolConfig<InputArgs, OutputArgs>,
+    handler: ToolTaskHandler<InputArgs>,
+    fallback: ToolCallback<InputArgs>,
+  ): RegisteredTool {
+    return registerOptionalTaskTool(
+      this.inner,
+      name,
+      config,
+      { ...handler, createTask: withProvenance(this.base, handler.createTask) },
+      withProvenance(this.base, fallback),
+    );
+  }
+
+  /** Resources only read, so they register on the wrapped registrar unscoped. */
+  get registerResource(): McpRegistrar['registerResource'] {
+    return this.inner.registerResource.bind(this.inner);
+  }
+
+  /** Prompts only read, so they register on the wrapped registrar unscoped. */
+  get registerPrompt(): McpRegistrar['registerPrompt'] {
+    return this.inner.registerPrompt.bind(this.inner);
+  }
+}
+
 /** Register a task-capable tool when the registrar supports tasks, else a synchronous fallback. */
 export function registerOptionalTaskTool<
   OutputArgs extends ToolOutputSchema,
@@ -374,7 +459,7 @@ export function registerOptionalTaskTool<
   handler: ToolTaskHandler<InputArgs>,
   fallback: ToolCallback<InputArgs>,
 ): RegisteredTool {
-  if (server instanceof McpCatalog && server.tasksEnabled) {
+  if (isTaskRegistrar(server) && server.tasksEnabled) {
     return server.registerTaskTool(name, config, handler, fallback);
   }
 

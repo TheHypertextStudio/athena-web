@@ -21,8 +21,8 @@ import {
   projectDependency,
   task,
   taskDependency,
-  type ChangeOrigin,
 } from '@docket/db';
+import type { RecordedOrigin } from '@docket/work/provenance-contract';
 import { canActor } from '@docket/authz';
 import type {
   PlanCommitCounts,
@@ -45,6 +45,7 @@ import {
   type Placement,
   type Tx,
 } from '../organize/place';
+import { originFor } from '../provenance/context';
 import { resolveLandingTarget } from '../task-landing';
 import { serializableTx } from '../serializable-tx';
 import { applySubtaskCompletionPolicyForParents, finishTaskStateTransition } from '../task-state';
@@ -70,7 +71,7 @@ export interface CommitPlanInput {
   readonly refs: readonly string[];
   /** The owner's actor in the plan's workspace, already authorized to contribute. */
   readonly actorId: string;
-  readonly origin: ChangeOrigin;
+  readonly origin: RecordedOrigin;
 }
 
 /** The parent a node lands under when that parent is already real. */
@@ -500,7 +501,7 @@ function placementFor(
  * and the undo route answers "is this yours?" from the origin alone, so without the plan on it the
  * person who pressed Confirm would have nothing to undo.
  */
-function planOrigin(origin: ChangeOrigin, row: PlanDraftRow): ChangeOrigin {
+function planOrigin(origin: RecordedOrigin, row: PlanDraftRow): RecordedOrigin {
   return { ...origin, planId: row.id, planOwnerUserId: row.ownerUserId };
 }
 
@@ -508,7 +509,7 @@ function planOrigin(origin: ChangeOrigin, row: PlanDraftRow): ChangeOrigin {
 interface CommitMeta {
   readonly row: PlanDraftRow;
   readonly actorId: string;
-  readonly origin: ChangeOrigin;
+  readonly origin: RecordedOrigin;
   /** The first placed item's title, for a one-item summary. */
   readonly firstTitle: string | undefined;
 }
@@ -555,8 +556,8 @@ export async function commitOwnedPlan(
   ownerUserId: string,
   id: string,
   refs: readonly string[],
-  origin: ChangeOrigin = { tool: 'plan_commit' },
 ): Promise<CommitPlanResult> {
+  const origin = originFor('plan_commit');
   const row = await loadOwnedPlan(ownerUserId, id);
   if (row.status === 'archived') throw new NotFoundError('Plan not found');
   const actorId = await ownerActorInOrg(ownerUserId, row.organizationId);

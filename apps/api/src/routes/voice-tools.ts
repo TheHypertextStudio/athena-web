@@ -30,6 +30,7 @@ import {
 } from '../lib/task-state';
 import { loadStatusSets } from '../lib/work-status';
 import { recordChangeSetInTransaction, trackedFields } from '../mcp/change-set';
+import { athenaProvenance, originFor, runWithProvenance } from '../lib/provenance/context';
 
 import { buildTaskViewFilter } from './task-helpers';
 import type {
@@ -114,11 +115,25 @@ export class DocketVoiceToolRunner implements VoiceToolRunner {
   /**
    * Execute one call and describe what happened in a sentence Athena can say.
    *
+   * @remarks
+   * Every change a call makes records Athena on the phone as its performer. The call's summary
+   * and its undo find those changes by the voice session id the provenance carries.
+   *
    * @param ctx - The session the call belongs to.
    * @param name - Tool name as the model called it.
    * @param args - Call arguments as the model produced them.
    */
   async run(
+    ctx: VoiceSessionContext,
+    name: string,
+    args: Record<string, unknown>,
+  ): Promise<VoiceToolOutcome> {
+    return runWithProvenance(athenaProvenance('phone', ctx.voiceSessionId), () =>
+      this.dispatch(ctx, name, args),
+    );
+  }
+
+  private async dispatch(
     ctx: VoiceSessionContext,
     name: string,
     args: Record<string, unknown>,
@@ -193,7 +208,7 @@ export class DocketVoiceToolRunner implements VoiceToolRunner {
       const changeSetId = await recordChangeSetInTransaction(tx, {
         orgId: organizationId,
         actorId,
-        origin: { client: 'athena-phone', sessionId: ctx.voiceSessionId, tool: 'create_task' },
+        origin: originFor('create_task'),
         summary,
         changes: [{ kind: 'task', id: row.id, op: 'create', after: trackedFields('task', row) }],
       });
@@ -382,7 +397,7 @@ export class DocketVoiceToolRunner implements VoiceToolRunner {
       const changeSetId = await recordChangeSetInTransaction(tx, {
         orgId: organizationId,
         actorId,
-        origin: { client: 'athena-phone', sessionId: ctx.voiceSessionId, tool: 'complete_task' },
+        origin: originFor('complete_task'),
         summary,
         changes: [mutation, ...cascades].map((change) => ({
           kind: 'task' as const,

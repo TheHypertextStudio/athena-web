@@ -24,9 +24,17 @@ import { env } from '../env';
 import { ApiError, ConflictError, NotFoundError, problemTypeUrl } from '../error';
 import type { McpContext } from './auth';
 import { attachStream, notifyLog } from './notify';
-import { createSession, endSession, resolveSession, SESSION_HEADER } from './session-registry';
+import {
+  createSession,
+  endSession,
+  type LiveSession,
+  resolveSession,
+  SESSION_HEADER,
+} from './session-registry';
 import { oauthIssuer, resolveMcpContext } from './auth';
 import { createMcpCatalog } from './catalog';
+import type { ProvenanceBase } from '../lib/provenance/context';
+import { type DeclaredClientInfo, mcpProvenance } from './provenance';
 import { registerPrompts } from './prompts';
 import { withRequestScope } from './request-context';
 import { registerResources } from './resources';
@@ -88,9 +96,15 @@ export function serverInfo(): Implementation {
  * identity so authorization can never cross requests.
  *
  * @param ctx - The authenticated MCP caller.
+ * @param sessionId - The MCP or Athena session the server is bound to.
+ * @param provenance - Where the caller's changes come from; derived from `ctx` when omitted.
  * @returns the configured {@link McpServer} with tools + resources registered.
  */
-export function buildServer(ctx: McpContext, sessionId: string | null = null): McpServer {
+export function buildServer(
+  ctx: McpContext,
+  sessionId: string | null = null,
+  provenance: ProvenanceBase = mcpProvenance(ctx, sessionId),
+): McpServer {
   const tasksEnabled = env.MCP_TASKS_ENABLED;
   // Everything advertised here is delivered (mcp-notifications.md §5). `resources.subscribe` and
   // `logging` are real: the notification channel is a session-scoped SSE stream this server owns
@@ -112,7 +126,7 @@ export function buildServer(ctx: McpContext, sessionId: string | null = null): M
     ...(tasksEnabled ? { taskStore: taskStoreForContext(ctx, sessionId) } : {}),
   });
   const catalog = createMcpCatalog(server, { tasksEnabled });
-  registerTools(catalog, ctx, sessionId);
+  registerTools(catalog, ctx, sessionId, provenance);
   registerResources(catalog, ctx);
   registerPrompts(catalog, ctx);
   catalog.installListHandlers(ctx);
@@ -271,20 +285,69 @@ export async function authorizationServerMetadata(c: Context): Promise<Response>
 /** How often the notification stream writes a comment frame to survive proxy idle reaping. */
 const HEARTBEAT_MS = 25_000;
 
-/** Whether a parsed body is the `initialize` request that starts a session. */
-function isInitializeBody(body: unknown): boolean {
-  return rpcMessages(body).some((message) => message.method === 'initialize');
+/** What an `initialize` request declared about the client. */
+interface InitializeParams {
+  readonly protocolVersion: string | null;
+  readonly clientInfo: DeclaredClientInfo;
 }
 
-/** The protocol version an `initialize` body negotiated, when it declared one. */
-function negotiatedProtocolVersion(body: unknown): string | null {
-  for (const message of rpcMessages(body)) {
-    if (message.method !== 'initialize') continue;
-    if (typeof message.params !== 'object' || message.params === null) continue;
-    const version: unknown = Reflect.get(message.params, 'protocolVersion');
-    if (typeof version === 'string') return version;
-  }
-  return null;
+/** A string field of a value, or null when the value is not an object or the field not a string. */
+function stringField(value: unknown, key: string): string | null {
+  if (typeof value !== 'object' || value === null) return null;
+  const field: unknown = Reflect.get(value, key);
+  return typeof field === 'string' ? field : null;
+}
+
+/** The session a request presented, proven to belong to its caller; null when it presented none. */
+async function presentedSession(ctx: McpContext, headers: Headers): Promise<LiveSession | null> {
+  const id = headers.get(SESSION_HEADER);
+  return id ? resolveSession(ctx, id) : null;
+}
+
+/**
+ * The provenance of a request's tool calls, with the client version it declared on this request's
+ * `initialize` or, failing that, on the one that opened its session.
+ */
+function requestProvenance(
+  ctx: McpContext,
+  sessionId: string | null,
+  body: unknown,
+  live: LiveSession | null,
+): ProvenanceBase {
+  const declared = initializeParams(body)?.clientInfo ?? live?.clientInfo ?? null;
+  return mcpProvenance(ctx, sessionId, declared);
+}
+
+/** The `initialize` request in a parsed body, when there is one. */
+function initializeParams(body: unknown): InitializeParams | null {
+  const message = rpcMessages(body).find((candidate) => candidate.method === 'initialize');
+  if (!message) return null;
+  const info: unknown =
+    typeof message.params === 'object' && message.params !== null
+      ? Reflect.get(message.params, 'clientInfo')
+      : null;
+  return {
+    protocolVersion: stringField(message.params, 'protocolVersion'),
+    clientInfo: { name: declaredLabel(info, 'name'), version: declaredLabel(info, 'version') },
+  };
+}
+
+/** The longest client-declared label kept. Real client names and versions are a few words. */
+const DECLARED_LABEL_MAX = 100;
+
+/**
+ * A client-declared `clientInfo` label, trimmed, stripped of control characters, and capped.
+ *
+ * @remarks
+ * The client writes this string, and it is stored on the session and copied into provenance, so
+ * it is bounded here rather than trusted. A blank label is no label.
+ */
+function declaredLabel(info: unknown, key: string): string | null {
+  const raw = stringField(info, key);
+  if (raw === null) return null;
+  // eslint-disable-next-line no-control-regex -- stripping control characters is the point
+  const label = raw.replace(/[\u0000-\u001f\u007f]/gu, '').trim();
+  return label ? label.slice(0, DECLARED_LABEL_MAX) : null;
 }
 
 /**
@@ -559,17 +622,15 @@ export async function mcpHandler(c: Context): Promise<Response> {
     return problem(c, err);
   }
 
-  const presentedSession = c.req.raw.headers.get(SESSION_HEADER);
   // Prove a presented session belongs to this caller before it can address anything. A mismatch
   // is a miss, not a denial, so a guessed id cannot confirm a session exists.
-  let session: string | null = null;
-  if (presentedSession) {
-    try {
-      session = await resolveSession(ctx, presentedSession);
-    } catch (err) {
-      return problem(c, err);
-    }
+  let live: LiveSession | null;
+  try {
+    live = await presentedSession(ctx, c.req.raw.headers);
+  } catch (err) {
+    return problem(c, err);
   }
+  const session = live ? live.id : null;
 
   // `DELETE` ends a session and drops its subscriptions (mcp-notifications.md §4.1).
   if (c.req.raw.method === 'DELETE') {
@@ -624,15 +685,17 @@ export async function mcpHandler(c: Context): Promise<Response> {
       return stepUp;
     }
 
+    const initialize = initializeParams(body);
     // A client completing `initialize` without a session gets one, so it can open the stream.
-    if (!session && isInitializeBody(body)) {
-      mintedSession = await createSession(ctx, negotiatedProtocolVersion(body));
+    if (!session && initialize) {
+      mintedSession = await createSession(ctx, initialize.protocolVersion, initialize.clientInfo);
     }
     // Rebuild the request from the buffered text since `clone()` above already tee'd it.
     raw = new Request(raw.url, { method: raw.method, headers: raw.headers, body: text });
   }
 
-  const server = buildServer(ctx, session ?? mintedSession);
+  const sessionId = session ?? mintedSession;
+  const server = buildServer(ctx, sessionId, requestProvenance(ctx, sessionId, body, live));
   const transport = new WebStandardStreamableHTTPServerTransport({});
   await server.connect(transport);
   const activeIds = raw.method === 'POST' ? [...new Set(cancellableRequestIds(body))] : [];

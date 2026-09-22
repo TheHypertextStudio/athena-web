@@ -4,8 +4,8 @@
  * @remarks
  * The canonical permission tables (`role`, `grant` — the single folded grant shape;
  * there is no `permission_grant`) plus the cross-cutting entities that hang off many
- * subjects: updates, daily-plan items, notifications, integrations, labels, comments,
- * the universal audit feed, and saved views.
+ * subjects: updates, daily-plan items, notifications, integrations, labels, comments, and
+ * saved views. The universal audit feed lives in `./audit-event`.
  */
 import { sql } from 'drizzle-orm';
 import {
@@ -40,8 +40,6 @@ import {
 import {
   attachmentKind,
   attachmentSubjectType,
-  auditEventType,
-  auditSubjectType,
   contactPointStatus,
   contactPointType,
   commentSubjectType,
@@ -953,28 +951,6 @@ export const automationRule = pgTable(
     isSeed: boolean('is_seed').notNull().default(false),
   },
   (t) => [index('automation_rule_org_idx').on(t.organizationId)],
-);
-
-/** The universal audit feed; agent actions carry `actorId`=agent + `initiatorId`=human. */
-export const auditEvent = pgTable(
-  'audit_event',
-  {
-    id: text('id').primaryKey().$defaultFn(genId),
-    organizationId: text('organization_id')
-      .notNull()
-      .references(() => organization.id, { onDelete: 'cascade' }),
-    actorId: text('actor_id').references(() => actor.id, { onDelete: 'set null' }),
-    initiatorId: text('initiator_id').references(() => actor.id, { onDelete: 'set null' }),
-    subjectType: auditSubjectType('subject_type').notNull(),
-    subjectId: text('subject_id').notNull(),
-    type: auditEventType('type').notNull(),
-    metadata: jsonb('metadata').$type<Record<string, unknown>>().notNull().default({}),
-    createdAt: timestamp('created_at').notNull().defaultNow(),
-  },
-  (t) => [
-    index('audit_event_org_created_idx').on(t.organizationId, t.createdAt),
-    index('audit_event_subject_idx').on(t.subjectType, t.subjectId),
-  ],
 );
 
 /** A shareable, permission-filtered saved view (list/board config). */

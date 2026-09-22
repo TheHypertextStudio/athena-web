@@ -27,10 +27,11 @@ describe('change-set recording', () => {
   it('chunks a large MCP-compatible relation audit below database bind limits', async () => {
     const seeded = await seedBaseOrg(db, schema);
     const { recordChangeSet } = await import('../../src/mcp/change-set');
+    const { appProvenance, originFor } = await import('../../src/lib/provenance/context');
     const changeSetId = await recordChangeSet({
       orgId: seeded.orgId,
       actorId: seeded.humanActorId,
-      origin: { tool: 'chunk-test' },
+      origin: originFor('chunk-test', {}, appProvenance()),
       summary: 'Record a large relation audit',
       changes: Array.from({ length: 12_000 }, (_, index) => ({
         kind: 'project_has_label' as const,

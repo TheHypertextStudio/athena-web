@@ -151,7 +151,7 @@ function toolboxExecutor(session: SessionRow): ToolboxExecutor {
     /* v8 ignore next -- @preserve defensive: agent_session_executor_shape_check guarantees an
        athena session's ownerUserId is NOT NULL at the database level */
     if (!session.ownerUserId) throw new Error('Athena session is missing its owner');
-    return { kind: 'athena', ownerUserId: session.ownerUserId };
+    return { kind: 'athena', ownerUserId: session.ownerUserId, sessionKind: session.kind };
   }
   /* v8 ignore next 3 -- @preserve defensive: agent_session_executor_shape_check guarantees a
      registered_agent session's organizationId and agentId are both NOT NULL at the database

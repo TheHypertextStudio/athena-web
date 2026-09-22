@@ -89,7 +89,15 @@ describe('openToolbox — private-draft metadata', () => {
     const userId = await seedUser();
     const toolbox = await openToolbox({ kind: 'athena', ownerUserId: userId }, 'sess_123');
     try {
-      expect(buildServer).toHaveBeenCalledWith(expect.anything(), 'sess_123');
+      expect(buildServer).toHaveBeenCalledWith(
+        expect.anything(),
+        'sess_123',
+        expect.objectContaining({
+          channel: 'athena',
+          surface: 'chat',
+          performer: { kind: 'athena', name: 'Athena' },
+        }),
+      );
       expect(toolbox.annotations('plan_draft')).toEqual({
         readOnlyHint: false,
         destructiveHint: false,
@@ -110,9 +118,13 @@ describe('openToolbox — private-draft metadata', () => {
     listTools.mockReset();
     listTools.mockResolvedValueOnce({ tools: [] });
     const userId = await seedUser();
-    const toolbox = await openToolbox({ kind: 'athena', ownerUserId: userId });
+    const toolbox = await openToolbox({ kind: 'athena', ownerUserId: userId, sessionKind: 'job' });
     try {
-      expect(buildServer).toHaveBeenCalledWith(expect.anything(), null);
+      expect(buildServer).toHaveBeenCalledWith(
+        expect.anything(),
+        null,
+        expect.objectContaining({ channel: 'athena', surface: 'session' }),
+      );
     } finally {
       await toolbox.close();
     }

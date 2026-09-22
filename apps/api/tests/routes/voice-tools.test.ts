@@ -96,7 +96,9 @@ describe('DocketVoiceToolRunner', () => {
         .from(schema.changeSet)
         .where(eq(schema.changeSet.id, outcome.changeSetId ?? ''));
       expect(record?.origin).toMatchObject({
-        client: 'athena-phone',
+        channel: 'athena',
+        surface: 'phone',
+        performer: { kind: 'athena' },
         sessionId: 'voice_1',
         tool: 'create_task',
       });

@@ -31,6 +31,10 @@ export const mcpSession = pgTable(
     id: text('id').primaryKey(),
     principalKey: text('principal_key').notNull(),
     protocolVersion: text('protocol_version'),
+    /** `clientInfo.name` from `initialize`, recorded as the client's own claim for provenance. */
+    clientName: text('client_name'),
+    /** `clientInfo.version` from `initialize`. */
+    clientVersion: text('client_version'),
     logLevel: logLevel('log_level').notNull().default('info'),
     createdAt: timestamp('created_at').notNull().defaultNow(),
     lastSeenAt: timestamp('last_seen_at').notNull().defaultNow(),

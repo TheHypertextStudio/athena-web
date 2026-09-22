@@ -4,6 +4,7 @@
 import type { Context, MiddlewareHandler } from 'hono';
 import { cors } from 'hono/cors';
 import { SESSION_OWNER_HEADER } from '@docket/identity-access/session-contract';
+import { SURFACE_HEADER } from '@docket/work/provenance-contract';
 
 import type { AppEnv } from './context';
 import { isReplayOwnerRequest, REPLAY_OWNER_HEADER } from './replay-owner-contract';
@@ -96,6 +97,8 @@ const ALLOWED_REQUEST_HEADERS = [
   'If-None-Match',
   // Retry safety on POST.
   'Idempotency-Key',
+  // The app surface a write came from, recorded as provenance.
+  SURFACE_HEADER,
 ];
 
 /** Object-command POSTs may bind an offline-capable write to its captured account. */

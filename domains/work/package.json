@@ -40,6 +40,7 @@
     "./subject-ref-contract": "./src/contracts/subject-ref.ts",
     "./slug-contract": "./src/contracts/slug.ts",
     "./publish-contract": "./src/contracts/publish.ts",
+    "./provenance-contract": "./src/contracts/provenance.ts",
     "./workflow": "./src/workflow.ts"
   },
   "scripts": {

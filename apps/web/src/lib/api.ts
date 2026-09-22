@@ -2,6 +2,7 @@ import type { AppType } from '@docket/api/rpc-contract';
 import { hc } from 'hono/client';
 
 import { withOfflineOutbox } from '@/components/pwa/offline-write';
+import { surfaceHeaders } from '@/lib/provenance/surface';
 
 /**
  * The typed Hono RPC client for the Docket API.
@@ -22,6 +23,9 @@ import { withOfflineOutbox } from '@/components/pwa/offline-write';
  * writing a property of the app rather than a feature individual screens remembered. It only ever
  * acts on a *rejected* request, so a real server error still reaches the caller untouched.
  *
+ * Every request names the app surface it was sent from ({@link surfaceHeaders}), which the API
+ * records as the provenance of any change it makes.
+ *
  * @example
  * ```ts
  * const res = await api.v1.orgs.$get();
@@ -31,6 +35,7 @@ import { withOfflineOutbox } from '@/components/pwa/offline-write';
  * ```
  */
 export const api = hc<AppType>('', {
+  headers: surfaceHeaders,
   fetch: withOfflineOutbox((input: RequestInfo | URL, init?: RequestInit) =>
     fetch(input, { ...init, credentials: 'include' }),
   ),

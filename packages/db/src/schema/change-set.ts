@@ -14,33 +14,15 @@
  * This does NOT extend `provenance_source`. Its `native|linked` values encode *sync semantics* —
  * whether a row mirrors an external system — and drive the `task_source_uq`/`project_source_uq`
  * partial indexes and the connector reconcile paths. A task an agent created is still `native`.
- * Authorship is a different axis and lives here.
+ * Authorship is a different axis and lives here, shaped by the provenance contract.
  */
+import type { ChangeOrigin } from '@docket/work/provenance-contract';
 import { index, jsonb, pgTable, primaryKey, text, timestamp } from 'drizzle-orm/pg-core';
 
 import { changeSetOp } from '../enums';
 import { actor, organization } from './identity';
 
-/** Where a change came from, recorded once per change set. */
-export interface ChangeOrigin {
-  /** The MCP client that made the call, when it identified itself (`clientInfo.name`). */
-  readonly client?: string;
-  /** The MCP session the call arrived on, when it held one. */
-  readonly sessionId?: string;
-  /**
-   * The plan draft this change confirmed, when it came from the planning canvas.
-   *
-   * @remarks
-   * A canvas commit has no agent session behind it — the person pressed the button — so the
-   * session is not always there to answer "may this caller take it back". The plan is: it belongs
-   * to exactly one user, and that user is the one offered Undo on the confirmation line.
-   */
-  readonly planId?: string;
-  /** The user who owns {@link ChangeOrigin.planId}, recorded beside it for the same question. */
-  readonly planOwnerUserId?: string;
-  /** The tool that produced the change. */
-  readonly tool: string;
-}
+export type { ChangeOrigin };
 
 /**
  * One tool call's worth of change, undoable as a unit.

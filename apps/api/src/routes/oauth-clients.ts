@@ -21,6 +21,7 @@ import { z } from 'zod';
 import type { AppEnv } from '../context';
 import { AuthError, NotFoundError } from '../error';
 import { ok } from '../lib/ok';
+import { fallbackClientName } from '../lib/provenance/clients';
 import { apiDoc } from '../lib/openapi-route';
 import { zParam } from '../lib/validate';
 
@@ -29,20 +30,6 @@ function requireUserId(c: Context<AppEnv>): string {
   const session = c.get('session');
   if (!session?.user.id) throw new AuthError('Authentication required.');
   return session.user.id;
-}
-
-/**
- * A display name for a client with no `name` on file: its own host for a CIMD (URL-form)
- * `client_id`, else the raw id. `oauthClient.name` is nullable — the plugin's dynamic client
- * registration doesn't require `client_name` — so a standard DCR'd client can legitimately
- * have none.
- */
-export function fallbackClientName(clientId: string): string {
-  try {
-    return new URL(clientId).hostname;
-  } catch {
-    return clientId;
-  }
 }
 
 const clientIdParam = z.object({ clientId: z.string() });

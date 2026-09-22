@@ -32,6 +32,9 @@ export const TaskListQuery = CursorQuery.extend({
   labelId: LabelId.optional().describe(
     'Restrict the list to tasks carrying this label. Combines with `programId` as an AND. Omit for no label filter.',
   ),
+  milestoneId: MilestoneId.optional().describe(
+    'Restrict the list to tasks on this milestone. Combines with the other filters as an AND. Omit for no milestone filter.',
+  ),
 }).meta({ id: 'TaskListQuery', description: 'Query filters for listing tasks.' });
 /** Validated task-list query value. */
 export type TaskListQuery = z.infer<typeof TaskListQuery>;

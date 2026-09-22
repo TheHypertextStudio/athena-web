@@ -25,10 +25,11 @@ import { trackedFields, type ChangeRecord } from '../../mcp/change-set';
 import { DESCRIPTOR_HINT, resolveOptional } from '../../mcp/descriptors';
 import { entityHref } from '../../mcp/entity-href';
 import type { serializableTx } from '../serializable-tx';
+import { attachToMilestone, placeMilestone, resolveItemMilestone } from './place-milestone';
 import { resolveContainerStatus } from '../work-status';
 
 /** The kinds `organize` can place, outermost first — also the order they must be walked in. */
-export const KINDS = ['initiative', 'program', 'project', 'task'] as const;
+export const KINDS = ['initiative', 'program', 'project', 'milestone', 'task'] as const;
 /** One placeable kind. */
 export type Kind = (typeof KINDS)[number];
 
@@ -60,12 +61,13 @@ export const OrganizeItem = z.object({
     .string()
     .optional()
     .describe(
-      'The `ref` of another item in this call that this one sits under — a task under a project, a project under a program or initiative, a program under an initiative. To attach to something that already exists instead, use `project`/`program`/`initiative`.',
+      'The `ref` of another item in this call that this one sits under — a task under a project or milestone, a milestone under a project, a project under a program or initiative, a program under an initiative. To attach to something that already exists instead, use `project`/`program`/`initiative`.',
     ),
   project: z
     .string()
     .optional()
-    .describe(`An existing project to file this task under. ${DESCRIPTOR_HINT}`),
+    .describe(`An existing project to file this task or milestone under. ${DESCRIPTOR_HINT}`),
+  milestone: z.string().optional().describe('An existing milestone for this task.'),
   program: z
     .string()
     .optional()
@@ -87,7 +89,7 @@ export const OrganizeItem = z.object({
   targetDate: z.iso
     .date()
     .optional()
-    .describe('The target finish for a project or initiative, as `YYYY-MM-DD`.'),
+    .describe('The target finish for a project, milestone, or initiative, as `YYYY-MM-DD`.'),
 });
 /** One node of the plan. */
 export type OrganizeItem = z.infer<typeof OrganizeItem>;
@@ -97,27 +99,21 @@ const ALLOWED_PARENTS: Record<Kind, readonly Kind[]> = {
   initiative: [],
   program: ['initiative'],
   project: ['program', 'initiative'],
-  task: ['project', 'program', 'task'],
+  milestone: ['project'],
+  task: ['project', 'milestone', 'program', 'task'],
 };
 
 /**
  * What every placement reports identically: the handle, the name, the parent, and the route.
  *
  * @param item - The item being placed.
- * @param orgId - The organization it lands in.
- * @param id - Its real id, new or matched.
+ * @param href - Where it shows in the product app.
  */
 function identityOf(
   item: OrganizeItem,
-  orgId: string,
-  id: string,
+  href: string,
 ): Pick<Placed, 'ref' | 'title' | 'parent' | 'href'> {
-  return {
-    ref: item.ref,
-    title: item.title,
-    parent: item.parent,
-    href: entityHref(orgId, item.kind, id),
-  };
+  return { ref: item.ref, title: item.title, parent: item.parent, href };
 }
 
 /** What happened to one item. */
@@ -137,6 +133,8 @@ export interface Placed {
   readonly parent?: string | undefined;
   /** False when an existing item of the same name in the same place was used instead. */
   readonly created: boolean;
+  /** The project a milestone belongs to, so a task placed under it lands in the same project. */
+  readonly projectId?: string | undefined;
 }
 
 /**
@@ -234,12 +232,14 @@ export interface Placement {
   projectId: string | null;
   programId: string | null;
   initiativeId: string | null;
+  milestoneId: string | null;
   parentTaskId: string | null;
 }
 
 /** One item's descriptor fields, resolved to ids. */
-interface ItemRefs {
+export interface ItemRefs {
   readonly projectId: string | null;
+  readonly milestoneId: string | null;
   readonly programId: string | null;
   readonly initiativeId: string | null;
   readonly teamId: string | null;
@@ -267,13 +267,42 @@ export async function resolveItem(orgId: string, item: OrganizeItem): Promise<It
       resolveOptional(orgId, 'actor', item.lead, 'lead'),
     ]);
   return {
-    projectId: projectId ?? null,
+    ...(await resolveItemMilestone(orgId, item, projectId)),
     programId: programId ?? null,
     initiativeId: initiativeId ?? null,
     teamId: teamId ?? null,
     assigneeId: assigneeId ?? null,
     ownerId: ownerId ?? null,
     leadId: leadId ?? null,
+  };
+}
+
+/**
+ * Where an `organize` item lands: a parent placed in this call wins over a resolved descriptor.
+ *
+ * @remarks
+ * A task under a milestone placed in this call lands in that milestone's project as well as on it.
+ *
+ * @param local - The parent placed earlier in this call, if the item named one.
+ * @param refs - The item's descriptors, resolved.
+ * @returns the placement.
+ */
+export function placementUnder(local: Placed | undefined, refs: ItemRefs): Placement {
+  const localId = (kind: Kind): string | undefined => (local?.kind === kind ? local.id : undefined);
+  const projectId = localId('project') ?? local?.projectId ?? refs.projectId;
+  // A named milestone resolves with its own project in `refs.projectId`; a parent that puts the
+  // task in any other project would file it on a milestone of a different project.
+  if (refs.milestoneId !== null && localId('milestone') === undefined) {
+    if (projectId !== refs.projectId) {
+      reject('milestone', refs.milestoneId, "The milestone is not in this task's project.", []);
+    }
+  }
+  return {
+    projectId,
+    programId: localId('program') ?? refs.programId,
+    initiativeId: localId('initiative') ?? refs.initiativeId,
+    milestoneId: localId('milestone') ?? refs.milestoneId,
+    parentTaskId: localId('task') ?? null,
   };
 }
 
@@ -333,7 +362,7 @@ async function placeInitiative(tx: Tx, input: PlaceInput): Promise<PlaceResult> 
   if (existing[0]) {
     return {
       placed: {
-        ...identityOf(item, orgId, existing[0].id),
+        ...identityOf(item, entityHref(orgId, 'initiative', existing[0].id)),
         kind: 'initiative',
         id: existing[0].id,
         created: false,
@@ -356,7 +385,12 @@ async function placeInitiative(tx: Tx, input: PlaceInput): Promise<PlaceResult> 
   /* v8 ignore next -- @preserve defensive: insert always returns a row */
   if (!row) throw new Error('initiative insert returned no row');
   return {
-    placed: { ...identityOf(item, orgId, row.id), kind: 'initiative', id: row.id, created: true },
+    placed: {
+      ...identityOf(item, entityHref(orgId, 'initiative', row.id)),
+      kind: 'initiative',
+      id: row.id,
+      created: true,
+    },
     change: {
       kind: 'initiative',
       id: row.id,
@@ -406,7 +440,12 @@ async function placeProgram(tx: Tx, input: PlaceInput): Promise<PlaceResult> {
   }
   const row = inserted[0];
   return {
-    placed: { ...identityOf(item, orgId, id), kind: 'program', id, created: row !== undefined },
+    placed: {
+      ...identityOf(item, entityHref(orgId, 'program', id)),
+      kind: 'program',
+      id,
+      created: row !== undefined,
+    },
     ...(row
       ? { change: { kind: 'program', id, op: 'create', after: trackedFields('program', row) } }
       : {}),
@@ -455,7 +494,12 @@ async function placeProject(tx: Tx, input: PlaceInput): Promise<PlaceResult> {
   }
   const row = inserted[0];
   return {
-    placed: { ...identityOf(item, orgId, id), kind: 'project', id, created: row !== undefined },
+    placed: {
+      ...identityOf(item, entityHref(orgId, 'project', id)),
+      kind: 'project',
+      id,
+      created: row !== undefined,
+    },
     ...(row
       ? { change: { kind: 'project', id, op: 'create', after: trackedFields('project', row) } }
       : {}),
@@ -477,7 +521,7 @@ function taskScope(at: Placement) {
 async function placeTask(tx: Tx, input: PlaceInput): Promise<PlaceResult> {
   const { item, at, orgId } = input;
   const existing = await tx
-    .select({ id: task.id })
+    .select()
     .from(task)
     .where(
       and(
@@ -489,13 +533,15 @@ async function placeTask(tx: Tx, input: PlaceInput): Promise<PlaceResult> {
     )
     .limit(1);
   if (existing[0]) {
+    const change = await attachToMilestone(tx, existing[0], at.milestoneId);
     return {
       placed: {
-        ...identityOf(item, orgId, existing[0].id),
+        ...identityOf(item, entityHref(orgId, 'task', existing[0].id)),
         kind: 'task',
         id: existing[0].id,
         created: false,
       },
+      ...(change ? { change } : {}),
     };
   }
   const inserted = await tx
@@ -512,6 +558,7 @@ async function placeTask(tx: Tx, input: PlaceInput): Promise<PlaceResult> {
       assigneeId: input.assigneeId,
       projectId: at.projectId,
       programId: at.programId,
+      milestoneId: at.milestoneId,
       parentTaskId: at.parentTaskId,
       priority: Priority.parse(item.priority ?? 'none'),
       dueDate: item.dueDate ? new Date(item.dueDate) : undefined,
@@ -523,7 +570,12 @@ async function placeTask(tx: Tx, input: PlaceInput): Promise<PlaceResult> {
   /* v8 ignore next -- @preserve defensive: insert always returns a row */
   if (!row) throw new Error('task insert returned no row');
   return {
-    placed: { ...identityOf(item, orgId, row.id), kind: 'task', id: row.id, created: true },
+    placed: {
+      ...identityOf(item, entityHref(orgId, 'task', row.id)),
+      kind: 'task',
+      id: row.id,
+      created: true,
+    },
     change: { kind: 'task', id: row.id, op: 'create', after: trackedFields('task', row) },
   };
 }
@@ -549,6 +601,8 @@ export async function placeItem(tx: Tx, input: PlaceInput): Promise<PlaceResult>
       return placeProgram(tx, input);
     case 'project':
       return placeProject(tx, input);
+    case 'milestone':
+      return placeMilestone(tx, input);
     case 'task':
       return placeTask(tx, input);
   }

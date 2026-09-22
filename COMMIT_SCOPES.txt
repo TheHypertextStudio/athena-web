@@ -37,6 +37,7 @@ initiatives
 integrations
 marketing
 mcp
+milestones
 notion
 onboarding
 permissions

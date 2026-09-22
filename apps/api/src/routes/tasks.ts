@@ -93,6 +93,7 @@ import {
   idParam,
   loadTask,
   resolveStateTransition,
+  releasedMilestonePatch,
   type TaskRow,
   toOut,
   toRef,
@@ -1181,12 +1182,12 @@ The new task appears in the organization's activity stream. An assigned task als
       response: pageOf(TaskOut),
       description: `List active tasks in the organization, newest first. Tasks use \`createdAt\` and then \`id\` for stable ordering. Archived tasks are excluded.
 
-\`limit\` defaults to 50 and accepts at most 100. Reuse a cursor only with the same \`programId\` and \`labelId\` filters. \`labelId\` selects tasks with that label. \`programId\` selects tasks attached directly to the program or to one of its projects. Docket applies task visibility before filling the page. Organization membership is required. Each item is a {@link TaskOut}; use \`GET /:id\` for dependencies and subtasks.`,
+\`limit\` defaults to 50 and accepts at most 100. Reuse a cursor only with the same \`programId\`, \`labelId\`, and \`milestoneId\` filters. \`labelId\` selects tasks with that label. \`milestoneId\` selects tasks on that milestone. \`programId\` selects tasks attached directly to the program or to one of its projects. Docket applies task visibility before filling the page. Organization membership is required. Each item is a {@link TaskOut}; use \`GET /:id\` for dependencies and subtasks.`,
     }),
     zQuery(TaskListQuery),
     async (c) => {
       const { orgId, actorId } = c.get('actorCtx');
-      const { cursor, limit, programId, labelId } = c.req.valid('query');
+      const { cursor, limit, programId, labelId, milestoneId } = c.req.valid('query');
 
       // Label filter: an EXISTS against the join, so a task carrying the label once is returned
       // once — a plain inner join would duplicate rows and corrupt the keyset page size.
@@ -1233,6 +1234,7 @@ The new task appears in the organization's activity stream. An assigned task als
               seekAfter(task.createdAt, task.id, after),
               ...(programFilter ? [programFilter] : []),
               ...(labelFilter ? [labelFilter] : []),
+              ...(milestoneId === undefined ? [] : [eq(task.milestoneId, milestoneId)]),
             ),
           )
           .orderBy(desc(task.createdAt), desc(task.id));
@@ -1344,7 +1346,7 @@ A cross-org or unknown id 404s (existence-hiding: another tenant's task is indis
       summary: 'Update a task',
       capability: 'contribute',
       response: TaskOut,
-      description: `Update selected task fields. Omitted fields remain unchanged, and an empty body returns the task unchanged. Every referenced resource must be visible to the caller and belong to the same organization. A selected cycle must also belong to the task's team.
+      description: `Update selected task fields. Omitted fields remain unchanged, and an empty body returns the task unchanged. Every referenced resource must be visible to the caller and belong to the same organization. A selected cycle must also belong to the task's team. A \`milestoneId\` must belong to the task's project; changing \`projectId\` without sending \`milestoneId\` clears a milestone that belongs to another project.
 
 Changing \`assigneeId\` or \`delegateId\` requires \`assign\`; other changes require \`contribute\`. Set \`parentTaskId\` to make the task a subtask, or set it to null to move the task to the top level. A task cannot become its own parent or a child of one of its descendants. Docket checks the hierarchy while applying the change, so concurrent updates cannot create a cycle. When \`cycleCadenceRevision\` is present, a stale value returns 409 \`cadence_changed\` before Docket moves the task.
 
@@ -1415,6 +1417,9 @@ Changing \`assigneeId\` or \`delegateId\` requires \`assign\`; other changes req
           : undefined;
 
       const patch = {
+        // Re-filing a task under another project releases a milestone that belongs to the old
+        // one, unless this same request names the milestone to use instead.
+        ...(await releasedMilestonePatch(before.milestoneId, body)),
         ...(body.title !== undefined ? { title: body.title } : {}),
         ...(body.description !== undefined ? { description: body.description } : {}),
         ...(body.summary !== undefined ? { summary: body.summary } : {}),

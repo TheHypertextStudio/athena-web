@@ -1027,9 +1027,9 @@ describe('milestone DTOs', () => {
         projectId: ID,
         name: 'M',
         description: null,
-        targetDate: null,
         sort: 0,
         createdAt: 'x',
+        progress: { total: 0, completed: 0 },
       }).sort,
     ).toBe(0);
   });

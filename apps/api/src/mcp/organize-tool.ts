@@ -25,10 +25,10 @@ import {
   MAX_ITEMS,
   OrganizeItem,
   type Placed,
-  type Placement,
   assertPriorities,
   inParentOrder,
   placeItem,
+  placementUnder,
   resolveItem,
 } from '../lib/organize/place';
 import { originFor } from '../lib/provenance/context';
@@ -46,6 +46,20 @@ import { WIDGET, widgetMeta } from './apps';
 import { authorize, jsonResult, runTool, scopedActor } from './result';
 import { orgIdParam, resolveStateTransition } from './tools-shared';
 
+/**
+ * The one-line summary an `organize` change set is recorded under.
+ *
+ * @param created - How many items were new.
+ * @param changed - How many rows were written, counting matched tasks attached to a milestone.
+ * @param firstTitle - The first item's title, for a single-item plan.
+ */
+function summaryOf(created: number, changed: number, firstTitle: string | undefined): string {
+  if (created === 1 && changed === 1 && firstTitle !== undefined) return `Created "${firstTitle}"`;
+  const attached = changed - created;
+  if (attached === 0) return `Created ${created} items`;
+  return `Created ${created} items and attached ${attached} to milestones`;
+}
+
 /** Register `organize` on `server`. */
 export function registerOrganizeTool(server: McpRegistrar, ctx: McpContext): void {
   server.registerTool(
@@ -53,7 +67,7 @@ export function registerOrganizeTool(server: McpRegistrar, ctx: McpContext): voi
     {
       title: 'Organize work',
       description:
-        'Create a whole plan — initiatives, programs, projects, and tasks — in one call, with children naming their parent by a local `ref` you invent. Running the same plan twice does not duplicate it: anything already there by that name in that place is matched and reused, and the result says which was which. Use this for turning a document or a conversation into structure; use capture for a single task.',
+        'Create a whole plan — initiatives, programs, projects, milestones, and tasks — in one call, with children naming their parent by a local `ref` you invent. A milestone sits under a project, and a task under a milestone lands on it. Running the same plan twice does not duplicate it: anything already there by that name in that place is matched and reused, and the result says which was which. Use this for turning a document or a conversation into structure; use capture for a single task.',
       inputSchema: {
         orgId: orgIdParam,
         items: z
@@ -78,6 +92,7 @@ export function registerOrganizeTool(server: McpRegistrar, ctx: McpContext): voi
               created: z
                 .boolean()
                 .describe('False when an existing item of that name was matched instead.'),
+              projectId: z.string().optional().describe('For a milestone, the project it is in.'),
             }),
           )
           .describe('Every item, in the order it was placed.'),
@@ -147,13 +162,7 @@ export function registerOrganizeTool(server: McpRegistrar, ctx: McpContext): voi
             /** The already-placed parent from this call, if the item named one. */
             const local = item.parent === undefined ? undefined : byRef.get(item.parent);
 
-            const at: Placement = {
-              projectId: (local?.kind === 'project' ? local.id : undefined) ?? refs.projectId,
-              programId: (local?.kind === 'program' ? local.id : undefined) ?? refs.programId,
-              initiativeId:
-                (local?.kind === 'initiative' ? local.id : undefined) ?? refs.initiativeId,
-              parentTaskId: local?.kind === 'task' ? local.id : null,
-            };
+            const at = placementUnder(local, refs);
 
             const result = await placeItem(tx, {
               orgId: input.orgId,
@@ -179,8 +188,9 @@ export function registerOrganizeTool(server: McpRegistrar, ctx: McpContext): voi
 
         // Search indexing and change recording both happen after commit: a rolled-back plan must
         // not leave an index entry pointing at a row that never existed, or an undo for it.
-        for (const row of placed) {
-          if (row.created) await enqueueSearchUpsert(input.orgId, row.kind, row.id);
+        // Every recorded change: the rows created, and matched tasks a re-run attached to a milestone.
+        for (const change of changes) {
+          await enqueueSearchUpsert(input.orgId, change.kind, change.id);
         }
         for (const cascade of cascades) {
           await finishTaskStateTransition({ actorId: null }, cascade);
@@ -190,10 +200,7 @@ export function registerOrganizeTool(server: McpRegistrar, ctx: McpContext): voi
           orgId: input.orgId,
           actorId: actorCtx.actorId,
           origin: originFor('organize'),
-          summary:
-            created === 1 && placed[0]
-              ? `Created "${ordered[0]?.title}"`
-              : `Created ${created} items`,
+          summary: summaryOf(created, changes.length, ordered[0]?.title),
           changes,
         });
 

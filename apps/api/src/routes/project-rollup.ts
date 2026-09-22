@@ -41,6 +41,7 @@ import { zParam } from '../lib/validate';
 import { toActivityOut } from './agent-session-helpers';
 import { buildTaskViewFilter, toOut as taskToOut } from './task-helpers';
 import { labelsForSubjects } from '../lib/labels';
+import { milestoneProgressOf, toMilestoneOut } from '../lib/milestone-writes';
 
 /** Path-param schema for the single-project roll-up route. */
 const idParam = z.object({ id: z.string() });
@@ -91,17 +92,9 @@ const projectRollup = new Hono<AppEnv>()
         orgId,
         visible.map((row) => row.id),
       );
+      const progress = milestoneProgressOf(visible);
       return ok(c, ProjectWorkSectionsOut, {
-        milestones: milestoneRows.map((row) => ({
-          id: row.id,
-          organizationId: row.organizationId,
-          projectId: row.projectId,
-          name: row.name,
-          description: row.description,
-          targetDate: row.targetDate?.toISOString() ?? null,
-          sort: row.sort,
-          createdAt: row.createdAt.toISOString(),
-        })),
+        milestones: milestoneRows.map((row) => toMilestoneOut(row, progress.get(row.id))),
         tasks: visible.map((row) => taskToOut(row, labels.get(row.id) ?? [])),
         taskMilestones: visible.map((row) => ({ taskId: row.id, milestoneId: row.milestoneId })),
       });

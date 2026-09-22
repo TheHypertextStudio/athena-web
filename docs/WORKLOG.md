@@ -78,6 +78,46 @@
   fails `infra.test.ts` until `pnpm build` has written `dist/rpc-contract.d.ts`, and that build
   needs a 4 GB heap.
 
+### [MILESTONES-MCP-001] Make milestones a first-class MCP and REST feature
+
+- **Status**: COMPLETED
+- **Started**: 2026-09-22
+- **Completed**: 2026-09-22
+- **Priority**: P1
+- **Description**: Agents could not create, edit, delete, or assign milestones over MCP, and REST
+  had no way to list a milestone's tasks and left stale milestone links when a task changed
+  project.
+- **Approach**: A dedicated `milestones` MCP tool (`list | create | update | delete`, addressed
+  through its project, the same as REST) built on write helpers shared with the REST routes
+  (`lib/milestone-writes.ts`). Milestone writes record change sets; a new `delete` change-set op
+  lets `undo` re-insert a deleted milestone under its id and restore its task links
+  (`mcp/milestone-undo.ts`). Task assignment goes through `update` `set.milestone`, `organize`
+  (a `milestone` kind under a project, tasks under a milestone, and a task-level `milestone`),
+  and a `list_work` `milestone` filter. Project reads carry milestone description, position, and
+  visible-task progress; task reads name their milestone.
+- **REST**: `GET /tasks?milestoneId=`, `progress` on every `MilestoneOut`, and `PATCH /tasks/:id`
+  clears a milestone from the old project when `projectId` changes. Project delete now removes
+  its milestones' search entries, and its reference text says the milestones are deleted.
+- **Decisions**: `capture` takes no project, so it stays without a milestone field; `organize` is
+  the placement tool. The MCP tool uses compact input schemas because every tool schema is sent to
+  a local model each turn, and the catalog stays inside the 64,000-character local-model budget.
+- **Files changed**: `apps/api/src/{lib/milestone-writes.ts, lib/organize/place*.ts,
+lib/plan-draft/commit.ts, mcp/milestone-tool.ts, mcp/milestone-undo.ts, mcp/task-milestone.ts,
+mcp/change-set*.ts, mcp/descriptors.ts, mcp/update-tool*.ts, mcp/list-work.ts,
+mcp/resource-work-hydrators.ts, mcp/organize-tool.ts, mcp/scope.ts, mcp/tools.ts,
+routes/milestones.ts, routes/tasks.ts, routes/task-helpers.ts, routes/projects.ts,
+routes/project-rollup.ts}`, `domains/work/src/contracts/{milestone,task}.ts`,
+  `packages/db` (enum + migration 0142), docs, and tests.
+- **Follow-up**: `POST /object-commands` (the web app's write path) still refuses to move a task
+  whose milestone belongs to the old project, while REST `PATCH` and MCP `update` clear the link.
+  Aligning it means changing that path's replay and undo handling, so it is left as its own task.
+- **Learnings**: Descriptions on shared filter schemas are paid three times in the local-model
+  tool budget (`list_work`, `update`, `archive`). The complexity ledger reads files from the git
+  index, so mid-rebase conflict stages count a file more than once until it is staged.
+- **Blockers**: None.
+
+---
+
 ### [CI-RELEASE-001] Get CI green on main so Deploy main can ship
 
 - **Status**: IN_PROGRESS

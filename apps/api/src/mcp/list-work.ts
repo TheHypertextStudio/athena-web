@@ -30,20 +30,7 @@ import {
   taskLabel,
   team,
 } from '@docket/db';
-import {
-  and,
-  desc,
-  eq,
-  exists,
-  gte,
-  inArray,
-  isNotNull,
-  isNull,
-  lt,
-  lte,
-  or,
-  sql,
-} from 'drizzle-orm';
+import { and, desc, eq, exists, gte, inArray, isNotNull, isNull, lte, sql } from 'drizzle-orm';
 import type { SQL } from 'drizzle-orm';
 import { alias, type AnyPgColumn } from 'drizzle-orm/pg-core';
 import { z } from 'zod';
@@ -57,27 +44,9 @@ import { ValidationError } from '../error';
 import { buildTaskViewFilter, type ViewableTaskParts } from '../routes/task-helpers';
 import { DESCRIPTOR_HINT, resolveDescriptor, resolveOptional } from './descriptors';
 import { entityHref } from './entity-href';
-import type { WorkCursor } from './tools-shared-queries';
+import { milestoneCondition, milestoneFilter } from './task-milestone';
+import { seekAfter, type WorkCursor } from './tools-shared-queries';
 import { stateTypeOf, teamWorkflows } from './workflow-states';
-
-/**
- * The keyset predicate that resumes a page, built per table.
- *
- * @remarks
- * `(createdAt DESC, id DESC)` with the id as tiebreak, so paging never skips or repeats a row even
- * as work is created underneath it.
- */
-function seekAfter(
-  createdAtColumn: AnyPgColumn,
-  idColumn: AnyPgColumn,
-  after: WorkCursor | undefined,
-): SQL | undefined {
-  if (!after) return undefined;
-  return or(
-    lt(createdAtColumn, after.createdAt),
-    and(eq(createdAtColumn, after.createdAt), lt(idColumn, after.id)),
-  );
-}
 
 /** The entities `list_work` can enumerate. */
 export const WORK_ENTITIES = ['task', 'project', 'program', 'initiative'] as const;
@@ -102,6 +71,7 @@ const SUPPORTED: Record<WorkEntity, readonly FilterName[]> = {
     'priority',
     'label',
     'cycle',
+    'milestone',
     'parent',
     'unfiled',
     'blocked',
@@ -161,6 +131,7 @@ export const listWorkFilters = {
     .string()
     .optional()
     .describe(`Only tasks committed to this cycle, by name or number. ${DESCRIPTOR_HINT}`),
+  milestone: milestoneFilter,
   parent: z.string().optional().describe('Only subtasks of this task id.'),
   unfiled: z
     .boolean()
@@ -483,6 +454,21 @@ async function taskRowNames(orgId: string, rows: readonly TaskRowRefs[]): Promis
   return { actors, projects, parents, cycles };
 }
 
+/** The task predicate for a `label` filter, or nothing when none was given. */
+async function taskLabelCondition(
+  orgId: string,
+  label: string | undefined,
+): Promise<SQL | undefined> {
+  if (label === undefined) return undefined;
+  const labelId = await resolveDescriptor(orgId, 'label', label, 'label');
+  return exists(
+    db
+      .select({ one: sql`1` })
+      .from(taskLabel)
+      .where(and(eq(taskLabel.taskId, task.id), eq(taskLabel.labelId, labelId))),
+  );
+}
+
 /**
  * Build and run the task query.
  *
@@ -519,6 +505,7 @@ async function listTasks(
   if (assigneeId !== undefined) where.push(eq(task.assigneeId, assigneeId));
   if (delegateId !== undefined) where.push(eq(task.delegateId, delegateId));
   if (cycleId !== undefined) where.push(eq(task.cycleId, cycleId));
+  where.push(await milestoneCondition(orgId, projectId, input.milestone));
   if (input.parent !== undefined) where.push(eq(task.parentTaskId, input.parent));
 
   if (input.state !== undefined && input.state.length > 0) {
@@ -531,17 +518,7 @@ async function listTasks(
   if (Array.isArray(input.priority) && input.priority.length > 0) {
     where.push(anyValue(task.priority, input.priority));
   }
-  if (input.label !== undefined) {
-    const labelId = await resolveDescriptor(orgId, 'label', input.label, 'label');
-    where.push(
-      exists(
-        db
-          .select({ one: sql`1` })
-          .from(taskLabel)
-          .where(and(eq(taskLabel.taskId, task.id), eq(taskLabel.labelId, labelId))),
-      ),
-    );
-  }
+  where.push(await taskLabelCondition(orgId, input.label));
   if (input.unfiled === true) {
     where.push(and(isNull(task.projectId), isNull(task.programId)));
   }

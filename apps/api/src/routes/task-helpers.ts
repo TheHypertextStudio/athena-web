@@ -552,3 +552,96 @@ export async function visibleProjectTaskCounts(
     ),
   );
 }
+
+/**
+ * Count each of a Project's milestones' visible Tasks, and how many are done.
+ *
+ * @remarks
+ * The same aggregate as {@link visibleProjectTaskCounts}, one level down: the counts a milestone
+ * reports never include a Task the caller cannot see.
+ *
+ * @param orgId - The caller's organization.
+ * @param actorId - The caller's actor id, for the visibility policy.
+ * @param projectId - The Project whose milestones to count.
+ * @returns totals keyed by milestone id; a milestone with no visible Tasks is absent.
+ */
+export async function visibleMilestoneTaskCounts(
+  orgId: string,
+  actorId: string,
+  projectId: string,
+): Promise<Map<string, ProjectTaskCounts>> {
+  const rows = await db
+    .select({
+      milestoneId: task.milestoneId,
+      total: count(),
+      completed: count(task.completedAt),
+    })
+    .from(task)
+    .where(
+      and(
+        eq(task.organizationId, orgId),
+        eq(task.projectId, projectId),
+        isNull(task.archivedAt),
+        isNotNull(task.milestoneId),
+        await buildTaskViewCondition(orgId, actorId),
+      ),
+    )
+    .groupBy(task.milestoneId);
+  return new Map(
+    rows.flatMap((row) =>
+      row.milestoneId === null
+        ? []
+        : [[row.milestoneId, { total: row.total, completed: row.completed }]],
+    ),
+  );
+}
+
+/**
+ * The `milestoneId` patch a Task needs when it moves to another Project.
+ *
+ * @remarks
+ * A milestone groups Tasks within its own Project only, so a Task re-filed elsewhere cannot keep
+ * the old Project's milestone. Every write path that changes `projectId` without also naming a
+ * milestone applies this, so the link is cleared in one place rather than remembered per caller.
+ *
+ * @param current - The Task's current milestone, if any.
+ * @param nextProjectId - The Project the Task is moving to (`null` for none).
+ * @param database - The connection or transaction to read through.
+ * @returns `{ milestoneId: null }` when the current milestone belongs elsewhere, otherwise `{}`.
+ */
+export async function staleMilestonePatch(
+  current: string | null,
+  nextProjectId: string | null,
+  database: Database = db,
+): Promise<{ milestoneId?: null }> {
+  if (current === null) return {};
+  if (nextProjectId === null) return { milestoneId: null };
+  const [row] = await database
+    .select({ projectId: milestone.projectId })
+    .from(milestone)
+    .where(eq(milestone.id, current))
+    .limit(1);
+  return row?.projectId === nextProjectId ? {} : { milestoneId: null };
+}
+
+/** The two fields of a partial Task update that decide its milestone, each absent when unchanged. */
+interface TaskRefiling {
+  readonly projectId?: string | null | undefined;
+  readonly milestoneId?: string | null | undefined;
+}
+
+/**
+ * The `milestoneId` patch a partial Task update implies when it re-files the Task.
+ *
+ * @param currentMilestoneId - The Task's current milestone, if any.
+ * @param body - The update: its `projectId` and `milestoneId`, each absent when not being changed.
+ * @returns {@link staleMilestonePatch}'s answer when the update moves the Task without naming a
+ *   milestone, otherwise `{}`.
+ */
+export async function releasedMilestonePatch(
+  currentMilestoneId: string | null,
+  body: TaskRefiling,
+): Promise<{ milestoneId?: null }> {
+  if (body.projectId === undefined || body.milestoneId !== undefined) return {};
+  return staleMilestonePatch(currentMilestoneId, body.projectId);
+}

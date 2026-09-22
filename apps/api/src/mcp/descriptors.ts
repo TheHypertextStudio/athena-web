@@ -23,6 +23,7 @@ import {
   initiative,
   label,
   labelGroup,
+  milestone,
   program,
   project,
   task as taskTable,
@@ -46,7 +47,7 @@ export type DescriptorKind =
 const MAX_SUGGESTIONS = 12;
 
 /** Every id in Docket is a 26-char Crockford-base32 ULID, so a name can never be mistaken for one. */
-const ULID = /^[0-9A-HJKMNP-TV-Z]{26}$/;
+export const ULID = /^[0-9A-HJKMNP-TV-Z]{26}$/;
 
 /** Whether a descriptor is an id rather than a name. */
 export function isUlid(value: string): boolean {
@@ -377,6 +378,54 @@ export async function resolveSubject(
   const row = rows[0];
   if (!row) throw new NotFoundError('No task with that id in this organization');
   return row.id;
+}
+
+/**
+ * Resolve a milestone by name or id, within one Project or across the workspace.
+ *
+ * @remarks
+ * Separate from {@link resolveDescriptor} because a milestone name is only meaningful inside its
+ * Project: "Beta" in two projects is two different checkpoints. Given a Project, only its
+ * milestones are candidates; without one, every milestone in the workspace is, and a name shared
+ * by two projects comes back as the ambiguity it is.
+ *
+ * @param orgId - The organization to resolve within.
+ * @param projectId - The Project the milestone must belong to, or null for any.
+ * @param value - The id or name supplied by the caller.
+ * @param field - The tool parameter it came from, used in the error.
+ * @returns the milestone id and the Project that owns it.
+ * @throws {ValidationError} When the name is ambiguous or matches nothing.
+ * @throws {NotFoundError} When a well-formed id is not a milestone in scope.
+ */
+export async function resolveMilestone(
+  orgId: string,
+  projectId: string | null,
+  value: string,
+  field: string,
+): Promise<{ id: string; projectId: string }> {
+  const byId = ULID.test(value);
+  const rows = await db
+    .select({ id: milestone.id, label: milestone.name, projectId: milestone.projectId })
+    .from(milestone)
+    .innerJoin(project, eq(milestone.projectId, project.id))
+    .where(
+      and(
+        eq(milestone.organizationId, orgId),
+        isNull(project.archivedAt),
+        projectId === null ? undefined : eq(milestone.projectId, projectId),
+        byId ? eq(milestone.id, value) : undefined,
+      ),
+    );
+  if (byId) {
+    const [match] = rows;
+    if (!match) throw new NotFoundError('No milestone with that id in this project');
+    return { id: match.id, projectId: match.projectId };
+  }
+  const id = await pick(field, value, rows);
+  const chosen = rows.find((row) => row.id === id);
+  /* v8 ignore next -- @preserve `pick` only ever returns one of the candidates it was given */
+  if (!chosen) throw new NotFoundError('No milestone by that name');
+  return { id: chosen.id, projectId: chosen.projectId };
 }
 
 /**

@@ -399,10 +399,15 @@ export async function commitPlanNodes(input: CommitPlanInput): Promise<CommitPla
 
   /* v8 ignore next -- @preserve defensive: the transaction always sets the outcome */
   if (!outcome) throw new Error('plan commit produced no outcome');
+  // A plan has no milestone nodes, so nothing placed here is one; the filter states that for the
+  // type the result carries.
+  const planPlaced: PlanPlaced[] = placed.flatMap((entry) =>
+    entry.kind === 'milestone' ? [] : [{ ...entry, kind: entry.kind }],
+  );
   return {
     row: outcome.row,
-    placed,
-    createdCounts: planCommitCounts(row.document, placed),
+    placed: planPlaced,
+    createdCounts: planCommitCounts(row.document, planPlaced),
     changeSetId: outcome.changeSetId,
   };
 }
@@ -489,6 +494,7 @@ function placementFor(
     projectId: localId('project') ?? parentTask?.projectId ?? refs.projectId,
     programId: localId('program') ?? refs.programId,
     initiativeId: localId('initiative') ?? refs.initiativeId,
+    milestoneId: refs.milestoneId,
     parentTaskId: parentTask?.taskId ?? null,
   };
 }

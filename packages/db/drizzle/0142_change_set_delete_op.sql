@@ -1,0 +1,1 @@
+ALTER TYPE "public"."change_set_op" ADD VALUE 'delete';

@@ -76,6 +76,23 @@ export const MilestoneUpdate = z
 /** Validated milestone-update body. */
 export type MilestoneUpdate = z.infer<typeof MilestoneUpdate>;
 
+/** How far along a milestone's Tasks are, counting only Tasks the caller can see. */
+export const MilestoneProgress = z
+  .object({
+    total: z
+      .number()
+      .int()
+      .nonnegative()
+      .describe('Visible, non-archived Tasks on this milestone.'),
+    completed: z.number().int().nonnegative().describe('How many of those Tasks are completed.'),
+  })
+  .meta({
+    id: 'MilestoneProgress',
+    description: "A milestone's visible Task totals.",
+  });
+/** Milestone progress value. */
+export type MilestoneProgress = z.infer<typeof MilestoneProgress>;
+
 /** Full milestone representation returned by reads. */
 export const MilestoneOut = z
   .object({
@@ -105,6 +122,7 @@ export const MilestoneOut = z
         'Manual ordering key among the project’s milestones (ascending); the order they render on the timeline.',
       ),
     createdAt: z.string().describe('When the milestone was created (ISO-8601 timestamp).'),
+    progress: MilestoneProgress,
   })
   .meta({ id: 'MilestoneOut', description: 'A milestone.' });
 /** Milestone representation value. */

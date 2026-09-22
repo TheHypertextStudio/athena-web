@@ -1,6 +1,7 @@
 import type { actor } from '@docket/db';
 import { db, initiative, program, project, task } from '@docket/db';
-import { and, eq, isNull, sql } from 'drizzle-orm';
+import { and, eq, isNull, lt, or, sql, type SQL } from 'drizzle-orm';
+import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 import { z } from 'zod';
 
 import { OrganizationId } from '@docket/identity-access/ids';
@@ -117,6 +118,25 @@ export async function wouldCreateCycle(
 export interface WorkCursor {
   readonly createdAt: Date;
   readonly id: string;
+}
+
+/**
+ * The keyset predicate that resumes a page, built per table.
+ *
+ * @remarks
+ * `(createdAt DESC, id DESC)` with the id as tiebreak, so paging never skips or repeats a row even
+ * as work is created underneath it.
+ */
+export function seekAfter(
+  createdAtColumn: AnyPgColumn,
+  idColumn: AnyPgColumn,
+  after: WorkCursor | undefined,
+): SQL | undefined {
+  if (!after) return undefined;
+  return or(
+    lt(createdAtColumn, after.createdAt),
+    and(eq(createdAtColumn, after.createdAt), lt(idColumn, after.id)),
+  );
 }
 
 interface ToolCursorPayload {

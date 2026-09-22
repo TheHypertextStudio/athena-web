@@ -51,6 +51,7 @@ export const updateSetFields = {
     .nullable()
     .optional()
     .describe(`The project to file the task under, or null to unfile it. ${DESCRIPTOR_HINT}`),
+  milestone: z.string().nullable().optional().describe("The task's milestone, or null to clear."),
   program: z
     .string()
     .nullable()

@@ -14,5 +14,15 @@ the Tasks that must be complete by that checkpoint.
 Deleting a Milestone does not delete its Tasks. Docket removes the Milestone from those Tasks and
 keeps the work.
 
+Moving a Task to another Project takes it off its old Project's Milestone.
+
+## From an agent or the API
+
+Agents connected over MCP read and edit Milestones with the `milestones` tool, put Tasks on one
+with `update`, and filter with `list_work`'s `milestone` filter. `organize` places Milestones and
+their Tasks as part of a plan. The REST API serves them under
+`/v1/orgs/{orgId}/projects/{projectId}/milestones`, and `GET /v1/orgs/{orgId}/tasks?milestoneId=`
+lists a Milestone's Tasks.
+
 Use a [Cycle](/guides/concepts/cycles) for the recurring period a Team works in. Use a due date on a
 [Task](/guides/concepts/tasks) when only one item is due.

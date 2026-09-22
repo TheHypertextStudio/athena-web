@@ -69,6 +69,7 @@ function milestone(overrides: Partial<MilestoneOut> & { id: string; name: string
     targetDate: null,
     sort: 0,
     createdAt: '2026-01-01T00:00:00.000Z',
+    progress: { total: 0, completed: 0 },
     ...overrides,
   };
 }

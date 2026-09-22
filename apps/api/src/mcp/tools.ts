@@ -25,6 +25,7 @@ import { registerContentTools } from './content-tools';
 import { registerDirectiveTools } from './directive-tools';
 import { registerLabelTools } from './label-tools';
 import { registerLinkTool } from './link-tool';
+import { registerMilestoneTool } from './milestone-tool';
 import { registerOrganizeTool } from './organize-tool';
 import { registerPlanDraftTools } from './plan-draft-tools';
 import { registerPlanTools } from './plan-tools';
@@ -74,6 +75,7 @@ export function registerTools(
   registerOrganizeTool(server, ctx);
   registerLinkTool(server, ctx);
   registerArchiveTool(server, ctx);
+  registerMilestoneTool(server, ctx);
   registerLabelTools(server, ctx);
   registerTemplateTools(server, ctx);
   registerPlanTools(server, ctx);

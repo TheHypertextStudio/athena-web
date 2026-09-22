@@ -1008,9 +1008,17 @@ export const logLevel = pgEnum('log_level', [
  *
  * @remarks
  * `link` covers edges that are not rows a caller edits — a dependency, an initiative association —
- * where reversing means removing the edge rather than restoring a prior column value.
+ * where reversing means removing the edge rather than restoring a prior column value. `delete`
+ * covers a row that is removed outright rather than archived, such as a milestone: reversing it
+ * re-inserts the recorded row under its original id.
  */
-export const changeSetOp = pgEnum('change_set_op', ['create', 'update', 'archive', 'link']);
+export const changeSetOp = pgEnum('change_set_op', [
+  'create',
+  'update',
+  'archive',
+  'link',
+  'delete',
+]);
 
 /**
  * Which system owns an {@link externalResource}.

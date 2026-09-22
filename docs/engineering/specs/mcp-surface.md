@@ -219,28 +219,29 @@ earlier draft of this section listed twenty-six that mapped roughly 1:1 onto SQL
 surface could not express ordinary sentences ("reassign Sarah's open work to me" needed a name→id
 lookup, a filtered query, and a bulk write, and offered none of the three) and was replaced.
 
-| Tool              | readOnly | destructive | idempotent | openWorld | Scope             | Widget          |
-| ----------------- | :------: | :---------: | :--------: | :-------: | ----------------- | --------------- |
-| `workspaces`      |  **T**   |      F      |     T      |     F     | `work:read`       | —               |
-| `list_work`       |  **T**   |      F      |     T      |     F     | `work:read`       | `work-list`     |
-| `find`            |  **T**   |      F      |     T      |     F     | `work:read`       | —               |
-| `get`             |  **T**   |      F      |     T      |     F     | `work:read`       | —               |
-| `brief`           |  **T**   |      F      |     T      |     F     | `work:read`       | —               |
-| `retrospect`      |  **T**   |      F      |     T      |     F     | `work:read`       | —               |
-| `capture`         |    F     |      F      |     F      |     F     | `work:write`      | `change-report` |
-| `organize`        |    F     |      F      |   **T**    |     F     | `work:write`      | `change-report` |
-| `update`          |    F     |    **T**    |     T      |     F     | `work:write`      | `change-report` |
-| `link`            |    F     |    **T**    |     T      |     F     | `work:write`      | —               |
-| `archive`         |    F     |    **T**    |     T      |     F     | `work:write`      | `change-report` |
-| `define_labels`   |    F     |      F      |   **T**    |     F     | `work:write`      | `change-report` |
-| `define_template` |    F     |      F      |     F      |     F     | `work:write`      | `change-report` |
-| `comment`         |    F     |      F      |     F      |     F     | `work:write`      | —               |
-| `report_status`   |    F     |      F      |     F      |     F     | `work:write`      | —               |
-| `plan_day`        |    F     |      F      |     T      |     F     | `work:write`      | —               |
-| `undo`            |    F     |    **T**    |     T      |     F     | `work:write`      | —               |
-| `link_external`   |    F     |      F      |     T      |   **T**   | `connectors:link` | —               |
-| `run_agent`       |    F     |      F      |     F      |   **T**   | `agents:run`      | —               |
-| `manage_session`  |    F     |    **T**    |     T      |     F     | `agents:run`      | —               |
+| Tool              | readOnly | destructive | idempotent | openWorld | Scope                            | Widget          |
+| ----------------- | :------: | :---------: | :--------: | :-------: | -------------------------------- | --------------- |
+| `workspaces`      |  **T**   |      F      |     T      |     F     | `work:read`                      | —               |
+| `list_work`       |  **T**   |      F      |     T      |     F     | `work:read`                      | `work-list`     |
+| `find`            |  **T**   |      F      |     T      |     F     | `work:read`                      | —               |
+| `get`             |  **T**   |      F      |     T      |     F     | `work:read`                      | —               |
+| `brief`           |  **T**   |      F      |     T      |     F     | `work:read`                      | —               |
+| `retrospect`      |  **T**   |      F      |     T      |     F     | `work:read`                      | —               |
+| `capture`         |    F     |      F      |     F      |     F     | `work:write`                     | `change-report` |
+| `organize`        |    F     |      F      |   **T**    |     F     | `work:write`                     | `change-report` |
+| `update`          |    F     |    **T**    |     T      |     F     | `work:write`                     | `change-report` |
+| `link`            |    F     |    **T**    |     T      |     F     | `work:write`                     | —               |
+| `archive`         |    F     |    **T**    |     T      |     F     | `work:write`                     | `change-report` |
+| `define_labels`   |    F     |      F      |   **T**    |     F     | `work:write`                     | `change-report` |
+| `define_template` |    F     |      F      |     F      |     F     | `work:write`                     | `change-report` |
+| `milestones`      |    F     |    **T**    |     F      |     F     | `work:read` (list), `work:write` | —               |
+| `comment`         |    F     |      F      |     F      |     F     | `work:write`                     | —               |
+| `report_status`   |    F     |      F      |     F      |     F     | `work:write`                     | —               |
+| `plan_day`        |    F     |      F      |     T      |     F     | `work:write`                     | —               |
+| `undo`            |    F     |    **T**    |     T      |     F     | `work:write`                     | —               |
+| `link_external`   |    F     |      F      |     T      |   **T**   | `connectors:link`                | —               |
+| `run_agent`       |    F     |      F      |     F      |   **T**   | `agents:run`                     | —               |
+| `manage_session`  |    F     |    **T**    |     T      |     F     | `agents:run`                     | —               |
 
 Two more are registered only for a user principal, never a workspace one, because they act on a
 private delegation rather than on shared work:

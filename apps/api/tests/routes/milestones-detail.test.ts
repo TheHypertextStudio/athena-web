@@ -4,18 +4,27 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import type * as DbModule from '@docket/db';
 
 import type { StatusIdLookup } from '../support/routes-harness';
-import { appWithActor, getDb, one, seedBaseOrg } from '../support/routes-harness';
+import {
+  appWithActor,
+  getDb,
+  one,
+  seedBaseOrg,
+  seedTaskAccessOrg,
+} from '../support/routes-harness';
 import type milestonesRouter from '../../src/routes/milestones';
+import type tasksRouter from '../../src/routes/tasks';
 import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
 let milestones!: typeof milestonesRouter;
+let tasks!: typeof tasksRouter;
 
 beforeAll(async () => {
   schema = await getDb();
   db = schema.db;
   milestones = (await import('../../src/routes/milestones')).default;
+  tasks = (await import('../../src/routes/tasks')).default;
 });
 
 /** Parse a JSON response body as the given shape. */
@@ -323,5 +332,93 @@ describe('milestones: an omitted sort appends', () => {
       body: JSON.stringify({ name: 'Only' }),
     });
     expect((await json<{ sort: number }>(res)).sort).toBe(0);
+  });
+});
+
+describe('milestones detail: progress and task links', () => {
+  /** Seed a project with a milestone, one done and one open task on it, and one task off it. */
+  async function seedProgress() {
+    const base = await seedTaskAccessOrg(db, schema);
+    const { orgId, teamId, humanActorId, statusId } = base;
+    const projectId = await seedProject(statusId, orgId, teamId, humanActorId);
+    const milestoneId = await seedMilestone(orgId, projectId, humanActorId);
+    const insertTask = async (title: string, onMilestone: boolean, done: boolean) =>
+      one(
+        await db
+          .insert(schema.task)
+          .values({
+            organizationId: orgId,
+            title,
+            teamId,
+            state: done ? 'done' : 'backlog',
+            statusId: statusId('task', done ? 'done' : 'backlog'),
+            completedAt: done ? new Date() : null,
+            projectId,
+            milestoneId: onMilestone ? milestoneId : null,
+          })
+          .returning({ id: schema.task.id }),
+      ).id;
+    const doneTask = await insertTask('Shipped', true, true);
+    const openTask = await insertTask('Open', true, false);
+    await insertTask('Elsewhere', false, false);
+    return { ...base, projectId, milestoneId, doneTask, openTask };
+  }
+
+  it('reports visible task progress on list, get, and update', async () => {
+    const s = await seedProgress();
+    const app = appWithActor(milestones, s.orgId, ['contribute'], s.humanActorId);
+    const expected = { total: 2, completed: 1 };
+
+    const listed = await json<{ items: { progress: unknown }[] }>(
+      await app.request(`/${s.projectId}/milestones`, { method: 'GET' }),
+    );
+    expect(listed.items.map((m) => m.progress)).toEqual([expected]);
+    const got = await json<{ progress: unknown }>(
+      await app.request(`/${s.projectId}/milestones/${s.milestoneId}`, { method: 'GET' }),
+    );
+    expect(got.progress).toEqual(expected);
+    const patched = await json<{ progress: unknown }>(
+      await app.request(`/${s.projectId}/milestones/${s.milestoneId}`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ name: 'Renamed' }),
+      }),
+    );
+    expect(patched.progress).toEqual(expected);
+  });
+
+  it("lists a milestone's tasks and clears the link when a task moves project", async () => {
+    const s = await seedProgress();
+    const app = appWithActor(tasks, s.orgId, ['contribute'], s.humanActorId);
+    const onMilestone = await json<{ items: { id: string }[] }>(
+      await app.request(`/?milestoneId=${s.milestoneId}`, { method: 'GET' }),
+    );
+    expect(onMilestone.items.map((t) => t.id).sort()).toEqual([s.doneTask, s.openTask].sort());
+
+    const other = await seedProject(s.statusId, s.orgId, s.teamId, s.humanActorId);
+    const moved = await app.request(`/${s.openTask}`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ projectId: other }),
+    });
+    expect(moved.status).toBe(200);
+    const [row] = await db
+      .select({ milestoneId: schema.task.milestoneId })
+      .from(schema.task)
+      .where(eq(schema.task.id, s.openTask));
+    expect(row?.milestoneId).toBeNull();
+
+    // A move within the same project keeps the link.
+    const kept = await app.request(`/${s.doneTask}`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ projectId: s.projectId }),
+    });
+    expect(kept.status).toBe(200);
+    const [keptRow] = await db
+      .select({ milestoneId: schema.task.milestoneId })
+      .from(schema.task)
+      .where(eq(schema.task.id, s.doneTask));
+    expect(keptRow?.milestoneId).toBe(s.milestoneId);
   });
 });

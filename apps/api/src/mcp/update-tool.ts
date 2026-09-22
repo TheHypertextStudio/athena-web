@@ -51,6 +51,7 @@ import { isTaskRowVisible, listWork, listWorkFilters, type WorkEntity } from './
 import { authorize, jsonResult, runTool, scopedActor } from './result';
 import { resolveStateTransition } from './tools-shared';
 import { entityHref, entityListHref } from './entity-href';
+import { taskMilestoneDecisions, type MilestoneDecision } from './task-milestone';
 import { updateSetFields, updateToolDefinition } from './update-tool-contract';
 
 export { updateSetFields } from './update-tool-contract';
@@ -90,6 +91,7 @@ const SETTABLE: Record<WorkEntity, readonly SetName[]> = {
     'assignee',
     'delegate',
     'project',
+    'milestone',
     'program',
     'team',
     'dueDate',
@@ -372,6 +374,8 @@ interface RowContext {
   readonly fiscalYearStartMonth: number;
   readonly containerStatus: { statusId: string; status: string } | undefined;
   readonly labelEdit: LabelEdit | undefined;
+  /** Each row's milestone patch, decided before any row is written. */
+  readonly milestoneFor: (id: string) => MilestoneDecision;
 }
 
 /** One written row as the report card shows it. */
@@ -496,16 +500,21 @@ async function updateRow(rc: RowContext, row: Record<string, unknown>): Promise<
   if (rc.labelEdit && !labelsFitRow(rc.labelEdit, teamAfter(rc, row))) {
     return { skipped: { id, title, reason: 'label_out_of_scope' } };
   }
+  const milestonePatch = rc.milestoneFor(id);
+  if (typeof milestonePatch === 'string') return { skipped: { id, title, reason: milestonePatch } };
   const { entity, orgId } = rc;
-  const patch = await buildPatch(
-    entity,
-    orgId,
-    row,
-    rc.set,
-    rc.refs,
-    rc.fiscalYearStartMonth,
-    rc.containerStatus,
-  );
+  const patch = {
+    ...(await buildPatch(
+      entity,
+      orgId,
+      row,
+      rc.set,
+      rc.refs,
+      rc.fiscalYearStartMonth,
+      rc.containerStatus,
+    )),
+    ...milestonePatch,
+  };
   const before = trackedFields(entity, row);
   const next = await writeColumns(rc, row, patch);
   /* v8 ignore next -- @preserve defensive: the row was just read in this call */
@@ -616,6 +625,7 @@ export function registerUpdateTool(server: McpRegistrar, ctx: McpContext): void 
         fiscalYearStartMonth: workspaceSettings.fiscalYearStartMonth,
         containerStatus,
         labelEdit,
+        milestoneFor: await taskMilestoneDecisions(input.orgId, set, refs, visibleRows),
       };
       const changes: RecordedChange[] = [];
       const report: RowReport[] = [];

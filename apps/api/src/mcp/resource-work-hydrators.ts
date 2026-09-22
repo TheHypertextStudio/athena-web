@@ -16,6 +16,7 @@ import { and, asc, desc, eq, inArray, isNull, or } from 'drizzle-orm';
 
 import { NotFoundError } from '../error';
 import type { ViewableTaskParts } from '../routes/task-helpers';
+import { milestoneProgressOf } from '../lib/milestone-writes';
 import { originOf } from './change-set';
 import { stateOptionsOf, stateTypeOf, teamWorkflows } from './workflow-states';
 
@@ -79,6 +80,20 @@ async function taskRelations(orgId: string, id: string, t: typeof task.$inferSel
   ]);
 }
 
+/** The milestone a task is on, named, so a reader need not look it up; null when it is on none. */
+async function milestoneRefOf(
+  orgId: string,
+  milestoneId: string | null,
+): Promise<{ id: string; name: string; targetDate: string | null } | null> {
+  if (milestoneId === null) return null;
+  const [row] = await db
+    .select({ id: milestone.id, name: milestone.name, targetDate: milestone.targetDate })
+    .from(milestone)
+    .where(and(eq(milestone.id, milestoneId), eq(milestone.organizationId, orgId)))
+    .limit(1);
+  return row ? { ...row, targetDate: row.targetDate?.toISOString() ?? null } : null;
+}
+
 /** The latest status update for a subject (drives the subject's current health). */
 export async function latestUpdateFor(
   orgId: string,
@@ -121,7 +136,10 @@ export async function hydrateTask(
   const t = rows[0];
   if (!t) throw new NotFoundError();
 
-  const [blocking, blockedBy, subtasks, origin, workflows] = await taskRelations(orgId, id, t);
+  const [[blocking, blockedBy, subtasks, origin, workflows], onMilestone] = await Promise.all([
+    taskRelations(orgId, id, t),
+    milestoneRefOf(orgId, t.milestoneId),
+  ]);
 
   return {
     id: t.id,
@@ -146,6 +164,7 @@ export async function hydrateTask(
     projectId: t.projectId,
     programId: t.programId,
     milestoneId: t.milestoneId,
+    milestone: onMilestone,
     cycleId: t.cycleId,
     parentTaskId: t.parentTaskId,
     estimate: t.estimate,
@@ -192,10 +211,16 @@ export async function hydrateProject(
 
   const [milestones, taskRows, initiativeRows, latestUpdate] = await Promise.all([
     db
-      .select({ id: milestone.id, name: milestone.name, targetDate: milestone.targetDate })
+      .select({
+        id: milestone.id,
+        name: milestone.name,
+        description: milestone.description,
+        targetDate: milestone.targetDate,
+        sort: milestone.sort,
+      })
       .from(milestone)
       .where(eq(milestone.projectId, id))
-      .orderBy(asc(milestone.sort)),
+      .orderBy(asc(milestone.sort), asc(milestone.id)),
     db
       .select({
         id: task.id,
@@ -204,6 +229,8 @@ export async function hydrateProject(
         teamId: task.teamId,
         projectId: task.projectId,
         programId: task.programId,
+        milestoneId: task.milestoneId,
+        completedAt: task.completedAt,
         visibility: task.visibility,
       })
       .from(task)
@@ -218,6 +245,7 @@ export async function hydrateProject(
   ]);
 
   const visibleTasks = taskRows.filter(canViewTask);
+  const progress = milestoneProgressOf(visibleTasks);
 
   return {
     id: p.id,
@@ -240,7 +268,10 @@ export async function hydrateProject(
     milestones: milestones.map((m) => ({
       id: m.id,
       name: m.name,
+      description: m.description,
       targetDate: m.targetDate?.toISOString() ?? null,
+      sort: m.sort,
+      progress: progress.get(m.id) ?? { total: 0, completed: 0 },
     })),
     initiatives: initiativeRows,
     latestUpdate,

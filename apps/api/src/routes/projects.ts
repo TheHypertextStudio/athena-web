@@ -878,13 +878,13 @@ const projects = new Hono<AppEnv>()
       summary: 'Delete a project',
       capability: 'manage',
       response: ProjectOut,
-      description: `Permanently delete a project. The project must belong to the organization, and the caller needs the \`manage\` capability. Tasks and milestones are not deleted, but they no longer belong to the project. Initiative links are removed. To preserve the project and its history, update its \`status\` to \`completed\` or \`canceled\` instead. Returns the deleted {@link ProjectOut}.`,
+      description: `Permanently delete a project. The project must belong to the organization, and the caller needs the \`manage\` capability. Tasks are not deleted, but they no longer belong to the project or its milestones. The project's milestones are deleted with it. Initiative links are removed. To preserve the project and its history, update its \`status\` to \`completed\` or \`canceled\` instead. Returns the deleted {@link ProjectOut}.`,
     }),
     zParam(idParam),
     async (c) => {
       const { orgId } = c.get('actorCtx');
       const { id } = c.req.valid('param');
-      const row = await db.transaction(async (tx) => {
+      const result = await db.transaction(async (tx) => {
         const candidates = await tx
           .select()
           .from(project)
@@ -892,6 +892,12 @@ const projects = new Hono<AppEnv>()
           .limit(1);
         const candidate = candidates[0];
         if (!candidate) return undefined;
+        // The milestones go with the project through the foreign key; their ids are read first so
+        // their search entries can follow them out.
+        const milestoneRows = await tx
+          .select({ id: milestone.id })
+          .from(milestone)
+          .where(and(eq(milestone.organizationId, orgId), eq(milestone.projectId, id)));
         await tx
           .delete(entityDisplay)
           .where(
@@ -902,10 +908,14 @@ const projects = new Hono<AppEnv>()
             ),
           );
         const deleted = await tx.delete(project).where(eq(project.id, id)).returning();
-        return deleted[0];
+        return deleted[0] && { row: deleted[0], milestoneIds: milestoneRows.map((m) => m.id) };
       });
-      if (!row) throw new NotFoundError('Project not found');
+      if (!result) throw new NotFoundError('Project not found');
+      const { row, milestoneIds } = result;
       await enqueueSearchDelete(orgId, 'project', row.id);
+      for (const milestoneId of milestoneIds) {
+        await enqueueSearchDelete(orgId, 'milestone', milestoneId);
+      }
       return ok(c, ProjectOut, toOut(row, await sourcePeopleForSubject(orgId, 'project', row.id)));
     },
   )

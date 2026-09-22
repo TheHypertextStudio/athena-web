@@ -257,11 +257,11 @@ Mounted `/orgs/:orgId/projects`. Milestones are nested (data-model: own table, c
 | `PATCH /:projectId` | `json: ProjectUpdate{ name?, description?, leadId?, programId?, status?, startDate?, targetDate?, teamId? }` | `ProjectOut` | org | `org:contribute` |
 | `DELETE /:projectId` | `param` | `{ id, archivedAt }` | org | `org:manage` |
 | `GET /:projectId/tasks` | `query: ListQuery & { groupBy?: "status"                                                                                           | "milestone", state?, assigneeId? }` | `{ groups: TaskGroup[] }` (default group-by-Milestone per product §8.4) | org | `org:view` |
-| `GET /:projectId/milestones` | `param` | `Milestone[]{ id, projectId, name, description?, targetDate?, sort }` | org | `org:view` |
+| `GET /:projectId/milestones` | `param` | `Page<Milestone{ id, projectId, name, description?, targetDate?, sort, progress{ total, completed } }>` | org | `org:view` |
 | `POST /:projectId/milestones` | `json: MilestoneCreate{ name, description?, targetDate?, sort? }` | `Milestone` | org | `org:contribute` |
 | `GET /:projectId/milestones/:milestoneId` | `param` | `Milestone` | org | `org:view` |
 | `PATCH /:projectId/milestones/:milestoneId` | `json: MilestoneUpdate{ name?, description?, targetDate?, sort? }` | `Milestone` | org | `org:contribute` |
-| `DELETE /:projectId/milestones/:milestoneId` | `param` | `{ id, removed: true }` (tasks' `milestone_id` nulled) | org | `org:contribute` |
+| `DELETE /:projectId/milestones/:milestoneId` | `param` | `Milestone` tombstone (tasks' `milestone_id` nulled) | org | `org:contribute` |
 | `GET /:projectId/updates` | `query: ListQuery` | `Page<UpdateOut>` | org | `org:view` |
 | `GET /:projectId/agents` | `param` | `{ agents: AgentRef[], lastSession?: SessionSummary, pendingApprovals: number }` (the "agents here" strip) | org | `org:view` |
 

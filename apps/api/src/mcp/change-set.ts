@@ -20,6 +20,7 @@ import {
   initiative,
   initiativeProgram,
   initiativeProject,
+  milestone,
   program,
   project,
   projectDependency,
@@ -37,6 +38,8 @@ import type { RecordedOrigin } from '@docket/work/provenance-contract';
 
 import { ConflictError, NotFoundError } from '../error';
 import { isCompanionKind, revertCompanion, revertCompanionIn } from './change-set-companions';
+import { restoredDate, unchangedSince } from './change-set-values';
+import { revertMilestone } from './milestone-undo';
 import { serializableTx } from '../lib/serializable-tx';
 import {
   applySubtaskCompletionPolicyForParents,
@@ -46,8 +49,14 @@ import {
 } from '../lib/task-state';
 import { planTaskReparents } from '../services/task-hierarchy';
 
-/** The entity kinds a change set can record, mapped to the table they live in. */
-const RECORDABLE = { task, project, program, initiative } as const;
+/**
+ * The entity kinds a change set can record, mapped to the table they live in.
+ *
+ * @remarks
+ * A milestone is deleted outright rather than archived, so it reverses through
+ * {@link revertMilestone} rather than the archive-based path the other kinds share.
+ */
+const RECORDABLE = { task, project, program, initiative, milestone } as const;
 
 /** One recordable entity kind. */
 export type RecordableKind = keyof typeof RECORDABLE;
@@ -184,6 +193,7 @@ const TRACKED: Record<RecordableKind, readonly string[]> = {
     'targetDateFiscalYearStartMonth',
     'archivedAt',
   ],
+  milestone: ['projectId', 'name', 'description', 'targetDate', 'sort'],
 };
 
 /**
@@ -204,8 +214,8 @@ export function trackedFields(
 export interface ChangeRecord {
   readonly kind: RecordableKind;
   readonly id: string;
-  readonly op: 'create' | 'update' | 'archive';
-  /** The row as it was, for an update or archive. Absent on a create. */
+  readonly op: 'create' | 'update' | 'archive' | 'delete';
+  /** The row as it was, for an update, archive, or delete. Absent on a create. */
   readonly before?: Record<string, unknown>;
   /** The row as it now is, for a create or update. Absent on an archive. */
   readonly after?: Record<string, unknown>;
@@ -374,27 +384,6 @@ export async function recordChangeSetInTx(
   return id;
 }
 
-/**
- * Whether a row still looks the way this change set left it.
- *
- * @remarks
- * Compares only the fields the change actually wrote. A change set that set `priority` should not
- * refuse to undo because someone edited the title afterwards — the narrow comparison is what makes
- * undo useful on a live workspace rather than only on an untouched one.
- *
- * @param current - The row as it is now.
- * @param after - The row as this change set left it.
- * @returns true when every field this change wrote is unchanged.
- */
-function unchangedSince(current: Record<string, unknown>, after: Record<string, unknown>): boolean {
-  return Object.entries(after).every(([key, value]) => {
-    const now = current[key];
-    // Dates and enums round-trip through JSON as strings; compare on that footing.
-    const normalize = (v: unknown): unknown => (v instanceof Date ? v.toISOString() : v);
-    return normalize(now) === normalize(value);
-  });
-}
-
 /** Load one recordable row by id, or null when it is gone. */
 async function loadRow(
   kind: RecordableKind,
@@ -471,16 +460,6 @@ function endpointValues(kind: RelationKind, from: string, to: string): Record<st
     case 'program_contributes_to':
       return { programId: from, initiativeId: to };
   }
-}
-
-/** Parse a JSON round-tripped nullable date from a recorded row. */
-function restoredDate(value: unknown): Date | null {
-  if (value === null || value === undefined) return null;
-  if (value instanceof Date) return value;
-  if (typeof value !== 'string') throw new Error('Recorded task timestamp is invalid');
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) throw new Error('Recorded task timestamp is invalid');
-  return date;
 }
 
 /** Turn a tracked task snapshot back into a Drizzle task patch. */
@@ -651,6 +630,7 @@ async function revertEntry(
   const ref = { kind: entry.entityKind, id: entry.entityId };
   if (!(kind in RECORDABLE)) return { ...ref, reverted: false, reason: 'unsupported_kind' };
   if (kind === 'task') return revertTask(entry, orgId);
+  if (kind === 'milestone') return revertMilestone(entry, orgId);
 
   const table = RECORDABLE[kind] as RecordableTable;
   const current = await loadRow(kind, orgId, entry.entityId);

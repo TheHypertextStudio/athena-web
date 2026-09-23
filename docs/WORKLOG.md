@@ -236,9 +236,15 @@ routes/project-rollup.ts}`, `domains/work/src/contracts/{milestone,task}.ts`,
   write and without the parent completion cascade. Initiative parentage lives in a link table
   that change sets do not track, so hierarchy moves record the child with unchanged fields.
   Program and initiative labels have no relation kind and record as entity updates. Project,
-  program, and initiative delete record as `archive`; undo reports those rows gone. The MCP
-  `update` tool records a change set but writes no `audit_event`, so an MCP edit appears as the
-  origin card's Last changed side and never as a task activity row (an MCP create does).
+  program, and initiative delete record as `archive`; undo reports those rows gone.
+- **MCP tool activity (2026-09-22)**: MCP writes now produce the task activity rows REST writes,
+  each with the tool call's origin (`mcp/tool-activity.ts`). `update` writes per-field rows from
+  its before/after rows plus a labels row; a row that went through a state change already records
+  its fields through `finishTaskStateTransition`, so only its labels row is added. `link` and
+  `organize` record through `recordToolChangeSet`, which writes field rows for recorded task
+  updates (`subtask_of`, milestone attaches) and REST-worded dependency rows on both ends of a
+  `blocks` edge. `archive` writes none, matching REST archive; `capture`, `organize` creates, and
+  `repeat_task` rely on the feed's synthetic created entry. Tests: `tests/mcp/mcp-tool-activity.test.ts`.
 - **Slice 4 notes**: One formatter (`apps/web/src/lib/provenance/format.ts`) turns an origin into
   a performer, an optional channel detail, and an avatar kind. A rule names Docket as the
   performer with the rule as the detail, so activity rows keep the performer-then-channel shape.

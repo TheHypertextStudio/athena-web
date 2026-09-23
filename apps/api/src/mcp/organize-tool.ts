@@ -41,7 +41,8 @@ import {
 import { enqueueSearchUpsert } from '../search/write-through';
 import type { McpContext } from './auth';
 import type { McpRegistrar } from './catalog';
-import { recordChangeSet, type ChangeRecord } from './change-set';
+import { type ChangeRecord } from './change-set';
+import { recordToolChangeSet } from './tool-activity';
 import { WIDGET, widgetMeta } from './apps';
 import { placedOutputSchema, placedWithContainers } from './organize-containers';
 import { authorize, jsonResult, runTool, scopedActor } from './result';
@@ -186,7 +187,7 @@ export function registerOrganizeTool(server: McpRegistrar, ctx: McpContext): voi
           await finishTaskStateTransition({ actorId: null }, cascade);
         }
         const created = placed.filter((row) => row.created).length;
-        const changeSetId = await recordChangeSet({
+        const changeSetId = await recordToolChangeSet({
           orgId: input.orgId,
           actorId: actorCtx.actorId,
           origin: originFor('organize'),

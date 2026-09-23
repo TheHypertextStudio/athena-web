@@ -51,6 +51,7 @@ import {
   type RecordedChange,
 } from './change-set';
 import { resolveOptional } from './descriptors';
+import { recordUpdatedRowActivity } from './tool-activity';
 import { applyLabelEdit, labelsFitRow, resolveLabelEdit, type LabelEdit } from './update-labels';
 import { isTaskRowVisible, listWork, listWorkFilters, type WorkEntity } from './list-work';
 import { updateReportResult } from './apps/change-render';
@@ -534,6 +535,7 @@ async function updateRow(rc: RowContext, row: Record<string, unknown>): Promise<
     fields.push(labels.field);
     changes.push(labels.change);
   }
+  await recordUpdatedRowActivity(rc, row, next, labels);
   if (changes.length > 0) await enqueueSearchUpsert(orgId, entity, id);
   const href = entityHref(orgId, entity, id);
   return { report: { id, title: titleOf(next, id), href, fields }, changes };

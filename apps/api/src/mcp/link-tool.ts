@@ -26,7 +26,8 @@ import { serializableTx } from '../lib/serializable-tx';
 import { enqueueSearchUpsert } from '../search/write-through';
 import type { McpContext } from './auth';
 import type { McpRegistrar } from './catalog';
-import { recordChangeSet, trackedFields, type RecordedChange } from './change-set';
+import { trackedFields, type RecordedChange } from './change-set';
+import { recordToolChangeSet } from './tool-activity';
 import { DESCRIPTOR_HINT, resolveAcross, resolveDescriptor } from './descriptors';
 import { authorize, jsonResult, runTool, scopedActor } from './result';
 import { wouldCreateSubtaskCycle } from '../routes/task-helpers';
@@ -99,7 +100,7 @@ export function registerLinkTool(server: McpRegistrar, ctx: McpContext): void {
         );
 
         const changeSetId = result.changed
-          ? await recordChangeSet({
+          ? await recordToolChangeSet({
               orgId: input.orgId,
               actorId: actorCtx.actorId,
               origin: originFor('link'),

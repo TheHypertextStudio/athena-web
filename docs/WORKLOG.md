@@ -17494,6 +17494,12 @@ xhigh` passes (10 finder angles each, one-vote verification, a gap sweep) agains
   Lattice gateway and LM Studio (`poolside/laguna-s-2.1`). The first private durable assignment
   failed before submission with `oauth_invalid`; two HTTP regression checks failed on the missing
   account binding before the fix and pass afterward. The public Settings DTO still omits account ID.
+  The first production CI run exposed an undocumented exported status mapper that the local
+  test-utils cache had hidden. Document the mapper and disable caching for test-utils because its
+  documentation suite scans the entire workspace; the direct documentation-coverage test passes.
+  The uncached UI suite requires the repository's pinned Node 24; Node 26 on the local shell lacks
+  the expected `window.localStorage`, while the suite passes under Node 24. After clearing generated
+  caches to recover disk space, the full Node 24 coverage suite and production build pass.
 - **Blockers for launch**: Durable relay submission and one reviewable returned proposal still need
   production proof after the Docket account-binding fix is released. Lovelace hosted GitHub Actions
   runs fail before jobs start; its gateway was released directly through Cloud Build and Cloud Run.

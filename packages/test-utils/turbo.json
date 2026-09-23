@@ -1,0 +1,9 @@
+{
+  "extends": ["//"],
+  "tasks": {
+    // Documentation coverage scans every workspace source file, not just this package. Turbo's
+    // package graph cannot capture those reads, so a cached PASS can hide a new missing comment.
+    "test": { "cache": false },
+    "test:coverage": { "cache": false }
+  }
+}

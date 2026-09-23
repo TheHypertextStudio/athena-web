@@ -190,10 +190,10 @@ function toUnavailableReason(value: string | null): LatticeUnavailableReason | n
 }
 
 /**
- * Project a connection row (or its absence) into the status DTO.
+ * Preserve the owner's approved grant when a later gateway request fails.
  *
  * @param row - The owner's connection, or null when they have never connected.
- * @returns The status payload.
+ * @returns Whether the owner has an approved grant to display in Settings.
  */
 function hasApprovedLatticeGrant(row: LatticeConnectionRow | null): boolean {
   return (
@@ -202,6 +202,12 @@ function hasApprovedLatticeGrant(row: LatticeConnectionRow | null): boolean {
   );
 }
 
+/**
+ * Project a connection row (or its absence) into the public Settings status DTO.
+ *
+ * @param row - The owner's connection, or null when they have never connected.
+ * @returns The status payload without credentials or the Lovelace account identifier.
+ */
 export function toLatticeStatus(
   row: LatticeConnectionRow | null,
 ): z.input<typeof LatticeStatusOut> {

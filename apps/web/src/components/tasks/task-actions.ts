@@ -51,6 +51,13 @@ import { useCopyOutcome } from '@/components/clipboard';
 import { usePickerOverlay } from '@/components/pickers/picker-overlay';
 import { useTaskHierarchyMutation } from '@/components/tasks/use-task-hierarchy-mutation';
 import {
+  allComplete,
+  taskHref,
+  taskIds,
+  taskSubjects,
+} from '@/components/tasks/task-action-context';
+import { taskTimeEstimateAction } from '@/components/tasks/task-time-estimate-action';
+import {
   createTaskAssociationCommandPort,
   createTaskRelationCommandPort,
   createTaskTeamRelationCommandPort,
@@ -61,7 +68,6 @@ import {
   type ActionContext,
   type ActionDefinition,
   defineActionDomain,
-  objectHref,
   objectMetaString,
   type ObjectRef,
   useRegisterActionDomain,
@@ -75,47 +81,6 @@ const RELATION_RESPONSIVENESS = {
   // No separate mutation receipt surface exists for these relation commands.
   ownership: 'autonomous',
 } as const;
-
-/** Every task the context names, or an empty list when it names none. */
-function taskIds(context: ActionContext): readonly string[] {
-  return context.objects.filter((o) => o.kind === 'task').map((o) => o.id);
-}
-
-/**
- * The first task's detail path, or `null` when the context names none.
- *
- * @remarks
- * Through {@link objectHref} so Open, Copy link, and a copied row can never disagree about where a
- * task lives. The workspace falls back to the context's, because a row may carry the object without
- * an org while the invocation always knows one.
- */
-function taskHref(context: ActionContext): string | null {
-  const object = context.objects.find((o) => o.kind === 'task');
-  if (object === undefined) return null;
-  return objectHref(
-    object.organizationId === null && context.organizationId !== null
-      ? { ...object, organizationId: context.organizationId }
-      : object,
-  );
-}
-
-/**
- * Whether every task in the context already sits in a completed status.
- *
- * @remarks
- * The right-click menu carries a task's status *key* on its object payload, and a key means
- * something only against the workspace's set — so the category comes from the registry rather than
- * from a switch over five literal keys, which answered "backlog" for every renamed stage and left
- * "Mark done" offering to complete work that was already complete.
- */
-function allComplete(context: ActionContext, categoryOf: CategoryOfState): boolean {
-  const tasks = context.objects.filter((o) => o.kind === 'task');
-  if (tasks.length === 0) return false;
-  return tasks.every((o) => {
-    const state = objectMetaString(o, 'state');
-    return state !== null && categoryOf(state) === 'completed';
-  });
-}
 
 /**
  * Register the task domain for as long as the caller is mounted.
@@ -260,19 +225,6 @@ export function useRegisterTaskActions(): void {
         return 'applied';
       },
     });
-    const taskSubjects = (context: ActionContext, organizationId: string) =>
-      context.objects.flatMap((object) =>
-        object.kind === 'task'
-          ? [
-              {
-                kind: 'task' as const,
-                id: object.id,
-                organizationId,
-                meta: { ...object.meta, title: object.title },
-              },
-            ]
-          : [],
-      );
     const executeRelation = async (
       context: ActionContext,
       relationId: PatchableTaskRelationId,
@@ -661,6 +613,7 @@ export function useRegisterTaskActions(): void {
           });
         },
       },
+      taskTimeEstimateAction(pickerOverlay),
       {
         id: 'task.linkCalendarItem',
         relationId: 'task.calendar-item',

@@ -71,6 +71,7 @@ const TASK: TaskDraft = {
   dueDate: '2026-09-30',
   labelIds: [BUG_ID],
   estimate: 3,
+  estimateMinutes: 90,
   repeat: {
     kind: 'calendar',
     schedule: {

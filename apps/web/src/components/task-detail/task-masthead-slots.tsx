@@ -19,6 +19,7 @@ import { useEntityDisplay } from '@/components/entity-display/use-entity-display
 import { useWorkStatus } from '@/components/entity-display/use-work-status';
 import { DetailPrintSummary } from '@/components/views/detail-print-summary';
 import { formatCalendarDate } from '@/lib/format-date';
+import { formatEstimate } from '@/lib/format-estimate';
 import type { TaskPatch } from '@/lib/use-task-mutations';
 
 /** The section ids in tab order, Overview first, as `useDetailTab` reads them. */
@@ -143,7 +144,7 @@ export interface TaskPrintSummaryProps {
  * The static brief the task prints as, in place of its interactive page.
  *
  * @param props - See {@link TaskPrintSummaryProps}.
- * @returns the printable summary with status, priority, assignee, project, due date, and estimate.
+ * @returns the printable summary with status, priority, assignee, project, due date, and estimates.
  */
 export function TaskPrintSummary({
   task,
@@ -163,6 +164,7 @@ export function TaskPrintSummary({
         { label: 'Project', value: projectName ?? '—' },
         { label: 'Due', value: formatCalendarDate(task.dueDate) ?? '—' },
         { label: 'Estimate', value: task.estimate?.toString() ?? '—' },
+        { label: 'Time estimate', value: formatEstimate(task.estimateMinutes) ?? '—' },
       ]}
     />
   );

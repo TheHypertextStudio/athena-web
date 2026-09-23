@@ -8,8 +8,9 @@
  *
  * - the column set is a flexing Title + Status + Labels + Assignee + Due date + Time, with
  *   headers derived from the task catalog (so they stay consistent with the FilterToolbar);
- * - the Time cell renders `estimateMinutes` as a compact `1h 30m` duration beside the timer (its
- *   own placeholder when unset), and the due-date cell renders a short calendar day;
+ * - the Time cell renders `estimateMinutes` as `h:mm` beside the timer (its own placeholder when
+ *   unset) on a control that opens the time-estimate picker, and the due-date cell renders a short
+ *   calendar day;
  * - the assignee cell resolves the actor id to a named avatar, with a neutral placeholder when a
  *   task is unassigned;
  * - rows are real links to the task detail, and grouped tasks render full-width group headers;
@@ -404,8 +405,8 @@ describe('TaskTable', () => {
     expect(glyph).toHaveClass('text-state-started');
     expect(glyph).toHaveAccessibleName(DEFAULT_WORK_STATUSES.task[2]?.name ?? '');
     expect(within(row).getByLabelText('Ada Lovelace')).toBeInTheDocument();
-    // estimateMinutes is rendered as the compact duration, not raw minutes.
-    expect(within(row).getByText('1h 30m')).toBeInTheDocument();
+    // estimateMinutes is rendered as `h:mm`, not raw minutes.
+    expect(within(row).getByRole('button', { name: /^Time estimate/ })).toHaveTextContent('1:30');
     expect(within(row).getByText('Jun 21')).toBeInTheDocument();
     // The row is a real link to the task detail.
     expect(titleLink).toHaveAttribute('href', `/orgs/${ORG_ID}/tasks/${TASK_1}`);

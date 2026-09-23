@@ -26,7 +26,7 @@
  */
 import type { HubTaskItem, HubTodayPlanItem } from '../../lib/contracts/hub';
 import { EntityListRow, RowMeta, StatusIcon } from '@docket/ui/components';
-import { AlarmClock, CircleStop } from '@docket/ui/icons';
+import { CircleStop } from '@docket/ui/icons';
 import Link from '@/components/docket-link';
 import type { JSX } from 'react';
 
@@ -34,6 +34,8 @@ import { formatDay } from '@/components/date-picker';
 import { OrgChip } from '@/components/org-chip';
 import { ObjectSurface } from '@/components/objects/object-surface';
 import { todayISODate } from '@/lib/today';
+
+import { planTiming, PlanTimingLabel } from './plan-timing';
 
 /** Props for {@link HubTaskRow}. */
 export interface HubTaskRowProps {
@@ -62,24 +64,6 @@ function isPlanItem(task: HubTaskItem | HubTodayPlanItem): task is HubTodayPlanI
   return 'planItemId' in task;
 }
 
-/**
- * When this task is scheduled, or how long it is expected to take.
- *
- * @remarks
- * A real clock time beats an estimate whenever one exists — a timebox is a commitment and an
- * estimate is a guess, so showing both would spend two meta slots to say one thing twice.
- */
-function timing(task: HubTodayPlanItem, displayTimezone: string | undefined): string | null {
-  if (task.timeboxStartsAt) {
-    return new Date(task.timeboxStartsAt).toLocaleTimeString([], {
-      hour: 'numeric',
-      minute: '2-digit',
-      ...(displayTimezone === undefined ? {} : { timeZone: displayTimezone }),
-    });
-  }
-  return task.estimateMinutes === null ? null : `${String(task.estimateMinutes)} min`;
-}
-
 /** One cross-workspace task row, draggable onto the calendar and linking into the task. */
 export default function HubTaskRow({
   task,
@@ -92,7 +76,7 @@ export default function HubTaskRow({
   const due =
     task.dueDate == null ? null : formatDay(task.dueDate, { month: 'short', day: 'numeric' });
   const plan = isPlanItem(task) ? task : null;
-  const time = plan ? timing(plan, displayTimezone) : null;
+  const time = plan ? planTiming(plan, displayTimezone) : null;
   const href = `/orgs/${task.organizationId}/tasks/${task.id}`;
   const object = {
     kind: 'task' as const,
@@ -134,15 +118,15 @@ export default function HubTaskRow({
             {plan && plan.dependencyImpact > 0 ? (
               <RowMeta tabular>Unblocks {String(plan.dependencyImpact)}</RowMeta>
             ) : null}
-            {/* Floors, not fixed widths. The meta band is a right-packed flex, so an estimate of
-                `240 min` and one of `60 min` put their clock glyphs on different axes and the
+            {/* Floors, not fixed widths. The meta band is a right-packed flex, so a start of
+                `10:30 AM` and an estimate of `0:30` put their glyphs on different axes and the
                 column jitters down the list. Reserving the box stops that. `min-w-*` rather than
                 `w-*` because `RowMeta` does not truncate: a hard width makes an unusually long
-                value (`10080 min`, a week) overflow into the column beside it, where a floor lets
-                that one row grow and leaves every realistic value aligned. */}
+                value overflow into the column beside it, where a floor lets that one row grow and
+                leaves every realistic value aligned. */}
             {time ? (
               <RowMeta tabular className="min-w-20">
-                <AlarmClock aria-hidden="true" className="size-3.5" /> {time}
+                <PlanTimingLabel timing={time} />
               </RowMeta>
             ) : null}
             {due ? (

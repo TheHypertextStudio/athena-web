@@ -33,6 +33,10 @@ import {
 } from './hierarchy-rails';
 import type { ListMembership } from './work-list-groups';
 import {
+  renderEstimatePropertyValue,
+  renderProgressPropertyValue,
+} from './work-list-number-values';
+import {
   formatWorkViewValue,
   type WorkViewRowFor,
   workViewRowTitle,
@@ -429,29 +433,6 @@ function renderDatePropertyValue({
   return null;
 }
 
-/** Render the progress fraction as a bar plus an exact percentage. */
-function renderProgressPropertyValue({
-  fieldKey,
-  value,
-}: {
-  readonly fieldKey: string;
-  readonly value: unknown;
-}): JSX.Element | null {
-  if (fieldKey !== 'progress' || typeof value !== 'number') return null;
-  const percent = Math.round(value * 100);
-  return (
-    <span className="flex w-full items-center gap-2 tabular-nums">
-      <span className="bg-surface-container-highest h-1.5 min-w-10 flex-1 overflow-hidden rounded-full">
-        <span
-          className="bg-primary block h-full rounded-full"
-          style={{ width: `${String(percent)}%` }}
-        />
-      </span>
-      {percent}%
-    </span>
-  );
-}
-
 /** Render collection values as a compact count. */
 function renderCollectionPropertyValue(value: unknown): JSX.Element | null {
   return Array.isArray(value) ? <span className="tabular-nums">{value.length || '—'}</span> : null;
@@ -499,6 +480,7 @@ function PropertyValue<TTarget extends ViewTarget>({
     renderWorkRowSources(displayRow, fieldKey) ??
     renderDatePropertyValue({ kind: field.kind, value }) ??
     renderProgressPropertyValue({ fieldKey, value }) ??
+    renderEstimatePropertyValue({ fieldKey, value }) ??
     renderCollectionPropertyValue(value) ??
     renderScalarPropertyValue({ kind: field.kind, value })
   );

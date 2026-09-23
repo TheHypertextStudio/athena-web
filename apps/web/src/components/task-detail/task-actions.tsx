@@ -1,13 +1,16 @@
 'use client';
 
 /**
- * The task masthead's actions: track time, and the overflow menu.
+ * The task masthead's actions: the time estimate, track time, and the overflow menu.
  *
  * @remarks
  * The timer is the one primary action. It is deliberately unconditional on workflow state and on
  * edit rights: time tracking is the viewer's own record of what they did, so it is not a content
  * mutation, and a task being blocked, done, or someone else's does not stop a person having spent
  * real time on it.
+ *
+ * The time estimate sits beside it, as Sunsama pairs planned time with the timer: how long the task
+ * should take next to how long it has taken. It is edited only here, and only with edit rights.
  *
  * The overflow menu holds only what has no better home on the page: expanding the description,
  * copying the link, and deleting. Properties are edited where they are shown, so the menu carries
@@ -28,6 +31,7 @@ import type { JSX } from 'react';
 
 import { copyObjects } from '@/components/actions/copy-object-action';
 import { useCopyOutcome } from '@/components/clipboard';
+import { EstimateTimePicker } from '@/components/pickers/estimate-time-picker';
 import { TaskTimerButton } from '@/components/time-tracking';
 import { canWriteClipboard } from '@/lib/clipboard/write';
 import type { TaskMutations } from '@/lib/use-task-mutations';
@@ -118,9 +122,34 @@ export interface TaskActionsProps {
   readonly canManage: boolean;
   readonly mutations: Pick<
     TaskMutations,
-    'resetDelete' | 'deleteTask' | 'deletePending' | 'deleteError'
+    'resetDelete' | 'deleteTask' | 'deletePending' | 'deleteError' | 'patchTask'
   >;
   readonly expansion: DescriptionExpansion;
+}
+
+/** Props for {@link TaskTimeEstimate}. */
+interface TaskTimeEstimateProps {
+  readonly task: TaskDetail;
+  readonly canEdit: boolean;
+  readonly onPatch: TaskMutations['patchTask'];
+}
+
+/** The task's time estimate, editable with edit rights and absent when unset without them. */
+function TaskTimeEstimate({ task, canEdit, onPatch }: TaskTimeEstimateProps): JSX.Element | null {
+  const value = task.estimateMinutes ?? null;
+  if (!canEdit && value === null) return null;
+  return (
+    <EstimateTimePicker
+      value={value}
+      onChange={(estimateMinutes) => {
+        onPatch({ estimateMinutes });
+      }}
+      readOnly={!canEdit}
+      placeholder="Estimate"
+      triggerControlSize="xl"
+      triggerClassName="rounded-corner-full"
+    />
+  );
 }
 
 /**
@@ -141,6 +170,7 @@ export function TaskActions({
   return (
     <>
       <ControlGroup controlSize="xl">
+        <TaskTimeEstimate task={task} canEdit={canEdit} onPatch={mutations.patchTask} />
         <TaskTimerButton taskId={task.id} title={task.title} emphasis="prominent" />
         <TaskOverflowMenu
           orgId={orgId}

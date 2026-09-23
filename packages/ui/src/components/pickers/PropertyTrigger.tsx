@@ -22,6 +22,7 @@ import { Plus } from '../../icons';
 import { cn } from '../../lib/utils';
 import {
   Button,
+  type ControlSize,
   focusRing,
   Tooltip,
   TooltipContent,
@@ -58,6 +59,11 @@ export interface PropertyTriggerProps {
   readOnly?: boolean | undefined;
   /** Trigger weight: `ghost` (quiet, for panel rows) or `secondary` (tonal, for composers). */
   variant?: 'ghost' | 'secondary' | undefined;
+  /**
+   * Size the trigger on the shared control scale, matching the buttons beside it (e.g. inside an
+   * `xl` `ControlGroup`). Omit for the compact property-row trigger.
+   */
+  controlSize?: ControlSize | undefined;
   /** Extra classes merged onto the trigger. */
   className?: string | undefined;
   /**
@@ -72,6 +78,35 @@ export interface PropertyTriggerProps {
   'aria-invalid'?: boolean | undefined;
   /** Id of the element carrying the host's validation message for this control. */
   'aria-describedby'?: string | undefined;
+}
+
+/** The button's size: the compact legacy step, or the control step a host asked for. */
+function triggerSize(
+  controlSize: ControlSize | undefined,
+): { readonly size: 'sm' } | { readonly controlSize: ControlSize } {
+  return controlSize === undefined ? { size: 'sm' } : { controlSize };
+}
+
+/**
+ * The button's classes.
+ *
+ * @remarks
+ * A compact row trigger uses `body-medium`, not the button's own `label-large`, because it shows a
+ * property's value, prose the reader takes in rather than a name they scan for. On the control
+ * scale the button's own step sets height, padding, and type.
+ */
+function triggerClassName(
+  controlSize: ControlSize | undefined,
+  hasValue: boolean,
+  className: string | undefined,
+): string {
+  return cn(
+    controlSize === undefined
+      ? 'text-body-medium h-auto max-w-full justify-start gap-2 px-2 py-1.5'
+      : 'max-w-full justify-start',
+    hasValue ? 'text-on-surface' : 'text-on-surface-variant',
+    className,
+  );
 }
 
 /**
@@ -100,6 +135,7 @@ export const PropertyTrigger = React.forwardRef<HTMLButtonElement, PropertyTrigg
       disabled,
       readOnly,
       variant = 'ghost',
+      controlSize,
       className,
       ...rest
     },
@@ -167,16 +203,10 @@ export const PropertyTrigger = React.forwardRef<HTMLButtonElement, PropertyTrigg
         ref={ref}
         type="button"
         variant={variant}
-        size="sm"
+        {...triggerSize(controlSize)}
         disabled={disabled}
         aria-label={ariaLabel}
-        className={cn(
-          // `body-medium`, not the button's own `label-large`: this trigger shows a property's
-          // value, which is prose the reader takes in rather than a name they scan for.
-          'text-body-medium h-auto max-w-full justify-start gap-2 px-2 py-1.5',
-          hasValue ? 'text-on-surface' : 'text-on-surface-variant',
-          className,
-        )}
+        className={triggerClassName(controlSize, hasValue, className)}
         {...rest}
       >
         {hasValue ? (

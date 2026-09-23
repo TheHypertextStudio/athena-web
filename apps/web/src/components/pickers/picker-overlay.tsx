@@ -33,6 +33,7 @@ import type { RelationId } from '@docket/work/relation-contract';
 import { InitiativeHierarchyPickerOverlay } from '../initiatives/initiative-hierarchy-picker-overlay';
 import { InitiativeHierarchyWriteCoordinatorProvider } from '../initiatives/initiative-hierarchy-write-coordinator';
 import { TaskHierarchyPickerOverlay } from '../tasks/task-hierarchy-picker-overlay';
+import { EstimateTimePickerOverlay } from './estimate-time-picker-overlay';
 import { LabelPickerOverlay } from './label-picker-overlay';
 import { RelationTargetPickerOverlay } from './relation-target-picker-overlay';
 
@@ -79,12 +80,27 @@ export interface RelationTargetPickerRequest {
   readonly anchor?: HTMLElement | null;
 }
 
+/** A request to set the time estimate of one or more tasks. */
+export interface EstimateTimePickerRequest {
+  readonly kind: 'estimate-time';
+  /** The tasks being changed, in display order. Always at least one. */
+  readonly objects: readonly ObjectRef[];
+  /**
+   * Each task's current estimate in minutes, keyed by `objectKey(object)`, when the caller has the
+   * rows in hand. Omit to have the popover read them.
+   */
+  readonly current?: ReadonlyMap<string, number | null>;
+  /** Anchor element for the popover. Defaults to `document.activeElement`. */
+  readonly anchor?: HTMLElement | null;
+}
+
 /** Every picker the single app overlay can move to an invoking object. */
 export type PickerOverlayRequest =
   | LabelPickerRequest
   | InitiativeHierarchyPickerRequest
   | TaskHierarchyPickerRequest
-  | RelationTargetPickerRequest;
+  | RelationTargetPickerRequest
+  | EstimateTimePickerRequest;
 
 /** Stable fallback geometry and focus ownership captured when a moved picker opens. */
 export interface CapturedPickerAnchor {
@@ -182,36 +198,57 @@ export function PickerOverlayProvider({ children }: PickerOverlayProviderProps):
       <PickerOverlayContext.Provider value={api}>
         {children}
         {request ? (
-          request.kind === 'labels' ? (
-            <LabelPickerOverlay key={requestSequence} request={request} onClose={closeRequest} />
-          ) : request.kind === 'initiative-hierarchy' ? (
-            <InitiativeHierarchyPickerOverlay
-              key={requestSequence}
-              request={request}
-              operationOwnerId={`picker-${requestSequence}`}
-              onBusyChange={(busy) => {
-                if (activeSequenceRef.current !== requestSequence) return;
-                if (busy) busySequenceRef.current = requestSequence;
-                else if (busySequenceRef.current === requestSequence)
-                  busySequenceRef.current = null;
-              }}
-              onClose={closeRequest}
-            />
-          ) : request.kind === 'task-hierarchy' ? (
-            <TaskHierarchyPickerOverlay
-              key={requestSequence}
-              request={request}
-              onClose={closeRequest}
-            />
-          ) : (
-            <RelationTargetPickerOverlay
-              key={requestSequence}
-              request={request}
-              onClose={closeRequest}
-            />
-          )
+          <RequestOverlay
+            key={requestSequence}
+            request={request}
+            requestSequence={requestSequence}
+            onBusyChange={(busy) => {
+              if (activeSequenceRef.current !== requestSequence) return;
+              if (busy) busySequenceRef.current = requestSequence;
+              else if (busySequenceRef.current === requestSequence) busySequenceRef.current = null;
+            }}
+            onClose={closeRequest}
+          />
         ) : null}
       </PickerOverlayContext.Provider>
     </InitiativeHierarchyWriteCoordinatorProvider>
   );
+}
+
+/** Props for {@link RequestOverlay}. */
+interface RequestOverlayProps {
+  readonly request: PickerOverlayRequest;
+  /** The open request's sequence, which names the initiative write's owner. */
+  readonly requestSequence: number;
+  /** Hold the overlay open while an initiative write is in flight. */
+  readonly onBusyChange: (busy: boolean) => void;
+  readonly onClose: () => void;
+}
+
+/** The picker for one request. */
+function RequestOverlay({
+  request,
+  requestSequence,
+  onBusyChange,
+  onClose,
+}: RequestOverlayProps): JSX.Element {
+  switch (request.kind) {
+    case 'labels':
+      return <LabelPickerOverlay request={request} onClose={onClose} />;
+    case 'initiative-hierarchy':
+      return (
+        <InitiativeHierarchyPickerOverlay
+          request={request}
+          operationOwnerId={`picker-${String(requestSequence)}`}
+          onBusyChange={onBusyChange}
+          onClose={onClose}
+        />
+      );
+    case 'task-hierarchy':
+      return <TaskHierarchyPickerOverlay request={request} onClose={onClose} />;
+    case 'estimate-time':
+      return <EstimateTimePickerOverlay request={request} onClose={onClose} />;
+    case 'relation-target':
+      return <RelationTargetPickerOverlay request={request} onClose={onClose} />;
+  }
 }

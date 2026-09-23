@@ -209,6 +209,7 @@ export default function CycleDetailPage(): JSX.Element {
       statuses,
       resolveActor: (id) => resolveActor(id),
       canEdit: canEditCycle,
+      canEstimate: canEditCycle,
       onRename: renameCycleTask,
       onOpen: openTaskRecord,
     });

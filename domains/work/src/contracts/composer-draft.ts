@@ -132,6 +132,13 @@ export const TaskDraftPayload = z
       .nullable()
       .optional()
       .describe('The effort estimate in the workspace scale, or null for none.'),
+    estimateMinutes: z
+      .number()
+      .int()
+      .min(0)
+      .nullable()
+      .optional()
+      .describe('The time estimate in minutes, or null for none.'),
     repeat: ComposerRepeatDraft.optional().describe('Whether and how the task repeats.'),
   })
   .meta({ id: 'TaskDraftPayload', description: 'A saved task composer draft.' });

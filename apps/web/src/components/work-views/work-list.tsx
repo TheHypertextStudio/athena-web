@@ -46,6 +46,7 @@ import {
   hierarchyRowAria,
 } from './hierarchy-rails';
 import { withWorkListMoreColumn } from './work-list-more-column';
+import { useWorkListPropertyKey } from './work-list-property-keys';
 import type { WorkViewDefinitionFor } from './view-state';
 import type { WorkViewGroupPage, WorkViewGroupSummary, WorkViewRowFor } from './renderer-types';
 import {
@@ -328,6 +329,7 @@ export function WorkList<TTarget extends ViewTarget>({
   const tableSelection = useEntityTableSelection<ListMembership<TTarget>>((membership) =>
     workViewSelectionObject(membership.row, organizationId),
   );
+  const onRowPropertyKey = useWorkListPropertyKey<TTarget>(organizationId);
 
   return (
     <div className="relative flex h-full min-h-0 flex-1">
@@ -357,6 +359,7 @@ export function WorkList<TTarget extends ViewTarget>({
         onRowClick={(membership) => {
           onActivate(membership.row);
         }}
+        onRowPropertyKey={onRowPropertyKey}
         renderRowInteraction={({ row: membership, children }) => {
           const interaction =
             interactions.get(membership.key) ??

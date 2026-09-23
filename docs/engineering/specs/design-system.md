@@ -520,7 +520,7 @@ The default view everywhere (product §7: lists preferred, kanban de‑emphasize
 - Props: `items`, `groupBy`, `subGroupBy?`, `sortBy`, `columns` (visible properties), `density`, `selection`, plus callbacks (`onInlineEdit`, `onReorder`, `onOpen`). Grouping is data‑driven from any property; default for Tasks = **group by Project → sub‑group by Status** (product §8.3 / model `Task.project_id` + `Task.state`).
 - **`ListGroup` / `ListSubGroup`:** `GroupHeader` shows group label (vocabulary‑skinned), a `CountBadge`, optional health/aggregate (e.g. progress for a Project group), and a chevron. **Collapsible** (`Collapsible`); collapse state persisted per view. Sub‑groups indent 16px and use a lighter `GroupHeader`.
 - **`ListRow`:** fixed `--row-h` (density‑driven), single line. Cell order (Task default): `StatusIcon` · `PriorityIcon` · `IdTag` · title (truncating) · `LabelChip`s · `SessionPill` (if agent‑run) · spacer · `ActorAvatar` (assignee) · due `Timestamp` · `ProvenanceChip` (if linked). Hover reveals row actions (assign, move, delegate) at the right. Selected = `bg-surface-3` + left `org-accent` hairline. Agent‑run rows show `SessionStatusPill` that opens the `SessionView` (product §8.3).
-- **Inline edit (`ListRowInlineEditor`):** click a cell or press a property hotkey to edit in place — status (`S`), assignee (`A`), priority (`P`), due (`D`), labels (`L`), project (`Shift+P`). Edits are **optimistic** (`OptimisticBadge`), reconciled with the API; failures toast + revert.
+- **Inline edit (`ListRowInlineEditor`):** click a cell or press a property hotkey to edit in place — status (`S`), assignee (`A`), priority (`P`), due (`D`), labels (`L`), time estimate (`W`), project (`Shift+P`). Edits are **optimistic** (`OptimisticBadge`), reconciled with the API; failures toast + revert.
 - **Virtualization:** `@tanstack/react-virtual` over flattened (group‑header + row) list so thousands of tasks stay smooth; collapsed groups drop their rows from the virtual set.
 - **Reorder:** dnd‑kit for manual sort within a group (e.g. backlog ordering, daily plan); disabled when `sortBy` is a computed field.
 
@@ -600,6 +600,7 @@ A single `useGlobalHotkeys()` registry (scoped so List/editor contexts can claim
 | `J` / `K` or `↑` / `↓`                     | Move selection in List                                                              |
 | `X` / `Shift+↑↓`                           | Select / range‑select                                                               |
 | `S` `A` `P` `D` `L`                        | Edit status/assignee/priority/due/labels on selection                               |
+| `W`                                        | Set the time estimate on the active task row (Sunsama's planned-time key)           |
 | `O` / `Enter`                              | Open detail · `Space` peek                                                          |
 | `Esc`                                      | Close overlay / clear selection / exit inline edit                                  |
 | `?`                                        | Keyboard help                                                                       |

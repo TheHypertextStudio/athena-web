@@ -61,8 +61,8 @@ export const TaskTemplateDraft = z
       .array(LabelId)
       .optional()
       .describe('Labels applied on create. Ids that no longer exist in the org are dropped.'),
-    // No `estimate`: the task composer has no estimate control, so a template that set one would
-    // write a value nobody could see before saving and nobody chose.
+    // No `estimate` or `estimateMinutes`: a template does not pre-fill either estimate, so the
+    // composer's points and time-estimate chips start empty on every task made from one.
   })
   .meta({ id: 'TaskTemplateDraft', description: 'The draft a Task template pre-fills.' });
 /** Task template draft value. */

@@ -30,8 +30,6 @@
  *
  * @see {@link useComposerOptions} for the assignee / project / cycle / label option sources.
  */
-import { ActorId, TeamId } from '@docket/identity-access/ids';
-import { CycleId, LabelId, MilestoneId, ProjectId } from '@docket/work/ids';
 import { type TaskOut } from '@docket/work/task-model';
 import { type TeamOut } from '../../lib/contracts/team';
 import { type WorkflowState } from '@docket/work/workflow';
@@ -72,6 +70,8 @@ import {
   type TaskRepeatDraft,
 } from '@/components/recurrence/repeat-task-control';
 
+import { ComposerTimeEstimate } from './composer-time-estimate';
+import { taskCreateBody } from './task-create-body';
 import { TaskComposerPickers } from './task-form-pickers';
 import { useTaskDraftPersistence } from './use-task-draft-persistence';
 
@@ -95,6 +95,8 @@ export interface TaskDraft {
   labelIds: readonly string[];
   /** Coarse effort estimate in the workspace's scale, or null for none. */
   estimate: number | null;
+  /** The picked time estimate in minutes, or null for none (a `~` title token may still set one). */
+  estimateMinutes: number | null;
   /** Whether and how Docket should create future copies of this task. */
   repeat: TaskRepeatDraft;
 }
@@ -214,6 +216,7 @@ export const CreateTaskDialog = withComposerReset(function CreateTaskComposer({
     dueDate: null,
     labelIds: [],
     estimate: null,
+    estimateMinutes: null,
     repeat: { kind: 'none' },
   });
 
@@ -229,6 +232,8 @@ export const CreateTaskDialog = withComposerReset(function CreateTaskComposer({
   const [creating, setCreating] = useState(false);
   const [completionFailed, setCompletionFailed] = useState(false);
   const [completedTask, setCompletedTask] = useState<TaskOut | null>(null);
+  /** Properties stay put while the task is being created and once it exists. */
+  const propertiesLocked = creating || completedTask !== null;
   const [error, setError] = useState<string | null>(null);
   const continuation = useComposerContinuation({
     creating,
@@ -377,24 +382,7 @@ export const CreateTaskDialog = withComposerReset(function CreateTaskComposer({
       setError(null);
       let createdTask: TaskOut | null = null;
       try {
-        const trimmedBody = draft.description.trim();
-        const taskBody = {
-          title: trimmed,
-          teamId: TeamId.parse(teamId),
-          priority: draft.priority,
-          ...(trimmedBody.length > 0 ? { description: trimmedBody } : {}),
-          ...(draft.state ? { state: draft.state } : {}),
-          ...(draft.assigneeId ? { assigneeId: ActorId.parse(draft.assigneeId) } : {}),
-          ...(draft.projectId ? { projectId: ProjectId.parse(draft.projectId) } : {}),
-          ...(draft.milestoneId ? { milestoneId: MilestoneId.parse(draft.milestoneId) } : {}),
-          ...(draft.cycleId ? { cycleId: CycleId.parse(draft.cycleId) } : {}),
-          ...(draft.startDate ? { startDate: draft.startDate } : {}),
-          ...(draft.dueDate ? { dueDate: draft.dueDate } : {}),
-          ...(draft.labelIds.length > 0
-            ? { labels: draft.labelIds.map((id) => LabelId.parse(id)) }
-            : {}),
-          ...(draft.estimate !== null ? { estimate: draft.estimate } : {}),
-        };
+        const taskBody = taskCreateBody(draft, teamId);
         const res =
           draft.repeat.kind === 'none'
             ? await api.v1.orgs[':orgId'].tasks.$post({ param: { orgId }, json: taskBody })
@@ -474,7 +462,7 @@ export const CreateTaskDialog = withComposerReset(function CreateTaskComposer({
         globalCreation ? (
           <>
             <EntityMetadataItem priority={0} className="max-w-none">
-              <WorkspacePicker disabled={creating || completedTask !== null} />
+              <WorkspacePicker disabled={propertiesLocked} />
             </EntityMetadataItem>
             {teams.length > 1 ? (
               <EntityMetadataItem priority={1} className="flex max-w-none gap-2">
@@ -483,7 +471,7 @@ export const CreateTaskDialog = withComposerReset(function CreateTaskComposer({
                   teams={teams}
                   value={teamId}
                   onChange={changeTeam}
-                  disabled={creating || completedTask !== null}
+                  disabled={propertiesLocked}
                 />
               </EntityMetadataItem>
             ) : null}
@@ -558,7 +546,7 @@ export const CreateTaskDialog = withComposerReset(function CreateTaskComposer({
         labelOptions={options.labelOptions}
         estimationScale={estimationScale}
         estimate={draft.estimate}
-        creating={creating || completedTask !== null}
+        creating={propertiesLocked}
         onStateChange={(next) => {
           setField('state', next);
         }}
@@ -585,6 +573,17 @@ export const CreateTaskDialog = withComposerReset(function CreateTaskComposer({
         onEstimateChange={(next) => {
           setField('estimate', next);
         }}
+      />
+      <ComposerTimeEstimate
+        title={draft.title}
+        value={draft.estimateMinutes}
+        onChange={(next) => {
+          setField('estimateMinutes', next);
+        }}
+        onTitleChange={(next) => {
+          setField('title', next);
+        }}
+        disabled={propertiesLocked}
       />
       <EntityMetadataItem priority={7}>
         <RepeatTaskControl

@@ -88,6 +88,8 @@ export { default as ListChecks } from '@mui/icons-material/ChecklistRtl';
 export { default as ListView } from '@mui/icons-material/ViewList';
 export { default as History } from '@mui/icons-material/History';
 export { default as Home } from '@mui/icons-material/Home';
+/** An hourglass: how long a piece of work is expected to take, as a time estimate. */
+export { default as Hourglass } from '@mui/icons-material/HourglassEmptyOutlined';
 export { default as Inbox } from '@mui/icons-material/Inbox';
 export { default as Info } from '@mui/icons-material/InfoOutlined';
 export { default as Layers } from '@mui/icons-material/Layers';

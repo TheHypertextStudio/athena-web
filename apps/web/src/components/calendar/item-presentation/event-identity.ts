@@ -17,7 +17,7 @@ import { Calendar, Layers, type LucideIcon, Schedule, TaskAlt } from '@docket/ui
 
 import { formatScheduleInstantRange } from '@/components/scheduling';
 import { formatCalendarDate } from '@/lib/format-date';
-import { formatEstimate } from '@/lib/format-estimate';
+import { formatDuration } from '@/components/time-tracking/format-duration';
 import { formatClock } from '@/lib/format-time';
 
 const MILLISECONDS_PER_MINUTE = 60_000;
@@ -110,8 +110,9 @@ export function itemClockRangeLabel(item: CalendarItemOut, displayTimezone: stri
  */
 export function itemDurationLabel(item: CalendarItemOut): string | null {
   if (!item.startsAt || !item.endsAt) return null;
-  const minutes = (Date.parse(item.endsAt) - Date.parse(item.startsAt)) / MILLISECONDS_PER_MINUTE;
-  return formatEstimate(minutes);
+  const ms = Date.parse(item.endsAt) - Date.parse(item.startsAt);
+  // Under half a minute rounds to nothing to show; NaN (an unparseable bound) fails the test too.
+  return ms >= MILLISECONDS_PER_MINUTE / 2 ? formatDuration(ms) : null;
 }
 
 /** Human labels for {@link CalendarItemPermission.readOnlyReason}. */

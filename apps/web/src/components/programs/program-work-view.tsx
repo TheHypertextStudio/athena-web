@@ -212,6 +212,7 @@ export function ProgramWorkView({ orgId, programId }: ProgramWorkViewProps): JSX
             : { name: 'Someone', kind: 'human' as const };
         },
         canEdit,
+        canEstimate: canEdit,
         onRename: renameTask,
         onOpen: openTaskRecord,
       }),

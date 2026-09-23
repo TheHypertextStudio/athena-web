@@ -12,7 +12,7 @@
 import type { Column } from '@docket/ui/components';
 import type { ViewTarget } from '@docket/work/view-contract';
 
-import { ObjectMoreButton } from '@/components/context-menu';
+import { OBJECT_MORE_COLUMN_CLASSNAME, ObjectMoreButton } from '@/components/context-menu';
 
 import { workViewRowTitle } from './renderer-types';
 import type { ListMembership } from './work-list-groups';
@@ -35,6 +35,7 @@ export function withWorkListMoreColumn<TTarget extends ViewTarget>(
       header: '',
       width: '2rem',
       priority: 'always',
+      className: OBJECT_MORE_COLUMN_CLASSNAME,
       render: (membership) =>
         hasObject(membership) ? (
           <ObjectMoreButton title={workViewRowTitle(membership.row)} />

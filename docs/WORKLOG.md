@@ -78,7 +78,72 @@
   fails `infra.test.ts` until `pnpm build` has written `dist/rpc-contract.d.ts`, and that build
   needs a 4 GB heap.
 
-### [MILESTONES-MCP-001] Make milestones a first-class MCP and REST feature
+---
+
+### [TASK-TIME-ESTIMATE-001] Set a task's time estimate, Sunsama-style
+
+- **Status**: COMPLETED
+- **Started**: 2026-09-22
+- **Completed**: 2026-09-23
+- **Priority**: P1
+- **Description**: Tasks carry a time estimate (`estimateMinutes`) beside points, but nothing in the
+  app could set it; the Time column showed "—" for every task a person made, and the Tasks roster
+  printed raw minutes. Mirror Sunsama's planned-time UX and keep the estimate independent of
+  workspace configuration (never gated by the points scale).
+- **Subtasks**:
+  - [x] `parseEstimate` / `parseTitleEstimate`; `formatEstimate` shows `h:mm`
+  - [x] `EstimateTimePicker` (presets, typed entry, clear)
+  - [x] Picker overlay, "Time estimate…" action, `W` on task tables and the roster
+  - [x] Time-column button, task-detail masthead, create dialog with `~30m` titles
+  - [x] `h:mm` on the roster, Home, and the printable summary
+- **Decisions** (user-confirmed): one estimate per task (the existing `estimateMinutes` column), never
+  gated by the workspace's points scale; `h:mm` everywhere a task's time estimate shows, matching
+  the tracking pill. Sunsama's model: the row's Time column is the task clock (timer + planned
+  time), `W` sets planned time, `~30m` in a new title sets it, and the task masthead puts it beside
+  Track. Calendar item lengths keep the worded `1h 4m` (`formatMinutesSpan`); on Home the estimate
+  takes an hourglass glyph so `0:30` never reads as a clock time beside `10:30 AM` starts.
+- **Behavior**: presets 0:05–4:00; typed `45`, `45m`, `1h`, `1.5h`, `1h30`, `1:30` (1–5999
+  minutes); while the field has text the parsed time is the only row, so Enter commits it. List
+  saves go through `useSetTaskEstimate` and refresh task, cycle, program, project, and Home reads;
+  a rejected save reaches the person as the classified failure notice (403 offers its
+  destination). Lists do no client-side permission check, as with labels (`L`); `TaskOut` carries
+  no capabilities. The masthead picker is read-only without `contribute` and absent when unset.
+- **Files changed**: new `lib/parse-estimate.ts`, `lib/task-patch-body.ts`,
+  `lib/use-set-task-estimate.ts`, `pickers/estimate-time-picker.tsx`,
+  `pickers/estimate-time-picker-overlay.tsx`, `tasks/task-action-context.ts`,
+  `tasks/task-time-estimate-action.ts`, `tasks/task-create-body.ts`,
+  `tasks/composer-time-estimate.tsx`, `views/task-row-pickers.ts`,
+  `work-views/work-list-property-keys.ts`, `work-views/work-list-number-values.tsx`,
+  `today/plan-timing.tsx`; changed `lib/format-estimate.ts`, `lib/use-task-mutations.ts`,
+  `pickers/picker-overlay.tsx`, `tasks/task-actions.ts`, `tasks/create-task.tsx`,
+  `tasks/task-draft-codec.ts`, `views/task-table.tsx`, `views/task-time-cell.tsx`,
+  `work-views/work-list.tsx`, `work-views/work-list-columns.tsx`, `task-detail/task-actions.tsx`,
+  `task-detail/task-masthead-slots.tsx`, `today/hub-task-row.tsx`, `today/focus-card.tsx`,
+  `today/suggested-tasks.tsx`, `calendar/item-presentation/event-identity.ts`,
+  `packages/ui/src/icons/index.ts` (Hourglass), `domains/work/src/contracts/composer-draft.ts`
+  (`estimateMinutes` on saved task drafts), and the design-system and time-tracking specs.
+- **Complexity ledger**: `task-actions.ts`, `use-task-mutations.ts`, `create-task.tsx`, and
+  `work-list-columns.tsx` sat at their ceilings; the new code paid for itself by moving pure helpers
+  out (`task-action-context.ts`, `task-patch-body.ts`, `task-create-body.ts`,
+  `work-list-number-values.tsx`), so every ledgered value went down or held.
+- **Review fixes** (xhigh review, 15 findings): title tokens need a unit or colon (`~5 people`
+  stays text); a bare decimal is hours (`1.5` → 1:30); zero is a real estimate (`0:00`); clearing
+  the composer chip removes a `~` token; bulk saves refresh once after every write settles, and
+  only task, cycle, program/project work, and Home reads; cycle and program tables show the
+  estimate as text to viewers without `contribute`; a failed estimate read shows a banner;
+  `PropertyTrigger` takes a `controlSize`; calendar lengths reuse `formatDuration`.
+- **Row polish**: the estimate sits in a fixed end-aligned slot so timer glyphs line up; the ⋯
+  column is dropped for a mouse (`OBJECT_MORE_COLUMN_CLASSNAME`, right-click covers it) so rows no
+  longer end in ~40px of reserved blank. Touch keeps it.
+- **Validation**: root typecheck, lint with the complexity ledger (clean, 1445 entries), Prettier;
+  `test:coverage` passes for web (589 files, 4578 tests) and ui (64 files, 847 tests); `@docket/api`
+  fails the same 9 tests as the base commit (permissions, cycle-backfill, programs-detail,
+  route-auth). Captures at 1440 and 390 (seeded project, Tasks tab, task page) show aligned timer
+  glyphs, the even right inset, and `⌛ 1:30 · Track · ⋯` fitting the phone masthead.
+- **Blockers**: None.
+
+---
+
 ### [TASK-TIMER-EXPRESSIVE-001] The row timer shows state through shape
 
 - **Status**: COMPLETED
@@ -268,6 +333,46 @@ routes/project-rollup.ts}`, `domains/work/src/contracts/{milestone,task}.ts`,
 - **Learnings**: `MilestoneTasks` sits at its ledgered function ceiling, so even a one-line fix has
   to pay for itself. The e2e files already reference the rail test id, so renaming it needs those
   updated in the same change.
+- **Blockers**: None.
+
+---
+
+### [MILESTONES-MCP-001] Make milestones a first-class MCP and REST feature
+
+- **Status**: COMPLETED
+- **Started**: 2026-09-22
+- **Completed**: 2026-09-22
+- **Priority**: P1
+- **Description**: Agents could not create, edit, delete, or assign milestones over MCP, and REST
+  had no way to list a milestone's tasks and left stale milestone links when a task changed
+  project.
+- **Approach**: A dedicated `milestones` MCP tool (`list | create | update | delete`, addressed
+  through its project, the same as REST) built on write helpers shared with the REST routes
+  (`lib/milestone-writes.ts`). Milestone writes record change sets; a new `delete` change-set op
+  lets `undo` re-insert a deleted milestone under its id and restore its task links
+  (`mcp/milestone-undo.ts`). Task assignment goes through `update` `set.milestone`, `organize`
+  (a `milestone` kind under a project, tasks under a milestone, and a task-level `milestone`),
+  and a `list_work` `milestone` filter. Project reads carry milestone description, position, and
+  visible-task progress; task reads name their milestone.
+- **REST**: `GET /tasks?milestoneId=`, `progress` on every `MilestoneOut`, and `PATCH /tasks/:id`
+  clears a milestone from the old project when `projectId` changes. Project delete now removes
+  its milestones' search entries, and its reference text says the milestones are deleted.
+- **Decisions**: `capture` takes no project, so it stays without a milestone field; `organize` is
+  the placement tool. The MCP tool uses compact input schemas because every tool schema is sent to
+  a local model each turn, and the catalog stays inside the 64,000-character local-model budget.
+- **Files changed**: `apps/api/src/{lib/milestone-writes.ts, lib/organize/place*.ts,
+lib/plan-draft/commit.ts, mcp/milestone-tool.ts, mcp/milestone-undo.ts, mcp/task-milestone.ts,
+mcp/change-set*.ts, mcp/descriptors.ts, mcp/update-tool*.ts, mcp/list-work.ts,
+mcp/resource-work-hydrators.ts, mcp/organize-tool.ts, mcp/scope.ts, mcp/tools.ts,
+routes/milestones.ts, routes/tasks.ts, routes/task-helpers.ts, routes/projects.ts,
+routes/project-rollup.ts}`, `domains/work/src/contracts/{milestone,task}.ts`,
+  `packages/db` (enum + migration 0142), docs, and tests.
+- **Follow-up**: `POST /object-commands` (the web app's write path) still refuses to move a task
+  whose milestone belongs to the old project, while REST `PATCH` and MCP `update` clear the link.
+  Aligning it means changing that path's replay and undo handling, so it is left as its own task.
+- **Learnings**: Descriptions on shared filter schemas are paid three times in the local-model
+  tool budget (`list_work`, `update`, `archive`). The complexity ledger reads files from the git
+  index, so mid-rebase conflict stages count a file more than once until it is staged.
 - **Blockers**: None.
 
 ---

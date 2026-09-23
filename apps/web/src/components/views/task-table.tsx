@@ -30,8 +30,8 @@ import { renderSourcePeople } from '@/components/people/source-person-references
  * title render as one indented identity cell with hierarchy rails ({@link withTaskIdentity}).
  * Activating a row opens the task detail via a real Next.js `Link` (right-clickable /
  * new-tab-openable), with the roving-tabindex keyboard navigation the table owns. Pressing `L` on
- * the focused row opens the shared label picker (via {@link usePickerOverlay}) seeded with that
- * row's own labels, since a task row already has them in hand and needs no fetch to show them.
+ * the focused row opens the shared label picker and `W` the time-estimate picker
+ * ({@link useTaskRowPickers}), each seeded with the row's own value.
  */
 import { type EntityDisplayOut } from '@docket/work/entity-display-contract';
 import { type TaskOut } from '@docket/work/task-model';
@@ -47,14 +47,13 @@ import {
 import { type JSX, type ReactNode, useMemo } from 'react';
 import { cn } from '@docket/ui/lib/utils';
 
-import { ObjectMoreButton } from '@/components/context-menu';
+import { OBJECT_MORE_COLUMN_CLASSNAME, ObjectMoreButton } from '@/components/context-menu';
 import { EditableTitle } from '@/components/editor/editable-title';
 import {
   type WorkStatusDisplay,
   unknownStatus,
   WorkStatusIcon,
 } from '@/components/entity-display/work-status';
-import { usePickerOverlay } from '@/components/pickers/picker-overlay';
 import { useDraggable } from '@/components/dnd/use-draggable';
 import {
   SelectAllCheckbox,
@@ -65,7 +64,7 @@ import {
 } from '@/components/selection';
 import { useTaskHierarchyDrop } from '@/components/tasks/task-hierarchy-drop';
 import { useTimerRecord } from '@/components/time-tracking';
-import { objectKey, objectTargetProps, taskObjectRef } from '@/lib/actions';
+import { objectKey, objectTargetProps } from '@/lib/actions';
 import { formatCalendarDate } from '@/lib/format-date';
 import { api } from '@/lib/api';
 import { apiQueryOptions, queryKeys, useApiQuery, usePrefetchApi } from '@/lib/query';
@@ -77,6 +76,7 @@ import type { FieldCatalog } from './field-catalog';
 import { findField } from './field-catalog';
 import { PAGE_LIST_BLEED } from './page-layout';
 import { TASK_TABLE_INLINE_LINK_COLUMN_KEY, withTaskIdentity } from './task-identity-cell';
+import { taskRowObject, useTaskRowPickers } from './task-row-pickers';
 import { TaskTimeCell } from './task-time-cell';
 import { nestTaskList, type TaskPositions } from './task-table-hierarchy';
 
@@ -93,11 +93,6 @@ export interface TaskTableActor {
 /** A neutral fallback header label, used only if the catalog omits a field (it never should). */
 function headerFor<T>(catalog: FieldCatalog<T>, key: string, fallback: string): string {
   return findField(catalog, key)?.label ?? fallback;
-}
-
-/** A row's task as drag, selection, actions, and label editing see it. */
-function taskObject(task: TaskOut) {
-  return taskObjectRef(task, task.organizationId);
 }
 
 /** Props for {@link buildTaskColumns}. */
@@ -119,6 +114,11 @@ export interface TaskColumnsDeps {
   canEdit?: boolean | undefined;
   /** Persist a renamed task title. Enables inline rename when provided with `canEdit`. */
   onRename?: ((taskId: string, title: string) => void) | undefined;
+  /**
+   * Whether the viewer may set a task's time estimate from its row. `false` shows the estimate as
+   * text; omit where the list does not know, and the server decides.
+   */
+  canEstimate?: boolean | undefined;
   /** Open a task — used by the inline title so a single click still navigates. */
   onOpen?: ((task: TaskOut) => void) | undefined;
 }
@@ -170,6 +170,7 @@ export function buildTaskColumns({
   canEdit,
   onRename,
   onOpen,
+  canEstimate,
 }: TaskColumnsDeps): Column<TaskOut>[] {
   return [
     // Title — the one flexing, truncating column.
@@ -255,7 +256,7 @@ export function buildTaskColumns({
       align: 'end',
       width: '6rem',
       priority: 1,
-      render: (task) => <TaskTimeCell task={task} />,
+      render: (task) => <TaskTimeCell task={task} editable={canEstimate !== false} />,
     },
   ];
 }
@@ -347,7 +348,7 @@ export function TaskTable({
   // Subtasks sit directly under their parent, so selection order follows the rendered order.
   const nesting = useMemo(() => nestTaskList(tasks, groups), [tasks, groups]);
   const visibleTasks = taskTableRows(nesting.tasks, nesting.groups);
-  const objects = visibleTasks.map(taskObject);
+  const objects = visibleTasks.map(taskRowObject);
   const organizationId = objects[0]?.organizationId ?? null;
   const selectionSurfaceId = taskTableSurfaceId(organizationId, label);
   const displaysQ = useApiQuery(
@@ -442,7 +443,7 @@ function TaskRowInteraction({
   readonly highlightedIds: ReadonlySet<string> | undefined;
   readonly children: (binding: EntityTableRowInteraction) => ReactNode;
 }): JSX.Element {
-  const object = taskObject(row);
+  const object = taskRowObject(row);
   const selection = useSelection();
   const selected = selection.isSelected(objectKey(object));
   const drag = useDraggable({
@@ -498,7 +499,7 @@ const TASK_SELECTION_COLUMN: Column<TaskOut> = {
   width: '1rem',
   priority: 'always',
   className: 'pointer-coarse:hidden',
-  render: (task) => <SelectionCheckbox object={taskObject(task)} />,
+  render: (task) => <SelectionCheckbox object={taskRowObject(task)} />,
 };
 
 /** The trailing ⋯ that opens the row's action menu, the touch-screen route to right-click. */
@@ -507,6 +508,7 @@ const TASK_MORE_COLUMN: Column<TaskOut> = {
   header: '',
   width: '2rem',
   priority: 'always',
+  className: OBJECT_MORE_COLUMN_CLASSNAME,
   render: (task) => <ObjectMoreButton title={task.title} />,
 };
 
@@ -534,10 +536,10 @@ function SelectableTaskTable({
   proposedByTaskId,
   highlightedIds,
 }: SelectableTaskTableProps): JSX.Element {
-  const pickerOverlay = usePickerOverlay();
+  const rowPickers = useTaskRowPickers();
   const prefetch = usePrefetchApi();
   const visibleTasks = taskTableRows(tasks, groups);
-  const tableSelection = useEntityTableSelection<TaskOut>(taskObject);
+  const tableSelection = useEntityTableSelection<TaskOut>(taskRowObject);
   // Warm a task's detail on hover or focus, so opening it is instant.
   const onRowPrefetch = (task: TaskOut): void => {
     prefetch(taskDetailDef(task.organizationId, task.id));
@@ -554,17 +556,6 @@ function SelectableTaskTable({
     }),
     TASK_MORE_COLUMN,
   ];
-  const openLabels = (task: TaskOut, anchor: HTMLElement | null): void => {
-    const object = taskObject(task);
-    pickerOverlay.open({
-      kind: 'labels',
-      organizationId: task.organizationId,
-      objects: [object],
-      current: new Map([[objectKey(object), task.labels.map((label) => label.id)]]),
-      anchor,
-    });
-  };
-
   return (
     <EntityTable<TaskOut>
       aria-label={label}
@@ -594,11 +585,7 @@ function SelectableTaskTable({
             },
           }
         : {})}
-      onRowPropertyKey={(key, task, anchor) => {
-        if (key !== 'l') return false;
-        openLabels(task, anchor);
-        return true;
-      }}
+      onRowPropertyKey={rowPickers.onPropertyKey}
       {...(defaultCollapsed !== undefined ? { defaultCollapsed } : {})}
       {...(className !== undefined ? { className } : {})}
     />

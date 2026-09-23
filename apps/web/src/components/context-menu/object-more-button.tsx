@@ -11,13 +11,21 @@
  * `objectTargetProps`, which is how `openFor` finds the object.
  *
  * It is always visible on a touch screen. With a mouse it appears while the row is hovered or the
- * button has keyboard focus, since right-click already covers that pointer.
+ * button has keyboard focus, since right-click already covers that pointer. A list that gives it a
+ * column of its own drops that column for a mouse ({@link OBJECT_MORE_COLUMN_CLASSNAME}), so rows
+ * do not end in a reserved blank.
  */
 import { MoreHorizontal } from '@docket/ui/icons';
 import { Button } from '@docket/ui/primitives';
 import type { JSX } from 'react';
 
 import { useObjectContextMenu } from './object-context-menu';
+
+/**
+ * The class for a list's ⋯ column: shown for touch, where it is the way into the menu, and dropped
+ * for a mouse, which right-clicks the row instead of reaching past the row's last value.
+ */
+export const OBJECT_MORE_COLUMN_CLASSNAME = 'pointer-fine:hidden';
 
 /** Props for {@link ObjectMoreButton}. */
 export interface ObjectMoreButtonProps {

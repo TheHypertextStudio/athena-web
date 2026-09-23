@@ -18,7 +18,7 @@
  * lose them.
  */
 import type { HubTodayPlanItem } from '../../lib/contracts/hub';
-import { AlarmClock, ArrowRight, Check, Ellipsis } from '@docket/ui/icons';
+import { ArrowRight, Check, Ellipsis } from '@docket/ui/icons';
 import {
   Button,
   Card,
@@ -40,6 +40,8 @@ import { TimeboxForm } from '@/components/agenda/agenda-timebox-form';
 import { OrgChip } from '@/components/org-chip';
 import { TaskTimerButton } from '@/components/time-tracking/task-timer-button';
 
+import { planTiming, PlanTimingLabel } from './plan-timing';
+
 /** Props for {@link FocusCard}. */
 export interface FocusCardProps {
   /** The plan item being worked on now. */
@@ -57,17 +59,6 @@ export interface FocusCardProps {
   readonly displayTimezone: string;
 }
 
-function timing(item: HubTodayPlanItem, displayTimezone: string): string | null {
-  if (item.timeboxStartsAt) {
-    return new Date(item.timeboxStartsAt).toLocaleTimeString([], {
-      hour: 'numeric',
-      minute: '2-digit',
-      timeZone: displayTimezone,
-    });
-  }
-  return item.estimateMinutes ? `${String(item.estimateMinutes)} min` : null;
-}
-
 /** The single item you are on now: a filled surface carrying its own inline actions. */
 export function FocusCard({
   item,
@@ -79,7 +70,7 @@ export function FocusCard({
   date,
   displayTimezone,
 }: FocusCardProps): JSX.Element {
-  const time = timing(item, displayTimezone);
+  const time = planTiming(item, displayTimezone);
   return (
     // `p-5` at every width, not `p-4 @xl:p-5`: the list below is `EntityList`'s `p-2` plus each
     // row's `px-3`, which is 20px always. At the smaller step this card's content sat 4px inside
@@ -115,7 +106,7 @@ export function FocusCard({
                 {item.reason ? <span>{item.reason}</span> : null}
                 {time ? (
                   <span className="inline-flex items-center gap-1">
-                    <AlarmClock aria-hidden="true" className="size-3.5" /> {time}
+                    <PlanTimingLabel timing={time} />
                   </span>
                 ) : null}
               </Row>

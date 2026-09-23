@@ -6,9 +6,8 @@
  * their optimistic cache writes. Returns stable callbacks the page wires into its
  * interactive affordances.
  */
-import { ActorId } from '@docket/identity-access/ids';
 import { type CommentOut } from '@docket/work/comment-contract';
-import { LabelId, MilestoneId, ProgramId, ProjectId, TaskId } from '@docket/work/ids';
+import { TaskId } from '@docket/work/ids';
 import { type ObjectCommandResult } from './contracts/object-command';
 import { TaskSubjectRef } from '@docket/work/subject-ref-contract';
 import { TaskStatusKey } from '@docket/work/work-view-contract';
@@ -25,7 +24,8 @@ import { useStatusRegistry } from '@/components/statuses/status-registry';
 import { api } from './api';
 import { userErrorMessage, UserFacingError } from './problem';
 import { queryKeys, unwrap, useApiMutation } from './query';
-import { cycleAssignmentRequest, isCycleCadenceConflict } from './task-cycle-mutation';
+import { isCycleCadenceConflict } from './task-cycle-mutation';
+import { taskPatchBody } from './task-patch-body';
 import { withRef } from './task-refs';
 import { useParentReopenOffer } from './use-parent-reopen-offer';
 
@@ -52,6 +52,8 @@ export interface TaskPatch {
   cycleCadenceRevision?: number | undefined;
   /** New point estimate, or `null` to clear it. */
   estimate?: number | null | undefined;
+  /** New time estimate in whole minutes, or `null` to clear it. */
+  estimateMinutes?: number | null | undefined;
   /**
    * The anticipated start date as a bare `YYYY-MM-DD` calendar day, or `null` to clear it.
    *
@@ -317,36 +319,11 @@ export function useTaskMutations(
           'Could not update the task.',
         );
       }
-      const body = {
-        ...(patch.title !== undefined ? { title: patch.title } : {}),
-        ...(patch.description !== undefined ? { description: patch.description } : {}),
-        ...(patch.assigneeId !== undefined
-          ? { assigneeId: patch.assigneeId === null ? null : ActorId.parse(patch.assigneeId) }
-          : {}),
-        ...(patch.projectId !== undefined
-          ? { projectId: patch.projectId === null ? null : ProjectId.parse(patch.projectId) }
-          : {}),
-        ...(patch.programId !== undefined
-          ? { programId: patch.programId === null ? null : ProgramId.parse(patch.programId) }
-          : {}),
-        ...(patch.milestoneId !== undefined
-          ? {
-              milestoneId: patch.milestoneId === null ? null : MilestoneId.parse(patch.milestoneId),
-            }
-          : {}),
-        ...cycleAssignmentRequest(patch),
-        ...(patch.estimate !== undefined ? { estimate: patch.estimate } : {}),
-        ...(patch.startDate !== undefined ? { startDate: patch.startDate } : {}),
-        ...(patch.dueDate !== undefined ? { dueDate: patch.dueDate } : {}),
-        ...(patch.labels !== undefined
-          ? { labels: patch.labels.map((id) => LabelId.parse(id)) }
-          : {}),
-      };
       return unwrap(
         () =>
           api.v1.orgs[':orgId'].tasks[':id'].$patch({
             param: { orgId, id: taskId },
-            json: body,
+            json: taskPatchBody(patch),
           }),
         'Could not update the task.',
       );

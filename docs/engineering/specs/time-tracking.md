@@ -476,7 +476,13 @@ excluded from target-specific submissions until allocated.
 
 ### 8.2 Estimate comparisons
 
-Task `estimateMinutes` is a planning estimate. The Task detail can compare it with a selected time
+Task `estimateMinutes` is a planning estimate, set and shown the way Sunsama handles planned time:
+it reads `h:mm` everywhere, a list row's Time column pairs it with the timer and opens its picker
+(common durations or a typed time such as `45`, `1h 30m`, `1:30`), `W` opens the same picker on the
+active row, the task masthead shows it beside Track, and a `~45m` token in a new task's title sets
+it. It reads no workspace setting and is independent of point estimates.
+
+The Task detail can compare it with a selected time
 measure and report scope, for example “45m human effort, 20m agent effort, against a 60m estimate.”
 It must label agent inclusion and must not use the comparison to automatically change priority,
 state, estimation, or health.

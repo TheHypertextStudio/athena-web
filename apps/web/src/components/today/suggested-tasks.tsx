@@ -1,14 +1,32 @@
 'use client';
 
 import type { HubTodaySuggestion } from '../../lib/contracts/hub';
-import { ArrowRight, Play, Plus, X } from '@docket/ui/icons';
+import { ArrowRight, Hourglass, Play, Plus, X } from '@docket/ui/icons';
 import { Button, ControlGroup } from '@docket/ui/primitives';
 import Link from '@/components/docket-link';
 import { type JSX, useMemo, useState } from 'react';
 
+import { formatEstimate } from '@/lib/format-estimate';
+
 import { OrgChip } from '@/components/org-chip';
 
 import { TodaySection } from './today-section';
+
+/** Props for {@link SuggestionReason}. */
+interface SuggestionReasonProps {
+  readonly suggestion: HubTodaySuggestion;
+}
+
+/** Why the task is suggested, and its time estimate. */
+function SuggestionReason({ suggestion }: SuggestionReasonProps): JSX.Element {
+  return (
+    <p className="text-on-surface-variant text-body-small mt-1 flex flex-wrap items-center gap-1">
+      <span>{suggestion.reason} ·</span>
+      <Hourglass aria-hidden="true" className="size-3.5" />
+      <span className="tabular-nums">{formatEstimate(suggestion.estimateMinutes)}</span>
+    </p>
+  );
+}
 
 /** Props for {@link SuggestedTasks}. */
 export interface SuggestedTasksProps {
@@ -65,9 +83,7 @@ export default function SuggestedTasks({
                       name={orgName(suggestion.organizationId)}
                     />
                   </div>
-                  <p className="text-on-surface-variant text-body-small mt-1">
-                    {suggestion.reason} · {String(suggestion.estimateMinutes)} min
-                  </p>
+                  <SuggestionReason suggestion={suggestion} />
                 </div>
                 <ControlGroup controlSize="lg" wrap>
                   <Button

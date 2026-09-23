@@ -71,6 +71,7 @@ export function serializeTaskDraft(draft: TaskDraft): ComposerDraftPayload {
     dueDate: draft.dueDate,
     labelIds: brandIds(LabelId, draft.labelIds),
     estimate: draft.estimate,
+    estimateMinutes: draft.estimateMinutes,
     repeat: draft.repeat,
   };
 }
@@ -159,6 +160,7 @@ export function hydrateTaskDraft(
     dueDate: payload.dueDate ?? null,
     labelIds: allInRoster(payload.labelIds, rosters.labels),
     estimate: payload.estimate ?? null,
+    estimateMinutes: payload.estimateMinutes ?? null,
     repeat: repeatFromWire(payload.repeat),
     ...hydrateTeamFields(payload, rosters),
     ...hydrateProjectFields(payload, rosters),

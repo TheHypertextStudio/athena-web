@@ -102,6 +102,11 @@ vi.mock('../../src/components/dnd/use-relation-drop-target', () => ({
   },
 }));
 
+const openPicker = vi.hoisted(() => vi.fn());
+vi.mock('../../src/components/pickers/picker-overlay', () => ({
+  usePickerOverlay: () => ({ open: openPicker }),
+}));
+
 import { WorkList } from '../../src/components/work-views/work-list';
 import { SelectionProvider } from '../../src/components/selection';
 import type {
@@ -348,6 +353,9 @@ describe('WorkList', () => {
     fireEvent.keyDown(grid, { key: 'ArrowDown' });
     fireEvent.keyDown(grid, { key: 'Enter' });
     expect(onActivate).toHaveBeenCalledWith(task(0));
+    fireEvent.keyDown(grid, { key: 'w' });
+    const current = new Map([[`task:${task(0).id}`, null]]);
+    expect(openPicker).toHaveBeenCalledWith(expect.objectContaining({ current }));
     fireEvent.click(screen.getByRole('checkbox', { name: 'Select Task 0' }));
     expect(screen.getByRole('checkbox', { name: 'Select Task 0' })).toBeChecked();
   });

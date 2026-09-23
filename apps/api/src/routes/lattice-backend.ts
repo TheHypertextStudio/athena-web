@@ -149,10 +149,19 @@ export async function resolveOwnerBackend(
   if (!ownerUserId) return fallback();
 
   const connection = await loadLatticeConnection(ownerUserId);
-  // Not connected, switched off, or no device chosen are all ordinary "this person is on the
-  // default backend" states, not failures.
-  if (!connection || !connection.enabled || connection.status !== 'connected') return fallback();
-  if (!connection.deviceId) return fallback();
+  // Only an explicit switch-off can send a selected personal runtime back to the deployment
+  // backend. A failed or pending relink leaves that choice intact and fails visibly instead.
+  if (!connection?.enabled || !connection.deviceId) return fallback();
+
+  if (connection.status !== 'connected') {
+    throw new LatticeUnavailableError(
+      connection.lastFailureReason === 'insufficient_scopes'
+        ? 'insufficient_scopes'
+        : connection.status === 'error'
+          ? 'authorization_expired'
+          : 'not_connected',
+    );
+  }
 
   const gateway = turnGatewayContext(await latticeGatewayContext(connection));
   const deviceId = connection.deviceId;

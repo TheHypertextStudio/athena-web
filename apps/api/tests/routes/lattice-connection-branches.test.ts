@@ -581,7 +581,7 @@ describe('refreshing a grant that is about to expire', () => {
     });
   });
 
-  it('switches the connection off when the issuer refuses the refresh', async () => {
+  it('keeps the selected backend fail-closed when the issuer refuses the refresh', async () => {
     const owner = await seedOwner('Revoked');
     const connection = await seedConnection(owner, {
       deviceId: 'lat_studio',
@@ -595,10 +595,10 @@ describe('refreshing a grant that is about to expire', () => {
     const { body } = await callAs(owner)('/lattice/devices');
 
     expect(body).toMatchObject({ devices: [], unavailableReason: 'authorization_expired' });
-    // Terminal: every later turn would fail identically, so the connection stops claiming to work.
+    // Athena remains pointed at this device until the owner explicitly turns it off.
     expect(await readConnection(owner)).toMatchObject({
       status: 'error',
-      enabled: false,
+      enabled: true,
       lastFailureReason: 'authorization_expired',
     });
     expect(gateway.calls).toEqual([]);

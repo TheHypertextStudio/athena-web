@@ -292,9 +292,7 @@ describe('LatticeSection carries no supplemental status text', () => {
         deviceId: 'd1',
         deviceName: 'Mac Studio',
         deviceStatus: 'reachable' as const,
-        // A non-terminal reason: the backend can genuinely report this while still connected.
-        // ('authorization_expired' cannot — recording it always flips status to 'error'.)
-        unavailableReason: 'gateway_unreachable' as const,
+        unavailableReason: 'authorization_expired' as const,
       }),
     );
     // The devices read reflects the same ongoing outage — a successful devices read always clears
@@ -303,12 +301,13 @@ describe('LatticeSection carries no supplemental status text', () => {
     devicesGet
       .mockReset()
       .mockResolvedValue(
-        okResponse({ devices: [], unavailableReason: 'gateway_unreachable' as const }),
+        okResponse({ devices: [], unavailableReason: 'authorization_expired' as const }),
       );
     renderSection();
 
     // No narration anywhere — not a top banner, not a reason footer, not a status line.
     expect(await screen.findByText('Could not load your computers')).toBeInTheDocument();
+    expect(screen.getByText('Reconnect Lovelace to restore access.')).toBeInTheDocument();
     expect(screen.queryByText(/answers only from/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/standard models/i)).not.toBeInTheDocument();
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();

@@ -17454,3 +17454,34 @@ xhigh` passes (10 finder angles each, one-vote verification, a gap sweep) agains
 - **Learnings**: The release contract and the test encoded opposite outcomes for the same sentence.
   Live native-host acceptance exposed that mismatch before the browser flow could conceal it behind
   a generic denial screen.
+
+## [LATTICE-PRODUCTION-ROUND-TRIP-001] Restore the Docket to Mac Studio route — 2026-09-23
+
+- **Status**: IN PROGRESS
+- **State**: VALIDATING
+- **Priority**: P0
+- **Description**: Complete the web Settings account link, device selection, interactive Athena
+  turns, and durable task delegation through the owner's Mac Studio, then prove the production
+  round trip before general availability.
+- **Approach**: The production FedCM grant completed but device discovery returned
+  `authorization_expired`. The Lovelace gateway advertises its own resource URL while its JWT
+  verifier accepted only the platform audience. Repair that vendor contract in Lovelace. In
+  Docket, keep an enabled selected device fail-closed through grant errors, preserve approved
+  grants through failed reconnects, restore a recovered connection after a successful device
+  read, and show the account-specific repair message in Settings.
+- **Files changed**: `apps/api/src/routes/lattice-backend.ts`,
+  `apps/api/src/routes/lattice-connection.ts`, `apps/api/src/routes/lattice.ts`,
+  `apps/web/src/app/(app)/settings/athena/lattice-section.tsx`,
+  `apps/web/src/app/(app)/settings/athena/lattice-empty-devices.tsx`, focused tests and fixtures,
+  `docs/engineering/specs/lattice-byo-model.md`, and this worklog. The gateway fix is tracked in
+  the separate Lovelace repository.
+- **Validation**: The affected API and web typechecks and source lint pass. Focused tests pass:
+  198 API tests across OAuth, connection, backend, assignment, and delegation paths, and 25 web
+  Settings/FedCM tests. The full Docket typecheck, lint, complexity check, and coverage/test
+  suite pass. Lovelace's complete gateway suite passes (843 tests, one expected failure), and its
+  gateway source lint, typecheck, pre-commit checks, and staging deploy dry run pass. Production
+  device and inference acceptance remain open while Lovelace Cloud Run access and the Mac Studio
+  relay credential are restored.
+- **Blockers for launch**: The saved Mac Studio relay credential expired on September 2. Lovelace
+  hosted GitHub Actions runs fail before jobs start. The Cloud SDK operator session needs passkey
+  reauthentication to inspect the live gateway and Beacon settings and deploy the gateway fix.

@@ -8,7 +8,7 @@
  * field anywhere in this section.
  */
 import { CheckCircle2, CircleDashed, CloudOff, Computer, XCircle } from '@docket/ui/icons';
-import { ConfirmDestructiveDialog, EmptyState, InlineBanner } from '@docket/ui/components';
+import { ConfirmDestructiveDialog, InlineBanner } from '@docket/ui/components';
 import {
   Button,
   Chip,
@@ -42,12 +42,12 @@ import {
   LATTICE_DEPLOYMENT_COPY,
   LATTICE_DEVICE_STATUS_COPY,
   LATTICE_FEDCM_FALLBACK_COPY,
-  LATTICE_SETUP_URL,
   LATTICE_UNAVAILABLE_REASON_MESSAGE,
   type LatticeAuthorizationOutcome,
   type LatticeDeploymentReason,
   type LatticeUnavailableReason,
 } from './lattice-copy';
+import { LatticeEmptyDevices } from './lattice-empty-devices';
 import {
   requestLatticeFedCM,
   type LatticeAuthorizationStart,
@@ -564,33 +564,10 @@ export function LatticeSection(): JSX.Element {
             <Skeleton className="h-24 rounded-xl" />
           </div>
         ) : devices.length === 0 ? (
-          // EmptyState itself carries no live-region role (most of its 13+ other callers render
-          // on first paint, where one would just announce the initial page); this transition can
-          // happen live (a person's last device drops off mid-session), so it's added locally.
-          <div role="status">
-            {devicesQ.isError || devicesQ.data.unavailableReason ? (
-              <EmptyState
-                icon={Computer}
-                title="Could not load your computers"
-                body="Try again in a moment, or reconnect Lovelace if this keeps happening."
-                frame="none"
-              />
-            ) : (
-              <EmptyState
-                icon={Computer}
-                title="No computers paired"
-                body="Install Lattice on a computer to pair it here."
-                frame="none"
-                action={
-                  <Button asChild variant="secondary">
-                    <a href={LATTICE_SETUP_URL} target="_blank" rel="noopener noreferrer">
-                      Set up Lattice
-                    </a>
-                  </Button>
-                }
-              />
-            )}
-          </div>
+          <LatticeEmptyDevices
+            isError={devicesQ.isError}
+            reason={devicesQ.data?.unavailableReason ?? null}
+          />
         ) : (
           <ul className="flex flex-col" aria-live="polite" aria-atomic="false">
             {devices.map((device) => (

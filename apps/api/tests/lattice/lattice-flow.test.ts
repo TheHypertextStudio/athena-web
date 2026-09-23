@@ -480,6 +480,31 @@ describe('the bring-your-own-Lattice flow', () => {
     recorder.deviceOnline = true;
   });
 
+  it('never falls back to a cloud model when the selected device grant is revoked', async () => {
+    const { recordLatticeFailure } = await import('../../src/routes/lattice-connection');
+    await recordLatticeFailure(USER_ID, 'authorization_expired');
+    try {
+      await expect(resolveOwnerBackend(USER_ID)).rejects.toMatchObject({
+        reason: 'authorization_expired',
+      });
+      const status = (await (await call('/v1/me/athena/lattice')).json()) as Record<
+        string,
+        unknown
+      >;
+      expect(status).toMatchObject({
+        connected: true,
+        enabled: true,
+        deviceId: 'lat_studio',
+        unavailableReason: 'authorization_expired',
+      });
+    } finally {
+      await db
+        .update(schema.latticeConnection)
+        .set({ status: 'connected', enabled: true, lastFailureReason: null, lastFailureAt: null })
+        .where(eq(schema.latticeConnection.ownerUserId, USER_ID));
+    }
+  });
+
   it('returns to the deployment fallback when switched off, keeping the grant', async () => {
     await call('/v1/me/athena/lattice', {
       method: 'PATCH',

@@ -121,8 +121,14 @@ It is enforced at four layers, deliberately redundantly:
 3. **`LatticeAgentTurnRuntime.streamTurn`** does not catch. A port failure propagates with its
    reason intact. Its deliberate public entry point is
    `@docket/athena/turn/adapters/lattice`.
-4. **`resolveOwnerBackend`** throws rather than degrading when a stored grant cannot produce a
-   usable token.
+4. **`resolveOwnerBackend`** keeps an enabled, selected device in charge even after the grant is
+   rejected. It throws rather than degrading when the connection is in an error state or cannot
+   produce a usable token. Only the owner's explicit Turn off or Disconnect returns Athena to the
+   deployment backend.
+
+An expired or narrowed grant remains visible in Settings with its selected device and a
+reason-specific reconnect action. A failed reconnect keeps the existing sealed grant and device
+choice. A successful device read restores the connection to its usable state.
 
 Tests count Docket generation rows and remote submissions. An offline selected runtime keeps the
 delegation queued and produces zero Docket generation rows.

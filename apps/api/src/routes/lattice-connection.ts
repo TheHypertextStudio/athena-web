@@ -106,10 +106,9 @@ export async function loadLatticeConnection(
  * Record a failure against a connection using a stable code.
  *
  * @remarks
- * `authorization_expired` and `insufficient_scopes` also flip `status` to `error` and switch the
- * connection off, because both mean every subsequent turn would fail the same way. A merely
- * sleeping laptop (`device_offline`) is recorded but left enabled — the person will wake it, and
- * silently disconnecting them for closing a lid would be worse than useless.
+ * `authorization_expired` and `insufficient_scopes` also flip `status` to `error`, so the person
+ * knows to reconnect. They do not switch Athena back to a cloud model: only the owner can turn
+ * off an enabled personal runtime. A sleeping laptop is recorded but left connected.
  *
  * @param ownerUserId - The connection's owner.
  * @param reason - The stable reason code.
@@ -124,7 +123,7 @@ export async function recordLatticeFailure(
     .set({
       lastFailureReason: reason,
       lastFailureAt: new Date(),
-      ...(terminal ? { status: 'error' as const, enabled: false } : {}),
+      ...(terminal ? { status: 'error' as const } : {}),
     })
     .where(eq(latticeConnection.ownerUserId, ownerUserId));
 }

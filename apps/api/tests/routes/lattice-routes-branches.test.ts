@@ -39,7 +39,7 @@ vi.mock('@docket/integrations', async (importOriginal) => ({
 
 import type * as DbModule from '@docket/db';
 import type * as IntegrationsModule from '@docket/integrations';
-import { LATTICE_SCOPES, LatticeUnavailableError, type LatticeDevice } from '@docket/integrations';
+import { LATTICE_SCOPES, LatticeUnavailableError } from '@docket/integrations';
 
 import { env } from '../../src/env';
 import type latticeRouter from '../../src/routes/lattice';
@@ -48,6 +48,7 @@ import type {
   storeLatticeCredential as StoreLatticeCredential,
 } from '../../src/routes/lattice-connection';
 import { appWithSession, fakeSession, getDb, one } from '../support/routes-harness';
+import { latticeDevice as device } from '../support/lattice-device';
 import { assertDefined } from '@docket/test-utils';
 
 const JSON_HEADERS = { 'content-type': 'application/json' };
@@ -70,19 +71,6 @@ afterEach(() => {
   listLatticeDevices.mockReset();
   vi.restoreAllMocks();
 });
-
-/** A device as the gateway reports it. */
-function device(overrides: Partial<LatticeDevice> = {}): LatticeDevice {
-  return {
-    id: 'lat_studio',
-    name: 'Studio Mac',
-    status: 'reachable',
-    ready: true,
-    lastSeenAt: '2026-08-29T12:00:00.000Z',
-    executionBackend: 'local-model',
-    ...overrides,
-  };
-}
 
 /** Seed a Better Auth user to own a connection. */
 async function seedUser(label: string): Promise<string> {
@@ -371,41 +359,44 @@ describe('starting and completing a Lattice authorization attempt', () => {
     expect(form.get('code_verifier')).toBeTruthy();
   });
 
-  it('does not let a failed replacement attempt damage the active connection', async () => {
-    const owner = await seedUser('lattice-relink-fails');
-    const connectionId = await seedConnection(owner, {
-      deviceId: 'lat_studio',
-      deviceName: 'Studio Mac',
-      enabled: true,
-    });
-    const started = await call(owner, '/lattice/authorize', { method: 'POST' });
-    const { attemptId } = (await started.json()) as { attemptId: string };
-    vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('issuer unavailable'));
+  it.each(['connected', 'error'] as const)(
+    'does not let a failed replacement attempt damage the %s connection',
+    async (status) => {
+      const owner = await seedUser(`lattice-relink-fails-${status}`);
+      const connectionId = await seedConnection(owner, {
+        status,
+        deviceId: 'lat_studio',
+        enabled: true,
+        lastFailureReason: status === 'error' ? 'authorization_expired' : null,
+      });
+      const started = await call(owner, '/lattice/authorize', { method: 'POST' });
+      const { attemptId } = (await started.json()) as { attemptId: string };
+      vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('issuer unavailable'));
 
-    const response = await call(owner, '/lattice/authorize/code', {
-      method: 'POST',
-      body: { attemptId, authorizationCode: 'code_unexchangeable' },
-    });
+      const response = await call(owner, '/lattice/authorize/code', {
+        method: 'POST',
+        body: { attemptId, authorizationCode: 'code_unexchangeable' },
+      });
 
-    expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({ status: 'error' });
-    expect(await readConnection(owner)).toMatchObject({
-      id: connectionId,
-      status: 'connected',
-      enabled: true,
-      deviceId: 'lat_studio',
-      lastFailureReason: null,
-    });
-    expect(await loadStoredLatticeCredential(connectionId, owner)).toMatchObject({
-      kind: 'lattice_oauth',
-      accessToken: 'at_test',
-    });
-    const [attempt] = await db
-      .select()
-      .from(schema.latticeAuthorizationAttempt)
-      .where(eq(schema.latticeAuthorizationAttempt.id, attemptId));
-    expect(attempt).toMatchObject({ status: 'failed', failureReason: 'gateway_error' });
-  });
+      expect(await response.json()).toEqual({ status: 'error' });
+      expect(await readConnection(owner)).toMatchObject({
+        id: connectionId,
+        status,
+        enabled: true,
+        deviceId: 'lat_studio',
+        lastFailureReason: status === 'error' ? 'authorization_expired' : null,
+      });
+      expect(await loadStoredLatticeCredential(connectionId, owner)).toMatchObject({
+        kind: 'lattice_oauth',
+        accessToken: 'at_test',
+      });
+      const [attempt] = await db
+        .select()
+        .from(schema.latticeAuthorizationAttempt)
+        .where(eq(schema.latticeAuthorizationAttempt.id, attemptId));
+      expect(attempt).toMatchObject({ status: 'failed', failureReason: 'gateway_error' });
+    },
+  );
 
   it('refuses to complete another owner’s attempt before calling Lovelace', async () => {
     const owner = await seedUser('lattice-attempt-owner');
@@ -540,9 +531,11 @@ describe('listing the devices on a Lattice account', () => {
   it('refreshes the chosen device’s live status from the account', async () => {
     const owner = await seedUser('lattice-refresh-status');
     await seedConnection(owner, {
+      status: 'error',
       deviceId: 'lat_studio',
       deviceName: 'Studio Mac',
-      deviceStatus: 'reachable',
+      enabled: true,
+      lastFailureReason: 'authorization_expired',
     });
     listLatticeDevices.mockResolvedValue([
       device({ status: 'offline', ready: false }),
@@ -556,7 +549,12 @@ describe('listing the devices on a Lattice account', () => {
       expect.objectContaining({ id: 'lat_studio', status: 'offline', selected: true }),
       expect.objectContaining({ id: 'lat_laptop', status: 'reachable', selected: false }),
     ]);
-    expect(await readConnection(owner)).toMatchObject({ deviceStatus: 'offline' });
+    expect(await readConnection(owner)).toMatchObject({
+      status: 'connected',
+      enabled: true,
+      deviceStatus: 'offline',
+      lastFailureReason: null,
+    });
   });
 
   it('answers an unreadable gateway with an actionable reason and records it', async () => {
@@ -578,7 +576,7 @@ describe('listing the devices on a Lattice account', () => {
     expect(row?.lastFailureAt).toBeInstanceOf(Date);
   });
 
-  it('switches a narrowed grant off instead of leaving it apparently working', async () => {
+  it('keeps a selected device fail-closed when its grant lacks required scopes', async () => {
     const owner = await seedUser('lattice-narrow-grant');
     await seedConnection(owner, {
       deviceId: 'lat_studio',
@@ -594,7 +592,7 @@ describe('listing the devices on a Lattice account', () => {
     });
     expect(await readConnection(owner)).toMatchObject({
       status: 'error',
-      enabled: false,
+      enabled: true,
       lastFailureReason: 'insufficient_scopes',
     });
   });

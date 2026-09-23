@@ -195,6 +195,13 @@ function toUnavailableReason(value: string | null): LatticeUnavailableReason | n
  * @param row - The owner's connection, or null when they have never connected.
  * @returns The status payload.
  */
+function hasApprovedLatticeGrant(row: LatticeConnectionRow | null): boolean {
+  return (
+    row?.status === 'connected' ||
+    (row?.status === 'error' && (row.lastVerifiedAt !== null || row.grantedScope !== null))
+  );
+}
+
 export function toLatticeStatus(
   row: LatticeConnectionRow | null,
 ): z.input<typeof LatticeStatusOut> {
@@ -202,7 +209,9 @@ export function toLatticeStatus(
   return {
     available: configured,
     deploymentReason: configured ? null : 'not_configured',
-    connected: row?.status === 'connected',
+    // An approved grant remains stored after a gateway or refresh refusal. Settings must keep
+    // showing its device and the reconnect action until the owner explicitly disconnects it.
+    connected: hasApprovedLatticeGrant(row),
     enabled: row?.enabled ?? false,
     deviceId: row?.deviceId ?? null,
     deviceName: row?.deviceName ?? null,
@@ -285,7 +294,9 @@ const lattice = new Hono<AppEnv>()
         )[0];
       if (!row) throw new ConflictError('Could not start a Lattice authorization');
 
-      if (row.status !== 'connected') {
+      // An error row can still hold an approved grant and a selected device. A replacement
+      // attempt must leave that active state intact if Lovelace declines or the exchange fails.
+      if (row.status !== 'connected' && row.lastVerifiedAt === null && row.grantedScope === null) {
         await db
           .update(latticeConnection)
           .set({ status: 'pending', lastFailureReason: null, lastFailureAt: null })
@@ -340,6 +351,7 @@ const lattice = new Hono<AppEnv>()
         await db
           .update(latticeConnection)
           .set({
+            status: 'connected',
             lastVerifiedAt: new Date(),
             lastFailureReason: null,
             lastFailureAt: null,

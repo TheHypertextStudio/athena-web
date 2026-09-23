@@ -60,6 +60,7 @@ describe('requestLatticeFedCM', () => {
       }),
     ).resolves.toEqual({ kind: 'code', authorizationCode: 'code_from_lovelace' });
     expect(get).toHaveBeenCalledWith({
+      signal: expect.any(AbortSignal),
       identity: {
         mode: 'active',
         providers: [
@@ -118,5 +119,27 @@ describe('requestLatticeFedCM', () => {
       kind: 'fallback',
       authorizationUrl: STARTED.authorizationUrl,
     });
+  });
+
+  it('closes a stalled native ceremony and offers the redirect', async () => {
+    vi.useFakeTimers();
+    try {
+      const get = vi.fn().mockImplementation(() => new Promise(() => undefined));
+      const result = requestLatticeFedCM(STARTED, {
+        IdentityCredential: {},
+        activeFedCMModeSupported: true,
+        navigator: { credentials: { get } },
+      });
+
+      await vi.advanceTimersByTimeAsync(45_000);
+
+      await expect(result).resolves.toEqual({
+        kind: 'fallback',
+        authorizationUrl: STARTED.authorizationUrl,
+      });
+      expect(get.mock.calls[0]?.[0].signal.aborted).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

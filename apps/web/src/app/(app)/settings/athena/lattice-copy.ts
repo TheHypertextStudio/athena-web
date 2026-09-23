@@ -81,12 +81,11 @@ export const LATTICE_UNAVAILABLE_REASON_MESSAGE: Readonly<
 export const LATTICE_SETUP_URL = 'https://developers.uselovelace.com/lattice';
 
 /**
- * Copy shown only after a supported browser's native FedCM ceremony did not finish.
+ * Copy offered while a supported browser's native FedCM ceremony is pending or did not finish.
  *
  * @remarks
- * This state is reached by a dismissed dialog and by a dialog that failed on its own, and the
- * person cannot tell those apart. So the copy names the way forward and says what the next click
- * does, rather than narrating a cause it cannot know.
+ * A native dialog can be hidden, dismissed, or fail on its own, and the person cannot tell those
+ * apart. The copy names the way forward and says what the next click does.
  */
 export const LATTICE_FEDCM_FALLBACK_COPY = {
   title: 'Finish connecting on Lovelace',

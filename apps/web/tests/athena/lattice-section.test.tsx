@@ -110,6 +110,21 @@ const UNCONNECTED = {
   grantedScope: null,
   unavailableReason: null,
 };
+const REACHABLE_DEVICE = {
+  id: 'd1',
+  name: 'Mac Studio',
+  status: 'reachable' as const,
+  ready: true,
+  lastSeenAt: null,
+  executionBackend: 'lattice',
+  selected: false,
+};
+const OFFLINE_DEVICE = {
+  ...REACHABLE_DEVICE,
+  status: 'offline' as const,
+  ready: false,
+  selected: true,
+};
 
 let assignMock = vi.fn();
 
@@ -215,6 +230,20 @@ describe('LatticeSection FedCM-first authorization', () => {
     const connect = await preparedConnectButton();
     expect(fallback.className).not.toEqual(connect.className);
 
+    fireEvent.click(fallback);
+    expect(assignMock).toHaveBeenCalledWith(AUTHORIZATION_URL);
+  });
+
+  it('offers the Lovelace redirect while a native dialog is still pending', async () => {
+    requestLatticeFedCM.mockImplementation(() => new Promise(() => undefined));
+    renderSection();
+
+    fireEvent.click(await preparedConnectButton());
+
+    const fallback = await screen.findByRole('button', {
+      name: LATTICE_FEDCM_FALLBACK_COPY.action,
+    });
+    expect(assignMock).not.toHaveBeenCalled();
     fireEvent.click(fallback);
     expect(assignMock).toHaveBeenCalledWith(AUTHORIZATION_URL);
   });
@@ -329,17 +358,7 @@ describe('LatticeSection carries no supplemental status text', () => {
     );
     devicesGet.mockReset().mockResolvedValue(
       okResponse({
-        devices: [
-          {
-            id: 'd1',
-            name: 'Mac Studio',
-            status: 'reachable' as const,
-            ready: true,
-            lastSeenAt: null,
-            executionBackend: 'lattice',
-            selected: false,
-          },
-        ],
+        devices: [REACHABLE_DEVICE],
         unavailableReason: null,
       }),
     );
@@ -366,17 +385,7 @@ describe('LatticeSection carries no supplemental status text', () => {
     );
     devicesGet.mockReset().mockResolvedValue(
       okResponse({
-        devices: [
-          {
-            id: 'd1',
-            name: 'Mac Studio',
-            status: 'offline' as const,
-            ready: false,
-            lastSeenAt: null,
-            executionBackend: 'lattice',
-            selected: true,
-          },
-        ],
+        devices: [OFFLINE_DEVICE],
         unavailableReason: null,
       }),
     );
@@ -474,17 +483,7 @@ describe('LatticeSection ceremony feedback', () => {
     connectionGet.mockReset().mockResolvedValue(okResponse({ ...UNCONNECTED, connected: true }));
     devicesGet.mockReset().mockResolvedValue(
       okResponse({
-        devices: [
-          {
-            id: 'd1',
-            name: 'Mac Studio',
-            status: 'reachable' as const,
-            ready: true,
-            lastSeenAt: null,
-            executionBackend: 'lattice',
-            selected: false,
-          },
-        ],
+        devices: [REACHABLE_DEVICE],
         unavailableReason: null,
       }),
     );
@@ -516,17 +515,7 @@ describe('LatticeSection ceremony feedback', () => {
     );
     devicesGet.mockReset().mockResolvedValue(
       okResponse({
-        devices: [
-          {
-            id: 'd1',
-            name: 'Mac Studio',
-            status: 'offline' as const,
-            ready: false,
-            lastSeenAt: null,
-            executionBackend: 'lattice',
-            selected: true,
-          },
-        ],
+        devices: [OFFLINE_DEVICE],
         unavailableReason: null,
       }),
     );
@@ -560,17 +549,7 @@ describe('LatticeSection ceremony feedback', () => {
     connectionGet.mockReset().mockResolvedValue(okResponse({ ...UNCONNECTED, connected: true }));
     devicesGet.mockReset().mockResolvedValue(
       okResponse({
-        devices: [
-          {
-            id: 'd1',
-            name: 'Mac Studio',
-            status: 'reachable' as const,
-            ready: true,
-            lastSeenAt: null,
-            executionBackend: 'lattice',
-            selected: false,
-          },
-        ],
+        devices: [REACHABLE_DEVICE],
         unavailableReason: null,
       }),
     );

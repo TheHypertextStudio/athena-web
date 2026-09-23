@@ -17468,20 +17468,28 @@ xhigh` passes (10 finder angles each, one-vote verification, a gap sweep) agains
   verifier accepted only the platform audience. Repair that vendor contract in Lovelace. In
   Docket, keep an enabled selected device fail-closed through grant errors, preserve approved
   grants through failed reconnects, restore a recovered connection after a successful device
-  read, and show the account-specific repair message in Settings.
+  read, and show the account-specific repair message in Settings. Production also showed a FedCM
+  ceremony stuck on “Opening Lovelace”; keep the redirect action visible during the ceremony and
+  abort a stalled browser request after 45 seconds.
 - **Files changed**: `apps/api/src/routes/lattice-backend.ts`,
   `apps/api/src/routes/lattice-connection.ts`, `apps/api/src/routes/lattice.ts`,
   `apps/web/src/app/(app)/settings/athena/lattice-section.tsx`,
+  `apps/web/src/app/(app)/settings/athena/lattice-fedcm.ts`,
+  `apps/web/src/app/(app)/settings/athena/lattice-copy.ts`,
   `apps/web/src/app/(app)/settings/athena/lattice-empty-devices.tsx`, focused tests and fixtures,
   `docs/engineering/specs/lattice-byo-model.md`, and this worklog. The gateway fix is tracked in
   the separate Lovelace repository.
 - **Validation**: The affected API and web typechecks and source lint pass. Focused tests pass:
-  198 API tests across OAuth, connection, backend, assignment, and delegation paths, and 25 web
+  198 API tests across OAuth, connection, backend, assignment, and delegation paths, and 27 web
   Settings/FedCM tests. The full Docket typecheck, lint, complexity check, and coverage/test
   suite pass. Lovelace's complete gateway suite passes (843 tests, one expected failure), and its
-  gateway source lint, typecheck, pre-commit checks, and staging deploy dry run pass. Production
-  device and inference acceptance remain open while Lovelace Cloud Run access and the Mac Studio
-  relay credential are restored.
-- **Blockers for launch**: The saved Mac Studio relay credential expired on September 2. Lovelace
-  hosted GitHub Actions runs fail before jobs start. The Cloud SDK operator session needs passkey
-  reauthentication to inspect the live gateway and Beacon settings and deploy the gateway fix.
+  gateway source lint, typecheck, pre-commit checks, and staging deploy dry run pass. Lovelace's
+  resource-audience fix is now on `main` and serving the production gateway, with staging and
+  production health verified. The live Cloud Run configuration confirms Beacon uses PostgreSQL for
+  relay storage. Production device and inference acceptance remain open while the Mac Studio
+  runtime is re-paired.
+- **Blockers for launch**: The saved Mac Studio relay credential expired on September 2 and the
+  Lovelace web account is waiting for a browser passkey ceremony. Lovelace hosted GitHub Actions
+  runs fail before jobs start; its gateway was released directly through Cloud Build and Cloud Run.
+  The local Docket release browser test stalled at Docker startup because Docker Desktop did not
+  answer `docker run` or `docker info`.

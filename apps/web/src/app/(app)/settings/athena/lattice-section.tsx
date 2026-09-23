@@ -263,7 +263,10 @@ function useLatticeAuthorization(
     },
     startAuthorization: () => {
       if (!started) return;
-      setFallbackUrl(null);
+      // Keep a usable redirect visible while the browser owns a FedCM dialog. Some browsers leave
+      // that promise pending without showing a prompt, so waiting for rejection would strand the
+      // person on "Connecting…" with no way forward.
+      setFallbackUrl(started.authorizationUrl);
       // Active-mode FedCM requires transient user activation. Calling the browser boundary here,
       // before React Query or another network round trip, keeps it on the original click stack.
       const result = requestLatticeFedCM(started);

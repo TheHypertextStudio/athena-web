@@ -22,6 +22,7 @@ export interface LatticeAuthorizationStart {
 
 /** Minimal request shape missing from some TypeScript DOM library versions. */
 interface ActiveFedCMRequest {
+  readonly signal: AbortSignal;
   readonly identity: {
     readonly mode: 'active';
     readonly providers: readonly {
@@ -54,6 +55,9 @@ export type LatticeFedCMResult =
   | { readonly kind: 'redirect'; readonly authorizationUrl: string }
   | { readonly kind: 'code'; readonly authorizationCode: string }
   | { readonly kind: 'fallback'; readonly authorizationUrl: string };
+
+/** Stop waiting for a browser ceremony that never resolves, leaving time for the OAuth redirect. */
+const FEDCM_CEREMONY_TIMEOUT_MS = 45_000;
 
 /** Read a non-empty OAuth code from an opaque browser credential. */
 function authorizationCode(credential: unknown): string | null {
@@ -115,24 +119,37 @@ export async function requestLatticeFedCM(
     return { kind: 'redirect', authorizationUrl: started.authorizationUrl };
   }
 
+  const controller = new AbortController();
+  let timeout: ReturnType<typeof setTimeout> | undefined;
   try {
-    const credential = await credentials.get({
-      identity: {
-        mode: 'active',
-        providers: [
-          {
-            configURL: started.fedcm.configUrl,
-            clientId: started.fedcm.clientId,
-            params: started.fedcm.params,
-          },
-        ],
-      },
-    });
+    const credential = await Promise.race([
+      credentials.get({
+        signal: controller.signal,
+        identity: {
+          mode: 'active',
+          providers: [
+            {
+              configURL: started.fedcm.configUrl,
+              clientId: started.fedcm.clientId,
+              params: started.fedcm.params,
+            },
+          ],
+        },
+      }),
+      new Promise<null>((resolve) => {
+        timeout = setTimeout(() => {
+          controller.abort();
+          resolve(null);
+        }, FEDCM_CEREMONY_TIMEOUT_MS);
+      }),
+    ]);
     const code = authorizationCode(credential);
     return code
       ? { kind: 'code', authorizationCode: code }
       : { kind: 'fallback', authorizationUrl: started.authorizationUrl };
   } catch {
     return { kind: 'fallback', authorizationUrl: started.authorizationUrl };
+  } finally {
+    clearTimeout(timeout);
   }
 }

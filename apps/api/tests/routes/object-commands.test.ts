@@ -1374,69 +1374,6 @@ describe('object commands', () => {
     expect(undated?.startDate).toBeNull();
   });
 
-  it('validates milestones against each Task Project and rejects an invalid Project move', async () => {
-    const seeded = await seedCommandOrg();
-    const firstProject = await seedProject(db, schema, seeded.statusId, {
-      organizationId: seeded.orgId,
-      teamId: seeded.teamId,
-      createdBy: seeded.humanActorId,
-      name: 'First project',
-    });
-    const secondProject = await seedProject(db, schema, seeded.statusId, {
-      organizationId: seeded.orgId,
-      teamId: seeded.teamId,
-      createdBy: seeded.humanActorId,
-      name: 'Second project',
-    });
-    const [milestone] = await db
-      .insert(schema.milestone)
-      .values({
-        organizationId: seeded.orgId,
-        projectId: firstProject.id,
-        name: 'First milestone',
-      })
-      .returning({ id: schema.milestone.id });
-    const [taskRow] = await db
-      .insert(schema.task)
-      .values({
-        organizationId: seeded.orgId,
-        teamId: seeded.teamId,
-        projectId: firstProject.id,
-        title: 'Milestoned task',
-        state: 'backlog',
-        statusId: seeded.statusId('task', 'backlog'),
-      })
-      .returning({ id: schema.task.id });
-    if (!milestone || !taskRow) throw new Error('fixture insert failed');
-    const app = appWithActor(objectCommands, seeded.orgId, ['manage'], seeded.humanActorId);
-    expect(
-      (
-        await send(app, {
-          commandId: 'set-milestone',
-          objectKind: 'task',
-          objectIds: [taskRow.id],
-          operation: { type: 'replace_property', property: 'milestoneId', value: milestone.id },
-        })
-      ).status,
-    ).toBe(200);
-    expect(
-      (
-        await send(app, {
-          commandId: 'move-away-from-milestone',
-          objectKind: 'task',
-          objectIds: [taskRow.id],
-          operation: {
-            type: 'replace_property',
-            property: 'projectId',
-            value: secondProject.id,
-          },
-        })
-      ).status,
-    ).toBe(422);
-    const [unchanged] = await db.select().from(schema.task).where(eq(schema.task.id, taskRow.id));
-    expect(unchanged).toMatchObject({ projectId: firstProject.id, milestoneId: milestone.id });
-  });
-
   it('supports the nullable reference values exposed by the canvas bulk editor', async () => {
     const seeded = await seedCommandOrg();
     const projectRow = await seedProject(db, schema, seeded.statusId, {

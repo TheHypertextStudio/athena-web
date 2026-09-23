@@ -681,6 +681,46 @@ async function updateTaskStatuses(
     .returning();
 }
 
+/**
+ * Whether a command moves a task out of the project its milestone belongs to. A milestone always
+ * belongs to the task's current project, so any real move drops it, the same as REST
+ * `PATCH /tasks/:id` and MCP `update` do.
+ */
+function movesAwayFromMilestone(
+  row: typeof task.$inferSelect,
+  property: string,
+  value: unknown,
+): boolean {
+  return property === 'projectId' && row.milestoneId !== null && row.projectId !== value;
+}
+
+/** Group items by a key, keeping first-seen order. */
+function groupBy<T>(items: readonly T[], key: (item: T) => string): T[][] {
+  const groups = new Map<string, T[]>();
+  for (const item of items) groups.set(key(item), [...(groups.get(key(item)) ?? []), item]);
+  return [...groups.values()];
+}
+
+/** Apply forward task patches, one `UPDATE` per distinct patch, since a move clears some milestones. */
+async function updateTaskPatches(
+  tx: Tx,
+  orgId: string,
+  writes: readonly { readonly id: string; readonly patch: Record<string, unknown> }[],
+): Promise<(typeof task.$inferSelect)[]> {
+  const updated: (typeof task.$inferSelect)[] = [];
+  for (const group of groupBy(writes, (write) => JSON.stringify(write.patch))) {
+    const ids = group.map((write) => write.id);
+    updated.push(
+      ...(await tx
+        .update(task)
+        .set(group[0]?.patch ?? {})
+        .where(and(eq(task.organizationId, orgId), inArray(task.id, ids)))
+        .returning()),
+    );
+  }
+  return updated;
+}
+
 const REPLAY_INTEGER_PROPERTIES = new Set([
   'estimate',
   'startDateFiscalYearStartMonth',
@@ -726,6 +766,11 @@ function replayPatchSource(
   )}::jsonb) AS replay_patch(${definitions})`;
 }
 
+/**
+ * Apply replay patches. Updates are grouped by their property set because `jsonb_to_recordset`
+ * yields NULL for a column a row's patch omits, and a bulk project move clears the milestone on
+ * only some of its tasks.
+ */
 async function updateReplayObjects(
   tx: Tx,
   orgId: string,
@@ -733,6 +778,13 @@ async function updateReplayObjects(
   updates: readonly { readonly id: string; readonly patch: Record<string, unknown> }[],
 ): Promise<readonly (typeof task.$inferSelect | typeof project.$inferSelect)[]> {
   if (updates.length === 0) return [];
+  const groups = groupBy(updates, (update) => Object.keys(update.patch).sort().join('\0'));
+  if (groups.length > 1) {
+    const updated: (typeof task.$inferSelect | typeof project.$inferSelect)[] = [];
+    for (const group of groups)
+      updated.push(...(await updateReplayObjects(tx, orgId, kind, group)));
+    return updated;
+  }
   const properties = [...new Set(updates.flatMap((update) => Object.keys(update.patch)))];
   const patch = Object.fromEntries(
     properties.map((property) => [property, sql`replay_patch.${sql.identifier(property)}`]),
@@ -784,31 +836,6 @@ async function assertMilestoneForProject(
     .limit(1);
   if (!rows[0]) throw new NotFoundError('Milestone not found');
   if (rows[0].projectId !== projectId) {
-    throw ownedValidation("Milestone must belong to the task's project", ['operation', 'value']);
-  }
-}
-
-async function assertMilestonesRemainInProject(
-  database: Dbh,
-  orgId: string,
-  milestoneIds: readonly string[],
-  projectId: string | null,
-): Promise<void> {
-  const ids = [...new Set(milestoneIds)];
-  if (ids.length === 0) return;
-  const rows = await database
-    .select({ id: milestone.id, projectId: milestone.projectId })
-    .from(milestone)
-    .innerJoin(project, eq(milestone.projectId, project.id))
-    .where(
-      and(
-        inArray(milestone.id, ids),
-        eq(project.organizationId, orgId),
-        isNull(project.archivedAt),
-      ),
-    );
-  if (rows.length !== ids.length) throw new NotFoundError('Milestone not found');
-  if (rows.some((row) => row.projectId !== projectId)) {
     throw ownedValidation("Milestone must belong to the task's project", ['operation', 'value']);
   }
 }
@@ -930,16 +957,6 @@ async function validateReferences(
             projectIds.values().next().value ?? null,
           );
         }
-      }
-      if (op.property === 'projectId') {
-        await assertMilestonesRemainInProject(
-          database,
-          orgId,
-          (rows as readonly (typeof task.$inferSelect)[])
-            .map((row) => row.milestoneId)
-            .filter((id): id is string => id !== null),
-          op.value,
-        );
       }
     } else {
       if (op.property === 'leadId') await assertActiveHumanProjectLead(database, orgId, op.value);
@@ -1071,6 +1088,7 @@ async function executeForward(
           const patch: Record<string, unknown> = {
             [property]: dbValue(property, normalizeProperty(property, value)),
           };
+          if (movesAwayFromMilestone(row, property, value)) patch['milestoneId'] = null;
           if (property === 'state') {
             const status = statusByTeam.get(row.teamId);
             if (!status) throw new NotFoundError('Task status not found');
@@ -1084,10 +1102,9 @@ async function executeForward(
           const nextDue = property === 'dueDate' ? (patch['dueDate'] as Date | null) : row.dueDate;
           if (nextStart && nextDue && nextDue < nextStart)
             throw ownedValidation('Due date cannot fall before the anticipated start date');
-          const changedProperties =
-            property === 'state'
-              ? (['state', 'statusId', 'completedAt', 'canceledAt'] as const)
-              : ([property] as const);
+          // The patch holds exactly what changes: the property, plus the status tuple for a state
+          // change or the dropped milestone for a project move.
+          const changedProperties = Object.keys(patch);
           for (const changedProperty of changedProperties) {
             entries.push({
               kind: 'object',
@@ -1101,26 +1118,10 @@ async function executeForward(
             kind: 'task',
             id: row.id,
             op: property === 'archivedAt' && op.type === 'trash' ? 'archive' : 'update',
-            before: {
-              [property]: row[property as keyof typeof row],
-              ...(property === 'state'
-                ? {
-                    statusId: row.statusId,
-                    completedAt: row.completedAt,
-                    canceledAt: row.canceledAt,
-                  }
-                : {}),
-            },
-            after: {
-              [property]: patch[property],
-              ...(property === 'state'
-                ? {
-                    statusId: patch['statusId'],
-                    completedAt: patch['completedAt'],
-                    canceledAt: patch['canceledAt'],
-                  }
-                : {}),
-            },
+            before: Object.fromEntries(
+              changedProperties.map((key) => [key, row[key as keyof typeof row]]),
+            ),
+            after: Object.fromEntries(changedProperties.map((key) => [key, patch[key]])),
           });
           writes.push({ id: row.id, patch, before: row });
         }
@@ -1131,21 +1132,7 @@ async function executeForward(
         const updatedRows =
           property === 'state'
             ? await updateTaskStatuses(tx, orgId, writes)
-            : writes.length === 0
-              ? []
-              : await tx
-                  .update(task)
-                  .set(writes[0]?.patch ?? {})
-                  .where(
-                    and(
-                      eq(task.organizationId, orgId),
-                      inArray(
-                        task.id,
-                        writes.map((write) => write.id),
-                      ),
-                    ),
-                  )
-                  .returning();
+            : await updateTaskPatches(tx, orgId, writes);
         if (updatedRows.length !== writes.length)
           throw new ConflictError('Task changed during update');
         const updatedById = new Map(updatedRows.map((row) => [row.id, row]));
@@ -2193,6 +2180,18 @@ async function executeReplay(
         denied.add(objectId);
         continue;
       }
+      // Undoing a project move restores the milestone it cleared, so that milestone has to be
+      // checked against the project being restored, not the one the task sits in now.
+      const projectEntry = entries.find(
+        (entry) => entry.kind === 'object' && entry.property === 'projectId',
+      );
+      const targetRow =
+        projectEntry?.kind === 'object'
+          ? {
+              ...row,
+              projectId: direction === 'undo' ? projectEntry.before : projectEntry.after,
+            }
+          : row;
       for (const entry of entries) {
         validateReceiptEntryShape(receipt, entry);
         const expected = direction === 'undo' ? entry.after : entry.before;
@@ -2210,7 +2209,7 @@ async function executeReplay(
               receipt.objectKind,
               entry.property,
               target,
-              row,
+              targetRow,
             );
           } catch (error) {
             if (error instanceof CapabilityError || error instanceof NotFoundError) {

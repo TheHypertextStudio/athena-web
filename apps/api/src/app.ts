@@ -36,6 +36,7 @@ import { cachePolicy } from './lib/cache-policy';
 import { finiteEtag } from './lib/finite-etag';
 import { operationContractForRequest } from './lib/api-operation-contract';
 import {
+  MAX_DEVICE_NOTIFICATION_BATCH_BYTES,
   MAX_OBJECT_COMMAND_BYTES,
   MAX_REQUEST_BYTES,
   rejectOversizedBody,
@@ -57,6 +58,10 @@ import meIdentities from './routes/me-identities';
 import { createMeNotificationsRoutes } from './routes/me-notifications';
 import mePasskeys from './routes/me-passkeys';
 import meDrafts from './routes/me-drafts';
+import {
+  meDeviceNotifications,
+  meDeviceNotificationSources,
+} from './routes/me-device-notifications';
 import mePlans from './routes/me-plans';
 import meRecovery from './routes/me-recovery';
 import meSessions from './routes/me-sessions';
@@ -118,6 +123,14 @@ app.use(
   bodyLimit({
     maxSize: MAX_OBJECT_COMMAND_BYTES,
     onError: () => rejectOversizedBody(MAX_OBJECT_COMMAND_BYTES),
+  }),
+);
+// A phone answers 413 by halving its batch; see `MAX_DEVICE_NOTIFICATION_BATCH_BYTES`.
+app.use(
+  '/me/device-notifications/batches',
+  bodyLimit({
+    maxSize: MAX_DEVICE_NOTIFICATION_BATCH_BYTES,
+    onError: () => rejectOversizedBody(MAX_DEVICE_NOTIFICATION_BATCH_BYTES),
   }),
 );
 
@@ -246,6 +259,8 @@ const routes = app
   .route('/me/sessions', meSessions)
   .route('/me/plans', mePlans)
   .route('/me/drafts', meDrafts)
+  .route('/me/device-notification-sources', meDeviceNotificationSources)
+  .route('/me/device-notifications', meDeviceNotifications)
   .route('/me/athena', personalAthena)
   .route('/me/athena', lattice)
   // Athena's own inbox. Mounted at the same `/me/athena` prefix as the two routers above (Hono

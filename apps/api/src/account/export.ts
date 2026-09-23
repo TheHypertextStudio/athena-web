@@ -51,6 +51,7 @@ import { linkedIdentities } from '../routes/integration-provider';
 import { dispatchSystemUserNotification } from '../services/notifications/system';
 
 import { type ExportDocument, buildExportArchive } from './archive';
+import { collectDeviceNotificationExport } from './export-device-notifications';
 import { exportReadyEmail } from './emails';
 
 /** Days a generated export download URL is advertised as valid for. */
@@ -88,6 +89,52 @@ export interface AccountExportDocument {
   readonly document: ExportDocument;
   /** The user row, or null if the account no longer exists. */
   readonly user: typeof user.$inferSelect | null;
+}
+
+/**
+ * Collect every work-location row a hub owns, for `personal.workLocation`.
+ *
+ * @param db - The database client.
+ * @param hubId - The account's hub, or undefined when it has none.
+ */
+async function collectWorkLocationExport(db: Database, hubId: string | undefined) {
+  const [
+    places,
+    profiles,
+    assertions,
+    exceptions,
+    observations,
+    providerMappings,
+    syncAccounts,
+    externalBindings,
+    writes,
+  ] = hubId
+    ? await Promise.all([
+        db.select().from(workPlace).where(eq(workPlace.hubId, hubId)),
+        db.select().from(workLocationProfile).where(eq(workLocationProfile.hubId, hubId)),
+        db.select().from(workLocationAssertion).where(eq(workLocationAssertion.hubId, hubId)),
+        db.select().from(workLocationException).where(eq(workLocationException.hubId, hubId)),
+        db.select().from(workLocationObservation).where(eq(workLocationObservation.hubId, hubId)),
+        db.select().from(workPlaceProviderMapping).where(eq(workPlaceProviderMapping.hubId, hubId)),
+        db.select().from(workLocationSyncAccount).where(eq(workLocationSyncAccount.hubId, hubId)),
+        db
+          .select()
+          .from(workLocationExternalBinding)
+          .where(eq(workLocationExternalBinding.hubId, hubId)),
+        db.select().from(workLocationWrite).where(eq(workLocationWrite.hubId, hubId)),
+      ])
+    : [[], [], [], [], [], [], [], [], []];
+  return {
+    places,
+    profiles,
+    assertions,
+    exceptions,
+    observations,
+    providerMappings,
+    syncAccounts,
+    externalBindings,
+    writes,
+  };
 }
 
 /**
@@ -161,15 +208,8 @@ export async function collectAccountExport(
       digests,
       days,
       follows,
-      places,
-      locationProfiles,
-      locationAssertions,
-      locationExceptions,
-      locationObservations,
-      placeProviderMappings,
-      locationSyncAccounts,
-      locationExternalBindings,
-      locationWrites,
+      workLocation,
+      deviceNotifications,
     ] = await Promise.all([
       hubId
         ? db.select().from(dailyPlanItem).where(eq(dailyPlanItem.hubId, hubId))
@@ -192,35 +232,8 @@ export async function collectAccountExport(
       includesPersonal
         ? db.select().from(streamSubscription).where(eq(streamSubscription.userId, userId))
         : [],
-      hubId ? db.select().from(workPlace).where(eq(workPlace.hubId, hubId)) : [],
-      hubId
-        ? db.select().from(workLocationProfile).where(eq(workLocationProfile.hubId, hubId))
-        : [],
-      hubId
-        ? db.select().from(workLocationAssertion).where(eq(workLocationAssertion.hubId, hubId))
-        : [],
-      hubId
-        ? db.select().from(workLocationException).where(eq(workLocationException.hubId, hubId))
-        : [],
-      hubId
-        ? db.select().from(workLocationObservation).where(eq(workLocationObservation.hubId, hubId))
-        : [],
-      hubId
-        ? db
-            .select()
-            .from(workPlaceProviderMapping)
-            .where(eq(workPlaceProviderMapping.hubId, hubId))
-        : [],
-      hubId
-        ? db.select().from(workLocationSyncAccount).where(eq(workLocationSyncAccount.hubId, hubId))
-        : [],
-      hubId
-        ? db
-            .select()
-            .from(workLocationExternalBinding)
-            .where(eq(workLocationExternalBinding.hubId, hubId))
-        : [],
-      hubId ? db.select().from(workLocationWrite).where(eq(workLocationWrite.hubId, hubId)) : [],
+      collectWorkLocationExport(db, hubId),
+      collectDeviceNotificationExport(db, hubId),
     ]);
     return {
       hub: hubRow ?? null,
@@ -231,22 +244,13 @@ export async function collectAccountExport(
       dailyDigests: digests,
       activityDays: days,
       streamSubscriptions: follows,
-      workLocation: {
-        places,
-        profiles: locationProfiles,
-        assertions: locationAssertions,
-        exceptions: locationExceptions,
-        observations: locationObservations,
-        providerMappings: placeProviderMappings,
-        syncAccounts: locationSyncAccounts,
-        externalBindings: locationExternalBindings,
-        writes: locationWrites,
-      },
+      workLocation,
+      deviceNotifications,
     };
   })();
 
   const document = {
-    schemaVersion: 2,
+    schemaVersion: 3,
     identity: includesAccount
       ? { user: userRow ?? null, linkedAccounts: identities, connectedApps: consents }
       : null,

@@ -38,3 +38,4 @@ export * from './composer-draft';
 export * from './source-person';
 
 export * from './actor-alias';
+export * from './device-notification';

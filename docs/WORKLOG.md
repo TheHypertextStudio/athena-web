@@ -2,6 +2,7 @@
 
 > **Purpose**: Comprehensive tracking of all work - past, present, and future.
 > **Last Updated**: 2026-09-22
+> **Last Updated**: 2026-09-23
 
 ---
 
@@ -775,6 +776,57 @@ routes/project-rollup.ts}`, `domains/work/src/contracts/{milestone,task}.ts`,
 - **Blockers**: None.
 
 ---
+
+### [DEVICE-NOTIFICATIONS-001] Store notifications a phone syncs for Athena
+
+- **Status**: COMPLETED
+- **Started**: 2026-09-23
+- **Completed**: 2026-09-23
+- **Priority**: P1
+- **Description**: The server half of Android notification sync (Docket tasks "Store synced
+  notifications on the server", "Accept notification uploads from devices", and the server half of
+  "Sync deletions between the phone and the server"). Implement the contract in docket-android's
+  `docs/reference/notification-sync.md`: device registration, batch uploads with per-item results,
+  deletion times the phone reads back, deletes, and a list for checking what the server holds.
+- **Subtasks**:
+  - [x] Contract `@docket/athena/device-notification-contract` with the field and batch limits
+  - [x] Six hub-owned tables with composite `(hub_id, id)` keys, migration 0143, GIN search indexes
+  - [x] Register, read, upload, deletions, delete, and list routes under `/v1/me`
+  - [x] 8 MiB body limit, 240 batches an hour per person, expiry on upload and in the daily sweep
+  - [x] `personal.deviceNotifications` in the account export (schema version 3) and its README line
+  - [x] `docs/engineering/specs/device-notification-sync.md`, API contract section 3.11C
+- **Approach**: The request is parsed leniently (each item is its full schema or anything with an
+  `id`) and each item is then validated on its own, so one malformed notification is answered
+  `invalid` rather than failing its batch, while the published reference still shows the full item
+  schemas. One transaction per batch deletes the uploader's expired rows, classifies notifications,
+  inserts with insert-or-ignore, stores messages once per identity, then stores removals so they can
+  refer to notifications from the same batch.
+- **Decisions**: An unregistered device is `404` (the phone registers at the start of every run).
+  Malformed batches are `422` like every other validation failure. Deletions are one time per scope
+  (everything or an app), not per-item tombstones. Expiry uses the existing `expired-drafts-sweep`
+  cron tick rather than a new job. Content is not encrypted in the application because Athena's
+  search needs full-text indexes; Neon encrypts at rest. The list includes each notification's
+  messages and removal.
+- **Files changed**: `domains/athena/src/contracts/device-notification.ts`,
+  `packages/db/src/schema/device-notification.ts`, `packages/db/drizzle/0143_device_notification_sync.sql`,
+  `apps/api/src/services/device-notifications/`, `apps/api/src/routes/me-device-notifications.ts`,
+  `apps/api/src/app.ts`, `apps/api/src/lib/http-limits.ts`, `apps/api/src/routes/cron.ts`,
+  `apps/api/src/dev-scheduler.ts`, `apps/api/src/account/export.ts`,
+  `apps/api/src/account/export-device-notifications.ts`, `apps/api/src/account/archive.ts`, tests
+  under `apps/api/tests/routes/me-device-notifications*.test.ts` and
+  `apps/api/tests/account/export-device-notifications.test.ts`.
+- **Validation**: 24 new route and export tests (one also reads a registered device back) (valid batch, the same batch twice, mixed results,
+  oversized fields, expiry, deletion times, message identity, cross-account isolation, `404`,
+  `413`, `429` with `Retry-After`, `401`, the daily sweep, and cascade on account deletion) pass
+  against PGlite, with typecheck and lint clean for the API, database, and Athena packages.
+- **Learnings**: Hono's validator publishes its own request schema over a `describeRoute`
+  `requestBody`, so the documented schema has to be the parsed one; a union of the full item schema
+  and a loose `id` envelope documents the right shape and keeps per-item failures. The
+  collect-export function was at its length ceiling, so the work-location reads moved into a helper
+  to make room for the new section.
+- **Blockers**: None for this change. Pre-existing failures on `main`, unchanged by it:
+  `purge-coverage` (`api_idempotency_receipt`), the OpenAPI generation tests (`getV1Example must
+resolve one tag`), `error.test.ts` (`insufficient_scope`), and `complexity:check` (`routes/tasks.ts`).
 
 ### [CANVAS-A11Y-001] Complete Canvas accessibility follow-ups
 

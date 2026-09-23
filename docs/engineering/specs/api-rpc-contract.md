@@ -395,6 +395,23 @@ draft expires 183 days after its last save (`expiresAt`, renewed on every save; 
 | `PATCH /:id`  | `ComposerDraftPatch{ revision, payload }`                                                                    | `ComposerDraftOut` (**412** on a stale `revision`, **422** on a kind mismatch) | owner only (**404** otherwise)            |
 | `DELETE /:id` | `param`                                                                                                      | **204**                                                                        | owner only (**404** otherwise)            |
 
+### 3.11C `me/device-notification-sources` and `me/device-notifications` (phone notification sync)
+
+Mounted `/me/device-notification-sources` and `/me/device-notifications`. Every row belongs to the
+signed-in person's hub, resolved from the session; nothing is organization data. A phone registers
+itself, uploads what it indexed, and reads back deletions so Athena can use that context from
+anywhere. Times on the wire are Unix milliseconds. Contract:
+`@docket/athena/device-notification-contract`; behaviour: [`device-notification-sync.md`](./device-notification-sync.md).
+
+| Method + Path                                   | Input                                                                                | Output                                                                                        | Auth                |
+| ----------------------------------------------- | ------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------- | ------------------- |
+| `GET /me/device-notification-sources/:deviceId` | `param`                                                                              | `DeviceNotificationSourceOut` (**404** when unregistered)                                     | authenticated owner |
+| `PUT /me/device-notification-sources/:deviceId` | `DeviceNotificationSourceIn{ platform, label, retentionDays, syncConsentedAt }`      | `DeviceNotificationSourceOut`                                                                 | authenticated owner |
+| `POST /me/device-notifications/batches`         | `DeviceNotificationBatchIn{ deviceId, notifications[≤100], removals[≤200] }` (8 MiB) | `DeviceNotificationBatchOut` (per-item status; **404** unregistered device, **413**, **429**) | authenticated owner |
+| `GET /me/device-notifications/deletions`        | —                                                                                    | `DeviceNotificationDeletionsOut{ deletedBefore, apps[] }`                                     | authenticated owner |
+| `DELETE /me/device-notifications`               | `query: { appId? }`                                                                  | `DeviceNotificationDeleteOut{ deleted }`                                                      | authenticated owner |
+| `GET /me/device-notifications`                  | `query: { appId?, cursor?, limit? }`                                                 | `DeviceNotificationListOut{ items[], nextCursor }`                                            | authenticated owner |
+
 ### 3.12 `integrations`
 
 Mounted `/orgs/:orgId/integrations`. Migration vs Connector decided up front; MVP = import (migration) / read-only mirror (connector).

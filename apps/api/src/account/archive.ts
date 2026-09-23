@@ -81,6 +81,13 @@ function countPersonal(personal: Record<string, unknown> | null, key: string): n
   return Array.isArray(value) ? value.length : 0;
 }
 
+/** Count the phone notifications synced to Docket (0 when absent). */
+function countSyncedNotifications(personal: Record<string, unknown> | null): number {
+  const section = personal?.['deviceNotifications'];
+  if (typeof section !== 'object' || section === null) return 0;
+  return countPersonal(section as Record<string, unknown>, 'notifications');
+}
+
 /** Render the human-facing README.md for the archive. */
 function renderReadme(doc: ExportDocument, meta: ExportArchiveMeta): string {
   let tasks = 0;
@@ -129,12 +136,13 @@ This archive contains ${
 - Comments: ${comments}
 - Notifications: ${countPersonal(doc.personal, 'notifications')}
 - Activity records (observations): ${countPersonal(doc.personal, 'observations')}
+- Phone notifications synced for Athena: ${countSyncedNotifications(doc.personal)}
 
 ## What's inside
 
 - ${includesAccount ? "`account.json` — your profile, the external accounts you've linked (Google, GitHub, …), and the apps you've authorized." : 'Account information was not selected.'}
 - ${includesWorkspaces ? "`workspaces/` — one file per selected workspace, each containing that workspace's work: projects, tasks, milestones, cycles, comments, updates, labels, and saved views." : 'Workspace data was not selected.'}
-- ${includesPersonal ? '`personal.json` — your cross-workspace personal data: notifications, activity (observations), daily plans, daily digests, and the things you follow.' : 'Personal Docket data was not selected.'}
+- ${includesPersonal ? '`personal.json` — your cross-workspace personal data: notifications, activity (observations), daily plans, daily digests, the things you follow, and the phone notifications you synced for Athena with the devices that sent them and the deletions you made.' : 'Personal Docket data was not selected.'}
 - \`manifest.json\` — a machine-readable summary (schema version, timestamps, counts).
 
 ## Notes

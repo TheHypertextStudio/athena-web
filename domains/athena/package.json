@@ -32,6 +32,7 @@
     "./agent-contract": "./src/contracts/agent.ts",
     "./athena-contract": "./src/contracts/athena.ts",
     "./athena-mail-contract": "./src/contracts/athena-mail.ts",
+    "./device-notification-contract": "./src/contracts/device-notification.ts",
     "./email-suggestion-contract": "./src/contracts/email-suggestion.ts"
   },
   "scripts": {

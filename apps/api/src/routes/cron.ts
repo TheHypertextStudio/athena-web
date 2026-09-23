@@ -45,6 +45,7 @@ import { runServiceProbes } from '../services/service-probes';
 import { sweepElicitations } from '../services/elicitation-service';
 import { sweepExpiredSessions } from './session-sweep';
 import { sweepExpiredComposerDrafts } from './composer-draft-sweep';
+import { sweepExpiredDeviceNotifications } from '../services/device-notifications/expiry';
 import { sweepRecurrenceMaterialization } from '../lib/recurrence/sweep';
 import { createGoogleWorkLocationTransport } from '../services/work-location/google-transport';
 import { sweepWorkLocations } from '../services/work-location/sweep';
@@ -329,10 +330,14 @@ const cron = new Hono()
   })
   // Expired-draft sweep: deletes every saved composer draft past its `expiresAt`. Reads already
   // leave expired rows out, so this only reclaims storage. Plain stateless delete, safe to retry.
+  // Synced phone notifications past their device's retention go on the same daily tick, so a
+  // person who stops syncing still loses them on schedule without a scheduler job of their own.
   .post('/expired-drafts-sweep', async (c) => {
     if (!authorized(c)) return c.json({ error: 'unauthorized' }, 401);
-    const result = await sweepExpiredComposerDrafts(new Date());
-    return c.json({ swept: true, ...result });
+    const now = new Date();
+    const result = await sweepExpiredComposerDrafts(now);
+    const deviceNotifications = await sweepExpiredDeviceNotifications(now);
+    return c.json({ swept: true, ...result, deviceNotifications });
   });
 
 export default cron;

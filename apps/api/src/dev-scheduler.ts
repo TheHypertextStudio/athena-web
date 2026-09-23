@@ -23,6 +23,7 @@ import { sweepLegacyMentions } from './content/legacy-mention-sweep';
 import { sweepResourceUnfurls } from './content/unfurl-sweep';
 import { sweepCalendarSync } from './routes/calendar-sync-sweep';
 import { sweepExpiredComposerDrafts } from './routes/composer-draft-sweep';
+import { sweepExpiredDeviceNotifications } from './services/device-notifications/expiry';
 import { sweepActivitySources } from './lib/activity/sweep';
 import { sweepConnectorSync } from './routes/integration-sync';
 import { sweepNotionMirror } from './routes/notion-mirror-reconcile';
@@ -63,6 +64,7 @@ export function startDevScheduler(): void {
       await sweepResourceUnfurls(getContainer().unfurler, now);
       await sweepLegacyMentions();
       await sweepExpiredComposerDrafts(now);
+      await sweepExpiredDeviceNotifications(now);
     } catch (err) {
       console.error('[dev-cron] sweep failed:', err);
     }

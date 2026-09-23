@@ -21,6 +21,14 @@ import { PayloadTooLargeError } from '../error';
 export const MAX_REQUEST_BYTES = 32 * 1024 * 1024;
 /** Maximum JSON body accepted by the canvas object-command endpoint. */
 export const MAX_OBJECT_COMMAND_BYTES = 4 * 1024 * 1024;
+/**
+ * Maximum JSON body accepted by the device-notification upload endpoint.
+ *
+ * @remarks
+ * Sized so one notification at every field limit still fits: the phone answers a `413` by halving
+ * its batch, and that only converges if a batch of one is always accepted.
+ */
+export const MAX_DEVICE_NOTIFICATION_BATCH_BYTES = 8 * 1024 * 1024;
 
 /**
  * Answer an over-long body through the Problem model rather than Hono's plain-text default.

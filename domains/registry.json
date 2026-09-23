@@ -33,6 +33,7 @@
         "./agent-contract",
         "./athena-contract",
         "./athena-mail-contract",
+        "./device-notification-contract",
         "./email-suggestion-contract"
       ],
       "allowedRuntimeDependencies": [

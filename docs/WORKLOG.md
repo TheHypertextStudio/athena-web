@@ -8,6 +8,17 @@
 
 ## Active Tasks
 
+### [DAILY-PLAN-001] Daily planning flow and planned-versus-actual history
+
+- **Status**: REVIEW
+- **Started**: 2026-09-22
+- **Priority**: P0
+- **Description**: Build a distinct planning flow from Today that works without Athena and keeps the accepted commitment, later revisions, and recorded work separate.
+- **Progress**: Today opens review, work selection, agenda, plan review, and confirmation. Drafts resume. Missed blocks can be recorded or revised with a preview and Undo. The manual flow, browser scenarios, desktop and phone captures, typecheck, lint, production build, and coverage suites passed locally.
+- **Files changed**: Planning contracts in `domains/planning`; draft and revision storage in `packages/db`; daily-plan routes in `apps/api`; planning and Today screens in `apps/web`; product and engineering docs.
+- **Release gate**: The first CI run for 5a9aa2a55 failed when the API lint process exceeded its 4 GB heap and the new daily-plan schema lowered database function coverage to 89.58%. API lint now runs source and tests separately. A schema contract test raises database function coverage to 90.08% locally. These fixes still need CI and production verification.
+- **Learnings**: A cold CI lint run uses more memory than a warm local cache. New Drizzle tables add executable callbacks that the database coverage gate counts even when route tests pass.
+
 ### [RELEASE-ROSTER-001] Unblock production deploys held by the shared roster release test
 
 - **Status**: COMPLETED

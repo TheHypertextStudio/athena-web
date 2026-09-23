@@ -228,6 +228,11 @@ reuses both identifiers. Terminal settlement clears the reply key in the same tr
 records the outcome. The state machine is in
 [`lattice-delegation-state.mmd`](./lattice-delegation-state.mmd).
 
+The gateway's personal runtime record includes its authenticated Lovelace `accountId`. Device
+selection stores that binding with the selected runtime; a later successful device read repairs
+connections selected by older Docket builds. The public Settings device response omits account ID.
+Durable authorization checks the stored account and runtime together before submission.
+
 ## 7. Surfaces
 
 `GET|PATCH|DELETE /v1/me/athena/lattice`, `POST /v1/me/athena/lattice/authorize`,

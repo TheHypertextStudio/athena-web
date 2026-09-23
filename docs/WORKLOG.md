@@ -17470,15 +17470,18 @@ xhigh` passes (10 finder angles each, one-vote verification, a gap sweep) agains
   grants through failed reconnects, restore a recovered connection after a successful device
   read, and show the account-specific repair message in Settings. Production also showed a FedCM
   ceremony stuck on “Opening Lovelace”; keep the redirect action visible during the ceremony and
-  abort a stalled browser request after 45 seconds.
+  abort a stalled browser request after 45 seconds. A live private assignment then failed with
+  `oauth_invalid` before relay submission: the Settings device mapper discarded the gateway's
+  authenticated `accountId`, while durable authorization requires it. Persist that binding on
+  selection and repair existing selected connections on a successful device read.
 - **Files changed**: `apps/api/src/routes/lattice-backend.ts`,
   `apps/api/src/routes/lattice-connection.ts`, `apps/api/src/routes/lattice.ts`,
   `apps/web/src/app/(app)/settings/athena/lattice-section.tsx`,
   `apps/web/src/app/(app)/settings/athena/lattice-fedcm.ts`,
   `apps/web/src/app/(app)/settings/athena/lattice-copy.ts`,
   `apps/web/src/app/(app)/settings/athena/lattice-empty-devices.tsx`, focused tests and fixtures,
-  `docs/engineering/specs/lattice-byo-model.md`, and this worklog. The gateway fix is tracked in
-  the separate Lovelace repository.
+  `packages/integrations/src/lattice-gateway.ts`, `docs/engineering/specs/lattice-byo-model.md`,
+  and this worklog. The gateway fix is tracked in the separate Lovelace repository.
 - **Validation**: The affected API and web typechecks and source lint pass. Focused tests pass:
   198 API tests across OAuth, connection, backend, assignment, and delegation paths, and 27 web
   Settings/FedCM tests. The full Docket typecheck, lint, complexity check, and coverage/test
@@ -17486,10 +17489,13 @@ xhigh` passes (10 finder angles each, one-vote verification, a gap sweep) agains
   gateway source lint, typecheck, pre-commit checks, and staging deploy dry run pass. Lovelace's
   resource-audience fix is now on `main` and serving the production gateway, with staging and
   production health verified. The live Cloud Run configuration confirms Beacon uses PostgreSQL for
-  relay storage. Production device and inference acceptance remain open while the Mac Studio
-  runtime is re-paired.
-- **Blockers for launch**: The saved Mac Studio relay credential expired on September 2 and the
-  Lovelace web account is waiting for a browser passkey ceremony. Lovelace hosted GitHub Actions
+  relay storage. On September 23, the Lovelace account linked through the production OAuth redirect,
+  Settings showed Mac Studio as Ready and In use, and a Docket Athena prompt returned through the
+  Lattice gateway and LM Studio (`poolside/laguna-s-2.1`). The first private durable assignment
+  failed before submission with `oauth_invalid`; two HTTP regression checks failed on the missing
+  account binding before the fix and pass afterward. The public Settings DTO still omits account ID.
+- **Blockers for launch**: Durable relay submission and one reviewable returned proposal still need
+  production proof after the Docket account-binding fix is released. Lovelace hosted GitHub Actions
   runs fail before jobs start; its gateway was released directly through Cloud Build and Cloud Run.
   The local Docket release browser test stalled at Docker startup because Docker Desktop did not
   answer `docker run` or `docker info`.

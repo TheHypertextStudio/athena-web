@@ -372,12 +372,17 @@ describe('the bring-your-own-Lattice flow', () => {
 
     expect(body.devices).toHaveLength(1);
     expect(body.devices[0]).toMatchObject({ id: 'lat_studio', ready: true, selected: false });
+    expect(body.devices[0]).not.toHaveProperty('accountId');
     // Attribution: the gateway saw the *user's* bearer token, not a shared developer key.
     const listCall = recorder.gatewayCalls.find((c) => c.path === '/v1/personal-runtimes');
     expect(listCall?.authorization).toBe('Bearer at_1');
   });
 
   it('points Athena at the chosen device and reports it active', async () => {
+    await db
+      .update(schema.latticeConnection)
+      .set({ accountId: null })
+      .where(eq(schema.latticeConnection.ownerUserId, USER_ID));
     const response = await call('/v1/me/athena/lattice/device', {
       method: 'POST',
       body: JSON.stringify({ deviceId: 'lat_studio' }),
@@ -392,6 +397,21 @@ describe('the bring-your-own-Lattice flow', () => {
       deviceStatus: 'reachable',
       unavailableReason: null,
     });
+    const [connection] = await db.select().from(schema.latticeConnection);
+    expect(connection?.accountId).toBe('acct_1');
+  });
+
+  it('repairs the account binding on a selected device from an older build', async () => {
+    await db
+      .update(schema.latticeConnection)
+      .set({ accountId: null })
+      .where(eq(schema.latticeConnection.ownerUserId, USER_ID));
+
+    const response = await call('/v1/me/athena/lattice/devices');
+
+    expect(response.status).toBe(200);
+    const [connection] = await db.select().from(schema.latticeConnection);
+    expect(connection?.accountId).toBe('acct_1');
   });
 
   it('routes that owner’s turn to the gateway, which relays it to the device', async () => {

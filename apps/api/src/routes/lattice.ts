@@ -348,10 +348,14 @@ const lattice = new Hono<AppEnv>()
       try {
         const context = await latticeGatewayContext(row);
         const devices = await listLatticeDevices(context);
+        const selectedDevice = devices.find((device) => device.id === row.deviceId);
         await db
           .update(latticeConnection)
           .set({
             status: 'connected',
+            // The gateway owns this account binding. Older Docket builds discarded it even
+            // after the person selected a device, leaving durable work unable to submit.
+            accountId: selectedDevice?.accountId ?? devices[0]?.accountId ?? null,
             lastVerifiedAt: new Date(),
             lastFailureReason: null,
             lastFailureAt: null,
@@ -360,8 +364,7 @@ const lattice = new Hono<AppEnv>()
             // account can no longer see it at all.
             ...(row.deviceId
               ? {
-                  deviceStatus:
-                    devices.find((device) => device.id === row.deviceId)?.status ?? 'revoked',
+                  deviceStatus: selectedDevice?.status ?? 'revoked',
                 }
               : {}),
           })
@@ -406,6 +409,7 @@ const lattice = new Hono<AppEnv>()
         const [updated] = await db
           .update(latticeConnection)
           .set({
+            accountId: device.accountId,
             deviceId: device.id,
             deviceName: device.name,
             deviceStatus: device.status,

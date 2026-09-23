@@ -99,6 +99,7 @@ describe('clientFor', () => {
       // options, falling back to the SDK's own defaults (production gateway, platform fetch).
       const devices = await listLatticeDevices({ accessToken: 'tok' });
       expect(devices.map((device) => device.id)).toEqual(['lat_a']);
+      expect(devices[0]?.accountId).toBe('acct_1');
       expect(fetchMock).toHaveBeenCalled();
       const [calledUrl] = fetchMock.mock.calls[0] as [string];
       expect(calledUrl).toContain('/v1/personal-runtimes');
@@ -203,6 +204,7 @@ describe('listLatticeDevices', () => {
     expect(devices).toEqual([
       {
         id: 'lat_a',
+        accountId: 'acct_1',
         name: 'Studio',
         status: 'reachable',
         ready: true,
@@ -211,6 +213,7 @@ describe('listLatticeDevices', () => {
       },
       {
         id: 'lat_b',
+        accountId: 'acct_1',
         name: 'lat_b',
         status: 'offline',
         ready: false,

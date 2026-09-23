@@ -102,6 +102,8 @@ export class LatticeUnavailableError extends Error {
 export interface LatticeDevice {
   /** Gateway id for the device. */
   readonly id: string;
+  /** Account proven by the authenticated gateway response; kept out of the Settings DTO. */
+  readonly accountId: string;
   /** The name its owner gave it. */
   readonly name: string;
   /** Live reachability as of this read. */
@@ -226,6 +228,7 @@ export function toLatticeUnavailable(cause: unknown): LatticeUnavailableError {
 function toDevice(runtime: PersonalLatticeRuntimeResource): LatticeDevice {
   return {
     id: runtime.latticeId,
+    accountId: runtime.accountId,
     name: runtime.displayName,
     status: runtime.status,
     ready: runtime.status === 'reachable',

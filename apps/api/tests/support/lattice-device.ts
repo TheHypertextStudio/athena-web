@@ -4,6 +4,7 @@ import type { LatticeDevice } from '@docket/integrations';
 export function latticeDevice(overrides: Partial<LatticeDevice> = {}): LatticeDevice {
   return {
     id: 'lat_studio',
+    accountId: 'acct_lovelace_1',
     name: 'Studio Mac',
     status: 'reachable',
     ready: true,

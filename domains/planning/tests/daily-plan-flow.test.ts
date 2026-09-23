@@ -107,4 +107,45 @@ describe('daily plan acceptance and revision', () => {
       ),
     ).toThrow();
   });
+
+  it('keeps selected work and session identifiers unambiguous', () => {
+    const acceptedAt = '2026-09-22T15:00:00.000Z';
+    const firstTask = assertDefined(first.tasks[0]);
+    const firstSession = assertDefined(first.sessions[0]);
+    expect(() =>
+      acceptDailyDraft({ ...first, tasks: [firstTask, firstTask] }, acceptedAt),
+    ).toThrow();
+    expect(() => acceptDailyDraft({ ...first, mainTaskId: 'task-b' }, acceptedAt)).toThrow();
+    expect(() =>
+      acceptDailyDraft({ ...first, sessions: [firstSession, firstSession] }, acceptedAt),
+    ).toThrow();
+    expect(() =>
+      acceptDailyDraft(
+        {
+          ...first,
+          sessions: [
+            {
+              ...firstSession,
+              allocations: [
+                { taskId: 'task-a', plannedMinutes: 15 },
+                { taskId: 'task-a', plannedMinutes: 15 },
+              ],
+            },
+          ],
+        },
+        acceptedAt,
+      ),
+    ).toThrow();
+  });
+
+  it('rejects a revision for a different date', () => {
+    const accepted = acceptDailyDraft(first, '2026-09-22T15:00:00.000Z');
+    expect(() =>
+      reviseDailyPlan(
+        accepted,
+        { ...first, date: '2026-09-23', sessions: [] },
+        '2026-09-22T17:00:00.000Z',
+      ),
+    ).toThrow('A daily plan revision must remain on the original date');
+  });
 });

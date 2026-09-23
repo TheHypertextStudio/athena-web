@@ -376,9 +376,7 @@ describe('domain registry policy', () => {
   });
 
   it('declares Planning contracts and portable time rules', () => {
-    const registry = readDomainRegistry();
-    const planning = registry.domains.find((domain) => domain.packageName === '@docket/planning');
-
+    const planning = readDomainRegistry().domains.find(({ id }) => id === 'planning');
     expect(planning).toEqual(
       expect.objectContaining({
         id: 'planning',
@@ -397,6 +395,8 @@ describe('domain registry policy', () => {
       './intervals',
       './zoned-time',
       './work-schedule',
+      './daily-capacity',
+      './daily-plan-flow',
       './work-location-resolution',
       './hub-preferences-contract',
       './daily-plan-contract',
@@ -416,16 +416,12 @@ describe('domain registry policy', () => {
   });
 
   it('declares Billing as an API-only deployable domain', () => {
-    const registry = readDomainRegistry();
-    const billing = registry.domains.find((domain) => domain.packageName === '@docket/billing');
-
+    const billing = readDomainRegistry().domains.find(({ id }) => id === 'billing');
     expect(billing?.supportedDeployableRuntimes).toEqual(['api']);
   });
 
   it("declares Billing's exact eight public entrypoints", () => {
-    const registry = readDomainRegistry();
-    const billing = registry.domains.find((domain) => domain.packageName === '@docket/billing');
-
+    const billing = readDomainRegistry().domains.find(({ id }) => id === 'billing');
     expect(billing?.publicExports).toEqual([
       './contracts',
       './adapters/in-memory',

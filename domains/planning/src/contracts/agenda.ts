@@ -41,6 +41,10 @@ export const TaskTimeboxAgendaEntry = z
   .object({
     kind: z.literal('task_timebox').describe('Entry discriminator for a Docket task timebox.'),
     taskId: TaskId.describe('The timeboxed task id.'),
+    sessionId: z
+      .string()
+      .optional()
+      .describe('Accepted planning session, when this timebox comes from a daily plan.'),
     organizationId: OrganizationId.describe('The organization that owns the task.'),
     title: z.string().describe('Task title.'),
     state: z.string().describe('Task workflow state.'),

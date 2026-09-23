@@ -48,8 +48,6 @@ export interface DayPlanProps {
   readonly loading: boolean;
   /** Whether no plan has been accepted yet, which is what makes planning the empty-state action. */
   readonly unplanned?: boolean;
-  /** Ask Athena to build a plan. Rendered as the empty state's primary action. */
-  readonly onPlan?: (() => void) | undefined;
   /** Whether a completion is in flight. */
   readonly completing?: boolean;
   readonly onComplete?: ((item: HubTodayPlanItem) => void) | undefined;
@@ -77,7 +75,6 @@ export default function DayPlan({
   orgName,
   loading,
   unplanned = false,
-  onPlan,
   completing = false,
   onComplete,
   onDefer,
@@ -164,7 +161,6 @@ export default function DayPlan({
           icon={ListChecks}
           tone="accent"
           title={unplanned ? 'No plan for today yet' : 'No tasks left on today’s plan'}
-          {...(onPlan ? { cta: { label: 'Plan today with Athena', onClick: onPlan } } : {})}
           action={
             <Button asChild variant="ghost" controlSize="sm">
               <Link href="/tasks">Browse all tasks</Link>

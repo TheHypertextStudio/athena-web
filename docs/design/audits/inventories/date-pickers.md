@@ -72,6 +72,7 @@ delegation are asserted in `apps/web/tests/pickers/timeframe-picker-contract.tes
 | 28  | Planning canvas → inspector               | `apps/web/src/components/plan-canvas/plan-inspector.tsx`                    | Target, Due                              | Shared picker                                 |
 | 29  | Team settings → cycle cadence             | `apps/web/src/components/team-detail/team-cycle-settings.tsx`               | New cadence starts                       | Shared picker                                 |
 | 30  | Cycle assignment → go to future date      | `apps/web/src/components/pickers/future-cycle-picker.tsx`                   | Future cycle lookup                      | Shared picker                                 |
+| 31  | Daily planning → yesterday review         | `apps/web/src/components/daily-planning/daily-planning-yesterday.tsx`       | Move unfinished work to another date     | Shared picker                                 |
 
 Before this pass, rows 9–12 each hosted their own `<input type="date">`, so four surfaces had four
 different behaviours and none of them had bounds. Rows 1–8 already shared a component, but that
@@ -95,6 +96,8 @@ calendar-day contract.
 | Admin → notification console        | `apps/admin/src/app/(admin)/notifications/compose-stage.tsx`            | Scheduled send           | `datetime-local`                                      |
 | Time → add past time                | `apps/web/src/components/time-tracking/time-add-past-dialog.tsx`        | Starts at, Ends at       | Shared `CalendarTimeField` + explicit DST fold choice |
 | Time → repair a manual interval     | `apps/web/src/components/time-tracking/time-record-dialog.tsx`          | Starts at, Ends at       | Shared `CalendarTimeField` + explicit DST fold choice |
+| Daily planning → session editor     | `apps/web/src/components/daily-planning/daily-planning-agenda.tsx`      | Block start              | `time` in the planning date's timezone                |
+| Daily planning → planned task row   | `apps/web/src/components/daily-planning/daily-planning-work.tsx`        | Finish work at           | `time` in the planning date's timezone                |
 
 ## Formatting
 

@@ -264,6 +264,7 @@ export const queryKeys = {
   dayHighlights: (date: string) => ['me', 'highlights', date] as const,
   agenda: (date: string) => ['me', 'agenda', date] as const,
   dailyPlan: (date: string) => ['me', 'daily-plan', date] as const,
+  dailyPlanningDay: (date: string) => ['me', 'daily-planning-day', date] as const,
   calendarSettings: () => ['me', 'calendar-settings'] as const,
   workLocation: () => ['me', 'work-location'] as const,
   workLocationGeocoding: (query: string) => ['me', 'work-location', 'geocoding', query] as const,

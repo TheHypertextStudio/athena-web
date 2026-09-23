@@ -3,8 +3,15 @@ import '@testing-library/jest-dom/vitest';
 import type { HubTaskItem, HubTodayPlanItem } from '../../src/lib/contracts/hub';
 import { OrganizationId } from '@docket/identity-access/ids';
 import { TaskId } from '@docket/work/ids';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import {
+  cleanup,
+  render as renderWithTestingLibrary,
+  screen,
+  within,
+} from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { ReactElement } from 'react';
 
 import NeedsAttention from '../../src/components/today/needs-attention';
 import DayPlan from '../../src/components/today/day-plan';
@@ -19,6 +26,11 @@ vi.mock('../../src/components/org-chip', () => ({
 
 const ORG_A = OrganizationId.parse('01JQ000000000000000000000A');
 const ORG_B = OrganizationId.parse('01JQ000000000000000000000B');
+
+function render(ui: ReactElement): ReturnType<typeof renderWithTestingLibrary> {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return renderWithTestingLibrary(<QueryClientProvider client={client}>{ui}</QueryClientProvider>);
+}
 
 /**
  * Short, readable ids ('a1', 't2', …) padded out to a real ULID shape so they parse as branded
@@ -165,10 +177,12 @@ describe('DayPlan', () => {
         loading={false}
       />,
     );
-    const row = screen.getByRole('link');
-    expect(within(row).getByText('Finalise the budget')).toBeInTheDocument();
-    expect(within(row).getByText(/Aug 7/)).toBeInTheDocument();
-    expect(within(row).getByText('Acme')).toBeInTheDocument();
+    expect(screen.getByText('Finalise the budget')).toBeInTheDocument();
+    expect(screen.getByText(/Aug 7/)).toBeInTheDocument();
+    expect(screen.getByText('Acme')).toBeInTheDocument();
+    expect(
+      screen.getByRole('link', { name: 'Open Finalise the budget details' }),
+    ).toBeInTheDocument();
   });
 
   it('marks a blocked item so the row says why it will not move', () => {
@@ -179,9 +193,8 @@ describe('DayPlan', () => {
         loading={false}
       />,
     );
-    const row = screen.getByRole('link');
-    expect(within(row).getByText(/blocked/i)).toBeInTheDocument();
-    expect(within(row).getByText(/unblocks 3/i)).toBeInTheDocument();
+    expect(screen.getByText(/blocked/i)).toBeInTheDocument();
+    expect(screen.getByText(/unblocks 3/i)).toBeInTheDocument();
   });
 
   it('groups by workspace only when the day actually spans more than one', () => {
@@ -213,14 +226,10 @@ describe('DayPlan', () => {
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
   });
 
-  it('offers a way to fill an empty day instead of only stating it is empty', () => {
-    const onPlan = vi.fn();
-    render(<DayPlan plan={[]} orgName={orgName} loading={false} unplanned onPlan={onPlan} />);
+  it('keeps the empty state factual while the daily planning entry owns the action', () => {
+    render(<DayPlan plan={[]} orgName={orgName} loading={false} unplanned />);
 
-    // Planning is the empty state's own action now — it used to be a banner above every section,
-    // announcing Athena where the day's work should have been.
-    fireEvent.click(screen.getByRole('button', { name: /plan today/i }));
-    expect(onPlan).toHaveBeenCalledOnce();
+    expect(screen.getByText('No plan for today yet')).toBeInTheDocument();
     expect(screen.getByRole('link')).toHaveAttribute('href', '/tasks');
   });
 

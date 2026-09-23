@@ -35,6 +35,10 @@ export interface TimeAddPastDialogProps {
   readonly timezone: string;
   readonly workspaceId?: string | undefined;
   readonly workspaces: readonly OrgSummary[];
+  readonly initialTaskId?: string | undefined;
+  readonly initialStartsAt?: string | undefined;
+  readonly initialEndsAt?: string | undefined;
+  readonly onSaved?: () => void;
 }
 
 function nowWallTime(timezone: string): string {
@@ -42,14 +46,92 @@ function nowWallTime(timezone: string): string {
   return date.toString().slice(0, 16);
 }
 
+interface TimeWorkFieldsProps {
+  readonly workspace: string;
+  readonly setWorkspace: (value: string) => void;
+  readonly workspaces: TimeAddPastDialogProps['workspaces'];
+  readonly taskId: string;
+  readonly setTaskId: (value: string) => void;
+  readonly tasks: readonly { id: string; title: string }[];
+  readonly tasksPending: boolean;
+  readonly title: string;
+  readonly setTitle: (value: string) => void;
+}
+
+function TimeWorkFields(props: TimeWorkFieldsProps): JSX.Element {
+  const {
+    workspace,
+    setWorkspace,
+    workspaces,
+    taskId,
+    setTaskId,
+    tasks,
+    tasksPending,
+    title,
+    setTitle,
+  } = props;
+  return (
+    <>
+      <Field label="Workspace">
+        <Select
+          value={workspace}
+          onChange={(event) => {
+            setWorkspace(event.target.value);
+            setTaskId('');
+          }}
+        >
+          <option value="">Choose a workspace</option>
+          {workspaces.map((entry) => (
+            <option key={entry.id} value={entry.id}>
+              {entry.name}
+            </option>
+          ))}
+        </Select>
+      </Field>
+      <Field label="Task">
+        <Select
+          value={taskId}
+          onChange={(event) => {
+            setTaskId(event.target.value);
+          }}
+          disabled={!workspace || tasksPending}
+        >
+          <option value="">Create a task from a title instead</option>
+          {tasks.map((task) => (
+            <option key={task.id} value={task.id}>
+              {task.title}
+            </option>
+          ))}
+        </Select>
+      </Field>
+      {!taskId ? (
+        <Field label="What did you work on?">
+          <Input
+            value={title}
+            onChange={(event) => {
+              setTitle(event.target.value);
+            }}
+            placeholder="Write release notes"
+          />
+        </Field>
+      ) : null}
+    </>
+  );
+}
+
 /** Create past time with explicit wall-clock bounds in the Hub timezone. */
-export function TimeAddPastDialog({
-  open,
-  onOpenChange,
-  timezone,
-  workspaceId,
-  workspaces,
-}: TimeAddPastDialogProps): JSX.Element {
+export function TimeAddPastDialog(props: TimeAddPastDialogProps): JSX.Element {
+  const {
+    open,
+    onOpenChange,
+    timezone,
+    workspaceId,
+    workspaces,
+    initialTaskId,
+    initialStartsAt,
+    initialEndsAt,
+    onSaved,
+  } = props;
   const [workspace, setWorkspace] = useState(workspaceId ?? workspaces[0]?.id ?? '');
   const [taskId, setTaskId] = useState('');
   const [title, setTitle] = useState('');
@@ -62,14 +144,30 @@ export function TimeAddPastDialog({
     if (!open) return;
     const now = nowWallTime(timezone);
     setWorkspace(workspaceId ?? workspaces[0]?.id ?? '');
-    setTaskId('');
+    setTaskId(initialTaskId ?? '');
     setTitle('');
-    setStartsAt(now);
-    setEndsAt(now);
+    setStartsAt(
+      initialStartsAt
+        ? Temporal.Instant.from(initialStartsAt)
+            .toZonedDateTimeISO(timezone)
+            .toPlainDateTime()
+            .toString()
+            .slice(0, 16)
+        : now,
+    );
+    setEndsAt(
+      initialEndsAt
+        ? Temporal.Instant.from(initialEndsAt)
+            .toZonedDateTimeISO(timezone)
+            .toPlainDateTime()
+            .toString()
+            .slice(0, 16)
+        : now,
+    );
     setStartOccurrence(null);
     setEndOccurrence(null);
     setError(null);
-  }, [open, timezone, workspaceId, workspaces]);
+  }, [open, timezone, workspaceId, workspaces, initialTaskId, initialStartsAt, initialEndsAt]);
   const tasksQ = useApiListQuery(
     apiQueryOptions(
       queryKeys.tasks(workspace),
@@ -125,6 +223,7 @@ export function TimeAddPastDialog({
       {
         onSuccess: () => {
           onOpenChange(false);
+          onSaved?.();
         },
       },
     );
@@ -136,54 +235,21 @@ export function TimeAddPastDialog({
         <DialogHeader>
           <DialogTitle>Add past time</DialogTitle>
           <DialogDescription>
-            Record time you already worked. Athena stores the exact times in {timezone}; it does not
-            infer work from your calendar.
+            Record time you already worked. The exact times will appear in your work history.
           </DialogDescription>
         </DialogHeader>
         <div className="flex flex-col gap-4">
-          <Field label="Workspace">
-            <Select
-              value={workspace}
-              onChange={(event) => {
-                setWorkspace(event.target.value);
-                setTaskId('');
-              }}
-            >
-              <option value="">Choose a workspace</option>
-              {workspaces.map((entry) => (
-                <option key={entry.id} value={entry.id}>
-                  {entry.name}
-                </option>
-              ))}
-            </Select>
-          </Field>
-          <Field label="Task">
-            <Select
-              value={taskId}
-              onChange={(event) => {
-                setTaskId(event.target.value);
-              }}
-              disabled={!workspace || tasksQ.isPending}
-            >
-              <option value="">Create a task from a title instead</option>
-              {tasks.map((task) => (
-                <option key={task.id} value={task.id}>
-                  {task.title}
-                </option>
-              ))}
-            </Select>
-          </Field>
-          {!taskId ? (
-            <Field label="What did you work on?">
-              <Input
-                value={title}
-                onChange={(event) => {
-                  setTitle(event.target.value);
-                }}
-                placeholder="Write release notes"
-              />
-            </Field>
-          ) : null}
+          <TimeWorkFields
+            workspace={workspace}
+            setWorkspace={setWorkspace}
+            workspaces={workspaces}
+            taskId={taskId}
+            setTaskId={setTaskId}
+            tasks={tasks}
+            tasksPending={tasksQ.isPending}
+            title={title}
+            setTitle={setTitle}
+          />
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <CalendarTimeField
               label="Started"

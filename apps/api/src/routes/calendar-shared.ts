@@ -1,13 +1,4 @@
-import {
-  actor,
-  calendarConnection,
-  calendarList,
-  dailyPlanItem,
-  db,
-  hub,
-  task,
-  type calendarEvent,
-} from '@docket/db';
+import { calendarConnection, calendarList, db, type calendarEvent } from '@docket/db';
 import type { AgendaOut } from '@docket/planning/agenda-contract';
 import type {
   CalendarConnectionOut,
@@ -24,7 +15,7 @@ import { readCalendarItemsInRange, readCalendarLayers } from '../calendar/calend
 import { readCalendarSourceGroups } from '../calendar/calendar-source-groups';
 import type { AppEnv } from '../context';
 import { AuthError } from '../error';
-import { buildTaskViewFilter } from './task-helpers';
+import { loadPlannedAgendaEntries } from './calendar-plan-entries';
 
 type CalendarConnectionRow = typeof calendarConnection.$inferSelect;
 type CalendarListRow = typeof calendarList.$inferSelect;
@@ -150,95 +141,17 @@ export async function buildAgendaPayload(
   userId: string,
   options: {
     date: string;
+    dayStart?: Date;
+    dayEnd?: Date;
     includeGoogleCalendar?: boolean | undefined;
     connectionIds?: readonly string[] | undefined;
     calendarIds?: readonly string[] | undefined;
   },
 ): Promise<z.input<typeof AgendaOut>> {
-  const hubRows = await db.select({ id: hub.id }).from(hub).where(eq(hub.userId, userId)).limit(1);
-  const planRows = hubRows[0]
-    ? await db
-        .select({
-          id: task.id,
-          taskId: task.id,
-          organizationId: task.organizationId,
-          title: task.title,
-          state: task.state,
-          priority: task.priority,
-          teamId: task.teamId,
-          projectId: task.projectId,
-          programId: task.programId,
-          visibility: task.visibility,
-          startsAt: dailyPlanItem.timeboxStartsAt,
-          endsAt: dailyPlanItem.timeboxEndsAt,
-        })
-        .from(dailyPlanItem)
-        .innerJoin(
-          task,
-          and(
-            eq(task.id, dailyPlanItem.refTaskId),
-            eq(task.organizationId, dailyPlanItem.refOrganizationId),
-          ),
-        )
-        .where(
-          and(
-            eq(dailyPlanItem.hubId, hubRows[0].id),
-            eq(dailyPlanItem.date, options.date),
-            isNull(task.archivedAt),
-          ),
-        )
-    : [];
+  const taskEntries = await loadPlannedAgendaEntries(userId, options.date);
 
-  // A daily-plan row is a durable personal pointer, not a durable read grant. Reauthorize each
-  // referenced task so legacy rows cannot disclose work after membership or grants change.
-  const organizationIds = [...new Set(planRows.map((row) => row.organizationId))];
-  const actorRows =
-    organizationIds.length > 0
-      ? await db
-          .select({ id: actor.id, organizationId: actor.organizationId })
-          .from(actor)
-          .where(
-            and(
-              eq(actor.userId, userId),
-              inArray(actor.organizationId, organizationIds),
-              eq(actor.kind, 'human'),
-              eq(actor.status, 'active'),
-              isNull(actor.archivedAt),
-            ),
-          )
-      : [];
-  const taskViewFilters = new Map(
-    await Promise.all(
-      actorRows.map(
-        async (actorRow) =>
-          [
-            actorRow.organizationId,
-            await buildTaskViewFilter(actorRow.organizationId, actorRow.id),
-          ] as const,
-      ),
-    ),
-  );
-
-  const taskEntries = planRows.flatMap((row) => {
-    const canView = taskViewFilters.get(row.organizationId);
-    if (!row.startsAt || !row.endsAt || !canView?.(row)) return [];
-    return [
-      {
-        kind: 'task_timebox' as const,
-        taskId: row.taskId,
-        organizationId: row.organizationId,
-        title: row.title,
-        state: row.state,
-        priority: row.priority,
-        startsAt: row.startsAt.toISOString(),
-        endsAt: row.endsAt.toISOString(),
-      },
-    ];
-  });
-
-  const start = new Date(`${options.date}T00:00:00.000Z`);
-  const end = new Date(start);
-  end.setUTCDate(end.getUTCDate() + 1);
+  const start = options.dayStart ?? new Date(`${options.date}T00:00:00.000Z`);
+  const end = options.dayEnd ?? new Date(start.getTime() + 24 * 60 * 60_000);
 
   let eventEntries: z.input<typeof AgendaOut>['entries'] = [];
   if (options.includeGoogleCalendar !== false) {

@@ -34,7 +34,8 @@
  * `now` is a parameter, never a module-scope clock, so every branch here is reachable from a test.
  */
 import type { dayCheckIn } from '@docket/db';
-import { db, genId } from '@docket/db';
+import { dailyPlanDay, db, genId } from '@docket/db';
+import { and, eq, isNotNull } from 'drizzle-orm';
 import type { CheckInResponse } from '@docket/planning/scheduling-directive-contract';
 
 import { dispatchSystemUserNotification } from '../services/notifications/system';
@@ -184,7 +185,18 @@ async function sweepOneHub(
   if (verdict.cooledDown) totals.cooledDown += 1;
 
   let outcome: ReorganizeOutcome | null = null;
-  if (verdict.shouldReorganize && preferences.autoReorganizeOnDrift) {
+  const [acceptedDay] = await db
+    .select({ id: dailyPlanDay.id })
+    .from(dailyPlanDay)
+    .where(
+      and(
+        eq(dailyPlanDay.hubId, entry.hubId),
+        eq(dailyPlanDay.date, date),
+        isNotNull(dailyPlanDay.accepted),
+      ),
+    )
+    .limit(1);
+  if (verdict.shouldReorganize && preferences.autoReorganizeOnDrift && !acceptedDay) {
     outcome = await reorganizeRemainingDay(db, context, now);
     if (outcome.moves.length > 0 || outcome.displaced.length > 0) {
       totals.reorganized += 1;

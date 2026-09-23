@@ -35,7 +35,7 @@ describe('ambient Athena entry points', () => {
     expect(calendar).toContain("source: { type: 'calendar_item'");
   });
 
-  it('routes the Today prompt into the shared rail instead of creating a local mini session UI', () => {
+  it('keeps Athena in the shared rail while Today offers a separate daily planner', () => {
     const source = read('apps/web/src/components/today/today-prompt.tsx');
     expect(source).toContain('useAthenaPanel');
     // The contextual door `/today` used to carry as a masthead button. It hands Athena the
@@ -47,6 +47,6 @@ describe('ambient Athena entry points', () => {
     expect(source).not.toContain('SessionStatusPill');
     const today = read('apps/web/src/app/(app)/today/page.tsx');
     expect(today).not.toContain('TodaySession');
-    expect(today).toContain("openTodayAthena('Plan today')");
+    expect(today).toContain('<DailyPlanningEntry date={date} />');
   });
 });

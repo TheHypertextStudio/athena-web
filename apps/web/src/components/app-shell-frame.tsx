@@ -339,7 +339,8 @@ export function AppShellFrame({ children, initialSession }: AppShellFrameProps):
   // A right rail makes a week collapse into a few narrow day lanes, which turns the surface into a
   // cramped agenda before the person has chosen that presentation.
   // `(^|/)calendar$` excludes settings' `google-calendar` (preceded by `-`, not `/`).
-  const calendarSurface = /(^|\/)calendar$/.test(pathname);
+  // Planning owns an editable agenda too; the shell rail would duplicate it.
+  const calendarSurface = /(^|\/)(calendar|plan)$/.test(pathname);
 
   // Bind the active workspace during render, from the route and the layout-hydrated workspace list.
   // Doing it here rather than only in `AppShellInner`'s effect is what lets the Workspace rows be

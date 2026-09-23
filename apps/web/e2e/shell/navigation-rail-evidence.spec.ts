@@ -248,7 +248,7 @@ test('the labeled navigation rail keeps daily work visible at every density', as
   await expect(page.getByRole('heading', { name: 'Today', exact: true })).toBeVisible({
     timeout: TIMEOUTS.pageReady,
   });
-  await expect(page.getByRole('heading', { name: 'Plan today with Athena' })).toBeVisible({
+  await expect(page.getByRole('link', { name: 'Plan day' })).toBeVisible({
     timeout: TIMEOUTS.pageReady,
   });
   await seedRecentDocuments(page, orgId);

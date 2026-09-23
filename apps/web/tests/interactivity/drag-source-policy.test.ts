@@ -12,6 +12,7 @@ const DND_IMPORT_ALLOWLIST = new Set([
   'src/components/dnd/object-pointer-sensor.ts',
   'src/components/dnd/source-aware-collision-detector.ts',
   'src/components/dnd/use-scheduling-slot-drop-target.ts',
+  'src/components/dnd/use-daily-plan-drop-target.ts',
   'src/components/dnd/use-draggable.ts',
   'src/components/dnd/use-relation-drop-target.ts',
   'src/components/work-views/work-board.tsx',

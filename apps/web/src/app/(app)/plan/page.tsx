@@ -4,6 +4,8 @@ import type { JSX } from 'react';
 import { Suspense } from 'react';
 
 import { PlanSurface } from '@/components/scheduling-plan/plan-surface';
+import { DailyPlanningSurface } from '@/components/daily-planning/daily-planning-surface';
+import { useAppSearchParams } from '@/lib/app-location';
 
 /**
  * The plan route — the generated week and the daily loop that runs off it.
@@ -17,7 +19,12 @@ export default function PlanPage(): JSX.Element {
   // skeletons, so the fallback here is only for the split second before hydration.
   return (
     <Suspense fallback={null}>
-      <PlanSurface />
+      <PlanRouteContent />
     </Suspense>
   );
+}
+
+function PlanRouteContent(): JSX.Element {
+  const search = useAppSearchParams();
+  return search.get('view') === 'day' ? <DailyPlanningSurface /> : <PlanSurface />;
 }

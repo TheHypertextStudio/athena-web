@@ -59,7 +59,7 @@ test('capture today + calendar baseline', async ({ page }, testInfo) => {
   });
 
   await page.goto('/today', { waitUntil: 'domcontentloaded' });
-  await expect(page.getByRole('button', { name: 'Plan today with Athena' })).toBeVisible({
+  await expect(page.getByRole('link', { name: 'Plan day' })).toBeVisible({
     timeout: 30_000,
   });
   await page.getByRole('textbox', { name: 'Ask Athena about today' }).fill('Help me plan today');
@@ -67,7 +67,7 @@ test('capture today + calendar baseline', async ({ page }, testInfo) => {
   await expect(page.getByRole('heading', { name: 'Athena', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Close Athena' })).toBeVisible();
   await page.getByRole('button', { name: 'Close Athena' }).click();
-  await expect(page.getByRole('button', { name: 'Plan today with Athena' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Plan day' })).toBeVisible();
 
   const teams = await apiJson<{ items: { id: string }[] }>(page, `/v1/orgs/${orgId}/teams`);
   const teamId = teams.items[0]?.id;

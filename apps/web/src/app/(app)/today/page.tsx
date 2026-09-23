@@ -5,6 +5,7 @@ import { type JSX, useMemo } from 'react';
 
 import { PartialLoadBanner } from '@/components/feedback';
 import { DayRecapEntry } from '@/components/today/day-recap-entry';
+import { DailyPlanningEntry } from '@/components/daily-planning/daily-planning-entry';
 import SuggestedTasks from '@/components/today/suggested-tasks';
 import NeedsAttention from '@/components/today/needs-attention';
 import { TodayPrompt } from '@/components/today/today-prompt';
@@ -46,17 +47,16 @@ function useTodayAttention(data: TodayPayload | null | undefined): TodayAttentio
 }
 
 /**
- * TodayPage — the daily operating surface, with Athena as its first interaction.
+ * TodayPage — the daily operating surface, with a distinct planning entry.
  *
  * @remarks
- * **At rest** it answers where things stand in a fixed order: the Athena field, work that needs a
- * decision and is not on the plan, the accepted plan itself, and the Projects and Initiatives that
- * work belongs to. Inline actions cover quick execution; entity links defer detailed workflows to
- * their canonical pages.
+ * **At rest** it offers Plan day or Resume planning, then shows the Athena field, work that needs a
+ * decision, the accepted plan, and the Projects and Initiatives that work belongs to. Inline actions
+ * cover quick execution; entity links defer detailed workflows to their canonical pages.
  *
  * **Engaged**, it keeps the plan visible and reveals Athena in the shared utility rail. The rail
- * receives the workspace and draft while Today remains the planning surface, so a person can return
- * to the plan without maintaining a second conversation host.
+ * receives the workspace and draft while Today remains the execution surface. The planner lives at
+ * `/plan?view=day` and returns here after confirmation.
  *
  * It is still only **one** conversation. The session rendered here is the same persistent thread
  * the ⌘J rail and `/athena` open; Today is another door onto it, not a place that grows its own.
@@ -77,12 +77,8 @@ export default function TodayPage(): JSX.Element {
   const { data, loading, error, refetch, orgName, heading, activeOrgId, date, displayTimezone } =
     useTodayData();
   const actions = useTodayActions(date);
-  const { openAthena, railVisible } = useAthenaPanel();
+  const { railVisible } = useAthenaPanel();
   const attention = useTodayAttention(data);
-  const openTodayAthena = (draft: string): void => {
-    if (!activeOrgId) return;
-    openAthena({ workspaceId: activeOrgId, workspaceName: orgName(activeOrgId) }, draft);
-  };
 
   return (
     <div className="mx-auto flex h-full w-full max-w-3xl flex-col gap-10 px-5 pt-10 pb-20 @2xl:px-8 @2xl:pt-14">
@@ -95,6 +91,8 @@ export default function TodayPage(): JSX.Element {
         </h1>
         <p className="text-on-surface-variant text-body-medium">{heading}</p>
       </Stack>
+
+      <DailyPlanningEntry date={date} />
 
       <TodayPrompt
         orgId={activeOrgId}
@@ -133,9 +131,6 @@ export default function TodayPage(): JSX.Element {
         orgName={orgName}
         loading={loading}
         unplanned={data?.planState === 'unplanned'}
-        onPlan={() => {
-          openTodayAthena('Plan today');
-        }}
         completing={actions.completing}
         onComplete={actions.complete}
         onDefer={actions.defer}

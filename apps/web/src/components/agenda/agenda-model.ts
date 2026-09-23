@@ -72,7 +72,7 @@ export function toAgendaEntries(data: HubTodayOut | AgendaOut | null): AgendaEnt
     return data.entries.map((entry, i) =>
       entry.kind === 'task_timebox'
         ? {
-            id: entry.taskId,
+            id: entry.sessionId ? `${entry.taskId}:${entry.sessionId}` : entry.taskId,
             source: 'task',
             taskId: entry.taskId,
             organizationId: entry.organizationId,

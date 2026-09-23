@@ -33,8 +33,15 @@ const ADAPTER_VIEWPORTS = [
   { width: 390, height: 844 },
 ] as const;
 
+/**
+ * Every shared roster the release contract covers, with the ARIA role its table announces.
+ *
+ * Task and Initiative rows nest under a parent of their own kind, so those rosters are always
+ * treegrids with row levels (`nestsHierarchy` in `work-list-groups.ts`); Project and Program
+ * rosters are flat grids.
+ */
 const ROUTES = [
-  { route: 'tasks', heading: 'Tasks', grid: 'Tasks', view: ROSTER_VIEWS.task, role: 'grid' },
+  { route: 'tasks', heading: 'Tasks', grid: 'Tasks', view: ROSTER_VIEWS.task, role: 'treegrid' },
   {
     route: 'projects',
     heading: 'Projects',

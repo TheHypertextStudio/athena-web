@@ -8,6 +8,30 @@
 
 ## Active Tasks
 
+### [RELEASE-ROSTER-001] Unblock production deploys held by the shared roster release test
+
+- **Status**: COMPLETED
+- **Started**: 2026-09-23
+- **Priority**: P0
+- **Description**: `Core screen acceptance` failed on `main` from ed27c5e2f onward (runs
+  35836371935, 35895232188), so `Release ready` and `Deploy main` were skipped and nothing after
+  58ac3e234 reached production. The failure was the only red check.
+- **Root cause**: bd231dd76 ("Show subtasks under their parent in every task list") made the Tasks
+  roster announce itself as a `treegrid`, since `nestsHierarchy` now covers Task as well as
+  Initiative targets. That change was intended and matches the rest of the product. It updated the
+  other e2e specs, but `e2e/release/work-roster-acceptance.spec.ts` still looked for
+  `getByRole('grid', { name: 'Tasks' })` and waited 60 seconds for a table that never existed. The CI
+  screenshot shows the roster rendered correctly as a `treegrid`.
+- **Fix**: The spec's Tasks route now expects `treegrid`, and a comment on `ROUTES` explains which
+  rosters nest. Every geometry, paging, and interaction assertion is unchanged.
+- **Files changed**: `apps/web/e2e/release/work-roster-acceptance.spec.ts`, `docs/WORKLOG.md`.
+- **Validation**: I reproduced the failure locally at line 76 against a production build, using
+  local PostgreSQL in place of the Docker service because Docker was unavailable. The fixed spec
+  passes, and so does the full `e2e/release` suite (5/5). Web `tsc --noEmit`, web ESLint, and
+  `pnpm complexity:check` are clean.
+- **Learnings**: A change to a roster's ARIA role has to sweep `e2e/release/` too. Those specs run
+  only in the release gate, so a missed selector there blocks deploys rather than failing a PR check.
+
 ### [MCP-CATALOG-001] Create and edit labels and templates over MCP
 
 - **Status**: COMPLETED

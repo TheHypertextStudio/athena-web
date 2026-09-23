@@ -7,7 +7,7 @@ import { type QueryClient, useQueryClient } from '@tanstack/react-query';
 import { useAppRouter as useRouter } from '@/lib/interactions/navigation';
 import { useCallback, useId, useMemo } from 'react';
 
-import { copyObjectAction } from '@/components/actions/copy-object-action';
+import { objectReferenceActions } from '@/components/actions/object-reference-actions';
 import { settleRelationExecution } from '@/components/actions/settle-relation-execution';
 import { useCopyOutcome } from '@/components/clipboard';
 import {
@@ -224,7 +224,7 @@ export function useRegisterInitiativeActions(): void {
             if (href !== null) router.push(href);
           },
         },
-        copyObjectAction('initiative', reportOutcome),
+        ...objectReferenceActions('initiative', reportOutcome, router),
         {
           id: 'initiative.changeParent',
           relationId: 'initiative.parent',

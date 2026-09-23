@@ -74,10 +74,6 @@ function renderRegistration() {
   return { client, coordinator, registry };
 }
 
-function setup() {
-  return renderRegistration().registry;
-}
-
 const child: ObjectRef = {
   kind: 'initiative',
   id: 'child',
@@ -97,7 +93,7 @@ afterEach(() => {
 
 describe('Initiative actions', () => {
   it('registers one Initiative action set for navigation and hierarchy editing', () => {
-    const registry = setup();
+    const { registry } = renderRegistration();
     expect(registry.snapshot().ids).toEqual([
       'initiative.addLabel',
       'initiative.addSubinitiative',
@@ -107,6 +103,7 @@ describe('Initiative actions', () => {
       'initiative.open',
       'initiative.setLeadTeam',
       'initiative.setOwner',
+      'initiative.showOrigin',
     ]);
     expect(registry.getByRelation('initiative.parent')?.id).toBe('initiative.changeParent');
   });
@@ -701,7 +698,7 @@ describe('Initiative actions', () => {
   });
 
   it('opens an Initiative from a hub context without a route organization', async () => {
-    const registry = setup();
+    const { registry } = renderRegistration();
 
     await registry.invoke('initiative.open', () => ({
       objects: [{ ...child, organizationId: 'org-b' }],
@@ -714,7 +711,7 @@ describe('Initiative actions', () => {
   });
 
   it('rejects an Initiative property target from another organization', async () => {
-    const registry = setup();
+    const { registry } = renderRegistration();
 
     await registry.invoke('initiative.setOwner', () => ({
       objects: [{ ...child, organizationId: 'org-b' }],
@@ -735,7 +732,7 @@ describe('Initiative actions', () => {
 
   it('writes and invalidates same-owner Initiative properties through the subject owner', async () => {
     patchInitiative.mockResolvedValue(okResponse({}));
-    const registry = setup();
+    const { registry } = renderRegistration();
 
     await registry.invoke('initiative.setOwner', () => ({
       objects: [{ ...child, organizationId: 'org-b' }],
@@ -767,7 +764,7 @@ describe('Initiative actions', () => {
       finishRepair = resolve;
     });
     invalidateWorkTargetQueries.mockReturnValue(repair);
-    const registry = setup();
+    const { registry } = renderRegistration();
     let settled = false;
 
     const invocation = registry
@@ -800,7 +797,7 @@ describe('Initiative actions', () => {
     patchInitiative
       .mockResolvedValueOnce(okResponse({}))
       .mockRejectedValueOnce(new Error('second Initiative write failed'));
-    const registry = setup();
+    const { registry } = renderRegistration();
 
     const result = await registry.invoke('initiative.setOwner', () => ({
       objects: [
@@ -829,7 +826,7 @@ describe('Initiative actions', () => {
 
   it('refreshes only the target owner for mixed-owner Initiative properties', async () => {
     patchInitiative.mockResolvedValue(okResponse({}));
-    const registry = setup();
+    const { registry } = renderRegistration();
 
     const result = await registry.invoke('initiative.setOwner', () => ({
       objects: [
@@ -861,7 +858,7 @@ describe('Initiative actions', () => {
   });
 
   it('opens the same hierarchy picker for parent and child operations', async () => {
-    const registry = setup();
+    const { registry } = renderRegistration();
     const context = {
       objects: [child],
       source: 'context-menu' as const,
@@ -887,7 +884,7 @@ describe('Initiative actions', () => {
   });
 
   it('only offers move to top level when the Initiative has a parent edge', () => {
-    const registry = setup();
+    const { registry } = renderRegistration();
     const nested = registry.resolve(() => ({
       objects: [child],
       source: 'context-menu',

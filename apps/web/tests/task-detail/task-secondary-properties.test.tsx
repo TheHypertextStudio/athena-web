@@ -137,7 +137,7 @@ describe('TaskSecondaryProperties chips', () => {
     expect(overflow.getByLabelText(/^Milestone/)).toBeVisible();
     expect(overflow.getByRole('button', { name: /^Program/ })).toBeVisible();
     expect(overflow.getByRole('button', { name: /^Anticipated start/ })).toBeVisible();
-    expect(overflow.getByLabelText(/^Task — Created/)).toBeVisible();
+    expect(overflow.getByRole('button', { name: /^Created/ })).toBeVisible();
     // Each property exists once: the inline set is not repeated in the overflow.
     expect(overflow.queryByRole('button', { name: /^Labels/ })).not.toBeInTheDocument();
   });

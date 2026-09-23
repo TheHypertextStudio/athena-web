@@ -197,8 +197,9 @@ routes/project-rollup.ts}`, `domains/work/src/contracts/{milestone,task}.ts`,
 
 ### [PROVENANCE-001] Record and quietly surface where every change came from
 
-- **Status**: IN_PROGRESS
+- **Status**: COMPLETED
 - **Started**: 2026-09-22
+- **Completed**: 2026-09-22
 - **Priority**: P1
 - **Description**: Every task, project, and initiative write records a typed provenance (channel +
   performer, beside the authorizing actor). The app keeps it out of the way: the Created row opens
@@ -208,7 +209,7 @@ routes/project-rollup.ts}`, `domains/work/src/contracts/{milestone,task}.ts`,
   - [x] Taxonomy contract, `ChangeOrigin` v2, request-scoped recorder, MCP/Athena/REST entry points
   - [x] Record on every REST create/mutation and every worker path; `audit_event.origin`
   - [x] Provenance read endpoint and activity-row origin
-  - [ ] Origin card, truthful activity rows, Show origin action
+  - [x] Origin card, truthful activity rows, Show origin action
 - **Decisions**: `ChangeOrigin` v2 stays a superset of v1 (`tool`, `client`, `sessionId`,
   `planId`, `planOwnerUserId` keep their top-level spelling) because phone summaries, Athena undo,
   and canvas replay read those keys, one of them through raw SQL. `createdBy` keeps meaning the
@@ -235,7 +236,29 @@ routes/project-rollup.ts}`, `domains/work/src/contracts/{milestone,task}.ts`,
   write and without the parent completion cascade. Initiative parentage lives in a link table
   that change sets do not track, so hierarchy moves record the child with unchanged fields.
   Program and initiative labels have no relation kind and record as entity updates. Project,
-  program, and initiative delete record as `archive`; undo reports those rows gone.
+  program, and initiative delete record as `archive`; undo reports those rows gone. The MCP
+  `update` tool records a change set but writes no `audit_event`, so an MCP edit appears as the
+  origin card's Last changed side and never as a task activity row (an MCP create does).
+- **Slice 4 notes**: One formatter (`apps/web/src/lib/provenance/format.ts`) turns an origin into
+  a performer, an optional channel detail, and an avatar kind. A rule names Docket as the
+  performer with the rule as the detail, so activity rows keep the performer-then-channel shape.
+  The origin card (`components/provenance/origin-card.tsx`) wraps the Created value in the
+  `@docket/ui` `HoverCard` and reads `GET /provenance/:kind/:id` only when open. The Created value
+  is the task sidebar's footer date, or an overflow-only Created chip in the metadata row (task on
+  a narrow pane, project, initiative); the chip reads its entity from the layout's object
+  (`views/entity-detail-context.ts`). Show origin is one definition per kind, spread with Copy via
+  `objectReferenceActions`; it leaves a request in `lib/provenance/origin-request.ts` and
+  navigates when the object's page is not open. `EntityMetadataRow`'s overflow is now controlled
+  so a hidden Created chip can open it. The palette lists registry actions that declare
+  `palette: true` for the selection of the list focused when it opened, or the page's object
+  (`command-palette/subject-commands.ts`). Show origin is hidden, not disabled, for a
+  multi-selection: the registry's arity rule hides every single-object action there. Line and
+  complexity ceilings on the two detail clients and three action registrations were held flat by
+  inlining a single-use `display` and merging duplicate imports.
+- **Validation (slice 4)**: root typecheck, lint, complexity ledger, and format pass; whole web
+  suite passes. Verified on the dev stack with an app-created task, an MCP-created task (OAuth
+  client registered as "Claude Code"), MCP edits, project, and initiative: hover, focus, context
+  menu, palette, and list-row Show origin (navigates, then opens) at 1440 and 390, light and dark.
 - **Blockers**: None.
 
 ---

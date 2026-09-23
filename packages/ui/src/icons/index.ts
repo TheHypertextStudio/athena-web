@@ -86,6 +86,7 @@ export { default as Globe } from '@mui/icons-material/Public';
 export { default as HelpCircle } from '@mui/icons-material/HelpOutlined';
 export { default as ListChecks } from '@mui/icons-material/ChecklistRtl';
 export { default as ListView } from '@mui/icons-material/ViewList';
+export { default as History } from '@mui/icons-material/History';
 export { default as Home } from '@mui/icons-material/Home';
 export { default as Inbox } from '@mui/icons-material/Inbox';
 export { default as Info } from '@mui/icons-material/InfoOutlined';

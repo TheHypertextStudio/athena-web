@@ -46,7 +46,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useAppRouter as useRouter } from '@/lib/interactions/navigation';
 import { useCallback, useMemo } from 'react';
 
-import { copyObjectAction } from '@/components/actions/copy-object-action';
+import { objectReferenceActions } from '@/components/actions/object-reference-actions';
 import { useCopyOutcome } from '@/components/clipboard';
 import { usePickerOverlay } from '@/components/pickers/picker-overlay';
 import { useTaskHierarchyMutation } from '@/components/tasks/use-task-hierarchy-mutation';
@@ -761,7 +761,7 @@ export function useRegisterTaskActions(): void {
           await navigator.clipboard.writeText(new URL(href, window.location.origin).toString());
         },
       },
-      copyObjectAction('task', reportOutcome),
+      ...objectReferenceActions('task', reportOutcome, router),
       {
         id: 'task.showInGraph',
         label: 'Show in Task graph',

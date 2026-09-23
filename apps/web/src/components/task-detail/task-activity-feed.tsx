@@ -22,9 +22,10 @@ import { QueryLoadFailure } from '@/components/feedback';
 import { StaticMarkdown } from '@/components/editor/static-markdown';
 import { relativeTime } from '@/components/project-detail/format-time';
 import { api } from '@/lib/api';
+import { useViewerActorId } from '@/lib/provenance/defs';
 import { apiInfiniteQueryOptions, queryKeys, useInfiniteApiQuery } from '@/lib/query';
 
-import { activityActorName, activitySentence } from './format-activity';
+import { activityPerformer, activitySentence, activityTimestampTitle } from './format-activity';
 import { TaskDelegatedWork } from './task-delegated-work';
 import { DetailSection } from '@/components/entity-detail/detail-section';
 
@@ -100,19 +101,28 @@ function ActivityFilterMenu({ filter, onFilterChange }: ActivityFilterMenuProps)
   );
 }
 
-/** One chronological Activity row. */
-function ActivityRow({ entry }: { readonly entry: TaskActivityOut }): JSX.Element {
-  const name = activityActorName(entry);
+/** Props for {@link ActivityRow}. */
+interface ActivityRowProps {
+  readonly entry: TaskActivityOut;
+  readonly orgId: string;
+}
+
+/** One chronological Activity row, naming whoever performed the change. */
+function ActivityRow({ entry, orgId }: ActivityRowProps): JSX.Element {
+  // Only an agent working for someone reads its owner ("for You"), so only its row asks who is viewing.
+  const viewerActorId = useViewerActorId(orgId, entry.origin?.channel === 'mcp');
+  const performer = activityPerformer(entry, viewerActorId);
+  const { name } = performer;
   return (
     <li className="flex items-start gap-2.5">
-      <ActorAvatar kind="human" name={name} size={24} className="mt-0.5 shrink-0" />
+      <ActorAvatar kind={performer.avatarKind} name={name} size={24} className="mt-0.5 shrink-0" />
       <div className="text-body-medium text-on-surface-variant min-w-0 flex-1">
         <div>
           <span className="text-on-surface">{name}</span>{' '}
           {entry.type === 'comment' ? 'commented' : entrySentence(entry)}{' '}
           <time
             dateTime={entry.createdAt}
-            title={entry.createdAt}
+            title={activityTimestampTitle(entry.createdAt, performer.detail)}
             className="text-label-medium text-on-surface-variant whitespace-nowrap"
           >
             {relativeTime(entry.createdAt)}
@@ -198,7 +208,7 @@ export function TaskActivityFeed({
         ) : (
           <ol className="flex flex-col gap-4">
             {entries.map((entry) => (
-              <ActivityRow key={entry.id} entry={entry} />
+              <ActivityRow key={entry.id} entry={entry} orgId={orgId} />
             ))}
           </ol>
         )}

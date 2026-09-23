@@ -13,6 +13,7 @@ import {
 
 import { CommandPalette } from './command-palette';
 import { PageCommandsProvider } from './page-commands';
+import type { PaletteOpening } from './subject-commands';
 
 /** The command-palette controls exposed to the app shell. */
 export interface CommandPaletteValue {
@@ -73,16 +74,25 @@ export function CommandPaletteProvider({
   children,
 }: CommandPaletteProviderProps): JSX.Element {
   const [open, setOpen] = useState(false);
+  const [opening, setOpening] = useState<PaletteOpening | null>(null);
+  // Read before the palette takes focus, so it still names the row or page the person was on.
+  const recordOpening = useCallback(() => {
+    setOpening({ element: document.activeElement });
+  }, []);
 
   const openPalette = useCallback(() => {
-    if (enabled) setOpen(true);
-  }, [enabled]);
+    if (!enabled) return;
+    recordOpening();
+    setOpen(true);
+  }, [enabled, recordOpening]);
   const closePalette = useCallback(() => {
     setOpen(false);
   }, []);
   const togglePalette = useCallback(() => {
-    if (enabled) setOpen((o) => !o);
-  }, [enabled]);
+    if (!enabled) return;
+    recordOpening();
+    setOpen((o) => !o);
+  }, [enabled, recordOpening]);
 
   // The global shortcut listener: Cmd/Ctrl+K toggles the palette. (Cmd/Ctrl+J summons the
   // Athena panel — see `AthenaPanelProvider`, which owns that shortcut independently.)
@@ -94,13 +104,14 @@ export function CommandPaletteProvider({
     const onKeyDown = (event: KeyboardEvent): void => {
       if (!isPaletteShortcut(event)) return;
       event.preventDefault();
+      recordOpening();
       setOpen((o) => !o);
     };
     document.addEventListener('keydown', onKeyDown);
     return () => {
       document.removeEventListener('keydown', onKeyDown);
     };
-  }, [enabled]);
+  }, [enabled, recordOpening]);
 
   const visibleOpen = enabled && open;
 
@@ -121,7 +132,7 @@ export function CommandPaletteProvider({
 
   return (
     <CommandPaletteContext.Provider value={value}>
-      <PageCommandsProvider>{children}</PageCommandsProvider>
+      <PageCommandsProvider opening={opening}>{children}</PageCommandsProvider>
     </CommandPaletteContext.Provider>
   );
 }

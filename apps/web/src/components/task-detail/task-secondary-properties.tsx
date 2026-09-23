@@ -24,16 +24,18 @@ import {
   LabelsPicker,
   type PickerOption,
 } from '@docket/ui/components';
-import { Flag, Layers, Schedule, Tag } from '@docket/ui/icons';
+import { Flag, Layers, Tag } from '@docket/ui/icons';
 import { cn } from '@docket/ui/lib/utils';
 import type { JSX } from 'react';
 
+import { CreatedOriginChip } from '@/components/provenance/created-origin';
 import {
   ENTITY_METADATA_CHIP_CLASS,
   EntityMetadataItem,
   EntityMetadataStaticChip,
 } from '@/components/views/entity-detail-layout';
 import { formatCalendarDate, isoDateOf } from '@/lib/format-date';
+import type { ProvenanceSubject } from '@/lib/provenance/defs';
 import type { TaskPatch } from '@/lib/use-task-mutations';
 import { FutureCyclePicker } from '@/components/pickers/future-cycle-picker';
 import { EstimatePicker } from './EstimatePicker';
@@ -107,6 +109,16 @@ function originLabel(externalUrl: string): string {
   } catch {
     return 'Open the original';
   }
+}
+
+/**
+ * The task as the origin card names it.
+ *
+ * @param task - The task on the page.
+ * @returns the provenance subject for its Created value.
+ */
+export function taskProvenanceSubject(task: TaskDetail): ProvenanceSubject {
+  return { kind: 'task', id: task.id, organizationId: task.organizationId };
 }
 
 /**
@@ -298,13 +310,7 @@ function ReadOnlyChips({ model }: SecondaryProps): JSX.Element {
           />
         </EntityMetadataItem>
       ) : null}
-      <EntityMetadataItem priority={7} overflowOnly>
-        <EntityMetadataStaticChip
-          icon={<Schedule className="size-4" />}
-          label={`Created ${formatCalendarDate(task.createdAt) ?? '—'}`}
-          ariaLabel="Task"
-        />
-      </EntityMetadataItem>
+      <CreatedOriginChip subject={taskProvenanceSubject(task)} createdAt={task.createdAt} />
       {provenance.source === 'linked' && provenance.externalUrl ? (
         <EntityMetadataItem priority={7} overflowOnly>
           <OriginLink

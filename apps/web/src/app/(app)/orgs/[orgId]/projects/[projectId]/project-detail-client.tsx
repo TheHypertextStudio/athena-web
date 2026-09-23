@@ -34,7 +34,7 @@ import { type JSX, useCallback, useEffect, useMemo, useState } from 'react';
 
 import { useHighlightedIds } from '@/components/athena/proposal-highlight';
 import { useProposedTaskChanges } from '@/lib/athena/proposed-changes';
-import { useCreateLabel } from '@/components/labels/queries';
+import { labelsDef, useCreateLabel } from '@/components/labels/queries';
 import { ConfirmDestructiveDialog, InlineBanner } from '@docket/ui/components';
 import { TemplateAwareEntityDocument } from '@/components/editor/apply-description-template';
 import { EditableSubtitle } from '@/components/editor/editable-subtitle';
@@ -84,7 +84,7 @@ import { projectWorkSectionsDef } from '@/lib/fetch-project-sections';
 import { useFiscalYearStartMonth } from '@/lib/use-fiscal-year-start-month';
 import { useAppRouter } from '@/lib/interactions/navigation';
 import { openTaskRecord } from '@/lib/local-first-navigation';
-import { labelsDef } from '@/components/labels/queries';
+import { CreatedOriginChip } from '@/components/provenance/created-origin';
 import {
   removeNavigationSnapshot,
   seedNavigationSnapshot,
@@ -313,7 +313,6 @@ export default function ProjectDetailPage(): JSX.Element {
   const projectTaskCount = aggregate?.defaultView.progress.taskCount ?? 0;
   const linkedInitiativeIds =
     aggregate?.references.initiatives.map((initiative) => initiative.id) ?? [];
-  const display = entityDisplay.display;
   const invalidateProject = useCallback((): void => {
     void invalidateWorkTargetQueries(queryClient, {
       target: 'project',
@@ -585,7 +584,7 @@ export default function ProjectDetailPage(): JSX.Element {
       }
       icon={
         <EntityIconPicker
-          display={display}
+          display={entityDisplay.display}
 
           workspaceId={orgId}
           entityName={project.name}
@@ -697,6 +696,7 @@ export default function ProjectDetailPage(): JSX.Element {
                 );
               }}
             />
+            <CreatedOriginChip createdAt={project.createdAt} />
           </EntityMetadataRow>
           <HeaderLoadFailureBanner
             failures={[

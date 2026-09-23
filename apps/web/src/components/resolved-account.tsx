@@ -38,3 +38,13 @@ export function useResolvedAccountId(): string | null {
   }
   return userId;
 }
+
+/**
+ * Read the resolved account when a surface can render without one.
+ *
+ * @returns The account id, or `null` while unknown or outside the authenticated shell.
+ */
+export function useOptionalResolvedAccountId(): string | null {
+  const userId = useContext(ResolvedAccountContext);
+  return userId === MISSING_RESOLVED_ACCOUNT ? null : userId;
+}

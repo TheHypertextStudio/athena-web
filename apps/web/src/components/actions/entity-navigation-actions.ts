@@ -10,6 +10,7 @@ import { useAppRouter as useRouter } from '@/lib/interactions/navigation';
 import { useMemo } from 'react';
 
 import { copyObjectAction } from '@/components/actions/copy-object-action';
+import { objectReferenceActions } from '@/components/actions/object-reference-actions';
 import { settleRelationExecution } from '@/components/actions/settle-relation-execution';
 import { useCopyOutcome } from '@/components/clipboard';
 import { usePickerOverlay } from '@/components/pickers/picker-overlay';
@@ -381,7 +382,7 @@ export function useRegisterEntityNavigationActions(): void {
           section: 'organize',
           run: (context) => executeProject(context, 'project.blocks'),
         },
-        copyObjectAction('project', reportOutcome),
+        ...objectReferenceActions('project', reportOutcome, router),
       ]),
       program: defineActionDomain('program', [
         {

@@ -13,6 +13,9 @@
  * and an unset value must never surface as a literal "null" or a bare dash.
  */
 import type { TaskActivityOut } from '@docket/connections/activity-contract';
+import type { ActorKind } from '@docket/ui/components';
+
+import { formatProvenance } from '@/lib/provenance/format';
 
 /**
  * Build the one-sentence description of what an activity entry records.
@@ -46,4 +49,54 @@ export function activitySentence(entry: TaskActivityOut): string {
  */
 export function activityActorName(entry: TaskActivityOut): string {
   return entry.actorName ?? 'Someone';
+}
+
+/** Who a row names, the avatar it draws, and how the change arrived. */
+export interface ActivityPerformer {
+  readonly name: string;
+  readonly avatarKind: ActorKind;
+  /** The channel detail for the timestamp's tooltip, or null for a person working in the app. */
+  readonly detail: string | null;
+}
+
+/**
+ * Name the performer behind an entry.
+ *
+ * @remarks
+ * A change Athena, an agent, or Docket itself performed names that performer, so an MCP edit
+ * reads "Claude Code set Status to Done". A change a person made reads exactly as it always has.
+ *
+ * @param entry - The activity entry.
+ * @param currentActorId - The viewer's actor, so an agent working for them reads "for You".
+ * @returns the performer to show.
+ */
+export function activityPerformer(
+  entry: TaskActivityOut,
+  currentActorId: string | null,
+): ActivityPerformer {
+  const origin = entry.origin;
+  const display =
+    origin === null || origin.performerKind === 'person'
+      ? null
+      : formatProvenance(origin, { actorId: entry.actorId, name: entry.actorName }, currentActorId);
+  if (display === null) {
+    return { name: activityActorName(entry), avatarKind: 'human', detail: null };
+  }
+  return { name: display.performer, avatarKind: display.avatarKind, detail: display.detail };
+}
+
+/**
+ * The timestamp's tooltip: the exact time, with the channel detail beside it.
+ *
+ * @param createdAt - When the entry was recorded (ISO-8601).
+ * @param detail - The performer's channel detail, when there is one.
+ * @returns the tooltip text.
+ */
+export function activityTimestampTitle(createdAt: string, detail: string | null): string {
+  if (detail === null) return createdAt;
+  const parsed = new Date(createdAt);
+  const exact = Number.isNaN(parsed.getTime())
+    ? createdAt
+    : parsed.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+  return `${exact} · ${detail}`;
 }

@@ -96,34 +96,50 @@ person opens the origin card.
 Task activity rows carry a compact `origin` (`ActivityOriginOut`) so the feed can name the real
 performer. The MCP task resource exposes the same normalized origin.
 
-> §4 is not built yet; it lands in the last slice of PROVENANCE-001 (see `docs/WORKLOG.md`).
-
 ---
 
-## 4. Presentation (planned)
+## 4. Presentation
 
 Provenance stays out of the way. It is never a badge, a column, or a banner.
 
-- **The Created row** on task, project, and initiative pages still reads just the date. Hovering
-  or focusing it opens the origin card: who created it, who last changed it, and how.
-- **The activity feed** names the performer and shows their avatar kind, so an MCP change reads
-  "Claude Code set Status to Done". The channel detail sits in the timestamp's tooltip. Rows a
-  person made in the app look exactly as before.
-- **Show origin** is an action on every task, project, and initiative, reachable from the
-  command palette and the right-click menu. It opens the same card.
+- **The Created row** on task, project, and initiative pages still reads just the date. Hovering,
+  focusing, clicking, or tapping it opens the origin card (`components/provenance/origin-card.tsx`
+  in a `HoverCard`): a **Created** row and a **Last changed** row, each with the performer's
+  avatar, the formatted line, and a relative time whose tooltip is the exact time. A side the
+  formatter cannot name is left out; with neither side the card does not open. The card reads
+  `GET /provenance/:kind/:id` only when it opens. On the task page the row is the properties
+  sidebar's Created value, or the Created chip in the metadata row's overflow on a narrow pane;
+  project and initiative pages carry the Created chip in their metadata row's overflow.
+- **The activity feed** names the performer and shows their avatar kind when Athena, an agent,
+  or Docket performed the change, so an MCP change reads "Claude Code set Status to Done". The
+  channel detail sits in the timestamp's tooltip beside the exact time. Rows a person made in the
+  app look exactly as before.
+- **Show origin** (`task.showOrigin`, `project.showOrigin`, `initiative.showOrigin`) is offered
+  for one object in the right-click menu and the command palette. The palette lists actions that
+  declare `palette: true` for the selection of the list that held focus when it opened, or for
+  the object whose page is open. The action leaves a request in `lib/provenance/origin-request.ts`
+  and, away from the object's page, navigates there; the Created row answers it by scrolling into
+  view and opening the card, opening the metadata row's overflow first when the chip lives there.
 
-Display labels come from one formatter (`apps/web/src/lib/provenance/format.ts`):
+Display labels come from one formatter (`apps/web/src/lib/provenance/format.ts`). Each is a
+performer and an optional channel detail:
 
 | Recorded                    | Shown                 |
 | --------------------------- | --------------------- |
 | `app`, performer = you      | You                   |
 | `app`, performer = teammate | Their name            |
 | `athena` / `chat`           | Athena · Chat         |
+| `athena` / `session`        | Athena · Session      |
 | `athena` / `phone`          | Athena · Phone call   |
 | `mcp`, client Claude Code   | Claude Code · for You |
+| `mcp`, registered agent     | The agent's name      |
 | `api`, client X             | X · API               |
 | `email`                     | Athena · From email   |
 | `sync`, Linear              | Linear · Synced       |
 | `import`, Notion            | Notion · Imported     |
-| `rule` / `recurrence`       | Repeats               |
+| `rule` / `recurrence`       | Docket · Repeats      |
+| `rule`, other rules         | Docket · the rule     |
 | Unknown or pre-provenance   | Nothing (date only)   |
+
+A rule names Docket as its performer so an activity row reads "Docket created this task" with
+"Repeats" in the timestamp's tooltip, the same performer-then-channel shape as every other row.

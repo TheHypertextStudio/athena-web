@@ -42,9 +42,16 @@ import {
   useState,
 } from 'react';
 
-import { objectTargetProps, type ObjectRef } from '@/lib/actions/object';
+import { OBJECT_PAGE_ATTRIBUTE, objectTargetProps, type ObjectRef } from '@/lib/actions/object';
 
 import { useDetailHeaderCollapse } from './entity-detail-collapse';
+import {
+  EntityDetailObjectContext,
+  MetadataPlacementContext,
+  type OverflowRevealer,
+  useMetadataItemPlacement,
+  useOverflowDisclosure,
+} from './entity-detail-context';
 import { useElementWidth } from './use-element-width';
 
 /** Props for {@link EntityDetailLayout}. */
@@ -177,7 +184,7 @@ function DetailHeader({
   return (
     <header
       ref={headerRef}
-      {...(object ? objectTargetProps(object) : {})}
+      {...(object ? { ...objectTargetProps(object), [OBJECT_PAGE_ATTRIBUTE]: '' } : {})}
       // The two ends of M3's on-scroll app bar, as roles from the documented ramp rather than as
       // tokens. A static `Surface` cannot express this: the bar interpolates between two tones as
       // the page scrolls, so the tone is an animation rather than a resting class. Naming both
@@ -357,42 +364,44 @@ export function EntityDetailLayout({
   const asideState = useMemo<EntityDetailAsideState>(() => ({ docked }), [docked]);
 
   return (
-    <EntityDetailAsideContext.Provider value={asideState}>
-      <div
-        ref={scrollRef}
-        data-detail-panel-scroll=""
-        data-detail-cover={cover ? 'present' : 'absent'}
-        data-detail-print={printSummary ? '' : undefined}
-        className={cn(
-          // Sections are rows of this grid, so the rhythm between them is declared once here rather
-          // than by each section spacing itself against its neighbours. The bottom inset is not one
-          // of them: it belongs to `.detail-body`, because this element declares its own container
-          // and so can never resolve the `--page-gutter` step its own descendants see.
-          'page-grid h-full min-h-0 w-full gap-y-4 overflow-y-auto @2xl:gap-y-5',
-          className,
-        )}
-      >
-        {/* Bleeds the full pane so the backdrop can reach both edges, and re-measures its own
+    <EntityDetailObjectContext.Provider value={object ?? null}>
+      <EntityDetailAsideContext.Provider value={asideState}>
+        <div
+          ref={scrollRef}
+          data-detail-panel-scroll=""
+          data-detail-cover={cover ? 'present' : 'absent'}
+          data-detail-print={printSummary ? '' : undefined}
+          className={cn(
+            // Sections are rows of this grid, so the rhythm between them is declared once here rather
+            // than by each section spacing itself against its neighbours. The bottom inset is not one
+            // of them: it belongs to `.detail-body`, because this element declares its own container
+            // and so can never resolve the `--page-gutter` step its own descendants see.
+            'page-grid h-full min-h-0 w-full gap-y-4 overflow-y-auto @2xl:gap-y-5',
+            className,
+          )}
+        >
+          {/* Bleeds the full pane so the backdrop can reach both edges, and re-measures its own
             children through the nested grid, so nothing inside has to know it sits in a bleeding
             section. */}
-        <DetailHeader
-          headerRef={headerRef}
-          cover={cover}
-          eyebrow={eyebrow}
-          icon={icon}
-          title={title}
-          subtitle={subtitle}
-          metadata={metadata}
-          actions={actions}
-          tabs={tabs}
-          object={object}
-          hasPrintSummary={Boolean(printSummary)}
-        />
-        <DetailBody printSummary={printSummary} aside={aside} docked={docked}>
-          {children}
-        </DetailBody>
-      </div>
-    </EntityDetailAsideContext.Provider>
+          <DetailHeader
+            headerRef={headerRef}
+            cover={cover}
+            eyebrow={eyebrow}
+            icon={icon}
+            title={title}
+            subtitle={subtitle}
+            metadata={metadata}
+            actions={actions}
+            tabs={tabs}
+            object={object}
+            hasPrintSummary={Boolean(printSummary)}
+          />
+          <DetailBody printSummary={printSummary} aside={aside} docked={docked}>
+            {children}
+          </DetailBody>
+        </div>
+      </EntityDetailAsideContext.Provider>
+    </EntityDetailObjectContext.Provider>
   );
 }
 
@@ -517,7 +526,7 @@ export function fitEntityMetadataPriority({
   return visiblePriority;
 }
 
-interface EntityMetadataLaneContext {
+interface EntityMetadataLaneContext extends OverflowRevealer {
   readonly lane: 'inline' | 'overflow';
   readonly visiblePriority: EntityMetadataPriority;
   readonly declareItem?: (
@@ -564,6 +573,7 @@ export function EntityMetadataItem({
   }, [declareItem, overflowOnly, priority]);
 
   const hiddenInline = lane?.lane === 'inline' && (overflowOnly || priority > lane.visiblePriority);
+  const placement = useMetadataItemPlacement(hiddenInline, lane);
   if (lane?.lane === 'overflow' && !overflowOnly && priority <= lane.visiblePriority) return null;
 
   return (
@@ -574,7 +584,9 @@ export function EntityMetadataItem({
       data-entity-metadata-priority={priority}
       className={cn('max-w-64 min-w-0 shrink-0 items-center [&>*]:min-w-0', className)}
     >
-      {children}
+      <MetadataPlacementContext.Provider value={placement}>
+        {children}
+      </MetadataPlacementContext.Provider>
     </div>
   );
 }
@@ -712,9 +724,11 @@ export function EntityMetadataRow({
     if (rowWidth > 0) setAvailableWidth(rowWidth);
   }, [rowWidth, setAvailableWidth]);
 
+  const overflow = useOverflowDisclosure();
+  const revealOverflow = overflow.reveal;
   const inlineLane = useMemo<EntityMetadataLaneContext>(
-    () => ({ lane: 'inline', visiblePriority, declareItem }),
-    [declareItem, visiblePriority],
+    () => ({ lane: 'inline', visiblePriority, declareItem, revealOverflow }),
+    [declareItem, revealOverflow, visiblePriority],
   );
   const overflowLane = useMemo<EntityMetadataLaneContext>(
     () => ({ lane: 'overflow', visiblePriority }),
@@ -734,7 +748,7 @@ export function EntityMetadataRow({
         </ControlGroup>
       </div>
       {hasOverflow ? (
-        <Popover>
+        <Popover open={overflow.open} onOpenChange={overflow.setOpen}>
           <PopoverTrigger asChild>
             <Button
               type="button"

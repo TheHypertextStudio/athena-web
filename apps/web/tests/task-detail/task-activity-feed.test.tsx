@@ -180,6 +180,51 @@ describe('TaskActivityFeed', () => {
     expect(rows[1]).toHaveTextContent('changed Status from Todo to In progress');
   });
 
+  it('names the agent that performed a change, and leaves a person’s change as it was', () => {
+    const viaMcp = entry({
+      id: 'audit:01ARZ3NDEKTSV4RRFFQ69G5F03',
+      origin: {
+        channel: 'mcp',
+        surface: null,
+        performerKind: 'agent',
+        performerName: 'Claude Code',
+        clientName: 'Claude Code',
+        provider: null,
+      },
+    });
+    const inApp = entry({
+      id: 'audit:01ARZ3NDEKTSV4RRFFQ69G5F04',
+      origin: {
+        channel: 'app',
+        surface: 'detail',
+        performerKind: 'person',
+        performerName: null,
+        clientName: null,
+        provider: null,
+      },
+    });
+    queryState.data = { pages: [{ items: [viaMcp, inApp] }] };
+
+    renderFeed();
+
+    const activity = screen.getByRole('region', { name: 'Activity' });
+    const [agentRow, personRow] = within(activity).getAllByRole('listitem');
+    if (agentRow === undefined || personRow === undefined) throw new Error('expected two rows');
+    expect(agentRow.querySelector('[data-actor-kind]')).toHaveAttribute('data-actor-kind', 'agent');
+    expect(within(agentRow).getByText('Claude Code')).toBeInTheDocument();
+    expect(agentRow).not.toHaveTextContent('Ada Lovelace');
+    const agentTime = agentRow.querySelector('time');
+    expect(agentTime).toHaveAttribute('datetime', viaMcp.createdAt);
+    expect(agentTime?.getAttribute('title')).not.toBe(viaMcp.createdAt);
+
+    expect(personRow.querySelector('[data-actor-kind]')).toHaveAttribute(
+      'data-actor-kind',
+      'human',
+    );
+    expect(within(personRow).getByText('Ada Lovelace')).toBeInTheDocument();
+    expect(personRow.querySelector('time')).toHaveAttribute('title', inApp.createdAt);
+  });
+
   it('uses application-owned copy when the Activity read fails', () => {
     queryState.data = undefined;
     queryState.isError = true;

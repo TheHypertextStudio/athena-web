@@ -200,6 +200,11 @@ interface ActionDefinitionBase {
   /** Marks a destructive action, so surfaces can tone it and place it last. */
   readonly destructive?: boolean;
   /**
+   * Offer this action in the command palette for the selection, or for the object whose page is
+   * open. Defaults to `false`.
+   */
+  readonly palette?: boolean;
+  /**
    * An extra applicability test beyond the kind/arity checks.
    *
    * @remarks

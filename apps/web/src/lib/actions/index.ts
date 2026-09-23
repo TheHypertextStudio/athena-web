@@ -43,6 +43,8 @@ export {
   parseObjectKey,
   readObjectTarget,
   readObjectActionScope,
+  readPageObject,
+  OBJECT_PAGE_ATTRIBUTE,
   type TaskObjectSource,
   taskObjectRef,
 } from './object';

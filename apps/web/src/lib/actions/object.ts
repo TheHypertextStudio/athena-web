@@ -565,6 +565,19 @@ export function objectTargetProps(
 /** The CSS selector matching any element marked by {@link objectTargetProps}. */
 export const OBJECT_TARGET_SELECTOR = '[data-object-kind][data-object-id]';
 
+/** The attribute a detail page's header carries beside its object marking. */
+export const OBJECT_PAGE_ATTRIBUTE = 'data-object-page';
+
+/**
+ * The object whose detail page is on screen.
+ *
+ * @param root - Where to look; the document by default.
+ * @returns the page's object, or `null` on a page that belongs to no single object.
+ */
+export function readPageObject(root: ParentNode = document): ObjectRef | null {
+  return readObjectTarget(root.querySelector(`[${OBJECT_PAGE_ATTRIBUTE}]`));
+}
+
 /**
  * Read the action scope attached to one object surface.
  *

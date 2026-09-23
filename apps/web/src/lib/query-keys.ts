@@ -55,6 +55,10 @@ export const queryKeys = {
   // property re-reads the entry it just wrote without any call site knowing the log exists.
   taskActivity: (orgId: string, taskId: string) =>
     ['org', orgId, 'tasks', taskId, 'activity'] as const,
+  // Nested under the entity's own key, so any write that invalidates the entity also refreshes
+  // where it came from and who last changed it.
+  provenance: (orgId: string, target: ViewTarget, id: string) =>
+    [...workTargetCollectionKey(orgId, target), id, 'provenance'] as const,
   processDefinitions: (orgId: string) => ['org', orgId, 'process-definitions'] as const,
   processDefinition: (orgId: string, definitionId: string) =>
     ['org', orgId, 'process-definitions', definitionId] as const,

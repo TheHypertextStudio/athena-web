@@ -14,7 +14,7 @@
  */
 import type { JSX } from 'react';
 
-import { formatCalendarDate } from '@/lib/format-date';
+import { CreatedOriginDate } from '@/components/provenance/created-origin';
 
 import { PropertyRow } from './PropertyRow';
 import {
@@ -35,6 +35,7 @@ import {
   OriginLink,
   ProgramField,
   StartField,
+  taskProvenanceSubject,
 } from './task-secondary-properties';
 
 /**
@@ -122,7 +123,9 @@ function ProvenanceFooter({ model }: { readonly model: TaskPropertyModel }): JSX
     <dl className="text-on-surface-variant text-body-small flex flex-col gap-1">
       <div className="flex gap-3">
         <dt className="w-28 shrink-0">Created</dt>
-        <dd>{formatCalendarDate(task.createdAt) ?? '—'}</dd>
+        <dd>
+          <CreatedOriginDate subject={taskProvenanceSubject(task)} createdAt={task.createdAt} />
+        </dd>
       </div>
       {provenance.source === 'linked' ? (
         <div className="flex min-w-0 gap-3">

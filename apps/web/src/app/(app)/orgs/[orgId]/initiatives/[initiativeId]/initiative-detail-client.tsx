@@ -4,7 +4,6 @@ import type { AttachmentOut } from '@docket/work/attachment-contract';
 import type { Health } from '@docket/work/capability-contract';
 import type { UpdateOut } from '@docket/work/update-contract';
 import { InitiativeSubjectRef } from '@docket/work/subject-ref-contract';
-import type { PickerOption } from '@docket/ui/components';
 import { useVocabulary } from '@docket/ui/hooks';
 import { CornerDownLeft, Ellipsis, Trash2 } from '@docket/ui/icons';
 import {
@@ -21,7 +20,7 @@ import Link from '@/components/docket-link';
 import { useTypedRoute } from '@/lib/app-location';
 import { type JSX, useEffect, useMemo, useState } from 'react';
 
-import { ConfirmDestructiveDialog } from '@docket/ui/components';
+import { ConfirmDestructiveDialog, type PickerOption } from '@docket/ui/components';
 import { TemplateAwareEntityDocument } from '@/components/editor/apply-description-template';
 import { PartialLoadBanner, QueryLoadFailure } from '@/components/feedback';
 import { PlanWithAthenaAction } from '@/components/initiatives/plan-with-athena-action';
@@ -45,6 +44,7 @@ import {
 
 import { memberActorOptions } from '@/components/pickers/options';
 import { usePickerOverlay } from '@/components/pickers/picker-overlay';
+import { CreatedOriginChip } from '@/components/provenance/created-origin';
 import { PublishAction } from '@/components/publishing/publish-action';
 import { ContainerDetailLoading } from '@/components/views/entity-snapshot-metadata';
 import { DetailPrintSummary } from '@/components/views/detail-print-summary';
@@ -175,7 +175,6 @@ export default function InitiativeDetailPage(): JSX.Element {
     ),
   );
   const updates = updatesQ.data?.items ?? [];
-  const display = entityDisplay.display;
   const canEdit = aggregate?.capabilities.contribute ?? false;
   const canManage = aggregate?.capabilities.manage ?? false;
   const currentActorId = aggregate?.viewer.actorId ?? null;
@@ -389,7 +388,7 @@ export default function InitiativeDetailPage(): JSX.Element {
       }
       icon={
         <EntityIconPicker
-          display={display}
+          display={entityDisplay.display}
 
           workspaceId={orgId}
           entityName={detail.name}
@@ -513,6 +512,7 @@ export default function InitiativeDetailPage(): JSX.Element {
                 Manage hierarchy
               </Button>
             </EntityMetadataItem>
+            <CreatedOriginChip createdAt={detail.createdAt} />
           </EntityMetadataRow>
           <HeaderLoadFailureBanner
             failures={[

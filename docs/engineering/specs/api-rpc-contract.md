@@ -409,7 +409,7 @@ anywhere. Times on the wire are Unix milliseconds. Contract:
 | `PUT /me/device-notification-sources/:deviceId` | `DeviceNotificationSourceIn{ platform, label, retentionDays, syncConsentedAt }`      | `DeviceNotificationSourceOut`                                                                 | authenticated owner |
 | `POST /me/device-notifications/batches`         | `DeviceNotificationBatchIn{ deviceId, notifications[≤100], removals[≤200] }` (8 MiB) | `DeviceNotificationBatchOut` (per-item status; **404** unregistered device, **413**, **429**) | authenticated owner |
 | `GET /me/device-notifications/deletions`        | —                                                                                    | `DeviceNotificationDeletionsOut{ deletedBefore, apps[] }`                                     | authenticated owner |
-| `DELETE /me/device-notifications`               | `query: { appId? }`                                                                  | `DeviceNotificationDeleteOut{ deleted }`                                                      | authenticated owner |
+| `DELETE /me/device-notifications`               | `query: { appId?, before? }` (Unix ms, clamped to now)                               | `DeviceNotificationDeleteOut{ deleted }`                                                      | authenticated owner |
 | `GET /me/device-notifications`                  | `query: { appId?, cursor?, limit? }`                                                 | `DeviceNotificationListOut{ items[], nextCursor }`                                            | authenticated owner |
 
 ### 3.12 `integrations`

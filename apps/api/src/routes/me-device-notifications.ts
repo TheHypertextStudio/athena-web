@@ -116,13 +116,16 @@ export const meDeviceNotifications = new Hono<AppEnv>()
       tag: 'Me',
       summary: 'Delete synced notifications',
       response: DeviceNotificationDeleteOut,
-      description: `Delete everything the caller has synced from every device, or only one app's entries with \`appId\`, together with their messages and removals. Records the deletion time so later uploads of entries captured at or before it are answered \`deleted\`, and phones apply it through the deletions read. Session-only. **401** when unauthenticated. Returns {@link DeviceNotificationDeleteOut} with the number of notifications deleted.`,
+      description: `Delete what the caller has synced from every device, or only one app's entries with \`appId\`, together with their messages and removals. Only entries captured at or before the deletion time are deleted: \`before\` (Unix ms) when given — the time the person asked, so a delete a phone queued offline and sends late spares what it captured since — clamped to now, otherwise now. Records that time so later uploads of entries captured at or before it are answered \`deleted\`, and phones apply it through the deletions read. A scope's deletion time never moves backwards. **422** for a malformed \`before\`. Session-only. **401** when unauthenticated. Returns {@link DeviceNotificationDeleteOut} with the number of notifications deleted.`,
     }),
     zQuery(DeviceNotificationDeleteQuery),
     async (c) => {
       const hubId = await callerHub(c);
-      const { appId } = c.req.valid('query');
-      return ok(c, DeviceNotificationDeleteOut, await deleteNotifications(hubId, appId));
+      return ok(
+        c,
+        DeviceNotificationDeleteOut,
+        await deleteNotifications(hubId, c.req.valid('query')),
+      );
     },
   )
   .get(

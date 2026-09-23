@@ -62,8 +62,9 @@ request. Times on the wire are Unix milliseconds.
   Not part of the Android contract; it exists so the registration has a reader.
 - `POST /v1/me/device-notifications/batches` uploads at most 100 notifications and 200 removals.
 - `GET /v1/me/device-notifications/deletions` returns `{ deletedBefore, apps[] }`.
-- `DELETE /v1/me/device-notifications[?appId=]` deletes everything, or one app's entries, from every
-  device, records the deletion time, and returns `{ deleted }`.
+- `DELETE /v1/me/device-notifications[?appId=][&before=]` deletes everything, or one app's
+  entries, captured at or before the deletion time, from every device, records that time, and
+  returns `{ deleted }`. The deletion time is `before` (Unix ms) clamped to now, or now.
 - `GET /v1/me/device-notifications?appId=&cursor=&limit=` lists newest capture first, 1..200 per page
   (default 50), each notification with the messages first stored with it and its removal, and
   returns `{ items, nextCursor }`.
@@ -104,11 +105,18 @@ item schemas. Whole-request failures are Problem responses:
 
 ## Deletions and expiry
 
-A delete removes the rows at once (messages and removals cascade) and moves the deletion time for
-its scope forward to now. Late uploads captured at or before that time come back `deleted`; phones
-read the times through the deletions endpoint and delete their own older entries, so a delete
-anywhere removes the copy everywhere. Deletion rows are one per scope per person and are overwritten
-by later deletes, so they are never pruned.
+A delete's deletion time is when the person asked. The phone queues deletes and may send one long
+after, so it passes that moment as `before`; the server uses `min(before, now)`, or now when
+`before` is absent. The delete removes the scope's rows captured at or before that time at once
+(messages and removals cascade) and leaves anything captured later, so what the phone captured while
+the delete waited is neither wiped on the server nor answered `deleted` when it uploads, nor deleted
+from the phone when it reads the time back. Late uploads captured at or before the time come back
+`deleted`; phones read the times through the deletions endpoint and delete their own older entries,
+so a delete anywhere removes the copy everywhere.
+
+Deletion rows are one per scope per person. A later delete keeps the greater of the stored and the
+new time, so a late-arriving delete with an earlier `before` never moves a scope's time backwards.
+The rows are never pruned.
 
 Expired rows are left out of every read at once and deleted two ways, neither a new worker: each
 upload first deletes the uploader's own expired rows, and the existing daily
@@ -124,9 +132,13 @@ rows on schedule. The local dev scheduler runs the same sweep.
 - **Deletion times, not per-item tombstones.** The phone deletes by scope (everything or one app),
   so one time per scope answers every late upload and every other device without a row per deleted
   notification. There is no delete-by-device endpoint in this contract.
-- **Clock skew.** Deletion times are server time and capture times are phone time. A phone whose
-  clock runs behind can have a notification captured just after a delete answered `deleted`. The
-  window is the skew, and the phone marks such an item uploaded rather than retrying.
+- **The phone says when a delete happened.** A delete queued offline and sent later must not take
+  what was captured in the meantime, so `before` carries the moment the person asked. It is
+  clamped to now so a phone cannot record a deletion time in the future.
+- **Clock skew.** A deletion time without `before`, and every clamp, is server time; capture times
+  are phone time. A phone whose clock runs behind can have a notification captured just after such
+  a delete answered `deleted`. The window is the skew, and the phone marks such an item uploaded
+  rather than retrying.
 - **8 MiB body limit.** Sized so a single notification at every field limit still fits, so halving
   on `413` always converges.
 - **240 batches an hour.** A fixed hourly window stored in Postgres so it holds across instances.

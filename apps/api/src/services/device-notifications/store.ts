@@ -18,6 +18,7 @@ import {
 } from '@docket/db';
 import type {
   DeviceNotificationDeleteOut,
+  DeviceNotificationDeleteQuery,
   DeviceNotificationDeletionsOut,
   DeviceNotificationListOut,
   DeviceNotificationListQuery,
@@ -25,7 +26,7 @@ import type {
   DeviceNotificationSourceIn,
   DeviceNotificationSourceOut,
 } from '@docket/athena/device-notification-contract';
-import { and, asc, desc, eq, gt, inArray, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, inArray, lte, sql } from 'drizzle-orm';
 
 import { pageResult, seekAfter } from '../../lib/list-cursor';
 
@@ -108,32 +109,39 @@ export async function readDeletions(
 }
 
 /**
- * Delete the caller's synced notifications from every device — all of them, or one app's — and
- * record the deletion time so late uploads of older entries are refused.
+ * Delete the caller's synced notifications from every device — all of them, or one app's — that
+ * were captured at or before the deletion time, and record that time so late uploads of older
+ * entries are refused.
  *
  * @remarks
- * Messages and removals go with their notifications through the foreign-key cascade. The
- * deletion time only ever moves forward.
+ * The deletion time is `before` when the phone says when the person asked (a queued delete sent
+ * late), clamped to `now`, and `now` otherwise. Entries captured after it survive, so a delete that
+ * waited offline never takes what the phone captured in the meantime. Messages and removals go with
+ * their notifications through the foreign-key cascade. A scope's recorded time only ever moves
+ * forward: a later delete with an earlier `before` keeps the existing time.
  */
 export async function deleteNotifications(
   hubId: string,
-  appId: string | undefined,
+  scope: DeviceNotificationDeleteQuery,
   now = new Date(),
   database: Database = db,
 ): Promise<DeviceNotificationDeleteOut> {
+  const { appId, before } = scope;
+  const deletedBefore = before === undefined ? now : new Date(Math.min(before, now.getTime()));
   return database.transaction(async (tx) => {
     const deleted = await tx
       .delete(deviceNotification)
       .where(
         and(
           eq(deviceNotification.hubId, hubId),
+          lte(deviceNotification.capturedAt, deletedBefore),
           appId === undefined ? undefined : eq(deviceNotification.appId, appId),
         ),
       )
       .returning({ id: deviceNotification.id });
     await tx
       .insert(deviceNotificationDeletion)
-      .values({ hubId, appId: appId ?? null, deletedBefore: now, updatedAt: now })
+      .values({ hubId, appId: appId ?? null, deletedBefore, updatedAt: now })
       .onConflictDoUpdate({
         target: [deviceNotificationDeletion.hubId, deviceNotificationDeletion.appId],
         set: {

@@ -108,6 +108,76 @@ describe('DELETE /v1/me/device-notifications and GET …/deletions', () => {
   });
 });
 
+describe('DELETE /v1/me/device-notifications?before=', () => {
+  it('deletes only what was captured by the time the person asked', async () => {
+    const { app } = await seedDevicePerson();
+    const deviceId = await registerDevice(app);
+    const now = Date.now();
+    const before = now - 5 * 60_000;
+    const older = notificationItem({ capturedAt: now - 10 * 60_000 });
+    const newer = notificationItem({ capturedAt: now - 2 * 60_000 });
+    const otherApp = notificationItem({ appId: 'com.whatsapp', capturedAt: now - 10 * 60_000 });
+    await upload(app, deviceId, [older, newer, otherApp]);
+
+    const res = await app.request(
+      `/me/device-notifications?appId=com.google.android.gm&before=${String(before)}`,
+      { method: 'DELETE' },
+    );
+    expect((await res.json()) as DeviceNotificationDeleteOut).toEqual({ deleted: 1 });
+    expect((await list(app)).items.map((item) => item.id).sort()).toEqual(
+      [newer.id, otherApp.id].sort(),
+    );
+    expect((await deletions(app)).apps).toEqual([
+      { appId: 'com.google.android.gm', deletedBefore: before },
+    ]);
+
+    // Captured after `before` but uploaded after the delete: still stored.
+    const capturedSince = notificationItem({ capturedAt: now - 3 * 60_000 });
+    const capturedEarlier = notificationItem({ capturedAt: now - 6 * 60_000 });
+    const result = await upload(app, deviceId, [capturedSince, capturedEarlier]);
+    expect(result.notifications.map((r) => r.status)).toEqual(['stored', 'deleted']);
+
+    const all = await app.request(`/me/device-notifications?before=${String(before)}`, {
+      method: 'DELETE',
+    });
+    expect((await all.json()) as DeviceNotificationDeleteOut).toEqual({ deleted: 1 });
+    expect((await list(app)).items.map((item) => item.id).sort()).toEqual(
+      [newer.id, capturedSince.id].sort(),
+    );
+    expect((await deletions(app)).deletedBefore).toBe(before);
+  });
+
+  it('clamps a future time to now', async () => {
+    const { app } = await seedDevicePerson();
+    const future = Date.now() + DAY;
+    await app.request(`/me/device-notifications?before=${String(future)}`, { method: 'DELETE' });
+    const recorded = (await deletions(app)).deletedBefore;
+    expect(recorded).toEqual(expect.any(Number));
+    expect(recorded).toBeLessThanOrEqual(Date.now());
+    expect(recorded).toBeGreaterThan(Date.now() - 60_000);
+  });
+
+  it('never moves a deletion time backwards', async () => {
+    const { app } = await seedDevicePerson();
+    const later = Date.now() - 60_000;
+    await app.request(`/me/device-notifications?before=${String(later)}`, { method: 'DELETE' });
+    await app.request(`/me/device-notifications?before=${String(later - 10 * 60_000)}`, {
+      method: 'DELETE',
+    });
+    expect((await deletions(app)).deletedBefore).toBe(later);
+  });
+
+  it('rejects a malformed time', async () => {
+    const { app } = await seedDevicePerson();
+    for (const before of ['yesterday', '-1', '1.5']) {
+      const res = await app.request(`/me/device-notifications?before=${before}`, {
+        method: 'DELETE',
+      });
+      expect(res.status, before).toBe(422);
+    }
+  });
+});
+
 describe('GET /v1/me/device-notifications', () => {
   it('pages newest capture first and filters by app', async () => {
     const { app } = await seedDevicePerson();

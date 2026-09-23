@@ -795,6 +795,8 @@ routes/project-rollup.ts}`, `domains/work/src/contracts/{milestone,task}.ts`,
   - [x] 8 MiB body limit, 240 batches an hour per person, expiry on upload and in the daily sweep
   - [x] `personal.deviceNotifications` in the account export (schema version 3) and its README line
   - [x] `docs/engineering/specs/device-notification-sync.md`, API contract section 3.11C
+  - [x] Deletes take `before`, the time the person asked, so a queued delete sent late spares
+        entries captured since; a scope's deletion time never moves backwards
 - **Approach**: The request is parsed leniently (each item is its full schema or anything with an
   `id`) and each item is then validated on its own, so one malformed notification is answered
   `invalid` rather than failing its batch, while the published reference still shows the full item

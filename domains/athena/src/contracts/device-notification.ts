@@ -321,6 +321,13 @@ export type DeviceNotificationDeletionsOut = z.infer<typeof DeviceNotificationDe
 export const DeviceNotificationDeleteQuery = z
   .object({
     appId: RequiredText.optional().describe('Delete only this app’s entries. Omit to delete all.'),
+    before: z.coerce
+      .number()
+      .pipe(EpochMilliseconds)
+      .optional()
+      .describe(
+        'When the person asked to delete, Unix ms. Entries captured at or before it are deleted; a phone sending a queued delete late passes the time it was made so entries captured since survive. Clamped to now; omit to delete up to now.',
+      ),
   })
   .meta({ id: 'DeviceNotificationDeleteQuery', description: 'Which entries to delete.' });
 /** Delete query value. */

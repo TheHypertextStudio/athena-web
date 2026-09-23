@@ -17,6 +17,7 @@
     "./zoned-time": "./src/zoned-time.ts",
     "./work-schedule": "./src/work-schedule.ts",
     "./daily-capacity": "./src/daily-capacity.ts",
+    "./daily-plan-flow": "./src/daily-plan-flow.ts",
     "./work-location-resolution": "./src/work-location-resolution.ts",
     "./hub-preferences-contract": "./src/contracts/hub-preferences.ts",
     "./daily-plan-contract": "./src/contracts/daily-plan.ts",

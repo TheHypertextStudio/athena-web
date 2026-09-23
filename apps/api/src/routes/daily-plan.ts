@@ -6,26 +6,37 @@
  * and resolves the caller's {@link hub} via `hub.userId = session.user.id`. Items
  * reference a Task in any org where the caller is an active, unarchived human Actor. On create,
  * the referenced `(refOrganizationId, refTaskId)` must be currently viewable through the canonical
- * task grant/visibility resolver, else a 404 (existence-hiding). A null session throws
- * {@link AuthError}.
+ * task grant/visibility resolver, else a 404 (existence-hiding). Day drafts use the same gate
+ * before saving or confirming. A null session throws {@link AuthError}.
  */
-import { actor, db, dailyPlanItem, hub, task } from '@docket/db';
+import { actor, db, dailyPlanDay, dailyPlanItem, hub, task, timeInterval } from '@docket/db';
+import { AgendaOut } from '@docket/planning/agenda-contract';
+import { addDays, instantAt } from '@docket/planning/zoned-time';
+import {
+  AcceptedDailyPlan,
+  DailyPlanSnapshot,
+  acceptDailyDraft,
+  reviseDailyPlan,
+} from '@docket/planning/daily-plan-flow';
 import {
   DailyPlanItemCreate,
   DailyPlanItemOut,
   DailyPlanItemUpdate,
 } from '@docket/planning/daily-plan-contract';
 import { CursorQuery, pageOf } from '../contracts/pagination';
-import { and, asc, eq, gt, isNull, or } from 'drizzle-orm';
+import { and, asc, eq, gt, inArray, isNull, lt, or } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
 
 import type { AppEnv } from '../context';
-import { AuthError, NotFoundError, ValidationError } from '../error';
+import { AuthError, ConflictError, NotFoundError, ValidationError } from '../error';
 import { created, ok } from '../lib/ok';
 import { decodeTupleCursor, pageResultByTuple } from '../lib/list-cursor';
 import { apiDoc } from '../lib/openapi-route';
 import { zJson, zParam, zQuery } from '../lib/validate';
+import { resolveResourceAccess, resourceAccessKey } from '../permissions/resource-access';
+import { loadSchedulingPreferences } from '../services/scheduling/repository';
+import { buildAgendaPayload } from './calendar-shared';
 import { buildTaskViewFilter } from './task-helpers';
 
 type DailyPlanItemRow = typeof dailyPlanItem.$inferSelect;
@@ -101,9 +112,260 @@ async function requireViewableTask(
 
 const listQuery = CursorQuery.extend({ date: z.iso.date() });
 const idParam = z.object({ id: z.string() });
+const dayParam = z.object({ date: z.iso.date() });
+const resumeStep = z.enum(['review_yesterday', 'plan_today', 'review_plan']);
+const draftInput = z.object({ draft: DailyPlanSnapshot, resumeStep });
+const dayOut = z.object({
+  date: z.iso.date(),
+  draft: DailyPlanSnapshot.nullable(),
+  accepted: AcceptedDailyPlan.nullable(),
+  resumeStep,
+});
+const dayReadOut = dayOut.extend({
+  tasks: z.array(
+    z.object({
+      taskId: z.string(),
+      organizationId: z.string(),
+      title: z.string(),
+      state: z.string(),
+      projectId: z.string().nullable(),
+      completedAt: z.iso.datetime().nullable(),
+    }),
+  ),
+  agenda: AgendaOut,
+  actual: z.array(
+    z.object({
+      taskId: z.string().nullable(),
+      startedAt: z.iso.datetime(),
+      endedAt: z.iso.datetime().nullable(),
+      recordedMinutes: z.number().nonnegative(),
+    }),
+  ),
+});
 
-/** Daily-plan router: the caller's Hub daily plan for a date + add/update/remove items. */
+function toDayOut(
+  date: string,
+  row: typeof dailyPlanDay.$inferSelect | undefined,
+): z.input<typeof dayOut> {
+  return {
+    date,
+    draft: row?.draft ?? null,
+    accepted: row?.accepted ?? null,
+    resumeStep: resumeStep.parse(row?.resumeStep ?? 'review_yesterday'),
+  };
+}
+
+async function loadVisibleDayTasks(
+  userId: string,
+  date: string,
+  hubId: string,
+  row: typeof dailyPlanDay.$inferSelect | undefined,
+): Promise<z.input<typeof dayReadOut>['tasks']> {
+  const snapshot = row?.draft ?? row?.accepted?.current.snapshot;
+  const legacyItems = snapshot
+    ? []
+    : await db
+        .select()
+        .from(dailyPlanItem)
+        .where(and(eq(dailyPlanItem.hubId, hubId), eq(dailyPlanItem.date, date)));
+  const refs = snapshot
+    ? snapshot.tasks.map((entry) => ({
+        id: entry.taskId,
+        organizationId: entry.organizationId,
+        kind: 'task' as const,
+      }))
+    : legacyItems
+        .sort((left, right) => left.sort - right.sort)
+        .map((entry) => ({
+          id: entry.refTaskId,
+          organizationId: entry.refOrganizationId,
+          kind: 'task' as const,
+        }));
+  const access = await resolveResourceAccess(userId, refs);
+  const visibleRefs = refs.filter((ref) => access.get(resourceAccessKey(ref))?.canView);
+  if (visibleRefs.length === 0) return [];
+  const taskRows = await db
+    .select({
+      taskId: task.id,
+      organizationId: task.organizationId,
+      title: task.title,
+      state: task.state,
+      projectId: task.projectId,
+      completedAt: task.completedAt,
+    })
+    .from(task)
+    .where(
+      and(
+        inArray(
+          task.id,
+          visibleRefs.map((ref) => ref.id),
+        ),
+        isNull(task.archivedAt),
+      ),
+    );
+  const visibleKeys = new Set(visibleRefs.map((ref) => `${ref.organizationId}:${ref.id}`));
+  const order = new Map(refs.map((ref, index) => [`${ref.organizationId}:${ref.id}`, index]));
+  return taskRows
+    .filter((entry) => visibleKeys.has(`${entry.organizationId}:${entry.taskId}`))
+    .sort(
+      (left, right) =>
+        (order.get(`${left.organizationId}:${left.taskId}`) ?? 0) -
+        (order.get(`${right.organizationId}:${right.taskId}`) ?? 0),
+    )
+    .map((entry) => ({ ...entry, completedAt: entry.completedAt?.toISOString() ?? null }));
+}
+
+async function loadRecordedDayWork(
+  hubId: string,
+  dayStart: Date,
+  dayEnd: Date,
+): Promise<z.input<typeof dayReadOut>['actual']> {
+  const intervals = await db
+    .select()
+    .from(timeInterval)
+    .where(
+      and(
+        eq(timeInterval.hubId, hubId),
+        eq(timeInterval.actorKind, 'human'),
+        isNull(timeInterval.supersededById),
+        lt(timeInterval.startedAt, dayEnd),
+        or(isNull(timeInterval.endedAt), gt(timeInterval.endedAt, dayStart)),
+      ),
+    );
+  const now = Date.now();
+  return intervals.map((entry) => {
+    const start = Math.max(entry.startedAt.getTime(), dayStart.getTime());
+    const end = Math.min(entry.endedAt?.getTime() ?? now, dayEnd.getTime());
+    return {
+      taskId: entry.taskId,
+      startedAt: entry.startedAt.toISOString(),
+      endedAt: entry.endedAt?.toISOString() ?? null,
+      recordedMinutes: Math.max(0, Math.round((end - start) / 60_000)),
+    };
+  });
+}
+
+async function buildDayRead(
+  userId: string,
+  hubId: string,
+  date: string,
+  row: typeof dailyPlanDay.$inferSelect | undefined,
+): Promise<z.input<typeof dayReadOut>> {
+  const preferences = await loadSchedulingPreferences(db, hubId);
+  const dayStart = instantAt(date, 0, preferences.timezone);
+  const dayEnd = instantAt(addDays(date, 1), 0, preferences.timezone);
+  const [tasks, agenda, actual] = await Promise.all([
+    loadVisibleDayTasks(userId, date, hubId, row),
+    buildAgendaPayload(userId, { date }),
+    loadRecordedDayWork(hubId, dayStart, dayEnd),
+  ]);
+  return { ...toDayOut(date, row), tasks, agenda, actual };
+}
+
+/** Daily-plan router: accepted day history, editable drafts, and legacy item operations. */
 const dailyPlan = new Hono<AppEnv>()
+  .get(
+    '/day/:date',
+    apiDoc({
+      tag: 'DailyPlan',
+      summary: 'Read a daily planning draft and accepted history',
+      response: dayReadOut,
+      description:
+        "Return the caller's draft, accepted history, visible task state, agenda events, and time-ledger work for one day.",
+    }),
+    zParam(dayParam),
+    async (c) => {
+      const session = c.get('session');
+      if (!session?.user) throw new AuthError();
+      const { date } = c.req.valid('param');
+      const hubId = await resolveHubId(session.user.id);
+      const [row] = await db
+        .select()
+        .from(dailyPlanDay)
+        .where(and(eq(dailyPlanDay.hubId, hubId), eq(dailyPlanDay.date, date)))
+        .limit(1);
+      return ok(c, dayReadOut, await buildDayRead(session.user.id, hubId, date, row));
+    },
+  )
+  .put(
+    '/day/:date/draft',
+    apiDoc({
+      tag: 'DailyPlan',
+      summary: 'Save a resumable daily planning draft',
+      response: dayOut,
+      description:
+        "Save the caller's editable draft and resume step. The accepted plan and recorded work do not change.",
+    }),
+    zParam(dayParam),
+    zJson(draftInput),
+    async (c) => {
+      const session = c.get('session');
+      if (!session?.user) throw new AuthError();
+      const { date } = c.req.valid('param');
+      const { draft, resumeStep: step } = c.req.valid('json');
+      if (draft.date !== date) {
+        throw new ValidationError([
+          { path: ['draft', 'date'], message: 'Draft date must match the requested day' },
+        ]);
+      }
+      for (const entry of draft.tasks) {
+        await requireViewableTask(session.user.id, entry.organizationId, entry.taskId);
+      }
+      const hubId = await resolveHubId(session.user.id);
+      const [row] = await db
+        .insert(dailyPlanDay)
+        .values({ hubId, date, draft, resumeStep: step })
+        .onConflictDoUpdate({
+          target: [dailyPlanDay.hubId, dailyPlanDay.date],
+          set: { draft, resumeStep: step },
+        })
+        .returning();
+      return ok(c, dayOut, toDayOut(date, row));
+    },
+  )
+  .post(
+    '/day/:date/confirm',
+    apiDoc({
+      tag: 'DailyPlan',
+      summary: 'Accept a daily planning draft',
+      response: dayOut,
+      description:
+        'Accept the draft as the original commitment or a later revision. Confirmation never starts a timer or rewrites actual work.',
+    }),
+    zParam(dayParam),
+    async (c) => {
+      const session = c.get('session');
+      if (!session?.user) throw new AuthError();
+      const { date } = c.req.valid('param');
+      const hubId = await resolveHubId(session.user.id);
+      const [existing] = await db
+        .select()
+        .from(dailyPlanDay)
+        .where(and(eq(dailyPlanDay.hubId, hubId), eq(dailyPlanDay.date, date)))
+        .limit(1);
+      if (!existing?.draft) throw new ConflictError('No draft is ready to confirm');
+      for (const entry of existing.draft.tasks) {
+        await requireViewableTask(session.user.id, entry.organizationId, entry.taskId);
+      }
+      const acceptedAt = new Date().toISOString();
+      const accepted = existing.accepted
+        ? reviseDailyPlan(AcceptedDailyPlan.parse(existing.accepted), existing.draft, acceptedAt)
+        : acceptDailyDraft(existing.draft, acceptedAt);
+      const [row] = await db
+        .update(dailyPlanDay)
+        .set({ draft: null, accepted, resumeStep: 'plan_today' })
+        .where(
+          and(
+            eq(dailyPlanDay.hubId, hubId),
+            eq(dailyPlanDay.date, date),
+            eq(dailyPlanDay.draft, existing.draft),
+          ),
+        )
+        .returning();
+      if (!row) throw new ConflictError('The planning draft changed before confirmation');
+      return ok(c, dayOut, toDayOut(date, row));
+    },
+  )
   .get(
     '/',
     apiDoc({

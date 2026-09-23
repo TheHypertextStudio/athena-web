@@ -7,6 +7,8 @@ The public REST API accepts an optional exact `Docket-Version` assertion and ide
 response with its contract and source revision. See the
 [API version policy](docs/engineering/specs/api-version-policy.md) before changing the contract.
 
+Daily planning draft and acceptance state uses `/v1/daily-plan/day/:date`. The current data contract and the remaining UI and migration work are recorded in [the daily planning engineering spec](docs/engineering/specs/daily-planning.md).
+
 ## From clone to a working app
 
 On macOS or Linux, the supported entrypoint is:

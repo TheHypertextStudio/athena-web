@@ -17,10 +17,10 @@ import {
   type MilestoneRow,
   type ProjectRow,
   callerOrgIds,
-  groupBy,
   toMilestoneItem,
   toOrgChip,
 } from './hub-helpers';
+import { groupBy } from '../lib/group-by';
 
 /**
  * Build the hub portfolio payload (without the HTTP envelope).

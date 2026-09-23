@@ -82,6 +82,8 @@ import {
   type RecordTaskChangesInput,
 } from '../lib/task-audit';
 import { assertCycle } from '../services/task-cycle-assignment';
+import { groupBy } from '../lib/group-by';
+import { staleMilestonePatch } from './task-helpers';
 import { lockTargets, receiptId, type Tx } from '../services/object-command-targets';
 
 type CommandEntry = ObjectCommandReceipt['entries'][number];
@@ -265,6 +267,11 @@ interface ReplayRequirement {
   readonly kind: ResourceKind;
   readonly id: string;
   readonly capability: Capability;
+}
+
+/** The value a receipt entry puts back when replayed in `direction`. */
+function replayTarget<T>(entry: { readonly before: T; readonly after: T }, direction: string): T {
+  return direction === 'undo' ? entry.before : entry.after;
 }
 
 function replayRequirementKey(kind: ResourceKind, id: string): string {
@@ -681,46 +688,6 @@ async function updateTaskStatuses(
     .returning();
 }
 
-/**
- * Whether a command moves a task out of the project its milestone belongs to. A milestone always
- * belongs to the task's current project, so any real move drops it, the same as REST
- * `PATCH /tasks/:id` and MCP `update` do.
- */
-function movesAwayFromMilestone(
-  row: typeof task.$inferSelect,
-  property: string,
-  value: unknown,
-): boolean {
-  return property === 'projectId' && row.milestoneId !== null && row.projectId !== value;
-}
-
-/** Group items by a key, keeping first-seen order. */
-function groupBy<T>(items: readonly T[], key: (item: T) => string): T[][] {
-  const groups = new Map<string, T[]>();
-  for (const item of items) groups.set(key(item), [...(groups.get(key(item)) ?? []), item]);
-  return [...groups.values()];
-}
-
-/** Apply forward task patches, one `UPDATE` per distinct patch, since a move clears some milestones. */
-async function updateTaskPatches(
-  tx: Tx,
-  orgId: string,
-  writes: readonly { readonly id: string; readonly patch: Record<string, unknown> }[],
-): Promise<(typeof task.$inferSelect)[]> {
-  const updated: (typeof task.$inferSelect)[] = [];
-  for (const group of groupBy(writes, (write) => JSON.stringify(write.patch))) {
-    const ids = group.map((write) => write.id);
-    updated.push(
-      ...(await tx
-        .update(task)
-        .set(group[0]?.patch ?? {})
-        .where(and(eq(task.organizationId, orgId), inArray(task.id, ids)))
-        .returning()),
-    );
-  }
-  return updated;
-}
-
 const REPLAY_INTEGER_PROPERTIES = new Set([
   'estimate',
   'startDateFiscalYearStartMonth',
@@ -766,25 +733,37 @@ function replayPatchSource(
   )}::jsonb) AS replay_patch(${definitions})`;
 }
 
+/** One object's new field values, keyed by column property. */
+interface ObjectPatch {
+  readonly id: string;
+  readonly patch: Record<string, unknown>;
+}
+
 /**
- * Apply replay patches. Updates are grouped by their property set because `jsonb_to_recordset`
- * yields NULL for a column a row's patch omits, and a bulk project move clears the milestone on
- * only some of its tasks.
+ * Write a per-row patch to each object. Rows are grouped by property set because
+ * `jsonb_to_recordset` yields NULL for a column a row's patch omits, and a project move clears the
+ * milestone on only some of its tasks.
  */
-async function updateReplayObjects(
+async function updateObjectPatches(
   tx: Tx,
   orgId: string,
   kind: 'task' | 'project',
-  updates: readonly { readonly id: string; readonly patch: Record<string, unknown> }[],
+  updates: readonly ObjectPatch[],
 ): Promise<readonly (typeof task.$inferSelect | typeof project.$inferSelect)[]> {
-  if (updates.length === 0) return [];
-  const groups = groupBy(updates, (update) => Object.keys(update.patch).sort().join('\0'));
-  if (groups.length > 1) {
-    const updated: (typeof task.$inferSelect | typeof project.$inferSelect)[] = [];
-    for (const group of groups)
-      updated.push(...(await updateReplayObjects(tx, orgId, kind, group)));
-    return updated;
+  const updated: (typeof task.$inferSelect | typeof project.$inferSelect)[] = [];
+  const shapes = groupBy(updates, (update) => Object.keys(update.patch).sort().join('\0'));
+  for (const shape of shapes.values()) {
+    updated.push(...(await updateObjectPatchShape(tx, orgId, kind, shape)));
   }
+  return updated;
+}
+
+async function updateObjectPatchShape(
+  tx: Tx,
+  orgId: string,
+  kind: 'task' | 'project',
+  updates: readonly ObjectPatch[],
+): Promise<readonly (typeof task.$inferSelect | typeof project.$inferSelect)[]> {
   const properties = [...new Set(updates.flatMap((update) => Object.keys(update.patch)))];
   const patch = Object.fromEntries(
     properties.map((property) => [property, sql`replay_patch.${sql.identifier(property)}`]),
@@ -1088,7 +1067,10 @@ async function executeForward(
           const patch: Record<string, unknown> = {
             [property]: dbValue(property, normalizeProperty(property, value)),
           };
-          if (movesAwayFromMilestone(row, property, value)) patch['milestoneId'] = null;
+          if (property === 'projectId') {
+            const nextProjectId = typeof value === 'string' ? value : null;
+            Object.assign(patch, await staleMilestonePatch(row.milestoneId, nextProjectId, tx));
+          }
           if (property === 'state') {
             const status = statusByTeam.get(row.teamId);
             if (!status) throw new NotFoundError('Task status not found');
@@ -1132,7 +1114,12 @@ async function executeForward(
         const updatedRows =
           property === 'state'
             ? await updateTaskStatuses(tx, orgId, writes)
-            : await updateTaskPatches(tx, orgId, writes);
+            : ((await updateObjectPatches(
+                tx,
+                orgId,
+                'task',
+                writes,
+              )) as (typeof task.$inferSelect)[]);
         if (updatedRows.length !== writes.length)
           throw new ConflictError('Task changed during update');
         const updatedById = new Map(updatedRows.map((row) => [row.id, row]));
@@ -2180,18 +2167,12 @@ async function executeReplay(
         denied.add(objectId);
         continue;
       }
-      // Undoing a project move restores the milestone it cleared, so that milestone has to be
-      // checked against the project being restored, not the one the task sits in now.
-      const projectEntry = entries.find(
-        (entry) => entry.kind === 'object' && entry.property === 'projectId',
-      );
-      const targetRow =
-        projectEntry?.kind === 'object'
-          ? {
-              ...row,
-              projectId: direction === 'undo' ? projectEntry.before : projectEntry.after,
-            }
-          : row;
+      // The row as this replay leaves it. Undoing a project move restores the milestone it cleared,
+      // so references are checked against the restored project, not the one the task sits in now.
+      const nextRow: Record<string, unknown> = { ...row };
+      for (const entry of entries) {
+        if (entry.kind === 'object') nextRow[entry.property] = replayTarget(entry, direction);
+      }
       for (const entry of entries) {
         validateReceiptEntryShape(receipt, entry);
         const expected = direction === 'undo' ? entry.after : entry.before;
@@ -2209,7 +2190,7 @@ async function executeReplay(
               receipt.objectKind,
               entry.property,
               target,
-              targetRow,
+              nextRow,
             );
           } catch (error) {
             if (error instanceof CapabilityError || error instanceof NotFoundError) {
@@ -2244,8 +2225,7 @@ async function executeReplay(
         const entry = entries.find(
           (candidate) => candidate.kind === 'object' && candidate.property === property,
         );
-        if (entry?.kind !== 'object') return undefined;
-        return direction === 'undo' ? entry.before : entry.after;
+        return entry?.kind === 'object' ? replayTarget(entry, direction) : undefined;
       };
       const hasTarget = (property: string): boolean =>
         entries.some((entry) => entry.kind === 'object' && entry.property === property);
@@ -2283,15 +2263,11 @@ async function executeReplay(
         }
       }
       if (receipt.objectKind === 'task') {
-        const nextProject = hasTarget('projectId') ? targetFor('projectId') : row['projectId'];
-        const nextMilestone = hasTarget('milestoneId')
-          ? targetFor('milestoneId')
-          : row['milestoneId'];
         await assertMilestoneForProject(
           tx,
           orgId,
-          receiptId(nextMilestone, 'milestone reference'),
-          receiptId(nextProject, 'Project reference'),
+          receiptId(nextRow['milestoneId'], 'milestone reference'),
+          receiptId(nextRow['projectId'], 'Project reference'),
         );
         const nextStart = hasTarget('startDate')
           ? targetFor('startDate')
@@ -2386,7 +2362,7 @@ async function executeReplay(
       });
       for (const entry of tuple) tupleEntries.add(entry);
     }
-    const tupleRows = await updateReplayObjects(tx, orgId, receipt.objectKind, tupleUpdates);
+    const tupleRows = await updateObjectPatches(tx, orgId, receipt.objectKind, tupleUpdates);
     const tupleRowsById = new Map(tupleRows.map((row) => [row.id, row]));
     for (const update of tupleUpdates) {
       const updated = tupleRowsById.get(update.id);
@@ -2427,7 +2403,7 @@ async function executeReplay(
         ),
       });
     }
-    const objectRows = await updateReplayObjects(tx, orgId, receipt.objectKind, objectUpdates);
+    const objectRows = await updateObjectPatches(tx, orgId, receipt.objectKind, objectUpdates);
     const objectRowsById = new Map(objectRows.map((row) => [row.id, row]));
     for (const update of objectUpdates) {
       const updated = objectRowsById.get(update.id);

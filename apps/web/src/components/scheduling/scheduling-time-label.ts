@@ -31,6 +31,10 @@ interface ScheduleInstantRange {
   readonly endsAt: string;
 }
 
+interface ClippedItemRange extends ScheduleInstantRange {
+  readonly fullMiddleDay: boolean;
+}
+
 type SchedulePreviewRangeResolution =
   | { readonly kind: 'resolved'; readonly range: ScheduleInstantRange }
   | { readonly kind: 'skipped' | 'repeated' | 'invalid' };
@@ -108,7 +112,7 @@ function clippedItemRange(
   item: ScheduleItem,
   lane: ScheduleLane,
   timezone: string,
-): ScheduleInstantRange | null {
+): ClippedItemRange | null {
   const startPosition = scheduleWallPositionForInstant(item.startsAt, timezone);
   const endPosition = scheduleWallPositionForInstant(item.endsAt, timezone);
   if (!startPosition || !endPosition) return null;
@@ -120,7 +124,13 @@ function clippedItemRange(
     endPosition.date === lane.date
       ? item.endsAt
       : scheduleInstantAt(lane.date, 24 * 60, timezone, 'reject');
-  return startsAt && endsAt ? { startsAt, endsAt } : null;
+  return startsAt && endsAt
+    ? {
+        startsAt,
+        endsAt,
+        fullMiddleDay: startPosition.date < lane.date && endPosition.date > lane.date,
+      }
+    : null;
 }
 
 /** Resolve exact instants and the reason an ambiguous live preview cannot commit. */
@@ -198,8 +208,12 @@ export function presentScheduleItemTimeRange(
     resolution.range.endsAt,
     options.displayTimezone,
   );
+  const fullMiddleDay =
+    base.fullMiddleDay &&
+    resolution.range.startsAt === base.startsAt &&
+    resolution.range.endsAt === base.endsAt;
   return label
-    ? { label, valid: true }
+    ? { label: fullMiddleDay ? `${label} next day` : label, valid: true }
     : { label: 'Unavailable time', valid: false, announcement: INVALID_EDIT_GUIDANCE };
 }
 

@@ -97,6 +97,11 @@ Time-axis rules:
   the short zone name (for example, PDT or PST) when needed to distinguish the instant. A newly
   selected, moved, or resized edge in a gap or fold is rejected rather than silently coerced to
   another instant; create and drawer `datetime-local` edits reject the same ambiguous wall times.
+- A timed item that crosses a local date keeps one exact inclusive-start, exclusive-end range.
+  Each date lane shows only its clipped portion. A full middle-day card names its ending midnight
+  as `next day`, so identical `12:00 AM` labels do not read as a zero-length item. An item ending
+  exactly at midnight renders no card on its end date. The peek and detail show both local dates
+  and the whole item's clock range. All-day items continue to use date-only labels.
 
 ### Canvas Interaction Contract
 

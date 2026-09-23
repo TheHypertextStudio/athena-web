@@ -109,7 +109,10 @@ function makeLayer(): CalendarLayerOut {
   };
 }
 
-function renderPeek(item: CalendarItemOut): {
+function renderPeek(
+  item: CalendarItemOut,
+  displayTimezone = 'UTC',
+): {
   onOpenDetail: ReturnType<typeof vi.fn>;
   onClose: ReturnType<typeof vi.fn>;
 } {
@@ -126,7 +129,7 @@ function renderPeek(item: CalendarItemOut): {
   render(
     <CalendarItemPeekOverlay
       item={item}
-      displayTimezone="UTC"
+      displayTimezone={displayTimezone}
       anchorRef={anchor}
       onOpenDetail={onOpenDetail}
       onClose={onClose}
@@ -169,6 +172,33 @@ describe('calendar item peek', () => {
     await waitFor(() => {
       expect(peek).toHaveTextContent('My blocks');
     });
+  });
+
+  it('shows both local dates and exact times for an overnight item in the viewer timezone', async () => {
+    renderPeek(
+      makeItem({
+        startsAt: '2026-09-24T06:30:00Z',
+        endsAt: '2026-09-24T08:15:00Z',
+      }),
+      'America/Los_Angeles',
+    );
+
+    const peek = await screen.findByRole('dialog', { name: 'Take transit to Pop Café' });
+    expect(peek).toHaveTextContent(/Sep 23, 2026.*Sep 24, 2026/);
+    expect(peek).toHaveTextContent('11:30 PM – 1:15 AM');
+  });
+
+  it('shows both years when an item crosses the year boundary', async () => {
+    renderPeek(
+      makeItem({
+        startsAt: '2026-12-31T23:30:00Z',
+        endsAt: '2027-01-01T01:15:00Z',
+      }),
+    );
+
+    const peek = await screen.findByRole('dialog', { name: 'Take transit to Pop Café' });
+    expect(peek).toHaveTextContent(/Dec 31, 2026.*Jan 1, 2027/);
+    expect(peek).toHaveTextContent('11:30 PM – 1:15 AM');
   });
 
   it('escalates to the detail rather than opening it on the click', async () => {

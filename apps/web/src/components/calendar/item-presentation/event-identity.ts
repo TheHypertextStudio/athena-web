@@ -15,7 +15,7 @@ import type {
 } from '@docket/planning/calendar-contract';
 import { Calendar, Layers, type LucideIcon, Schedule, TaskAlt } from '@docket/ui/icons';
 
-import { formatScheduleInstantRange } from '@/components/scheduling';
+import { dateKeyForInstant, formatScheduleInstantRange } from '@/components/scheduling';
 import { formatCalendarDate } from '@/lib/format-date';
 import { formatDuration } from '@/components/time-tracking/format-duration';
 import { formatClock } from '@/lib/format-time';
@@ -67,7 +67,7 @@ export function itemTimeLabel(item: CalendarItemOut, displayTimezone: string): s
 }
 
 /**
- * The item's day, written out — `Sunday, September 6`.
+ * The item's local day, or both dated endpoints when it crosses a local day boundary.
  *
  * @param item - The calendar item to describe.
  * @param displayTimezone - The hub timezone the viewer reads the calendar in.
@@ -79,6 +79,20 @@ export function itemDayLabel(item: CalendarItemOut, displayTimezone: string): st
   // An all-day date is a plain `YYYY-MM-DD` with no zone, so anchoring it at UTC noon keeps it on
   // its own day for every viewer timezone; a timed item already carries an instant.
   const instant = item.startsAt ? new Date(item.startsAt) : new Date(`${start}T12:00:00Z`);
+  if (
+    item.startsAt &&
+    item.endsAt &&
+    dateKeyForInstant(item.startsAt, displayTimezone) !==
+      dateKeyForInstant(item.endsAt, displayTimezone)
+  ) {
+    const dateFormatter = new Intl.DateTimeFormat(undefined, {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      timeZone: displayTimezone,
+    });
+    return `${dateFormatter.format(instant)} – ${dateFormatter.format(new Date(item.endsAt))}`;
+  }
   return new Intl.DateTimeFormat(undefined, {
     weekday: 'long',
     month: 'long',

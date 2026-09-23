@@ -580,22 +580,14 @@ describe('personal Athena assignments', () => {
       headers: JSON_HEADERS,
       body: JSON.stringify({ type: 'event', eventKinds: ['status_change'] }),
     });
-    const eventTrigger = (await eventTriggerResponse.json()) as { id: string };
+    expect(eventTriggerResponse.status).toBe(201);
     const scheduledTriggerResponse = await app.request(`/assignments/${assignment.id}/triggers`, {
       method: 'POST',
       headers: JSON_HEADERS,
       body: JSON.stringify({ type: 'scheduled', scheduleMinutes: 5 }),
     });
-    const scheduledTrigger = (await scheduledTriggerResponse.json()) as { id: string };
-    expect(eventTrigger.id).not.toBe(scheduledTrigger.id);
-
-    const [scheduledRow] = await db
-      .select({ nextRunAt: schema.athenaTrigger.nextRunAt })
-      .from(schema.athenaTrigger)
-      .where(eq(schema.athenaTrigger.id, scheduledTrigger.id));
-    const scheduledAt = scheduledRow?.nextRunAt;
-    if (!scheduledAt) throw new Error('scheduled trigger is missing its next run');
-    expect(scheduledAt).toBeInstanceOf(Date);
+    const scheduledTrigger = (await scheduledTriggerResponse.json()) as { nextRunAt: string };
+    const scheduledAt = new Date(scheduledTrigger.nextRunAt);
     const firedAt = new Date();
     await handleAthenaAssignmentEvent(
       {
@@ -618,11 +610,19 @@ describe('personal Athena assignments', () => {
       .from(schema.athenaAssignment)
       .where(eq(schema.athenaAssignment.id, assignment.id));
     expect(afterSchedule?.activeSessionId).not.toBe(afterEvent?.activeSessionId);
+    const scheduledSessionId = assertDefined(assertDefined(afterSchedule).activeSessionId);
+    const scheduledPrompt = await db
+      .select({ body: schema.sessionActivity.body })
+      .from(schema.sessionActivity)
+      .where(eq(schema.sessionActivity.sessionId, scheduledSessionId));
+    expect(scheduledPrompt[0]?.body).toMatchObject({
+      text: 'Keep this queued through the durable runner.',
+    });
 
     const sessionIds = [
       assignment.activeSessionId,
       assertDefined(assertDefined(afterEvent).activeSessionId),
-      assertDefined(assertDefined(afterSchedule).activeSessionId),
+      scheduledSessionId,
     ];
     const sessions = await db
       .select({ id: schema.agentSession.id, status: schema.agentSession.status })

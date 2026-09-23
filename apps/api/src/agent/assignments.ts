@@ -494,12 +494,7 @@ export async function sweepAthenaAssignmentTriggers(
     );
   const result = { triggered: 0, paused: 0, skipped: 0 };
   for (const row of rows) {
-    const outcome = await fireTrigger(
-      row.trigger,
-      row.assignment,
-      'Review the assigned work and continue any action that is currently useful.',
-      now,
-    );
+    const outcome = await fireTrigger(row.trigger, row.assignment, row.assignment.objective, now);
     result[outcome] += 1;
   }
   return result;

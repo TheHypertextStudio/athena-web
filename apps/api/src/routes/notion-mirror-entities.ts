@@ -41,6 +41,7 @@ import type { MirrorSourceValue, MirrorValue } from '@docket/connections/notion/
 import { defaultCycleName } from '@docket/work/cycle-contract';
 import { and, eq, isNull, sql } from 'drizzle-orm';
 
+import { recordCreatedRows } from '../lib/provenance/record-created';
 import { landingStatus } from '../lib/work-status';
 import { enqueueSearchUpsert } from '../search/write-through';
 
@@ -634,7 +635,7 @@ export async function adoptEntity(
     case 'task':
       return adoptTask(orgId, actorId, integrationRow, values);
     case 'project':
-      return adoptProject(orgId, integrationRow, values);
+      return adoptProject(orgId, actorId, integrationRow, values);
     default:
       // Every other entity is projection-only (`push` direction) — see applyPulledValues's
       // matching default branch and MIRROR_ENTITY_SPECS[entity].direction.
@@ -642,6 +643,8 @@ export async function adoptEntity(
   }
 }
 
+// Adoption runs inside a mirror sync pass, which declares the `sync` provenance; each adopted row
+// is recorded in the adopting transaction.
 async function adoptTask(
   orgId: string,
   actorId: string,
@@ -660,8 +663,8 @@ async function adoptTask(
 
   const row = await insertNotionSourceEntity(
     { orgId, integrationId: integrationRow.id, subjectType: 'task', values },
-    async (tx) =>
-      tx
+    async (tx) => {
+      const rows = await tx
         .insert(task)
         .values({
           organizationId: orgId,
@@ -680,7 +683,9 @@ async function adoptTask(
           ...(estimateMinutes !== undefined ? { estimateMinutes } : {}),
           ...(priority !== undefined ? { priority } : {}),
         })
-        .returning({ id: task.id }),
+        .returning();
+      return recordCreatedRows('task', rows, 'sync_create', { executor: tx });
+    },
   );
   if (!row) return undefined;
   await enqueueSearchUpsert(orgId, 'task', row.id);
@@ -689,6 +694,7 @@ async function adoptTask(
 
 async function adoptProject(
   orgId: string,
+  actorId: string,
   integrationRow: IntegrationRow,
   values: Readonly<Record<string, MirrorValue>>,
 ): Promise<string | undefined> {
@@ -708,12 +714,13 @@ async function adoptProject(
 
   const row = await insertNotionSourceEntity(
     { orgId, integrationId: integrationRow.id, subjectType: 'project', values },
-    async (tx) =>
-      tx
+    async (tx) => {
+      const rows = await tx
         .insert(project)
         .values({
           organizationId: orgId,
           teamId,
+          createdBy: actorId,
           name: name !== undefined && name.length > 0 ? name : 'Untitled',
           summary: summary !== undefined && summary.length > 0 ? summary : null,
           description: description !== undefined && description.length > 0 ? description : null,
@@ -723,7 +730,9 @@ async function adoptProject(
           statusId: status.id,
           ...(projectHealth !== undefined ? { health: projectHealth } : {}),
         })
-        .returning({ id: project.id }),
+        .returning();
+      return recordCreatedRows('project', rows, 'sync_create', { executor: tx });
+    },
   );
   if (!row) return undefined;
   await enqueueSearchUpsert(orgId, 'project', row.id);

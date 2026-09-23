@@ -33,6 +33,8 @@ import { and, eq, inArray, isNotNull, isNull, lt, notInArray, or, sql } from 'dr
 import type { z } from 'zod';
 import { resolveProductCapability } from '@docket/billing/application/entitlement';
 
+import { integrationProvenance, runWithProvenance } from '../lib/provenance/context';
+
 import {
   PROVIDER_DIRECTORY,
   asConnectorProvider,
@@ -441,12 +443,11 @@ export async function runLeasedSync(
   }
 
   try {
-    const { processed, total, stampFullSync } = await execute({
-      row,
-      provider,
-      token: tokenResult.token,
-      now,
-    });
+    // Every sync pass is its own entry point, whether a schedule or "Sync now" started it.
+    const syncScope = integrationProvenance('sync', { id: row.id, provider: row.provider });
+    const { processed, total, stampFullSync } = await runWithProvenance(syncScope, () =>
+      execute({ row, provider, token: tokenResult.token, now }),
+    );
     return await finishSuccess(run, row, processed, total, now, { stampFullSync });
   } catch (err) {
     const needsReauth = isProviderAuthError(err);

@@ -15,6 +15,8 @@ import { provenanceMiddleware } from '../../src/lib/provenance/rest-middleware';
 import './auth-mock';
 import { getMigratedDb } from './db';
 
+export { scoped, syncPass } from './provenance';
+
 type Db = typeof DbModule.db;
 
 let dbmod: typeof DbModule | undefined;

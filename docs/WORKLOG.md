@@ -206,8 +206,8 @@ routes/project-rollup.ts}`, `domains/work/src/contracts/{milestone,task}.ts`,
   reaches it from the palette and context menu.
 - **Subtasks**:
   - [x] Taxonomy contract, `ChangeOrigin` v2, request-scoped recorder, MCP/Athena/REST entry points
-  - [ ] Record on every REST create/mutation and every worker path; `audit_event.origin`
-  - [ ] Provenance read endpoint and activity-row origin
+  - [x] Record on every REST create/mutation and every worker path; `audit_event.origin`
+  - [x] Provenance read endpoint and activity-row origin
   - [ ] Origin card, truthful activity rows, Show origin action
 - **Decisions**: `ChangeOrigin` v2 stays a superset of v1 (`tool`, `client`, `sessionId`,
   `planId`, `planOwnerUserId` keep their top-level spelling) because phone summaries, Athena undo,
@@ -220,7 +220,22 @@ routes/project-rollup.ts}`, `domains/work/src/contracts/{milestone,task}.ts`,
   `max-lines` ceiling.
 - **Validation (slice 1)**: root typecheck, lint, complexity ledger, and format pass. API suite:
   6469 pass; the 9 failures (`permissions`, `route-auth`, `cycle-backfill`, `programs-detail`)
-  fail identically on a clean `HEAD`. Web 4484 and work-domain 307 pass.
+  fail identically on a clean `HEAD`. Web 4484 and work-domain 307 pass. Slice 1 deployed after
+  `0df7942b6` registered the new contract export and moved the naive-timestamp allowance with
+  `audit_event`; both policies live in `packages/test-utils` and only a root `pnpm test` runs them.
+- **Slices 2–3 notes**: Shared helpers that MCP tools also call never record change sets; the
+  REST route or tool does, so `POST /tasks/:id/state` now runs the state steps itself instead of
+  `setTaskState`. Task archive records op `update` so undo can reverse it. A bare MCP `undo` now
+  targets the caller's latest change through the same channel, client, and session
+  (`mcp/undo-target.ts`), because app edits record change sets too. `change-set.ts`,
+  `tasks.ts`, `initiatives.ts`, and `task-activity-routes.ts` sit at their ledger ceilings, so
+  recorders live in new modules (`lib/provenance/*`, `routes/container-change-sets.ts`,
+  `routes/task-activity-entries.ts`, `mcp/change-set-history.ts`).
+- **Known gaps**: `reparentTasks` commits its own transaction, so reparent records just after the
+  write and without the parent completion cascade. Initiative parentage lives in a link table
+  that change sets do not track, so hierarchy moves record the child with unchanged fields.
+  Program and initiative labels have no relation kind and record as entity updates. Project,
+  program, and initiative delete record as `archive`; undo reports those rows gone.
 - **Blockers**: None.
 
 ---

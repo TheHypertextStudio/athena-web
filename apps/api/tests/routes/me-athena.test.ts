@@ -8,6 +8,7 @@ import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { AppEnv } from '../../src/context';
 import type { getContainer as GetContainer } from '../../src/container';
 import { onError } from '../../src/error';
+import { appProvenance, runWithProvenance } from '../../src/lib/provenance/context';
 import type meAthenaRouter from '../../src/routes/me-athena';
 import {
   fakeSession,
@@ -212,7 +213,7 @@ function appFor(person: Person) {
   const app = new Hono<AppEnv>();
   app.use('*', async (c, next) => {
     c.set('session', fakeSession(person.userId));
-    await next();
+    await runWithProvenance(appProvenance(), next);
   });
   app.route('/', meAthena);
   app.onError(onError);

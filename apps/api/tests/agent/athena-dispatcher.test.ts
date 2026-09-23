@@ -27,12 +27,12 @@ import type {
   reportAgentMilestone as ReportAgentMilestone,
 } from '../../src/routes/agent-bus';
 import { getMigratedDb } from '../support/db';
+import { dispatchAthenaWork } from '../support/entry-point-writers';
 import { seedStatuses, type StatusIdLookup } from '../support/routes-harness';
 import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
-let dispatchAthenaWork!: typeof DispatchAthenaWork;
 let interruptAthenaWork!: typeof InterruptAthenaWork;
 let resolveCanonicalConversation!: typeof ResolveCanonicalConversation;
 let rotateCanonicalConversation!: typeof RotateCanonicalConversation;
@@ -47,7 +47,6 @@ beforeAll(async () => {
   schema = await getMigratedDb();
   db = schema.db;
   ({
-    dispatchAthenaWork,
     interruptAthenaWork,
     resolveCanonicalConversation,
     rotateCanonicalConversation,

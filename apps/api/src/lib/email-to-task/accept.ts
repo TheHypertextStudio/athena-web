@@ -17,7 +17,9 @@ import {
 
 import { and, eq } from 'drizzle-orm';
 
-import { resolveLandingTarget } from '../task-landing';
+import { emailProvenance, runWithProvenance } from '../provenance/context';
+import { recordCreatedRow } from '../provenance/record-created';
+import { resolveLandingTarget, type LandingTarget } from '../task-landing';
 import { emitEvent } from '../../routes/event-emit';
 import { enqueueSearchUpsert } from '../../search/write-through';
 
@@ -95,12 +97,66 @@ export async function acceptSuggestion(
   const landing = await resolveLandingTarget(input.organizationId, input.actorId);
   if (!landing) return { kind: 'no_team' };
 
+  const created = await writeAcceptedTask(input, suggestion, landing);
+
+  // Emit a creation event so automation rules can react to the accept.
+  await emitEvent({
+    organizationId: input.organizationId,
+    kind: 'created',
+    actorId: input.actorId,
+    title: created.taskRow.title,
+    subject: { type: 'task', id: created.taskRow.id, title: created.taskRow.title },
+  });
+  await enqueueSearchUpsert(input.organizationId, 'task', created.taskRow.id);
+  await enqueueSearchUpsert(input.organizationId, 'attachment', created.attachmentId);
+
+  return { kind: 'accepted', ...created };
+}
+
+/**
+ * Accept a suggestion on the email channel, for an automatic accept with no person in the loop.
+ *
+ * @remarks
+ * The `suggestion.autoAccept` rule is the entry point for this write, so it declares the email
+ * provenance here. A person accepting from the inbox goes through {@link acceptSuggestion} under
+ * the request's own provenance.
+ *
+ * @param input - The org-scoped suggestion, the accepting actor, and field overrides.
+ * @returns the outcome, as {@link acceptSuggestion} returns it.
+ */
+export async function acceptSuggestionFromEmail(
+  input: AcceptSuggestionInput,
+): Promise<AcceptSuggestionResult> {
+  return runWithProvenance(emailProvenance(input.suggestionId), () => acceptSuggestion(input));
+}
+
+/** What one accept wrote: the task, the updated suggestion, and the email attachment. */
+interface AcceptedWrite {
+  readonly taskRow: TaskRow;
+  readonly suggestionRow: SuggestionRow;
+  readonly attachmentId: string;
+}
+
+/**
+ * Create the task, attach its source email, close the suggestion, and record the creation, in one
+ * transaction.
+ *
+ * @remarks
+ * The change set records under the provenance in flight: `app` when a person accepts from the
+ * inbox, `email` when a `suggestion.autoAccept` rule accepts it. Either way it names the
+ * suggestion the task was accepted from.
+ */
+async function writeAcceptedTask(
+  input: AcceptSuggestionInput,
+  suggestion: SuggestionRow,
+  landing: LandingTarget,
+): Promise<AcceptedWrite> {
   const overrides = input.overrides;
   const dueDate = overrides.dueDate
     ? new Date(overrides.dueDate)
     : (suggestion.dueDate ?? undefined);
 
-  const created = await db.transaction(async (tx) => {
+  return db.transaction(async (tx) => {
     const inserted = await tx
       .insert(task)
       .values({
@@ -121,6 +177,10 @@ export async function acceptSuggestion(
     const taskRow = inserted[0];
     /* v8 ignore next -- @preserve defensive: insert always returns a row */
     if (!taskRow) throw new Error('accept task insert returned no row');
+    await recordCreatedRow('task', taskRow, 'email_accept', {
+      executor: tx,
+      detail: { ref: { messageId: suggestion.id } },
+    });
 
     // Attach the source email back to the new task (the email rides along as context).
     const meta = suggestion.emailMeta as { subject?: string } | null;
@@ -158,17 +218,4 @@ export async function acceptSuggestion(
     if (!suggestionRow) throw new Error('accept suggestion update returned no row');
     return { taskRow, suggestionRow, attachmentId: attachmentRow.id };
   });
-
-  // Emit a creation event so automation rules can react to the accept.
-  await emitEvent({
-    organizationId: input.organizationId,
-    kind: 'created',
-    actorId: input.actorId,
-    title: created.taskRow.title,
-    subject: { type: 'task', id: created.taskRow.id, title: created.taskRow.title },
-  });
-  await enqueueSearchUpsert(input.organizationId, 'task', created.taskRow.id);
-  await enqueueSearchUpsert(input.organizationId, 'attachment', created.attachmentId);
-
-  return { kind: 'accepted', ...created };
 }

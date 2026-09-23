@@ -32,6 +32,7 @@ import {
 import { agentElicitation, db } from '@docket/db';
 import { eq } from 'drizzle-orm';
 
+import { athenaProvenance, runWithProvenance } from '../lib/provenance/context';
 import { raiseElicitation, type ElicitationRow } from './elicitation-service';
 
 /**
@@ -182,10 +183,11 @@ export function installElicitationHandler(client: Client, ctx: McpElicitationCon
     // render, so it is cancelled rather than opened, and the server takes its own fallback.
     const params = request.params as { message: string; requestedSchema?: unknown };
     if (params.requestedSchema === undefined) return { action: 'cancel' };
-    const result = await handleMcpElicitation(
-      { message: params.message, requestedSchema: params.requestedSchema },
-      ctx,
-    );
+    // The request arrives on the client's transport, outside any tool call's scope. The question
+    // belongs to the Athena session the client serves, so the task it may create is Athena's.
+    const scope = athenaProvenance('session', ctx.sessionId);
+    const question = { message: params.message, requestedSchema: params.requestedSchema };
+    const result = await runWithProvenance(scope, () => handleMcpElicitation(question, ctx));
     return result as { action: string; content?: Record<string, unknown> };
   });
 }

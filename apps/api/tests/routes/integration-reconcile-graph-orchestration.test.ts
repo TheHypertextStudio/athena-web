@@ -12,7 +12,7 @@ import type {
 } from '@docket/integrations';
 
 import type * as ReconcileGraph from '../../src/routes/integration-reconcile-graph';
-import { getDb, one, seedBaseOrg } from '../support/routes-harness';
+import { getDb, one, scoped, seedBaseOrg, syncPass } from '../support/routes-harness';
 
 /**
  * Full-`reconcileWorkGraph` orchestration tests targeting the private helpers only reachable
@@ -29,8 +29,11 @@ let reconcileWorkGraph!: typeof ReconcileGraph.reconcileWorkGraph;
 beforeAll(async () => {
   schema = await getDb();
   db = schema.db;
-  reconcileWorkGraph = (await import('../../src/routes/integration-reconcile-graph'))
-    .reconcileWorkGraph;
+  // A sync pass declares the `sync` provenance the reconciler records under.
+  reconcileWorkGraph = scoped(
+    syncPass('linear'),
+    (await import('../../src/routes/integration-reconcile-graph')).reconcileWorkGraph,
+  );
 });
 
 const NOW = new Date('2026-07-02T12:00:00.000Z');

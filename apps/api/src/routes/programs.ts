@@ -39,6 +39,7 @@ import { zJson, zParam, zQuery } from '../lib/validate';
 import { capabilityGuard } from '../permissions/capability-guard';
 import { enqueueSearchDelete, enqueueSearchUpsert } from '../search/write-through';
 
+import * as changeSets from './container-change-sets';
 import { emitEvent } from './event-emit';
 import { buildTaskViewCondition, buildTaskViewFilter, toOut as taskToOut } from './task-helpers';
 
@@ -140,6 +141,7 @@ const programs = new Hono<AppEnv>()
       const row = inserted[0];
       /* v8 ignore next -- @preserve defensive: insert/update always returns a row */
       if (!row) throw new Error('program insert returned no row');
+      await changeSets.recordCreate({ orgId, actorId }, 'program', row);
       // Stream: record the creation (mirrors projects.ts) so it surfaces to owners/followers.
       // Post-commit and unread by the response, so it runs after the caller has been answered.
       // Stamped here rather than inside the deferred callback: `emitEvent` defaults `occurredAt`
@@ -318,22 +320,17 @@ const programs = new Hono<AppEnv>()
         body.status === undefined
           ? undefined
           : await resolveContainerStatus(orgId, 'program', body.status);
-      const updated = await db
-        .update(program)
-        .set({
-          ...(body.name !== undefined ? { name: body.name } : {}),
-          ...clearableTextPatch('summary', body.summary),
-          ...(body.description !== undefined ? { description: body.description } : {}),
-          ...(body.ownerId !== undefined ? { ownerId: body.ownerId } : {}),
-          ...(nextStatus === undefined
-            ? {}
-            : { status: nextStatus.status, statusId: nextStatus.statusId }),
-          ...(body.health !== undefined ? { health: body.health } : {}),
-          ...(body.visibility !== undefined ? { visibility: body.visibility } : {}),
-        })
-        .where(and(eq(program.id, id), eq(program.organizationId, orgId)))
-        .returning();
-      const row = updated[0];
+      const row = await changeSets.updateProgramRecorded({ orgId, actorId }, id, body, {
+        ...(body.name !== undefined ? { name: body.name } : {}),
+        ...clearableTextPatch('summary', body.summary),
+        ...(body.description !== undefined ? { description: body.description } : {}),
+        ...(body.ownerId !== undefined ? { ownerId: body.ownerId } : {}),
+        ...(nextStatus === undefined
+          ? {}
+          : { status: nextStatus.status, statusId: nextStatus.statusId }),
+        ...(body.health !== undefined ? { health: body.health } : {}),
+        ...(body.visibility !== undefined ? { visibility: body.visibility } : {}),
+      });
       if (!row) throw new NotFoundError('Program not found');
       if (body.status !== undefined) {
         await emitEvent({
@@ -363,10 +360,10 @@ const programs = new Hono<AppEnv>()
     zParam(idParam),
     zJson(ProgramLabelLink),
     async (c) => {
-      const { orgId } = c.get('actorCtx');
+      const { orgId, actorId } = c.get('actorCtx');
       const { id } = c.req.valid('param');
       const { labelId } = c.req.valid('json');
-      await loadProgram(orgId, id);
+      const row = await loadProgram(orgId, id);
       await db.transaction(async (tx) => {
         const refs = await labelsForSubject('program', orgId, id, tx);
         if (refs.some((label) => label.id === labelId)) return;
@@ -379,6 +376,7 @@ const programs = new Hono<AppEnv>()
           resolveLabelSet(orgId, [labelId], { dbh: tx }),
         ]);
         await attachLabels(tx, 'program', id, orgId, existing, incoming);
+        await changeSets.recordLabelUpdate({ tx, orgId, actorId }, 'program', row);
       });
       await enqueueSearchUpsert(orgId, 'program', id);
       return ok(c, ProgramLabelLinked, { programId: id, labelId, linked: true });
@@ -402,7 +400,7 @@ const programs = new Hono<AppEnv>()
         .delete(program)
         .where(and(eq(program.id, id), eq(program.organizationId, orgId)))
         .returning();
-      const row = deleted[0];
+      const row = await changeSets.recordRemoval(c.get('actorCtx'), 'program', deleted[0]);
       if (!row) throw new NotFoundError('Program not found');
       await enqueueSearchDelete(orgId, 'program', row.id);
       return ok(c, ProgramOut, toOut(row));

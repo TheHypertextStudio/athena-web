@@ -15,23 +15,21 @@ import type * as DbModule from '@docket/db';
 
 import type {
   countWritesAfter as CountWritesAfter,
-  dispatchAthenaWork as DispatchAthenaWork,
   recordCurrentStep as RecordCurrentStep,
 } from '../../src/routes/agent-dispatch';
+import { dispatchAthenaWork } from '../support/entry-point-writers';
 import { getDb, seedBaseOrg, seedOrg, seedUserWithHub } from '../support/routes-harness';
 import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
-let dispatchAthenaWork!: typeof DispatchAthenaWork;
 let countWritesAfter!: typeof CountWritesAfter;
 let recordCurrentStep!: typeof RecordCurrentStep;
 
 beforeAll(async () => {
   schema = await getDb();
   db = schema.db;
-  ({ dispatchAthenaWork, countWritesAfter, recordCurrentStep } =
-    await import('../../src/routes/agent-dispatch'));
+  ({ countWritesAfter, recordCurrentStep } = await import('../../src/routes/agent-dispatch'));
 });
 
 describe('deriveTaskTitle (via dispatchAthenaWork)', () => {

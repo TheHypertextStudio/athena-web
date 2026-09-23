@@ -54,6 +54,7 @@ import { z } from 'zod';
 
 import { emitEvent } from '../../routes/event-emit';
 import { enqueueSearchUpsert } from '../../search/write-through';
+import { recordCreatedRow } from '../provenance/record-created';
 import { resolveLandingTarget } from '../task-landing';
 import { setTaskState } from '../task-state';
 import type { AutomationEvent } from './event';
@@ -329,6 +330,46 @@ async function existingRoute(
   return row;
 }
 
+/** An open database transaction. */
+type RouteTx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+/**
+ * Attach the source email to a routed task, when the item is an email.
+ *
+ * @remarks
+ * The email rides along as the task's context: the thread a person can open, and the integration
+ * and thread id the `mail.*` actions later act through.
+ *
+ * @param tx - The routing transaction.
+ * @param taskRow - The routed task.
+ * @param item - The inbound item.
+ * @returns the attachment id, or null when the item is not an email.
+ */
+async function attachSourceEmail(
+  tx: RouteTx,
+  taskRow: typeof task.$inferSelect,
+  item: InboundItem,
+): Promise<string | null> {
+  if (item.suggestionId === null || item.sourceUrl === null) return null;
+  const meta = item.emailMeta as { subject?: string } | null;
+  const [att] = await tx
+    .insert(attachment)
+    .values({
+      organizationId: taskRow.organizationId,
+      createdBy: taskRow.createdBy,
+      subjectType: 'task',
+      subjectId: taskRow.id,
+      kind: 'email',
+      title: meta?.subject ?? item.title,
+      url: item.sourceUrl,
+      sourceIntegrationId: item.integrationId,
+      externalId: item.sourceKey,
+      metadata: item.emailMeta,
+    })
+    .returning({ id: attachment.id });
+  return att?.id ?? null;
+}
+
 /** Whether a project id names a project in the target workspace. */
 async function projectInOrg(projectId: string, orgId: string): Promise<boolean> {
   const [row] = await db
@@ -471,30 +512,9 @@ export async function routeInboundItemToTask(
         })
         .returning({ id: inboundTaskRoute.id });
       if (!routeRow) throw new InboundRouteRaceLost(); // another writer routed this item first
-
-      // The source email rides along as the task's provenance: the thread a person can open, the
-      // integration and thread id the `mail.*` actions later act through.
-      let attachmentId: string | null = null;
-      if (item.suggestionId !== null && item.sourceUrl !== null) {
-        const meta = item.emailMeta as { subject?: string } | null;
-        const [att] = await tx
-          .insert(attachment)
-          .values({
-            organizationId: targetOrgId,
-            createdBy: writerActorId,
-            subjectType: 'task',
-            subjectId: taskRow.id,
-            kind: 'email',
-            title: meta?.subject ?? item.title,
-            url: item.sourceUrl,
-            sourceIntegrationId: item.integrationId,
-            externalId: item.sourceKey,
-            metadata: item.emailMeta,
-          })
-          .returning({ id: attachment.id });
-        attachmentId = att?.id ?? null;
-      }
-      return { taskRow, attachmentId };
+      // Recorded under the rule's provenance, which the automation engine declares.
+      await recordCreatedRow('task', taskRow, 'task_route', { executor: tx });
+      return { taskRow, attachmentId: await attachSourceEmail(tx, taskRow, item) };
     })
     // Only the race sentinel, and deliberately nothing else. A catch-all here would read a
     // genuine database failure — a bad foreign key, a dead connection — as "somebody beat me to

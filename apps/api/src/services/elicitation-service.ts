@@ -50,6 +50,7 @@ import {
 } from './elicitation-notify';
 import { emitElicitationEvent } from '../routes/event-emit';
 import { ownerActorIn } from '../routes/agent-dispatch';
+import { insertElicitationTask } from './elicitation-task';
 import { resolveLandingTarget } from '../lib/task-landing';
 import { ConflictError, NotFoundError } from '../error';
 
@@ -253,30 +254,20 @@ export async function ensureElicitationTask(
   const landing = await resolveLandingTarget(organizationId, actorId);
   if (!landing) throw new ConflictError('This workspace has no team to file work into yet.');
 
-  const [created] = await db
-    .insert(task)
-    .values({
-      organizationId,
-      title: actionSummary.slice(0, 120),
-      description: question,
-      teamId: landing.teamId,
-      statusId: landing.statusId,
-      state: landing.state,
-      assigneeId: landing.assigneeId,
-      cycleId: landing.cycleId,
-      source: 'native',
-      createdBy: actorId,
-    })
-    .returning({ id: task.id });
-  /* v8 ignore next -- @preserve defensive: insert always returns a row */
-  if (!created) throw new Error('elicitation task insert returned no row');
+  const taskId = await insertElicitationTask({
+    organizationId,
+    actorId,
+    landing,
+    actionSummary,
+    question,
+  });
 
   // The session now points at the task its question implements. It deliberately does NOT upgrade
   // `work_linkage` to `'task'`: that claim belongs to the dispatcher alone (asserted by
   // `tests/agent/athena-architecture.test.ts`), and a question is not an admission of work — the
   // task exists so the answer has somewhere to live, not because this session was dispatched.
-  await db.update(agentSession).set({ taskId: created.id }).where(eq(agentSession.id, session.id));
-  return { taskId: created.id, organizationId };
+  await db.update(agentSession).set({ taskId }).where(eq(agentSession.id, session.id));
+  return { taskId, organizationId };
 }
 
 /** Where one question's work is tracked: the task, and the workspace that task lives in. */

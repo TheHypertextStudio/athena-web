@@ -20,6 +20,7 @@
 import { auditEvent, db } from '@docket/db';
 import { and, desc, eq, sql } from 'drizzle-orm';
 
+import { insertAuditEvents } from '../lib/provenance/audit-events';
 import type { TaskSyncConflict } from './integration-reconcile-plan';
 
 /** The `metadata.kind` discriminator marking an `audit_event` row as a sync-conflict record. */
@@ -114,7 +115,7 @@ export async function recordSyncConflict(
     remoteDueDate: conflict.remoteDueDate ?? null,
     remoteCompleted: conflict.remoteCompleted ?? null,
   };
-  await db.insert(auditEvent).values({
+  await insertAuditEvents(db, 'sync_conflict', {
     organizationId: orgId,
     ...(actorId !== null ? { actorId } : {}),
     subjectType: 'task',

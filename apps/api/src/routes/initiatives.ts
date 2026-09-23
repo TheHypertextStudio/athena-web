@@ -31,7 +31,7 @@ import { and, desc, eq, inArray, isNull } from 'drizzle-orm';
 import { Hono } from 'hono';
 import type { z } from 'zod';
 
-import type { AppEnv, AuthSession } from '../context';
+import type { AppEnv } from '../context';
 import { ConflictError, NotFoundError } from '../error';
 import { clearableTextPatch } from '../lib/clearable-text';
 import { planningDatePatch } from '../lib/planning-timeframe';
@@ -49,7 +49,7 @@ import { pageResult, seekAfter } from '../lib/list-cursor';
 import { apiDoc } from '../lib/openapi-route';
 import { zJson, zParam, zQuery } from '../lib/validate';
 import { capabilityGuard } from '../permissions/capability-guard';
-import { resourceAccessKey, viewableResourceKeys } from '../permissions/resource-access';
+import { resourceAccessKey } from '../permissions/resource-access';
 import { enqueueSearchDelete, enqueueSearchUpsert } from '../search/write-through';
 
 import {
@@ -73,26 +73,14 @@ import {
   loadAccessibleInitiativeHierarchyGraph,
 } from './initiative-hierarchy';
 import initiativeResources from './initiative-resources';
-
-async function accessibleInitiativeWorkKeys(
-  session: AuthSession,
-  projects: readonly { readonly id: string; readonly organizationId: string }[],
-  programs: readonly { readonly id: string; readonly organizationId: string }[],
-): Promise<ReadonlySet<string>> {
-  if (!session?.user) return new Set();
-  return viewableResourceKeys(session.user.id, [
-    ...projects.map((row) => ({
-      organizationId: row.organizationId,
-      kind: 'project',
-      id: row.id,
-    })),
-    ...programs.map((row) => ({
-      organizationId: row.organizationId,
-      kind: 'program',
-      id: row.id,
-    })),
-  ]);
-}
+import { accessibleInitiativeWorkKeys } from './initiative-work-access';
+import {
+  recordCreate,
+  recordLabelUpdate,
+  recordLink,
+  recordRemoval,
+  recordUpdate,
+} from './container-change-sets';
 
 /** Initiatives router: org-scoped CRUD + child associations + roadmap roll-up. */
 const initiatives = new Hono<AppEnv>()
@@ -187,7 +175,7 @@ const initiatives = new Hono<AppEnv>()
         if (labels.length > 0) {
           await replaceLabels(tx, 'initiative', created.id, orgId, labels);
         }
-        return created;
+        return recordCreate({ tx, orgId, actorId }, 'initiative', created);
       });
       // Post-commit and unread by the response, so it runs after the caller has been answered.
       // Stamped here rather than inside the deferred callback: `emitEvent` defaults `occurredAt`
@@ -381,7 +369,7 @@ const initiatives = new Hono<AppEnv>()
         if (body.labelIds !== undefined) {
           await replaceLabels(tx, 'initiative', id, orgId, labels);
         }
-        return changed;
+        return recordUpdate({ tx, orgId, actorId }, 'initiative', current, changed, body);
       });
       if (!row) throw new NotFoundError('Initiative not found');
       if (body.status !== undefined) {
@@ -426,10 +414,10 @@ const initiatives = new Hono<AppEnv>()
     zParam(idParam),
     zJson(InitiativeLabelLink),
     async (c) => {
-      const { orgId } = c.get('actorCtx');
+      const { orgId, actorId } = c.get('actorCtx');
       const { id } = c.req.valid('param');
       const { labelId } = c.req.valid('json');
-      await loadInitiative(orgId, id);
+      const row = await loadInitiative(orgId, id);
       await db.transaction(async (tx) => {
         const refs = await labelsForSubject('initiative', orgId, id, tx);
         if (refs.some((label) => label.id === labelId)) return;
@@ -442,6 +430,7 @@ const initiatives = new Hono<AppEnv>()
           resolveLabelSet(orgId, [labelId], { dbh: tx }),
         ]);
         await attachLabels(tx, 'initiative', id, orgId, existing, incoming);
+        await recordLabelUpdate({ tx, orgId, actorId }, 'initiative', row);
       });
       await enqueueSearchUpsert(orgId, 'initiative', id);
       return ok(c, InitiativeLabelLinked, { initiativeId: id, labelId, linked: true });
@@ -459,7 +448,7 @@ const initiatives = new Hono<AppEnv>()
     }),
     zParam(idParam),
     async (c) => {
-      const { orgId } = c.get('actorCtx');
+      const { orgId, actorId } = c.get('actorCtx');
       const { id } = c.req.valid('param');
       const row = await db.transaction(async (tx) => {
         const candidates = await tx
@@ -535,7 +524,7 @@ const initiatives = new Hono<AppEnv>()
             ),
           );
         const deleted = await tx.delete(initiative).where(eq(initiative.id, id)).returning();
-        return deleted[0];
+        return recordRemoval({ tx, orgId, actorId }, 'initiative', deleted[0]);
       });
       if (!row) throw new NotFoundError('Initiative not found');
       await enqueueSearchDelete(orgId, 'initiative', row.id);
@@ -591,6 +580,7 @@ const initiatives = new Hono<AppEnv>()
       await db
         .insert(initiativeProject)
         .values({ initiativeId: id, projectId, organizationId: orgId });
+      await recordLink(c.get('actorCtx'), 'project_contributes_to', projectId, id, true);
       return created(
         c,
         InitiativeProjectLinked,
@@ -626,6 +616,7 @@ const initiatives = new Hono<AppEnv>()
         )
         .returning();
       if (!deleted[0]) throw new NotFoundError('Project link not found');
+      await recordLink(c.get('actorCtx'), 'project_contributes_to', projectId, id, false);
       return ok(c, InitiativeUnlinked, { unlinked: true });
     },
   )
@@ -671,6 +662,7 @@ const initiatives = new Hono<AppEnv>()
       await db
         .insert(initiativeProgram)
         .values({ initiativeId: id, programId, organizationId: orgId });
+      await recordLink(c.get('actorCtx'), 'program_contributes_to', programId, id, true);
       return created(
         c,
         InitiativeProgramLinked,
@@ -706,6 +698,7 @@ const initiatives = new Hono<AppEnv>()
         )
         .returning();
       if (!deleted[0]) throw new NotFoundError('Program link not found');
+      await recordLink(c.get('actorCtx'), 'program_contributes_to', programId, id, false);
       return ok(c, InitiativeUnlinked, { unlinked: true });
     },
   )

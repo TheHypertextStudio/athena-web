@@ -18,6 +18,7 @@ import type { z } from 'zod';
 import type { AppEnv } from '../context';
 import { ok } from '../lib/ok';
 import { encodeListCursor, seekAfter } from '../lib/list-cursor';
+import { insertAuditEvents } from '../lib/provenance/audit-events';
 import { apiDoc } from '../lib/openapi-route';
 import { zQuery } from '../lib/validate';
 
@@ -51,7 +52,7 @@ function toOut(e: AuditEventRow): z.input<typeof AuditEventOut> {
  * @param values - The audit-event insert values (sans generated id/timestamp).
  */
 export async function writeAudit(values: typeof auditEvent.$inferInsert): Promise<void> {
-  await db.insert(auditEvent).values(values);
+  await insertAuditEvents(db, 'audit', values);
 }
 
 /** Activity router: the organization's task-visible audit feed, newest first. */

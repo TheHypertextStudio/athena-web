@@ -19,15 +19,9 @@ import {
   taskDependency,
 } from '@docket/db';
 import { pageOf } from '../contracts/pagination';
-import { taskCreationEntryId } from '@docket/work/task-model';
-import {
-  TaskActivityChange,
-  TaskActivityOut,
-  TaskActivityQuery,
-} from '@docket/connections/activity-contract';
+import { TaskActivityOut, TaskActivityQuery } from '@docket/connections/activity-contract';
 import { and, asc, eq, inArray, isNull, or, sql, type SQLWrapper } from 'drizzle-orm';
 import { Hono } from 'hono';
-import type { z } from 'zod';
 
 import type { AppEnv } from '../context';
 import { NotFoundError } from '../error';
@@ -35,18 +29,15 @@ import { ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
 import { zParam, zQuery } from '../lib/validate';
 
+import { originOf } from '../mcp/change-set';
+import { activityEntries, creationEntry, type ActivityEntry } from './task-activity-entries';
 import { buildTaskViewFilter, idParam, loadTask } from './task-helpers';
 
-type ActivityEntry = z.input<typeof TaskActivityOut>;
-
-/** Fields from a child that alter a parent's understanding of its contained work. */
-const MEANINGFUL_CHILD_FIELDS = new Set(['description', 'state', 'assigneeId', 'dueDate']);
-
-/** Fields from a blocker that can alter whether the current task may proceed. */
-const DEPENDENCY_READINESS_FIELDS = new Set(['state', 'dueDate']);
+/** The position an Activity cursor encodes. */
+type CursorPosition = Pick<ActivityEntry, 'createdAt' | 'id'>;
 
 /** Encode one `(createdAt, id)` position without exposing a storage-table cursor. */
-function encodeActivityCursor(entry: ActivityEntry): string {
+function encodeActivityCursor(entry: CursorPosition): string {
   return Buffer.from(`${entry.createdAt}|${entry.id}`, 'utf8').toString('base64url');
 }
 
@@ -93,18 +84,6 @@ function sourceAfter(
     : sql`${createdAt} >= ${at}`;
 }
 
-/** Read safe application text from a session activity body. */
-function sessionBody(body: Record<string, unknown>, type: string): string | null {
-  if (type === 'error') return 'An automated task update could not be completed.';
-  const action = body['action'];
-  if (action && typeof action === 'object') {
-    const summary = (action as Record<string, unknown>)['summary'];
-    if (typeof summary === 'string' && summary.length > 0) return summary;
-  }
-  const text = body['text'];
-  return typeof text === 'string' && text.length > 0 ? text : null;
-}
-
 /** The canonical task Activity route, mounted on the tasks router at `/`. */
 export const taskActivityRoutes = new Hono<AppEnv>().get(
   '/:id/activity',
@@ -142,15 +121,6 @@ export const taskActivityRoutes = new Hono<AppEnv>().get(
         if (!last) break;
         cursor = encodeActivityCursor({
           id: `${entryPrefix}${last.id}`,
-          taskId: id,
-          actorId: null,
-          actorName: null,
-          type: 'updated',
-          category: 'task',
-          change: null,
-          body: null,
-          subjectTaskId: null,
-          subjectTaskTitle: null,
           createdAt: last.createdAt.toISOString(),
         });
       }
@@ -170,6 +140,7 @@ export const taskActivityRoutes = new Hono<AppEnv>().get(
         actorId: auditEvent.actorId,
         actorName: actor.displayName,
         metadata: auditEvent.metadata,
+        origin: auditEvent.origin,
         createdAt: auditEvent.createdAt,
       })
       .from(auditEvent)
@@ -292,6 +263,7 @@ export const taskActivityRoutes = new Hono<AppEnv>().get(
             programId: task.programId,
             visibility: task.visibility,
             metadata: auditEvent.metadata,
+            origin: auditEvent.origin,
             createdAt: auditEvent.createdAt,
           })
           .from(auditEvent)
@@ -338,6 +310,7 @@ export const taskActivityRoutes = new Hono<AppEnv>().get(
             programId: task.programId,
             visibility: task.visibility,
             metadata: auditEvent.metadata,
+            origin: auditEvent.origin,
             createdAt: auditEvent.createdAt,
           })
           .from(auditEvent)
@@ -377,149 +350,19 @@ export const taskActivityRoutes = new Hono<AppEnv>().get(
       }),
     );
 
+    const created = await originOf('task', taskRow.id);
     const entries: ActivityEntry[] = [
-      {
-        id: taskCreationEntryId(taskRow.id),
-        taskId: taskRow.id,
-        actorId: taskRow.createdBy,
-        actorName: creatorRows[0]?.name ?? null,
-        type: 'created',
-        category: 'task',
-        change: null,
-        body: null,
-        subjectTaskId: null,
-        subjectTaskTitle: null,
-        createdAt: taskRow.createdAt.toISOString(),
-      },
+      creationEntry(taskRow, creatorRows[0]?.name ?? null, created?.origin ?? null),
+      ...activityEntries(id, {
+        childCreations,
+        directLedger,
+        comments,
+        timerEvents,
+        taskSessions,
+        childLedger,
+        blockerLedger,
+      }),
     ];
-    for (const child of childCreations) {
-      entries.push({
-        id: `child-created:${child.id}`,
-        taskId: id,
-        actorId: child.createdBy,
-        actorName: child.actorName,
-        type: 'child',
-        category: 'subtask',
-        change: null,
-        body: null,
-        subjectTaskId: child.id,
-        subjectTaskTitle: child.title,
-        createdAt: child.createdAt.toISOString(),
-      });
-    }
-    for (const row of directLedger) {
-      const parsed = TaskActivityChange.safeParse(row.metadata);
-      if (!parsed.success) continue;
-      entries.push({
-        id: `audit:${row.id}`,
-        taskId: id,
-        actorId: row.actorId,
-        actorName: row.actorName,
-        type: 'updated',
-        category:
-          parsed.data.field === 'resource'
-            ? 'resource'
-            : parsed.data.field === 'dependency' || parsed.data.field === 'relatedTask'
-              ? 'relationship'
-              : parsed.data.field === 'subtask'
-                ? 'subtask'
-                : 'task',
-        change: parsed.data,
-        body: null,
-        subjectTaskId: null,
-        subjectTaskTitle: null,
-        createdAt: row.createdAt.toISOString(),
-      });
-    }
-    for (const row of comments) {
-      entries.push({
-        id: `comment:${row.id}`,
-        taskId: id,
-        actorId: row.authorId,
-        actorName: row.actorName,
-        type: 'comment',
-        category: 'comment',
-        change: null,
-        body: row.body,
-        subjectTaskId: null,
-        subjectTaskTitle: null,
-        createdAt: row.createdAt.toISOString(),
-      });
-    }
-    for (const row of timerEvents) {
-      entries.push({
-        id: `event:${row.id}`,
-        taskId: id,
-        actorId: row.actor?.docketActorId ?? null,
-        actorName: row.actor?.displayName ?? null,
-        type: 'timer',
-        category: 'time',
-        change: null,
-        body: row.title,
-        subjectTaskId: null,
-        subjectTaskTitle: null,
-        createdAt: row.occurredAt.toISOString(),
-      });
-    }
-    for (const row of taskSessions) {
-      entries.push({
-        id: `session:${row.id}`,
-        taskId: id,
-        actorId: null,
-        actorName: null,
-        type: 'session',
-        category: 'automation',
-        change: null,
-        body: sessionBody(row.body, row.type),
-        subjectTaskId: null,
-        subjectTaskTitle: null,
-        createdAt: row.createdAt.toISOString(),
-      });
-    }
-    for (const row of childLedger) {
-      const parsed = TaskActivityChange.safeParse(row.metadata);
-      if (!parsed.success || !MEANINGFUL_CHILD_FIELDS.has(parsed.data.field)) {
-        continue;
-      }
-      entries.push({
-        id: `child:${row.id}`,
-        taskId: id,
-        actorId: row.actorId,
-        actorName: row.actorName,
-        type: 'child',
-        category: 'subtask',
-        change: parsed.data,
-        body: null,
-        subjectTaskId: row.taskId,
-        subjectTaskTitle: row.taskTitle,
-        createdAt: row.createdAt.toISOString(),
-      });
-    }
-    for (const row of blockerLedger) {
-      const parsed = TaskActivityChange.safeParse(row.metadata);
-      if (!parsed.success || !DEPENDENCY_READINESS_FIELDS.has(parsed.data.field)) {
-        continue;
-      }
-      if (
-        parsed.data.field === 'state' &&
-        !/done|cancel|block/i.test(`${parsed.data.from ?? ''} ${parsed.data.to ?? ''}`)
-      ) {
-        continue;
-      }
-      entries.push({
-        id: `dependency:${row.id}`,
-        taskId: id,
-        actorId: row.actorId,
-        actorName: row.actorName,
-        type: 'dependency',
-        category: 'relationship',
-        change: parsed.data,
-        body: null,
-        subjectTaskId: row.taskId,
-        subjectTaskTitle: row.taskTitle,
-        createdAt: row.createdAt.toISOString(),
-      });
-    }
 
     const ordered = entries
       .filter((entry) => query.category === undefined || entry.category === query.category)

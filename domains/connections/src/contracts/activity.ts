@@ -12,6 +12,7 @@ import { z } from 'zod';
 import { ActorId, OrganizationId } from '@docket/identity-access/ids';
 import { AuditEventId } from '../ids';
 import { TaskId } from '@docket/work/ids';
+import { ActivityOriginOut } from '@docket/work/provenance-contract';
 
 /** Audit-feed subject kinds; `agent` is a first-class subject. */
 export const AuditSubjectType = z
@@ -227,6 +228,9 @@ export const TaskActivityOut = z
     createdAt: z
       .string()
       .describe('Exact ISO-8601 timestamp the change was recorded — the ascending sort key.'),
+    origin: ActivityOriginOut.nullable().describe(
+      'Where the change came from: its channel and who performed it. Present on the task’s creation and on field changes when it was recorded; null for comments, timer transitions, delegated execution updates, subtask creation, and changes recorded before provenance.',
+    ),
   })
   .meta({
     id: 'TaskActivityOut',

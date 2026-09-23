@@ -7,7 +7,7 @@ import type { WorkGraphConnector, WorkGraphSnapshot } from '@docket/integrations
 import type * as DbModule from '@docket/db';
 
 import type * as ReconcileGraph from '../../src/routes/integration-reconcile-graph';
-import { addMember, getDb, one, seedBaseOrg } from '../support/routes-harness';
+import { addMember, getDb, one, scoped, seedBaseOrg, syncPass } from '../support/routes-harness';
 import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
@@ -28,7 +28,8 @@ beforeAll(async () => {
   schema = await getDb();
   db = schema.db;
   const mod = await import('../../src/routes/integration-reconcile-graph');
-  reconcileWorkGraph = mod.reconcileWorkGraph;
+  // A sync pass declares the `sync` provenance the reconciler records under.
+  reconcileWorkGraph = scoped(syncPass('linear'), mod.reconcileWorkGraph);
   planWorkItemReconcile = mod.planWorkItemReconcile;
   memberUserId = one(
     await db

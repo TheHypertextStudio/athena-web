@@ -4,7 +4,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import type * as DbModule from '@docket/db';
 import type { ExternalWriteResult, ImportedItem, WritableConnector } from '@docket/integrations';
 
-import type * as ReconcileModule from '../../src/routes/integration-reconcile';
+import { reconcileTasks } from '../support/entry-point-writers';
 import { getDb, one, seedBaseOrg, seedStatus, seedStatuses } from '../support/routes-harness';
 
 /**
@@ -17,12 +17,10 @@ import { getDb, one, seedBaseOrg, seedStatus, seedStatuses } from '../support/ro
  */
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
-let reconcileTasks!: typeof ReconcileModule.reconcileTasks;
 
 beforeAll(async () => {
   schema = await getDb();
   db = schema.db;
-  reconcileTasks = (await import('../../src/routes/integration-reconcile')).reconcileTasks;
 });
 
 const NOW_ISO = '2026-06-01T00:00:00.000Z';

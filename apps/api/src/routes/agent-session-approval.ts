@@ -6,7 +6,6 @@ import {
   agentSession,
   agentSessionRun,
   athenaAssignment,
-  auditEvent,
   comment,
   db,
   latticeConnection,
@@ -19,6 +18,7 @@ import { and, asc, desc, eq, isNotNull, isNull } from 'drizzle-orm';
 import { approvalOutcome, proposalOrganizationId } from '../agent/proposals';
 import { persistWaitingAthenaWake } from '../agent/async-runner';
 import { ConflictError, NotFoundError } from '../error';
+import { insertAuditEvents } from '../lib/provenance/audit-events';
 
 import type { ActivityRow, SessionRow } from './agent-session-helpers';
 
@@ -72,7 +72,7 @@ async function settleLatticeDecision(
       .where(and(eq(sessionActivity.id, action.id), eq(sessionActivity.approvalStatus, 'proposed')))
       .returning();
     if (!rejected) throw new ConflictError('Activity is not a proposed action');
-    await tx.insert(auditEvent).values({
+    await insertAuditEvents(tx, 'reject_action', {
       organizationId: delegation.organizationId,
       actorId: null,
       initiatorId: session.initiatorId,
@@ -218,7 +218,7 @@ async function settleLatticeDecision(
     .where(and(eq(sessionActivity.id, action.id), eq(sessionActivity.approvalStatus, 'proposed')))
     .returning();
   if (!applied) throw new ConflictError('Activity is not a proposed action');
-  await tx.insert(auditEvent).values({
+  await insertAuditEvents(tx, 'approve_action', {
     organizationId: delegation.organizationId,
     actorId: ownerActor?.id ?? null,
     initiatorId: session.initiatorId,
@@ -232,7 +232,7 @@ async function settleLatticeDecision(
     },
   });
   if (!failureCode && ownerActor) {
-    await tx.insert(auditEvent).values({
+    await insertAuditEvents(tx, 'comment', {
       organizationId: delegation.organizationId,
       actorId: ownerActor.id,
       initiatorId: session.initiatorId,
@@ -552,7 +552,7 @@ export async function decideActivity(
         continue;
       }
       if (decision.decision === 'approve') {
-        await tx.insert(auditEvent).values({
+        await insertAuditEvents(tx, 'approve_action', {
           organizationId: authorization.organizationId,
           actorId: authorization.actorId,
           initiatorId: session.initiatorId,
@@ -569,7 +569,7 @@ export async function decideActivity(
         // `executing` before dispatch and advances it only after the result is durable.
         if (action.id === activityId) decidedTarget = decidedRow;
       } else {
-        await tx.insert(auditEvent).values({
+        await insertAuditEvents(tx, 'reject_action', {
           organizationId: authorization.organizationId,
           actorId: authorization.actorId,
           initiatorId: session.initiatorId,
@@ -695,7 +695,7 @@ export async function decideProposalGroup(
         )
         .returning();
       if (!row) continue;
-      await tx.insert(auditEvent).values({
+      await insertAuditEvents(tx, 'decide_action_group', {
         organizationId: authorization.organizationId,
         actorId: authorization.actorId,
         initiatorId: session.initiatorId,

@@ -3,9 +3,11 @@ import type { ImportedItem } from '@docket/integrations';
 import { and, asc, eq } from 'drizzle-orm';
 
 import { ConflictError } from '../error';
+import { integrationProvenance } from '../lib/provenance/context';
+import { countOf, recordCreated } from '../lib/provenance/record-created';
 import { enqueueSearchUpsert } from '../search/write-through';
 
-import { type IntegrationRow, toTaskOut } from './integration-provider';
+import { type IntegrationRow, type TaskRow, toTaskOut } from './integration-provider';
 import { landingStatus } from '../lib/work-status';
 
 /** Options controlling how imported items are materialized. */
@@ -61,9 +63,12 @@ export async function resolveImportTeam(orgId: string, row: IntegrationRow): Pro
  * Idempotency: an item whose `(sourceIntegrationId, externalId)` already exists is skipped,
  * so re-importing is safe.
  *
+ * The new tasks are recorded as one change set on the `import` channel, named by the provider:
+ * the import is its own entry point, whichever request started it.
+ *
  * @param orgId - The active organization id.
  * @param actorId - The actor performing the import (recorded as `createdBy`).
- * @param integrationId - The source integration id.
+ * @param source - The source integration.
  * @param teamId - The team the linked tasks attach to.
  * @param items - The imported items to materialize.
  * @param options - Materialization options.
@@ -72,15 +77,16 @@ export async function resolveImportTeam(orgId: string, row: IntegrationRow): Pro
 export async function importItems(
   orgId: string,
   actorId: string,
-  integrationId: string,
+  source: Pick<IntegrationRow, 'id' | 'provider'>,
   teamId: string,
   items: readonly ImportedItem[],
   options: ImportItemsOptions,
 ): Promise<ReturnType<typeof toTaskOut>[]> {
+  const integrationId = source.id;
   const landing = await landingStatus(orgId, 'task', teamId);
   const state = landing.key;
 
-  const created: ReturnType<typeof toTaskOut>[] = [];
+  const rows: TaskRow[] = [];
   for (const item of items) {
     const externalId = item.provenance.externalId;
     const existing = await db
@@ -119,7 +125,15 @@ export async function importItems(
     /* v8 ignore next -- @preserve defensive: insert/update always returns a row */
     if (!taskRow) throw new Error('linked task insert returned no row');
     await enqueueSearchUpsert(orgId, 'task', taskRow.id);
-    created.push(toTaskOut(taskRow));
+    rows.push(taskRow);
   }
-  return created;
+  await recordCreated({
+    orgId,
+    actorId,
+    tool: 'integration_import',
+    summary: `Imported ${countOf(rows.length, 'task')} from ${source.provider}`,
+    created: rows.map((row) => ({ kind: 'task', row })),
+    base: integrationProvenance('import', { id: integrationId, provider: source.provider }),
+  });
+  return rows.map((row) => toTaskOut(row));
 }

@@ -11,6 +11,8 @@
  */
 import type { AutomationRule } from '@docket/automation/contracts';
 import { evaluatePredicate, matchesAutomationEvent } from '@docket/automation/evaluation';
+
+import { type ProvenanceBase, ruleProvenance, runWithProvenance } from '../provenance/context';
 import type { Registry } from './registry';
 
 /** Context handed to every action handler (handlers close over their own services). */
@@ -21,6 +23,20 @@ export interface ActionContext {
 /** A rule as held by the engine: a stored rule plus its enabled flag. */
 export interface EngineRule extends AutomationRule {
   readonly enabled: boolean;
+  /** The stored rule's id, recorded as the cause of every change its actions make. */
+  readonly id?: string;
+}
+
+/**
+ * The provenance a rule's actions record under.
+ *
+ * @remarks
+ * A rule is the entry point for the changes its actions make, whoever caused the event it fired
+ * on, so each action runs as `rule` / `routing` with the rule named as the cause. An action that
+ * stands for a narrower door (accepting an email) declares its own scope inside this one.
+ */
+function ruleScope(rule: EngineRule): ProvenanceBase {
+  return ruleProvenance('routing', rule.id === undefined ? undefined : { ruleId: rule.id });
 }
 
 /** One dispatched action's outcome (`ran=false` when no handler is registered). */
@@ -66,7 +82,7 @@ export async function runAutomations(
         continue;
       }
       try {
-        await handler.run(context, action.params);
+        await runWithProvenance(ruleScope(rule), () => handler.run(context, action.params));
         dispatched.push({ type: action.type, ran: true });
       } catch (error) {
         // One action's failure must never abort the rest of this rule's actions, or any other

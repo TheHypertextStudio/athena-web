@@ -35,6 +35,7 @@ import type { ParentCandidate, ParentResolution } from '@docket/work/parent-reso
 import { truncateTitle } from '@docket/work/task-titles';
 import { and, desc, eq, inArray, isNull, notInArray } from 'drizzle-orm';
 
+import { recordCreatedRow } from '../lib/provenance/record-created';
 import { resolveLandingTarget } from '../lib/task-landing';
 import { reportAgentMilestone } from './agent-bus';
 import type { SessionRow } from './agent-session-helpers';
@@ -336,9 +337,10 @@ export async function dispatchAthenaWork(input: DispatchWorkInput): Promise<Disp
       createdBy: input.initiatorActorId,
       ...parentColumns(resolution),
     })
-    .returning({ id: task.id });
+    .returning();
   /* v8 ignore next -- @preserve defensive: insert always returns a row */
   if (!created) throw new Error('dispatched task insert returned no row');
+  await recordCreatedRow('task', created, 'athena_dispatch');
 
   const session = await insertSpawnedSession(input, created.id, spawnLabel);
   return {

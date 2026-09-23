@@ -20,7 +20,6 @@ import {
   actor,
   agent,
   agentSession,
-  auditEvent,
   db,
   genId,
   hub,
@@ -41,15 +40,14 @@ import { approvalOutcome, finalStatus, finishedSettlement, hasRun } from './appr
 import { summarizeToolCall } from './tool-call-summary';
 import { ConflictError, NotFoundError } from '../error';
 import { env } from '../env';
+import { insertAuditEvents } from '../lib/provenance/audit-events';
 import { internalUserContext } from '../mcp/internal-session';
 import { resolveActor } from '../mcp/auth';
 import { decideActivity, decideProposalGroup } from '../routes/agent-session-approval';
 import type { SessionRow } from '../routes/agent-session-helpers';
 import { resolveOwnerTurnRuntime } from '../routes/lattice-backend';
-import {
-  elicitationRequestFromToolInput,
-  materializeElicitations,
-} from '../services/elicitation-service';
+import { elicitationRequestFromToolInput } from '../services/elicitation-service';
+import { materializeSessionElicitations } from './elicitation-scope';
 import { classifyTool, decideUserOwnedToolExecution } from './approval-policy';
 import { assertHostedExecutionSurface } from './execution-surface';
 import { markProvenance } from './provenance';
@@ -252,7 +250,7 @@ async function insertExecutionAudit(
   tool: string,
 ): Promise<void> {
   const ownerUserId = executor.kind === 'athena' ? executor.ownerUserId : null;
-  await handle.insert(auditEvent).values({
+  await insertAuditEvents(handle, tool, {
     organizationId: orgId,
     actorId: authorizationActorId,
     initiatorId,
@@ -720,7 +718,7 @@ async function driveSessionWithAdmission(
       // timeout policy, and — when it is time-sensitive — an actionable notification. Deliberately
       // outside the fence, because creating a task is not part of this generation's transaction;
       // it is idempotent and re-runs on the next turn if this process dies here.
-      if (askedUser) await materializeElicitations(sessionId);
+      if (askedUser) await materializeSessionElicitations(session);
       // The loop's next iteration claims every immediately runnable action before dispatch,
       // then reconciles results or parks on a proposal/elicitation.
     }

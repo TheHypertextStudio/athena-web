@@ -25,6 +25,7 @@ import { rawResultRowCount } from '../lib/raw-result';
 import { serializableTx } from '../lib/serializable-tx';
 import { zJson, zParam } from '../lib/validate';
 import { capabilityGuard } from '../permissions/capability-guard';
+import { recordLink } from './container-change-sets';
 
 const idParam = z.object({ id: z.string() });
 const depParam = z.object({ id: z.string(), depId: z.string() });
@@ -130,7 +131,7 @@ export const projectDependencyRoutes = new Hono<AppEnv>()
     zParam(idParam),
     zJson(ProjectDependencyCreate),
     async (c) => {
-      const { orgId } = c.get('actorCtx');
+      const { orgId, actorId } = c.get('actorCtx');
       const { id } = c.req.valid('param');
       const body = c.req.valid('json');
       const blockingProjectId = body.blockingProjectId ?? id;
@@ -172,6 +173,8 @@ export const projectDependencyRoutes = new Hono<AppEnv>()
           blockingProjectId,
           blockedProjectId,
         });
+        const scope = { tx, orgId, actorId };
+        await recordLink(scope, 'project_blocks', blockingProjectId, blockedProjectId, true);
       });
       return created(
         c,
@@ -218,8 +221,19 @@ export const projectDependencyRoutes = new Hono<AppEnv>()
             ),
           ),
         )
-        .returning({ blockingProjectId: projectDependency.blockingProjectId });
-      if (!removed[0]) throw new NotFoundError('Project dependency not found');
+        .returning({
+          blockingProjectId: projectDependency.blockingProjectId,
+          blockedProjectId: projectDependency.blockedProjectId,
+        });
+      const edge = removed[0];
+      if (!edge) throw new NotFoundError('Project dependency not found');
+      await recordLink(
+        c.get('actorCtx'),
+        'project_blocks',
+        edge.blockingProjectId,
+        edge.blockedProjectId,
+        false,
+      );
       return ok(c, ProjectDependencyRemoved, { removed: true });
     },
   );

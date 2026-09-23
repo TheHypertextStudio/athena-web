@@ -37,6 +37,7 @@ import { ConflictError, NotFoundError } from '../../error';
 import { addCalendarDays, parseCalendarDate } from '@docket/planning/calendar-date';
 import type { TaskStateMutation } from '../task-state';
 import { loadStatusSets } from '../work-status';
+import { recordMaterializedWork } from './record-materialized';
 
 /** Transaction handle shared with completion advancement. */
 export type ProcessTransaction = Parameters<Parameters<Database['transaction']>[0]>[0];
@@ -201,7 +202,9 @@ function insertedEntityId(rows: readonly { id: string }[], kind: string): string
  * @remarks
  * The caller must hold the instance row lock. `all_at_once` creates the fixed plan immediately;
  * completion-relative dates remain unset until their predecessor completes. `when_ready` creates a
- * step only when timing, dependency, and containment prerequisites are satisfied.
+ * step only when timing, dependency, and containment prerequisites are satisfied. The projects and
+ * tasks a pass creates are recorded as one `rule` / `recurrence` change set in the same
+ * transaction (see `record-materialized.ts`).
  */
 export async function materializeInstanceSteps(
   tx: ProcessTransaction,
@@ -529,11 +532,8 @@ export async function materializeInstanceSteps(
     command.postCommitStateTransitions?.push(...cascades);
   }
 
-  return {
-    createdProjectIdsByKey: Object.fromEntries(createdProjects),
-    createdMilestoneIdsByKey: Object.fromEntries(createdMilestones),
-    createdTaskIdsByKey: Object.fromEntries(createdTasks),
-  };
+  const created = { projects: createdProjects, milestones: createdMilestones, tasks: createdTasks };
+  return recordMaterializedWork(tx, command, created);
 }
 
 /** Ensure one occurrence, instance, and eligible fixed/stateful work set exactly once. */

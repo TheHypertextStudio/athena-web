@@ -21,18 +21,17 @@ import type {
   elicitationRequestFromToolInput as ElicitationRequestFromToolInput,
   elicitationsForSessions as ElicitationsForSessions,
   elicitationTaskHref as ElicitationTaskHref,
-  ensureElicitationTask as EnsureElicitationTask,
   materializeElicitations as MaterializeElicitations,
   raiseElicitation as RaiseElicitation,
   sweepElicitations as SweepElicitations,
 } from '../../src/services/elicitation-service';
 import { getMigratedDb } from '../support/db';
+import { ensureElicitationTask } from '../support/entry-point-writers';
 import { seedStatuses } from '../support/routes-harness';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
 let eventEmit!: typeof EventEmitModule;
-let ensureElicitationTask!: typeof EnsureElicitationTask;
 let raiseElicitation!: typeof RaiseElicitation;
 let materializeElicitations!: typeof MaterializeElicitations;
 let answerElicitation!: typeof AnswerElicitation;
@@ -47,7 +46,6 @@ beforeAll(async () => {
   db = schema.db;
   eventEmit = await import('../../src/routes/event-emit');
   ({
-    ensureElicitationTask,
     raiseElicitation,
     materializeElicitations,
     answerElicitation,

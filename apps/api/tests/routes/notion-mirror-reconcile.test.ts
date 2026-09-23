@@ -27,11 +27,11 @@ import { mirrorContentHash } from '../../src/routes/notion-mirror-body';
 import {
   projectEntity,
   provisionMirror,
-  pullBackEntity,
   recoverCreationIntents,
   runNotionMirrorSync,
   sweepNotionMirror,
 } from '../../src/routes/notion-mirror-reconcile';
+import { pullBackEntity } from '../support/entry-point-writers';
 import { clearDocketPro, getDb, one } from '../support/routes-harness';
 import { NO_PAGES, findDesign, seedMirror } from '../support/notion-recording-mirror';
 import { assertDefined } from '@docket/test-utils';

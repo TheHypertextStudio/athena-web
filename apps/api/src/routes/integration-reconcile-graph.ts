@@ -71,6 +71,7 @@ import type {
 
 import { ConflictError } from '../error';
 import { assertPlanningDateRange, planningDatePatch } from '../lib/planning-timeframe';
+import { recordCreatedRow } from '../lib/provenance/record-created';
 import {
   applySubtaskCompletionPolicyForParents,
   finishTaskStateTransition,
@@ -450,7 +451,7 @@ export async function applyProject(ctx: GraphApplyContext, ext: ExternalProject)
       ctx.result.projects.skipped += 1;
       return;
     }
-    const inserted = await db
+    const [row] = await db
       .insert(project)
       .values({
         organizationId: ctx.orgId,
@@ -460,10 +461,10 @@ export async function applyProject(ctx: GraphApplyContext, ext: ExternalProject)
         createdBy: ctx.actorId,
         ...fields,
       })
-      .returning({ id: project.id });
-    const row = inserted[0];
+      .returning();
     /* v8 ignore next -- @preserve defensive: insert always returns a row */
     if (!row) throw new Error('project insert returned no row');
+    await recordCreatedRow('project', row, 'sync_create');
     ctx.projectIdByExternal.set(ext.externalId, row.id);
     ctx.result.projects.created += 1;
     return;
@@ -667,7 +668,7 @@ async function insertLinkedItem(
     await tx.execute(
       sql`select pg_advisory_xact_lock(hashtextextended(${`people:${ctx.orgId}`}, 0))`,
     );
-    const inserted = await tx
+    const [row] = await tx
       .insert(task)
       .values({
         organizationId: ctx.orgId,
@@ -678,10 +679,10 @@ async function insertLinkedItem(
         createdBy: ctx.actorId,
         ...cols,
       })
-      .returning({ id: task.id });
-    const row = inserted[0];
+      .returning();
     /* v8 ignore next -- @preserve defensive: insert always returns a row */
     if (!row) throw new Error('linked task insert returned no row');
+    await recordCreatedRow('task', row, 'sync_create', { executor: tx });
     await preserveSourceAssignee(
       ctx.orgId,
       ctx.integrationId,

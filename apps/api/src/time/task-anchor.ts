@@ -32,6 +32,7 @@ import {
 import { and, asc, desc, eq, isNull } from 'drizzle-orm';
 
 import { CapabilityError, ConflictError, NotFoundError, ValidationError } from '../error';
+import { recordCreatedRow } from '../lib/provenance/record-created';
 import { landingStatus } from '../lib/work-status';
 import { resourceAccessKey, resolveResourceAccess } from '../permissions/resource-access';
 
@@ -261,10 +262,12 @@ async function anchorToNewTask(
       createdBy: actorId,
       ...(actorId ? { assigneeId: actorId } : {}),
     })
-    .returning({ id: task.id, title: task.title });
+    .returning();
   const row = inserted[0];
   /* v8 ignore next -- @preserve defensive: insert always returns a row */
   if (!row) throw new Error('task insert returned no row');
+  // Recorded under the caller's provenance: the timer's REST routes, or its MCP tools.
+  await recordCreatedRow('task', row, 'time_anchor', { executor });
   return { taskId: row.id, organizationId, title: row.title, actorId, created: true };
 }
 

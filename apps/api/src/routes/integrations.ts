@@ -806,7 +806,7 @@ Requires \`contribute\`. Ongoing organization-wide synchronization through \`POS
 
       // Onboarding sends `assignToImporter: true` so the owner's freshly-mirrored work lands
       // under My Work's "Assigned to me". The general sync path omits it (Triage instead).
-      const created = await importItems(orgId, actorId, row.id, teamId, items, {
+      const created = await importItems(orgId, actorId, row, teamId, items, {
         assigneeId: assignToImporter ? actorId : null,
       });
       // The import succeeded against the real provider, so the connection is proven healthy.

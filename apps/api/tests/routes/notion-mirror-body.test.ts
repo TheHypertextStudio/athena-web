@@ -17,7 +17,8 @@ import { assertDefined } from '@docket/test-utils';
 
 import type { MirrorDatabaseRow } from '../../src/routes/notion-mirror-design';
 import { loadEntityRows } from '../../src/routes/notion-mirror-entities';
-import { projectEntity, pullBackEntity } from '../../src/routes/notion-mirror-reconcile';
+import { projectEntity } from '../../src/routes/notion-mirror-reconcile';
+import { pullBackEntity } from '../support/entry-point-writers';
 import { NO_PAGES, designWithDataSource, seedMirror } from '../support/notion-recording-mirror';
 import { getDb, one } from '../support/routes-harness';
 

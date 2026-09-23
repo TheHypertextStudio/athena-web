@@ -17,6 +17,7 @@ import { created, ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
 import { zJson, zParam, zQuery } from '../lib/validate';
 import { capabilityGuard } from '../permissions/capability-guard';
+import { recordHierarchyChange } from './container-change-sets';
 import {
   accessibleInitiativeHierarchyProjection,
   accessibleInitiativeNodeIds,
@@ -159,6 +160,7 @@ const initiativeHierarchyRoutes = new Hono<AppEnv>()
             createdBy: actorId,
           })
           .returning();
+        await recordHierarchyChange({ tx, orgId, actorId }, 'link', [body.childInitiativeId]);
         return rows[0];
       });
       /* v8 ignore next -- @preserve defensive: insert always returns one row */
@@ -180,7 +182,7 @@ const initiativeHierarchyRoutes = new Hono<AppEnv>()
     zParam(hierarchyLinkParam),
     zJson(InitiativeHierarchyLinkMove),
     async (c) => {
-      const { orgId } = c.get('actorCtx');
+      const { orgId, actorId } = c.get('actorCtx');
       const { linkId } = c.req.valid('param');
       const body = c.req.valid('json');
       const row = await db.transaction(async (tx) => {
@@ -216,6 +218,7 @@ const initiativeHierarchyRoutes = new Hono<AppEnv>()
           .set({ parentInitiativeId: body.parentInitiativeId })
           .where(eq(initiativeHierarchyLink.id, link.id))
           .returning();
+        await recordHierarchyChange({ tx, orgId, actorId }, 'move', [link.childInitiativeId]);
         return rows[0];
       });
       /* v8 ignore next -- @preserve defensive: the link was loaded above */
@@ -236,7 +239,7 @@ const initiativeHierarchyRoutes = new Hono<AppEnv>()
     }),
     zParam(hierarchyLinkParam),
     async (c) => {
-      const { orgId } = c.get('actorCtx');
+      const { orgId, actorId } = c.get('actorCtx');
       const { linkId } = c.req.valid('param');
       await db.transaction(async (tx) => {
         await tx
@@ -306,6 +309,8 @@ const initiativeHierarchyRoutes = new Hono<AppEnv>()
             removedEdges.map((edge) => edge.id),
           ),
         );
+        const childIds = removedEdges.map((edge) => edge.childInitiativeId);
+        await recordHierarchyChange({ tx, orgId, actorId }, 'unlink', childIds);
       });
       return ok(c, InitiativeUnlinked, { unlinked: true });
     },

@@ -32,6 +32,7 @@ import {
   type TaskStateMutation,
   writeTaskStateTransition,
 } from '../lib/task-state';
+import { recordCreatedRow } from '../lib/provenance/record-created';
 import { loadStatusSets, type ResolvedStatus, type StatusSets } from '../lib/work-status';
 import { serializableTx } from '../lib/serializable-tx';
 import { enqueueSearchUpsert } from '../search/write-through';
@@ -383,6 +384,7 @@ async function insertLinked(
     const row = inserted[0];
     /* v8 ignore next -- @preserve defensive: insert always returns a row */
     if (!row) throw new Error('linked task insert returned no row');
+    await recordCreatedRow('task', row, 'sync_create', { executor: tx });
     return {
       row,
       cascades: await applySubtaskCompletionPolicyForParents(tx, orgId, [row.parentTaskId]),

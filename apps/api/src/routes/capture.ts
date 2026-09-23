@@ -22,6 +22,7 @@ import { deriveCaptureTitle } from '../lib/capture-title';
 import { resolveLandingTarget } from '../lib/task-landing';
 import { ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
+import { recordCreatedRow } from '../lib/provenance/record-created';
 import { zJson } from '../lib/validate';
 import { capabilityGuard } from '../permissions/capability-guard';
 import { enqueueSearchUpsert } from '../search/write-through';
@@ -70,6 +71,7 @@ The task is assigned to the caller and placed in the organization's oldest activ
     const row = inserted[0];
     /* v8 ignore next -- @preserve defensive: insert always returns a row */
     if (!row) throw new Error('capture task insert returned no row');
+    await recordCreatedRow('task', row, 'capture');
     await enqueueSearchUpsert(orgId, 'task', row.id);
     return ok(c, TaskOut, taskToOut(row, []));
   },

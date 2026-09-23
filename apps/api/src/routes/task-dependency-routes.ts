@@ -1,4 +1,5 @@
-import { actor, auditEvent, cycle, db, project, task, taskDependency } from '@docket/db';
+import { actor, cycle, db, project, task, taskDependency } from '@docket/db';
+import type { TaskActivityChange } from '@docket/connections/activity-contract';
 import {
   SubtaskCreate,
   TaskDependencyCreate,
@@ -14,16 +15,15 @@ import { z } from 'zod';
 
 import type { AppEnv } from '../context';
 import { ConflictError, CycleError, NotFoundError, ValidationError } from '../error';
+import { insertAuditEvents } from '../lib/provenance/audit-events';
+import { recordTaskDependency, settleTaskCreation } from '../lib/provenance/task-change-sets';
 import { serializableTx } from '../lib/serializable-tx';
 import { taskActivityRows } from '../lib/task-audit';
 import { labelsForSubjects, replaceLabels, resolveLabelSet } from '../lib/labels';
 import { encodeIdCursor, pageResultById, seekAfterId } from '../lib/list-cursor';
 import { created, ok, resourceUrl } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
-import {
-  applySubtaskCompletionPolicyForParents,
-  finishTaskStateTransition,
-} from '../lib/task-state';
+import { finishTaskStateTransition } from '../lib/task-state';
 import { zJson, zParam, zQuery } from '../lib/validate';
 import { enqueueSearchUpsert } from '../search/write-through';
 
@@ -40,6 +40,9 @@ import {
   wouldCreateCycle,
 } from './task-helpers';
 import { landingTaskTransition, resolveTaskStatus } from '../lib/work-status';
+
+/** An open database transaction. */
+type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 async function listVisibleSubtasks(
   organizationId: string,
@@ -72,6 +75,36 @@ async function listVisibleSubtasks(
     visibleRows.push(...rows.filter(canView));
   }
   return visibleRows;
+}
+
+/** One endpoint's activity entry for a dependency edge. */
+interface DependencyActivity {
+  readonly taskId: string;
+  readonly title: string;
+  readonly change: TaskActivityChange;
+}
+
+/** Write the activity rows for both endpoints of a dependency edge through its transaction. */
+async function writeDependencyActivity(
+  tx: Tx,
+  tool: string,
+  orgId: string,
+  actorId: string,
+  activity: readonly DependencyActivity[],
+): Promise<void> {
+  await insertAuditEvents(
+    tx,
+    tool,
+    activity.flatMap((entry) =>
+      taskActivityRows({
+        organizationId: orgId,
+        taskId: entry.taskId,
+        title: entry.title,
+        actorId,
+        changes: [entry.change],
+      }),
+    ),
+  );
 }
 
 function dependencyActivities(
@@ -208,10 +241,13 @@ The child inherits sensible defaults but can override them: \`state\` defaults t
         if (resolvedLabels.length > 0) {
           await replaceLabels(tx, 'task', row.id, orgId, resolvedLabels);
         }
-        return {
+        return settleTaskCreation(tx, {
+          orgId,
+          actorId,
+          tool: 'create_subtask',
           row,
-          cascades: await applySubtaskCompletionPolicyForParents(tx, orgId, [parent.id]),
-        };
+          labels: resolvedLabels,
+        });
       });
       const { row, cascades } = result;
       for (const cascade of cascades) {
@@ -368,17 +404,14 @@ A task cannot block itself, and a new relationship cannot create a dependency cy
         await tx
           .insert(taskDependency)
           .values({ blockingTaskId, blockedTaskId, organizationId: orgId });
-        await tx.insert(auditEvent).values(
-          dependencyActivity.flatMap((activity) =>
-            taskActivityRows({
-              organizationId: orgId,
-              taskId: activity.taskId,
-              title: activity.title,
-              actorId,
-              changes: [activity.change],
-            }),
-          ),
-        );
+        await writeDependencyActivity(tx, 'add_dependency', orgId, actorId, dependencyActivity);
+        await recordTaskDependency(tx, {
+          orgId,
+          actorId,
+          blockingTaskId,
+          blockedTaskId,
+          linked: true,
+        });
       });
 
       return created(
@@ -445,17 +478,14 @@ A task cannot block itself, and a new relationship cannot create a dependency cy
             },
           },
         ];
-        await tx.insert(auditEvent).values(
-          dependencyActivity.flatMap((activity) =>
-            taskActivityRows({
-              organizationId: orgId,
-              taskId: activity.taskId,
-              title: activity.title,
-              actorId,
-              changes: [activity.change],
-            }),
-          ),
-        );
+        await writeDependencyActivity(tx, 'remove_dependency', orgId, actorId, dependencyActivity);
+        await recordTaskDependency(tx, {
+          orgId,
+          actorId,
+          blockingTaskId: edge.blockingTaskId,
+          blockedTaskId: edge.blockedTaskId,
+          linked: false,
+        });
       });
       return ok(c, TaskRemoved, { removed: true });
     },

@@ -18,7 +18,7 @@ import type {
   applyPulledValues as ApplyPulledValues,
 } from '../../src/routes/notion-mirror-entities';
 import type { IntegrationRow } from '../../src/routes/integration-provider';
-import { getDb, seedBaseOrg } from '../support/routes-harness';
+import { getDb, scoped, seedBaseOrg, syncPass } from '../support/routes-harness';
 import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
@@ -29,7 +29,10 @@ let adoptEntity!: typeof AdoptEntity;
 beforeAll(async () => {
   schema = await getDb();
   db = schema.db;
-  ({ applyPulledValues, adoptEntity } = await import('../../src/routes/notion-mirror-entities'));
+  const entities = await import('../../src/routes/notion-mirror-entities');
+  applyPulledValues = entities.applyPulledValues;
+  // A mirror sync pass declares the `sync` provenance adoption records under.
+  adoptEntity = scoped(syncPass('notion'), entities.adoptEntity);
 });
 
 /** Insert a Notion integration row for `resolveImportTeam` to read `config.teamId` off. */

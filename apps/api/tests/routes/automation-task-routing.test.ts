@@ -27,7 +27,7 @@ import { addMember, getDb, one, seedBaseOrg, seedUserWithHub } from '../support/
 import * as container from '../../src/container';
 import { sweepInboundEvents } from '../../src/routes/event-sync';
 import { projectEmitInput, projectInboundDraft } from '../../src/lib/automation/event';
-import { routeInboundItemToTask } from '../../src/lib/automation/route-task';
+import { routeInboundItemToTask } from '../support/entry-point-writers';
 import { runAutomationsForEvent } from '../../src/lib/automation/runtime';
 import { acceptSuggestion } from '../../src/lib/email-to-task/accept';
 import { persistSuggestions, type CandidateThread } from '../../src/lib/email-to-task/synthesize';

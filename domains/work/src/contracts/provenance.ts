@@ -295,10 +295,20 @@ export const ActivityOriginOut = z
   .object({
     channel: ProvenanceChannelSchema,
     surface: ProvenanceSurfaceSchema.nullable(),
-    performerKind: z.enum(PROVENANCE_PERFORMER_KINDS),
-    performerName: z.string().nullable(),
-    clientName: z.string().nullable(),
-    provider: z.string().nullable(),
+    performerKind: z
+      .enum(PROVENANCE_PERFORMER_KINDS)
+      .describe(
+        'Who performed the change: `person`, `athena` (Docket’s assistant), `agent` (a third-party AI client), or `docket` (a rule, sync, or import).',
+      ),
+    performerName: z
+      .string()
+      .nullable()
+      .describe('Display name of the performer. Null when the performer is the member who acted.'),
+    clientName: z.string().nullable().describe('The MCP or API client, when there is one.'),
+    provider: z
+      .string()
+      .nullable()
+      .describe('The connected tool behind a `sync` or `import` change.'),
   })
   .meta({ id: 'ActivityOrigin', description: 'Where an activity entry’s change came from.' });
 

@@ -7,6 +7,7 @@ import {
   beginSubagentExecution,
   finishAgentExecution,
 } from '../../src/time/agent-execution';
+import { appProvenance, runWithProvenance } from '../../src/lib/provenance/context';
 import { createTimeRecord, pauseTimeRecord } from '../../src/time/service';
 import {
   addMember,
@@ -88,9 +89,12 @@ describe('Time Ledger agent execution bridge', () => {
       .update(schema.agentSession)
       .set({ taskId: sessionTaskId })
       .where(eq(schema.agentSession.id, session.id));
-    const record = await createTimeRecord(userId, {
-      context: { label: 'Delegate migration review', contextualRefs: [] },
-    });
+    // The timer's REST route is the entry point: a named start creates its task as the app.
+    const record = await runWithProvenance(appProvenance(), () =>
+      createTimeRecord(userId, {
+        context: { label: 'Delegate migration review', contextualRefs: [] },
+      }),
+    );
 
     const executionId = await beginAgentExecution(session.id);
     expect(await beginAgentExecution(session.id)).toBe(executionId);

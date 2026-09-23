@@ -62,11 +62,23 @@ Entry points declare provenance once, with `runWithProvenance`:
 | REST middleware (`rest-middleware.ts`) | `app` + the `Docket-Surface` header for a session; `api` + the client for an OAuth token                    |
 | `registerTools` (`mcp/tools.ts`)       | `mcpProvenance(ctx)` for a registered agent or the bearer client; Athena's toolbox passes `athena` / `chat` |
 | Phone tools (`voice-tools.ts`)         | `athena` / `phone` with the voice session id                                                                |
-| Workers and jobs                       | `rule`, `sync`, `import`, or `email`                                                                        |
+| Recurrence materialize                 | `rule` / `recurrence` with `ref.seriesId`                                                                   |
+| Automation engine (rule actions)       | `rule` / `routing` with `ref.ruleId`                                                                        |
+| Email suggestion auto-accept           | `email` with `ref.messageId`                                                                                |
+| Integration import                     | `import` with the integration                                                                               |
+| `runLeasedSync` (every sync pass)      | `sync` with the integration                                                                                 |
+| Athena elicitation materialize         | `athena` / `chat` or `session`                                                                              |
 
-Writers call `recordChangeSet*` and supply only the operation name and any session or plan link;
+Every REST create, edit, archive, relation change, and label change on a task, project, program,
+or initiative records a change set, as do the MCP tools and every create above. Shared helpers
+that MCP tools also call never record on their own; the route or tool that calls them does, so no
+change is recorded twice. Writers supply only the operation name and any session or plan link;
 `originFor` merges them with the declared base. A change recorded outside any scope throws
-`MissingProvenanceError`, so a new write path cannot silently skip provenance.
+`MissingProvenanceError`, so a new write path cannot silently skip provenance. Activity rows
+(`audit_event`) take the scope's origin best-effort and stay null outside one.
+
+A bare MCP `undo` reverses the caller's latest change made through the same channel, client, and
+session, so it never reaches for an edit made in the app or by another client.
 
 `readOrigin` normalizes any stored origin. First-version rows map by what they recorded: the
 `athena-phone` client, the `canvas` and `plan_commit` tools, an MCP client name, or an Athena
@@ -74,16 +86,17 @@ session id. A first-version row with none of those returns null and renders noth
 
 ---
 
-## 3. Reading (planned)
+## 3. Reading
 
-> Not built yet: this section and §4 describe the read endpoint and presentation that land in
-> the following slices of PROVENANCE-001 (see `docs/WORKLOG.md`). Recording (§1–§2) is live.
-
-`GET /v1/orgs/{orgId}/provenance/{kind}/{id}` will return the change that created the entity, the
-most recent change, and how many recorded changes touched it. The web app fetches it only when a
+`GET /v1/orgs/{orgId}/provenance/{kind}/{id}` (`routes/provenance.ts`) returns the change that
+created the entity, the most recent change that has not been undone, and how many such changes
+touched it. It authorizes exactly like the entity's own read. The web app fetches it only when a
 person opens the origin card.
 
-Task activity rows will carry a compact `origin` so the feed can name the real performer.
+Task activity rows carry a compact `origin` (`ActivityOriginOut`) so the feed can name the real
+performer. The MCP task resource exposes the same normalized origin.
+
+> §4 is not built yet; it lands in the last slice of PROVENANCE-001 (see `docs/WORKLOG.md`).
 
 ---
 

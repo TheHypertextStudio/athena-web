@@ -4,7 +4,6 @@ import { taskListOutput } from './task-list-output';
 /** `@docket/api` — tasks router (mounted at `/v1/orgs/:orgId/tasks`). */
 import {
   actor,
-  auditEvent,
   changeSet,
   changeSetEntry,
   db,
@@ -43,6 +42,14 @@ import { deferAfterResponse } from '../lib/after-response';
 import { detailCapabilities } from '../lib/detail-capabilities';
 import { guardsInOrder } from '../lib/guards-in-order';
 import { originFor } from '../lib/provenance/context';
+import { insertAuditEvents } from '../lib/provenance/audit-events';
+import {
+  recordTaskPatch,
+  recordTaskReparents,
+  replaceTaskLabelSet,
+  settleTaskArchive,
+  settleTaskCreation,
+} from '../lib/provenance/task-change-sets';
 import {
   applyExclusivity,
   labelsForSubject,
@@ -104,6 +111,7 @@ import { taskActivityRoutes } from './task-activity-routes';
 import { taskDependencyRoutes } from './task-dependency-routes';
 import { taskStateRoutes } from './task-state-routes';
 import { closePatchTimers, finishTaskPatch } from './task-update-effects';
+import { relatedTaskPair, replaceRelatedTasks } from './task-related-replace';
 
 /** Require a caller-visible task template that can originate a task. */
 async function assertTaskTemplate(
@@ -126,13 +134,6 @@ async function assertTaskTemplate(
   if (row.targetType !== 'task') {
     throw new ValidationError([{ message: 'Template must create tasks', path: ['templateId'] }]);
   }
-}
-
-/** Store an undirected edge under its canonical endpoint ordering. */
-function relatedTaskPair(taskId: string, relatedTaskId: string) {
-  return taskId < relatedTaskId
-    ? { taskId, relatedTaskId }
-    : { taskId: relatedTaskId, relatedTaskId: taskId };
 }
 
 /**
@@ -526,10 +527,13 @@ The new task appears in the organization's activity stream. An assigned task als
           );
         }
         await replaceLabels(tx, 'task', row.id, orgId, resolvedLabels);
-        return {
+        return settleTaskCreation(tx, {
+          orgId,
+          actorId,
           row,
-          cascades: await applySubtaskCompletionPolicyForParents(tx, orgId, [row.parentTaskId]),
-        };
+          relatedTaskIds,
+          labels: resolvedLabels,
+        });
       });
       const { row, cascades } = result;
 
@@ -963,7 +967,9 @@ The new task appears in the organization's activity stream. An assigned task als
           });
         }
         if (activityChanges.length > 0) {
-          await tx.insert(auditEvent).values(
+          await insertAuditEvents(
+            tx,
+            'task_description_expansion',
             taskActivityRows({
               organizationId: orgId,
               taskId: updated.id,
@@ -1139,7 +1145,9 @@ The new task appears in the organization's activity stream. An assigned task als
             from: 'Expanded task definition',
             to: 'Restored the previous task definition',
           });
-          await tx.insert(auditEvent).values(
+          await insertAuditEvents(
+            tx,
+            'undo_task_description_expansion',
             taskActivityRows({
               organizationId: orgId,
               taskId: id,
@@ -1275,15 +1283,13 @@ When \`preserveSelectedSubtrees\` is true, a selected task whose ancestor is als
     zJson(TaskReparentBatchIn),
     async (c) => {
       const { orgId, actorId } = c.get('actorCtx');
-      return ok(
-        c,
-        TaskReparentBatchOut,
-        await reparentTasks({
-          organizationId: orgId,
-          actorId,
-          ...c.req.valid('json'),
-        }),
-      );
+      const result = await reparentTasks({
+        organizationId: orgId,
+        actorId,
+        ...c.req.valid('json'),
+      });
+      await recordTaskReparents(orgId, actorId, result.moves);
+      return ok(c, TaskReparentBatchOut, result);
     },
   )
   .get(
@@ -1496,10 +1502,6 @@ Changing \`assigneeId\` or \`delegateId\` requires \`assign\`; other changes req
         if (lockedTasks.length !== lockTaskIds.length) throw new NotFoundError('Task not found');
         const current = lockedTasks.find((candidate) => candidate.id === id);
         if (!current) throw new NotFoundError('Task not found');
-        const relationWhere = and(
-          eq(taskRelatedTask.organizationId, orgId),
-          or(eq(taskRelatedTask.taskId, id), eq(taskRelatedTask.relatedTaskId, id)),
-        );
         await assertTaskCapability(orgId, ctx.actorId, current, 'contribute', tx);
         if (body.assigneeId !== undefined || body.delegateId !== undefined) {
           await assertTaskCapability(orgId, ctx.actorId, current, 'assign', tx);
@@ -1521,91 +1523,27 @@ Changing \`assigneeId\` or \`delegateId\` requires \`assign\`; other changes req
         if (!updated) throw new NotFoundError('Task not found');
         const timerStops = await closePatchTimers(tx, ctx.actorId, statePatch, current, updated);
 
-        const relatedActivity: { taskId: string; title: string; linked: boolean }[] = [];
-        if (patchRelatedTaskIds !== undefined) {
-          const lockedRelationRows = await tx
-            .select({
-              taskId: taskRelatedTask.taskId,
-              relatedTaskId: taskRelatedTask.relatedTaskId,
-            })
-            .from(taskRelatedTask)
-            .where(relationWhere)
-            .orderBy(asc(taskRelatedTask.taskId), asc(taskRelatedTask.relatedTaskId))
-            .for('update');
-          const authorizationTaskIds = [
-            ...patchRelatedTaskIds,
-            ...lockedRelationRows.map((relatedTask) =>
-              relatedTask.taskId === id ? relatedTask.relatedTaskId : relatedTask.taskId,
-            ),
-          ].filter((taskId, index, all) => all.indexOf(taskId) === index);
-          const authorizationTasks =
-            authorizationTaskIds.length === 0
-              ? []
-              : await tx
-                  .select()
-                  .from(task)
-                  .where(
-                    and(
-                      eq(task.organizationId, orgId),
-                      isNull(task.archivedAt),
-                      inArray(task.id, authorizationTaskIds),
-                    ),
-                  );
-          if (authorizationTasks.length !== authorizationTaskIds.length) {
-            throw new NotFoundError('Task not found');
-          }
-          const relatedTaskById = new Map(
-            authorizationTasks.map((candidate) => [candidate.id, candidate]),
-          );
-          const currentRelatedIds = lockedRelationRows.map((relatedTask) =>
-            relatedTask.taskId === id ? relatedTask.relatedTaskId : relatedTask.taskId,
-          );
-          const nextRelatedIds = new Set<string>(patchRelatedTaskIds);
-          for (const relatedTaskId of patchRelatedTaskIds) {
-            if (currentRelatedIds.includes(relatedTaskId)) continue;
-            const relatedTask = relatedTaskById.get(relatedTaskId);
-            if (!relatedTask) throw new NotFoundError('Task not found');
-            relatedActivity.push({
-              taskId: relatedTask.id,
-              title: relatedTask.title,
-              linked: true,
-            });
-          }
-          for (const relatedTaskId of currentRelatedIds) {
-            if (nextRelatedIds.has(relatedTaskId)) continue;
-            const relatedTask = relatedTaskById.get(relatedTaskId);
-            if (!relatedTask) throw new NotFoundError('Task not found');
-            relatedActivity.push({
-              taskId: relatedTask.id,
-              title: relatedTask.title,
-              linked: false,
-            });
-          }
-          await guardsInOrder(
-            authorizationTaskIds.map((relatedTaskId) => {
-              const relatedTask = relatedTaskById.get(relatedTaskId);
-              if (!relatedTask) throw new NotFoundError('Task not found');
-              return assertTaskCapability(orgId, ctx.actorId, relatedTask, 'contribute', tx);
-            }),
-          );
-          await tx.delete(taskRelatedTask).where(relationWhere);
-          if (patchRelatedTaskIds.length > 0) {
-            await tx.insert(taskRelatedTask).values(
-              patchRelatedTaskIds.map((relatedTaskId) => ({
-                organizationId: orgId,
-                ...relatedTaskPair(id, relatedTaskId),
-              })),
-            );
-          }
-        }
-        if (patchLabels !== undefined) {
-          await replaceLabels(tx, 'task', id, orgId, patchLabels);
-        }
+        const relatedActivity = await replaceRelatedTasks(tx, {
+          orgId,
+          actorId: ctx.actorId,
+          taskId: id,
+          relatedTaskIds: patchRelatedTaskIds,
+        });
+        const labels = await replaceTaskLabelSet(tx, orgId, id, patchLabels);
         const parentTaskIds = [
           ...(statePatch === undefined ? [] : [updated.parentTaskId]),
           ...(body.parentTaskId === undefined ? [] : [current.parentTaskId, updated.parentTaskId]),
         ];
         const cascades = await applySubtaskCompletionPolicyForParents(tx, orgId, parentTaskIds);
+        await recordTaskPatch(tx, {
+          orgId,
+          actorId: ctx.actorId,
+          before: current,
+          after: updated,
+          cascades,
+          related: relatedActivity,
+          labels,
+        });
         return { row: updated, cascades, relatedActivity, timerStops };
       });
       const { row, cascades, relatedActivity, timerStops } = result;
@@ -1701,10 +1639,7 @@ Archiving an already archived, inaccessible, or unknown task returns 404, so a r
           .returning();
         const row = updated[0];
         if (!row) throw new NotFoundError('Task not found');
-        return {
-          row,
-          cascades: await applySubtaskCompletionPolicyForParents(tx, orgId, [row.parentTaskId]),
-        };
+        return settleTaskArchive(tx, { orgId, actorId, row });
       });
       const { row } = result;
       await enqueueTaskSearchIndex(orgId, row.id, 'delete');

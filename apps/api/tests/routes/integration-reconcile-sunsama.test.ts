@@ -17,7 +17,7 @@ import {
 } from '@docket/integrations';
 
 import type * as ReconcileModule from '../../src/routes/integration-reconcile';
-import { getDb, one, seedBaseOrg } from '../support/routes-harness';
+import { getDb, one, scoped, seedBaseOrg, syncPass } from '../support/routes-harness';
 
 /**
  * The end-to-end proof that the Sunsama → Docket pipeline (read via MCP → normalize → route →
@@ -46,7 +46,11 @@ let reconcileTasks!: typeof ReconcileModule.reconcileTasks;
 beforeAll(async () => {
   schema = await getDb();
   db = schema.db;
-  reconcileTasks = (await import('../../src/routes/integration-reconcile')).reconcileTasks;
+  // A sync pass declares the `sync` provenance the reconciler records under.
+  reconcileTasks = scoped(
+    syncPass('sunsama'),
+    (await import('../../src/routes/integration-reconcile')).reconcileTasks,
+  );
 });
 
 /** Seed a `sunsama` migration-pattern integration row, mirroring what the CLI creates. */

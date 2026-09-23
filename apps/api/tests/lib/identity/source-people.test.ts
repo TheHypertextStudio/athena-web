@@ -2,7 +2,14 @@ import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { and, eq } from 'drizzle-orm';
 import type * as DatabaseModule from '@docket/db';
 import { assertDefined } from '@docket/test-utils';
-import { appWithActor, getDb, seedBaseOrg, seedTask } from '../../support/routes-harness';
+import {
+  appWithActor,
+  getDb,
+  scoped,
+  seedBaseOrg,
+  seedTask,
+  syncPass,
+} from '../../support/routes-harness';
 import {
   externalPersonCandidates,
   preserveSourceAssignee,
@@ -252,7 +259,11 @@ describe('source people', () => {
           await original(...args);
           throw new Error('injected source attribution failure');
         });
-      const { adoptEntity } = await import('../../../src/routes/notion-mirror-entities');
+      // Adoption runs inside a mirror sync pass, which declares the `sync` provenance.
+      const adoptEntity = scoped(
+        syncPass('notion'),
+        (await import('../../../src/routes/notion-mirror-entities')).adoptEntity,
+      );
       try {
         await expect(
           adoptEntity(orgId, humanActorId, assertDefined(integration), entity, {

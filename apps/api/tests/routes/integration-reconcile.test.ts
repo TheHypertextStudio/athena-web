@@ -5,7 +5,7 @@ import type * as DbModule from '@docket/db';
 import type { ImportedItem } from '@docket/integrations';
 
 import type * as ReconcileModule from '../../src/routes/integration-reconcile';
-import { getDb, one, seedBaseOrg } from '../support/routes-harness';
+import { getDb, one, scoped, seedBaseOrg, syncPass } from '../support/routes-harness';
 
 // `planTaskReconcile` is pure, but its module imports `@docket/db`, so we defer the import
 // until the harness has configured the (pglite) DATABASE_URL — exactly like the other suites.
@@ -20,7 +20,8 @@ beforeAll(async () => {
   db = schema.db;
   const mod = await import('../../src/routes/integration-reconcile');
   planTaskReconcile = mod.planTaskReconcile;
-  reconcileTasks = mod.reconcileTasks;
+  // A sync pass declares the `sync` provenance the reconciler records under.
+  reconcileTasks = scoped(syncPass('gtasks'), mod.reconcileTasks);
 });
 
 const D = (iso: string): Date => new Date(iso);

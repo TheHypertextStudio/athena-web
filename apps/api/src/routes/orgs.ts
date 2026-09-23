@@ -77,6 +77,7 @@ import publications from './publish';
 import publishingAddresses from './domains';
 import projectRollup from './project-rollup';
 import projectResources from './project-resources';
+import provenance from './provenance';
 import roles from './roles';
 import savedViews from './saved-views';
 import workViews from './work-views';
@@ -518,6 +519,7 @@ Every new organization includes the Owner, Admin, Member, and Guest roles plus a
   .route('/:orgId/publications', publications)
   .route('/:orgId/publishing', publishingAddresses)
   .route('/:orgId/activity', activity)
+  .route('/:orgId/provenance', provenance)
   .route('/:orgId/stream', stream);
 
 export default orgs;

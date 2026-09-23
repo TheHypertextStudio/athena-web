@@ -12,7 +12,7 @@ import { eq } from 'drizzle-orm';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import type elicitationsDefault from '../../src/routes/elicitations';
-import type { raiseElicitation as RaiseElicitation } from '../../src/services/elicitation-service';
+import { raiseElicitation } from '../support/entry-point-writers';
 import { appWithSession, fakeSession, getDb, one, seedStatuses } from '../support/routes-harness';
 import { assertDefined } from '@docket/test-utils';
 
@@ -20,13 +20,11 @@ let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
 let elicitations!: typeof elicitationsDefault;
 let webPushRoutes!: unknown;
-let raiseElicitation!: typeof RaiseElicitation;
 
 beforeAll(async () => {
   schema = await getDb();
   db = schema.db;
   ({ default: elicitations, webPushRoutes } = await import('../../src/routes/elicitations'));
-  ({ raiseElicitation } = await import('../../src/services/elicitation-service'));
 });
 
 const J = { 'content-type': 'application/json' };

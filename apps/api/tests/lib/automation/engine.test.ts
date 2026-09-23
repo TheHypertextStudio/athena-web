@@ -5,6 +5,11 @@ import { matchesAutomationEvent } from '@docket/automation/evaluation';
 
 import { type EngineRule, matches, runAutomations } from '../../../src/lib/automation/engine';
 import { type ActionHandler, createRegistry } from '../../../src/lib/automation/registry';
+import {
+  appProvenance,
+  currentProvenance,
+  runWithProvenance,
+} from '../../../src/lib/provenance/context';
 
 const event = {
   kind: 'task.completed',
@@ -152,5 +157,27 @@ describe('runAutomations (registry + interpreter wiring)', () => {
       expect.objectContaining({ type: 'throwing.action' }),
     );
     warnSpy.mockRestore();
+  });
+});
+
+describe('runAutomations provenance', () => {
+  it('runs each action as the rule, named as the cause, whatever scope fired the event', async () => {
+    const seen: unknown[] = [];
+    const registry = createRegistry();
+    registry.register({ type: 'mail.archive', run: () => void seen.push(currentProvenance()) });
+
+    await runWithProvenance(appProvenance('detail'), () =>
+      runAutomations(event, [rule({ id: 'rul_1' }), rule({})], registry),
+    );
+
+    expect(seen).toEqual([
+      {
+        channel: 'rule',
+        surface: 'routing',
+        performer: { kind: 'docket', name: 'Docket' },
+        ref: { ruleId: 'rul_1' },
+      },
+      { channel: 'rule', surface: 'routing', performer: { kind: 'docket', name: 'Docket' } },
+    ]);
   });
 });

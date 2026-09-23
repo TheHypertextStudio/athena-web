@@ -13,7 +13,7 @@ import type * as ReconcileGraph from '../../src/routes/integration-reconcile-gra
 import type * as WorkStatus from '../../src/lib/work-status';
 import type { ResolvedStatus } from '../../src/lib/work-status';
 import { ConflictError } from '../../src/error';
-import { getDb, one, seedBaseOrg, seedStatus } from '../support/routes-harness';
+import { getDb, one, scoped, seedBaseOrg, seedStatus, syncPass } from '../support/routes-harness';
 
 /**
  * Direct unit tests for `integration-reconcile-graph.ts`'s exported single-entity appliers
@@ -36,9 +36,10 @@ beforeAll(async () => {
   db = schema.db;
   const mod = await import('../../src/routes/integration-reconcile-graph');
   applyLabel = mod.applyLabel;
-  applyProject = mod.applyProject;
+  // A sync pass declares the `sync` provenance these appliers record under.
+  applyProject = scoped(syncPass('linear'), mod.applyProject);
   applyCycle = mod.applyCycle;
-  applyWorkItem = mod.applyWorkItem;
+  applyWorkItem = scoped(syncPass('linear'), mod.applyWorkItem);
   ({ loadStatusSets } = await import('../../src/lib/work-status'));
 });
 

@@ -68,6 +68,13 @@ import { insertMilestones } from '../lib/milestone-writes';
 import milestones from './milestones';
 import { projectDependencyRoutes } from './project-dependency-routes';
 import {
+  recordProjectCreate,
+  recordProjectLabels,
+  recordProjectUpdate,
+  recordRemoval,
+} from './container-change-sets';
+import { replaceProjectLinks } from './project-link-writes';
+import {
   buildTaskViewCondition,
   buildTaskViewFilter,
   visibleProjectTaskCounts,
@@ -359,7 +366,7 @@ const projects = new Hono<AppEnv>()
           0,
         );
         milestoneIds = checkpoints.map((row) => row.id);
-        return created;
+        return recordProjectCreate({ tx, orgId, actorId }, created, initiativeIds, labels);
       });
 
       // Both effects run after the row is committed and neither contributes to the response, so
@@ -793,26 +800,14 @@ const projects = new Hono<AppEnv>()
             : [current];
         const changed = updated[0];
         if (!changed) return undefined;
-        if (body.labelIds !== undefined) {
-          await replaceLabels(tx, 'project', id, orgId, labels);
-        }
-        if (initiativeIds !== undefined) {
-          await tx
-            .delete(initiativeProject)
-            .where(
-              and(eq(initiativeProject.organizationId, orgId), eq(initiativeProject.projectId, id)),
-            );
-          if (initiativeIds.length > 0) {
-            await tx.insert(initiativeProject).values(
-              initiativeIds.map((initiativeId) => ({
-                organizationId: orgId,
-                initiativeId,
-                projectId: id,
-              })),
-            );
-          }
-        }
-        return changed;
+        const links = await replaceProjectLinks(tx, {
+          orgId,
+          projectId: id,
+          labelIds: body.labelIds,
+          labels,
+          initiativeIds,
+        });
+        return recordProjectUpdate({ tx, orgId, actorId }, current, changed, body, links);
       });
       if (!row) throw new NotFoundError('Project not found');
 
@@ -844,11 +839,11 @@ const projects = new Hono<AppEnv>()
     zParam(idParam),
     zJson(ProjectLabelLink),
     async (c) => {
-      const { orgId } = c.get('actorCtx');
+      const { orgId, actorId } = c.get('actorCtx');
       const { id } = c.req.valid('param');
       const { labelId } = c.req.valid('json');
       const [row] = await db
-        .select({ teamId: project.teamId })
+        .select({ id: project.id, name: project.name, teamId: project.teamId })
         .from(project)
         .where(and(eq(project.organizationId, orgId), eq(project.id, id)))
         .limit(1);
@@ -864,7 +859,8 @@ const projects = new Hono<AppEnv>()
           ),
           resolveLabelSet(orgId, [labelId], { teamId: row.teamId, dbh: tx }),
         ]);
-        await attachLabels(tx, 'project', id, orgId, existing, incoming);
+        const next = await attachLabels(tx, 'project', id, orgId, existing, incoming);
+        await recordProjectLabels({ tx, orgId, actorId }, row, refs, next);
       });
       await enqueueSearchUpsert(orgId, 'project', id);
       return ok(c, ProjectLabelLinked, { projectId: id, labelId, linked: true });
@@ -882,7 +878,7 @@ const projects = new Hono<AppEnv>()
     }),
     zParam(idParam),
     async (c) => {
-      const { orgId } = c.get('actorCtx');
+      const { orgId, actorId } = c.get('actorCtx');
       const { id } = c.req.valid('param');
       const result = await db.transaction(async (tx) => {
         const candidates = await tx
@@ -908,7 +904,8 @@ const projects = new Hono<AppEnv>()
             ),
           );
         const deleted = await tx.delete(project).where(eq(project.id, id)).returning();
-        return deleted[0] && { row: deleted[0], milestoneIds: milestoneRows.map((m) => m.id) };
+        const removed = await recordRemoval({ tx, orgId, actorId }, 'project', deleted[0]);
+        return removed && { row: removed, milestoneIds: milestoneRows.map((m) => m.id) };
       });
       if (!result) throw new NotFoundError('Project not found');
       const { row, milestoneIds } = result;

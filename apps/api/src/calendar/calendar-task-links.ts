@@ -29,6 +29,7 @@ import type {
 
 import { buildTaskViewFilter } from '../routes/task-helpers';
 import { CapabilityError, ConflictError, NotFoundError } from '../error';
+import { recordCreatedRow } from '../lib/provenance/record-created';
 import { landingStatus } from '../lib/work-status';
 
 type CalendarItemRow = typeof calendarItem.$inferSelect;
@@ -285,6 +286,7 @@ export async function linkTaskToItem(
   const taskRow = createdRows[0];
   /* v8 ignore next -- @preserve defensive: insert always returns a row */
   if (taskRow === undefined) throw new Error('calendar-linked task insert returned no row');
+  await recordCreatedRow('task', taskRow, 'calendar_item_task');
 
   const link = await insertLink(db, {
     item,

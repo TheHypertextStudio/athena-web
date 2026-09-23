@@ -23,6 +23,8 @@ import type {
 
 import type { ActorCtx, AppEnv } from '../../src/context';
 import { onError } from '../../src/error';
+import { appProvenance, runWithProvenance } from '../../src/lib/provenance/context';
+import { originOf } from '../../src/mcp/change-set';
 import type captureRouter from '../../src/routes/capture';
 import { getMigratedDb } from '../support/db';
 import { assertDefined } from '@docket/test-utils';
@@ -42,7 +44,8 @@ function appFor(orgId: string, capabilities: readonly string[], actorId = 'actor
   app.use('*', async (c, next) => {
     const ctx: ActorCtx = { orgId, actorId, roleId: 'role_test', capabilities };
     c.set('actorCtx', ctx);
-    await next();
+    // The REST middleware declares a cookie session as the app; mounted bare, the test does.
+    await runWithProvenance(appProvenance('capture'), next);
   });
   app.route('/', capture);
   app.onError(onError);
@@ -160,6 +163,10 @@ describe('POST /capture', () => {
     expect(rows[0]?.description).toBe('plan outreach strategy');
     expect(rows[0]?.source).toBe('native');
     expect(rows[0]?.createdBy).toBe(s.humanActorId);
+
+    const created = await originOf('task', body.id);
+    expect(created?.actorId).toBe(s.humanActorId);
+    expect(created?.origin).toMatchObject({ channel: 'app', surface: 'capture', tool: 'capture' });
   });
 
   it('derives the title from the first non-empty line and caps long one-liners', async () => {

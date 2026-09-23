@@ -26,12 +26,12 @@ import type {
 } from '../../src/services/elicitation-service';
 import type { notifyElicitation as NotifyElicitation } from '../../src/services/elicitation-notify';
 import { getMigratedDb } from '../support/db';
+import { raiseElicitation } from '../support/entry-point-writers';
 import { seedStatuses } from '../support/routes-harness';
 import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
-let raiseElicitation!: typeof RaiseElicitation;
 let answerElicitation!: typeof AnswerElicitation;
 let cancelElicitation!: typeof CancelElicitation;
 let sweepElicitations!: typeof SweepElicitations;
@@ -48,7 +48,6 @@ beforeAll(async () => {
   schema = await getMigratedDb();
   db = schema.db;
   ({
-    raiseElicitation,
     answerElicitation,
     cancelElicitation,
     sweepElicitations,

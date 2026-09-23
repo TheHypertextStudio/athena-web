@@ -10,9 +10,8 @@
  * Every write here records a change set, because the surface executes immediately instead of
  * proposing. That is only a defensible trade if the caller can see what happened and reverse it.
  */
-import { changeSet, db, task } from '@docket/db';
+import { db, task } from '@docket/db';
 import { TaskId } from '@docket/work/ids';
-import { and, desc, eq, isNull } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { NotFoundError } from '../error';
@@ -27,6 +26,7 @@ import { isCompanionKind } from './change-set-companions';
 import { WIDGET, widgetMeta } from './apps';
 import { authorize, jsonResult, runTool, scopedActor } from './result';
 import { orgIdParam } from './tools-shared';
+import { latestOwnChangeSet } from './undo-target';
 import { entityHref, entityListHref } from './entity-href';
 
 /**
@@ -221,24 +221,10 @@ export function registerWriteTools(server: McpRegistrar, ctx: McpContext): void 
           orgId: input.orgId,
         });
 
-        // Defaulting to the caller's own latest change is scoped to their actor on purpose:
-        // "undo that" should never reach for something a colleague did.
+        // Defaulting to the caller's own latest change is scoped to their actor and to the door
+        // they came through: "undo that" never reaches for a colleague's work or an app edit.
         const targetId =
-          input.changeSetId ??
-          (
-            await db
-              .select({ id: changeSet.id })
-              .from(changeSet)
-              .where(
-                and(
-                  eq(changeSet.organizationId, input.orgId),
-                  eq(changeSet.actorId, actorCtx.actorId),
-                  isNull(changeSet.undoneAt),
-                ),
-              )
-              .orderBy(desc(changeSet.createdAt))
-              .limit(1)
-          )[0]?.id;
+          input.changeSetId ?? (await latestOwnChangeSet(input.orgId, actorCtx.actorId));
         if (!targetId) throw new NotFoundError('Nothing to undo');
 
         const { summary, outcomes } = await undoChangeSet(input.orgId, targetId);

@@ -17,7 +17,7 @@ import { z } from 'zod';
 
 import { attachLabels, resolveAttachedLabels, resolveLabelSet } from '../labels';
 import { setTaskState } from '../task-state';
-import { acceptSuggestion } from '../email-to-task/accept';
+import { acceptSuggestionFromEmail } from '../email-to-task/accept';
 import { emitEvent } from '../../routes/event-emit';
 import { enqueueSearchUpsert } from '../../search/write-through';
 import type { ActionContext } from './engine';
@@ -407,7 +407,7 @@ export function buildAutomationRegistry(deps: HandlerDeps): Registry {
       }
       if (actorId === undefined) return;
       try {
-        const result = await acceptSuggestion({
+        const result = await acceptSuggestionFromEmail({
           organizationId: event.organizationId,
           suggestionId: event.subjectId,
           actorId,

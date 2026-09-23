@@ -39,6 +39,7 @@ import { type TaskActivityChange } from '@docket/connections/activity-contract';
 import { and, eq, inArray } from 'drizzle-orm';
 
 import { emitFieldChange } from '../routes/event-emit';
+import { auditOrigin } from './provenance/context';
 import type { TaskRow } from '../routes/task-helpers';
 
 /**
@@ -424,6 +425,7 @@ export async function writeTaskChangeGroups(
   database: Pick<typeof db, 'insert'>,
   inputs: readonly RecordTaskChangesInput[],
 ): Promise<void> {
+  const origin = auditOrigin('task_update');
   const rows = inputs.flatMap((input) => {
     const ids = input.changes.map(() => genId()).sort();
     return input.changes.map((change, index) => ({
@@ -435,6 +437,7 @@ export async function writeTaskChangeGroups(
       subjectId: input.taskId,
       type: 'updated' as const,
       metadata: { ...change },
+      origin,
     }));
   });
   if (rows.length === 0) return;
@@ -469,6 +472,7 @@ export async function finishTaskChanges(
 
 /** Build durable ledger rows for callers that own the surrounding transaction. */
 export function taskActivityRows(input: RecordTaskChangesInput) {
+  const origin = auditOrigin('task_update');
   const ids = input.changes.map(() => genId()).sort();
   return input.changes.map((change, index) => ({
     id: ids[index] ?? genId(),
@@ -478,6 +482,7 @@ export function taskActivityRows(input: RecordTaskChangesInput) {
     subjectId: input.taskId,
     type: 'updated' as const,
     metadata: { ...change },
+    origin,
   }));
 }
 

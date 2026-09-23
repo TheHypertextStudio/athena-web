@@ -18,6 +18,7 @@ type RuleRow = typeof automationRule.$inferSelect;
 /** Map an `automation_rule` row into the engine's {@link EngineRule} shape. */
 export function rowToEngineRule(r: RuleRow): EngineRule {
   return {
+    id: r.id,
     enabled: r.enabled,
     on: r.eventMatch as AutomationEventMatch,
     when: r.condition as Predicate,

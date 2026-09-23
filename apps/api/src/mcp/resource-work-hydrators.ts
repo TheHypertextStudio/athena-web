@@ -12,6 +12,11 @@ import {
   update,
 } from '@docket/db';
 import { defaultCycleName } from '@docket/work/cycle-contract';
+import {
+  readOrigin,
+  toActivityOrigin,
+  type ActivityOriginOut,
+} from '@docket/work/provenance-contract';
 import { and, asc, desc, eq, inArray, isNull, or } from 'drizzle-orm';
 
 import { NotFoundError } from '../error';
@@ -31,6 +36,35 @@ export function taskRef(t: {
   projectId: string | null;
 }): { id: string; title: string; state: string; projectId: string | null } {
   return { id: t.id, title: t.title, state: t.state, projectId: t.projectId };
+}
+
+/** Where a hydrated task came from: the normalized provenance of the change that created it. */
+export interface HydratedOrigin extends ActivityOriginOut {
+  readonly sessionId: string | null;
+  readonly planId: string | null;
+  /** The member whose permissions the creating change ran under. */
+  readonly actorId: string;
+  readonly at: string;
+}
+
+/**
+ * Normalize the creating change of a task for its hydrated projection.
+ *
+ * @param created - The creating change set, from {@link originOf}.
+ * @returns the normalized origin, or null when none was recorded or it cannot be placed.
+ */
+export function hydratedOrigin(
+  created: Awaited<ReturnType<typeof originOf>>,
+): HydratedOrigin | null {
+  const provenance = created ? readOrigin(created.origin) : null;
+  if (!created || !provenance) return null;
+  return {
+    ...toActivityOrigin(provenance),
+    sessionId: provenance.sessionId,
+    planId: provenance.planId,
+    actorId: created.actorId,
+    at: created.at.toISOString(),
+  };
 }
 
 /** Load the relations that turn a task row into its hydrated MCP projection. */
@@ -177,17 +211,9 @@ export async function hydrateTask(
       syncMode: t.sourceSyncMode,
     },
     // Authorship, which is a different axis from `provenance` above: that says whether the row is
-    // mirrored from an external system, this says which tool and conversation made it. Null for
-    // anything created before change sets existed, or through the web app.
-    origin: origin
-      ? {
-          tool: origin.origin.tool,
-          client: origin.origin.client ?? null,
-          sessionId: origin.origin.sessionId ?? null,
-          actorId: origin.actorId,
-          at: origin.at.toISOString(),
-        }
-      : null,
+    // mirrored from an external system, this says which channel, performer, and conversation made
+    // it. Null when no recorded change created the task or its origin cannot be placed.
+    origin: hydratedOrigin(origin),
     blocking: blocking.filter(canViewTask).map(taskRef),
     blockedBy: blockedBy.filter(canViewTask).map(taskRef),
     subtasks: subtasks.filter(canViewTask).map(taskRef),

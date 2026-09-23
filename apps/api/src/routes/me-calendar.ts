@@ -60,6 +60,7 @@ import {
   deleteCalendarSourceGroup,
   updateCalendarSourceGroup,
 } from '../calendar/calendar-source-groups';
+import { calendarEventAttachment } from '../calendar/calendar-event-task';
 import { removeCalendarSourceSubscription } from '../calendar/calendar-source-removal';
 import {
   toCalendarItemOut,
@@ -77,6 +78,7 @@ import { CapabilityError, NotFoundError, ValidationError } from '../error';
 import { labelsForSubject } from '../lib/labels';
 import { created, ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
+import { recordCreatedRow } from '../lib/provenance/record-created';
 import { zJson, zParam } from '../lib/validate';
 import { landingStatus } from '../lib/work-status';
 import { enqueueSearchUpsert } from '../search/write-through';
@@ -453,28 +455,11 @@ const meCalendar = new Hono<AppEnv>()
           .returning()
       )[0];
       if (!created) throw new Error('calendar event task insert returned no row');
+      await recordCreatedRow('task', created, 'calendar_event_task');
 
       const insertedAttachments = await db
         .insert(attachment)
-        .values({
-          organizationId: target.organizationId,
-          createdBy: target.actorId,
-          subjectType: 'task',
-          subjectId: created.id,
-          kind: 'calendar_event',
-          title: row.event.title,
-          externalId: row.event.externalEventId,
-          url: row.event.htmlLink,
-          metadata: {
-            connectionId: row.connection.id,
-            calendarId: row.calendar.id,
-            externalCalendarId: row.event.externalCalendarId,
-            startsAt: row.event.startsAt?.toISOString() ?? null,
-            endsAt: row.event.endsAt?.toISOString() ?? null,
-            accountEmail: row.connection.accountEmail,
-            calendarTitle: row.calendar.title,
-          },
-        })
+        .values(calendarEventAttachment(row, created))
         .returning({ id: attachment.id });
       const attachmentRow = insertedAttachments[0];
       if (!attachmentRow) throw new Error('calendar event attachment insert returned no row');

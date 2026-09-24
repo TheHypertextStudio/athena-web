@@ -205,7 +205,7 @@ export function SchedulingTimeGrid({
         {children}
         <div
           aria-hidden="true"
-          className="pointer-events-none absolute inset-0 z-[5] flex"
+          className="pointer-events-none absolute inset-0 z-5 flex"
           data-schedule-current-layer=""
         >
           {lanes.map((lane) => (

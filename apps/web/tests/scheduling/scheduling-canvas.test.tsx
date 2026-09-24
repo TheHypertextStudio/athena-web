@@ -1429,7 +1429,7 @@ describe('SchedulingCanvas', () => {
     expect(lines[0]).toHaveAttribute('data-current-time-line', 'today-a');
     expect(lines[1]).toHaveAttribute('data-current-time-line', 'today-b');
     expect(lines[0]).toHaveStyle({ top: '570px' });
-    expect(lines[0]?.closest('[data-schedule-current-layer]')).toHaveClass('z-[5]');
+    expect(lines[0]?.closest('[data-schedule-current-layer]')).toHaveClass('z-5');
   });
 
   it('annotates skipped and repeated wall-clock positions in their relevant date lanes', () => {

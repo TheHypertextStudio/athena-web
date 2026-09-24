@@ -39,7 +39,7 @@ import {
 import { calendarRouteState, installCalendarRoutes } from '../helpers/calendar-routes';
 import { expect, test } from '../helpers/fixtures';
 
-const ANCHOR_DATE = '2026-07-13';
+const ANCHOR_DATE = new Date().toISOString().slice(0, 10);
 
 /** The contract's own floor. Asserted literally — this is the number the author wrote. */
 const MINIMUM_VIEWPORT_SHARE = 0.1;
@@ -116,18 +116,19 @@ async function openOverlay(page: Page, overlay: Overlay): Promise<void> {
     await playwrightExpect(page.getByRole('menu')).toBeVisible();
     return;
   }
-  // A click answers with the peek; the drawer this measures is what Open escalates to. The old
-  // wait matched the workspace's "Event details" section heading, which the arc replaced.
+  // A phone opens the full event workspace directly. Wider canvases keep the anchored peek.
   await page
     .getByRole('button', { name: /^Research review/ })
     .first()
     .click();
-  // Only one peek is ever open, and the block this clicks is not the one whose id is easiest to
-  // reach for — naming the attribute rather than an id keeps the two from drifting apart again.
-  const peek = page.locator('[data-calendar-item-peek]');
-  await playwrightExpect(peek).toBeVisible();
-  await peek.getByRole('button', { name: 'Open' }).click();
-  await playwrightExpect(peek).toBeHidden();
+  if ((page.viewportSize()?.width ?? 0) >= 640) {
+    const peek = page.locator('[data-calendar-item-peek]');
+    await playwrightExpect(peek).toBeVisible();
+    await peek.getByRole('button', { name: 'Open' }).click({ timeout: 15_000 });
+    await playwrightExpect(peek).toBeHidden();
+  } else {
+    await playwrightExpect(page.locator('[data-calendar-item-peek]')).toHaveCount(0);
+  }
   await playwrightExpect(page.getByLabel('Title')).toHaveValue(/^Research review/);
 }
 
@@ -163,13 +164,13 @@ for (const viewport of VIEWPORTS) {
   const size = `${String(viewport.width)}x${String(viewport.height)}`;
   test(`holds a tenth of the viewport in every panel combination at ${size}`, async ({ page }) => {
     test.setTimeout(240_000);
-    await page.clock.setFixedTime(`${ANCHOR_DATE}T17:00:00.000Z`);
     await page.setViewportSize({ ...viewport });
     await signUpAndOnboard(page, 'PanelFloor');
 
     for (const syncAlert of [false, true]) {
       await installCalendarRoutes(page, stateWith(syncAlert));
       await page.goto('/calendar', { waitUntil: 'domcontentloaded' });
+      await playwrightExpect(page.getByRole('button', { name: /^Research review/ })).toBeVisible();
       await expect(page.getByRole('region', { name: 'Schedule' })).toBeVisible();
       if (syncAlert) await expect(page.getByRole('alert').first()).toBeVisible();
 

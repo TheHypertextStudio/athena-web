@@ -18,18 +18,20 @@
  * interaction between them.
  */
 import { expect as playwrightExpect, type Page } from '@playwright/test';
+import { CalendarItemId } from '@docket/planning/ids';
 
 import { signUpAndOnboard } from '../helpers/app';
 import {
   CALENDAR_IDS,
   makeCalendarItem,
   makeCalendarLayer,
+  shiftDate,
   utcAt,
 } from '../helpers/calendar-fixtures';
 import { calendarRouteState, installCalendarRoutes } from '../helpers/calendar-routes';
 import { expect, test } from '../helpers/fixtures';
 
-const ANCHOR_DATE = '2026-07-13';
+const ANCHOR_DATE = new Date().toISOString().slice(0, 10);
 
 /** The band where the shell's right rail appears and the old layout collapsed. */
 const VIEWPORTS = [
@@ -38,6 +40,7 @@ const VIEWPORTS = [
   { width: 1180, height: 620 },
   { width: 1280, height: 720 },
   { width: 1440, height: 760 },
+  { width: 1440, height: 900 },
 ] as const;
 
 /** The contract is a tenth of the viewport; asserting a fifth leaves room to catch drift early. */
@@ -97,10 +100,12 @@ async function setRail(page: Page, expanded: boolean): Promise<void> {
 
 /** Switch the calendar between its Dates and People axes through the consolidated Display menu. */
 async function setAxis(page: Page, axis: 'Dates' | 'People'): Promise<void> {
+  const lanePrefix = axis === 'Dates' ? 'date:' : 'person:';
+  if ((await page.locator(`[data-schedule-lane-header^="${lanePrefix}"]`).count()) > 0) return;
   const display = page.getByRole('button', { name: 'Display settings' });
   if ((await display.count()) > 0) {
     await display.first().click();
-    await page.getByRole('menuitemradio', { name: axis }).click();
+    await page.getByRole('menuitemradio', { name: axis }).click({ timeout: 15_000 });
     await playwrightExpect(page.getByRole('menu')).toHaveCount(0);
     return;
   }
@@ -108,7 +113,6 @@ async function setAxis(page: Page, axis: 'Dates' | 'People'): Promise<void> {
 }
 
 test('keeps exactly one schedule on screen, above its floor, at every width', async ({ page }) => {
-  await page.clock.setFixedTime(`${ANCHOR_DATE}T17:00:00.000Z`);
   await signUpAndOnboard(page, 'ViewportFloor');
 
   // Real content, not an empty grid: two layers, overlapping events, an all-day item, and a
@@ -160,8 +164,18 @@ test('keeps exactly one schedule on screen, above its floor, at every width', as
         startsAt: null,
         endsAt: null,
         allDayStartDate: ANCHOR_DATE,
-        allDayEndDate: ANCHOR_DATE,
+        allDayEndDate: shiftDate(ANCHOR_DATE, 1),
         permissions: { canEditCore: false, canDelete: false, readOnlyReason: 'provider_scope' },
+      }),
+      makeCalendarItem({
+        id: CalendarItemId.parse('FRNV2AHRZ6ENW3BJS08FPX4CKT'),
+        layerId: nativeLayer.id,
+        kind: 'native_event',
+        title: 'Team offsite',
+        startsAt: null,
+        endsAt: null,
+        allDayStartDate: ANCHOR_DATE,
+        allDayEndDate: shiftDate(ANCHOR_DATE, 1),
       }),
     ],
     preferences: { timezone: 'UTC', calendar: { pixelsPerHour: 72, minLaneWidth: 240 } },
@@ -170,6 +184,7 @@ test('keeps exactly one schedule on screen, above its floor, at every width', as
 
   await page.goto('/calendar', { waitUntil: 'domcontentloaded' });
   await expect(page.getByRole('region', { name: 'Schedule' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Independence Day', exact: true })).toBeVisible();
 
   for (const viewport of VIEWPORTS) {
     await page.setViewportSize({ ...viewport });
@@ -194,4 +209,79 @@ test('keeps exactly one schedule on screen, above its floor, at every width', as
       await setAxis(page, 'Dates');
     }
   }
+});
+
+test('keeps two all-day rows and dense overflow under the 128px header ceiling', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await signUpAndOnboard(page, 'HeaderFloor');
+
+  const nativeLayer = makeCalendarLayer({ id: CALENDAR_IDS.nativeLayer, title: 'Docket' });
+  const state = calendarRouteState({
+    layers: [nativeLayer],
+    items: [
+      makeCalendarItem({
+        id: CALENDAR_IDS.readOnlyEvent,
+        layerId: nativeLayer.id,
+        kind: 'native_event',
+        title: 'Holiday',
+        startsAt: null,
+        endsAt: null,
+        allDayStartDate: ANCHOR_DATE,
+        allDayEndDate: shiftDate(ANCHOR_DATE, 1),
+      }),
+      makeCalendarItem({
+        id: CalendarItemId.parse('FRNV2AHRZ6ENW3BJS08FPX4CKT'),
+        layerId: nativeLayer.id,
+        kind: 'native_event',
+        title: 'Team offsite',
+        startsAt: null,
+        endsAt: null,
+        allDayStartDate: ANCHOR_DATE,
+        allDayEndDate: shiftDate(ANCHOR_DATE, 1),
+      }),
+    ],
+    preferences: { timezone: 'UTC', calendar: { pixelsPerHour: 72, minLaneWidth: 240 } },
+  });
+  await installCalendarRoutes(page, state);
+  await page.goto('/calendar', { waitUntil: 'domcontentloaded' });
+  const dateHeader = page.locator(`[data-schedule-lane-header="date:${ANCHOR_DATE}"]`);
+  await playwrightExpect(dateHeader.locator('[data-schedule-all-day-primary]')).toHaveCount(2);
+  const header = page.locator('[data-schedule-all-day-header]');
+  const twoRowHeight = await header.evaluate((node) => node.getBoundingClientRect().height);
+  expect(
+    twoRowHeight,
+    'two all-day rows leave at least 772px below the sticky header',
+  ).toBeLessThanOrEqual(128);
+
+  const denseIds = [
+    'GRNV2AHRZ6ENW3BJS08FPX4CKT',
+    'HRNV2AHRZ6ENW3BJS08FPX4CKT',
+    'JRNV2AHRZ6ENW3BJS08FPX4CKT',
+    'KRNV2AHRZ6ENW3BJS08FPX4CKT',
+  ];
+  state.items.push(
+    ...denseIds.map((id, index) =>
+      makeCalendarItem({
+        id: CalendarItemId.parse(id),
+        layerId: nativeLayer.id,
+        kind: 'native_event',
+        title: `Extra all-day ${String(index + 1)}`,
+        startsAt: null,
+        endsAt: null,
+        allDayStartDate: ANCHOR_DATE,
+        allDayEndDate: shiftDate(ANCHOR_DATE, 1),
+      }),
+    ),
+  );
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await playwrightExpect(dateHeader.locator('[data-schedule-all-day-primary]')).toHaveCount(2);
+  await playwrightExpect(dateHeader.locator('summary')).toContainText('+4 more');
+  const denseHeight = await header.evaluate((node) => node.getBoundingClientRect().height);
+  expect(denseHeight, 'overflow does not add a sticky-header row').toBeLessThanOrEqual(128);
+  await dateHeader.locator('summary').click();
+  await playwrightExpect(
+    dateHeader.getByRole('button', { name: 'Extra all-day 4', exact: true }),
+  ).toBeVisible();
 });

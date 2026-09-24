@@ -27,6 +27,7 @@ import {
   calendarSchedulingEmptyMessage,
   calendarSchedulingError,
 } from './calendar-scheduling-copy';
+import { calendarMinimumLaneWidth } from './calendar-lane-width';
 import { CalendarScheduleItemContent } from './calendar-schedule-item-content';
 
 export type {
@@ -151,7 +152,8 @@ export function CalendarSchedulingSurface({
           pixelsPerHour={pixelsPerHour}
           now={now}
           viewportHeight="100%"
-          minimumLaneWidth={144}
+          minimumLaneWidth={calendarMinimumLaneWidth}
+          compactOverlapSidecarWidth={42}
           maximumVisibleLaneCount={7}
           {...(axis === 'dates' ? workLocationComposition?.canvasProps : {})}
           initialLaneIndex={axis === 'dates' ? dateAxis.initialLaneIndex : 0}
@@ -176,9 +178,8 @@ export function CalendarSchedulingSurface({
             peopleAxis.selectedActorIds.length,
           )}
           onViewportGeometry={({ visibleLaneCount: next }) => {
-            if (axis === 'dates' && next > 0 && next !== visibleLaneCount) {
+            if (axis === 'dates' && next > 0 && next !== visibleLaneCount)
               onVisibleLaneCountChange(next);
-            }
           }}
           onVisibleLaneRange={({ startLane, endLane }) => {
             if (axis === 'dates') {

@@ -5,7 +5,7 @@ import { SchedulingAllDayItem } from './scheduling-all-day-item';
 import type { ScheduleLane, SchedulingCanvasProps } from './scheduling-types';
 import type { SchedulingRelationshipMode } from './use-scheduling-relationship-mode';
 
-const CALENDAR_PRIMARY_ALL_DAY_ITEMS = 3;
+const CALENDAR_PRIMARY_ALL_DAY_ITEMS = 2;
 const AGENDA_PRIMARY_ALL_DAY_ITEMS = 2;
 
 /** Keep dense all-day schedules bounded while retaining direct access to every item. */
@@ -96,14 +96,16 @@ export function SchedulingAllDayLane({
       {primary.map((item, index) => (
         <div
           key={item.id}
-          className={`w-full ${reserveCreateTarget && allDayLaneContext === null && index === 0 ? 'pr-10' : ''}`}
+          className={`w-full ${reserveCreateTarget && allDayLaneContext === null && index === 0 ? 'pr-10' : ''} ${!isAgenda && overflow.length > 0 && index === primary.length - 1 ? 'pr-20' : ''}`}
           data-schedule-all-day-primary=""
         >
           {render(item)}
         </div>
       ))}
       {overflow.length > 0 ? (
-        <details className="text-label-medium relative z-50 max-w-full">
+        <details
+          className={`text-label-medium z-50 max-w-full ${isAgenda ? 'relative' : 'absolute right-0 bottom-0'}`}
+        >
           <summary className="text-primary hover:bg-primary/10 focus-visible:ring-ring flex cursor-pointer list-none items-center rounded px-1.5 py-0.5 outline-none focus-visible:ring-2 [@media(pointer:coarse)]:min-h-10">
             +{String(overflow.length)} more
           </summary>
@@ -126,17 +128,6 @@ export function SchedulingAllDayLane({
           }}
         >
           <Plus aria-hidden="true" className="size-5" />
-        </button>
-      ) : onSelectAllDayRegion ? (
-        <button
-          type="button"
-          className="text-primary text-label-medium hover:bg-primary-container focus-visible:ring-ring min-h-7 rounded px-1.5 outline-none focus-visible:ring-2 focus-visible:ring-inset [@media(pointer:coarse)]:min-h-10"
-          aria-label={`Create all-day item for ${lane.label}`}
-          onClick={(event) => {
-            onSelectAllDayRegion(lane, event.currentTarget);
-          }}
-        >
-          + All day
         </button>
       ) : null}
     </div>

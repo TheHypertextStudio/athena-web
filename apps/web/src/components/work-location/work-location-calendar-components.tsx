@@ -308,7 +308,7 @@ function startTimedPointerSession(input: {
   window.addEventListener('pointercancel', cancel);
 }
 
-/** Render all-day expected location inside the shared all-day lane context row. */
+/** Render expected location in one day-context row above all-day events. */
 export function WorkLocationAllDayContext({
   regions,
   context,
@@ -334,7 +334,7 @@ export function WorkLocationAllDayContext({
             key={region.id}
             type="button"
             aria-label={`${region.label} work location`}
-            className="group focus-visible:outline-primary inline-flex min-h-10 max-w-full min-w-10 items-center justify-center rounded-full focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-solid"
+            className={`group focus-visible:outline-primary inline-flex min-h-10 max-w-full min-w-10 items-center justify-center rounded-full focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-solid ${visible.length > 1 ? 'flex-1' : ''}`}
             onClick={() => {
               if (suppressedClick.current === region.id) {
                 suppressedClick.current = null;
@@ -424,7 +424,7 @@ export function WorkLocationAllDayContext({
           <span
             key={region.id}
             data-work-location-read-only="true"
-            className="bg-surface-container text-on-surface-variant text-label-small inline-flex min-h-7 min-w-0 items-center gap-1 rounded-full px-2"
+            className={`bg-surface-container text-on-surface-variant text-label-small inline-flex min-h-7 min-w-10 items-center gap-1 rounded-full px-2 ${visible.length > 1 ? 'flex-1' : ''}`}
           >
             {region.isHome ? (
               <Home aria-hidden="true" className="size-3.5! shrink-0" />

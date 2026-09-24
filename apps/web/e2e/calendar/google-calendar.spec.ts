@@ -12,6 +12,8 @@ import { expect, test } from '../helpers/fixtures';
 const CONNECTION_ID = '01ARZ3NDEKTSV4RRFFQ69G5FAV';
 const CALENDAR_ID = '01BX5ZZKBKACTAV9WEVGEMMVRZ';
 const EVENT_ID = '01BX5ZZKBKACTAV9WEVGEMMVS0';
+const LAYER_ID = '01BX5ZZKBKACTAV9WEVGEMMVL1';
+const GROUP_ID = 'layer_ada';
 
 function calendarSettings(selected = true) {
   return {
@@ -74,7 +76,7 @@ function calendarSettings(selected = true) {
     ],
     layers: [
       {
-        id: '01BX5ZZKBKACTAV9WEVGEMMVL1',
+        id: LAYER_ID,
         connectionId: CONNECTION_ID,
         provider: 'google',
         sourceKind: 'provider_calendar',
@@ -95,6 +97,27 @@ function calendarSettings(selected = true) {
         updatedAt: '2026-06-30T16:00:00.000Z',
       },
     ],
+    sourceGroups: [
+      {
+        id: GROUP_ID,
+        persistedGroupId: null,
+        provenance: 'single',
+        title: 'Ada',
+        color: '#16a34a',
+        selected,
+        visibleByDefault: selected,
+        preferredLayerId: LAYER_ID,
+        sources: [
+          {
+            layerId: LAYER_ID,
+            connectionId: CONNECTION_ID,
+            relationship: 'owned',
+            management: { canRemoveSubscription: false, requiresIncrementalConsent: false },
+          },
+        ],
+      },
+    ],
+    sourceGroupSuggestions: [],
   };
 }
 
@@ -163,7 +186,7 @@ test.describe('google calendar', () => {
         },
       });
     });
-    await page.route(`**/v1/me/calendar/calendars/${CALENDAR_ID}`, async (route) => {
+    await page.route(`**/v1/me/calendar/source-groups/${GROUP_ID}`, async (route) => {
       patchSeen = true;
       const body = route.request().postDataJSON() as { selected?: boolean };
       selected = Boolean(body.selected);
@@ -180,17 +203,17 @@ test.describe('google calendar', () => {
     await expect(page).toHaveURL(/\/settings\/connections\/google-calendar/);
     await expect(page.getByRole('heading', { name: 'Google Calendar' })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'ada@example.com' })).toBeVisible();
-    await expect(page.getByRole('checkbox', { name: /Ada/ })).toBeChecked();
+    await expect(page.getByRole('checkbox', { name: 'Toggle Ada visibility' })).toBeChecked();
 
     await page.getByRole('button', { name: 'Sync' }).click();
     await expect.poll(() => syncSeen).toBe(true);
     await expect(page.getByText('Updated 1 event.')).toBeVisible();
 
-    await page.getByRole('checkbox', { name: /Ada/ }).click();
+    await page.getByRole('checkbox', { name: 'Toggle Ada visibility' }).click();
     await expect.poll(() => patchSeen).toBe(true);
     await expect(page.getByText('0 of 2 calendars visible')).toBeVisible();
 
-    await page.getByRole('checkbox', { name: /Ada/ }).click();
+    await page.getByRole('checkbox', { name: 'Toggle Ada visibility' }).click();
     await expect(page.getByText('1 of 2 calendars visible')).toBeVisible();
 
     await page.goto('/today', { waitUntil: 'domcontentloaded' });

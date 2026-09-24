@@ -10,17 +10,14 @@
  *
  * ## The seed is read during render, which the server also does
  *
- * The initial value comes from `useState(() => new Date())`, so a component prerendered by the
- * `(app)` server layout bakes the *server's* clock into its markup and the browser then hydrates
- * with its own. Every current caller survives that because each formats the value at a coarser
- * grain than the gap between the two reads — minutes on a now-line, whole seconds on an elapsed
- * readout — so both sides usually render the same characters.
+ * Without `initialNow`, the initial value comes from `new Date()` on both server and browser.
+ * Calendar passes the server's exact seed because its visible date heading can differ when the
+ * browser uses another timezone or a test controls its clock. The effect catches up to live time
+ * as soon as the browser mounts.
  *
- * That is a property of the callers, not a guarantee of this hook. Anything rendering seconds, a
- * countdown that crosses a boundary, or a raw timestamp can mismatch on hydration. A caller that
- * needs the guarantee should hold `null` until mounted and seed inside an effect — as
- * `components/athena/voice-phone-numbers.tsx` does, where the value gates a `disabled` attribute
- * and a wrong first render is a control the person cannot press.
+ * Other callers that render seconds or raw timestamps should pass a server seed or hold `null`
+ * until mounted. `components/athena/voice-phone-numbers.tsx` uses the latter approach when the
+ * value gates a `disabled` attribute.
  *
  * Making that the default here means returning `Date | null` and teaching all six call sites what
  * to show before mount, which reaches the Agenda and Calendar scheduling prop contracts. Worth
@@ -37,6 +34,8 @@ export interface UseNowOptions {
    * While false the last value is held, so what is on screen stays put instead of jumping.
    */
   readonly enabled?: boolean;
+  /** Server-provided instant that keeps the first browser render equal to SSR. */
+  readonly initialNow?: string | undefined;
 }
 
 /**
@@ -52,8 +51,8 @@ export interface UseNowOptions {
  * ```
  */
 export function useNow(intervalMs = 30_000, options: UseNowOptions = {}): Date {
-  const { enabled = true } = options;
-  const [now, setNow] = useState(() => new Date());
+  const { enabled = true, initialNow } = options;
+  const [now, setNow] = useState(() => new Date(initialNow ?? Date.now()));
   useEffect(() => {
     if (!enabled) return undefined;
     // Catch up before ticking. A gated clock holds its last value while off, so resuming without

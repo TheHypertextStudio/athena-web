@@ -1,8 +1,8 @@
 # Calendar craft and cross-day time implementation plan
 
-> **For agentic workers:** Implement the remaining unchecked tasks in order. Use bounded workers
-> for every build and test command. Record new visual evidence before claiming that the Calendar
-> is done.
+> **For Calendar maintainers:** Keep the measured date axis, exact cross-day labels, compact
+> overlap disclosure, and phone editor when changing this view. The dated craft review records
+> the visual acceptance evidence.
 
 **Goal:** Keep Docket's traditional editable calendar while fixing the September 23 layout audit
 and making every timed event that crosses a local calendar day display correct times.
@@ -19,37 +19,44 @@ source identity remains available in the item details and layer control.
 ## Decision and current evidence
 
 This is a tactical Calendar pass. Keep the 24-hour time grid, all-day events, simultaneous event
-columns, rolling date viewport, continuous zoom, direct creation, and permission-aware editing.
+access, rolling date viewport, continuous zoom, direct creation, and permission-aware editing.
 Do not add a planning dashboard, create a day/week mode in `SchedulingCanvas`, or classify
 provider events by words such as “Sleep” or “Travel” in their titles. The existing `/plan` and Today
 surfaces retain their own jobs. A later stream model may carry richer activity types, but this pass
 must work with the item kinds Docket already has.
 
+The implementation review changed two presentation rules. The user rejected source-color stripes,
+including stripes that wrap rounded card corners, so source color now contributes only a slight
+event-fill tint. A measured Calendar canvas below 600 px shows one whole day. Foldable and tablet
+widths add days progressively; the desktop canvas still reaches seven. Narrow collision clusters
+now keep one readable card and put every other item in a `+N` disclosure near its start time.
+Phone taps open a full-height event workspace directly because the anchored peek and centered
+dialog consumed space without helping a phone reader. The initial render shows the known date
+and starting hours while width measurement determines the later lane count. The [dated scorecard](../../design/audits/2026-09-23-calendar.md)
+records the final visual evidence.
+
 The user-supplied September 23 screenshot shows a roughly 200 px all-day/header area, a partly
 hidden midnight tick, large saturated blue timed events, truncated identifying titles, weak
 today emphasis, a month-only range heading, equally weighted toolbar controls, and many unreadable
 open-document tabs. The screenshot is evidence for that captured state, not proof that every
-current theme and viewport has the same defect. Capture a fresh baseline on the implementation
-revision before changing product code.
+current theme and viewport has the same defect. The dated craft review records the resulting layout at five widths and both themes.
 
 The current code projects timed event instants into local day lanes in
 `scheduling-lane-projection.ts` and formats each card from clipped instants in
 `scheduling-time-label.ts`. The initial test proved that a full middle-day card read
 `12:00 AM – 12:00 AM` without saying that the second midnight was on the next date. The item peek
-also showed only the starting date, so its end time lacked a date on an overnight event. Both
-defects are fixed on this planning branch and have focused rendered tests. The rest of the plan
-must keep those tests green and add browser proof before shipping the visual pass.
+also showed only the starting date, so its end time lacked a date on an overnight event. Both defects are fixed on this branch and have rendered and browser tests.
 
-## Completed on the planning branch
+## Cross-day label result
 
 - A rendered-card regression test failed on `12:00 AM – 12:00 AM`; the middle-day label now says
   `12:00 AM – 12:00 AM next day` in visible text, its accessible name, and its title.
 - The shared event-day label now includes both local dates, with years, for a timed item that
-  crosses a day. The Calendar peek and detail use the same helper. Rendered peek tests cover the
-  label; the detail surface still needs browser proof.
+  crosses a day. The Calendar peek and detail use the same helper. Rendered tests cover the peek,
+  and the browser spec covers the detail surface.
 - Seven scheduling label cases now cover UTC overnight, viewer-local overnight, midnight end,
   three-day middle, spring and fall clock changes, and a year boundary. The source instants and
-  lane geometry remain unchanged. Browser and screenshot acceptance remain open.
+  lane geometry remain unchanged. Browser and screenshot acceptance pass.
 
 ## File ownership
 
@@ -97,13 +104,13 @@ navigation.
 
 ## Implementation tasks
 
-### 1. Record the baseline and failing cross-day label case
+### 1. Record visual evidence and the failing cross-day label case
 
-- [ ] Capture `/calendar` at 1440×900 and 390×844 in light and dark with a deterministic fixture
+- [x] Capture `/calendar` at 1440×900 and 390×844 in light and dark with a deterministic fixture
       containing a long title, an overnight event, a three-day timed event, three concurrent items,
       dense all-day items, and work location. Save sanitized screenshots under a new dated
       `docs/design/audits/screenshots/` directory; do not commit the user's private screenshot.
-- [ ] Measure sticky-header height, first hour-label bounds, card/lane gutters, and page overflow
+- [x] Measure sticky-header height, first hour-label bounds, card/lane gutters, and page overflow
       at 320 px. Record the values and the current eight-dimension Docket Craft Rubric score in a
       dated `docs/design/audits/` scorecard.
 - [x] Add a failing rendered-card test in
@@ -123,72 +130,84 @@ navigation.
 - [x] Cover all seven cases in rendered scheduling tests and verify the existing geometry tests.
       Add Calendar peek tests for both local dates and whole-event times. The item workspace reads
       the same helper, and the browser spec below must prove its rendered copy.
-- [ ] Add `apps/web/e2e/calendar/calendar-crossday-times.spec.ts` with one overnight and one
+- [x] Add `apps/web/e2e/calendar/calendar-crossday-times.spec.ts` with one overnight and one
       three-day browser-visible item. Assert the labels in each visible lane, open the item, and
       assert the same exact item owns both segments. Edit a multi-day endpoint through the item
       form, since the canvas deliberately offers no timed move/resize handles for multi-day items.
       Verify the exact endpoint persists once.
-- [ ] Run the focused Web tests and e2e spec with two workers. A label that reads `12:00 AM –
+- [x] Run the focused Web tests and e2e spec with two workers. A label that reads `12:00 AM –
 12:00 AM` without `next day` fails this task even if its geometry tests pass.
 
 ### 3. Reclaim vertical space and fix the midnight tick
 
-- [ ] Separate work-location day context from all-day events inside the shared header. Keep Home
+- [x] Separate work-location day context from all-day events inside the shared header. Keep Home
       and named places visible on one compact row. Do not label work location as an all-day event.
       Keep the existing work-location edit and accessible control paths.
-- [ ] Show at most two all-day event rows per date in Calendar, followed by a specific count and
+- [x] Show at most two all-day event rows per date in Calendar, followed by a specific count and
       an accessible expansion control. Keep every hidden event reachable. The create action must not
       reserve another full empty row. Preserve Agenda's independently chosen density.
-- [ ] Align the first and last tick labels inside `scheduling-time-grid.tsx` so the midnight label
+- [x] Align the first and last tick labels inside `scheduling-time-grid.tsx` so the midnight label
       is wholly visible below the sticky header. Preserve tick geometry and the keyboard/pointer
       minute mapping.
-- [ ] Update `scheduling-all-day-overflow.test.tsx`, work-location component tests, and the
+- [x] Update `scheduling-all-day-overflow.test.tsx`, work-location component tests, and the
       Calendar viewport-floor e2e test. At 1440×900 with two visible all-day rows, the sticky header
       should be no more than 128 px high. Verify the dense overflow case separately.
 
 ### 4. Restore readable card and grid hierarchy
 
-- [ ] Replace the large saturated event fill in `scheduling-item-surface.ts` with a quiet semantic
-      surface and readable foreground. Keep source color in a narrow accent, including for all-day
+- [x] Replace the large saturated event fill in `scheduling-item-surface.ts` with a quiet semantic
+      surface and readable foreground. Keep source color as a slight fill tint, including for all-day
       items. Use theme tokens and test contrast in both themes. Timeboxes and availability retain
       distinct treatments. Do not classify imported events by title.
-- [ ] Remove the forced single-line `truncate` in Calendar's title renderer so the shared card's
+- [x] Remove the forced single-line `truncate` in Calendar's title renderer so the shared card's
       measured one-, two-, or three-line clamp works. Keep short and overlapping cards compact, and
       ensure focus/click exposes the full title and exact time.
-- [ ] Tune lane insets, overlap gaps, title/time type hierarchy, and today-lane tint on the 4 px
-      rhythm. Keep simultaneous events individually visible and their minimum pointer and touch
-      targets intact. The current-time line remains visible over the subtle today tint.
-- [ ] Extend `scheduling-item-presentation.test.tsx`, the color/contrast tests, and Calendar
+- [x] Tune lane insets, overlap gaps, title/time type hierarchy, and today-lane tint on the 4 px
+      rhythm. Keep one directly readable event in a narrow overlap cluster and every other event
+      reachable from a nearby `+N` disclosure. The current-time line remains visible below text.
+- [x] Extend `scheduling-item-presentation.test.tsx`, the color/contrast tests, and Calendar
       browser fixtures. Verify a long title in a tall card, two narrow overlapping cards, a short
       event, an all-day event, and light/dark palettes at desktop and phone widths.
 
 ### 5. Tighten calendar navigation and shell chrome
 
-- [ ] Change Calendar's heading from a month-only label to the actual visible range. Show the
+- [x] Change Calendar's heading from a month-only label to the actual visible range. Show the
       full local year in the accessible name; shorten only the visual text when the toolbar narrows.
       Update `calendar-range-label.test.ts` for same-month, cross-month, and cross-year ranges.
-- [ ] Make Calendars/Display visually secondary to the create control without changing their
+- [x] Make Calendars/Display visually secondary to the create control without changing their
       functions. The create control must reveal whether it will create an event or timebox before
       persistence. Keep the one-row, 320 px-safe toolbar contract.
-- [ ] Reduce the open-document row's visual weight when many tabs are open. Preserve active-tab
+- [x] Reduce the open-document row's visual weight when many tabs are open. Preserve active-tab
       identity, close targets, keyboard navigation, and the overflow menu; do not invent a Calendar or
       Athena document tab. Test a 32-tab state and the no-tabs state. Keep this shell change in its
       own reviewable commit because every app route uses `TabBar`.
-- [ ] Remove only padding and nested framing that fresh screenshots show to be wasteful. The grid
+- [x] Remove only padding and nested framing that fresh screenshots show to be wasteful. The grid
       must gain usable space without cutting off resize grips, popovers, the scrollbar, or focus rings.
+
+### 5a. Stabilize first paint and phone event details
+
+- [x] Show the selected date and starting hour labels on first paint, before the viewport
+      reports a nonzero width. Reattach the resize observer after the initial frame gives way to
+      the real scrollport. Confirm
+      one date at 320, 390, and 430 px, two at 768 px, and seven at 1440 px after resizing.
+- [x] Give the loading state a recognizable calendar grid rather than misaligned dates or a blank
+      page. Keep item loading and failure status on top of the real grid after it appears.
+- [x] Let a phone event tap open a full-height workspace directly. Stack start and end fields,
+      preserve safe-area insets, and keep the close control at the top. Check an event with a long
+      title at 390 px and 320 px. Desktop retains the anchored peek.
 
 ### 6. Prove the complete slice and update the product contract
 
-- [ ] Run focused tests for scheduling, Calendar, Agenda, work location, and tabs with
-      `--maxWorkers=2`. Run Web typecheck and lint through Turbo with `--concurrency=2`, then the Web
+- [x] Run focused tests for scheduling, Calendar, Agenda, work location, and tabs with
+      `--maxWorkers=2`. Run Web typecheck and lint through Turbo with bounded concurrency, then the Web
       build with the repo's process-local heap setting.
-- [ ] Run the calendar browser specs with `--workers=2`. Capture fresh 1440×900 and 390×844
+- [x] Run the calendar browser specs with `--workers=2`. Capture fresh 1440×900 and 390×844
       screenshots in both themes, a 320 px overflow check, an open-documents overflow state, and
       a cross-day event state. Check keyboard focus, contrast, all-day expansion, and direct editing.
-- [ ] Update `docs/engineering/specs/calendar-ui.md` with the chosen range-heading, card tone,
+- [x] Update `docs/engineering/specs/calendar-ui.md` with the chosen range-heading, card tone,
       compact header, and cross-day label rules. Finish the dated craft scorecard and the
-      `CALENDAR-CRAFT-001` WORKLOG entry with files, measurements, tests, and remaining limits.
-- [ ] Self-review the diff, keep commits scoped to owned changes, and verify
+      `CALENDAR-CRAFT-002` WORKLOG entry with files, measurements, tests, and remaining limits.
+- [x] Self-review the diff, keep commits scoped to owned changes, and verify
       `git rev-list --merges --count origin/main..HEAD` returns `0` before presenting the finished
       implementation.
 
@@ -199,8 +218,8 @@ Use the project package manager and bounded runners. The relevant commands are:
 ```bash
 pnpm --filter @docket/web exec vitest run tests/scheduling/scheduling-geometry.test.ts tests/scheduling/scheduling-crossday-time-labels.test.tsx --maxWorkers=2
 pnpm --filter @docket/web exec vitest run tests/calendar tests/scheduling tests/agenda tests/work-location --maxWorkers=2
-pnpm exec turbo run typecheck lint --filter=@docket/web... --concurrency=2
-pnpm exec turbo run build --filter=@docket/web --concurrency=2
+pnpm exec turbo run typecheck lint --filter=@docket/web... --concurrency=1
+env API_URL=https://api.docket.localhost NEXT_PUBLIC_API_URL=https://api.docket.localhost NEXT_PUBLIC_APP_URL=https://docket.localhost NEXT_PUBLIC_PASSKEY_RP_ID=docket.localhost pnpm exec turbo run build --filter=@docket/web --concurrency=1
 pnpm --filter @docket/web exec playwright test e2e/calendar --workers=2
 pnpm exec prettier --check docs/engineering/plans/calendar-craft-and-cross-day-times.md docs/engineering/specs/calendar-ui.md docs/WORKLOG.md
 ```

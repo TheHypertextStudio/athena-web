@@ -1429,7 +1429,7 @@ describe('SchedulingCanvas', () => {
     expect(lines[0]).toHaveAttribute('data-current-time-line', 'today-a');
     expect(lines[1]).toHaveAttribute('data-current-time-line', 'today-b');
     expect(lines[0]).toHaveStyle({ top: '570px' });
-    expect(lines[0]?.closest('[data-schedule-current-layer]')).toHaveClass('z-30');
+    expect(lines[0]?.closest('[data-schedule-current-layer]')).toHaveClass('z-[5]');
   });
 
   it('annotates skipped and repeated wall-clock positions in their relevant date lanes', () => {
@@ -1904,7 +1904,7 @@ describe('SchedulingCanvas', () => {
     expect(compactVisibleRange).not.toHaveClass('sr-only');
     expect(renderedItem('full')).toHaveTextContent(/11:00.*12:00/);
     expect(renderedItem('full').style.getPropertyValue('--schedule-item-fill')).toBe(
-      'color-mix(in oklab, #7c3aed 8%, var(--color-primary))',
+      'color-mix(in oklab, #7c3aed 5%, var(--color-surface-container-high))',
     );
     expect(
       renderedItem('full').querySelector<HTMLElement>('[data-schedule-item-surface]')?.style
@@ -2016,7 +2016,7 @@ describe('SchedulingCanvas', () => {
     expect(surface).toHaveClass('motion-reduce:transition-none');
     expect(surface).not.toHaveClass('group-hover:bg-(--schedule-item-fill-raised)');
     expect(renderedItem('focus').style.getPropertyValue('--schedule-item-fill')).toBe(
-      'color-mix(in oklab, #2563eb 8%, var(--color-primary))',
+      'color-mix(in oklab, #2563eb 5%, var(--color-surface-container-high))',
     );
     expect((surface as HTMLElement | null)?.style.backgroundColor).toBe(
       'var(--schedule-item-fill)',

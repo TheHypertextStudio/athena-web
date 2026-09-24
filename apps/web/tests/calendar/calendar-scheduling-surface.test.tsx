@@ -414,13 +414,6 @@ describe('CalendarSchedulingSurface persistence', () => {
     expect(wrapper).not.toHaveClass('min-h-[max(16rem,45dvh)]');
   });
 
-  it('targets a seven-day desktop week with compact readable lanes', () => {
-    renderSurface();
-
-    expect(canvasProps().minimumLaneWidth).toBe(144);
-    expect(canvasProps().maximumVisibleLaneCount).toBe(7);
-  });
-
   it('never renders provider sync state as calendar chrome', () => {
     renderSurface('dates', calendarItem(), '2026-07-13', {
       dateItemsError: true,

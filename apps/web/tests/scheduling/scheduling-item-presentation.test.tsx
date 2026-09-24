@@ -55,7 +55,7 @@ describe('SchedulingCanvas item presentation', () => {
       />,
     );
 
-    expect(screen.getByRole('region', { name: 'Schedule' }).scrollTop).toBe(1_182);
+    expect(screen.getByRole('region', { name: 'Schedule' }).scrollTop).toBe(1_206);
   });
 
   it('uses collision width as well as height to choose readable card density', () => {
@@ -97,7 +97,7 @@ describe('SchedulingCanvas item presentation', () => {
 
     const card = assertDefined(document.querySelector<HTMLElement>('[data-schedule-item="a"]'));
     expect(card).toHaveAttribute('data-item-density', 'full');
-    expect(card.querySelector('.text-title-small')).toHaveClass('line-clamp-2');
+    expect(card.querySelector('.text-title-small')).toHaveClass('line-clamp-3');
   });
 
   it('keeps exact item details discoverable on every visual density', () => {
@@ -116,7 +116,7 @@ describe('SchedulingCanvas item presentation', () => {
     );
   });
 
-  it('renders omitted appearances as flat calendar-colour events in timed and all-day lanes', () => {
+  it('renders omitted appearances with quiet source-tinted fill in both lanes', () => {
     const timed = { ...item('focus', 'Focus block'), color: '#316eb4' };
     const allDay = {
       ...item('offsite', 'Team offsite'),
@@ -150,18 +150,18 @@ describe('SchedulingCanvas item presentation', () => {
     expect(allDayItem).toHaveClass('isolate');
     expect(allDaySurface).toHaveClass('-z-10');
     expect(card.style.getPropertyValue('--schedule-item-fill')).toBe(
-      'color-mix(in oklab, #316eb4 8%, var(--color-primary))',
+      'color-mix(in oklab, #316eb4 5%, var(--color-surface-container-high))',
     );
     expect(allDayItem.style.getPropertyValue('--schedule-item-fill')).toBe(
-      'color-mix(in oklab, #316eb4 8%, var(--color-primary))',
+      'color-mix(in oklab, #316eb4 5%, var(--color-surface-container-high))',
     );
     expect(surface.style.backgroundColor).toBe('var(--schedule-item-fill)');
     expect(allDaySurface.style.backgroundColor).toBe('var(--schedule-item-fill)');
     expect(card.style.getPropertyValue('--schedule-item-foreground')).toBe(
-      'var(--color-on-primary)',
+      'var(--color-on-surface)',
     );
     expect(allDayItem.style.getPropertyValue('--schedule-item-foreground')).toBe(
-      'var(--color-on-primary)',
+      'var(--color-on-surface)',
     );
     expect(card.querySelector('[data-schedule-item-body]')).toHaveClass(
       'text-(--schedule-item-foreground)',
@@ -169,14 +169,15 @@ describe('SchedulingCanvas item presentation', () => {
     expect(allDayItem.querySelector('[data-schedule-item-body]')).toHaveClass(
       'text-(--schedule-item-foreground)',
     );
-    expect(card.style.borderLeftWidth).toBe('');
+    expect(surface).not.toHaveClass('border-l-[3px]');
+    expect(allDaySurface).not.toHaveClass('border-l-[3px]');
     expect(card.querySelector('[data-schedule-item-accent]')).not.toBeInTheDocument();
     expect(allDayItem.querySelector('[data-schedule-item-accent]')).not.toBeInTheDocument();
     expect(card.className).not.toMatch(/shadow-/);
     expect(allDayItem.className).not.toMatch(/shadow-/);
   });
 
-  it('uses a solid semantic event color when a consumer supplies no color', () => {
+  it('uses a quiet semantic event surface when a consumer supplies no color', () => {
     render(
       <SchedulingCanvas
         displayTimezone="UTC"
@@ -190,7 +191,7 @@ describe('SchedulingCanvas item presentation', () => {
       document.querySelector<HTMLElement>('[data-schedule-item="focus"]'),
     );
     expect(renderedItem.style.getPropertyValue('--schedule-item-fill')).toBe(
-      'color-mix(in oklab, var(--color-primary) 8%, var(--color-primary))',
+      'color-mix(in oklab, var(--color-primary) 5%, var(--color-surface-container-high))',
     );
     expect(
       renderedItem.querySelector<HTMLElement>('[data-schedule-item-surface]')?.style

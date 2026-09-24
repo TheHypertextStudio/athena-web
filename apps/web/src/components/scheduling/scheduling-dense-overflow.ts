@@ -25,6 +25,8 @@ export interface DenseScheduleArrangementOptions {
   readonly leadingInsetByCluster?: ReadonlyMap<string, number> | undefined;
   /** Smallest useful card or disclosure column on this surface. */
   readonly minimumReadableItemWidth?: number | undefined;
+  /** Fixed disclosure width when the consumer favors one readable card in a narrow day. */
+  readonly compactSidecarWidth?: number | undefined;
 }
 
 /** Derive the number of collision columns that remain readable at the measured lane width. */
@@ -60,6 +62,100 @@ function localOverflowBuckets(
   return buckets;
 }
 
+/** Reserve direct columns, replacing the last one with a requested hidden event when needed. */
+function visibleSourceColumns(
+  cluster: readonly PositionedScheduleItem[],
+  directColumnCount: number,
+  promotedItemId?: string,
+): Map<number, number> {
+  const promotedColumn = cluster.find(({ item }) => item.id === promotedItemId)?.placement
+    .columnIndex;
+  const sourceColumns = Array.from({ length: directColumnCount }, (_, index) => index);
+  if (promotedColumn !== undefined && promotedColumn >= directColumnCount) {
+    sourceColumns[directColumnCount - 1] = promotedColumn;
+  }
+  return new Map(
+    sourceColumns.map((sourceColumn, displayedColumn) => [sourceColumn, displayedColumn]),
+  );
+}
+
+/** Keep hidden events near their own start rather than one distant cluster-wide disclosure. */
+function overflowGroupsForCluster(
+  clusterId: string,
+  hidden: readonly PositionedScheduleItem[],
+  directColumnCount: number,
+  displayedColumnCount: number,
+  compactSidecarWidth?: number,
+): DenseScheduleOverflowGroup[] {
+  return localOverflowBuckets(hidden).flatMap((items, bucketIndex) => {
+    const first = items[0];
+    if (!first) return [];
+    const overflowId = `${clusterId}:overflow:${String(bucketIndex)}`;
+    return [
+      {
+        clusterId: overflowId,
+        items,
+        top: first.top,
+        height: Math.min(40, first.height),
+        placement: {
+          id: overflowId,
+          columnIndex: directColumnCount,
+          columnCount: displayedColumnCount,
+          trailingSidecarWidth: compactSidecarWidth,
+        },
+      },
+    ];
+  });
+}
+
+/** Arrange one independent collision cluster after the lane has fixed its available width. */
+function arrangeCluster(
+  clusterId: string,
+  cluster: readonly PositionedScheduleItem[],
+  laneWidth: number,
+  options: DenseScheduleArrangementOptions,
+): DenseScheduleArrangement {
+  const requiredColumns = Math.max(1, ...cluster.map(({ placement }) => placement.columnCount));
+  const compactSidecarWidth =
+    requiredColumns > 1 && (options.compactSidecarWidth ?? 0) > 0
+      ? options.compactSidecarWidth
+      : undefined;
+  const capacity = readableColumnCount(
+    laneWidth,
+    options.leadingInsetByCluster?.get(clusterId) ?? 0,
+    options.minimumReadableItemWidth ?? MINIMUM_READABLE_ITEM_WIDTH,
+  );
+  if (requiredColumns <= capacity && compactSidecarWidth === undefined) {
+    return { directItems: cluster, overflowGroups: [] };
+  }
+
+  const directColumnCount = compactSidecarWidth === undefined ? capacity - 1 : 1;
+  const displayedColumnCount = compactSidecarWidth === undefined ? capacity : 2;
+  const displayedColumns = visibleSourceColumns(cluster, directColumnCount, options.promotedItemId);
+  const directItems = cluster
+    .filter(({ placement }) => displayedColumns.has(placement.columnIndex))
+    .map((positioned) => ({
+      ...positioned,
+      placement: {
+        ...positioned.placement,
+        columnIndex: displayedColumns.get(positioned.placement.columnIndex) ?? 0,
+        columnCount: displayedColumnCount,
+        trailingSidecarWidth: compactSidecarWidth,
+      },
+    }));
+  const hidden = cluster.filter(({ placement }) => !displayedColumns.has(placement.columnIndex));
+  return {
+    directItems,
+    overflowGroups: overflowGroupsForCluster(
+      clusterId,
+      hidden,
+      directColumnCount,
+      displayedColumnCount,
+      compactSidecarWidth,
+    ),
+  };
+}
+
 /**
  * Keep dense collision layouts readable without hiding any underlying schedule item.
  *
@@ -84,59 +180,9 @@ export function arrangeDenseScheduleItems(
   const directItems: PositionedScheduleItem[] = [];
   const overflowGroups: DenseScheduleOverflowGroup[] = [];
   for (const [clusterId, cluster] of clusters) {
-    const capacity = readableColumnCount(
-      laneWidth,
-      options.leadingInsetByCluster?.get(clusterId) ?? 0,
-      options.minimumReadableItemWidth ?? MINIMUM_READABLE_ITEM_WIDTH,
-    );
-    const requiredColumns = Math.max(1, ...cluster.map(({ placement }) => placement.columnCount));
-    if (requiredColumns <= capacity) {
-      directItems.push(...cluster);
-      continue;
-    }
-
-    const directColumnCount = capacity - 1;
-    const promotedColumn = cluster.find(
-      ({ item: candidate }) => candidate.id === options.promotedItemId,
-    )?.placement.columnIndex;
-    const sourceColumns = Array.from({ length: directColumnCount }, (_, index) => index);
-    if (promotedColumn !== undefined && promotedColumn >= directColumnCount) {
-      sourceColumns[directColumnCount - 1] = promotedColumn;
-    }
-    const displayedColumns = new Map(
-      sourceColumns.map((sourceColumn, displayedColumn) => [sourceColumn, displayedColumn]),
-    );
-    const direct = cluster.filter(({ placement }) => displayedColumns.has(placement.columnIndex));
-    const overflow = cluster.filter(
-      ({ placement }) => !displayedColumns.has(placement.columnIndex),
-    );
-    directItems.push(
-      ...direct.map((positioned) => ({
-        ...positioned,
-        placement: {
-          ...positioned.placement,
-          columnIndex: displayedColumns.get(positioned.placement.columnIndex) ?? 0,
-          columnCount: capacity,
-        },
-      })),
-    );
-
-    for (const [bucketIndex, items] of localOverflowBuckets(overflow).entries()) {
-      const first = items[0];
-      if (!first) continue;
-      const overflowId = `${clusterId}:overflow:${String(bucketIndex)}`;
-      overflowGroups.push({
-        clusterId: overflowId,
-        items,
-        top: first.top,
-        height: Math.min(40, first.height),
-        placement: {
-          id: overflowId,
-          columnIndex: directColumnCount,
-          columnCount: capacity,
-        },
-      });
-    }
+    const arranged = arrangeCluster(clusterId, cluster, laneWidth, options);
+    directItems.push(...arranged.directItems);
+    overflowGroups.push(...arranged.overflowGroups);
   }
 
   return { directItems, overflowGroups };

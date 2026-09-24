@@ -12,6 +12,7 @@ import {
 } from 'react';
 
 import { SchedulingCanvasHeader } from './scheduling-canvas-header';
+import { SchedulingCanvasMeasuring } from './scheduling-canvas-measuring';
 import { SchedulingCanvasNotice } from './scheduling-canvas-notice';
 import { arrangeDenseScheduleItems } from './scheduling-dense-overflow';
 import { SchedulingDenseOverflow } from './scheduling-dense-overflow-ui';
@@ -26,7 +27,11 @@ import {
 import { presentSchedulingRegion, SchedulingRegionPreview } from './scheduling-region-preview';
 import { scheduleWallPositionForInstant } from './scheduling-time-axis';
 import { SchedulingTimeGrid } from './scheduling-time-grid';
-import type { ScheduleRegionSelection, SchedulingCanvasProps } from './scheduling-types';
+import type {
+  ScheduleLane,
+  ScheduleRegionSelection,
+  SchedulingCanvasProps,
+} from './scheduling-types';
 import { useSchedulingDensePromotion } from './use-scheduling-dense-promotion';
 import { useSchedulingRegionSelection } from './use-scheduling-region-selection';
 import { useSchedulingRelationshipMode } from './use-scheduling-relationship-mode';
@@ -43,67 +48,75 @@ const MINIMUM_COARSE_POINTER_PIXELS = 40;
  * makes a full two-finger spread land near a 2x change without any single event feeling jumpy.
  */
 const ZOOM_GESTURE_DELTA_SCALE = 180;
+
+/** Present a selected region against its current lane after a date-axis update. */
+function presentSelectedRegion(
+  selectedRegion: ScheduleRegionSelection | null | undefined,
+  lanes: readonly ScheduleLane[],
+  displayTimezone: string,
+): ReturnType<typeof presentSchedulingRegion> | null {
+  if (!selectedRegion) return null;
+  const lane = lanes.find((candidate) => candidate.id === selectedRegion.lane.id);
+  return lane
+    ? presentSchedulingRegion({
+        lane,
+        startMinutes: selectedRegion.startMinutes,
+        endMinutes: selectedRegion.endMinutes,
+        displayTimezone,
+      })
+    : null;
+}
 /** Render a 24-hour fluid grid while consumers own data, persistence, and policy. */
-export default function SchedulingCanvas({
-  presentation = 'calendar',
-  displayTimezone,
-  lanes,
-  pixelsPerHour,
-  now,
-  viewportWidth,
-  viewportHeight,
-  minimumLaneWidth = MINIMUM_LANE_WIDTH,
-  minimumReadableTimedItemWidth,
-  maximumVisibleLaneCount,
-  gutterSlot,
-  initialLaneIndex = 0,
-  horizontalAnchorKey,
-  initialScrollMinutes,
-  onViewportGeometry,
-  onVisibleLaneRange,
-  onReachBoundary,
-  error,
-  errorAction,
-  emptyMessage = 'Nothing scheduled.',
-  emptyAction,
-  renderItem,
-  renderItemAction,
-  renderTimedLaneUnderlay,
-  renderTimedLaneContext,
-  resolveTimedItemLeadingInset,
-  renderAllDayLaneContext,
-  renderTimedItemDecoration,
-  selectedRegion,
-  selectedRegionAnchorRef,
-  onSelectRegion,
-  onSelectAllDayRegion,
-  onDateShortcut,
-  onOpenItem,
-  onMoveItem,
-  onResizeItem,
-  onMoveAllDayItem,
-  onResizeAllDayItem,
-  calendarSlotTarget,
-  onZoomGesture,
-}: SchedulingCanvasProps): JSX.Element {
+export default function SchedulingCanvas(props: SchedulingCanvasProps): JSX.Element {
+  const {
+    presentation = 'calendar',
+    displayTimezone,
+    lanes,
+    pixelsPerHour,
+    now,
+    viewportWidth,
+    viewportHeight,
+    minimumLaneWidth = MINIMUM_LANE_WIDTH,
+    minimumReadableTimedItemWidth,
+    compactOverlapSidecarWidth,
+    maximumVisibleLaneCount,
+    gutterSlot,
+    initialLaneIndex = 0,
+    horizontalAnchorKey,
+    initialScrollMinutes,
+    onViewportGeometry,
+    onVisibleLaneRange,
+    onReachBoundary,
+    error,
+    errorAction,
+    emptyMessage = 'Nothing scheduled.',
+    emptyAction,
+    renderItem,
+    renderItemAction,
+    renderTimedLaneUnderlay,
+    renderTimedLaneContext,
+    resolveTimedItemLeadingInset,
+    renderAllDayLaneContext,
+    renderTimedItemDecoration,
+    selectedRegion,
+    selectedRegionAnchorRef,
+    onSelectRegion,
+    onSelectAllDayRegion,
+    onDateShortcut,
+    onOpenItem,
+    onMoveItem,
+    onResizeItem,
+    onMoveAllDayItem,
+    onResizeAllDayItem,
+    calendarSlotTarget,
+    onZoomGesture,
+  } = props;
   const [gestureAnnouncement, setGestureAnnouncement] = useState('');
   // The sticky lane header covers the top of the scrollport, so an item that has scrolled partly
   // out of view has to pin its title below the header rather than under it. Measured (the header
   // grows with all-day items) and published as a CSS variable the item bodies consume.
   const headerRef = useRef<HTMLElement | null>(null);
   const [headerHeight, setHeaderHeight] = useState(0);
-  useEffect(() => {
-    const node = headerRef.current;
-    if (!node || typeof ResizeObserver === 'undefined') return;
-    const observer = new ResizeObserver(([entry]) => {
-      if (entry) setHeaderHeight(Math.round(entry.contentRect.height));
-    });
-    observer.observe(node);
-    setHeaderHeight(Math.round(node.getBoundingClientRect().height));
-    return () => {
-      observer.disconnect();
-    };
-  }, []);
   const usesCoarsePointer = useMediaQuery('(pointer: coarse)');
   const minimumInteractivePixels = usesCoarsePointer
     ? MINIMUM_COARSE_POINTER_PIXELS
@@ -130,6 +143,18 @@ export default function SchedulingCanvas({
       onVisibleLaneRange,
       onReachBoundary,
     });
+  useEffect(() => {
+    const node = headerRef.current;
+    if (!node || typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(([entry]) => {
+      if (entry) setHeaderHeight(Math.round(entry.contentRect.height));
+    });
+    observer.observe(node);
+    setHeaderHeight(Math.round(node.getBoundingClientRect().height));
+    return () => {
+      observer.disconnect();
+    };
+  }, [observedWidth]);
   // Trackpad pinch / ctrl+wheel zoom. React's synthetic `onWheel` is attached passively at the
   // root, so it cannot cancel the browser's own page zoom — the listener has to be registered
   // manually with `{ passive: false }`. The canvas emits raw multiplicative intent only; the
@@ -182,18 +207,7 @@ export default function SchedulingCanvas({
     const lane = preview ? lanes.find((candidate) => candidate.id === preview.laneId) : undefined;
     return preview && lane ? presentSchedulingRegion({ ...preview, lane, displayTimezone }) : null;
   }, [displayTimezone, lanes, regionSelection.preview]);
-  const selectedRegionPresentation = useMemo(() => {
-    if (!selectedRegion) return null;
-    const lane = lanes.find((candidate) => candidate.id === selectedRegion.lane.id);
-    return lane
-      ? presentSchedulingRegion({
-          lane,
-          startMinutes: selectedRegion.startMinutes,
-          endMinutes: selectedRegion.endMinutes,
-          displayTimezone,
-        })
-      : null;
-  }, [displayTimezone, lanes, selectedRegion]);
+  const selectedRegionPresentation = presentSelectedRegion(selectedRegion, lanes, displayTimezone);
   const fullWidth = geometry.gutterWidth + geometry.contentWidth;
   const todayDate = now
     ? (scheduleWallPositionForInstant(now, displayTimezone)?.date ?? undefined)
@@ -226,6 +240,10 @@ export default function SchedulingCanvas({
                 : undefined,
             leadingInsetByCluster,
             minimumReadableItemWidth: minimumReadableTimedItemWidth,
+            compactSidecarWidth:
+              compactOverlapSidecarWidth !== undefined && geometry.laneWidth < 420
+                ? compactOverlapSidecarWidth
+                : undefined,
           }),
           leadingInsetByCluster,
         };
@@ -238,25 +256,20 @@ export default function SchedulingCanvas({
       lanes,
       minimumInteractivePixels,
       minimumReadableTimedItemWidth,
+      compactOverlapSidecarWidth,
       resolveTimedItemLeadingInset,
     ],
   );
+  if (viewportWidth === undefined && observedWidth === 0) {
+    return <SchedulingCanvasMeasuring viewportRef={viewportRef} options={props} />;
+  }
   return (
     <section
       ref={viewportRef}
       aria-label="Schedule"
-      // No outer border: the tonal step from the page canvas onto `bg-surface` carries the
-      // separation, exactly as the shell's own panels do.
-      //
-      // Deliberately NOT a scroll-snap container, though a day is exactly the kind of indivisible
-      // unit `scroll-snap-type: x` exists for. This scrollport is a direct-manipulation surface: a
-      // resize grip is grabbed by scrolling it into view, measuring its box, and pressing on that
-      // point. A snap — mandatory *or* proximity — is applied a frame after that programmatic
-      // scroll, which moves the grip out from under the pointer and drops the gesture. Both
-      // variants were tried and both broke `fluid-scheduling-gestures`. Lane alignment is instead
-      // guaranteed where it is actually decided, in `use-scheduling-viewport`'s horizontal anchor:
-      // every rendered scroll position is a whole number of lanes, measured across 162 widths.
-      className={`bg-surface relative overflow-auto overscroll-contain ${presentation === 'agenda' ? '' : 'rounded-xl'} ${viewportHeight === undefined ? 'h-[clamp(20rem,68dvh,48rem)]' : ''}`}
+      // Scroll snap shifts a grip after programmatic scrolling and drops the resize gesture.
+      // `use-scheduling-viewport` instead aligns each rendered scroll position to whole lanes.
+      className={`bg-surface relative overflow-auto overscroll-contain ${viewportHeight === undefined ? 'h-[clamp(20rem,68dvh,48rem)]' : ''}`}
       style={
         {
           '--schedule-sticky-top': `${String(headerHeight)}px`,
@@ -313,7 +326,7 @@ export default function SchedulingCanvas({
                   aria-label={`${lane.label} time grid`}
                   // A single hairline between lanes, and none after the last one — the separator
                   // exists to divide days, not to draw a box around the grid.
-                  className={`relative shrink-0 touch-none ${laneIndex === lanes.length - 1 ? '' : 'border-outline-variant/30 border-r'}`}
+                  className={`relative shrink-0 touch-none ${todayDate === lane.date ? 'bg-primary-container/10' : ''} ${laneIndex === lanes.length - 1 ? '' : 'border-outline-variant/30 border-r'}`}
                   disabled={calendarSlotTarget === undefined}
                   startMinutesAt={(clientY, bounds) =>
                     pixelsToMinutes(clientY - bounds.top, effectivePixelsPerHour, snapMinutes)

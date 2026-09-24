@@ -114,7 +114,7 @@ function EventSchedule({ item, displayTimezone, editor }: EventScheduleProps): J
   const describedBy = editor.timeError ? editor.timeErrorId : undefined;
   if (!editor.timed) {
     return (
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
         <DatePicker
           ariaLabel="Starts"
           placeholder="Pick a day"
@@ -145,7 +145,7 @@ function EventSchedule({ item, displayTimezone, editor }: EventScheduleProps): J
     );
   }
   return (
-    <div className="grid grid-cols-2 gap-2">
+    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
       <CalendarTimeField
         label="Starts"
         value={editor.start.wallValue}

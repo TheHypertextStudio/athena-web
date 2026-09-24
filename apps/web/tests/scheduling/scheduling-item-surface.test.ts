@@ -68,10 +68,12 @@ describe('scheduling item surface palette', () => {
     },
   );
 
-  it('keeps calendar identity in a solid event fill without trusting it as the contrast base', () => {
+  it('keeps a restrained source tint over a quiet event surface', () => {
     const palette = scheduleItemSurfacePalette('event', '#316eb4');
-    expect(palette.fill).toBe('color-mix(in oklab, #316eb4 8%, var(--color-primary))');
-    expect(palette.foreground).toBe('var(--color-on-primary)');
+    expect(palette.fill).toBe(
+      'color-mix(in oklab, #316eb4 5%, var(--color-surface-container-high))',
+    );
+    expect(palette.foreground).toBe('var(--color-on-surface)');
     expect(palette.fill).not.toContain('transparent');
   });
 });

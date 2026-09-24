@@ -15,7 +15,7 @@ export function CalendarDrawerClose({
       type="button"
       variant="ghost"
       size="icon"
-      className="-mt-2 -mr-2 size-10 shrink-0 self-end"
+      className="-mt-2 -mr-2 size-10 shrink-0 self-start"
       aria-label={label}
       onClick={onClick}
     >

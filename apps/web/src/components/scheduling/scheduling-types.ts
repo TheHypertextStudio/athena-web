@@ -287,10 +287,12 @@ export interface SchedulingCanvasProps {
   readonly viewportWidth?: number | undefined;
   /** Consumer-owned viewport height; defaults to a bounded responsive calendar surface. */
   readonly viewportHeight?: string | number | undefined;
-  /** Minimum readable lane width; the visible lane count is derived from this and the viewport. */
-  readonly minimumLaneWidth?: number | undefined;
+  /** Minimum readable lane width, or a policy based on the measured canvas width. */
+  readonly minimumLaneWidth?: number | ((viewportWidth: number) => number) | undefined;
   /** Minimum readable timed-card width after consumer-owned leading context is reserved. */
   readonly minimumReadableTimedItemWidth?: number | undefined;
+  /** Width reserved for a compact collision disclosure when one narrow day needs readable cards. */
+  readonly compactOverlapSidecarWidth?: number | undefined;
   /** Optional upper bound for visible lanes, such as a seven-day calendar week. */
   readonly maximumVisibleLaneCount?: number | undefined;
   /**

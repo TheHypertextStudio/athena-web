@@ -26,7 +26,7 @@ interface UseSchedulingViewportOptions {
   readonly lanes: readonly ScheduleLane[];
   readonly pixelsPerHour: number;
   readonly viewportWidth?: number | undefined;
-  readonly minimumLaneWidth: number;
+  readonly minimumLaneWidth: NonNullable<SchedulingCanvasProps['minimumLaneWidth']>;
   readonly maximumVisibleLaneCount?: number | undefined;
   readonly initialLaneIndex: number;
   readonly horizontalAnchorKey?: string | number | undefined;
@@ -34,6 +34,15 @@ interface UseSchedulingViewportOptions {
   readonly onViewportGeometry?: SchedulingCanvasProps['onViewportGeometry'] | undefined;
   readonly onVisibleLaneRange?: SchedulingCanvasProps['onVisibleLaneRange'] | undefined;
   readonly onReachBoundary?: SchedulingCanvasProps['onReachBoundary'] | undefined;
+}
+
+function resolvedMinimumLaneWidth(
+  minimumLaneWidth: UseSchedulingViewportOptions['minimumLaneWidth'],
+  viewportWidth: number,
+): number {
+  return typeof minimumLaneWidth === 'function'
+    ? minimumLaneWidth(viewportWidth)
+    : minimumLaneWidth;
 }
 
 /** The minute-of-day under a zoom pointer, plus where that pointer sat in the viewport. */
@@ -104,6 +113,7 @@ export function useSchedulingViewport({
   // Zero represents an unmeasured container. Assuming a desktop width here would briefly report
   // phantom lanes and could make a responsive correction look like horizontal navigation.
   const [observedWidth, setObservedWidth] = useState(0);
+  const waitingForMeasurement = observedWidth === 0;
 
   useLayoutEffect(() => {
     if (viewportWidth !== undefined) return;
@@ -118,7 +128,8 @@ export function useSchedulingViewport({
     const observer = new ResizeObserver(update);
     observer.observe(element);
     return observer.disconnect.bind(observer);
-  }, [viewportWidth]);
+    // The first measured render replaces the loading section, so observe the new scrollport too.
+  }, [viewportWidth, waitingForMeasurement]);
 
   const measuredWidth = viewportWidth ?? observedWidth;
   const axis = useMemo(() => deriveScheduleAxis(measuredWidth), [measuredWidth]);
@@ -128,7 +139,7 @@ export function useSchedulingViewport({
         viewportWidth: measuredWidth,
         laneCount: lanes.length,
         gutterWidth: axis.gutterWidth,
-        minimumLaneWidth,
+        minimumLaneWidth: resolvedMinimumLaneWidth(minimumLaneWidth, measuredWidth),
         ...(maximumVisibleLaneCount === undefined ? {} : { maximumVisibleLaneCount }),
       }),
     [axis.gutterWidth, lanes.length, maximumVisibleLaneCount, measuredWidth, minimumLaneWidth],
@@ -209,10 +220,8 @@ export function useSchedulingViewport({
     }
     previousLaneWidthRef.current = geometry.laneWidth;
     if (!initializedVerticalScrollRef.current) {
-      viewport.scrollTop = Math.max(
-        0,
-        timedGridOffset + minutesToPixels(initialScrollMinutes, pixelsPerHour) - 48,
-      );
+      // Leave the first requested hour below the sticky header rather than beneath its labels.
+      viewport.scrollTop = Math.max(0, minutesToPixels(initialScrollMinutes, pixelsPerHour) - 24);
       initializedVerticalScrollRef.current = true;
     } else if (previousPixelsPerHourRef.current !== pixelsPerHour) {
       const previous = Math.max(1, previousPixelsPerHourRef.current);

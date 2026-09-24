@@ -38,6 +38,13 @@ function tickTop(wallMinutes: number, pixelsPerHour: number): number {
   return (wallMinutes / 60) * pixelsPerHour;
 }
 
+/** Anchor boundary labels inside the grid without moving their ticks. */
+function tickLabelTranslation(wallMinutes: number): string {
+  if (wallMinutes === 0) return 'translate-y-0';
+  if (wallMinutes === 1_440) return '-translate-y-full';
+  return '-translate-y-1/2';
+}
+
 /** One contiguous daylight-saving anomaly rendered as a single lane band. */
 interface ScheduleTransitionBand {
   readonly transition: Exclude<ScheduleTick['transition'], 'normal'>;
@@ -134,9 +141,7 @@ export function SchedulingTimeGrid({
               key={tick.wallMinutes}
               // `whitespace-nowrap` because the compact gutter is sized to the label's exact
               // measured width: without it a 44px box wraps `12 AM` onto two lines.
-              className={`text-on-surface-variant text-label-large absolute -translate-y-1/2 whitespace-nowrap tabular-nums ${
-                labelStyle === 'hour' ? 'right-1' : 'right-2'
-              }`}
+              className={`text-on-surface-variant text-label-large absolute whitespace-nowrap tabular-nums ${tickLabelTranslation(tick.wallMinutes)} ${labelStyle === 'hour' ? 'right-1' : 'right-2'}`}
               data-schedule-label={tick.wallMinutes}
               style={{ top: tickTop(tick.wallMinutes, pixelsPerHour) }}
             >
@@ -201,7 +206,7 @@ export function SchedulingTimeGrid({
         {children}
         <div
           aria-hidden="true"
-          className="pointer-events-none absolute inset-0 z-30 flex"
+          className="pointer-events-none absolute inset-0 z-0 flex"
           data-schedule-current-layer=""
         >
           {lanes.map((lane) => (

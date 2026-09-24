@@ -63,12 +63,7 @@ export function CalendarLayersMenu({
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <Button
-          variant="secondary"
-          size="sm"
-          aria-label="Calendars"
-          className={CALENDAR_CONTROL_CLASS}
-        >
+        <Button variant="ghost" size="sm" aria-label="Calendars" className={CALENDAR_CONTROL_CLASS}>
           <Layers className="size-4" aria-hidden="true" />
           <span className="hidden @2xl:inline">Calendars</span>
           <ChevronDown className="hidden size-4 opacity-60 @2xl:inline" aria-hidden="true" />

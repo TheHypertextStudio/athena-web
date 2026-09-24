@@ -2,7 +2,7 @@
 
 > **Status**: Implemented — fluid scheduling canvas
 > **Area**: Web app, agenda, settings, task detail
-> **Last Updated**: 2026-08-10
+> **Last Updated**: 2026-09-23
 
 ## Goal
 
@@ -68,21 +68,47 @@ Required controls:
 Layout:
 
 - Dense operational interface, not a marketing layout.
+- The scheduling grid reaches the shell's content edges; only the toolbar keeps an inset. The
+  shared canvas does not add a second rounded frame inside the shell.
 - A bounded two-axis scroll viewport with a sticky date/resource and all-day header above the
   24-hour grid. Zoom preserves the wall time at the viewport center after accounting for the
   header, so changing scale does not jump to another part of the day.
+- The toolbar heading names the first and last visible local dates, including the full year in
+  its accessible name. Narrow toolbars shorten month names and omit the visual year while keeping
+  the actual date range.
+  Calendars and Display are secondary controls; the New control names its current event or
+  timebox intent before opening the editable draft.
+- The first browser paint shows the selected date, all-day row, and hour labels around the
+  initial time. Canvas width only determines how many dates fit; it must not hide the known
+  starting period while measurement or item data loads. Item loading stays attached to the grid.
+- Work location sits in a compact day-context row separate from all-day events. Calendar shows at
+  most two all-day event rows per date before an accessible overflow control reveals the rest.
+  Agenda retains its own single-day density. The first hour label remains wholly visible below
+  the sticky header.
 - One continuous pixels-per-hour scalar. Labels and snap intervals adapt independently to remain
   readable and useful, with snap precision tightening from 60 minutes to a maximum five-minute
   resolution as scale increases.
-- Equal-width arbitrary lanes. The count visible at once derives from container width and a saved
-  minimum lane width; overflow scrolls horizontally.
+- Equal-width arbitrary lanes. The date axis shows one whole day while the measured canvas is
+  narrower than 600 px. Wider foldable and tablet canvases add days as the minimum readable lane
+  width falls toward the seven-day desktop target. Side rails therefore affect the count through
+  actual canvas width, and overflow scrolls horizontally.
 - A rolling query window with one measured viewport of overscan in each direction. Reaching a
   boundary shifts the host window without introducing named or fixed-count view modes.
-- Items colored by layer with icons for source/kind.
-- Concurrent timed items form deterministic side-by-side columns within their lane. Minimum
-  interactive height participates in collision detection, so short items do not paint over or
-  fully hide one another at low zoom.
-- All text must fit in cards across mobile and desktop.
+- Timed and all-day events use a quiet theme surface with a small source tint in the fill and
+  readable on-surface text. Event borders and corner-wrapping source stripes are absent. The
+  layer control and item details identify the source. Timeboxes,
+  availability, and busy blocks keep distinct semantic treatments; event titles do not determine
+  item kind. Tall cards wrap titles to their measured one-, two-, or three-line budget. Focus and
+  item details expose the complete title and exact time.
+- Today's lane has a subtle tint, while the current-time line stays visible above it.
+- Concurrent timed items form deterministic overlap clusters within each date lane. When several
+  columns would make an event unreadable, one card keeps most of the measured lane width and a
+  narrow `+N` disclosure opens every other event. The disclosure stays beside the events' own
+  start times. Wider lanes can show separate cards when each remains readable. Minimum interactive
+  height participates in collision detection, so short items do not paint over one another.
+- Short cards keep compact labels. Card titles wrap when their measured height allows it. The
+  current-time line sits behind event text. Focus and item details expose each full title and
+  exact time.
 
 Time-axis rules:
 
@@ -90,6 +116,9 @@ Time-axis rules:
   use the viewer's selected IANA timezone. A person or resource timezone is header metadata only.
 - Calendar and Agenda refresh their current-time instant every 30 seconds, including across a local
   midnight boundary; the line is not frozen at mount time.
+- Calendar seeds its first browser clock from the server and uses UTC until client hydration or
+  saved timezone preferences resolve. That keeps the initial date heading identical across server
+  and browser timezones; the mounted calendar then reconciles to the viewer's zone.
 - Major labels are the smallest supported interval that remains readable at the active scale;
   minor lines use the active snap interval.
 - Existing exact instants render through daylight-saving transitions. Skipped and repeated wall
@@ -144,6 +173,10 @@ Time-axis rules:
 
 The workspace is the primary detail interaction for a calendar item.
 
+On a standard phone, tapping an event opens the full-height item workspace directly. Its start
+and end fields stack at full width, and the header, scroll area, and footer respect safe-area
+insets. On larger screens, a tap opens an anchored peek that can expand to the workspace.
+
 Sections:
 
 - Header: title, time, layer, source badge, provider link.
@@ -164,7 +197,7 @@ grow into richer collaboration later.
 Visuals:
 
 - Calendar/provider icon.
-- Layer color strip or tint.
+- Layer color as a slight surface tint.
 - Account/calendar label in compact metadata.
 - Edit affordances only when `permissions.canEditCore`.
 

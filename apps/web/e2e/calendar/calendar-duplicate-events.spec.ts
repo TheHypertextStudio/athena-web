@@ -26,7 +26,7 @@ import { calendarRouteState, installCalendarRoutes } from '../helpers/calendar-r
 import { openScheduleItemDetail } from '../helpers/calendar-ui';
 import { expect, test } from '../helpers/fixtures';
 
-const ANCHOR_DATE = '2026-07-13';
+const ANCHOR_DATE = new Date().toISOString().slice(0, 10);
 const WORK_LAYER = CalendarLayerId.parse('01BX5ZZKBKACTAV9WEVGEMMVA1');
 const PERSONAL_LAYER = CalendarLayerId.parse('01BX5ZZKBKACTAV9WEVGEMMVA2');
 const PERSONAL_COPY = CalendarItemId.parse('01BX5ZZKBKACTAV9WEVGEMMVD2');
@@ -36,7 +36,6 @@ const PERSONAL_ONLY = CalendarItemId.parse('01BX5ZZKBKACTAV9WEVGEMMVD4');
 test.use({ timezoneId: 'UTC', viewport: { width: 1440, height: 900 } });
 
 test('renders one canonical block for an event that synced from two accounts', async ({ page }) => {
-  await page.clock.setFixedTime(`${ANCHOR_DATE}T17:00:00.000Z`);
   await signUpAndOnboard(page, 'DuplicateEvents');
 
   const work = makeCalendarLayer({
@@ -104,7 +103,7 @@ test('renders one canonical block for an event that synced from two accounts', a
   });
   await installCalendarRoutes(page, state);
 
-  await page.goto(`/calendar?date=${ANCHOR_DATE}`, { waitUntil: 'domcontentloaded' });
+  await page.goto('/calendar', { waitUntil: 'domcontentloaded' });
   await expect(page.getByRole('region', { name: 'Schedule' })).toBeVisible();
 
   const main = page.locator('main#main-content');

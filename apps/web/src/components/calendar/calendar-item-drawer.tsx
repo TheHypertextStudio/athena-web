@@ -73,7 +73,7 @@ export default function CalendarItemDrawer({
     >
       <DialogContent
         showClose={false}
-        presentation={{ kind: 'centered', size: 'large', height: 'tall' }}
+        presentation={{ kind: 'responsive-fullscreen', size: 'large', height: 'tall' }}
       >
         {itemId === null ? (
           <>

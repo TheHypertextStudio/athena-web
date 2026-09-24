@@ -406,14 +406,14 @@ export default function CreateBlockForm({
         <Button
           className={CALENDAR_CONTROL_CLASS}
           size="sm"
-          variant="secondary"
-          aria-label="New"
+          variant="default"
+          aria-label={`New ${intent}`}
           onClick={() => {
             handleOpenChange(true);
           }}
         >
           <Plus className="size-4" aria-hidden="true" />
-          <span className="hidden @2xl:inline">New</span>
+          <span className="hidden @2xl:inline">New {intent}</span>
         </Button>
       ) : null}
       <Dialog open={open} modal={desktopHosted === null} onOpenChange={handleOpenChange}>

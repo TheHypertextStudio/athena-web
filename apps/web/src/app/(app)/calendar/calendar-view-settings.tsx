@@ -180,7 +180,7 @@ export function CalendarViewSettings({
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button
-          variant="secondary"
+          variant="ghost"
           size="sm"
           aria-label="Display settings"
           className={CALENDAR_CONTROL_CLASS}

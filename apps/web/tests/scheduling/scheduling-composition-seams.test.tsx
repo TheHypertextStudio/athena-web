@@ -138,7 +138,10 @@ describe('SchedulingCanvas composition seams', () => {
     const allDayContext = assertDefined(
       document.querySelector<HTMLElement>('[data-schedule-all-day-lane-context="date"]'),
     );
-    expect(allDayContext.closest('[data-schedule-all-day-lane="date"]')).not.toBeNull();
+    expect(allDayContext.closest('[data-schedule-all-day-lane="date"]')).toBeNull();
+    expect(allDayContext.parentElement).toBe(
+      document.querySelector('[data-schedule-all-day-lane="date"]')?.parentElement,
+    );
     expect(allDayContext).not.toHaveAttribute('inert');
     expect(allDayContext).not.toHaveClass('pointer-events-none');
     expect(screen.getByTestId('all-day-context-chip')).toHaveAttribute('data-lane-index', '0');

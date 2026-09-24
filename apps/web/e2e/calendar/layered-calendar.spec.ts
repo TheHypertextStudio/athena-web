@@ -157,7 +157,7 @@ test.describe('layered calendar', () => {
 
     // Creating one fixture-backed event invalidates the server-hydrated layers key immediately;
     // this replaces the obsolete 31-second staleness wait and Week-mode query-key trick.
-    await page.getByRole('button', { name: 'New', exact: true }).click();
+    await page.getByRole('button', { name: 'New event' }).click();
     const createDialog = page.getByRole('dialog', { name: 'Create calendar item' });
     await createDialog.getByLabel('Title').fill('Refresh layer controls');
     await createDialog.getByRole('button', { name: 'Save' }).click();
@@ -194,7 +194,10 @@ test.describe('layered calendar', () => {
     await installCalendarRoutes(page, state);
 
     await page.goto('/calendar', { waitUntil: 'domcontentloaded' });
-    await page.getByRole('button', { name: 'New', exact: true }).click();
+    await expect(
+      page.getByText('Nothing scheduled. Drag on the grid or choose New to plan time.'),
+    ).toBeVisible();
+    await page.getByRole('button', { name: 'New event' }).click();
     const createDialog = page.getByRole('dialog', { name: 'Create calendar item' });
     await createDialog.getByLabel('Title').fill('Focus block');
     await createDialog.getByRole('button', { name: 'Save' }).click();

@@ -13,7 +13,7 @@
  * surface. Nothing else is allowed to take a band of vertical budget above the grid — layer
  * visibility and people comparison were both inline blocks here and are now popovers hanging off
  * the toolbar row, because "which calendars / which people" is a setting and the events are the
- * content. Padding is deliberately modest (`p-2` → `p-6`). The page column clips overflow while
+ * content. The grid reaches the page edge while the toolbar alone keeps its control inset. The page column clips overflow while
  * the shared canvas owns both axes, so wheel, touch, and keyboard scrolling never compete across
  * nested vertical scrollports.
  *
@@ -69,7 +69,7 @@ import {
 import { CalendarToolbar } from './calendar-toolbar';
 import { clampPixelsPerHour, DEFAULT_PIXELS_PER_HOUR } from './calendar-view-settings';
 import { useCalendarDateAxis } from './use-calendar-date-axis';
-import { useCalendarPeopleAxis } from './use-calendar-people-axis';
+import { type CalendarPeopleAxisState, useCalendarPeopleAxis } from './use-calendar-people-axis';
 
 /**
  * Trailing debounce applied to a pinch-driven zoom write.
@@ -80,8 +80,64 @@ import { useCalendarPeopleAxis } from './use-calendar-people-axis';
  */
 const ZOOM_GESTURE_COMMIT_MS = 300;
 
+interface CalendarClientProps {
+  readonly initialNow?: string;
+  readonly initialTimezone?: HubPreferences['timezone'];
+}
+
+/** Keep the first server and browser date in the same zone until hydration finishes. */
+function useHydratedCalendarTimezone(
+  timezone: HubPreferences['timezone'] | undefined,
+  initialTimezone: HubPreferences['timezone'] | undefined,
+): string {
+  const [hydrated, setHydrated] = useState(false);
+  useEffect(() => {
+    setHydrated(true);
+  }, []);
+  return resolveScheduleTimezone(timezone ?? initialTimezone ?? (hydrated ? undefined : 'UTC'));
+}
+
+/** Dismiss only anchored peeks when a date or comparison change replaces their source lanes. */
+function useCalendarContextReset(
+  contextKey: string,
+  tier: 'peek' | 'detail' | undefined,
+  setOpenSharedItem: (item: SharedCalendarItemDetail | null) => void,
+  closeEvent: () => void,
+): void {
+  const previousContextRef = useRef(contextKey);
+  useEffect(() => {
+    if (previousContextRef.current === contextKey) return;
+    previousContextRef.current = contextKey;
+    setOpenSharedItem(null);
+    // Detail owns its item independently and survives preference correction or date navigation.
+    if (tier === 'peek') closeEvent();
+  }, [contextKey, tier, setOpenSharedItem, closeEvent]);
+}
+
+/** Connect the People toolbar control to the current comparison axis. */
+function CalendarPeopleToolbarControl({
+  axisState,
+}: {
+  readonly axisState: CalendarPeopleAxisState;
+}): JSX.Element {
+  return (
+    <CalendarComparisonControls
+      workspaces={axisState.sharedWorkspaces}
+      workspaceId={axisState.comparisonOrgId}
+      members={axisState.activeMembers}
+      selectedActorIds={axisState.selectedActorIds}
+      membersPending={axisState.membersPending}
+      onWorkspaceChange={axisState.selectWorkspace}
+      onActorChange={axisState.toggleActor}
+    />
+  );
+}
+
 /** Render the unified calendar page over the shared scheduling canvas. */
-export default function CalendarClient(): JSX.Element {
+export default function CalendarClient({
+  initialNow,
+  initialTimezone,
+}: CalendarClientProps): JSX.Element {
   const router = useRouter();
   const [axis, setAxis] = useState<CalendarAxis>('dates');
   const [visibleLaneCount, setVisibleLaneCount] = useState(1);
@@ -89,6 +145,9 @@ export default function CalendarClient(): JSX.Element {
   const openEvent = useCalendarItemSelection();
   const { close: closeEvent } = openEvent;
   const [openSharedItem, setOpenSharedItem] = useState<SharedCalendarItemDetail | null>(null);
+  const closeSharedItem = useCallback(() => {
+    setOpenSharedItem(null);
+  }, []);
   const [selection, setSelection] = useState<CalendarCanvasRegionSelection | null>(null);
   const selectionAnchorRef = useRef<HTMLDivElement>(null);
   const [pixelsPerHour, setPixelsPerHour] = useState(DEFAULT_PIXELS_PER_HOUR);
@@ -102,7 +161,7 @@ export default function CalendarClient(): JSX.Element {
     readonly endDate: string;
   } | null>(null);
   const visibleDateRangeRef = useRef(visibleDateRange);
-  const now = useNow().toISOString();
+  const now = useNow(30_000, { initialNow }).toISOString();
 
   const preferencesQuery = useApiQuery(
     apiQueryOptions(
@@ -115,7 +174,7 @@ export default function CalendarClient(): JSX.Element {
   const workPlacesQuery = useApiListQuery(workLocationPlacesDef());
   const hubPreferences = preferencesQuery.data;
   const preferences = hubPreferences?.calendar;
-  const displayTimezone = resolveScheduleTimezone(hubPreferences?.timezone);
+  const displayTimezone = useHydratedCalendarTimezone(hubPreferences?.timezone, initialTimezone);
   const {
     date: anchorDate,
     today,
@@ -179,12 +238,12 @@ export default function CalendarClient(): JSX.Element {
     timezone: displayTimezone,
     lanes: dateAxis.lanes,
   });
-  useEffect(() => {
-    setOpenSharedItem(null);
-    // The peek points at a block. Changing the date, the axis, or the comparison org rebuilds every
-    // lane, so the block it was pointing at no longer exists.
-    closeEvent();
-  }, [anchorDate, axis, peopleAxis.comparisonOrgId, closeEvent]);
+  useCalendarContextReset(
+    `${anchorDate}:${axis}:${peopleAxis.comparisonOrgId}`,
+    openEvent.selection?.tier,
+    setOpenSharedItem,
+    closeEvent,
+  );
   useEffect(() => {
     visibleDateRangeRef.current = null;
     setVisibleDateRange(null);
@@ -195,11 +254,7 @@ export default function CalendarClient(): JSX.Element {
     axis === 'dates'
       ? (visibleDateRange?.endDate ?? shiftISODate(anchorDate, Math.max(0, visibleLaneCount - 1)))
       : anchorDate;
-  // Month/year only. The grid's lane headers carry weekday and day-of-month, so between them each
-  // date atom appears exactly once on screen.
   const heading = calendarRangeLabel(visibleStart, visibleEnd);
-  // The same context abbreviated, for widths where the long form would clip mid-month.
-  const headingShort = calendarRangeLabel(visibleStart, visibleEnd, 'short');
   const navigate = (direction: 'previous' | 'next'): void => {
     const magnitude = axis === 'people' ? 1 : visibleLaneCount;
     const currentStart = visibleDateRangeRef.current?.startDate ?? anchorDate;
@@ -209,16 +264,14 @@ export default function CalendarClient(): JSX.Element {
   };
 
   return (
-    // `p-2` at the narrowest step, not `p-3`: 8px of inset buys the control row 8px of budget, and
-    // at 320px that row was 27px over its container — enough to push the New button's right border
-    // off the viewport. From `@sm` up the inset returns to the app's normal rhythm.
     <div
       data-calendar-page=""
-      className="flex h-full min-h-0 w-full min-w-0 flex-col gap-3 overflow-hidden p-2 @sm:p-3 @2xl:p-4 @4xl:p-6"
+      className="flex h-full min-h-0 w-full min-w-0 flex-col overflow-hidden"
     >
       <CalendarToolbar
         heading={heading}
-        headingShort={headingShort}
+        headingShort={calendarRangeLabel(visibleStart, visibleEnd, 'short')}
+        headingTiny={calendarRangeLabel(visibleStart, visibleEnd, 'tiny')}
         axis={axis}
         pixelsPerHour={pixelsPerHour}
         onToday={() => {
@@ -227,19 +280,10 @@ export default function CalendarClient(): JSX.Element {
           setHorizontalAnchorKey((current) => current + 1);
           setAnchorDate(today);
         }}
-        onPrevious={() => {
-          navigate('previous');
-        }}
-        onNext={() => {
-          navigate('next');
-        }}
+        onPrevious={navigate.bind(null, 'previous')}
+        onNext={navigate.bind(null, 'next')}
         onAxisChange={(nextAxis) => {
-          // `anchorDate` doubles as "the dates axis's left-most rendered lane": once the canvas
-          // measures a viewport wide enough to show more than one lane, `onVisibleLaneCountChange`
-          // below recenters it backward so `today` lands mid-window with leading context days. That
-          // recentered value is correct for the dates axis, but the people axis is always a single
-          // day — reusing the drifted anchor made switching to People silently compare and render
-          // whatever day happened to be the dates view's left edge instead of today.
+          // The date axis can recenter its left edge as width changes. People must reopen today.
           if (nextAxis === 'people' && axis !== 'people' && anchorDate !== today) {
             visibleDateRangeRef.current = null;
             setVisibleDateRange(null);
@@ -255,24 +299,14 @@ export default function CalendarClient(): JSX.Element {
         layersControl={
           <CalendarLayersMenu layers={dateAxis.layers} layersError={dateAxis.layersError} />
         }
-        comparisonControl={
-          <CalendarComparisonControls
-            workspaces={peopleAxis.sharedWorkspaces}
-            workspaceId={peopleAxis.comparisonOrgId}
-            members={peopleAxis.activeMembers}
-            selectedActorIds={peopleAxis.selectedActorIds}
-            membersPending={peopleAxis.membersPending}
-            onWorkspaceChange={peopleAxis.selectWorkspace}
-            onActorChange={peopleAxis.toggleActor}
-          />
-        }
+        comparisonControl={<CalendarPeopleToolbarControl axisState={peopleAxis} />}
         createControl={
           <CreateBlockForm
             displayTimezone={displayTimezone}
             layers={dateAxis.layers}
             preferences={preferences}
             selection={selection}
-            selectionAnchorRef={selection ? selectionAnchorRef : undefined}
+            selectionAnchorRef={selectionAnchorRef}
             onSelectionConsumed={() => {
               setSelection(null);
             }}
@@ -355,9 +389,7 @@ export default function CalendarClient(): JSX.Element {
       <CalendarSharedItemDetails
         detail={openSharedItem}
         displayTimezone={displayTimezone}
-        onClose={() => {
-          setOpenSharedItem(null);
-        }}
+        onClose={closeSharedItem}
       />
     </div>
   );

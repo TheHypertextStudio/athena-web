@@ -33,9 +33,7 @@ import { useApiListQuery } from '@/lib/query';
 import { calendarLayersDef } from '../calendar-data';
 import { CalendarItemDeleteDialog } from '../item-drawer/status-actions';
 import { CalendarItemPeek } from './calendar-item-peek';
-
-/** Below this width an anchored 352px panel cannot sit beside anything, so the peek becomes a sheet. */
-const ANCHORED_PEEK_QUERY = '(min-width: 40rem)';
+import { CALENDAR_ANCHORED_PEEK_QUERY } from './use-calendar-item-selection';
 
 /** Props for {@link CalendarItemPeekOverlay}. */
 export interface CalendarItemPeekOverlayProps {
@@ -118,7 +116,7 @@ function OpenCalendarItemPeek({
   onDismissOutside,
   onRequestDelete,
 }: OpenCalendarItemPeekProps): JSX.Element {
-  const anchored = useMediaQuery(ANCHORED_PEEK_QUERY);
+  const anchored = useMediaQuery(CALENDAR_ANCHORED_PEEK_QUERY);
   const titleId = useId();
   const layersQuery = useApiListQuery(calendarLayersDef());
   const layer = layersQuery.data?.items.find((candidate) => candidate.id === item.layerId);

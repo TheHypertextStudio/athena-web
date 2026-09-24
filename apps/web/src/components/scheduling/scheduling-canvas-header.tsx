@@ -1,3 +1,4 @@
+import { Plus } from '@docket/ui/icons';
 import type { JSX, ReactNode, RefObject } from 'react';
 
 import { SchedulingAllDayLane } from './scheduling-all-day-lane';
@@ -49,13 +50,10 @@ function SchedulingLaneHeading({
   lane,
   displayTimezone,
   todayDate,
-  compact,
 }: {
   readonly lane: ScheduleLane;
   readonly displayTimezone: string;
   readonly todayDate?: string | undefined;
-  /** Stack the weekday over the day number, for a rail-width canvas. */
-  readonly compact: boolean;
 }): JSX.Element {
   const heading = lane.resourceId === undefined ? scheduleLaneDateHeading(lane.date) : null;
   const isToday = todayDate !== undefined && todayDate === lane.date;
@@ -64,25 +62,12 @@ function SchedulingLaneHeading({
   return (
     <div className="flex min-w-0 flex-col gap-0.5">
       {heading ? (
-        // Stacked in a rail because a rail's scarce axis is horizontal: `TUE` over `11` costs one
-        // extra text line and gives the all-day chips beside it the full lane width, where the
-        // inline form spends that width on a weekday nobody scans for.
-        <p
-          className={`text-title-small text-on-surface flex min-w-0 gap-1.5 ${
-            compact ? 'flex-col items-start gap-0' : 'items-center'
-          }`}
-        >
+        <p className="text-title-small text-on-surface flex min-w-0 items-center gap-1.5">
           {/* The weekday is the least informative atom in the heading — the day number is what a
               person scans for — and it is chrome sitting directly above the events. Dropping it to
               the variant tone keeps every day header quieter than an event's own title, which is
               the emphasis order this surface is supposed to have. */}
-          <span
-            className={`text-on-surface-variant truncate ${
-              compact ? 'text-label-large uppercase' : ''
-            }`}
-          >
-            {heading.weekday}
-          </span>
+          <span className="text-on-surface-variant truncate">{heading.weekday}</span>
           {/* The day number always occupies the same 24px box, chip or not, so every lane heading
               is exactly as tall as every other and the all-day row below stays on one line. */}
           <span
@@ -100,6 +85,141 @@ function SchedulingLaneHeading({
       {showsTimezone ? (
         <p className="text-label-large text-on-surface-variant truncate">{lane.timezone}</p>
       ) : null}
+    </div>
+  );
+}
+
+/** Put the date, create control, and optional day context above Calendar's event rows. */
+function SchedulingCalendarLaneTop({
+  lane,
+  displayTimezone,
+  todayDate,
+  dayContext,
+  reserveDayContextRow,
+  onSelectAllDayRegion,
+}: {
+  readonly lane: ScheduleLane;
+  readonly displayTimezone: string;
+  readonly todayDate?: string | undefined;
+  readonly dayContext: ReactNode;
+  readonly reserveDayContextRow: boolean;
+  readonly onSelectAllDayRegion?: SchedulingCanvasProps['onSelectAllDayRegion'] | undefined;
+}): JSX.Element {
+  return (
+    <>
+      <SchedulingLaneHeading lane={lane} displayTimezone={displayTimezone} todayDate={todayDate} />
+      {onSelectAllDayRegion ? (
+        <button
+          type="button"
+          className="text-primary hover:bg-primary-container focus-visible:ring-ring absolute top-0 right-1 z-20 flex size-8 items-center justify-center rounded-full opacity-0 outline-none hover:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 [@media(pointer:coarse)]:opacity-100"
+          aria-label={`Create all-day item for ${lane.label}`}
+          onClick={(event) => {
+            onSelectAllDayRegion(lane, event.currentTarget);
+          }}
+        >
+          <Plus aria-hidden="true" className="size-5" />
+        </button>
+      ) : null}
+      {reserveDayContextRow ? (
+        <div
+          className="relative z-10 mt-1 h-10 w-full"
+          role={dayContext !== null ? 'group' : undefined}
+          aria-label={dayContext !== null ? 'Day context' : undefined}
+          data-schedule-all-day-lane-context={lane.id}
+        >
+          {dayContext}
+        </div>
+      ) : null}
+    </>
+  );
+}
+
+/** Render aligned date columns while Agenda retains its own compact content flow. */
+function SchedulingHeaderLanes({
+  lanes,
+  displayTimezone,
+  todayDate,
+  viewportRef,
+  presentation,
+  contentWidth,
+  laneWidth,
+  renderItem,
+  renderAllDayLaneContext,
+  onOpenItem,
+  onMoveAllDayItem,
+  onResizeAllDayItem,
+  relationshipMode,
+  onGestureAnnouncementChange,
+  onSelectAllDayRegion,
+}: {
+  readonly lanes: readonly ScheduleLane[];
+  readonly displayTimezone: string;
+  readonly todayDate?: string | undefined;
+  readonly viewportRef: RefObject<HTMLElement | null>;
+  readonly presentation: 'calendar' | 'agenda';
+  readonly contentWidth: number;
+  readonly laneWidth: number;
+  readonly renderItem?: SchedulingCanvasProps['renderItem'] | undefined;
+  readonly renderAllDayLaneContext?: SchedulingCanvasProps['renderAllDayLaneContext'] | undefined;
+  readonly onOpenItem?: SchedulingCanvasProps['onOpenItem'] | undefined;
+  readonly onMoveAllDayItem?: SchedulingCanvasProps['onMoveAllDayItem'] | undefined;
+  readonly onResizeAllDayItem?: SchedulingCanvasProps['onResizeAllDayItem'] | undefined;
+  readonly relationshipMode: SchedulingRelationshipMode;
+  readonly onGestureAnnouncementChange: (announcement: string) => void;
+  readonly onSelectAllDayRegion?: SchedulingCanvasProps['onSelectAllDayRegion'] | undefined;
+}): JSX.Element {
+  const calendarContexts =
+    presentation === 'calendar'
+      ? lanes.map(
+          (lane, laneIndex) =>
+            renderAllDayLaneContext?.({
+              lane,
+              geometry: { laneIndex, laneWidth },
+              onAnnouncementChange: onGestureAnnouncementChange,
+            }) ?? null,
+        )
+      : [];
+  const reserveDayContextRow = calendarContexts.some((context) => context !== null);
+  return (
+    <div className="flex" style={{ width: contentWidth }}>
+      {lanes.map((lane, laneIndex) => (
+        <div
+          key={lane.id}
+          className={`relative min-w-0 shrink-0 ${presentation === 'agenda' ? 'px-1 py-1' : 'px-2 py-1'}`}
+          data-schedule-lane-header={lane.id}
+          style={{ width: laneWidth }}
+        >
+          {presentation === 'calendar' ? (
+            <SchedulingCalendarLaneTop
+              lane={lane}
+              displayTimezone={displayTimezone}
+              todayDate={todayDate}
+              dayContext={calendarContexts[laneIndex]}
+              reserveDayContextRow={reserveDayContextRow}
+              onSelectAllDayRegion={onSelectAllDayRegion}
+            />
+          ) : null}
+          <SchedulingAllDayLane
+            presentation={presentation}
+            lane={lane}
+            laneIndex={laneIndex}
+            lanes={lanes}
+            displayTimezone={displayTimezone}
+            laneWidth={laneWidth}
+            viewportRef={viewportRef}
+            renderItem={renderItem}
+            renderAllDayLaneContext={
+              presentation === 'agenda' ? renderAllDayLaneContext : undefined
+            }
+            onOpenItem={onOpenItem}
+            onMoveAllDayItem={onMoveAllDayItem}
+            onResizeAllDayItem={onResizeAllDayItem}
+            relationshipMode={relationshipMode}
+            onGestureAnnouncementChange={onGestureAnnouncementChange}
+            onSelectAllDayRegion={onSelectAllDayRegion}
+          />
+        </div>
+      ))}
     </div>
   );
 }
@@ -137,7 +257,7 @@ export function SchedulingCanvasHeader({
   /** Today's date in `displayTimezone`, used only to mark the current lane. */
   readonly todayDate?: string | undefined;
   readonly viewportRef: RefObject<HTMLElement | null>;
-  /** Rail-width canvas: stack the lane date and drop the visible `All day` gutter label. */
+  /** Rail-width canvas: drop the visible `All day` gutter label. */
   readonly compact: boolean;
   /** Calendar keeps lane headings; Agenda owns its single date outside this shared header. */
   readonly presentation: 'calendar' | 'agenda';
@@ -182,45 +302,26 @@ export function SchedulingCanvasHeader({
         }`}
         style={{ width: gutterWidth }}
       >
-        <span className={compact ? 'sr-only' : undefined}>All day</span>
+        <span className={compact ? 'sr-only' : 'mt-auto'}>All day</span>
         {gutterSlot}
       </div>
-      <div className="flex" style={{ width: contentWidth }}>
-        {lanes.map((lane, laneIndex) => (
-          <div
-            key={lane.id}
-            className={`min-w-0 shrink-0 ${presentation === 'agenda' ? 'px-1 py-1' : 'px-2 py-2'}`}
-            data-schedule-lane-header={lane.id}
-            style={{ width: laneWidth }}
-          >
-            {presentation === 'calendar' ? (
-              <SchedulingLaneHeading
-                lane={lane}
-                displayTimezone={displayTimezone}
-                todayDate={todayDate}
-                compact={compact}
-              />
-            ) : null}
-            <SchedulingAllDayLane
-              presentation={presentation}
-              lane={lane}
-              laneIndex={laneIndex}
-              lanes={lanes}
-              displayTimezone={displayTimezone}
-              laneWidth={laneWidth}
-              viewportRef={viewportRef}
-              renderItem={renderItem}
-              renderAllDayLaneContext={renderAllDayLaneContext}
-              onOpenItem={onOpenItem}
-              onMoveAllDayItem={onMoveAllDayItem}
-              onResizeAllDayItem={onResizeAllDayItem}
-              relationshipMode={relationshipMode}
-              onGestureAnnouncementChange={onGestureAnnouncementChange}
-              onSelectAllDayRegion={onSelectAllDayRegion}
-            />
-          </div>
-        ))}
-      </div>
+      <SchedulingHeaderLanes
+        lanes={lanes}
+        displayTimezone={displayTimezone}
+        todayDate={todayDate}
+        viewportRef={viewportRef}
+        presentation={presentation}
+        contentWidth={contentWidth}
+        laneWidth={laneWidth}
+        renderItem={renderItem}
+        renderAllDayLaneContext={renderAllDayLaneContext}
+        onOpenItem={onOpenItem}
+        onMoveAllDayItem={onMoveAllDayItem}
+        onResizeAllDayItem={onResizeAllDayItem}
+        relationshipMode={relationshipMode}
+        onGestureAnnouncementChange={onGestureAnnouncementChange}
+        onSelectAllDayRegion={onSelectAllDayRegion}
+      />
     </header>
   );
 }

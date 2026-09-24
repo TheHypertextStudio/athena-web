@@ -11,7 +11,10 @@ import {
 import { type JSX, useRef, useState } from 'react';
 
 import type { DenseScheduleOverflowGroup } from './scheduling-dense-overflow';
-import { scheduleOverlapHorizontalStyle } from './scheduling-overlap-layout';
+import {
+  scheduleOverlapColumnWidth,
+  scheduleOverlapHorizontalStyle,
+} from './scheduling-overlap-layout';
 import { formatScheduleInstantRange } from './scheduling-time-label';
 import type { ScheduleItemOpen, ScheduleLane, SchedulingCanvasProps } from './scheduling-types';
 
@@ -52,7 +55,7 @@ export function SchedulingDenseOverflow({
   const estimatedWidth =
     laneWidth === undefined
       ? Number.POSITIVE_INFINITY
-      : Math.max(0, (laneWidth - leadingInset) / group.placement.columnCount - 2);
+      : scheduleOverlapColumnWidth(group.placement, laneWidth, leadingInset);
   const compactLabel = estimatedWidth < 96;
 
   return (

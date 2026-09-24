@@ -19,7 +19,7 @@
  */
 import type { CalendarItemOut, CalendarLayerOut } from '@docket/planning/calendar-contract';
 import type { WorkPlaceOut } from '@docket/planning/work-location-contract';
-import { Home, Sparkles, Trash2, Workflow } from '@docket/ui/icons';
+import { Ellipsis, Home, Sparkles, Trash2 } from '@docket/ui/icons';
 import {
   Button,
   DialogBody,
@@ -31,7 +31,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
   Select,
-  Surface,
 } from '@docket/ui/primitives';
 import { type JSX, useState } from 'react';
 
@@ -83,7 +82,7 @@ export function CalendarItemWorkspace({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <DialogHeader className="gap-2">
+      <DialogHeader inset="responsive" className="gap-2">
         <EventMasthead
           item={item}
           layer={layer}
@@ -97,6 +96,7 @@ export function CalendarItemWorkspace({
       </DialogHeader>
 
       <DialogBody
+        inset="responsive"
         data-testid="calendar-item-dialog-scroll"
         className="flex flex-col gap-5 overscroll-contain"
       >
@@ -107,7 +107,7 @@ export function CalendarItemWorkspace({
           <GuestList item={item} />
         </div>
 
-        <Surface tone="well" shape="medium" pad="tight">
+        {workPlaces.length > 0 || item.workPlaceId ? (
           <PropertyPanelRow icon={<Home />} label="Saved place">
             <Select
               aria-label="Saved place"
@@ -118,7 +118,7 @@ export function CalendarItemWorkspace({
                 editor.setWorkPlace(event.target.value);
               }}
             >
-              <option value="">No saved place</option>
+              <option value="">Choose a saved place</option>
               {workPlaces.map((place) => (
                 <option key={place.id} value={place.id}>
                   {place.name}
@@ -126,14 +126,14 @@ export function CalendarItemWorkspace({
               ))}
             </Select>
           </PropertyPanelRow>
-        </Surface>
+        ) : null}
 
         <EventArc item={item} onOpenTask={onOpenTask} onOpenItem={onOpenItem} />
 
         <SaveState editor={editor} />
       </DialogBody>
 
-      <DialogFooter className="sm:justify-between">
+      <DialogFooter inset="responsive" className="flex-row justify-between">
         <EventOverflowMenu item={item} onClose={onClose} />
         <AthenaAction item={item} />
       </DialogFooter>
@@ -178,7 +178,7 @@ function EventOverflowMenu({ item, onClose }: EventOverflowMenuProps): JSX.Eleme
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button type="button" variant="ghost" controlSize="sm">
-            <Workflow aria-hidden="true" />
+            <Ellipsis aria-hidden="true" />
             More
           </Button>
         </DropdownMenuTrigger>
@@ -204,12 +204,14 @@ function EventOverflowMenu({ item, onClose }: EventOverflowMenuProps): JSX.Eleme
   );
 }
 
-/** The one primary action: hand the whole moment to Athena. */
+/** Open Athena with this event as context without outranking the event editor. */
 function AthenaAction({ item }: { readonly item: CalendarItemOut }): JSX.Element {
   const { openAthena } = useAthenaPanel();
   return (
     <Button
       type="button"
+      variant="ghost"
+      controlSize="sm"
       onClick={() => {
         const workspaceId = item.linkedTasks[0]?.organizationId;
         openAthena({
@@ -219,7 +221,7 @@ function AthenaAction({ item }: { readonly item: CalendarItemOut }): JSX.Element
       }}
     >
       <Sparkles aria-hidden="true" />
-      Have Athena handle this
+      Ask Athena
     </Button>
   );
 }

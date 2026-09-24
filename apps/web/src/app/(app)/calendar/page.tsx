@@ -2,12 +2,11 @@
  * The full layered-calendar view — server entry (SSR prefetch + hydration).
  *
  * @remarks
- * Prefetches today's calendar-items range and the layers list with the caller's session cookie,
- * dehydrates them, and hands the warm cache to {@link CalendarClient} via `<HydrationBoundary>` —
- * see `docs/engineering/specs/data-layer.md` §7 (and `inbox/page.tsx` for the pattern this mirrors).
- * A failed prefetch degrades gracefully (the client fetches normally); a server/client local-date
- * mismatch across timezones likewise just degrades to a cold client fetch for the correct day,
- * never a wrong day rendered (the client always computes its own local "today").
+ * Prefetches today's calendar items and layers with the caller's session cookie, then passes the
+ * saved timezone into the first render so its date and starting hours are correct before hydration.
+ * The prefetch cache reaches {@link CalendarClient} through `<HydrationBoundary>`; see
+ * `docs/engineering/specs/data-layer.md` §7. Failed reads fall back to client fetching and the
+ * browser's local timezone.
  */
 import { HydrationBoundary } from '@tanstack/react-query';
 import type { JSX } from 'react';
@@ -41,11 +40,12 @@ function dayRangeISO(date: string): CalendarDayRange {
  * @returns the hydrated calendar view.
  */
 export default async function CalendarPage(): Promise<JSX.Element> {
+  const initialNow = new Date().toISOString();
   const queryClient = getServerQueryClient();
   const api = await getServerApi();
   const { startISO, endISO } = dayRangeISO(todayISODate());
 
-  await Promise.allSettled([
+  const [, , preferencesResult] = await Promise.allSettled([
     queryClient.prefetchQuery({
       queryKey: queryKeys.calendarItems(startISO, endISO),
       queryFn: () =>
@@ -62,11 +62,17 @@ export default async function CalendarPage(): Promise<JSX.Element> {
       queryFn: () =>
         unwrap(() => api.v1.me.calendar.layers.$get(), 'Could not load your calendar layers.'),
     }),
+    unwrap(() => api.v1.hub.preferences.$get(), 'Could not load calendar preferences.'),
   ]);
 
   return (
     <HydrationBoundary state={dehydrate(queryClient)}>
-      <CalendarClient />
+      <CalendarClient
+        initialNow={initialNow}
+        initialTimezone={
+          preferencesResult.status === 'fulfilled' ? preferencesResult.value.timezone : undefined
+        }
+      />
     </HydrationBoundary>
   );
 }

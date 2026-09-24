@@ -26,7 +26,7 @@ import { dragLocatorToLocator, openScheduleItemDetail, scheduleItem } from '../h
 import { ORIGIN } from '../helpers/constants';
 import { expect, test } from '../helpers/fixtures';
 
-const ANCHOR_DATE = '2026-07-13';
+const ANCHOR_DATE = new Date().toISOString().slice(0, 10);
 
 /** The API origin the browser context is already authenticated against. */
 const API_ORIGIN = process.env['API_URL'] ?? `https://api.${new URL(ORIGIN).hostname}`;
@@ -60,7 +60,6 @@ async function relationTargets(page: Page, itemId: string): Promise<readonly str
 }
 
 test('drags an event onto a time block and the association survives a reload', async ({ page }) => {
-  await page.clock.setFixedTime(`${ANCHOR_DATE}T17:00:00.000Z`);
   await signUpAndOnboard(page, 'EventIntoBlock');
 
   const block = await createItem(page, {
@@ -79,7 +78,7 @@ test('drags an event onto a time block and the association survives a reload', a
   // Nothing is associated yet — the assertion below has to be able to fail.
   expect(await relationTargets(page, block.id)).toEqual([]);
 
-  await page.goto(`/calendar?date=${ANCHOR_DATE}`, { waitUntil: 'domcontentloaded' });
+  await page.goto('/calendar', { waitUntil: 'domcontentloaded' });
   await expect(page.getByRole('region', { name: 'Schedule' })).toBeVisible();
   await expect(scheduleItem(page, block.id).card).toBeVisible();
   await expect(scheduleItem(page, event.id).card).toBeVisible();

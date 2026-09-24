@@ -27,6 +27,8 @@ export interface ScheduleOverlapPlacement {
   readonly columnIndex: number;
   /** Peak concurrency of the item's cluster. */
   readonly columnCount: number;
+  /** Fixed trailing disclosure width when one readable card represents a compact collision. */
+  readonly trailingSidecarWidth?: number | undefined;
 }
 
 /** Inline horizontal geometry for one collision column. */
@@ -50,6 +52,11 @@ export function scheduleOverlapLeadingOffset(
   const columnCount = Math.max(1, placement.columnCount);
   const columnIndex = Math.max(0, Math.min(columnCount - 1, placement.columnIndex));
   const inset = normalizeScheduleLeadingInset(leadingInset, laneWidth);
+  if (placement.trailingSidecarWidth !== undefined && columnCount === 2) {
+    return columnIndex === 0
+      ? inset + 1
+      : Math.max(inset, laneWidth - placement.trailingSidecarWidth) + 1;
+  }
   const columnWidth = Math.max(0, laneWidth - inset) / columnCount;
   return inset + columnWidth * columnIndex + 1;
 }
@@ -94,6 +101,26 @@ export function scheduleOverlapHorizontalStyle(
 ): ScheduleOverlapHorizontalStyle {
   const columnCount = Math.max(1, placement.columnCount);
   const columnIndex = Math.max(0, Math.min(columnCount - 1, placement.columnIndex));
+  if (
+    laneWidth !== undefined &&
+    placement.trailingSidecarWidth !== undefined &&
+    columnCount === 2
+  ) {
+    const inset = normalizeScheduleLeadingInset(leadingInset, laneWidth);
+    const sidecarWidth = Math.min(
+      Math.max(0, placement.trailingSidecarWidth),
+      Math.max(0, laneWidth - inset),
+    );
+    return columnIndex === 0
+      ? {
+          left: inset + 1,
+          width: `${formatCssNumber(Math.max(0, laneWidth - inset - sidecarWidth - 2))}px`,
+        }
+      : {
+          left: laneWidth - sidecarWidth + 1,
+          width: `${formatCssNumber(Math.max(0, sidecarWidth - 2))}px`,
+        };
+  }
   if (laneWidth !== undefined && leadingInset > 0) {
     const inset = normalizeScheduleLeadingInset(leadingInset, laneWidth);
     const columnWidth = Math.max(0, laneWidth - inset) / columnCount;
@@ -109,6 +136,26 @@ export function scheduleOverlapHorizontalStyle(
     left: columnIndex === 0 ? 1 : `calc(${formatCssNumber(columnPercentage * columnIndex)}% + 1px)`,
     width: `calc(${formatCssNumber(columnPercentage)}% - 2px)`,
   };
+}
+
+/** Return the rendered width of one placed column for density and label decisions. */
+export function scheduleOverlapColumnWidth(
+  placement: ScheduleOverlapPlacement,
+  laneWidth: number,
+  leadingInset = 0,
+): number {
+  const usableWidth = Math.max(
+    0,
+    laneWidth - normalizeScheduleLeadingInset(leadingInset, laneWidth),
+  );
+  if (placement.trailingSidecarWidth !== undefined && placement.columnCount === 2) {
+    const sidecarWidth = Math.min(Math.max(0, placement.trailingSidecarWidth), usableWidth);
+    return Math.max(
+      0,
+      (placement.columnIndex === 0 ? usableWidth - sidecarWidth : sidecarWidth) - 2,
+    );
+  }
+  return Math.max(0, usableWidth / Math.max(1, placement.columnCount) - 2);
 }
 
 /** Keep optional exact coordinates in one total order: valid, invalid, then absent. */

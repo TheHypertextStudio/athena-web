@@ -11,7 +11,7 @@ export interface ScheduleItemSurfacePalette {
   readonly focusIndicator: string;
 }
 
-const CALENDAR_COLOR_SHARE = 8;
+const CALENDAR_COLOR_SHARE = 5;
 
 function suppliedColor(color: string | undefined, fallback: string): string {
   return color === undefined || color.trim().length === 0 ? fallback : color;
@@ -45,8 +45,8 @@ export function scheduleItemSurfacePalette(
     case 'event': {
       const source = suppliedColor(color, 'var(--color-primary)');
       return matchedPalette(
-        `color-mix(in oklab, ${source} ${String(CALENDAR_COLOR_SHARE)}%, var(--color-primary))`,
-        'var(--color-on-primary)',
+        `color-mix(in oklab, ${source} ${String(CALENDAR_COLOR_SHARE)}%, var(--color-surface-container-high))`,
+        'var(--color-on-surface)',
       );
     }
     case 'timebox': {

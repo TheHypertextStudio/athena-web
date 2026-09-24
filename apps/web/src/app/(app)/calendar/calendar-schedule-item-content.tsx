@@ -23,5 +23,5 @@ export function CalendarScheduleItemContent({
   readonly item: CalendarItemOut;
   readonly density: ScheduleItemDensity;
 }): JSX.Element {
-  return <span className="truncate">{item.title}</span>;
+  return <span>{item.title}</span>;
 }

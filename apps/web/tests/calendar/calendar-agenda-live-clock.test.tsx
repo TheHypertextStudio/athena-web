@@ -202,23 +202,22 @@ describe('live calendar viewport heading', () => {
         endDate: '2026-08-17',
       });
     });
-    expect(calendarToolbar.props?.heading).toBe('August 2026');
+    expect(calendarToolbar.props?.heading).toBe('August 16–17, 2026');
 
     act(() => {
       calendarToolbar.props?.onToday();
     });
 
-    expect(calendarToolbar.props?.heading).toBe('July 2026');
+    expect(calendarToolbar.props?.heading).toBe('July 13, 2026');
     expect(displayDateState.setDate).toHaveBeenCalledWith('2026-07-13');
     expect(calendarSurface.props?.horizontalAnchorKey).not.toBe(initialAnchorKey);
   });
 
   it('tracks the date lanes intersecting the horizontal viewport', () => {
     render(<CalendarClient />);
-    expect(calendarToolbar.props?.heading).toBe('July 2026');
+    expect(calendarToolbar.props?.heading).toBe('July 13, 2026');
 
-    // The heading carries month/year only — the grid's lane headers own weekday and day-of-month —
-    // so a range that spans a month boundary is what makes the tracking observable.
+    // The heading follows the dates actually intersecting the viewport, even over a month edge.
     act(() => {
       calendarSurface.props?.onVisibleDateRangeChange({
         startDate: '2026-07-31',
@@ -226,7 +225,7 @@ describe('live calendar viewport heading', () => {
       });
     });
 
-    expect(calendarToolbar.props?.heading).toBe('Jul – Aug 2026');
+    expect(calendarToolbar.props?.heading).toBe('July 31 – August 1, 2026');
   });
 
   it('pages from the visible range after horizontal scrolling', () => {

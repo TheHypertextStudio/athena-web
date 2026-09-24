@@ -27,6 +27,34 @@ function positioned(items: readonly ScheduleItem[]) {
 }
 
 describe('arrangeDenseScheduleItems', () => {
+  it('gives a narrow day one wide event and a compact disclosure for concurrent events', () => {
+    const result = arrangeDenseScheduleItems(
+      positioned([
+        item('a', '09:00', '10:00'),
+        item('b', '09:00', '10:00'),
+        item('c', '09:00', '10:00'),
+      ]),
+      346,
+      { compactSidecarWidth: 56 },
+    );
+
+    expect(result.directItems.map(({ item: direct }) => direct.id)).toEqual(['a']);
+    expect(result.directItems[0]?.placement).toMatchObject({
+      columnIndex: 0,
+      columnCount: 2,
+      trailingSidecarWidth: 56,
+    });
+    expect(result.overflowGroups[0]?.items.map(({ item: hidden }) => hidden.id)).toEqual([
+      'b',
+      'c',
+    ]);
+    expect(result.overflowGroups[0]?.placement).toMatchObject({
+      columnIndex: 1,
+      columnCount: 2,
+      trailingSidecarWidth: 56,
+    });
+  });
+
   it('derives collision capacity from the width left after a cluster inset', () => {
     const collisions = positioned([
       item('a', '09:00', '10:00'),

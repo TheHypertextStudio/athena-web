@@ -57,13 +57,6 @@ describe('Calendar responsive layout contract', () => {
     expect(surface).not.toContain('CalendarReadFailureNotice');
   });
 
-  it('uses a seven-day desktop target instead of three oversized date lanes', () => {
-    const surface = source('apps/web/src/app/(app)/calendar/calendar-scheduling-surface.tsx');
-
-    expect(surface).toContain('minimumLaneWidth={144}');
-    expect(surface).toContain('maximumVisibleLaneCount={7}');
-  });
-
   it('keeps the 320px toolbar on one row with a visible primary action', () => {
     const toolbar = source('apps/web/src/app/(app)/calendar/calendar-toolbar.tsx');
     const create = source('apps/web/src/components/calendar/create-block-form.tsx');
@@ -72,7 +65,7 @@ describe('Calendar responsive layout contract', () => {
     expect(toolbar).toContain('flex-nowrap');
     expect(toolbar).toContain("'h-10 w-10 min-w-10");
     expect(control).toContain("'min-h-10 w-10 min-w-10");
-    expect(create).toContain('aria-label="New"');
+    expect(create).toContain('aria-label={`New ${intent}`}');
     expect(toolbar).not.toContain("'h-9 w-9 min-w-9");
   });
 

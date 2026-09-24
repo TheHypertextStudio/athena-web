@@ -20,7 +20,7 @@ interface ToolbarHandlers {
 /** Render the toolbar with recognizable slot stand-ins for the three axis-gated controls. */
 function renderToolbar(
   axis: CalendarAxis = 'dates',
-  overrides: { readonly headingShort?: string } = {},
+  overrides: { readonly headingShort?: string; readonly headingTiny?: string } = {},
 ): ToolbarHandlers {
   const handlers: ToolbarHandlers = {
     onToday: vi.fn<() => void>(),
@@ -29,8 +29,9 @@ function renderToolbar(
   };
   render(
     <CalendarToolbar
-      heading="August 2026"
+      heading="August 30 – September 2, 2026"
       headingShort={overrides.headingShort}
+      headingTiny={overrides.headingTiny}
       axis={axis}
       pixelsPerHour={72}
       layersControl={<button type="button">Calendars slot</button>}
@@ -60,7 +61,7 @@ describe('CalendarToolbar', () => {
 
   it('makes the heading the only thing that gives, so no control leaves the viewport', () => {
     renderToolbar();
-    const heading = screen.getByRole('heading', { name: 'August 2026' });
+    const heading = screen.getByRole('heading', { name: 'August 30 – September 2, 2026' });
 
     // The heading absorbs slack first and has no floor of its own. A floor here is what pushed the
     // primary action off the screen: at 320px the New button's right edge measured 324px in a 320px
@@ -76,26 +77,31 @@ describe('CalendarToolbar', () => {
     }
   });
 
-  it('shows month/year context without repeating the grid’s date atoms', () => {
+  it('shows the visible date range without exposing ISO dates', () => {
     renderToolbar();
 
-    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('August 2026');
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(
+      'August 30 – September 2, 2026',
+    );
     expect(screen.getByRole('banner').textContent).not.toMatch(/\d{4}-\d{2}-\d{2}/);
   });
 
   it('carries an abbreviated heading for narrow widths without doubling the accessible name', () => {
-    renderToolbar('dates', { headingShort: 'Aug 2026' });
+    renderToolbar('dates', { headingShort: 'Aug 30 – Sep 2', headingTiny: '8/30–9/2' });
     const heading = screen.getByRole('heading', { level: 1 });
 
     // One accessible name, unabbreviated — the two spans the CSS toggles between are both hidden.
-    expect(heading).toHaveAccessibleName('August 2026');
-    expect(heading).toHaveAttribute('title', 'August 2026');
+    expect(heading).toHaveAccessibleName('August 30 – September 2, 2026');
+    expect(heading).toHaveAttribute('title', 'August 30 – September 2, 2026');
 
-    const [short, long] = Array.from(heading.querySelectorAll('span'));
-    expect(short).toHaveTextContent('Aug 2026');
-    expect(short?.className).toContain('@2xl:hidden');
-    expect(long).toHaveTextContent('August 2026');
-    expect(long?.className).toContain('hidden');
+    const [tiny, short, long] = Array.from(heading.querySelectorAll('span'));
+    expect(tiny).toHaveTextContent('8/30–9/2');
+    expect(tiny?.className).toContain('@min-[22rem]:hidden');
+    expect(short).toHaveTextContent('Aug 30 – Sep 2');
+    expect(short?.className).toContain('@min-[22rem]:inline');
+    expect(short?.className).toContain('@4xl:hidden');
+    expect(long).toHaveTextContent('August 30 – September 2, 2026');
+    expect(long?.className).toContain('@4xl:inline');
     for (const span of [short, long]) expect(span).toHaveAttribute('aria-hidden', 'true');
   });
 
@@ -103,7 +109,7 @@ describe('CalendarToolbar', () => {
     renderToolbar();
     const spans = screen.getByRole('heading', { level: 1 }).querySelectorAll('span');
 
-    for (const span of spans) expect(span).toHaveTextContent('August 2026');
+    for (const span of spans) expect(span).toHaveTextContent('August 30 – September 2, 2026');
   });
 
   it('carries exactly one zoom affordance, and only behind the Display menu', () => {

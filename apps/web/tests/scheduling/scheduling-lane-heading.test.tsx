@@ -126,5 +126,6 @@ describe('SchedulingCanvas lane headings', () => {
     );
 
     expect(screen.getByLabelText('Sun, Aug 2 time grid')).toBeInTheDocument();
+    expect(laneHeader('date:2026-08-02').querySelector('p')).toHaveClass('items-center');
   });
 });

@@ -13,6 +13,7 @@ import {
 import { MINUTES_PER_DAY, minutesToPixels } from './scheduling-geometry';
 import {
   normalizeScheduleLeadingInset,
+  scheduleOverlapColumnWidth,
   scheduleOverlapHorizontalStyle,
   scheduleOverlapLeadingOffset,
   type ScheduleOverlapPlacement,
@@ -172,7 +173,7 @@ export function SchedulingItemCard({
         laneWidth,
       )
     : leadingInset;
-  const estimatedWidth = Math.max(0, (laneWidth - visibleLeadingInset) / placement.columnCount - 2);
+  const estimatedWidth = scheduleOverlapColumnWidth(placement, laneWidth, visibleLeadingInset);
   const density = itemDensity(visibleHeight, estimatedWidth);
   const startsAtDayBoundary = visibleBounds.startMinutes === 0;
   const endsAtDayBoundary = visibleBounds.endMinutes === MINUTES_PER_DAY;

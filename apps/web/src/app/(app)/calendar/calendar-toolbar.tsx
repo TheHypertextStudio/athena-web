@@ -13,7 +13,7 @@
  * It is now exactly one row that cannot wrap at any width:
  *
  * ```text
- * [Today] [◀] [▶] [ August 2026 ——— flexible, truncates ]  [Calendars ▾] [People ▾]* [Display ▾] [+ New]
+ * [Today] [◀] [▶] [ Sep 23–24 ——— flexible ]  [Calendars ▾] [People ▾]* [Display ▾] [+ New event]
  * ```
  *
  * Three rules hold that shape:
@@ -77,23 +77,23 @@ interface TrailingSlotProps {
  */
 function TrailingSlot({ children }: TrailingSlotProps): JSX.Element | null {
   if (children === undefined || children === null) return null;
-  return (
-    <span className="flex shrink-0 items-center gap-0.5 @sm:gap-1 @2xl:gap-2">{children}</span>
-  );
+  return <span className="flex shrink-0 items-center gap-0.5 @2xl:gap-2">{children}</span>;
 }
 
 /** Props for the calendar's navigation, view-settings, and create controls. */
 export interface CalendarToolbarProps {
-  /** Month/year context for the visible range — never a weekday or an ISO date. */
+  /** Full inclusive range of visible dates, including year. */
   readonly heading: string;
   /**
-   * The same context abbreviated (`Aug 2026`), shown below `@2xl`.
+   * The same range with abbreviated months and no year, shown below `@4xl`.
    *
    * @remarks
    * Truncation is the row's release valve, but a clipped `August 2...` drops the year while an
    * abbreviated month keeps the whole answer. Defaults to {@link CalendarToolbarProps.heading}.
    */
   readonly headingShort?: string | undefined;
+  /** Numeric local range for containers below 22rem. */
+  readonly headingTiny?: string | undefined;
   /** Which lane axis the canvas is drawing. */
   readonly axis: CalendarAxis;
   /** The live, continuous row height in pixels per hour. */
@@ -114,6 +114,31 @@ export interface CalendarToolbarProps {
   readonly onZoomCommit: (pixelsPerHour: number) => void;
 }
 
+/** Show the selected date immediately, then expand its range when geometry is known. */
+function CalendarToolbarHeading({
+  heading,
+  headingShort,
+  headingTiny,
+}: Pick<CalendarToolbarProps, 'heading' | 'headingShort' | 'headingTiny'>): JSX.Element {
+  return (
+    <h1
+      aria-label={heading}
+      title={heading}
+      className="text-title-small text-on-surface @sm:text-title-medium min-w-0 flex-1 truncate"
+    >
+      <span aria-hidden="true" className="@min-[22rem]:hidden">
+        {headingTiny ?? headingShort ?? heading}
+      </span>
+      <span aria-hidden="true" className="hidden @min-[22rem]:inline @4xl:hidden">
+        {headingShort ?? heading}
+      </span>
+      <span aria-hidden="true" className="hidden @4xl:inline">
+        {heading}
+      </span>
+    </h1>
+  );
+}
+
 /**
  * Render the calendar's one control row.
  *
@@ -123,6 +148,7 @@ export interface CalendarToolbarProps {
 export function CalendarToolbar({
   heading,
   headingShort,
+  headingTiny,
   axis,
   pixelsPerHour,
   layersControl,
@@ -136,7 +162,7 @@ export function CalendarToolbar({
   onZoomCommit,
 }: CalendarToolbarProps): JSX.Element {
   return (
-    <header className="flex min-w-0 shrink-0 flex-nowrap items-center gap-0.5 @sm:gap-1 @2xl:gap-2">
+    <header className="flex min-w-0 shrink-0 flex-nowrap items-center gap-0.5 px-2 pt-2 pb-3 @sm:pt-3 @2xl:gap-2 @2xl:px-4 @2xl:pt-4 @4xl:px-6 @4xl:pt-6">
       {/*
         `Today` follows the same collapse rule as every other labelled control in the row — glyph
         below `@2xl`, word above it. It was the one text button that kept its label at every width,
@@ -171,34 +197,11 @@ export function CalendarToolbar({
         <ChevronRight className="size-4" aria-hidden="true" />
       </Button>
 
-      {/*
-        The heading is the row's release valve and is `min-w-0` on purpose. It used to hold a
-        `min-w-16` floor, which turns a too-narrow row into a *control* pushed past the viewport
-        edge — the New button's right border was measurably cut off at 320px — instead of a slightly
-        shorter month label. Every control now carries a width the row's budget was computed against
-        (see `CALENDAR_CONTROL_CLASS`). At 320px the heading takes the remaining space and truncates
-        while the primary New action remains visible. If a locale ever renders a
-        longer form than that budget allows, this truncates and the primary action stays on screen,
-        which is the right way round.
-
-        Below `@2xl` it renders the abbreviated month, which survives the squeeze intact where the
-        long form would clip to `August 2...` and lose the year; `title` keeps the full month
-        recoverable either way. Both spans are `aria-hidden` and the accessible name comes from
-        `aria-label`, so assistive tech reads one unabbreviated heading rather than the two the CSS
-        toggles between.
-      */}
-      <h1
-        aria-label={heading}
-        title={heading}
-        className="text-title-small text-on-surface @sm:text-title-medium min-w-0 flex-1 truncate"
-      >
-        <span aria-hidden="true" className="@2xl:hidden">
-          {headingShort ?? heading}
-        </span>
-        <span aria-hidden="true" className="hidden @2xl:inline">
-          {heading}
-        </span>
-      </h1>
+      <CalendarToolbarHeading
+        heading={heading}
+        headingShort={headingShort}
+        headingTiny={headingTiny}
+      />
 
       {axis === 'dates' ? <TrailingSlot>{layersControl}</TrailingSlot> : null}
       {axis === 'people' ? <TrailingSlot>{comparisonControl}</TrailingSlot> : null}

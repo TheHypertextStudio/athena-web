@@ -77,7 +77,7 @@ export function EventMasthead({
           rows={1}
           variant="plain"
           aria-label="Title"
-          className="text-headline-small min-w-0 flex-1 resize-none overflow-hidden"
+          className="text-title-large sm:text-headline-small min-w-0 flex-1 resize-none overflow-hidden"
           value={editor.title.value}
           disabled={!editor.canEdit}
           aria-invalid={editor.titleError ? true : undefined}

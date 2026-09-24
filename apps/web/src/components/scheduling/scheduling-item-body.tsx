@@ -49,8 +49,8 @@ interface SchedulingItemBodyProps {
  * because a fourth line is a description, not a title, and a card is not a reading surface.
  */
 function titleLineClamp(height: number, width: number): 1 | 2 | 3 {
-  if (width < 136 || height < 64) return 1;
-  if (width < 180 || height < 96) return 2;
+  if (width < 96 || height < 64) return 1;
+  if (width < 136 || height < 96) return 2;
   return 3;
 }
 
@@ -71,6 +71,8 @@ function ItemBodyContent({
   SchedulingItemBodyProps,
   'density' | 'height' | 'width' | 'timeRange' | 'content'
 >): JSX.Element {
+  const startOnly = width < 136 && timeRange.includes(' – ');
+  const visibleTime = startOnly ? (timeRange.split(' – ')[0] ?? timeRange) : timeRange;
   // A block too short for a time line still gets its title. It used to render as a featureless
   // coloured bar with the title only in the accessibility tree — a dead element on the one surface
   // whose entire job is saying what is happening. Solid leading (line-height = the token's own
@@ -92,9 +94,13 @@ function ItemBodyContent({
       <span className="sticky block w-full truncate" style={STICKY_LABEL_STYLE}>
         {content}
         <span aria-hidden="true"> · </span>
-        <span className="text-body-medium text-(--schedule-item-foreground) tabular-nums">
-          {timeRange}
+        <span
+          aria-hidden={startOnly || undefined}
+          className="text-body-medium text-(--schedule-item-foreground) tabular-nums"
+        >
+          {visibleTime}
         </span>
+        {startOnly ? <span className="sr-only">{timeRange}</span> : null}
       </span>
     );
   }
@@ -116,9 +122,13 @@ function ItemBodyContent({
       >
         {content}
       </span>
-      <span className="text-body-medium block w-full truncate text-(--schedule-item-foreground) tabular-nums">
-        {timeRange}
+      <span
+        aria-hidden={startOnly || undefined}
+        className="text-body-medium block w-full truncate text-(--schedule-item-foreground) tabular-nums"
+      >
+        {visibleTime}
       </span>
+      {startOnly ? <span className="sr-only">{timeRange}</span> : null}
     </span>
   );
 }

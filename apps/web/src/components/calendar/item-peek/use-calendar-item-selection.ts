@@ -13,6 +13,7 @@
  * knows nothing about tiers and its own tests keep passing untouched.
  */
 import type { PopoverVirtualAnchorRef } from '@docket/ui/primitives';
+import { useMediaQuery } from '@docket/ui/hooks';
 import { useCallback, useMemo, useRef, useState } from 'react';
 
 import {
@@ -23,6 +24,9 @@ import {
 
 /** Which surface an event is currently open on. */
 export type CalendarItemTier = 'peek' | 'detail';
+
+/** An anchored event peek needs enough width beside its originating card. */
+export const CALENDAR_ANCHORED_PEEK_QUERY = '(min-width: 40rem)';
 
 /** One open calendar item, and how much of it is showing. */
 export interface CalendarItemSelection {
@@ -60,6 +64,7 @@ export interface CalendarItemSelectionApi {
  * @returns the selection state and its transitions.
  */
 export function useCalendarItemSelection(): CalendarItemSelectionApi {
+  const canAnchorPeek = useMediaQuery(CALENDAR_ANCHORED_PEEK_QUERY);
   const [selection, setSelection] = useState<CalendarItemSelection | null>(null);
   const anchorRef = useRef<CalendarItemAnchor['virtual']>(null);
   const capturedRef = useRef<CalendarItemAnchor | null>(null);
@@ -71,14 +76,17 @@ export function useCalendarItemSelection(): CalendarItemSelectionApi {
     anchorRef.current = null;
   }, []);
 
-  const open = useCallback((itemId: string, anchor: HTMLElement | null): void => {
-    const captured = captureCalendarItemAnchor(itemId, anchor);
-    capturedRef.current = captured;
-    anchorRef.current = captured.virtual;
-    // Without a control to point at there is nothing for a peek to hang off, so the dense-overflow
-    // list and any other synthesized request go straight to the detail dialog.
-    setSelection({ itemId, tier: anchor ? 'peek' : 'detail' });
-  }, []);
+  const open = useCallback(
+    (itemId: string, anchor: HTMLElement | null): void => {
+      const captured = captureCalendarItemAnchor(itemId, anchor);
+      capturedRef.current = captured;
+      anchorRef.current = captured.virtual;
+      // Without a control to point at there is nothing for a peek to hang off, so the dense-overflow
+      // list and any other synthesized request go straight to the detail dialog.
+      setSelection({ itemId, tier: anchor && canAnchorPeek ? 'peek' : 'detail' });
+    },
+    [canAnchorPeek],
+  );
 
   const escalate = useCallback((): void => {
     setSelection((current) => (current ? { itemId: current.itemId, tier: 'detail' } : null));

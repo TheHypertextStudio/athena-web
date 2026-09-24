@@ -1371,7 +1371,7 @@ describe('TabBar', () => {
     expect(onClose).toHaveBeenCalledWith(TAB_B.key);
   });
 
-  it('is its own bar on the canvas, with each tab a detached floating pill', () => {
+  it('keeps the active tab distinct while inactive tabs rest on the canvas', () => {
     const { container } = render(
       <TabBar
         tabs={[TAB_A, TAB_B]}
@@ -1380,12 +1380,9 @@ describe('TabBar', () => {
         onClose={() => undefined}
       />,
     );
-    // The bar reads as its own chrome on the canvas tone — not a panel surface, no divider border.
     const bar = container.firstElementChild as HTMLElement;
     expect(bar).toHaveClass('bg-surface-container');
     expect(bar).not.toHaveClass('bg-surface-container-low', 'border-b');
-    // Every tab is a detached pill at the control radius, NOT welded to the panel below: no
-    // top-only rounding, no self-stretch.
     const activeTab = assertDefined(
       screen.getByText('Q3 Launch').closest<HTMLElement>('[role="tab"]'),
     );
@@ -1396,13 +1393,10 @@ describe('TabBar', () => {
       expect(tab).toHaveClass('rounded-md');
       expect(tab).not.toHaveClass('rounded-t-lg', 'self-stretch');
     }
-    // State is pure tonal hierarchy — no ring, no shadow, no chip selection role. The active pill
-    // wears the content panel's own `surface` tone (the open document's layer); the inactive pill
-    // rests one ramp step above the strip so it reads as a pill rather than vanishing into it.
     expect(activeTab).toHaveClass('bg-surface', 'text-on-surface');
     expect(activeTab).not.toHaveClass('bg-secondary-container', 'shadow-sm', 'ring-1');
-    expect(inactiveTab).toHaveClass('bg-surface-container-high', 'text-on-surface-variant');
-    expect(inactiveTab).not.toHaveClass('bg-secondary-container', 'ring-1', 'shadow-sm');
+    expect(inactiveTab).toHaveClass('text-on-surface-variant', 'hover:bg-surface-container-high');
+    expect(inactiveTab).not.toHaveClass('bg-surface-container-high');
   });
 
   it('gives each tab a bounded width with a flexing, truncating title and a right-pinned close', () => {

@@ -19,26 +19,20 @@
  * truncates with an ellipsis, while the close button is pinned to the right edge (`shrink-0`);
  * the two never overlap regardless of title length. The title is
  * the host's routing anchor (via {@link TabBarProps.renderLink}, which is handed the flex classes
- * so the anchor itself participates in the tab's flex row). A crowded bar **scrolls horizontally
- * only** — the strip clips vertical overflow so the chrome never grows a second row or a vertical
- * scrollbar. An always-present **searchable switcher** pinned at the right edge lists *every* open
- * document (type glyph + title) so the caller can jump to or close any tab even when dozens are
- * open and most have scrolled out of view. The switcher is 352px below the desktop breakpoint and
+ * so the anchor itself participates in the tab's flex row). Once more than five documents are
+ * open, the strip shows the active document and its nearest neighbors (or the last three when
+ * none is active). It can still scroll horizontally without growing a second row. The pinned
+ * **searchable switcher** lists *every* open document (type glyph + title) so the caller can jump
+ * to or close one that is outside the strip. The switcher is 352px below the desktop breakpoint and
  * caps at 480px on desktop, opens directly into its search field from the trigger or
  * Command/Control+Shift+A, and uses ordinary Tab order across each link and close action instead
  * of imposing menu semantics on a compound interactive row.
  *
  * @remarks Surface model — the bar is its **own bar on the canvas**: its container inherits the
- * shell's tinted `surface-container` tone (no panel surface, no divider border), so it reads as
- * chrome floating above the main content panel rather than a strip *inside* it. Each tab is a
- * **detached pill** at the control radius, vertically centred, and a consistent height. The bar
- * keeps a real visual gap above the main panel (the shell gutter) so the strip and the panel read
- * as two separate layers. Tab state is pure tonal hierarchy, no ring and no shadow: **inactive**
- * pills rest one ramp step above the strip (`surface-container-high`, muted `on-surface-variant`
- * ink) and step to `surface-container-highest` on hover; the **active** pill wears the content
- * panel's own `surface` tone — the tab for the open document sits on the same layer as the
- * document, which is what distinguishes this chrome from the selection-role (`secondary-container`)
- * grammar that content chips use.
+ * shell's tinted `surface-container` tone. Inactive tabs rest directly on that canvas and gain a
+ * fill on hover or keyboard focus. Only the active tab carries a persistent `surface` fill. This
+ * keeps a crowded strip quiet while preserving the selected document's identity. Close controls
+ * remain available on every tab and become visible on interaction, including touch.
  *
  * @remarks Inline responsiveness — the icon-only controls (each tab's close button and the
  * pinned switcher trigger) carry a {@link Tooltip} naming them on hover/focus, so a wordless
@@ -61,6 +55,10 @@ export { TYPE_LABEL, tabLabel };
 
 /** The shared 40px block occupied by the visible (desktop) document-tab row. */
 export const TAB_BAR_BLOCK_SIZE_CLASS = 'h-10';
+
+/** Keep small sets intact, then leave enough width for three readable document titles. */
+const MAX_FULL_STRIP_TABS = 5;
+const CROWDED_STRIP_TABS = 3;
 
 /** Props for {@link TabBar}. */
 export interface TabBarProps {
@@ -93,6 +91,26 @@ export function TabBar({
   renderLink,
   onClose,
 }: TabBarProps): React.JSX.Element | null {
+  const tablistRef = React.useRef<HTMLDivElement>(null);
+  const activeIndex = tabs.findIndex((tab) => tab.key === activeKey);
+  const windowStart =
+    activeIndex < 0
+      ? tabs.length - CROWDED_STRIP_TABS
+      : Math.min(Math.max(0, activeIndex - 1), tabs.length - CROWDED_STRIP_TABS);
+  const visibleTabs =
+    tabs.length <= MAX_FULL_STRIP_TABS
+      ? tabs
+      : tabs.slice(windowStart, windowStart + CROWDED_STRIP_TABS);
+
+  React.useLayoutEffect(() => {
+    const selectedTab = tablistRef.current?.querySelector<HTMLElement>(
+      '[role="tab"][aria-selected="true"]',
+    );
+    // Browser engines provide this method, but the jsdom test runtime does not.
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+    selectedTab?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
+  }, [activeKey, tabs]);
+
   if (tabs.length === 0) return null;
 
   return (
@@ -109,11 +127,12 @@ export function TabBar({
         )}
       >
         <div
+          ref={tablistRef}
           role="tablist"
           aria-label="Open documents"
           className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto overflow-y-hidden"
         >
-          {tabs.map((tab) => (
+          {visibleTabs.map((tab) => (
             <TabItem
               key={tab.key}
               tab={tab}

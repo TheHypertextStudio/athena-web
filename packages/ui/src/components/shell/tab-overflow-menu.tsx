@@ -143,7 +143,7 @@ export function OverflowMenu({
             type="button"
             aria-label={`Open documents (${String(tabs.length)})`}
             className={cn(
-              'bg-surface-container-high text-on-surface-variant hover:bg-surface-container-highest hover:text-on-surface data-[state=open]:bg-surface-container-highest data-[state=open]:text-on-surface text-label-medium flex h-8 shrink-0 items-center gap-0.5 self-center rounded-md px-2 transition-colors',
+              'text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface data-[state=open]:bg-surface-container-high data-[state=open]:text-on-surface text-label-medium flex h-8 shrink-0 items-center gap-0.5 self-center rounded-md px-2 transition-colors',
               menuFocusRing,
             )}
           >

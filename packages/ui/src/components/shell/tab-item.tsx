@@ -38,7 +38,7 @@ export function TabItem({ tab, active, renderLink, onClose }: TabItemProps): Rea
         'group text-label-large relative flex h-8 max-w-60 min-w-24 flex-1 shrink items-center rounded-md transition-colors',
         active
           ? 'bg-surface text-on-surface'
-          : 'bg-surface-container-high text-on-surface-variant hover:bg-surface-container-highest hover:text-on-surface',
+          : 'text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface focus-within:bg-surface-container-high',
       )}
     >
       {renderLink(
@@ -61,7 +61,10 @@ export function TabItem({ tab, active, renderLink, onClose }: TabItemProps): Rea
               onClose(tab.key);
             }}
             className={cn(
-              'hover:bg-surface-container-highest mr-1 flex size-6 shrink-0 items-center justify-center rounded-md opacity-60 transition-opacity hover:opacity-100 focus-visible:opacity-100',
+              'hover:bg-surface-container-highest mr-1 flex size-6 shrink-0 items-center justify-center rounded-md transition-opacity hover:opacity-100 focus-visible:opacity-100',
+              active
+                ? 'opacity-70'
+                : 'opacity-0 group-focus-within:opacity-70 group-hover:opacity-70 [@media(hover:none)]:opacity-70',
               focusRing,
             )}
           >

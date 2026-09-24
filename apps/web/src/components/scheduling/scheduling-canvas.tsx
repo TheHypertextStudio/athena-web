@@ -12,7 +12,7 @@ import {
 } from 'react';
 
 import { SchedulingCanvasHeader } from './scheduling-canvas-header';
-import { SchedulingCanvasMeasuring } from './scheduling-canvas-measuring';
+import { needsCanvasMeasurement, SchedulingCanvasMeasuring } from './scheduling-canvas-measuring';
 import { SchedulingCanvasNotice } from './scheduling-canvas-notice';
 import { arrangeDenseScheduleItems } from './scheduling-dense-overflow';
 import { SchedulingDenseOverflow } from './scheduling-dense-overflow-ui';
@@ -24,14 +24,14 @@ import {
   normalizeScheduleLeadingInset,
   positionScheduleLaneItems,
 } from './scheduling-overlap-layout';
-import { presentSchedulingRegion, SchedulingRegionPreview } from './scheduling-region-preview';
+import {
+  presentSchedulingRegion,
+  presentSelectedRegion,
+  SchedulingRegionPreview,
+} from './scheduling-region-preview';
 import { scheduleWallPositionForInstant } from './scheduling-time-axis';
 import { SchedulingTimeGrid } from './scheduling-time-grid';
-import type {
-  ScheduleLane,
-  ScheduleRegionSelection,
-  SchedulingCanvasProps,
-} from './scheduling-types';
+import type { ScheduleRegionSelection, SchedulingCanvasProps } from './scheduling-types';
 import { useSchedulingDensePromotion } from './use-scheduling-dense-promotion';
 import { useSchedulingRegionSelection } from './use-scheduling-region-selection';
 import { useSchedulingRelationshipMode } from './use-scheduling-relationship-mode';
@@ -49,23 +49,14 @@ const MINIMUM_COARSE_POINTER_PIXELS = 40;
  */
 const ZOOM_GESTURE_DELTA_SCALE = 180;
 
-/** Present a selected region against its current lane after a date-axis update. */
-function presentSelectedRegion(
-  selectedRegion: ScheduleRegionSelection | null | undefined,
-  lanes: readonly ScheduleLane[],
-  displayTimezone: string,
-): ReturnType<typeof presentSchedulingRegion> | null {
-  if (!selectedRegion) return null;
-  const lane = lanes.find((candidate) => candidate.id === selectedRegion.lane.id);
-  return lane
-    ? presentSchedulingRegion({
-        lane,
-        startMinutes: selectedRegion.startMinutes,
-        endMinutes: selectedRegion.endMinutes,
-        displayTimezone,
-      })
-    : null;
+/** Use the narrow overlap sidecar only while one day lane has limited space. */
+function compactSidecarWidthForLane(
+  sidecarWidth: number | undefined,
+  laneWidth: number,
+): number | undefined {
+  return laneWidth < 420 ? sidecarWidth : undefined;
 }
+
 /** Render a 24-hour fluid grid while consumers own data, persistence, and policy. */
 export default function SchedulingCanvas(props: SchedulingCanvasProps): JSX.Element {
   const {
@@ -240,10 +231,10 @@ export default function SchedulingCanvas(props: SchedulingCanvasProps): JSX.Elem
                 : undefined,
             leadingInsetByCluster,
             minimumReadableItemWidth: minimumReadableTimedItemWidth,
-            compactSidecarWidth:
-              compactOverlapSidecarWidth !== undefined && geometry.laneWidth < 420
-                ? compactOverlapSidecarWidth
-                : undefined,
+            compactSidecarWidth: compactSidecarWidthForLane(
+              compactOverlapSidecarWidth,
+              geometry.laneWidth,
+            ),
           }),
           leadingInsetByCluster,
         };
@@ -260,7 +251,7 @@ export default function SchedulingCanvas(props: SchedulingCanvasProps): JSX.Elem
       resolveTimedItemLeadingInset,
     ],
   );
-  if (viewportWidth === undefined && observedWidth === 0) {
+  if (needsCanvasMeasurement(viewportWidth, observedWidth)) {
     return <SchedulingCanvasMeasuring viewportRef={viewportRef} options={props} />;
   }
   return (
@@ -326,7 +317,8 @@ export default function SchedulingCanvas(props: SchedulingCanvasProps): JSX.Elem
                   aria-label={`${lane.label} time grid`}
                   // A single hairline between lanes, and none after the last one — the separator
                   // exists to divide days, not to draw a box around the grid.
-                  className={`relative shrink-0 touch-none ${todayDate === lane.date ? 'bg-primary-container/10' : ''} ${laneIndex === lanes.length - 1 ? '' : 'border-outline-variant/30 border-r'}`}
+                  className={`data-[today=true]:bg-primary-container/10 relative shrink-0 touch-none ${laneIndex === lanes.length - 1 ? '' : 'border-outline-variant/30 border-r'}`}
+                  data-today={String(todayDate === lane.date)}
                   disabled={calendarSlotTarget === undefined}
                   startMinutesAt={(clientY, bounds) =>
                     pixelsToMinutes(clientY - bounds.top, effectivePixelsPerHour, snapMinutes)

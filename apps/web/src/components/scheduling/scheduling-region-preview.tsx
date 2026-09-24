@@ -4,7 +4,7 @@ import type { JSX, Ref } from 'react';
 import { minutesToPixels } from './scheduling-geometry';
 import { formatScheduleInstantRange } from './scheduling-time-label';
 import { resolveScheduleWallInstant } from '@docket/planning/wall-time';
-import type { ScheduleLane } from './scheduling-types';
+import type { ScheduleLane, ScheduleRegionSelection } from './scheduling-types';
 
 /** User-facing meaning of one wall-clock region preview. */
 export interface SchedulingRegionPreviewPresentation {
@@ -54,6 +54,24 @@ export function presentSchedulingRegion({
     label: range,
     announcement: `Selected ${lane.label}, ${range}.`,
   };
+}
+
+/** Present a selected region against its current lane after a date-axis update. */
+export function presentSelectedRegion(
+  selectedRegion: ScheduleRegionSelection | null | undefined,
+  lanes: readonly ScheduleLane[],
+  displayTimezone: string,
+): SchedulingRegionPreviewPresentation | null {
+  if (!selectedRegion) return null;
+  const lane = lanes.find((candidate) => candidate.id === selectedRegion.lane.id);
+  return lane
+    ? presentSchedulingRegion({
+        lane,
+        startMinutes: selectedRegion.startMinutes,
+        endMinutes: selectedRegion.endMinutes,
+        displayTimezone,
+      })
+    : null;
 }
 
 /** Render an exact, visible label over the region being created. */

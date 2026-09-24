@@ -7,6 +7,14 @@ import { deriveScheduleTicks } from './scheduling-time-axis';
 import { deriveInitialScheduleScrollMinutes } from './scheduling-initial-scroll';
 import type { SchedulingCanvasProps } from './scheduling-types';
 
+/** Show the dated measuring canvas until the scrollport reports its first width. */
+export function needsCanvasMeasurement(
+  viewportWidth: number | undefined,
+  observedWidth: number,
+): boolean {
+  return viewportWidth === undefined && observedWidth === 0;
+}
+
 /** Show the selected date and starting hours while the canvas measures its lane width. */
 export function SchedulingCanvasMeasuring({
   viewportRef,

@@ -1376,7 +1376,7 @@ describe('SchedulingCanvas', () => {
     return cell;
   };
 
-  it('holds the compact axis to whole hours and a 44px gutter however far it is zoomed', () => {
+  it('holds the compact axis to whole hours and a 56px gutter however far it is zoomed', () => {
     const { rerender } = render(
       <SchedulingCanvas
         displayTimezone="UTC"
@@ -1386,13 +1386,13 @@ describe('SchedulingCanvas', () => {
       />,
     );
 
-    // 144px/hour puts 72px between half-hours — well past the 44px a label needs — so the full
+    // 144px/hour puts 72px between half-hours — well past the 56px reserved for labels — so the full
     // axis would label every 30 minutes here. `12 AM` cannot say which half of the hour it means,
     // so the compact form floors the interval at an hour instead of printing the same label twice.
     expect(document.querySelectorAll('[data-schedule-tick="major"]')).toHaveLength(25);
     expect(document.querySelector('[data-schedule-label="60"]')).toHaveTextContent(/^1\s?AM$/);
     expect(document.querySelector('[data-schedule-label="30"]')).toBeNull();
-    expect(gutterCell()).toHaveStyle({ width: '44px' });
+    expect(gutterCell()).toHaveStyle({ width: '56px' });
 
     // The threshold is the *measured* width, not the zoom: the same canvas one pixel into the full
     // band labels half-hours and pays 88px for the room to do it.

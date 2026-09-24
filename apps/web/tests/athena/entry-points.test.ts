@@ -31,7 +31,7 @@ describe('ambient Athena entry points', () => {
       'apps/web/src/components/calendar/item-drawer/calendar-item-workspace.tsx',
     );
     expect(calendar).toContain('useAthenaPanel');
-    expect(calendar).toContain('Have Athena handle this');
+    expect(calendar).toContain('Ask Athena');
     expect(calendar).toContain("source: { type: 'calendar_item'");
   });
 

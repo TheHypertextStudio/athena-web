@@ -134,7 +134,7 @@ function CalendarPeopleToolbarControl({
 }
 
 /** Render the unified calendar page over the shared scheduling canvas. */
-export default function CalendarClient({
+export function CalendarClientWithInitialData({
   initialNow,
   initialTimezone,
 }: CalendarClientProps): JSX.Element {
@@ -393,4 +393,9 @@ export default function CalendarClient({
       />
     </div>
   );
+}
+
+/** Mount Calendar without server props when the offline route table owns navigation. */
+export default function CalendarClient(): JSX.Element {
+  return <CalendarClientWithInitialData />;
 }

@@ -4,7 +4,7 @@
  * @remarks
  * Prefetches today's calendar items and layers with the caller's session cookie, then passes the
  * saved timezone into the first render so its date and starting hours are correct before hydration.
- * The prefetch cache reaches {@link CalendarClient} through `<HydrationBoundary>`; see
+ * The prefetch cache reaches {@link CalendarClientWithInitialData} through `<HydrationBoundary>`; see
  * `docs/engineering/specs/data-layer.md` §7. Failed reads fall back to client fetching and the
  * browser's local timezone.
  */
@@ -16,7 +16,7 @@ import { queryKeys } from '@/lib/query-keys';
 import { dehydrate, getServerApi, getServerQueryClient } from '@/lib/query-server';
 import { todayISODate } from '@/lib/today';
 
-import CalendarClient from './calendar-client';
+import { CalendarClientWithInitialData } from './calendar-client';
 
 /** An instant range, exclusive of `endISO`, over which calendar items are queried. */
 interface CalendarDayRange {
@@ -67,7 +67,7 @@ export default async function CalendarPage(): Promise<JSX.Element> {
 
   return (
     <HydrationBoundary state={dehydrate(queryClient)}>
-      <CalendarClient
+      <CalendarClientWithInitialData
         initialNow={initialNow}
         initialTimezone={
           preferencesResult.status === 'fulfilled' ? preferencesResult.value.timezone : undefined

@@ -97,7 +97,7 @@ describe('SchedulingCanvas item presentation', () => {
 
     const card = assertDefined(document.querySelector<HTMLElement>('[data-schedule-item="a"]'));
     expect(card).toHaveAttribute('data-item-density', 'full');
-    expect(card.querySelector('.text-title-small')).toHaveClass('line-clamp-3');
+    expect(card.querySelector('.text-title-small')).toHaveClass('line-clamp-2');
   });
 
   it('keeps exact item details discoverable on every visual density', () => {

@@ -17547,3 +17547,17 @@ xhigh` passes (10 finder angles each, one-vote verification, a gap sweep) agains
   runs fail before jobs start; its gateway was released directly through Cloud Build and Cloud Run.
   The local Docket release browser test stalled at Docker startup because Docker Desktop did not
   answer `docker run` or `docker info`.
+
+### 2026-09-24 production follow-up: submit prepared work in the trigger tick
+
+- **Observed**: The production OAuth redirect renewed the saved grant, Settings again showed Mac
+  Studio as Ready and In use, and a fresh Athena prompt returned `4` through LM Studio. The first
+  scheduled rerun of the existing private assignment created one prepared session at 16:50 UTC,
+  but it failed as `work_expired` at the next scheduler tick, with no relay work or proposal.
+- **Cause and fix**: The cron route captured `now` before `sweepAthenaAssignmentTriggers` created
+  the prepared delegation. It reused that earlier cutoff for `sweepLatticeDelegations`, so the new
+  delegation's `nextPollAt` was a few milliseconds in the future and missed the submission pass.
+  Its two-minute deadline expired before the next five-minute scheduler tick. Capture a new time
+  after trigger creation for the delegation sweep so a newly prepared run can submit immediately.
+- **Validation**: The focused cron authorization route tests pass. Production relay submission and
+  sealed-result acceptance still require a fresh run after this correction deploys.

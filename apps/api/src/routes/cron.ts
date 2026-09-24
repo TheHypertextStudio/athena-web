@@ -310,7 +310,9 @@ const cron = new Hono()
     const now = new Date();
     const triggers = await sweepAthenaAssignmentTriggers(now);
     const delegations = await sweepLatticeDelegations(
-      now,
+      // Triggered assignments prepare their delegation after the cutoff above was captured.
+      // Sweep at the current time so newly prepared work can submit in this same tick.
+      new Date(),
       latticeDelegationDependencies,
       await readLatticeServiceControls(),
     );

@@ -8,6 +8,16 @@
 
 ## Active Tasks
 
+### [DETAIL-HEADER-STACKING-001] Keep detail content beneath the pinned header
+
+- **Status**: REVIEW
+- **Started**: 2026-09-23
+- **Priority**: P1
+- **Description**: Scrolled detail content could paint over the pinned header, obscuring identity and tabs.
+- **Approach**: Give the shared detail body a zero-level stacking context so positioned descendants stay beneath the existing z-10 header.
+- **Validation**: The current-main stylesheet and bottom-padding rule are preserved. `git diff --check` passed before integration. No tests were run. A local screenshot remains unavailable because the detail route returned 404 without local entity data and the development process exceeded its 4 GB heap.
+- **Blockers**: Visual confirmation on an authenticated detail page remains outstanding.
+
 ### [DAILY-PLAN-001] Daily planning flow and planned-versus-actual history
 
 - **Status**: REVIEW

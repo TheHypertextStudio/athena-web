@@ -17,6 +17,7 @@
 import { db, latticeConnection, latticeCredential } from '@docket/db';
 import {
   LatticeUnavailableError,
+  LatticeOAuthError,
   latticeCredentialNeedsRefresh,
   parseLatticeCredential,
   refreshLatticeCredential,
@@ -194,8 +195,9 @@ export async function loadStoredLatticeCredential(
  *
  * @param connection - The owner-matched connection row.
  * @returns The usable credential.
- * @throws {LatticeUnavailableError} `not_connected` when there is no approved grant, or
- * `authorization_expired` when the refresh is refused.
+ * @throws {LatticeUnavailableError} `not_connected` when there is no approved grant,
+ * `authorization_expired` when its refresh token is invalid, or `gateway_error` for a retryable
+ * token-endpoint or database failure.
  */
 export async function loadUsableLatticeCredential(
   connection: LatticeConnectionRow,
@@ -207,15 +209,45 @@ export async function loadUsableLatticeCredential(
   if (!latticeCredentialNeedsRefresh(parsed)) return parsed;
 
   try {
-    const refreshed = await refreshLatticeCredential(latticeOAuthConfig(), parsed);
-    await storeLatticeCredential(connection.id, connection.ownerUserId, refreshed);
-    return refreshed;
+    return await db.transaction(async (tx) => {
+      // Refresh tokens rotate. Lock and re-read the stored grant so concurrent requests, including
+      // requests handled by another API instance, cannot both redeem the same token.
+      const [row] = await tx
+        .select({ id: latticeCredential.id, ciphertext: latticeCredential.ciphertext })
+        .from(latticeCredential)
+        .where(
+          and(
+            eq(latticeCredential.connectionId, connection.id),
+            eq(latticeCredential.ownerUserId, connection.ownerUserId),
+          ),
+        )
+        .for('update')
+        .limit(1);
+      const current = row?.ciphertext
+        ? parseLatticeCredential(unsealCredential(row.ciphertext))
+        : null;
+      if (!row || current?.kind !== 'lattice_oauth') {
+        throw new LatticeUnavailableError('not_connected', 'no approved Lattice grant is stored');
+      }
+      if (!latticeCredentialNeedsRefresh(current)) return current;
+
+      const refreshed = await refreshLatticeCredential(latticeOAuthConfig(), current);
+      await tx
+        .update(latticeCredential)
+        .set({ ciphertext: sealCredential(JSON.stringify(refreshed)) })
+        .where(eq(latticeCredential.id, row.id));
+      return refreshed;
+    });
   } catch (cause) {
     if (cause instanceof LatticeUnavailableError) throw cause;
-    // Any refusal at the token endpoint means this grant will not work again; only re-consent
-    // can fix it, so that is what the person is told.
+    // A revoked refresh token requires consent again. Transport, provider, and database errors can
+    // recover, so leave the approved grant in place and report a retryable gateway failure.
+    const reason =
+      cause instanceof LatticeOAuthError && cause.code === 'invalid_grant'
+        ? 'authorization_expired'
+        : 'gateway_error';
     throw new LatticeUnavailableError(
-      'authorization_expired',
+      reason,
       cause instanceof Error ? cause.message : 'Lattice token refresh failed',
     );
   }

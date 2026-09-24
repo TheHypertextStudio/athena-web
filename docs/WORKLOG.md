@@ -17567,3 +17567,15 @@ xhigh` passes (10 finder angles each, one-vote verification, a gap sweep) agains
   images now copy the complete pruned source before `pnpm install`; this keeps pnpm's install
   snapshot aligned with the files its build command verifies. Local Docker Desktop did not answer
   a six-second daemon probe, so the hosted image build remains the validation gate.
+- **Refresh lifecycle**: After the corrected scheduler deployed, the production device read briefly
+  reported `authorization_expired`; an immediate retry returned the same selected, reachable Mac
+  Studio without relinking. A local rotating-token issuer reproduced two faults: concurrent Docket
+  requests redeemed one stored refresh token twice, and a temporary token-endpoint failure was
+  presented as a revoked grant. Refresh now locks and re-reads the credential row before exchange,
+  persists the rotated token in that transaction, and reserves the reconnect state for
+  `invalid_grant`. Focused refresh, OAuth, device, delegation, type, and lint checks pass; a live
+  expiry boundary after deployment still needs verification.
+- **Production durable proof**: The existing private assignment fired once after the scheduler
+  correction. Session `01M3A8XEBQC2RHCV0T0YQRQMGV` returned from Mac Studio work
+  `work_01M3A8XE5RBD8T4S04X5FC653S` with a completed sealed relay result and one pending proposal
+  on the original task. The trigger was disabled after that run. The proposal remains unapproved.

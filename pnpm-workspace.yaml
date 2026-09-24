@@ -5,6 +5,10 @@ packages:
   - 'services/*'
   - 'tooling/*'
 
+# A fresh worktree must choose its install scope explicitly. The pnpm default silently installs
+# this entire 30-package workspace before a `pnpm exec` or `pnpm run` command can start.
+verifyDepsBeforeRun: error
+
 # Force a single @types/node (matching the Node 26 default runtime) across the whole
 # graph so transitive peers don't drift to an older major. Keeps the dependency tree
 # deduped on one Node typings version, consistent with engines.node ">=24.15 <27".

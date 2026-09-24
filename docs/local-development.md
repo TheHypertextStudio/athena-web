@@ -14,6 +14,19 @@ local configuration; installs repository-owned Git hooks and Conventional Commit
 the database; and runs the returning-user passkey journey against an isolated temporary database.
 Only after that journey passes does it start the normal development stack.
 
+`pnpm run` and `pnpm exec` fail fast when a new worktree has not installed dependencies. This is
+intentional: pnpm otherwise starts a full workspace install before the requested command runs.
+Install explicitly for the work you are doing. For a Web task, use
+`pnpm install --frozen-lockfile --filter @docket/root --filter '@docket/web...'` to include the root
+tools, Web, and its workspace dependencies. Use the affected package's filter for other work.
+`./bootstrap` remains the full setup path for a new primary checkout.
+
+Turbo shares its local task cache across linked worktrees. The Web production build excludes
+`.next/dev` from cached outputs because Next.js 16 writes live development artifacts there. Those
+files remain in each checkout for fast development but do not belong in a production build archive.
+The pnpm package store is also shared. Each checkout still needs its own workspace links so
+`@docket/*` imports resolve to that checkout's source.
+
 No global bootstrap installation, Docker daemon, local TLS certificate, `sudo`, cloud account, or
 provider credential is required. If Node.js, Corepack, or Git is missing, `./bootstrap check` names
 the missing prerequisite and the kind of installation required rather than failing later in an
@@ -62,9 +75,11 @@ unchanged.
 
 The repository reads Conventional Commit scopes from `COMMIT_SCOPES.txt`. Its `commit-msg` hook
 enforces that policy; `pre-commit` scans for secrets, runs staged formatting and linting, and checks
-the design-token policy; `pre-push` runs typecheck, lint, and the full test graph. Merge-commit hooks
-enforce the repository's linear-history policy, while local Git configuration uses rebase and
-fast-forward-only pulls. Personal author identity and global Git preferences remain untouched.
+the design-token policy. The installer removes its old full-suite `pre-push` hook. Run affected
+checks while developing and review that evidence before the one delivery push; CI runs the complete
+release graph. Merge-commit hooks enforce the repository's linear-history policy, while local Git
+configuration uses rebase and fast-forward-only pulls. Personal author identity and global Git
+preferences remain untouched.
 
 ## Optional Portless HTTPS mode
 

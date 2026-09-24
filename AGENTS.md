@@ -1,7 +1,7 @@
 # AGENTS.md - Project Athena Agent Guidelines
 
-> **Version**: 2.2.1
-> **Last Updated**: 2026-09-01
+> **Version**: 2.3.0
+> **Last Updated**: 2026-09-23
 > **Applies To**: All AI coding agents working on Project Athena
 
 This document defines the operational framework for AI agents contributing to Project Athena. All agents MUST adhere to these guidelines to ensure consistent, high-quality, autonomous development.
@@ -227,6 +227,17 @@ Hosted runner time is a finite production resource. Agents MUST validate locally
 the change requires, and make **one push per coherent delivery** after the local release checks pass.
 Do not push intermediate diagnostic commits or push each atomic commit separately.
 
+Developer time and local compute are finite resources too. Validate the changed behavior and its
+affected package graph while editing. Record a passing check against the source state it checked;
+do not repeat it because a workflow changed state, a commit was created, or a rebase had no relevant
+conflicts. Run a check again only when changed source or dependencies can affect its result. Stop
+running broader checks once the evidence answers the release risk. A failed check calls for diagnosis
+and a focused rerun, not a restart of the whole validation sequence.
+
+A fresh worktree has no installed dependencies. Install the affected workspace scope explicitly
+before running pnpm scripts; never let a formatting or inspection command cause an implicit full
+workspace install.
+
 Never push merely to use hosted CI as a debugger. Reproduce failures with the repository's local
 commands first, inspect active runs before starting another, and rerun only the failed job at the same
 SHA when the failure is transient or provider-side. A new push is justified only by a source change.
@@ -430,11 +441,9 @@ Run all tests with coverage report.
 
 ### Hook Automation
 
-Create hooks in `.claude/hooks/` for automatic triggers:
-
-- **pre-commit**: Lint, type-check, test affected
-- **post-implement**: Update WORKLOG.md
-- **pre-push**: Full test suite
+`scripts/install-git-guardrails.sh` owns the checkout-local Git hooks. Do not add a second hook
+layer. The pre-commit hook checks staged content; agents run affected tests and typechecks as part
+of the task. CI runs the complete release graph after the one delivery push.
 
 ---
 
@@ -541,12 +550,9 @@ How we'll verify success
 
 ### Plan Approval
 
-For significant changes:
-
-1. Write plan to WORKLOG.md
-2. Present plan to user
-3. Await explicit approval
-4. Begin implementation
+For significant changes, write the plan to WORKLOG.md and proceed. Ask for approval only when the
+next action is irreversible or genuinely needs a product decision. Do not stop implementation merely
+to obtain approval of a plan.
 
 ---
 
@@ -597,23 +603,16 @@ timeouts) is documented there with its fix. A second path is a second thing to k
 A fresh session is an empty account; seed through the API before claiming a surface was verified, and
 run `pnpm db:reset` afterwards because the dev database is the same file the API test suite reads.
 
-### Pre-Commit Validation
+### Local Validation
 
-Before any commit, verify:
+While editing, run the smallest check that can prove or disprove the behavior under change. Before
+committing, run affected tests and package checks, including typecheck and lint for changed code.
+Run a build when the change can affect the built artifact. Use Turbo filters and the declared task
+graph rather than reconstructing dependencies by hand.
 
-```bash
-# Type checking
-pnpm typecheck
-
-# Linting
-pnpm lint
-
-# Tests
-pnpm test
-
-# Build
-pnpm build
-```
+Before the one delivery push, review the evidence for the final source state and fill only actual
+gaps. A conflict-free rebase does not by itself invalidate passing checks. The pre-push hook must
+not replay the entire repository's typecheck, lint, and test graph; CI owns that full release gate.
 
 ### Documentation Validation
 

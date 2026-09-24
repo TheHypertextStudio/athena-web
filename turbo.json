@@ -24,7 +24,9 @@
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
-      "outputs": ["dist/**", ".next/**", "!.next/cache/**"],
+      // Next 16 writes live development output to .next/dev. A production build must never
+      // archive that directory: a warm local dev server can leave gigabytes there.
+      "outputs": ["dist/**", ".next/**", "!.next/cache/**", "!.next/dev/**"],
       // Docs-only edits and test-only changes never change build output — keep them
       // out of the cache key so that editing a .test.ts file in a dependency no longer
       // invalidates the web build (and the Vercel deploy it triggers).

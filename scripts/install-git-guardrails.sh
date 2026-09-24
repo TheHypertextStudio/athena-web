@@ -147,22 +147,13 @@ fi
 exit 0
 HOOK
 
-write_hook "$hooks_dir/pre-push" <<'HOOK'
-#!/bin/sh
-set -eu
-
-. "$(dirname "$0")/use-repo-node.sh"
-
-if ! command -v pnpm >/dev/null 2>&1; then
-  echo "pnpm is required to run pre-push checks." >&2
-  exit 1
+# Older installs replayed the complete validation graph at every push, including checks already
+# run while developing the change. Remove only that generated hook; leave a custom hook alone.
+if [ -f "$hooks_dir/pre-push" ] &&
+  grep -Fq '# A direct push is the repository' "$hooks_dir/pre-push"; then
+  rm "$hooks_dir/pre-push"
+  guardrails_changed=1
 fi
-
-# A direct push is the repository's integration boundary, so it runs the complete local gates.
-pnpm typecheck
-pnpm lint
-pnpm test
-HOOK
 
 if [ "$guardrails_changed" -eq 1 ]; then
   echo "CHANGE native Git guardrails reconciled in $hooks_dir"

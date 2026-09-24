@@ -15,7 +15,7 @@
       // than adding to it, so naming only the worker here would drop `.next` from the cache.
       // Both are this app's build products — the worker is bundled from
       // @docket/service-worker's source into this app's `public/`.
-      "outputs": [".next/**", "!.next/cache/**", "public/sw.js"]
+      "outputs": [".next/**", "!.next/cache/**", "!.next/dev/**", "public/sw.js"]
     },
     "dev": {
       "dependsOn": ["^db:migrate", "@docket/api#build"],

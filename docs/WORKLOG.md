@@ -8,6 +8,16 @@
 
 ## Active Tasks
 
+### [DEVX-LOCAL-COST-001] Stop repeated local validation and cache waste
+
+- **Status**: REVIEW
+- **Started**: 2026-09-23
+- **Priority**: P1
+- **Description**: Fresh worktrees triggered implicit installs, and generated pre-push hooks repeated the full check graph. The shared Turbo cache reached 66 GiB because Web production builds archived `.next/dev` output.
+- **Approach**: Require explicit scoped installs, remove the generated full-suite pre-push hook, and exclude `.next/dev` from Turbo build outputs. Remove the source-text test that required the old hook.
+- **Validation**: The installer removed its old hook in the calendar worktree. A Turbo dry run recognized the excluded output. Thirty-seven generated archives used 64.19 GiB; removing them left 73 GiB free. In CI, `Test (rest)` spent 6m19s on package coverage and 7s on `test:tooling`.
+- **Learnings**: Turbo already shares cache between worktrees. A test that demands literal script text can reject a working improvement without checking behavior.
+
 ### [CALENDAR-RELEASE-001] Finish the calendar release after CI failures
 
 - **Status**: REVIEW

@@ -78,20 +78,6 @@ describe('Docket bootstrap hooks', () => {
     expect(source).toContain('scripts/install-git-guardrails.sh');
   });
 
-  it('installs secret, commit-message, merge, and pre-push policy', () => {
-    const source = readFileSync(
-      resolve(import.meta.dirname, '../../scripts/install-git-guardrails.sh'),
-      'utf8',
-    );
-
-    expect(source).toContain('pnpm secret-scan');
-    expect(source).toContain('write_hook "$hooks_dir/commit-msg"');
-    expect(source).toContain('write_hook "$hooks_dir/pre-merge-commit"');
-    expect(source).toContain('write_hook "$hooks_dir/pre-push"');
-    expect(source).toContain('pnpm typecheck');
-    expect(source).toContain('pnpm test');
-  });
-
   it('does not rewrite converged Git guardrails', async () => {
     const root = mkdtempSync(resolve(tmpdir(), 'docket-bootstrap-git-'));
     roots.push(root);

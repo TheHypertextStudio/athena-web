@@ -7,7 +7,7 @@ ENV PATH="$PNPM_HOME:$PATH"
 # root packageManager field select the repository-pinned pnpm release.
 RUN npm install --global corepack@0.35.0 && corepack enable pnpm
 
-# Prune to @docket/admin + its workspace deps so the install layer is cache-stable across source edits.
+# Prune to @docket/admin + its workspace deps.
 FROM base AS pruner
 WORKDIR /app
 COPY . .
@@ -17,11 +17,11 @@ RUN pnpm dlx turbo@"$(node -p "require('./package.json').devDependencies.turbo")
 
 FROM base AS builder
 WORKDIR /app
-# Install from pruned manifests (cache-stable), then bring in the pruned source.
+# Copy the pruned source before install so pnpm's patch verification sees the final files.
 COPY --from=pruner /app/out/json/ .
+COPY --from=pruner /app/out/full/ .
 COPY --from=pruner /app/scripts/install-git-guardrails.sh ./scripts/install-git-guardrails.sh
 RUN pnpm install --frozen-lockfile
-COPY --from=pruner /app/out/full/ .
 ARG API_URL
 ARG NEXT_PUBLIC_API_URL
 ARG NEXT_PUBLIC_APP_URL

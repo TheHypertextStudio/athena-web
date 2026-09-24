@@ -7,9 +7,7 @@ ENV PATH="$PNPM_HOME:$PATH"
 # root packageManager field select the repository-pinned pnpm release.
 RUN npm install --global corepack@0.35.0 && corepack enable pnpm
 
-# Prune the monorepo to @docket/api + its workspace deps. `out/json` is just manifests + lockfile;
-# `out/full` is the pruned source. Splitting them lets the dependency-install layer stay cached
-# across source-only edits (only a manifest/lockfile change rebuilds it).
+# Prune the monorepo to @docket/api + its workspace deps.
 FROM base AS pruner
 WORKDIR /app
 COPY . .
@@ -19,13 +17,13 @@ RUN pnpm dlx turbo@"$(node -p "require('./package.json').devDependencies.turbo")
 
 FROM base AS installer
 WORKDIR /app
-# Install from the pruned manifests first — this RUN is the cache-stable layer.
+# Copy the pruned source before installing. pnpm verifies patches again before build commands;
+# copying the patch after install makes a valid dependency tree look stale.
 COPY --from=pruner /app/out/json/ .
+COPY --from=pruner /app/out/full/ .
 COPY --from=pruner /app/scripts/install-git-guardrails.sh ./scripts/install-git-guardrails.sh
 RUN pnpm install --prod --frozen-lockfile
-# Then the pruned source, retained for package assets and operator diagnostics. The serving process
-# uses only the build-stage artifacts copied below.
-COPY --from=pruner /app/out/full/ .
+# The serving process uses only the build-stage artifacts copied below.
 
 # Production receives already-runnable JavaScript. `tsx` is a development tool; loading it in the
 # serving process starts an esbuild child during every cold start and turns a compiler failure into
@@ -34,9 +32,9 @@ FROM base AS builder
 ARG DOCKET_BUILD_REVISION
 WORKDIR /app
 COPY --from=pruner /app/out/json/ .
+COPY --from=pruner /app/out/full/ .
 COPY --from=pruner /app/scripts/install-git-guardrails.sh ./scripts/install-git-guardrails.sh
 RUN pnpm install --frozen-lockfile
-COPY --from=pruner /app/out/full/ .
 RUN DOCKET_BUILD_REVISION="$DOCKET_BUILD_REVISION" pnpm --filter @docket/api build:runtime
 
 FROM base AS runner

@@ -17561,3 +17561,9 @@ xhigh` passes (10 finder angles each, one-vote verification, a gap sweep) agains
   after trigger creation for the delegation sweep so a newly prepared run can submit immediately.
 - **Validation**: The focused cron authorization route tests pass. Production relay submission and
   sealed-result acceptance still require a fresh run after this correction deploys.
+- **Release gate**: CI's admin Docker image refused to build with
+  `ERR_PNPM_VERIFY_DEPS_BEFORE_RUN: Patches were modified`. Its pruned Dockerfile installed before
+  copying the complete source, which rewrote the checked patch afterward. API, admin, and web
+  images now copy the complete pruned source before `pnpm install`; this keeps pnpm's install
+  snapshot aligned with the files its build command verifies. Local Docker Desktop did not answer
+  a six-second daemon probe, so the hosted image build remains the validation gate.

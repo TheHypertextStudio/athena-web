@@ -168,7 +168,9 @@ async function waitForSettledPage(page: Page): Promise<void> {
         const loadingText = /\bLoading(?: your)? [^\n]*…/i.test(document.body.innerText);
         return (
           !loadingText &&
-          document.querySelector('[data-schedule-measuring]') === null &&
+          [...document.querySelectorAll('[data-schedule-measuring]')].every(
+            (element) => element.getClientRects().length === 0,
+          ) &&
           document.querySelector('[data-calendar-page] h1[aria-label="Calendar"]') === null &&
           document.querySelector('.animate-pulse') === null &&
           document.querySelector('[data-slot="skeleton"]') === null

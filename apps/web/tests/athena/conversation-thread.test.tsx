@@ -8,7 +8,6 @@
  */
 import '@testing-library/jest-dom/vitest';
 
-import { Toaster, dismissAllNotices } from '@docket/ui/components';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -139,21 +138,19 @@ describe('AthenaConversation thread structure', () => {
     expect(scroller.querySelector('svg')).toBeNull();
   });
 
-  it('reports a failed send once as a notice, outside the thread and without the exception text', async () => {
+  it('keeps a failed send visible in the thread with the draft available to retry', async () => {
     chatGet.mockResolvedValue(okResponse(thread([])));
     personalPost.mockRejectedValue(new Error('network down'));
-    render(<Toaster />);
     renderConversation();
 
     const composer = await screen.findByRole('combobox', { name: 'Message Athena' });
     fireEvent.change(composer, { target: { value: 'Plan my day' } });
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
 
-    const notice = await screen.findByRole('alert');
-    expect(notice).not.toHaveTextContent('network down');
-    expect(notice.closest('[data-slot="athena-thread"]')).toBeNull();
+    const failure = await screen.findByRole('alert');
+    expect(failure).not.toHaveTextContent('network down');
+    expect(failure.closest('[data-slot="athena-thread"]')).not.toBeNull();
     expect(composer).toHaveValue('Plan my day');
-    dismissAllNotices();
   });
 
   it('renders a question as a thread entry at the time it was asked', async () => {

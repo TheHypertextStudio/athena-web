@@ -92,6 +92,14 @@ export async function fetchOrgChatThread(orgId: string): Promise<AgentSessionDet
   return await response.json();
 }
 
+/** The write succeeded; only the read that updates the visible conversation failed. */
+export class AcceptedChatRefreshError extends Error {
+  constructor() {
+    super('Athena accepted the message, but the conversation could not refresh.');
+    this.name = 'AcceptedChatRefreshError';
+  }
+}
+
 /**
  * Append one entry to the conversation, carrying the page it was asked from, and drive a turn.
  *
@@ -114,7 +122,11 @@ export async function sendOrgChatMessage(
     json: { body, ...(invocation ? { context: invocation } : {}) },
   });
   if (!response.ok) throw await readProblemError(response, 'Athena could not answer right now.');
-  return await fetchOrgChatThread(orgId);
+  try {
+    return await fetchOrgChatThread(orgId);
+  } catch {
+    throw new AcceptedChatRefreshError();
+  }
 }
 
 /** Insert one streamed activity into the cached thread, deduplicating by activity id. */

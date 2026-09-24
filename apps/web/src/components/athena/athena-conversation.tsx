@@ -28,7 +28,12 @@ import { ConversationThread } from '@/components/athena/conversation-thread';
 import { type ThreadQuestions, useThreadQuestions } from '@/components/athena/elicitation-queue';
 import { presentFailure } from '@/components/feedback';
 import { useMentionOrgId } from '@/components/mentions/use-mention-org';
-import { fetchOrgChatThread, sendOrgChatMessage, useOrgChatThread } from '@/lib/athena/chat-defs';
+import {
+  AcceptedChatRefreshError,
+  fetchOrgChatThread,
+  sendOrgChatMessage,
+  useOrgChatThread,
+} from '@/lib/athena/chat-defs';
 import { dismissHeadsUp, type HeadsUp, headsUpsFor } from '@/lib/athena/heads-ups';
 import {
   jobsNeedingYou,
@@ -41,6 +46,7 @@ import type {
 } from '@/lib/athena/presentation';
 import { personalAthenaTransport, type PersonalAthenaTransport } from '@/lib/athena/query-defs';
 import { queryKeys } from '@/lib/query';
+import { failurePresentation, type FailurePresentation } from '@/lib/failure-presentation';
 import { startViewTransition } from '@/lib/view-transition';
 
 /** What the thread shows before its first message, from a door with a subject of its own. */
@@ -57,6 +63,8 @@ export interface ComposerDraftRequest {
 
 /** Props for {@link AthenaConversation}. */
 export interface AthenaConversationProps {
+  /** The full-page surface uses a roomier conversation layout than the rail. */
+  layout?: 'page' | 'panel';
   /** A one-line label for an empty thread; the default empty thread is its suggestions alone. */
   emptyState?: ConversationEmptyState | undefined;
   /** The org whose persistent chat thread to render. */
@@ -187,11 +195,21 @@ interface SendInput {
   readonly contextAttached: boolean;
   readonly onAttachContext: (() => void) | undefined;
   readonly commitThread: (data: AgentSessionDetailOut) => void;
+  readonly thread: AgentSessionDetailOut | null;
 }
 
-/** The send state: whether a turn is in flight, and how to send. */
+/** A just-submitted message, before the server's activity has appeared in the thread. */
+export interface PendingTurn {
+  readonly text: string;
+  readonly knownActivityIds: ReadonlySet<string>;
+}
+
+/** The send state: local progress and any failure remain visible in the conversation. */
 interface SendState {
   readonly sending: boolean;
+  readonly pendingTurn: PendingTurn | null;
+  readonly failure: FailurePresentation | null;
+  readonly refreshDelayed: boolean;
   readonly send: () => void;
 }
 
@@ -203,30 +221,77 @@ function useSend({
   contextAttached,
   onAttachContext,
   commitThread,
+  thread,
 }: SendInput): SendState {
   const [sending, setSending] = useState(false);
+  const [pendingTurn, setPendingTurn] = useState<PendingTurn | null>(null);
+  const [failure, setFailure] = useState<FailurePresentation | null>(null);
+  const [refreshDelayed, setRefreshDelayed] = useState(false);
+  const queryClient = useQueryClient();
   const { draft, setDraft } = composer;
+
+  useEffect(() => {
+    if (!refreshDelayed || !pendingTurn) return;
+    const recorded = thread?.activities.some(
+      (activity) =>
+        !pendingTurn.knownActivityIds.has(activity.id) &&
+        activity.type === 'response' &&
+        activity.body['author'] === 'user' &&
+        activity.body['text'] === pendingTurn.text,
+    );
+    if (recorded) {
+      setPendingTurn(null);
+      setRefreshDelayed(false);
+    }
+  }, [refreshDelayed, pendingTurn, thread]);
 
   const send = useCallback(async (): Promise<void> => {
     const text = draft.trim();
     if (text.length === 0 || sending) return;
     setSending(true);
+    setFailure(null);
+    setRefreshDelayed(false);
+    setPendingTurn({ text, knownActivityIds: new Set(thread?.activities.map((a) => a.id) ?? []) });
     setDraft('');
     try {
       commitThread(await sendOrgChatMessage(orgId, text, contextAttached ? context : null));
+      setPendingTurn(null);
       // A detach applies to exactly one message: once it has gone out, the next one carries the
       // page again unless the person detaches it again.
       onAttachContext?.();
     } catch (caught) {
-      setDraft(text);
-      presentFailure(caught, 'Could not send your message.');
+      if (caught instanceof AcceptedChatRefreshError) {
+        setRefreshDelayed(true);
+        onAttachContext?.();
+      } else {
+        setDraft(text);
+        setFailure(failurePresentation(caught, 'Could not send your message.'));
+        setPendingTurn(null);
+      }
+      // The server can save the prompt before inference fails. Refresh the transcript so that
+      // the thread shows whichever part of this turn was durably recorded.
+      void queryClient.invalidateQueries({ queryKey: queryKeys.chatThread(orgId) });
     } finally {
       setSending(false);
     }
-  }, [orgId, draft, sending, setDraft, commitThread, context, contextAttached, onAttachContext]);
+  }, [
+    orgId,
+    draft,
+    sending,
+    setDraft,
+    commitThread,
+    context,
+    contextAttached,
+    onAttachContext,
+    thread,
+    queryClient,
+  ]);
 
   return {
     sending,
+    pendingTurn,
+    failure,
+    refreshDelayed,
     send: () => {
       void send();
     },
@@ -327,6 +392,9 @@ export default function AthenaConversation(props: AthenaConversationProps): JSX.
   const composer = useComposerDraft(props.initialDraft, settings.draftRequest);
   const [connectOpen, setConnectOpen] = useState(false);
   const { commitThread, reloadWithTransition, sendWidgetMessage } = useThreadWrites(orgId);
+  const questions = useThreadQuestions(orgId, settings.questions);
+  const headsUps = useHeadsUps(jobs);
+  const read = useThreadRead(orgId, jobs, questions);
   const sendState = useSend({
     orgId,
     composer,
@@ -334,10 +402,8 @@ export default function AthenaConversation(props: AthenaConversationProps): JSX.
     contextAttached,
     onAttachContext: props.onAttachContext,
     commitThread,
+    thread: read.thread,
   });
-  const questions = useThreadQuestions(orgId, settings.questions);
-  const headsUps = useHeadsUps(jobs);
-  const read = useThreadRead(orgId, jobs, questions);
 
   return (
     <div className={cn('flex h-full w-full flex-col', props.className)}>
@@ -345,6 +411,10 @@ export default function AthenaConversation(props: AthenaConversationProps): JSX.
         query={read.query}
         entries={read.entries}
         thread={read.thread}
+        layout={props.layout ?? 'panel'}
+        pendingTurn={sendState.pendingTurn}
+        sendFailure={sendState.failure}
+        refreshDelayed={sendState.refreshDelayed}
         orgId={orgId}
         transport={settings.transport}
         sendWidgetMessage={sendWidgetMessage}
@@ -371,6 +441,7 @@ export default function AthenaConversation(props: AthenaConversationProps): JSX.
         draft={composer.draft}
         setDraft={composer.setDraft}
         sending={sendState.sending}
+        layout={props.layout ?? 'panel'}
         mentionOrgId={mentionOrgId}
         onSend={sendState.send}
         onConnect={() => {

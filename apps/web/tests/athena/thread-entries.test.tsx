@@ -31,6 +31,24 @@ afterEach(() => {
 });
 
 describe('ThreadEntries', () => {
+  it('renders Athena reply Markdown as formatted prose', () => {
+    render(
+      <ThreadEntries
+        entries={entries([
+          actionActivity({
+            type: 'response',
+            body: { text: 'The answer is **20**.', author: 'athena' },
+          }),
+        ])}
+        workspaceId="org_1"
+        onWidgetMessage={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText('20')).toHaveProperty('tagName', 'STRONG');
+    expect(screen.queryByText(/\*\*20\*\*/)).not.toBeInTheDocument();
+  });
+
   it('renders no chip for a proposal-mode action — the proposal card is its record', () => {
     const { container } = render(
       <ThreadEntries

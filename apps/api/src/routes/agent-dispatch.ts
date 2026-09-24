@@ -33,7 +33,7 @@ import type { Database } from '@docket/db';
 import { describeParentResolution, resolveWorkParent } from '@docket/work/parent-resolution';
 import type { ParentCandidate, ParentResolution } from '@docket/work/parent-resolution';
 import { truncateTitle } from '@docket/work/task-titles';
-import { and, desc, eq, inArray, isNull, notInArray } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNull, ne, notInArray } from 'drizzle-orm';
 
 import { recordCreatedRow } from '../lib/provenance/record-created';
 import { resolveLandingTarget } from '../lib/task-landing';
@@ -61,14 +61,13 @@ const MAX_SPAWN_DEPTH = 32;
 type DbHandle = Database | Parameters<Parameters<Database['transaction']>[0]>[0];
 
 /**
- * Resolve the caller's one open Athena conversation, opening it the first time.
+ * Resolve the caller's latest Athena conversation, opening it the first time.
  *
  * @remarks
- * "The user will only have one active Athena session at once" is enforced here rather than
- * asserted in a comment: if more than one open `chat` row is somehow present — a historical row,
- * a race between two tabs, a partially-applied migration — the newest wins and the rest are
- * closed in the same transaction. Every door therefore converges on the same id instead of each
- * door picking its own favourite.
+ * A completed or failed turn does not end the conversation: the runner reopens that same session
+ * for the next message. An explicit fresh-chat request creates a newer row; a canceled latest chat
+ * opens a successor. Any older live rows are closed in the same transaction so every door still
+ * converges on one current id.
  *
  * @param ownerUserId - The authenticated owner.
  * @param contextOrganizationId - Workspace focus to record on a freshly opened conversation.
@@ -80,7 +79,7 @@ export async function resolveCanonicalConversation(
   initiatorActorId: string | null = null,
 ): Promise<SessionRow> {
   return db.transaction(async (tx) => {
-    const open = await tx
+    const [current] = await tx
       .select()
       .from(agentSession)
       .where(
@@ -88,22 +87,35 @@ export async function resolveCanonicalConversation(
           eq(agentSession.executorKind, 'athena'),
           eq(agentSession.ownerUserId, ownerUserId),
           eq(agentSession.kind, 'chat'),
-          inArray(agentSession.status, [...NON_TERMINAL_STATUSES]),
         ),
       )
-      .orderBy(desc(agentSession.createdAt), desc(agentSession.id));
+      .orderBy(desc(agentSession.createdAt), desc(agentSession.id))
+      .limit(1);
 
-    const current = open[0];
-    if (current) {
-      const superseded = open.slice(1).map((row) => row.id);
-      if (superseded.length > 0) {
-        await tx
-          .update(agentSession)
-          .set({ status: 'completed', endedAt: new Date() })
-          .where(inArray(agentSession.id, superseded));
-      }
-      return current;
+    const superseded = await tx
+      .select({ id: agentSession.id })
+      .from(agentSession)
+      .where(
+        and(
+          eq(agentSession.executorKind, 'athena'),
+          eq(agentSession.ownerUserId, ownerUserId),
+          eq(agentSession.kind, 'chat'),
+          inArray(agentSession.status, NON_TERMINAL_STATUSES),
+          current && current.status !== 'canceled' ? ne(agentSession.id, current.id) : undefined,
+        ),
+      );
+    if (superseded.length > 0) {
+      await tx
+        .update(agentSession)
+        .set({ status: 'completed', endedAt: new Date() })
+        .where(
+          inArray(
+            agentSession.id,
+            superseded.map((row) => row.id),
+          ),
+        );
     }
+    if (current && current.status !== 'canceled') return current;
 
     const [created] = await tx
       .insert(agentSession)

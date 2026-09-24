@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { okResponse } from '../support/query';
 
@@ -16,7 +16,7 @@ vi.mock('../../src/lib/api', () => ({
   },
 }));
 
-import { sendOrgChatMessage } from '../../src/lib/athena/chat-defs';
+import { AcceptedChatRefreshError, sendOrgChatMessage } from '../../src/lib/athena/chat-defs';
 
 const thread = {
   id: 'chat_1',
@@ -29,6 +29,10 @@ const thread = {
   activities: [],
   result: null,
 };
+
+beforeEach(() => {
+  vi.clearAllMocks();
+});
 
 describe('sendOrgChatMessage', () => {
   it('posts through the personal door with a wire-shaped context, then re-reads the thread', async () => {
@@ -57,5 +61,14 @@ describe('sendOrgChatMessage', () => {
     orgChatGet.mockResolvedValue(okResponse(thread));
     await sendOrgChatMessage('01HZZZZZZZZZZZZZZZZZZZZZZZ', 'Plan my afternoon');
     expect(personalPost).toHaveBeenCalledWith({ json: { body: 'Plan my afternoon' } });
+  });
+
+  it('distinguishes an accepted message from a failed follow-up read', async () => {
+    personalPost.mockResolvedValue(okResponse(thread));
+    orgChatGet.mockRejectedValue(new Error('connection lost'));
+    await expect(
+      sendOrgChatMessage('01HZZZZZZZZZZZZZZZZZZZZZZZ', 'Plan my afternoon'),
+    ).rejects.toBeInstanceOf(AcceptedChatRefreshError);
+    expect(personalPost).toHaveBeenCalledTimes(1);
   });
 });

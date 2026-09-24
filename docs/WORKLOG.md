@@ -17499,8 +17499,8 @@ xhigh` passes (10 finder angles each, one-vote verification, a gap sweep) agains
 
 ## [LATTICE-PRODUCTION-ROUND-TRIP-001] Restore the Docket to Mac Studio route — 2026-09-23
 
-- **Status**: IN PROGRESS
-- **State**: VALIDATING
+- **Status**: READY FOR PRODUCTION PROOF
+- **State**: COMMITTING
 - **Priority**: P0
 - **Description**: Complete the web Settings account link, device selection, interactive Athena
   turns, and durable task delegation through the owner's Mac Studio, then prove the production
@@ -17589,3 +17589,43 @@ xhigh` passes (10 finder angles each, one-vote verification, a gap sweep) agains
   returned to Ready, and a fresh Athena prompt answered `7` through the selected Studio. Focused
   API and web tests, typecheck, and formatting pass; the new error response still needs a live
   offline check after this Docket release.
+
+### 2026-09-24 Athena conversation continuity and response clarity
+
+- **Status**: IN PROGRESS
+- **State**: VALIDATING
+- **Description**: A production user sees a mostly empty Athena canvas, cannot tell whether a
+  submitted turn is working, and loses the visible conversation after each answer. The reply also
+  exposes Markdown punctuation instead of rendering it.
+- **Root cause**: The canonical conversation resolver selects only nonterminal chat sessions. A
+  completed interactive turn makes its session ineligible, so the next message opens another chat.
+  The web composer clears immediately but the thread has no pending entry; the wide page bottom
+  aligns short exchanges and renders assistant text as unformatted plain text.
+- **Approach**: Keep the latest noncanceled chat as the canonical conversation across completed and
+  failed turns, while still closing superseded live chats. Show the submitted turn immediately and
+  keep a clear in-thread working state until the response or a settled failure arrives. Render a
+  persistent inline failure with recovery guidance. Give the wide view a narrower, top-aligned
+  reading column, stronger message hierarchy, and a deliberate composer with context and Talk.
+  Render assistant Markdown through Docket's existing safe static renderer. Preserve the compact
+  rail layout and the existing approval controls.
+- **Files to modify**: `apps/api/src/routes/agent-dispatch.ts`, focused API tests, Athena thread,
+  composer, entry, and workspace components with their tests, the Athena companion design spec,
+  and this worklog.
+- **Risks**: A server activity may arrive while an optimistic entry is visible; deduplicate it by
+  activity identity. A completed conversation must still be resumable and an explicit fresh-chat
+  request must still rotate. The wide layout must remain usable in the rail, on mobile, in dark
+  theme, and with reduced motion.
+- **Validation**: Red/green API and component tests, affected typecheck and lint, built web output,
+  1440px and mobile light/dark screenshots through the repository's UI verification path, then a
+  production two-turn proof after the release gate.
+- **Local evidence**: The Athena web suite passed 298 tests in 33 files; the focused API routes and
+  dispatcher suite passed 87 tests. API and web typechecks, lint, the production build, formatting,
+  complexity, and documentation checks passed. The authenticated capture tool produced light and
+  dark frames at 1440px, 390px, and 320px with no horizontal overflow. A local throwaway account
+  returned `product_required` on chat send, so the populated thread and failure flows were
+  verified by component tests; the live two-turn proof remains a production release check.
+- **Retrospective**: A terminal session status was incorrectly used as the lifetime of a
+  conversation. The new regression test keeps that distinction explicit. Captures exposed a narrow
+  1440px conversation under Docket's persistent calendar; the revised breakpoint gives it space.
+  The capture tool also waited on a hidden mobile calendar measurement node, so its settled-page
+  check now ignores hidden measurements.

@@ -157,13 +157,14 @@ async function spawn(
 }
 
 describe('one active Athena session', () => {
-  it('resolves the same conversation id from every entry point', async () => {
+  it('keeps a completed or failed chat current across entry points', async () => {
     const workspace = await seedWorkspace();
     const first = await resolveCanonicalConversation(workspace.ownerUserId, workspace.orgId);
-    const second = await resolveCanonicalConversation(workspace.ownerUserId, null);
-    const third = await resolveCanonicalConversation(workspace.ownerUserId, workspace.orgId);
-    expect(second.id).toBe(first.id);
-    expect(third.id).toBe(first.id);
+    const chat = schema.agentSession;
+    for (const status of ['pending', 'completed', 'failed'] as const) {
+      await db.update(chat).set({ status }).where(eq(chat.id, first.id));
+      expect((await resolveCanonicalConversation(workspace.ownerUserId)).id).toBe(first.id);
+    }
   });
 
   it('converges on one open conversation even when extra open rows already exist', async () => {

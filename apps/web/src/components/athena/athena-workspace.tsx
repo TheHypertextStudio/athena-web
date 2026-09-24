@@ -20,7 +20,6 @@ import { Skeleton, Surface } from '@docket/ui/primitives';
 import { type JSX, useEffect, useMemo, useState } from 'react';
 
 import AthenaConversation from '@/components/athena/athena-conversation';
-import { AthenaContextChip } from '@/components/athena/athena-context-chip';
 import { AthenaConversationBrowser } from '@/components/athena/athena-conversation-browser';
 import {
   AthenaWorkLedger,
@@ -123,7 +122,7 @@ function WorkColumn({ queue, jobs, focus, transport }: WorkColumnProps): JSX.Ele
       tone="card"
       shape="none"
       aria-label="Athena work"
-      className="flex shrink-0 flex-col gap-8 p-4 xl:min-h-0 xl:overflow-y-auto"
+      className="flex max-h-40 shrink-0 flex-col gap-8 overflow-y-auto p-4 2xl:max-h-none 2xl:min-h-0"
     >
       <AthenaConversationBrowser className="max-h-72" />
       <WorkLedgerRead queue={queue} jobs={jobs} focus={focus} transport={transport} />
@@ -166,7 +165,7 @@ interface ThreadColumnProps {
   readonly transport: PersonalAthenaTransport;
 }
 
-/** The right column: the 44px header with the page chip and Talk, then the thread. */
+/** The right column: the conversation and its context-aware composer. */
 function ThreadColumn({
   workspaceId,
   invocationContext,
@@ -187,30 +186,17 @@ function ThreadColumn({
     );
   }
   return (
-    <section aria-label="Conversation" className="flex min-h-[32rem] min-w-0 flex-col xl:min-h-0">
-      <div
-        data-slot="athena-workspace-header"
-        className="flex h-11 shrink-0 items-center gap-1 px-4 xl:px-6"
-      >
-        <div className="flex min-w-0 flex-1 items-center">
-          {invocationContext ? (
-            <AthenaContextChip
-              context={invocationContext}
-              attached={contextAttached}
-              onDetach={() => {
-                setContextAttached(false);
-              }}
-              onAttach={() => {
-                setContextAttached(true);
-              }}
-            />
-          ) : null}
-        </div>
-        <VoiceLaunch workspaceId={workspaceId} iconOnly />
-      </div>
+    <section
+      aria-label="Conversation"
+      className="flex min-h-[32rem] min-w-0 flex-1 flex-col 2xl:min-h-0"
+    >
+      <h1 className="sr-only">Athena conversation</h1>
       <AthenaConversation
         orgId={workspaceId}
-        className="min-h-0 flex-1 px-4 pb-4 xl:px-6"
+        layout="page"
+        talk={<VoiceLaunch workspaceId={workspaceId} iconOnly />}
+        composerChip
+        className="min-h-0 flex-1 px-4 pb-4 xl:px-8"
         jobs={NO_JOBS}
         transport={transport}
         context={invocationContext}
@@ -251,7 +237,7 @@ export function AthenaWorkspace({
       data-athena-workspace
       className="flex h-full min-h-0 w-full flex-col"
     >
-      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto xl:grid xl:grid-cols-[minmax(18rem,26rem)_minmax(24rem,1fr)] xl:overflow-hidden">
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto 2xl:grid 2xl:grid-cols-[minmax(18rem,21rem)_minmax(24rem,1fr)] 2xl:overflow-hidden">
         <WorkColumn queue={queue} jobs={jobs} focus={focus} transport={transport} />
         <ThreadColumn
           workspaceId={workspaceId}

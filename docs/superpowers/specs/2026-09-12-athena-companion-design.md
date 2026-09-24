@@ -432,3 +432,24 @@ produces a heads-up and the icon status changes.
    Settings › Connections. Alternative: keep the link under the composer.
 4. **Heads-ups on by default** with an hour threshold for a waiting proposal. Alternative: off
    until the person turns them on in Settings › Athena.
+
+## 9. September 24 conversation clarity update
+
+The shipped wide view needs a reading layout suited to a full page. Keep the compact rail's
+bottom-anchored entries, but place the wide view's conversation in a centered, top-aligned column
+with sender cues, readable Markdown, and a distinct composer. The page has no promotional header:
+the existing navigation identifies Athena, while the attached context and Talk control sit in the
+composer where the person acts. The work browser stays beside the conversation when space allows
+and moves into a shallow, scrollable band on narrower layouts. This revises the wide layout and
+plain-text reply treatment in §4.2.
+
+Every send immediately adds the person's message and an accessible, in-thread "Athena is working"
+state. That state remains through an asynchronous run and survives a page reload when a persisted
+user turn is still running. Once the answer lands, replace it with the response. A failed send
+shows a persistent explanation in the thread and keeps the draft available. If the write succeeded
+but refreshing the thread failed, say the message was sent and keep checking; do not offer to send
+it again. Render assistant Markdown through Docket's safe static renderer.
+
+Completed and failed model turns are turns in the same conversation. Reuse the latest noncanceled
+personal chat on the next message. Only an explicit fresh-chat action or a canceled chat opens a
+successor; older sessions and their activities remain accessible in history.

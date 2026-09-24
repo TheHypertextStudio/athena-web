@@ -14,12 +14,14 @@
  */
 import { parseMcpAppPresentation } from '@docket/integrations/mcp-apps-contract';
 import { type SessionActivityOut } from '@docket/athena/agent-contract';
+import { Sparkles } from '@docket/ui/icons';
 import { Text } from '@docket/ui/primitives';
 import { type JSX } from 'react';
 
 import { PLAN_TOOL_NAMES } from '@docket/work/plan-draft-contract';
 
 import { McpAppPresentationCard } from '@/components/athena/mcp-app-presentation-card';
+import { StaticMarkdown } from '@/components/editor/static-markdown';
 import { parsePlanStart } from '@/components/plan-canvas/plan-start-card';
 import { capitalizeFirst } from '@/lib/athena/describe-proposal';
 import type { ThreadEntry } from '@/lib/athena/job-presentation';
@@ -127,18 +129,10 @@ function ChatEntry({ activity, onWidgetMessage }: ChatEntryProps): JSX.Element |
   const fromUser = activity.body['author'] === 'user';
 
   if (activity.type === 'response' && fromUser) {
-    return (
-      <div className="bg-primary text-on-primary text-body-medium rounded-corner-lg rounded-br-corner-xs ml-auto max-w-[85%] px-4 py-2.5 whitespace-pre-wrap">
-        {text}
-      </div>
-    );
+    return <UserMessage text={text} />;
   }
   if (activity.type === 'response' || activity.type === 'elicitation') {
-    return (
-      <p className="text-on-surface text-body-medium mr-auto max-w-160 whitespace-pre-wrap">
-        {text}
-      </p>
-    );
+    return <AthenaMessage text={text} />;
   }
   if (activity.type === 'error') {
     return (
@@ -152,6 +146,33 @@ function ChatEntry({ activity, onWidgetMessage }: ChatEntryProps): JSX.Element |
   }
   // Thoughts stay out of the conversation — the work-log session view carries them.
   return null;
+}
+
+/** The sender's message, shared by saved activity and the local optimistic turn. */
+export function UserMessage({ text }: { readonly text: string }): JSX.Element {
+  return (
+    <div className="bg-primary-container text-on-primary-container text-body-medium rounded-corner-lg rounded-br-corner-xs ml-auto max-w-[85%] px-4 py-3 whitespace-pre-wrap">
+      {text}
+    </div>
+  );
+}
+
+/** Athena's answer, with safe Markdown and a stable visual sender cue. */
+function AthenaMessage({ text }: { readonly text: string }): JSX.Element {
+  return (
+    <div className="flex items-start gap-3">
+      <span
+        className="bg-secondary-container text-on-secondary-container flex size-8 shrink-0 items-center justify-center rounded-full"
+        aria-hidden="true"
+      >
+        <Sparkles className="size-4" />
+      </span>
+      <div className="max-w-[75ch] min-w-0 pt-1">
+        <span className="text-label-small text-on-surface-variant">Athena</span>
+        <StaticMarkdown value={text} className="mt-1" />
+      </div>
+    </div>
+  );
 }
 
 /** What one `action` activity has to show: its chip text and whatever durable card it produced. */

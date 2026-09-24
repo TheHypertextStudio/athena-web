@@ -28,6 +28,8 @@ import { AddMcpConnectorForm } from '@/components/settings/mcp-connectors-sectio
 
 /** Props for {@link Composer}. */
 export interface ComposerProps {
+  /** Full-page composer has a calmer card treatment and a labeled send action. */
+  readonly layout?: 'page' | 'panel';
   /** The form element, so a caller can find its textarea and focus it. */
   readonly composerRef: RefObject<HTMLFormElement | null>;
   /** The page chip, for a host with no header to hold it. */
@@ -59,6 +61,7 @@ export function Composer({
   mentionOrgId,
   onSend,
   onConnect,
+  layout = 'panel',
 }: ComposerProps): JSX.Element {
   return (
     <form
@@ -67,7 +70,8 @@ export function Composer({
       aria-busy={sending}
       className={cn(
         surfaceToneColor('prominent'),
-        'focus-within:ring-ring @container flex shrink-0 flex-col rounded-lg p-2 transition-shadow focus-within:ring-1',
+        'focus-within:ring-ring @container flex shrink-0 flex-col rounded-xl p-2 transition-shadow focus-within:ring-2',
+        layout === 'page' && 'mx-auto w-full max-w-3xl',
       )}
       onSubmit={(event) => {
         event.preventDefault();
@@ -88,7 +92,13 @@ export function Composer({
           mentionOrgId={mentionOrgId}
           onSend={onSend}
         />
-        <ComposerControls talk={talk} sending={sending} draft={draft} onConnect={onConnect} />
+        <ComposerControls
+          talk={talk}
+          sending={sending}
+          draft={draft}
+          onConnect={onConnect}
+          layout={layout}
+        />
       </div>
     </form>
   );
@@ -132,10 +142,19 @@ function ComposerField({
 }
 
 /** Props for {@link ComposerControls}. */
-type ComposerControlsProps = Pick<ComposerProps, 'talk' | 'sending' | 'draft' | 'onConnect'>;
+type ComposerControlsProps = Pick<
+  ComposerProps,
+  'talk' | 'sending' | 'draft' | 'onConnect' | 'layout'
+>;
 
 /** The one 32px row of trailing controls: attach, an optional Talk slot, and send. */
-function ComposerControls({ talk, sending, draft, onConnect }: ComposerControlsProps): JSX.Element {
+function ComposerControls({
+  talk,
+  sending,
+  draft,
+  onConnect,
+  layout,
+}: ComposerControlsProps): JSX.Element {
   return (
     <div className="flex h-8 shrink-0 items-center gap-1">
       {/* There is no "New chat" control, and that is deliberate: a person has one Athena
@@ -157,11 +176,12 @@ function ComposerControls({ talk, sending, draft, onConnect }: ComposerControlsP
         <Button
           type="submit"
           controlSize="md"
-          iconOnly
+          iconOnly={layout !== 'page'}
           aria-label={sending ? 'Sending' : 'Send'}
           title="Send"
           disabled={sending || draft.trim().length === 0}
         >
+          {layout === 'page' ? <span>{sending ? 'Sending' : 'Send'}</span> : null}
           <ArrowUp aria-hidden="true" />
         </Button>
       </div>

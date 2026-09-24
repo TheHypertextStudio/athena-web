@@ -140,7 +140,7 @@ describe('AthenaWorkspace', () => {
     expect(document.querySelector('[data-slot="athena-thread"] [data-athena-job]')).toBeNull();
   });
 
-  it('holds the page chip and Talk in one header above the thread, not in the composer', async () => {
+  it('keeps context and Talk with the composer, without a promotional header', async () => {
     chatGet.mockResolvedValue(okResponse(chatThread()));
     elicitationsGet.mockResolvedValue(okResponse({ items: [] }));
     renderWorkspace({
@@ -151,10 +151,9 @@ describe('AthenaWorkspace', () => {
     });
 
     const form = await screen.findByRole('form', { name: /Message Athena/ });
-    const header = document.querySelector<HTMLElement>('[data-slot="athena-workspace-header"]');
-    if (!header) throw new Error('the thread column has a header');
-    expect(within(header).getByRole('group', { name: /Fall fundraiser launch/ })).toBeVisible();
-    expect(within(form).queryByRole('group', { name: /Fall fundraiser launch/ })).toBeNull();
+    expect(within(form).getByRole('group', { name: /Fall fundraiser launch/ })).toBeVisible();
+    expect(within(form).getByRole('button', { name: 'Talk' })).toBeVisible();
+    expect(document.querySelector('[data-slot="athena-workspace-header"]')).toBeNull();
   });
 
   it('opens on a linked job: switches to its filter and scrolls to its entry', async () => {

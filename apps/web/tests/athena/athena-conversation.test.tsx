@@ -146,6 +146,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+  vi.unstubAllGlobals();
   delete process.env['NEXT_PUBLIC_API_URL'];
 });
 
@@ -171,6 +172,119 @@ describe('AthenaConversation draft requests', () => {
       </QueryClientProvider>,
     );
     expect(await screen.findByRole('combobox')).toHaveValue('Second ask');
+  });
+});
+
+describe('AthenaConversation reply feedback', () => {
+  it('does not invite a duplicate send after the server accepts a message but refresh fails', async () => {
+    chatGet
+      .mockResolvedValueOnce(okResponse(thread([])))
+      .mockRejectedValue(new Error('read failed'));
+    personalPost.mockResolvedValue(okResponse(thread([])));
+    renderConversation();
+
+    const composer = await screen.findByRole('combobox', { name: 'Message Athena' });
+    fireEvent.change(composer, { target: { value: 'Plan my day' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+    expect(
+      await screen.findByText(/Message sent\. The conversation could not refresh yet\./),
+    ).toBeVisible();
+    expect(composer).toHaveValue('');
+    expect(personalPost).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows the submitted message and a working state before the API responds', async () => {
+    chatGet.mockResolvedValueOnce(okResponse(thread([]))).mockResolvedValueOnce(
+      okResponse(
+        thread([
+          {
+            id: 'user_1',
+            sessionId: 'chat_session',
+            organizationId: null,
+            type: 'response',
+            body: { text: 'What is 10 + 10?', author: 'user' },
+            createdAt: '2026-08-30T10:01:00.000Z',
+          },
+          {
+            id: 'reply_1',
+            sessionId: 'chat_session',
+            organizationId: null,
+            type: 'response',
+            body: { text: 'The answer is **20**.', author: 'athena' },
+            createdAt: '2026-08-30T10:02:00.000Z',
+          },
+        ]),
+      ),
+    );
+    let finishPost: ((value: ReturnType<typeof okResponse>) => void) | undefined;
+    personalPost.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          finishPost = resolve;
+        }),
+    );
+    renderConversation();
+
+    const composer = await screen.findByRole('combobox', { name: 'Message Athena' });
+    fireEvent.change(composer, { target: { value: 'What is 10 + 10?' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+    const threadElement = document.querySelector<HTMLElement>('[data-slot="athena-thread"]');
+    if (!threadElement) throw new Error('missing thread');
+    expect(within(threadElement).getByText('What is 10 + 10?')).toBeVisible();
+    expect(within(threadElement).getByRole('status')).toHaveTextContent('Athena is working');
+    expect(within(threadElement).queryByRole('list', { name: 'Suggestions' })).toBeNull();
+
+    finishPost?.(okResponse(thread([])));
+    await waitFor(() => {
+      expect(threadElement).toHaveTextContent('The answer is 20.');
+    });
+    await waitFor(() => {
+      expect(within(threadElement).queryByText('Athena is working')).toBeNull();
+    });
+  });
+
+  it('keeps showing work after the send is accepted until an asynchronous reply arrives', async () => {
+    vi.stubGlobal(
+      'EventSource',
+      class {
+        addEventListener(): void {
+          return;
+        }
+        close(): void {
+          return;
+        }
+      },
+    );
+    const running = {
+      ...thread([
+        {
+          id: 'user_1',
+          sessionId: 'chat_session',
+          organizationId: null,
+          type: 'response',
+          body: { text: 'Plan my day', author: 'user' },
+          createdAt: '2026-08-30T10:01:00.000Z',
+        },
+      ]),
+      status: 'running',
+    };
+    chatGet
+      .mockResolvedValueOnce(okResponse(thread([])))
+      .mockResolvedValueOnce(okResponse(running));
+    personalPost.mockResolvedValue(okResponse(running));
+    renderConversation();
+
+    const composer = await screen.findByRole('combobox', { name: 'Message Athena' });
+    fireEvent.change(composer, { target: { value: 'Plan my day' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Send' })).toBeDisabled();
+      expect(screen.getByRole('status')).toHaveTextContent('Athena is working');
+      expect(screen.getAllByText('Plan my day')).toHaveLength(1);
+    });
   });
 });
 

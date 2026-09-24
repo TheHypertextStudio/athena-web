@@ -139,8 +139,7 @@ export function SchedulingTimeGrid({
           .map((tick) => (
             <span
               key={tick.wallMinutes}
-              // `whitespace-nowrap` because the compact gutter is sized to the label's exact
-              // measured width: without it a 44px box wraps `12 AM` onto two lines.
+              // Keep hour labels on one line so the compact gutter reserves a stable inset.
               className={`text-on-surface-variant text-label-large absolute whitespace-nowrap tabular-nums ${tickLabelTranslation(tick.wallMinutes)} ${labelStyle === 'hour' ? 'right-1' : 'right-2'}`}
               data-schedule-label={tick.wallMinutes}
               style={{ top: tickTop(tick.wallMinutes, pixelsPerHour) }}

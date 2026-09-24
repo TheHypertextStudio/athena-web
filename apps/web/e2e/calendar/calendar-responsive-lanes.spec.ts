@@ -44,6 +44,15 @@ test('shows the selected period in server HTML before hydration or item loading'
     await expect(schedule.locator('[data-schedule-hour]').first()).toHaveText(/AM|PM/);
     for (const width of [320, 390, 768]) {
       await initialPage.setViewportSize({ width, height: 844 });
+      const noonInset = await schedule.locator('[data-schedule-hour="12"]').evaluate((label) => {
+        const text = label.firstChild;
+        const section = label.closest('section');
+        if (!text || !section) return -1;
+        const range = document.createRange();
+        range.selectNodeContents(text);
+        return range.getBoundingClientRect().left - section.getBoundingClientRect().left;
+      });
+      expect(noonInset).toBeGreaterThanOrEqual(8);
       await initialPage.screenshot({
         path: testInfo.outputPath(`calendar-${String(width)}x844-first-paint.png`),
       });
@@ -53,7 +62,9 @@ test('shows the selected period in server HTML before hydration or item loading'
   }
 });
 
-test('keeps one date lane on phones and fills wider canvases progressively', async ({ page }) => {
+test('keeps one date lane on phones and fills wider canvases progressively', async ({
+  page,
+}, testInfo) => {
   const hydrationErrors: string[] = [];
   page.on('pageerror', (error) => {
     if (error.message.includes('Hydration failed')) hydrationErrors.push(error.message);
@@ -69,6 +80,19 @@ test('keeps one date lane on phones and fills wider canvases progressively', asy
     await page.setViewportSize({ width, height: 844 });
     await expect(schedule).toHaveAttribute('data-visible-lane-count', '1');
     await expect(page.getByRole('heading', { name: 'September 23, 2026' })).toBeVisible();
+    const noonInset = await schedule.locator('[data-schedule-label="720"]').evaluate((label) => {
+      const section = label.closest('section');
+      if (!section) return -1;
+      const range = document.createRange();
+      range.selectNodeContents(label);
+      return range.getBoundingClientRect().left - section.getBoundingClientRect().left;
+    });
+    expect(noonInset).toBeGreaterThanOrEqual(8);
+    if (width !== 430) {
+      await page.screenshot({
+        path: testInfo.outputPath(`calendar-${String(width)}x844-time-gutter.png`),
+      });
+    }
   }
 
   await page.setViewportSize({ width: 768, height: 844 });

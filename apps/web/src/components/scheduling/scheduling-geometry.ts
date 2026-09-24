@@ -63,25 +63,22 @@ export interface ScheduleAxisPresentation {
 
 const FULL_AXIS: ScheduleAxisPresentation = { gutterWidth: 88, labelStyle: 'exact' };
 /**
- * 44px, not the ~32px a reference rail gets away with.
+ * 56px, not the ~32px a reference rail gets away with.
  *
  * @remarks
  * Those rails print their hours at 10–11px. Round 3 established a hard 14px floor for this surface
- * — zero rendered nodes at or below 12px — and `12 AM` at 14px measures ~38px plus its 4px inset.
- * Halving the gutter is worth having; buying the other 12px by regressing a shipped type guarantee
- * is not.
+ * — zero rendered nodes at or below 12px — and `12 AM` at 14px measures about 41px. The remaining
+ * space keeps the text clear of both the phone edge and the date lane without shrinking type.
  */
-const COMPACT_AXIS: ScheduleAxisPresentation = { gutterWidth: 44, labelStyle: 'hour' };
+const COMPACT_AXIS: ScheduleAxisPresentation = { gutterWidth: 56, labelStyle: 'hour' };
 
 /**
  * Choose the hour axis's width and label form from the measured canvas width.
  *
  * @remarks
- * An **unmeasured** viewport (`0`) resolves to the full axis rather than the compact one. Zero is
- * every canvas's first paint, and resolving it compact would make the wide calendar flash a 32px
- * gutter before its first measurement. The rail's own 88 → 32 correction lands in the same layout
- * pass as its lane width's 0 → real correction, which already reflows the surface, so it costs no
- * additional frame.
+ * An **unmeasured** viewport (`0`) resolves to the full axis for callers that need an axis state.
+ * The dedicated first frame uses the 56px compact gutter while width is unknown. Once measured,
+ * the grid chooses its gutter and date-lane count in the same layout pass.
  *
  * @param viewportWidth - Measured canvas width in CSS pixels, or `0` when unmeasured.
  * @returns The gutter width and label form for that width.

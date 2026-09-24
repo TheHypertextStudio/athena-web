@@ -46,14 +46,14 @@ export function SchedulingCanvasMeasuring({
       data-schedule-measuring=""
     >
       <div className="flex h-12 items-center">
-        <span className="w-12 shrink-0" />
+        <span className="w-14 shrink-0" />
         <span className="text-label-large text-on-surface px-1">
           {selectedLane?.label ?? 'Schedule'}
         </span>
       </div>
       <Separator className="opacity-30" />
       <div className="flex h-12 items-center">
-        <span className="text-label-medium text-on-surface-variant w-12 shrink-0 pr-1 text-right">
+        <span className="text-label-medium text-on-surface-variant w-14 shrink-0 pr-1 text-right">
           All day
         </span>
       </div>
@@ -64,7 +64,7 @@ export function SchedulingCanvasMeasuring({
           return (
             <div key={hour} className="flex" style={{ height: pixelsPerHour }}>
               <span
-                className="text-label-large text-on-surface-variant w-12 shrink-0 pr-1 text-right tabular-nums"
+                className="text-label-large text-on-surface-variant w-14 shrink-0 pr-1 text-right tabular-nums"
                 data-schedule-hour={hour}
               >
                 {hourLabels.get(hour)}

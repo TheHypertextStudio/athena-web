@@ -17579,3 +17579,13 @@ xhigh` passes (10 finder angles each, one-vote verification, a gap sweep) agains
   correction. Session `01M3A8XEBQC2RHCV0T0YQRQMGV` returned from Mac Studio work
   `work_01M3A8XE5RBD8T4S04X5FC653S` with a completed sealed relay result and one pending proposal
   on the original task. The trigger was disabled after that run. The proposal remains unapproved.
+- **Offline interactive recovery**: Stopping the Studio daemon made Settings show the selected Mac
+  Studio as Asleep and a new Athena request failed without a cloud answer. The live page showed a
+  generic internal error because Docket's global Problem handler treated the expected Lattice
+  refusal as an unhandled exception. Map it to the stable `lattice_unavailable` 503 Problem and
+  application-owned wake-or-reconnect copy. A separate regression test found that failure to
+  resolve an expired grant happened outside the generation settlement handler, leaving the run
+  claimed as `running`; move resolution inside that handler. The daemon was restarted, Settings
+  returned to Ready, and a fresh Athena prompt answered `7` through the selected Studio. Focused
+  API and web tests, typecheck, and formatting pass; the new error response still needs a live
+  offline check after this Docket release.

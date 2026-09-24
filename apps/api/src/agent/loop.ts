@@ -451,12 +451,12 @@ async function driveSessionWithAdmission(
   );
   let generationTurns = 0;
 
-  // Per-owner backend resolution: a personal Athena whose owner pointed it at their own Lattice
-  // device runs this turn there; everyone else gets the container's process-level runtime. See
-  // `routes/lattice-backend.ts` — it never falls back, so "my machine answered" stays honest.
-  const turnRuntime = deps.turnRuntime ?? (await resolveOwnerTurnRuntime(session.ownerUserId));
   let toolbox: Awaited<ReturnType<typeof openToolbox>> | null = null;
   try {
+    // Resolve after entering the generation's settlement scope. An expired personal grant can
+    // refuse before the first model call; that must release the claimed run instead of leaving it
+    // in "running" until the lease expires. Resolution never falls back to a cloud model.
+    const turnRuntime = deps.turnRuntime ?? (await resolveOwnerTurnRuntime(session.ownerUserId));
     const openedToolbox = (toolbox = await openToolbox(executor, sessionId));
     const settleOwned = async (
       status: 'awaiting_input' | 'awaiting_approval' | 'completed' | 'failed' | 'canceled',

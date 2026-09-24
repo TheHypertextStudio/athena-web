@@ -6,6 +6,7 @@
  * and emits the `domain packages` {@link Problem} shape as `application/problem+json`.
  */
 import type { StandardSchemaV1 } from '@standard-schema/spec';
+import { LatticeUnavailableError } from '@docket/integrations';
 import {
   publicProblemTitle,
   type FieldIssue,
@@ -461,11 +462,21 @@ function authenticationChallenge(error: ApiError, context: Context<AppEnv>): str
   return docketSessionChallenge(error);
 }
 
+/** Map expected provider and schema failures before the public problem renderer. */
+function toApiError(err: Error): ApiError {
+  if (err instanceof ApiError) return err;
+  if (err instanceof LatticeUnavailableError) {
+    return new ApiError(503, 'lattice_unavailable', 'Selected Lattice runtime unavailable');
+  }
+  if (err instanceof ZodError) return new ValidationError(err);
+  return new ApiError(500, 'internal', 'Internal server error');
+}
+
 /**
  * The Hono `onError` handler: maps any thrown error to the Problem shape.
  *
  * @remarks
- * An error that isn't an {@link ApiError} or a {@link ZodError} is a genuinely unhandled
+ * An error that isn't an {@link ApiError}, `LatticeUnavailableError`, or {@link ZodError} is a genuinely unhandled
  * exception — the code path never anticipated it, so there's no domain-specific status/code to
  * map it to and it collapses to a bare 500. That collapse used to be silent: the caller got
  * `{"code":"internal"}` and nothing else, anywhere, ever recorded *what* actually failed. One
@@ -489,14 +500,9 @@ export function onError<E extends Env>(err: Error, c: Context<E>): Response {
   // The production server always supplies AppEnv. Keeping the handler generic also lets small
   // isolated Hono tests exercise Problem rendering without fabricating unrelated context values.
   const appContext = c as unknown as Context<AppEnv>;
-  const apiErr =
-    err instanceof ApiError
-      ? err
-      : err instanceof ZodError
-        ? new ValidationError(err)
-        : new ApiError(500, 'internal', 'Internal server error');
+  const apiErr = toApiError(err);
 
-  if (!(err instanceof ApiError)) {
+  if (!(err instanceof ApiError) && !(err instanceof LatticeUnavailableError)) {
     console.error(
       JSON.stringify({
         level: 'error',

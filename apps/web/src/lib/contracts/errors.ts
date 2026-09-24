@@ -54,6 +54,7 @@ export const ProblemCode = z
     'payload_too_large',
     'precondition_failed',
     'unsupported_media_type',
+    'lattice_unavailable',
     'internal',
   ])
   .describe(
@@ -94,6 +95,7 @@ export const ProblemCode = z
       '- `payload_too_large` (HTTP 413): the request body is larger than this API will read. Upload a smaller file, or split the request.',
       '- `unsupported_media_type` (HTTP 415): the request body arrived under a `Content-Type` the endpoint does not read. Send `application/json` for a JSON body, or `multipart/form-data` where a file is expected.',
       '- `precondition_failed` (HTTP 412): the `If-Match` entity tag did not match the current representation, so the write was refused to avoid overwriting a concurrent change — re-read the resource and retry against the new `ETag`.',
+      '- `lattice_unavailable` (HTTP 503): the selected personal runtime cannot serve this Athena turn. Wake the computer or reconnect Lovelace in Settings, then retry.',
       '- `internal` (HTTP 500): an unexpected server error; safe to retry.',
     ].join('\n'),
   );
@@ -157,6 +159,7 @@ export const PUBLIC_PROBLEM_TITLES = {
   payload_too_large: 'That is too large to upload.',
   precondition_failed: 'Someone else changed this first.',
   unsupported_media_type: 'That file or format cannot be read.',
+  lattice_unavailable: 'Your Lattice computer is unavailable.',
   internal: 'Something went wrong on our side.',
 } as const satisfies Record<ProblemCode, string>;
 
@@ -207,6 +210,8 @@ export const PUBLIC_PROBLEM_SUMMARIES = {
   payload_too_large: 'The request exceeds the upload limit.',
   precondition_failed: 'The saved item changed after you last loaded it.',
   unsupported_media_type: 'This address cannot read the request content type.',
+  lattice_unavailable:
+    'Wake the selected computer or reconnect Lovelace in Settings, then try again.',
   internal: 'Docket could not complete the request.',
 } as const satisfies Record<ProblemCode, string>;
 
@@ -269,6 +274,7 @@ const PROBLEM_RECOVERY: Record<ProblemCode, ProblemRecovery> = {
   payload_too_large: 'review',
   precondition_failed: 'retry',
   unsupported_media_type: 'review',
+  lattice_unavailable: 'retry',
   internal: 'retry',
 };
 
@@ -317,6 +323,7 @@ const PROBLEM_STATUS: Record<ProblemCode, number> = {
   payload_too_large: 413,
   precondition_failed: 412,
   unsupported_media_type: 415,
+  lattice_unavailable: 503,
   internal: 500,
 };
 

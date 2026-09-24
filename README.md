@@ -6,6 +6,9 @@ application, operator console, API, background runner, shared packages, and depl
 The public REST API accepts an optional exact `Docket-Version` assertion and identifies each
 response with its contract and source revision. See the
 [API version policy](docs/engineering/specs/api-version-policy.md) before changing the contract.
+An Athena turn assigned to an unavailable Lattice computer returns a `503` problem with code
+`lattice_unavailable`; Docket keeps the chosen runtime and does not route the turn to a cloud model.
+See the [Lattice model-routing specification](docs/engineering/specs/lattice-byo-model.md).
 
 Today opens a focused daily planning flow for reviewing prior work, choosing tasks, placing timed blocks, and confirming the day. Drafts resume where they stopped, accepted changes retain earlier versions, and recorded time stays in the time ledger. The data and recovery rules are in [the daily planning engineering spec](docs/engineering/specs/daily-planning.md).
 

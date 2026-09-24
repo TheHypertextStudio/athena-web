@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import { LatticeUnavailableError } from '@docket/integrations';
 import { describe, expect, it, vi } from 'vitest';
 import { z, type ZodError } from 'zod';
 
@@ -107,6 +108,18 @@ describe('ApiError subclasses', () => {
 });
 
 describe('onError mapping', () => {
+  it('reports an unavailable selected Lattice runtime without leaking provider diagnostics', async () => {
+    const diagnostic = 'private relay credential text';
+    const res = await appThrowing(
+      new LatticeUnavailableError('device_offline', diagnostic),
+    ).request('/');
+    expect(res.status).toBe(503);
+    expect(res.headers.get('content-type')).toContain('application/problem+json');
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(body).toMatchObject({ code: 'lattice_unavailable', status: 503 });
+    expect(JSON.stringify(body)).not.toContain(diagnostic);
+  });
+
   it('maps an ApiError to its problem shape (no fieldErrors)', async () => {
     const res = await appThrowing(new NotFoundError('Missing')).request('/');
     expect(res.status).toBe(404);

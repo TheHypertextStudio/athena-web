@@ -130,6 +130,12 @@ An expired or narrowed grant remains visible in Settings with its selected devic
 reason-specific reconnect action. A failed reconnect keeps the existing sealed grant and device
 choice. A successful device read restores the connection to its usable state.
 
+An interactive turn that reaches an unavailable selected runtime returns a `503` Problem with the
+stable `lattice_unavailable` code. The API maps the expected Lattice refusal without returning
+provider diagnostics, and the web app supplies its own wake-or-reconnect guidance. Backend
+resolution runs inside the generation's failure handler so an unusable grant settles the claimed
+run as failed instead of leaving it running until its lease expires.
+
 Tests count Docket generation rows and remote submissions. An offline selected runtime keeps the
 delegation queued and produces zero Docket generation rows.
 
@@ -248,11 +254,10 @@ calls `PUT /v1/personal-relay/work-items/:workId/result-acknowledgement`, which 
 the sealed result and progress ciphertext. The gateway derives the Lovelace account from the token.
 Docket never supplies an authoritative account identity.
 
-**Unavailability is a 200, not a 409.** Every Lattice failure has an actionable cause — wake the
-machine, start the daemon, reconnect, pick another device — so it comes back in the payload as a
-stable `unavailableReason` and the surface renders an instruction. Modelling them as errors would
-force an error toast for "your laptop is asleep", or a widening of the closed `ProblemCode`
-taxonomy. Neither is right.
+**Settings availability reads return 200, not 409.** Every Lattice failure has an actionable cause
+— wake the machine, start the daemon, reconnect, pick another device — so Settings receives a stable
+`unavailableReason` and renders an instruction. A refused interactive turn uses the separate
+`lattice_unavailable` Problem code because that requested work did not complete.
 
 The API returns codes; `apps/web/src/app/(app)/settings/athena/lattice-copy.ts` owns every word a
 person reads. No gateway message, issuer `error_description`, or DNS failure text is ever rendered.

@@ -132,6 +132,37 @@ async function seedSession(policy?: 'suggest' | 'act_with_approval' | 'autonomou
   };
 }
 
+describe('selected Lattice backend', () => {
+  it('settles a claimed generation when the owner grant cannot resolve', async () => {
+    const seed = await seedSession();
+    const [personal] = await db
+      .insert(schema.agentSession)
+      .values({
+        executorKind: 'athena',
+        ownerUserId: seed.userId,
+        contextOrganizationId: seed.orgId,
+        trigger: 'delegation',
+        status: 'pending',
+      })
+      .returning({ id: schema.agentSession.id });
+    const sessionId = assertDefined(personal).id;
+    await db.insert(schema.latticeConnection).values({
+      ownerUserId: seed.userId,
+      status: 'error',
+      enabled: true,
+      deviceId: 'lat_unavailable',
+      lastFailureReason: 'authorization_expired',
+    });
+
+    await expect(driveSession(seed.orgId, sessionId)).rejects.toThrow();
+    const [session] = await db
+      .select({ status: schema.agentSession.status })
+      .from(schema.agentSession)
+      .where(eq(schema.agentSession.id, sessionId));
+    expect(session?.status).toBe('failed');
+  });
+});
+
 /** Build deps whose turn runtime replays the given script. */
 function scripted(script: readonly AgentRuntimeModule.ScriptedTurn[]): LoopDeps {
   return { turnRuntime: new agentRuntime.MockAgentTurnRuntime({ script }) };

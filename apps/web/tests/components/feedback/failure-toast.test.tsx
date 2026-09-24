@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { presentFailure } from '@/components/feedback/failure-toast';
 import { ApiRequestError } from '@/lib/query-core';
+import { readProblemError } from '@/lib/problem';
 
 afterEach(() => {
   dismissAllNotices();
@@ -21,6 +22,26 @@ async function present(run: () => void): Promise<HTMLElement> {
 }
 
 describe('presentFailure', () => {
+  it('tells the person their selected Lattice computer is unavailable', async () => {
+    render(<Toaster />);
+    const error = await readProblemError(
+      new Response(
+        JSON.stringify({
+          type: 'about:blank',
+          title: 'Selected Lattice computer unavailable',
+          status: 503,
+          code: 'lattice_unavailable',
+        }),
+        { status: 503, headers: { 'content-type': 'application/problem+json' } },
+      ),
+      'Athena could not answer right now.',
+    );
+
+    const alert = await present(() => presentFailure(error, 'Could not send your message.'));
+    expect(alert).toHaveTextContent(/Lattice computer.*unavailable/i);
+    expect(alert).toHaveTextContent(/wake.*computer/i);
+  });
+
   it('never shows an exception message, only application-owned copy', async () => {
     render(<Toaster />);
 

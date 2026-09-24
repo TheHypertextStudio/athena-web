@@ -16,7 +16,7 @@
 - **Description**: The calendar update reached `main`, but CI rejected stale web assertions, the offline calendar export, and a complexity increase. Production deployment has not run.
 - **Approach**: Restore a prop-free offline calendar export while retaining server-provided initial date and timezone for the online route. Extract canvas selection presentation and measurement logic to keep complexity at its prior level. Update assertions for the intended Athena label, phone gutter, and event title density.
 - **Files changed**: Calendar route and scheduling components, focused web tests, and this log.
-- **Validation**: The four affected Vitest files passed (91 tests). Focused typecheck, lint, CI, and production checks remain pending.
+- **Validation**: The four affected Vitest files passed (91 tests). The design policy passed (9 tests). A focused complexity measurement reports 465 lines of overshoot against 466 allowed. CI typecheck, lint, and Web tests passed on the second run; the ledger rejected one added line. The final CI and production checks remain pending.
 - **Learnings**: The offline route generator imports the calendar client's default export without props, while the online page passes server-owned initial values.
 
 ### [DETAIL-HEADER-STACKING-001] Keep detail content beneath the pinned header

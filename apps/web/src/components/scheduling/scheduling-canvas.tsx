@@ -57,6 +57,11 @@ function compactSidecarWidthForLane(
   return laneWidth < 420 ? sidecarWidth : undefined;
 }
 
+/** Keep touch targets larger than fine-pointer targets. */
+function minimumInteractiveSize(usesCoarsePointer: boolean): number {
+  return usesCoarsePointer ? MINIMUM_COARSE_POINTER_PIXELS : MINIMUM_INTERACTIVE_PIXELS;
+}
+
 /** Render a 24-hour fluid grid while consumers own data, persistence, and policy. */
 export default function SchedulingCanvas(props: SchedulingCanvasProps): JSX.Element {
   const {
@@ -109,9 +114,7 @@ export default function SchedulingCanvas(props: SchedulingCanvasProps): JSX.Elem
   const headerRef = useRef<HTMLElement | null>(null);
   const [headerHeight, setHeaderHeight] = useState(0);
   const usesCoarsePointer = useMediaQuery('(pointer: coarse)');
-  const minimumInteractivePixels = usesCoarsePointer
-    ? MINIMUM_COARSE_POINTER_PIXELS
-    : MINIMUM_INTERACTIVE_PIXELS;
+  const minimumInteractivePixels = minimumInteractiveSize(usesCoarsePointer);
   const effectivePixelsPerHour = Math.max(1, pixelsPerHour);
   const snapMinutes = deriveSnapMinutes(effectivePixelsPerHour);
   const resolvedInitialScrollMinutes = deriveInitialScheduleScrollMinutes({

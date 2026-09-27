@@ -13,10 +13,15 @@ import {
 export function LatticeEmptyDevices({
   isError,
   reason,
+  onRetry,
+  retrying,
 }: {
   readonly isError: boolean;
   readonly reason: LatticeUnavailableReason | null;
+  readonly onRetry: () => void;
+  readonly retrying: boolean;
 }): JSX.Element {
+  const canRetry = isError || reason === 'gateway_error' || reason === 'gateway_unreachable';
   // The final device can disappear during a session, so announce this transition.
   return (
     <div role="status">
@@ -30,6 +35,13 @@ export function LatticeEmptyDevices({
               : 'Try again in a moment, or reconnect Lovelace if this keeps happening.'
           }
           frame="none"
+          action={
+            canRetry ? (
+              <Button variant="secondary" onClick={onRetry} disabled={retrying}>
+                {retrying ? 'Trying…' : 'Try again'}
+              </Button>
+            ) : undefined
+          }
         />
       ) : (
         <EmptyState

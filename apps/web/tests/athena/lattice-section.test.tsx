@@ -433,6 +433,32 @@ describe('LatticeSection carries no supplemental status text', () => {
     expect(screen.queryByText('No computers paired')).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Set up Lattice' })).not.toBeInTheDocument();
   });
+
+  it('retries a provider failure without sending the person through authorization again', async () => {
+    connectionGet.mockReset().mockResolvedValue(
+      okResponse({
+        ...UNCONNECTED,
+        connected: true,
+        unavailableReason: 'gateway_error' as const,
+      }),
+    );
+    devicesGet
+      .mockReset()
+      .mockResolvedValueOnce(
+        okResponse({ devices: [], unavailableReason: 'gateway_error' as const }),
+      )
+      .mockResolvedValue(okResponse({ devices: [REACHABLE_DEVICE], unavailableReason: null }));
+    renderSection();
+
+    expect(await screen.findByText('Could not load your computers')).toBeInTheDocument();
+    const reconnect = screen.getByRole('button', { name: 'Reconnect' });
+    expect(reconnect.className).not.toContain('bg-secondary-container');
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+
+    expect(await screen.findByText('Mac Studio')).toBeInTheDocument();
+    expect(screen.queryByText('Could not load your computers')).not.toBeInTheDocument();
+    expect(requestLatticeFedCM).not.toHaveBeenCalled();
+  });
 });
 
 describe('LatticeSection ceremony feedback', () => {

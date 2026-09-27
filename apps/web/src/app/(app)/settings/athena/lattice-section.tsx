@@ -114,6 +114,17 @@ function deviceIcon(status: DeviceStatus): typeof CheckCircle2 {
   }
 }
 
+/** Whether renewed Lovelace consent can resolve this failure. */
+function authorizationNeedsAttention(
+  statusReason: LatticeUnavailableReason | null,
+  deviceResult: { readonly unavailableReason: LatticeUnavailableReason | null } | undefined,
+): boolean {
+  const reasons = [statusReason, deviceResult?.unavailableReason];
+  return reasons.some(
+    (reason) => reason === 'authorization_expired' || reason === 'insufficient_scopes',
+  );
+}
+
 /** Retint a device row's icon frame for the states worth a tonal call-out; ready/asleep stay neutral. */
 const DEVICE_ICON_TONE: Readonly<Record<DeviceStatus, string>> = {
   reachable: '',
@@ -527,10 +538,9 @@ export function LatticeSection(): JSX.Element {
   }
 
   const devices = devicesQ.data?.devices ?? [];
-  // Only an account-level reason actually gets fixed by reconnecting — a device being asleep,
-  // disabled, or gone from the account never is, so the button's weight stays scoped to what it
-  // can fix. The device row's own status word carries the device-level signal instead.
-  const needsReconnect = status.unavailableReason !== null;
+  // Reauthorization helps only when the grant or its scopes need attention. A gateway failure
+  // should direct the person to retry the read while preserving the existing approval.
+  const needsReconnect = authorizationNeedsAttention(status.unavailableReason, devicesQ.data);
 
   return (
     <>
@@ -570,6 +580,10 @@ export function LatticeSection(): JSX.Element {
           <LatticeEmptyDevices
             isError={devicesQ.isError}
             reason={devicesQ.data?.unavailableReason ?? null}
+            onRetry={() => {
+              void devicesQ.refetch();
+            }}
+            retrying={devicesQ.isFetching}
           />
         ) : (
           <ul className="flex flex-col" aria-live="polite" aria-atomic="false">

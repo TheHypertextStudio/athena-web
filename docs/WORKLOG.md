@@ -17629,3 +17629,33 @@ xhigh` passes (10 finder angles each, one-vote verification, a gap sweep) agains
   1440px conversation under Docket's persistent calendar; the revised breakpoint gives it space.
   The capture tool also waited on a hidden mobile calendar measurement node, so its settled-page
   check now ignores hidden measurements.
+- **Production proof, 2026-09-24**: Commit `a6fdcdc9c` passed CI and deployed. The authenticated
+  production account sent two consecutive prompts through the selected Mac Studio: the first
+  answered `25` for `18 + 7` while remembering `marigold`, and the follow-up answered `Marigold`.
+  Both turns remained visible after reload. The Studio's LM Studio server log contained both prompt
+  texts during those turns. This closes conversation continuity and interactive inference proof.
+
+### 2026-09-27 Lattice device recovery during a provider failure
+
+- **Status**: IN PROGRESS
+- **State**: VALIDATING
+- **Description**: Production Settings currently shows “Could not load your computers” for the
+  existing authorized account, leaving the person with only Reconnect and Disconnect while the
+  selected runtime is hidden.
+- **Evidence**: The production browser's `/v1/me/athena/lattice/devices` request returned HTTP 200
+  with `devices: []` and `unavailableReason: gateway_error` after roughly 600 ms, including after a
+  page reload. The Mac Studio daemon remains running. Public Auth, Lattice Gateway, and Beacon
+  readiness each returned healthy, but those probes do not identify the failed authenticated call.
+  The existing grant and selected device were preserved. Cloud Run logs still require operator
+  reauthentication to distinguish token refresh from gateway or relay failure.
+- **Approach**: Show a direct retry on transient device-list failures and reserve the prominent
+  Reconnect action for expired authorization or missing scopes. Keep the grant untouched while
+  resolving the underlying production failure from operator logs, then repeat the selected-device
+  and offline/recovery acceptance checks.
+- **Files changed**: `apps/web/src/app/(app)/settings/athena/lattice-empty-devices.tsx`,
+  `apps/web/src/app/(app)/settings/athena/lattice-section.tsx`, the focused Settings test, and this
+  worklog.
+- **Validation**: The new retry test failed against the former Reconnect weighting and then passed
+  after implementation; all 21 focused Lattice Settings tests pass. Web typecheck passes. The
+  first focused lint run found one complexity increment; extraction of the reason predicate fixed
+  that lint failure. Production provider diagnosis and release proof remain open.

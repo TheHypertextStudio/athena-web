@@ -20,8 +20,8 @@ export const athenaConversationChapter = pgTable(
     title: text('title').notNull(),
     startActivityId: text('start_activity_id').notNull(),
     endActivityId: text('end_activity_id'),
-    createdAt: timestamp('created_at').notNull().defaultNow(),
-    updatedAt: timestamp('updated_at')
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
       .notNull()
       .defaultNow()
       .$onUpdate(() => new Date()),

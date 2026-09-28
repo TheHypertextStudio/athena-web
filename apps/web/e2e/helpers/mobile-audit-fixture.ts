@@ -36,7 +36,7 @@ interface BillingState {
 }
 
 interface CurrentCycleWindow {
-  readonly cycles: readonly { readonly number: number }[];
+  readonly current: { readonly id: string } | null;
 }
 
 interface RecurringTaskCreated {
@@ -226,18 +226,8 @@ export async function createMobileAuditFixture(page: Page): Promise<MobileAuditF
     page,
     `/v1/orgs/${orgId}/cycles/current?teamId=${created.defaultTeam.id}`,
   );
-  const nextCycleNumber = Math.max(0, ...currentWindow.cycles.map((cycle) => cycle.number)) + 1;
-  const cycle = await apiJson<{ id: string }>(page, `/v1/orgs/${orgId}/cycles`, {
-    method: 'POST',
-    body: {
-      teamId: created.defaultTeam.id,
-      number: nextCycleNumber,
-      name: `Mobile audit cycle ${nextCycleNumber}`,
-      startsAt: calendarDate(-7),
-      endsAt: calendarDate(7),
-      status: 'active',
-    },
-  });
+  const cycle = currentWindow.current;
+  if (!cycle) throw new Error('Mobile audit requires a current cycle for its new team.');
   const task = await apiJson<{ id: string }>(page, `/v1/orgs/${orgId}/tasks`, {
     method: 'POST',
     body: {

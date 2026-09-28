@@ -8,6 +8,17 @@
 
 ## Active Tasks
 
+### [RELEASE-CYCLE-FIXTURE-001] Use the current cycle in release screen fixtures
+
+- **Status**: VALIDATING
+- **Started**: 2026-09-28
+- **Priority**: P0
+- **Description**: The production release gate failed in all three screen tests because its fixture tried to insert a manual cycle with the same team and start date as an auto-generated cycle. PostgreSQL rejected `cycle_native_start_uq`, before any screen assertion ran.
+- **Approach**: Use the current cycle returned by the fixture's existing `/cycles/current` read. The route already ensures the team's rolling window, and the screen tests need a cycle to attach work to, not a second cycle with an overlapping date.
+- **Files changed**: `apps/web/e2e/helpers/mobile-audit-fixture.ts` and this worklog.
+- **Validation**: The three focused local Playwright tests pass against the local API and PostgreSQL. Full release screen acceptance and CI rerun remain open.
+- **Learning**: Release fixtures must reuse auto-generated records when exercising surrounding screens; creating a second record on an occupied cadence boundary makes the gate depend on the calendar date.
+
 ### [ATHENA-SEND-RECONCILE-001] Reconcile a completed turn after a failed send response
 
 - **Status**: REVIEW

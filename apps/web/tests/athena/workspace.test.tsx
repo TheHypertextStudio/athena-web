@@ -18,7 +18,18 @@ vi.mock('../../src/lib/api', () => ({
     v1: {
       orgs: { ':orgId': { sessions: { chat: { $get: chatGet } } } },
       me: {
-        athena: { chat: { messages: { $post: personalPost } } },
+        athena: {
+          chat: {
+            messages: { $post: personalPost },
+            chapters: {
+              $get: vi.fn().mockResolvedValue({
+                ok: true,
+                status: 200,
+                json: async () => ({ sessionId: 'chat_1', items: [] }),
+              }),
+            },
+          },
+        },
         elicitations: { $get: elicitationsGet, presence: { $post: presencePost } },
       },
     },

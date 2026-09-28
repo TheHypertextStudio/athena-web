@@ -1016,6 +1016,13 @@
       "when": 1790190856668,
       "tag": "0144_shallow_morlocks",
       "breakpoints": true
+    },
+    {
+      "idx": 145,
+      "version": "7",
+      "when": 1790630673470,
+      "tag": "0145_huge_rattler",
+      "breakpoints": true
     }
   ]
 }

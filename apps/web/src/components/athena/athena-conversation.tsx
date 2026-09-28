@@ -75,6 +75,8 @@ export interface ComposerDraftRequest {
 export interface AthenaConversationProps {
   /** The full-page surface uses a roomier conversation layout than the rail. */
   layout?: 'page' | 'panel';
+  /** Whether this mounted conversation is currently open to the person. */
+  active?: boolean;
   /** A one-line label for an empty thread; the default empty thread is its suggestions alone. */
   emptyState?: ConversationEmptyState | undefined;
   /** The org whose persistent chat thread to render. */
@@ -436,6 +438,7 @@ export default function AthenaConversation(props: AthenaConversationProps): JSX.
   return (
     <div className={cn('flex h-full w-full flex-col', props.className)}>
       <ConversationThread
+        active={props.active}
         query={read.query}
         entries={read.entries}
         thread={read.thread}

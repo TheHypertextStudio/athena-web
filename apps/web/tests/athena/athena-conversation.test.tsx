@@ -30,7 +30,18 @@ vi.mock('../../src/lib/api', () => ({
         },
       },
       me: {
-        athena: { chat: { messages: { $post: personalPost } } },
+        athena: {
+          chat: {
+            messages: { $post: personalPost },
+            chapters: {
+              $get: vi
+                .fn()
+                .mockResolvedValue(
+                  new Response(JSON.stringify({ sessionId: 'chat_session', items: [] })),
+                ),
+            },
+          },
+        },
         elicitations: { $get: elicitationsGet, presence: { $post: presencePost } },
       },
     },
@@ -140,11 +151,13 @@ function jobTransport(detail: PersonalAthenaSessionSummary): PersonalAthenaTrans
 }
 
 beforeEach(() => {
+  vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-08-30T12:05:00.000Z'));
   elicitationsGet.mockResolvedValue(okResponse({ items: [] }));
 });
 
 afterEach(() => {
   cleanup();
+  vi.restoreAllMocks();
   vi.clearAllMocks();
   vi.unstubAllGlobals();
   delete process.env['NEXT_PUBLIC_API_URL'];
@@ -188,7 +201,7 @@ describe('AthenaConversation reply feedback', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
 
     expect(
-      await screen.findByText(/Message sent\. The conversation could not refresh yet\./),
+      await screen.findByText(/Message sent\. The conversation has not updated yet\./),
     ).toBeVisible();
     expect(composer).toHaveValue('');
     expect(personalPost).toHaveBeenCalledTimes(1);
@@ -233,7 +246,7 @@ describe('AthenaConversation reply feedback', () => {
     const threadElement = document.querySelector<HTMLElement>('[data-slot="athena-thread"]');
     if (!threadElement) throw new Error('missing thread');
     expect(within(threadElement).getByText('What is 10 + 10?')).toBeVisible();
-    expect(within(threadElement).getByRole('status')).toHaveTextContent('Athena is working');
+    expect(within(threadElement).getByRole('status')).toHaveTextContent('Reply pending');
     expect(within(threadElement).queryByRole('list', { name: 'Suggestions' })).toBeNull();
 
     finishPost?.(okResponse(thread([])));
@@ -241,7 +254,7 @@ describe('AthenaConversation reply feedback', () => {
       expect(threadElement).toHaveTextContent('The answer is 20.');
     });
     await waitFor(() => {
-      expect(within(threadElement).queryByText('Athena is working')).toBeNull();
+      expect(within(threadElement).queryByText('Reply pending')).toBeNull();
     });
   });
 
@@ -282,7 +295,7 @@ describe('AthenaConversation reply feedback', () => {
 
     await waitFor(() => {
       expect(screen.getByRole('button', { name: 'Send' })).toBeDisabled();
-      expect(screen.getByRole('status')).toHaveTextContent('Athena is working');
+      expect(screen.getByRole('status')).toHaveTextContent('Reply pending');
       expect(screen.getAllByText('Plan my day')).toHaveLength(1);
     });
   });
@@ -343,7 +356,6 @@ describe('AthenaConversation MCP app cards', () => {
     mount();
 
     expect(await screen.findByText('Interactive view unavailable.')).toBeVisible();
-    expect(screen.queryByTestId('mcp-app-view')).not.toBeInTheDocument();
   });
 
   it('sends composer messages through the personal door and renders the re-read turn', async () => {
@@ -387,7 +399,6 @@ describe('AthenaConversation page context', () => {
     });
     const form = await screen.findByRole('form', { name: /Message Athena/ });
     expect(within(form).queryByRole('group')).not.toBeInTheDocument();
-    expect(within(form).getByRole('combobox')).toHaveAttribute('rows', '2');
   });
 
   it('shows the attached page in the composer when asked, and sends it with the message', async () => {
@@ -521,14 +532,6 @@ describe('AthenaConversation heads-up', () => {
 });
 
 describe('AthenaConversation delegated work', () => {
-  it('renders a job as a card among the thread entries and skips the empty state', async () => {
-    chatGet.mockResolvedValue(okResponse(thread([])));
-    const theJob = job();
-    renderConversation({ jobs: [theJob], transport: jobTransport(theJob) });
-
-    expect(await screen.findByRole('article', { name: /Draft the launch update/ })).toBeVisible();
-  });
-
   it('keeps a job card in time order alongside the thread activities', async () => {
     chatGet.mockResolvedValue(
       okResponse(

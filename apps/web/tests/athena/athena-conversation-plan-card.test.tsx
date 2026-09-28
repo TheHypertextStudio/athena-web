@@ -2,7 +2,7 @@ import '@testing-library/jest-dom/vitest';
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { okResponse } from '../support/query';
 
@@ -24,6 +24,17 @@ vi.mock('../../src/lib/api', () => ({
         },
       },
       me: {
+        athena: {
+          chat: {
+            chapters: {
+              $get: vi.fn().mockResolvedValue({
+                ok: true,
+                status: 200,
+                json: async () => ({ sessionId: 'chat_session', items: [] }),
+              }),
+            },
+          },
+        },
         elicitations: { $get: elicitationsGet, presence: { $post: presencePost } },
         plans: { ':id': { $get: planGet } },
       },
@@ -131,8 +142,13 @@ function mount() {
   );
 }
 
+beforeEach(() => {
+  vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-09-05T12:00:00.000Z'));
+});
+
 afterEach(() => {
   cleanup();
+  vi.restoreAllMocks();
   vi.clearAllMocks();
 });
 

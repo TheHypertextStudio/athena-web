@@ -16,15 +16,21 @@
 import type { AgentSessionDetailOut } from '@docket/athena/agent-contract';
 import { ChevronDown, Sparkles } from '@docket/ui/icons';
 import { InlineBanner } from '@docket/ui/components';
-import { Button, Skeleton, Surface } from '@docket/ui/primitives';
+import { Button, Skeleton } from '@docket/ui/primitives';
 import { cn } from '@docket/ui/lib/utils';
 import type { UseQueryResult } from '@tanstack/react-query';
 import { type JSX, type RefObject, useEffect, useRef, useState } from 'react';
 
-import { ProposalGroupCard } from '@/components/agents/proposal-group-card';
 import { PartialLoadBanner, QueryLoadFailure } from '@/components/feedback';
+import { ChatProposals } from '@/components/athena/conversation-proposals';
+import type { ChapterActions } from '@/components/athena/conversation-chapter-menu';
 import { ConversationSuggestions } from '@/components/athena/conversation-suggestions';
 import { AthenaHeadsUpSlot } from '@/components/athena/heads-up-entry';
+import {
+  ConversationScrollArea,
+  useConversationHistory,
+  useThreadChapters,
+} from '@/components/athena/conversation-thread-controls';
 import { ThreadEntries } from '@/components/athena/thread-entries';
 import { UserMessage } from '@/components/athena/thread-entries';
 import type { PendingTurn } from '@/components/athena/athena-conversation';
@@ -33,7 +39,6 @@ import type { HeadsUp } from '@/lib/athena/heads-ups';
 import type { ThreadEntry } from '@/lib/athena/job-presentation';
 import type { PersonalAthenaContext } from '@/lib/athena/presentation';
 import type { PersonalAthenaTransport } from '@/lib/athena/query-defs';
-import { useSessionDetail } from '@/lib/use-session-detail';
 import { failureAction, type FailurePresentation } from '@/lib/failure-presentation';
 
 /** Find one job's entry inside a scroller, never elsewhere in the document. */
@@ -131,51 +136,11 @@ function useStickToEnd(
   }, [scrollerRef, columnRef]);
 }
 
-/** Props for {@link ChatProposals}. */
-interface ChatProposalsProps {
-  readonly orgId: string;
-  readonly sessionId: string;
-  readonly onSettled: () => Promise<void>;
-}
-
-/** The in-thread ghost review: the thread's pending batches, decidable in place. */
-function ChatProposals({ orgId, sessionId, onSettled }: ChatProposalsProps): JSX.Element | null {
-  const { proposals, decideGroup, editProposal, controlPending } = useSessionDetail(
-    orgId,
-    sessionId,
-  );
-  const groupRef = useRef<HTMLDivElement | null>(null);
-
-  // The proposal group loads via its own fetch, after the thread's scroll-to-end has already run,
-  // so without this the pending approval would render below the fold.
-  useEffect(() => {
-    if (proposals.length > 0) groupRef.current?.scrollIntoView({ block: 'end' });
-  }, [proposals.length]);
-
-  if (proposals.length === 0) return null;
-  return (
-    <div ref={groupRef} className="flex flex-col gap-3">
-      {proposals.map((group) => (
-        <ProposalGroupCard
-          key={group.proposalGroupId}
-          group={group}
-          canAct
-          pending={controlPending}
-          onDecide={(groupId, decision, activityIds) => {
-            void decideGroup(groupId, decision, activityIds).then(onSettled);
-          }}
-          onEdit={(activityId, input) => {
-            void editProposal(activityId, input);
-          }}
-        />
-      ))}
-    </div>
-  );
-}
-
 /** Props for {@link ConversationThread}. */
 export interface ConversationThreadProps {
   readonly layout?: 'page' | 'panel';
+  /** Whether this mounted conversation is currently open to the person. */
+  readonly active?: boolean | undefined;
   readonly pendingTurn?: PendingTurn | null;
   readonly sendFailure?: FailurePresentation | null;
   readonly refreshDelayed?: boolean;
@@ -216,7 +181,7 @@ type ThreadBodyProps = Omit<
   | 'waitingJobId'
   | 'scrollToJobId'
   | 'onScrolledToJob'
->;
+> & { readonly chapterActions?: ChapterActions | undefined };
 
 /**
  * The thread's history: a loading skeleton, the first read's failure, or the merged entries or
@@ -287,6 +252,8 @@ function ConversationHistory({
   sendFailure,
   refreshDelayed,
   showWorking,
+  onPickSuggestion,
+  chapterActions,
 }: ThreadBodyProps & { readonly showWorking: boolean }): JSX.Element {
   const optimisticText = optimisticTextFor(pendingTurn, thread);
   return (
@@ -297,16 +264,23 @@ function ConversationHistory({
         landingQuestionId={landingQuestionId}
         transport={transport}
         onWidgetMessage={sendWidgetMessage}
+        chapterActions={chapterActions}
       />
       {optimisticText ? <UserMessage text={optimisticText} /> : null}
       {showWorking ? <AthenaWorking /> : null}
       {refreshDelayed ? (
         <p role="status" className="text-on-surface-variant text-body-small">
-          Message sent. The conversation could not refresh yet. We&apos;ll keep checking.
+          Message sent. The conversation has not updated yet.
         </p>
       ) : null}
       {sendFailure ? <SendFailure failure={sendFailure} /> : null}
-      {!sendFailure && isUnansweredFailure(thread) ? <UnansweredFailure /> : null}
+      {!sendFailure && isUnansweredFailure(thread) ? (
+        <UnansweredFailure
+          onRetry={() => {
+            onPickSuggestion(lastUserMessage(thread));
+          }}
+        />
+      ) : null}
       {thread?.status === 'awaiting_approval' ? (
         <ChatProposals orgId={orgId} sessionId={thread.id} onSettled={reloadWithTransition} />
       ) : null}
@@ -364,11 +338,21 @@ function isUnansweredFailure(thread: AgentSessionDetailOut | null): boolean {
   return latestUser > latestAnswer;
 }
 
-/** A durable failure gives the saved message a clear outcome and next step. */
-function UnansweredFailure(): JSX.Element {
+/** The latest user text is the draft a failed turn can offer again. */
+function lastUserMessage(thread: AgentSessionDetailOut | null): string {
+  const activity = thread?.activities
+    .filter((entry) => entry.type === 'response' && entry.body['author'] === 'user')
+    .at(-1);
+  return typeof activity?.body['text'] === 'string' ? activity.body['text'] : '';
+}
+
+/** A durable failure offers the saved message in the composer for a deliberate retry. */
+function UnansweredFailure({ onRetry }: { readonly onRetry: () => void }): JSX.Element {
   return (
-    <InlineBanner tone="critical" title="Athena couldn't finish this reply.">
-      Your message is saved. Check your connection and send a follow-up when Athena is available.
+    <InlineBanner tone="critical" title="Athena couldn't answer.">
+      <Button type="button" variant="ghost" controlSize="sm" onClick={onRetry}>
+        Retry message
+      </Button>
     </InlineBanner>
   );
 }
@@ -388,30 +372,17 @@ function isWaitingForAthena(thread: AgentSessionDetailOut | null): boolean {
   return latestUser > latestReply;
 }
 
-/** A specific, live response state instead of a cleared composer and an empty page. */
+/** Keep pending replies visible without inserting a second message-sized card. */
 function AthenaWorking(): JSX.Element {
   return (
-    <div role="status" aria-live="polite" className="flex items-start gap-3">
+    <div role="status" aria-live="polite" className="flex items-center gap-2 pl-1">
       <span
-        className="bg-secondary-container text-on-secondary-container flex size-8 shrink-0 items-center justify-center rounded-full"
+        className="text-on-surface-variant flex size-6 shrink-0 items-center justify-center"
         aria-hidden="true"
       >
-        <Sparkles className="size-4" />
+        <Sparkles className="size-4 animate-pulse motion-reduce:animate-none" />
       </span>
-      <Surface tone="card" shape="large" pad="roomy">
-        <p className="text-on-surface text-body-medium">
-          Athena is working
-          <span
-            aria-hidden="true"
-            className="inline-block animate-pulse motion-reduce:animate-none"
-          >
-            …
-          </span>
-        </p>
-        <p className="text-on-surface-variant text-body-small mt-1">
-          Your message is in the conversation. The answer will appear here.
-        </p>
-      </Surface>
+      <span className="text-on-surface-variant text-label-small">Reply pending</span>
     </div>
   );
 }
@@ -422,9 +393,6 @@ function SendFailure({ failure }: { readonly failure: FailurePresentation }): JS
   return (
     <InlineBanner tone="critical" title={failure.title}>
       <p>{failure.detail}</p>
-      <p className="mt-2">
-        Your draft is still in the composer. Check the conversation before sending it again.
-      </p>
       {destination ? (
         <Link href={destination.href} className="mt-2 inline-block underline">
           {destination.label}
@@ -466,8 +434,10 @@ export function ConversationThread(props: ConversationThreadProps): JSX.Element 
   const { scrollToJobId, onScrolledToJob, landingQuestionId } = props;
   const scrollerRef = useRef<HTMLDivElement | null>(null);
   const columnRef = useRef<HTMLDivElement | null>(null);
+  const history = useConversationHistory(props.thread, entries, props.active);
+  const chapters = useThreadChapters(props.thread, scrollerRef, history.entries, history.reveal);
   // Keyed on the loading flag too: entries render only once the thread's own read settles.
-  const renderedCount = props.query.isPending ? 0 : entries.length;
+  const renderedCount = props.query.isPending ? 0 : history.entries.length;
   const waitingOutOfView = useWaitingOutOfView(scrollerRef, waitingJobId, renderedCount);
 
   // Newest at the bottom: a new entry scrolls the thread to its end, inside the scroller only.
@@ -482,14 +452,14 @@ export function ConversationThread(props: ConversationThreadProps): JSX.Element 
   useEffect(() => {
     if (!scrollToJobId) return;
     if (scrollToJobIn(scrollerRef.current, scrollToJobId)) onScrolledToJob?.(scrollToJobId);
-  }, [scrollToJobId, entries, onScrolledToJob]);
+  }, [scrollToJobId, history.entries, onScrolledToJob]);
 
   useEffect(() => {
     if (!landingQuestionId) return;
     scrollerRef.current
       ?.querySelector(`[data-elicitation="${landingQuestionId}"]`)
       ?.scrollIntoView({ block: 'center' });
-  }, [landingQuestionId, entries.length]);
+  }, [landingQuestionId, history.entries.length]);
 
   function jumpTo(jobId: string): void {
     scrollToJobIn(scrollerRef.current, jobId);
@@ -497,25 +467,23 @@ export function ConversationThread(props: ConversationThreadProps): JSX.Element 
 
   return (
     <div className="relative min-h-0 flex-1">
-      <div ref={scrollerRef} data-slot="athena-thread" className="absolute inset-0 overflow-y-auto">
-        <div
-          ref={columnRef}
-          className={cn(
-            'flex min-h-full flex-col gap-7 py-4',
-            props.layout === 'page'
-              ? 'mx-auto w-full max-w-3xl justify-start pt-8 pb-12'
-              : 'justify-end',
-          )}
-        >
-          <ThreadBody {...props} />
-          <AthenaHeadsUpSlot
-            headsUps={headsUps}
-            closedId={closedHeadsUpId}
-            onReview={jumpTo}
-            onDismiss={onDismissHeadsUp}
-          />
-        </div>
-      </div>
+      <ConversationScrollArea
+        scrollerRef={scrollerRef}
+        columnRef={columnRef}
+        layout={props.layout}
+        history={history}
+        chapters={chapters.rows}
+        onJumpChapter={chapters.jump}
+        onRemoveChapter={chapters.remove}
+      >
+        <ThreadBody {...props} entries={history.entries} chapterActions={chapters.actions} />
+        <AthenaHeadsUpSlot
+          headsUps={headsUps}
+          closedId={closedHeadsUpId}
+          onReview={jumpTo}
+          onDismiss={onDismissHeadsUp}
+        />
+      </ConversationScrollArea>
       {waitingJobId && waitingOutOfView ? (
         <JumpToWaiting
           onJump={() => {

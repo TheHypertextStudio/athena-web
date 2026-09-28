@@ -51,7 +51,8 @@ describe('headsUpsFor waiting trigger', () => {
     expect(headsUp).toBeDefined();
     expect(headsUp?.jobId).toBe(job.id);
     expect(headsUp?.action).toBe('review');
-    expect(headsUp?.text).toContain(job.objective);
+    expect(headsUp?.text).toBe('Work needs review');
+    expect(headsUp?.text).not.toContain(job.objective);
   });
 
   it('says nothing for a needs-you job that has not waited long enough', () => {
@@ -65,15 +66,11 @@ describe('headsUpsFor waiting trigger', () => {
   });
 });
 
-describe('headsUpsFor stopped trigger', () => {
-  it('surfaces a failed job', () => {
-    const job = failedJob();
-    const [headsUp] = headsUpsFor([job], NOW);
-
-    expect(headsUp).toBeDefined();
-    expect(headsUp?.jobId).toBe(job.id);
-    expect(headsUp?.action).toBe('review');
-    expect(headsUp?.text).toContain(job.objective);
+describe('headsUpsFor stopped work', () => {
+  it('leaves failed work in its entry instead of repeating its raw objective in the chat', () => {
+    expect(
+      headsUpsFor([failedJob({ objective: 'Review this task. Do not edit it.' })], NOW),
+    ).toHaveLength(0);
   });
 });
 
@@ -96,13 +93,21 @@ describe('headsUpsFor one-at-a-time rule', () => {
     expect(result[0]?.jobId).toBe(waiting.id);
   });
 
-  it('falls back to a failed job only once no job is waiting', () => {
+  it('shows no heads-up when no job needs a decision', () => {
     const notOverdue = waitingJob({ updatedAt: '2026-09-18T14:45:00.000Z' });
     const failed = failedJob();
     const result = headsUpsFor([notOverdue, failed], NOW);
 
-    expect(result).toHaveLength(1);
-    expect(result[0]?.jobId).toBe(failed.id);
+    expect(result).toHaveLength(0);
+  });
+
+  it('names the current object instead of quoting instructions', () => {
+    const job = waitingJob({
+      objective: 'Review the current state of this task. Leave the proposal for my approval.',
+      context: { source: { type: 'task', id: 'task_1', label: 'Launch checklist' } },
+    });
+
+    expect(headsUpsFor([job], NOW)[0]?.text).toBe('Launch checklist needs review');
   });
 });
 

@@ -165,6 +165,7 @@ export function AthenaRailConversation({
       <RailHeader orgId={orgId} />
       <AthenaConversation
         orgId={orgId}
+        active={athena.railVisible}
         className="min-h-0 flex-1 px-4 pb-4"
         draftRequest={athena.launchDraft}
         context={athena.context}

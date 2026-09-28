@@ -143,7 +143,7 @@ function WorkLedgerRead({ queue, jobs, focus, transport }: WorkColumnProps): JSX
   if (queue.isError) {
     return (
       <p role="status" className="text-on-surface-variant text-body-small">
-        Work is temporarily unavailable. We&apos;ll keep checking.
+        Work is unavailable.
       </p>
     );
   }

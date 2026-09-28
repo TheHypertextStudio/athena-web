@@ -206,7 +206,7 @@ with the thread, which is the one place work actually shows.
    inline after the text instead. A door with no header of its own carries the context chip and
    Talk in the composer instead. Enter sends; Shift+Enter breaks a line.
 
-Empty thread: the composer plus three suggestions drawn from the current page (§4.5), as
+Empty or fresh thread view: the composer plus three suggestions drawn from the current page (§4.5), as
 left-aligned 40px text buttons directly above it. They fill the composer. No icon, no name, no
 paragraph.
 
@@ -229,7 +229,7 @@ stream_event`, with a label). Detail routes and the calendar drawer register the
 
 `AthenaComposer` lives in `apps/web/src/components/athena/` and is used by the rail panel, the
 wide `/athena` view, and Today's expanded session. It owns: the context chip, mention insertion,
-attachments, the Talk control, the send button, and the streaming "Athena is working" state.
+attachments, the Talk control, the send button, and the compact pending-reply state.
 Today's resting prompt keeps its Task / Athena segmented control. In Athena position it sends into
 the personal thread and expands in place as it does now, using this composer inside the expanded
 session. While the panel is open, the prompt yields: it becomes one single-line "Add a task" field
@@ -246,8 +246,8 @@ with no toggle, attach control, or send button, so the screen holds one composer
   person, when a proposal has waited longer than a configurable threshold, and when the current
   page has an overdue or blocked item the person owns. Each heads-up is one sentence with one
   action. Thresholds and the on/off switch are per-user settings under Settings › Athena, on by
-  default. The first slice ships two of these triggers (a job waiting past a fixed hour, a job
-  that failed) computed client-side from the jobs already on the page, with dismissal kept
+  default. The current slice ships the waiting trigger only, computed client-side from the jobs
+  already on the page. Failed work stays in its own work entry. Dismissal is kept
   per-viewer in browser storage; per-user thresholds and the Settings › Athena switch follow in a
   later slice.
 
@@ -443,8 +443,8 @@ composer where the person acts. The work browser stays beside the conversation w
 and moves into a shallow, scrollable band on narrower layouts. This revises the wide layout and
 plain-text reply treatment in §4.2.
 
-Every send immediately adds the person's message and an accessible, in-thread "Athena is working"
-state. That state remains through an asynchronous run and survives a page reload when a persisted
+Every send immediately adds the person's message and a compact, accessible pending-reply state.
+That state remains through an asynchronous run and survives a page reload when a persisted
 user turn is still running. Once the answer lands, replace it with the response. A failed send
 shows a persistent explanation in the thread and keeps the draft available. If the write succeeded
 but refreshing the thread failed, say the message was sent and keep checking; do not offer to send
@@ -453,3 +453,18 @@ it again. Render assistant Markdown through Docket's safe static renderer.
 Completed and failed model turns are turns in the same conversation. Reuse the latest noncanceled
 personal chat on the next message. Only an explicit fresh-chat action or a canceled chat opens a
 successor; older sessions and their activities remain accessible in history.
+
+## 10. September 28 conversation history and chapter update
+
+The panel opens on a fresh view after six hours without a settled conversation activity. A small
+Earlier messages control stays at the top, and upward wheel or touch movement at the top reveals
+the older stream. The activity history remains in the same chat session. Live decisions stay in
+view even when their jobs began before the cutoff.
+
+A saved message has a quiet chapter control. A person names a start, then marks an end at a later
+message. The chapter index jumps to each marked start and can remove a marker without deleting
+messages. The organization conversation read supplies the full stream. The database stores
+chapters as owner-only activity spans, separate
+from the automatically derived topic cache. Failed jobs no longer add a second heads-up that
+quotes their full objective into the conversation. Assistant replies use plain left-aligned text;
+the user's bubbles already identify the speakers.

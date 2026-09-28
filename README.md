@@ -10,6 +10,11 @@ An Athena turn assigned to an unavailable Lattice computer returns a `503` probl
 `lattice_unavailable`; Docket keeps the chosen runtime and does not route the turn to a cloud model.
 See the [Lattice model-routing specification](docs/engineering/specs/lattice-byo-model.md).
 
+Athena keeps one conversation across visits. After six quiet hours, the panel opens on a fresh
+view; Earlier messages or an upward pull reveals the older stream. People can mark chapter starts
+and ends on saved messages, then return to those spans from the chapter index. The chapter markers
+are stored separately from Athena's automatically derived topics.
+
 Today opens a focused daily planning flow for reviewing prior work, choosing tasks, placing timed blocks, and confirming the day. Drafts resume where they stopped, accepted changes retain earlier versions, and recorded time stays in the time ledger. The data and recovery rules are in [the daily planning engineering spec](docs/engineering/specs/daily-planning.md).
 
 ## From clone to a working app

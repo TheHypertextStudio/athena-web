@@ -22,7 +22,16 @@ vi.mock('../../src/lib/api', () => ({
       me: {
         athena: {
           $get: athenaQueueGet,
-          chat: { messages: { $post: personalPost } },
+          chat: {
+            messages: { $post: personalPost },
+            chapters: {
+              $get: vi.fn().mockResolvedValue({
+                ok: true,
+                status: 200,
+                json: async () => ({ sessionId: 'chat_1', items: [] }),
+              }),
+            },
+          },
           pulse: { $get: pulseGet },
         },
         elicitations: { $get: elicitationsGet, presence: { $post: presencePost } },

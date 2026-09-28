@@ -13,9 +13,9 @@
  * There is deliberately no "new topic" control. Topics are derived from the conversation by the
  * API and simply appear; asking a person to declare a topic boundary is the chore this replaces.
  */
-import { Calendar, MessagesSquare, Search } from '@docket/ui/icons';
+import { MessagesSquare, Search } from '@docket/ui/icons';
 import { cn } from '@docket/ui/lib/utils';
-import { Button, ControlGroup, Field, Input, Text, Toolbar } from '@docket/ui/primitives';
+import { Button, ControlGroup, Field, Input, Skeleton, Text, Toolbar } from '@docket/ui/primitives';
 import { type JSX, useMemo, useState } from 'react';
 
 import { DatePicker } from '@/components/date-picker';
@@ -218,12 +218,13 @@ export function AthenaConversationBrowser({
       <div className="min-h-0 flex-1 overflow-y-auto">
         {lens === 'topics' ? (
           segments.isPending ? (
-            <Text as="p" token="body-small" tone="muted">
-              Working out what you have been talking about…
-            </Text>
+            <div role="status" aria-label="Loading topics" className="flex flex-col gap-2 px-2">
+              <Skeleton className="h-4 w-3/5" />
+              <Skeleton className="h-4 w-2/5" />
+            </div>
           ) : segments.isError ? (
             <Text as="p" token="body-small" tone="muted" role="status">
-              Topics are temporarily unavailable. The conversation itself is unaffected.
+              Topics are unavailable.
             </Text>
           ) : segments.data.items.length === 0 ? null : (
             <ul className="flex flex-col gap-1">
@@ -250,15 +251,11 @@ export function AthenaConversationBrowser({
               ))}
             </ul>
           )
-        ) : !hasQuery && !typing ? (
-          <Text as="p" token="body-small" tone="muted">
-            <Calendar aria-hidden="true" className="mr-1 inline size-4 align-text-bottom" />
-            Search by a word, a date range, or both.
-          </Text>
-        ) : typing || results.isPending ? (
-          <Text as="p" token="body-small" tone="muted">
-            Looking…
-          </Text>
+        ) : !hasQuery && !typing ? null : typing || results.isPending ? (
+          <div role="status" aria-label="Searching" className="flex flex-col gap-2 px-2">
+            <Skeleton className="h-4 w-3/5" />
+            <Skeleton className="h-4 w-2/5" />
+          </div>
         ) : results.isError ? (
           <Text as="p" token="body-small" tone="muted" role="status">
             That search could not run. Try again in a moment.

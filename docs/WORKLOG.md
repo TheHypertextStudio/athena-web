@@ -11965,6 +11965,18 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
 
 ## Completed Tasks
 
+### [ATHENA-PANEL-UX-001] Make the companion quiet and its conversation navigable
+
+- **Completed**: 2026-09-28
+- **Started**: 2026-09-28
+- **Priority**: P1
+- **Summary**: The companion now shows a small pending indicator and one short failure with a retry action. Failed background jobs no longer paste their internal objectives into the chat. A settled conversation reopened after six hours starts with a fresh view. Earlier messages remain behind a top control or an upward pull. People can name a chapter at one saved message, close it at a later message, jump to it, and remove its markers without deleting conversation content.
+- **Approach**: The long conversation remains one durable session. Chapter spans live in owner-scoped rows keyed to persisted activity ids. The UI treats each rail opening as a new view boundary because the shell keeps closed rail panels mounted. Derived topics remain independent from manual chapters.
+- **Files changed**: Conversation rendering and controls in `apps/web/src/components/athena/`; chapter queries in `apps/web/src/lib/athena/chapters.ts`; owner-only routes in `apps/api/src/routes/me-athena-chapter-routes.ts` and `me-athena-chapters.ts`; schema and migration in `packages/db/`; product and engineering docs; `scripts/dev-stack.sh` for the API build's task-scoped heap.
+- **Validation**: The affected web suite passed 66 tests, the migrated PGlite chapter suite passed 3 tests, changed API/web/DB files passed ESLint, web and API TypeScript passed, the complexity ledger stayed clean at 834 files and 1,420 entries, and the production web build passed with this worktree's public URLs. Live captures at 1440 px and 390 px showed the compact panel, saved chapter markers, chapter index, and fresh view. The local test database was reset after the captures.
+- **Learnings**: The screenshot combined two independent failures: a saved chat turn and a failed job heads-up. The arithmetic prompts were saved user messages, not instructions for the product or this task. Closed rail panels stay mounted, so a mount-only idle check would have missed reopening. The initial dev stack also needed the runner workspace dependencies installed before visual verification.
+- **Retrospective**: The shared screenshot harness proved the responsive result without a new test tool. Checking the rail's mount behavior earlier would have prevented a late reopen fix. The owner-scoped chapter API and existing query layer kept persistence separate from presentation.
+
 ### [MCP-AGENT-TASKS-001] Let a registered agent find the tasks its grant covers
 
 - **Completed**: 2026-09-19

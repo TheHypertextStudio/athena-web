@@ -197,7 +197,7 @@ case "${1:-start}" in
       tail -40 "$LOG" >&2
       exit 1
     fi
-    if ! pnpm --filter @docket/api build >>"$LOG" 2>&1; then
+    if ! NODE_OPTIONS=--max-old-space-size=4096 pnpm --filter @docket/api build >>"$LOG" 2>&1; then
       echo "API contract build failed" >&2
       tail -40 "$LOG" >&2
       exit 1

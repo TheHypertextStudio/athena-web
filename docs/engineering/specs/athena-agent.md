@@ -39,6 +39,35 @@ that same thread rather than a separate view, a pending change previews on the o
 ghost row until it is decided, an applied in-Docket change carries Undo on its receipt, and a
 single heads-up line above the thread speaks first when something needs the person.
 
+The web view starts fresh when the latest settled conversation activity is at least six hours old.
+This only changes which entries are initially rendered; the session id, activities, and model
+transcript stay intact. A top control or upward pull reveals earlier entries. A person can mark a
+chapter start and end at saved response activities. `athena_conversation_chapter` stores the
+owner, session, title, and two activity anchors. An open chapter has no end anchor, and a partial
+unique index allows one open chapter per session. The API checks both anchors against the current
+owner's conversation and rejects an end before its start. Chapter markers remain separate from
+the derived topic cache in `athena_conversation_segment`.
+
+The conversation view follows this state machine:
+
+```mermaid
+stateDiagram-v2
+    [*] --> Recent: Open after six quiet hours
+    Recent --> Earlier: Earlier messages or upward pull
+    Earlier --> Recent: Recent messages
+```
+
+Chapter markers follow a separate state machine:
+
+```mermaid
+stateDiagram-v2
+    [*] --> Unmarked
+    Unmarked --> Open: Start at a saved message
+    Open --> Closed: End at a later saved message
+    Open --> Unmarked: Remove
+    Closed --> Unmarked: Remove
+```
+
 **Two front doors, one service layer — literally.** Athena's loop connects an MCP SDK
 client over `InMemoryTransport` to the **same `buildServer(ctx)`** that serves `/mcp`
 (`apps/api/src/mcp/server.ts`). A tool added for Claude/Codex is instantly Athena's too;

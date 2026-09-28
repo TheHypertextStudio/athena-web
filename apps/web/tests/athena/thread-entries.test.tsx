@@ -78,4 +78,18 @@ describe('ThreadEntries', () => {
 
     expect(screen.getByText('Searched tasks')).toBeVisible();
   });
+
+  it('keeps provider error text out of the conversation', () => {
+    const { container } = render(
+      <ThreadEntries
+        entries={entries([
+          actionActivity({ type: 'error', body: { text: 'provider failure detail' } }),
+        ])}
+        workspaceId="org_1"
+        onWidgetMessage={vi.fn()}
+      />,
+    );
+
+    expect(container).toBeEmptyDOMElement();
+  });
 });

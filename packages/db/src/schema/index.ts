@@ -14,6 +14,7 @@ export * from './work-status';
 export * from './work';
 export * from './joins';
 export * from './agents';
+export * from './athena-chapters';
 export * from './elicitation';
 export * from './admin';
 export * from './billing';

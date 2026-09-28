@@ -71,6 +71,7 @@ import {
   athenaConversationSegments,
   conversationSearchQuery,
 } from './me-athena-conversation';
+import { athenaChapterRoutes } from './me-athena-chapter-routes';
 import {
   activityParam,
   idParam,
@@ -815,6 +816,10 @@ const meAthena = new Hono<AppEnv>()
       const conversation = await currentChat(owner);
       return ok(c, AthenaSegmentsOut, await athenaConversationSegments(owner, conversation.id));
     },
+  )
+  .route(
+    '/chat/chapters',
+    athenaChapterRoutes(async (owner) => (await currentChat(owner)).id),
   )
   .get(
     '/chat/search',

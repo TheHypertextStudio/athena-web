@@ -14,8 +14,6 @@
  */
 import { parseMcpAppPresentation } from '@docket/integrations/mcp-apps-contract';
 import { type SessionActivityOut } from '@docket/athena/agent-contract';
-import { Sparkles } from '@docket/ui/icons';
-import { Text } from '@docket/ui/primitives';
 import { type JSX } from 'react';
 
 import { PLAN_TOOL_NAMES } from '@docket/work/plan-draft-contract';
@@ -28,6 +26,7 @@ import type { ThreadEntry } from '@/lib/athena/job-presentation';
 import { personalAthenaTransport, type PersonalAthenaTransport } from '@/lib/athena/query-defs';
 
 import { AthenaJobCard } from './athena-job-card';
+import { ChapterMarkerMenu, type ChapterActions } from './conversation-chapter-menu';
 import { ThreadQuestion } from './elicitation-queue';
 import { ThreadPlanEntry } from './thread-plan-entry';
 
@@ -43,6 +42,8 @@ export interface ThreadEntriesProps {
   readonly transport?: PersonalAthenaTransport;
   /** Posts a widget-composed `ui/message` into this thread, as the user. */
   readonly onWidgetMessage: (text: string) => Promise<boolean>;
+  /** Mark the start or end of a chapter at a saved message. */
+  readonly chapterActions?: ChapterActions | undefined;
 }
 
 /** Props for {@link ThreadEntryView}. */
@@ -58,6 +59,7 @@ function ThreadEntryView({
   landingQuestionId,
   transport,
   onWidgetMessage,
+  chapterActions,
 }: ThreadEntryViewProps): JSX.Element | null {
   if (entry.kind === 'job') return <AthenaJobCard job={entry.job} transport={transport} />;
   if (entry.kind === 'question') {
@@ -69,7 +71,13 @@ function ThreadEntryView({
       />
     );
   }
-  return <ChatEntry activity={entry.activity} onWidgetMessage={onWidgetMessage} />;
+  return (
+    <ChatEntry
+      activity={entry.activity}
+      onWidgetMessage={onWidgetMessage}
+      chapterActions={chapterActions}
+    />
+  );
 }
 
 /** The key one merged entry renders under, unique across the three kinds. */
@@ -99,6 +107,7 @@ interface ChatEntryProps {
   activity: SessionActivityOut;
   /** Posts a widget-composed `ui/message` into this thread, as the user. */
   onWidgetMessage: (text: string) => Promise<boolean>;
+  chapterActions?: ChapterActions | undefined;
 }
 
 /** Read one nested object off an untrusted activity body. */
@@ -124,22 +133,40 @@ function startedPlanFrom(
 }
 
 /** One conversational beat: user bubble, Athena text, quiet work chip, or question. */
-function ChatEntry({ activity, onWidgetMessage }: ChatEntryProps): JSX.Element | null {
+function ChatEntry({
+  activity,
+  onWidgetMessage,
+  chapterActions,
+}: ChatEntryProps): JSX.Element | null {
   const text = typeof activity.body['text'] === 'string' ? activity.body['text'] : '';
   const fromUser = activity.body['author'] === 'user';
 
-  if (activity.type === 'response' && fromUser) {
-    return <UserMessage text={text} />;
+  if (activity.type === 'response') {
+    const starts = chapterActions?.chapters.find(
+      (chapter) => chapter.startActivityId === activity.id,
+    );
+    const ends = chapterActions?.chapters.find((chapter) => chapter.endActivityId === activity.id);
+    return (
+      <div className="group relative flex w-full flex-col" data-athena-activity={activity.id}>
+        {starts ? (
+          <h3 className="text-on-surface-variant text-label-small mb-2">{starts.title}</h3>
+        ) : null}
+        {fromUser ? <UserMessage text={text} /> : <AthenaMessage text={text} />}
+        {ends ? (
+          <p className="text-on-surface-variant text-label-small mt-2">End of {ends.title}</p>
+        ) : null}
+        {chapterActions ? (
+          <ChapterMarkerMenu activityId={activity.id} text={text} actions={chapterActions} />
+        ) : null}
+      </div>
+    );
   }
-  if (activity.type === 'response' || activity.type === 'elicitation') {
+  if (activity.type === 'elicitation') {
     return <AthenaMessage text={text} />;
   }
   if (activity.type === 'error') {
-    return (
-      <Text token="body-medium" tone="error" className="mr-auto">
-        {text || 'Athena hit an error.'}
-      </Text>
-    );
+    // The failed-turn state owns recovery. Provider error text is not conversation copy.
+    return null;
   }
   if (activity.type === 'action') {
     return <ActionEntry activity={activity} onWidgetMessage={onWidgetMessage} />;
@@ -157,20 +184,11 @@ export function UserMessage({ text }: { readonly text: string }): JSX.Element {
   );
 }
 
-/** Athena's answer, with safe Markdown and a stable visual sender cue. */
+/** A left-aligned answer; the user's right-aligned bubbles establish the speaker. */
 function AthenaMessage({ text }: { readonly text: string }): JSX.Element {
   return (
-    <div className="flex items-start gap-3">
-      <span
-        className="bg-secondary-container text-on-secondary-container flex size-8 shrink-0 items-center justify-center rounded-full"
-        aria-hidden="true"
-      >
-        <Sparkles className="size-4" />
-      </span>
-      <div className="max-w-[75ch] min-w-0 pt-1">
-        <span className="text-label-small text-on-surface-variant">Athena</span>
-        <StaticMarkdown value={text} className="mt-1" />
-      </div>
+    <div className="text-on-surface mr-auto max-w-[75ch] min-w-0">
+      <StaticMarkdown value={text} />
     </div>
   );
 }

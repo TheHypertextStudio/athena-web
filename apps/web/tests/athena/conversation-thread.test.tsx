@@ -16,19 +16,30 @@ import { okResponse } from '../support/query';
 
 const ORG_ID = '01ARZ3NDEKTSV4RRFFQ69G5FAV';
 
-const { chatGet, personalPost, elicitationsGet, presencePost } = vi.hoisted(() => ({
-  chatGet: vi.fn(),
-  personalPost: vi.fn(),
-  elicitationsGet: vi.fn(),
-  presencePost: vi.fn(),
-}));
+const { chatGet, personalPost, elicitationsGet, presencePost, chaptersGet, chaptersPost } =
+  vi.hoisted(() => ({
+    chatGet: vi.fn(),
+    personalPost: vi.fn(),
+    elicitationsGet: vi.fn(),
+    presencePost: vi.fn(),
+    chaptersGet: vi.fn(),
+    chaptersPost: vi.fn(),
+  }));
 
 vi.mock('../../src/lib/api', () => ({
   api: {
     v1: {
       orgs: { ':orgId': { sessions: { chat: { $get: chatGet } } } },
       me: {
-        athena: { chat: { messages: { $post: personalPost } } },
+        athena: {
+          chat: {
+            messages: { $post: personalPost },
+            chapters: {
+              $get: chaptersGet,
+              $post: chaptersPost,
+            },
+          },
+        },
         elicitations: { $get: elicitationsGet, presence: { $post: presencePost } },
       },
     },
@@ -59,11 +70,21 @@ function thread(activities: readonly Record<string, unknown>[]) {
 
 function renderConversation(props: Partial<AthenaConversationProps> = {}) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return render(
+  const view = render(
     <QueryClientProvider client={client}>
       <AthenaConversation orgId={ORG_ID} {...props} />
     </QueryClientProvider>,
   );
+  return {
+    ...view,
+    rerenderConversation: (next: Partial<AthenaConversationProps>) => {
+      view.rerender(
+        <QueryClientProvider client={client}>
+          <AthenaConversation orgId={ORG_ID} {...next} />
+        </QueryClientProvider>,
+      );
+    },
+  };
 }
 
 const WAITING_JOB: PersonalAthenaSessionSummary = {
@@ -117,16 +138,116 @@ class RecordingObserver {
 }
 
 beforeEach(() => {
+  vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-08-30T12:05:00.000Z'));
   elicitationsGet.mockResolvedValue(okResponse({ items: [] }));
+  chaptersGet.mockResolvedValue(okResponse({ sessionId: 'chat_session', items: [] }));
 });
 
 afterEach(() => {
   cleanup();
+  vi.restoreAllMocks();
   vi.clearAllMocks();
   vi.unstubAllGlobals();
 });
 
 describe('AthenaConversation thread structure', () => {
+  it('opens an old conversation fresh and reveals history by the top control or upward scroll', async () => {
+    vi.mocked(Date.now).mockReturnValue(Date.parse('2026-09-28T10:00:00.000Z'));
+    chatGet.mockResolvedValue(
+      okResponse(
+        thread([
+          {
+            id: 'old_user',
+            sessionId: 'chat_session',
+            organizationId: null,
+            type: 'response',
+            body: { text: 'Old question', author: 'user' },
+            createdAt: '2026-09-27T10:00:00.000Z',
+          },
+          {
+            id: 'old_reply',
+            sessionId: 'chat_session',
+            organizationId: null,
+            type: 'response',
+            body: { text: 'Old answer', author: 'athena' },
+            createdAt: '2026-09-27T10:01:00.000Z',
+          },
+        ]),
+      ),
+    );
+    renderConversation();
+
+    const earlier = await screen.findByRole('button', { name: 'Earlier messages' });
+    expect(screen.queryByText('Old answer')).not.toBeInTheDocument();
+    fireEvent.click(earlier);
+    expect(screen.getByText('Old answer')).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Recent messages' }));
+    expect(screen.queryByText('Old answer')).not.toBeInTheDocument();
+    const scroller = document.querySelector('[data-slot="athena-thread"]');
+    if (!scroller) throw new Error('no thread scroller');
+    fireEvent.wheel(scroller, { deltaY: -40 });
+    expect(screen.getByText('Old answer')).toBeVisible();
+  });
+
+  it('starts a fresh view when a mounted rail reopens after an idle gap', async () => {
+    chatGet.mockResolvedValue(
+      okResponse(
+        thread([
+          {
+            id: 'earlier_reply',
+            sessionId: 'chat_session',
+            organizationId: null,
+            type: 'response',
+            body: { text: 'Earlier answer', author: 'athena' },
+            createdAt: '2026-08-30T12:00:00.000Z',
+          },
+        ]),
+      ),
+    );
+    const view = renderConversation({ active: true });
+    expect(await screen.findByText('Earlier answer')).toBeVisible();
+
+    view.rerenderConversation({ active: false });
+    vi.mocked(Date.now).mockReturnValue(Date.parse('2026-08-30T19:00:00.000Z'));
+    view.rerenderConversation({ active: true });
+    expect(await screen.findByRole('button', { name: 'Earlier messages' })).toBeVisible();
+    expect(screen.queryByText('Earlier answer')).not.toBeInTheDocument();
+  });
+
+  it('names a chapter at a saved message', async () => {
+    chatGet.mockResolvedValue(
+      okResponse(
+        thread([
+          {
+            id: 'chapter_start',
+            sessionId: 'chat_session',
+            organizationId: null,
+            type: 'response',
+            body: { text: 'Plan the launch', author: 'user' },
+            createdAt: '2026-08-30T12:00:00.000Z',
+          },
+        ]),
+      ),
+    );
+    chaptersPost.mockResolvedValue(okResponse({ id: 'chapter_1' }));
+    renderConversation();
+
+    const message = await inThread('[data-athena-activity="chapter_start"]');
+    fireEvent.pointerDown(within(message).getByRole('button', { name: 'Chapter options' }), {
+      button: 0,
+      ctrlKey: false,
+    });
+    fireEvent.change(await screen.findByRole('textbox', { name: 'Chapter name' }), {
+      target: { value: 'Launch planning' },
+    });
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Start chapter here' }));
+    await waitFor(() => {
+      expect(chaptersPost).toHaveBeenCalledWith({
+        json: { startActivityId: 'chapter_start', title: 'Launch planning' },
+      });
+    });
+  });
+
   it('keeps an empty thread to its suggestions: no heading, no icon', async () => {
     chatGet.mockResolvedValue(okResponse(thread([])));
     renderConversation();

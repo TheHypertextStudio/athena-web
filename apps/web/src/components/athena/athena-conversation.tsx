@@ -15,7 +15,17 @@
  * page, and Today's expanded session — so the conversation is defined once and each door supplies
  * only its own chrome.
  */
-import { type JSX, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  type Dispatch,
+  type JSX,
+  type ReactNode,
+  type SetStateAction,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 
 import { useQueryClient, type UseQueryResult } from '@tanstack/react-query';
 
@@ -116,7 +126,7 @@ export interface AthenaConversationProps {
 /** The composer's draft, its form, and how a requested draft lands in it. */
 interface ComposerDraft {
   readonly draft: string;
-  readonly setDraft: (text: string) => void;
+  readonly setDraft: Dispatch<SetStateAction<string>>;
   readonly composerRef: React.RefObject<HTMLFormElement | null>;
 }
 
@@ -204,6 +214,19 @@ export interface PendingTurn {
   readonly knownActivityIds: ReadonlySet<string>;
 }
 
+/** Count only activity added after this send, even when the same prompt appeared earlier. */
+function isTurnRecorded(thread: AgentSessionDetailOut | null, attempt: PendingTurn): boolean {
+  return (
+    thread?.activities.some(
+      (activity) =>
+        !attempt.knownActivityIds.has(activity.id) &&
+        activity.type === 'response' &&
+        activity.body['author'] === 'user' &&
+        activity.body['text'] === attempt.text,
+    ) ?? false
+  );
+}
+
 /** The send state: local progress and any failure remain visible in the conversation. */
 interface SendState {
   readonly sending: boolean;
@@ -226,32 +249,36 @@ function useSend({
   const [sending, setSending] = useState(false);
   const [pendingTurn, setPendingTurn] = useState<PendingTurn | null>(null);
   const [failure, setFailure] = useState<FailurePresentation | null>(null);
+  const [failedAttempt, setFailedAttempt] = useState<PendingTurn | null>(null);
   const [refreshDelayed, setRefreshDelayed] = useState(false);
   const queryClient = useQueryClient();
   const { draft, setDraft } = composer;
 
   useEffect(() => {
     if (!refreshDelayed || !pendingTurn) return;
-    const recorded = thread?.activities.some(
-      (activity) =>
-        !pendingTurn.knownActivityIds.has(activity.id) &&
-        activity.type === 'response' &&
-        activity.body['author'] === 'user' &&
-        activity.body['text'] === pendingTurn.text,
-    );
-    if (recorded) {
+    if (isTurnRecorded(thread, pendingTurn)) {
       setPendingTurn(null);
       setRefreshDelayed(false);
     }
   }, [refreshDelayed, pendingTurn, thread]);
+
+  useEffect(() => {
+    if (!failedAttempt || !isTurnRecorded(thread, failedAttempt)) return;
+    setFailure(null);
+    setDraft((current) => (current === failedAttempt.text ? '' : current));
+    setFailedAttempt(null);
+    onAttachContext?.();
+  }, [failedAttempt, thread, setDraft, onAttachContext]);
 
   const send = useCallback(async (): Promise<void> => {
     const text = draft.trim();
     if (text.length === 0 || sending) return;
     setSending(true);
     setFailure(null);
+    setFailedAttempt(null);
     setRefreshDelayed(false);
-    setPendingTurn({ text, knownActivityIds: new Set(thread?.activities.map((a) => a.id) ?? []) });
+    const attempt = { text, knownActivityIds: new Set(thread?.activities.map((a) => a.id) ?? []) };
+    setPendingTurn(attempt);
     setDraft('');
     try {
       commitThread(await sendOrgChatMessage(orgId, text, contextAttached ? context : null));
@@ -266,6 +293,7 @@ function useSend({
       } else {
         setDraft(text);
         setFailure(failurePresentation(caught, 'Could not send your message.'));
+        setFailedAttempt(attempt);
         setPendingTurn(null);
       }
       // The server can save the prompt before inference fails. Refresh the transcript so that

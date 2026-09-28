@@ -8,6 +8,18 @@
 
 ## Active Tasks
 
+### [ATHENA-SEND-RECONCILE-001] Reconcile a completed turn after a failed send response
+
+- **Status**: REVIEW
+- **Started**: 2026-09-28
+- **Priority**: P0
+- **Description**: A production Athena prompt returned an answer through the selected Mac Studio, but the web conversation also displayed a send failure and restored the same text in the composer. That invites a duplicate turn.
+- **Approach**: Re-read the canonical thread after an uncertain send response, match only a newly recorded copy of this attempt, and clear the failure and duplicate draft when the transcript proves acceptance. Preserve the draft and a visible error when the prompt was not recorded. Reconcile a later poll or stream update too.
+- **Files changed**: `apps/web/src/components/athena/athena-conversation.tsx`, `apps/web/tests/athena/athena-send-reconciliation.test.tsx`, and this worklog.
+- **Risks**: An earlier identical prompt cannot count as this attempt; a person editing the restored draft must not lose their edits.
+- **Validation**: The production-shaped regression failed first and passed after the fix. All 23 focused conversation and thread tests pass; web typecheck, focused ESLint, Prettier, the complexity ledger, diff whitespace, and the production web build pass with local public build variables. Production release and verification remain open.
+- **Learning**: A synchronous POST can finish the remote work and persist Athena's answer before its HTTP response fails. The canonical thread's new activity IDs, rather than the POST outcome alone, decide whether a retry would duplicate the turn.
+
 ### [DEVX-LOCAL-COST-001] Stop repeated local validation and cache waste
 
 - **Status**: REVIEW

@@ -13,11 +13,11 @@
 - **Status**: VALIDATING
 - **Started**: 2026-09-28
 - **Priority**: P0
-- **Description**: The production release gate failed in all three screen tests because its fixture tried to insert a manual cycle with the same team and start date as an auto-generated cycle. PostgreSQL rejected `cycle_native_start_uq`, before any screen assertion ran.
-- **Approach**: Use the current cycle returned by the fixture's existing `/cycles/current` read. The route already ensures the team's rolling window, and the screen tests need a cycle to attach work to, not a second cycle with an overlapping date.
-- **Files changed**: `apps/web/e2e/helpers/mobile-audit-fixture.ts` and this worklog.
-- **Validation**: The three focused local Playwright tests pass against the local API and PostgreSQL. Full release screen acceptance and CI rerun remain open.
-- **Learning**: Release fixtures must reuse auto-generated records when exercising surrounding screens; creating a second record on an occupied cadence boundary makes the gate depend on the calendar date.
+- **Description**: The production release gate failed in all three screen tests because its fixture tried to insert a manual cycle with the same team and start date as an auto-generated cycle. PostgreSQL rejected `cycle_native_start_uq`, before any screen assertion ran. After that was repaired, the roster test picked the current cycle's nested task grid instead of the Active cycles grid and compared unrelated column widths.
+- **Approach**: Use the current cycle returned by the fixture's existing `/cycles/current` read. The route already ensures the team's rolling window, and the screen tests need a cycle to attach work to, not a second cycle with an overlapping date. Select the Active cycles grid by accessible name when measuring cycle roster columns.
+- **Files changed**: `apps/web/e2e/helpers/mobile-audit-fixture.ts`, `apps/web/e2e/release/work-roster-acceptance.spec.ts`, and this worklog.
+- **Validation**: The three focused local Playwright fixture tests pass against the local API and PostgreSQL. The production-build gate then passed four of five tests and exposed the nested-grid selector error in the fifth. A rerun with the corrected selector remains open.
+- **Learning**: Release fixtures must reuse auto-generated records when exercising surrounding screens; creating a second record on an occupied cadence boundary makes the gate depend on the calendar date. A page with multiple grids needs a named target in geometry assertions.
 
 ### [ATHENA-SEND-RECONCILE-001] Reconcile a completed turn after a failed send response
 

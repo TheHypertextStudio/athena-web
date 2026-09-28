@@ -129,7 +129,10 @@ async function openAdapter(
   await expect(
     page.getByRole('heading', { name: route === 'teams' ? 'Teams' : 'Cycles' }),
   ).toBeVisible({ timeout: TIMEOUTS.pageReady });
-  const grid = page.getByRole('grid').first();
+  const grid =
+    route === 'cycles'
+      ? page.getByRole('grid', { name: 'Active cycles' })
+      : page.getByRole('grid').first();
   await expect(grid).toBeVisible();
   return grid;
 }

@@ -17722,6 +17722,27 @@ xhigh` passes (10 finder angles each, one-vote verification, a gap sweep) agains
   first focused lint run found one complexity increment; extraction of the reason predicate fixed
   that lint failure. Production provider diagnosis and release proof remain open.
 
+### 2026-09-29 Start a personal Athena assignment from task context
+
+- **Status**: IN PROGRESS
+- **State**: COMMITTING
+- **Description**: The owner-only durable assignment API exists, but a person opening an existing
+  task has no visible way to start one in Docket. This blocks the requested task-level production
+  proof from the signed-in web app and leaves durable work effectively hidden behind an API call.
+- **Approach**: Add “Work on this task” to Athena's composer when its page context is an attached
+  task. Open a shared dialog with a required objective, submit through the existing owner-bound
+  assignment API once while pending, and show a clear success or recoverable failure. The task and
+  any returned proposal stay unchanged until the owner approves it. A full web test exposed the
+  established rule that task controls must not contain Athena actions, so the initial task-menu
+  placement was removed and the action moved to Athena.
+- **Files modified**: Athena conversation and composer, a focused assignment launcher, dialog and
+  mutation hook, Athena tests, the README, and this worklog.
+- **Validation**: The new assignment test first failed without its launcher; focused launcher,
+  conversation-context, and entry-point tests pass (26 tests). The first full web run identified
+  the task-menu contract conflict; after moving the action, all 619 web test files and 4,751 tests
+  pass with coverage. Root typecheck, lint, formatting, complexity, web performance, and secret
+  scan checks pass. Production use remains to be verified after deployment.
+
 ### 2026-09-28 Owner-bound Athena dispatch audit
 
 - **Status**: IN PROGRESS

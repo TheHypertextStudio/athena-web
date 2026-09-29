@@ -36,6 +36,8 @@ export interface ComposerProps {
   readonly chip?: ReactNode;
   /** A Talk control, for a host with no header to hold it. */
   readonly talk?: ReactNode;
+  /** Contextual durable work on the page's task, when one is attached. */
+  readonly taskAction?: ReactNode;
   /** The composer's current text. */
   readonly draft: string;
   /** Replace the composer's text. */
@@ -55,6 +57,7 @@ export function Composer({
   composerRef,
   chip,
   talk,
+  taskAction,
   draft,
   setDraft,
   sending,
@@ -94,6 +97,7 @@ export function Composer({
         />
         <ComposerControls
           talk={talk}
+          taskAction={taskAction}
           sending={sending}
           draft={draft}
           onConnect={onConnect}
@@ -144,12 +148,13 @@ function ComposerField({
 /** Props for {@link ComposerControls}. */
 type ComposerControlsProps = Pick<
   ComposerProps,
-  'talk' | 'sending' | 'draft' | 'onConnect' | 'layout'
+  'talk' | 'taskAction' | 'sending' | 'draft' | 'onConnect' | 'layout'
 >;
 
 /** The one 32px row of trailing controls: attach, an optional Talk slot, and send. */
 function ComposerControls({
   talk,
+  taskAction,
   sending,
   draft,
   onConnect,
@@ -169,6 +174,7 @@ function ComposerControls({
       >
         <Cable aria-hidden="true" />
       </Button>
+      {taskAction}
       <div className="ml-auto flex items-center gap-1">
         {talk}
         <Button

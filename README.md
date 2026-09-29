@@ -14,6 +14,10 @@ Athena keeps one conversation across visits. After six quiet hours, the panel op
 view; the Earlier messages menu or an upward pull reveals the older stream. People can save a named
 starting point on a message and finish that work at a later message. The same menu returns to saved
 places. The app's search control finds exact Athena messages while the full conversation is open.
+While viewing a task, open Athena in the rail and choose **Work on this task** beside its message
+composer to start a private assignment using the runtime selected in Settings. Enter an objective
+and start work; any returned proposal waits for review before the task changes. If the selected
+runtime is unavailable, the prompt retains the objective and links to Athena Settings for recovery.
 
 Today opens a focused daily planning flow for reviewing prior work, choosing tasks, placing timed blocks, and confirming the day. Drafts resume where they stopped, accepted changes retain earlier versions, and recorded time stays in the time ledger. The data and recovery rules are in [the daily planning engineering spec](docs/engineering/specs/daily-planning.md).
 

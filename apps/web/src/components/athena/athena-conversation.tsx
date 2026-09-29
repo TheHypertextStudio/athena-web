@@ -34,6 +34,10 @@ import { cn } from '@docket/ui/lib/utils';
 
 import { AthenaContextChip } from '@/components/athena/athena-context-chip';
 import { Composer, ConnectDialog } from '@/components/athena/conversation-composer';
+import {
+  assignmentTargetFromContext,
+  TaskAthenaAssignmentLauncher,
+} from '@/components/athena/task-athena-assignment-launcher';
 import { ConversationThread } from '@/components/athena/conversation-thread';
 import { type ThreadQuestions, useThreadQuestions } from '@/components/athena/elicitation-queue';
 import { presentFailure } from '@/components/feedback';
@@ -420,6 +424,7 @@ export default function AthenaConversation(props: AthenaConversationProps): JSX.
   const { orgId } = props;
   const settings = conversationSettings(props);
   const { context, contextAttached, jobs } = settings;
+  const assignmentTarget = assignmentTargetFromContext(context, contextAttached);
   const mentionOrgId = useMentionOrgId(orgId);
   const composer = useComposerDraft(props.initialDraft, settings.draftRequest);
   const [connectOpen, setConnectOpen] = useState(false);
@@ -472,6 +477,9 @@ export default function AthenaConversation(props: AthenaConversationProps): JSX.
         composerRef={composer.composerRef}
         chip={composerChipFor(props, settings)}
         talk={props.talk}
+        taskAction={
+          assignmentTarget ? <TaskAthenaAssignmentLauncher {...assignmentTarget} /> : null
+        }
         draft={composer.draft}
         setDraft={composer.setDraft}
         sending={sendState.sending}

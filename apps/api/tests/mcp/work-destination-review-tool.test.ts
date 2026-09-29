@@ -101,6 +101,30 @@ describe('review_work_destination', () => {
     expect(stream).toHaveBeenCalledOnce();
   });
 
+  it('does not use the cloud reviewer when the owner selected an unavailable Lattice device', async () => {
+    const seed = await seedWorkspace();
+    await db.insert(schema.latticeConnection).values({
+      ownerUserId: seed.userId,
+      status: 'error',
+      enabled: true,
+      deviceId: 'lat_studio',
+      lastFailureReason: 'authorization_expired',
+    });
+    const client = await connect(seed);
+    const cloudTurn = vi.spyOn(getContainer().agentTurn, 'streamTurn');
+
+    const result = await client.callTool({
+      name: 'review_work_destination',
+      arguments: request(
+        seed,
+        'I will compare TransitCenter posting cadence and record three patterns in the LVBT strategy document.',
+      ),
+    });
+
+    expect(resultPayload(result)).toMatchObject({ decision: 'deny' });
+    expect(cloudTurn).not.toHaveBeenCalled();
+  });
+
   it('does not run Athena for a same-workspace caller without view access', async () => {
     const workspace = await seedWorkspace();
     const peer = await seedUnprivilegedPeer(workspace);

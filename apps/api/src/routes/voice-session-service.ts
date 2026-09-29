@@ -26,17 +26,19 @@ import {
   voiceSession,
 } from '@docket/db';
 import type { VoiceChannel, VoiceEndReason, VoiceTurnOut } from '@docket/athena/voice';
+import type { AgentTurnRuntime } from '@docket/athena/turn';
 import type { VoiceSessionAuthorizationMethod } from '@docket/db';
 import { and, desc, eq, inArray, isNull } from 'drizzle-orm';
 
 import { assertProductCapability } from '../product-capability';
-import { NotFoundError, ProductRequiredError } from '../error';
+import { ConflictError, NotFoundError, ProductRequiredError } from '../error';
 
 import { markProvenanceInline } from '../agent/provenance';
 import { loadTranscript } from '../agent/transcript';
-import { getContainer } from '../container';
 
 import { resolveCanonicalConversation } from './agent-dispatch';
+import { resolveOwnerTurnRuntime } from './lattice-backend';
+import { loadLatticeConnection } from './lattice-connection';
 import { publishPhoneCallSummary } from './phone-call-summary';
 import { VoiceSessionEngine, type VoiceSessionContext } from './voice-engine';
 import { voiceInstructions } from './voice-instructions';
@@ -174,6 +176,24 @@ export async function isAthenaEntitled(organizationId: string | null): Promise<b
   }
 }
 
+/** Select a voice responder before a call exists, refusing a cloud provider for a local owner. */
+async function resolveVoiceResponderRuntime(
+  input: OpenVoiceSessionInput,
+): Promise<AgentTurnRuntime | null> {
+  if (input.channel === 'phone' || input.provider === 'mock') {
+    return resolveOwnerTurnRuntime(input.userId);
+  }
+  // The browser's speech-to-speech provider generates replies itself. It cannot use the
+  // selected Lattice runtime, so refuse before minting its cloud audio credential.
+  const connection = await loadLatticeConnection(input.userId);
+  if (connection?.enabled && connection.deviceId) {
+    throw new ConflictError(
+      'Voice mode cannot run on your selected computer yet. Use text chat or change your Athena computer in Settings.',
+    );
+  }
+  return null;
+}
+
 /**
  * Open a voice session on the caller's one conversation.
  *
@@ -190,6 +210,10 @@ export async function openVoiceSession(input: OpenVoiceSessionInput): Promise<Op
   if (!workspace) throw new NotFoundError('No workspace to talk about');
   const { organizationId, actorId } = workspace;
   await assertProductCapability(organizationId, 'voice');
+
+  // Resolve before creating a session so an unavailable selected device cannot open a call
+  // whose replies would silently come from the deployment model.
+  const responderRuntime = await resolveVoiceResponderRuntime(input);
 
   const conversation = await resolveCanonicalConversation(input.userId, organizationId);
   const [row] = await db
@@ -225,16 +249,15 @@ export async function openVoiceSession(input: OpenVoiceSessionInput): Promise<Op
   // persistence and the real tool dispatch with only the audio simulated. A real browser session
   // needs none of this: its speech-to-speech model generates in-band and reports itself through
   // transcript events.
-  const responder =
-    input.channel === 'phone' || input.provider === 'mock'
-      ? new AthenaVoiceResponder(
-          getContainer().agentTurn,
-          voiceInstructions(
-            await displayName(input.userId),
-            await recentConversation(conversation.id),
-          ),
-        )
-      : undefined;
+  const responder = responderRuntime
+    ? new AthenaVoiceResponder(
+        responderRuntime,
+        voiceInstructions(
+          await displayName(input.userId),
+          await recentConversation(conversation.id),
+        ),
+      )
+    : undefined;
   const engine = new VoiceSessionEngine(ctx, {
     store: transcriptStore,
     tools: toolRunner,

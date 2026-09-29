@@ -17710,3 +17710,24 @@ xhigh` passes (10 finder angles each, one-vote verification, a gap sweep) agains
   after implementation; all 21 focused Lattice Settings tests pass. Web typecheck passes. The
   first focused lint run found one complexity increment; extraction of the reason predicate fixed
   that lint failure. Production provider diagnosis and release proof remain open.
+
+### 2026-09-28 Owner-bound Athena dispatch audit
+
+- **Status**: IN PROGRESS
+- **State**: VALIDATING
+- **Description**: Two model calls outside the main Athena text loop used Docket's deployment
+  runtime even when the owner had selected a personal Lattice device: task destination review and
+  the phone/mock voice responder. Browser speech-to-speech voice also minted a cloud model session
+  for a person whose selected runtime cannot serve that protocol.
+- **Approach**: Resolve the destination reviewer and phone/mock responder through the same owner
+  runtime selector as interactive text turns. Refuse browser speech-to-speech voice before creating
+  a session when a personal runtime is selected; its current provider has no Lattice audio path.
+  Preserve the existing voice behavior for people who have not selected a personal runtime.
+- **Files changed**: The destination review tool and test, voice session service and test, and this
+  worklog.
+- **Validation**: Focused tests first demonstrated both silent fallback paths and the cloud voice
+  session. The final focused suite passes 51 tests in two files, covering unavailable mock and phone
+  responders, cloud speech-to-speech refusal, and destination review. API typecheck, affected ESLint,
+  API build, formatting, and the repository complexity ledger pass. These code checks do not
+  establish a live Mac Studio inference or relay heartbeat. Production rollout remains gated on
+  that device proof.

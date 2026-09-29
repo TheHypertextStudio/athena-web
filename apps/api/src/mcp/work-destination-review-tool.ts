@@ -1,13 +1,13 @@
 /** Review whether one destination supports a task the caller can read. */
-import type { TurnInput, TurnMessage, TurnToolDef } from '@docket/athena/turn';
+import type { AgentTurnRuntime, TurnInput, TurnMessage, TurnToolDef } from '@docket/athena/turn';
 import { z } from 'zod';
 
 import {
   WorkDestinationReviewMcpOut,
   WorkDestinationReviewOut,
 } from '../contracts/work-destination-review';
-import { getContainer } from '../container';
 import { NotFoundError } from '../error';
+import { resolveOwnerTurnRuntime } from '../routes/lattice-backend';
 import type { McpContext } from './auth';
 import type { McpRegistrar } from './catalog';
 import { loadVisibleTaskContext } from './active-work-resource';
@@ -164,11 +164,12 @@ function hasOnlyReviewResult(message: TurnMessage): boolean {
 
 async function collectReview(
   input: TurnInput,
+  runtime: AgentTurnRuntime,
 ): Promise<{ readonly calls: readonly unknown[]; readonly valid: boolean }> {
   const calls: unknown[] = [];
   let terminal = false;
   let valid = true;
-  for await (const event of getContainer().agentTurn.streamTurn(input)) {
+  for await (const event of runtime.streamTurn(input)) {
     if (terminal) {
       valid = false;
       continue;
@@ -188,11 +189,12 @@ async function collectReview(
 
 async function collectBeforeDeadline(
   input: TurnInput,
+  runtime: AgentTurnRuntime,
 ): Promise<Awaited<ReturnType<typeof collectReview>>> {
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
     return await Promise.race([
-      collectReview(input),
+      collectReview(input, runtime),
       new Promise<never>((_, reject) => {
         timer = setTimeout(() => {
           reject(new Error('review timeout'));
@@ -207,17 +209,22 @@ async function collectBeforeDeadline(
 async function reviewDestination(
   input: ReviewInput,
   taskContext: unknown,
+  ownerUserId: string,
 ): Promise<z.infer<typeof WorkDestinationReviewOut>> {
   if (input.challengeAnswer === undefined && isVagueSocialMediaRequest(input.justification)) {
     return challengeVagueSocialMediaRequest();
   }
 
   try {
-    const outcome = await collectBeforeDeadline({
-      system: reviewerPrompt(input, taskContext),
-      messages: [{ role: 'user', content: [{ type: 'text', text: 'Review this destination.' }] }],
-      tools: [resultTool],
-    });
+    const runtime = await resolveOwnerTurnRuntime(ownerUserId);
+    const outcome = await collectBeforeDeadline(
+      {
+        system: reviewerPrompt(input, taskContext),
+        messages: [{ role: 'user', content: [{ type: 'text', text: 'Review this destination.' }] }],
+        tools: [resultTool],
+      },
+      runtime,
+    );
     if (!outcome.valid || outcome.calls.length !== 1) {
       return deny('Athena did not return exactly one valid review result.');
     }
@@ -268,7 +275,7 @@ export function registerWorkDestinationReviewTool(server: McpRegistrar, ctx: Mcp
         if (taskContext?.organizationId !== input.organizationId) {
           throw new NotFoundError('Task not found');
         }
-        return jsonResult(await reviewDestination(input, taskContext));
+        return jsonResult(await reviewDestination(input, taskContext, ctx.principal.userId));
       }),
   );
 }

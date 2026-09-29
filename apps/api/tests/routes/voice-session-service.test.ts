@@ -92,6 +92,66 @@ describe('resolveVoiceWorkspace and the no-workspace refusal', () => {
   });
 });
 
+describe('voice responder model ownership', () => {
+  it.each([
+    { channel: 'web', provider: 'mock' },
+    { channel: 'phone', provider: 'twilio-relay' },
+  ] as const)(
+    'does not open a $channel voice session on the cloud model when the selected device is unavailable',
+    async ({ channel, provider }) => {
+      const person = await seedPerson();
+      await db.insert(schema.latticeConnection).values({
+        ownerUserId: person.userId,
+        status: 'error',
+        enabled: true,
+        deviceId: 'lat_studio',
+        lastFailureReason: 'authorization_expired',
+      });
+
+      await expect(
+        openVoiceSession({
+          userId: person.userId,
+          channel,
+          provider,
+          organizationId: person.orgId,
+        }),
+      ).rejects.toMatchObject({ reason: 'authorization_expired' });
+      expect(
+        await db
+          .select()
+          .from(schema.voiceSession)
+          .where(eq(schema.voiceSession.userId, person.userId)),
+      ).toHaveLength(0);
+    },
+  );
+
+  it('refuses cloud speech-to-speech voice when a personal runtime is selected', async () => {
+    const person = await seedPerson();
+    await db.insert(schema.latticeConnection).values({
+      ownerUserId: person.userId,
+      status: 'error',
+      enabled: true,
+      deviceId: 'lat_studio',
+      lastFailureReason: 'authorization_expired',
+    });
+
+    await expect(
+      openVoiceSession({
+        userId: person.userId,
+        channel: 'web',
+        provider: 'openai-realtime',
+        organizationId: person.orgId,
+      }),
+    ).rejects.toMatchObject({ code: 'conflict' });
+    expect(
+      await db
+        .select()
+        .from(schema.voiceSession)
+        .where(eq(schema.voiceSession.userId, person.userId)),
+    ).toHaveLength(0);
+  });
+});
+
 describe('openVoiceSession on a channel whose provider generates its own reply', () => {
   it('binds the active workspace membership actor into the voice context', async () => {
     const person = await seedPerson();

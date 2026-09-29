@@ -30,8 +30,8 @@ do not depend on a cold start.
 
 ### Lattice staging boundary
 
-`docket-staging` is a separate Vercel project whose intended public origin is
-`https://docket-staging.vercel.app`. Its passkey RP ID is that exact hostname. The staging API
+`docket-staging` is a separate Vercel project whose public origin is
+`https://docket-staging-gilt.vercel.app`. Its passkey RP ID is that exact hostname. The staging API
 must run as a separate `docket-api-staging` Cloud Run service with `APP_MODE=staging`, its own
 Neon schema-only branch, and separate `DATABASE_URL`, `BETTER_AUTH_SECRET`, `CRON_SECRET`, and
 `CREDENTIALS_ENCRYPTION_KEY` secrets. Never copy production Docket account or grant rows into
@@ -39,7 +39,7 @@ that branch. Do not point the staging web project at `api.clearthedocket.com`.
 
 Staging uses real OAuth, Lattice, and mail adapters. The `local` and `test` modes use mocks and
 cannot establish a staging round trip. Set its public Lovelace client ID to
-`https://docket-staging.vercel.app/.well-known/lattice-client.json`; the metadata document must
+`https://docket-staging-gilt.vercel.app/.well-known/lattice-client.json`; the metadata document must
 publish the staging API callback. Lovelace's issuer, gateway, and the existing Studio daemon may
 be shared as the external device under test; their grant in staging belongs only to the staging
 Docket account. Disable optional Docket integrations unless their staging credentials and callback

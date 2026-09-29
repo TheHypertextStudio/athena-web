@@ -22,7 +22,7 @@ export function chaptersDef(enabled = true) {
   return apiQueryOptions<{
     readonly sessionId: string;
     readonly items: readonly ConversationChapter[];
-  }>(CHAPTERS_KEY, () => api.v1.me.athena.chat.chapters.$get(), 'Could not load chapters.', {
+  }>(CHAPTERS_KEY, () => api.v1.me.athena.chat.chapters.$get(), 'Could not load sections.', {
     enabled,
     staleTime: STALE.volatile,
   });
@@ -35,7 +35,7 @@ export function useConversationChapters(enabled: boolean) {
     mutationFn: (input: { readonly startActivityId: string; readonly title: string }) =>
       unwrap(
         () => api.v1.me.athena.chat.chapters.$post({ json: input }),
-        'Could not start chapter.',
+        'Could not start section.',
       ),
     invalidateKeys: [CHAPTERS_KEY],
   });
@@ -43,11 +43,11 @@ export function useConversationChapters(enabled: boolean) {
     mutationFn: (input: { readonly chapterId: string; readonly endActivityId: string }) =>
       unwrap(
         () =>
-          api.v1.me.athena.chat.chapters[':chapterId'].end.$put({
+          api.v1.me.athena.chat.chapters[':chapterId'].$put({
             param: { chapterId: input.chapterId },
             json: { endActivityId: input.endActivityId },
           }),
-        'Could not end chapter.',
+        'Could not end section.',
       ),
     invalidateKeys: [CHAPTERS_KEY],
   });
@@ -55,7 +55,7 @@ export function useConversationChapters(enabled: boolean) {
     mutationFn: (chapterId: string) =>
       unwrap(
         () => api.v1.me.athena.chat.chapters[':chapterId'].$delete({ param: { chapterId } }),
-        'Could not remove chapter.',
+        'Could not remove section.',
       ),
     invalidateKeys: [CHAPTERS_KEY],
   });

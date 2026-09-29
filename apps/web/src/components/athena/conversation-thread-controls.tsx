@@ -116,8 +116,23 @@ export function useThreadChapters(
       scrollerRef.current?.querySelectorAll<HTMLElement>('[data-athena-activity]') ?? [],
     ).find((entry) => entry.dataset['athenaActivity'] === targetId);
     if (!target) return;
-    target.scrollIntoView({ block: 'start' });
-    setTargetId(null);
+    // Revealing history resizes the column; let its follow-latest observer settle first.
+    let secondFrame = 0;
+    const firstFrame = window.requestAnimationFrame(() => {
+      secondFrame = window.requestAnimationFrame(() => {
+        target.scrollIntoView({
+          block: 'center',
+          behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches
+            ? 'auto'
+            : 'smooth',
+        });
+        setTargetId(null);
+      });
+    });
+    return () => {
+      window.cancelAnimationFrame(firstFrame);
+      window.cancelAnimationFrame(secondFrame);
+    };
   }, [targetId, scrollerRef, visibleEntries]);
   const actions: ChapterActions = {
     chapters: rows,

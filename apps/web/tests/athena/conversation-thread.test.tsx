@@ -233,20 +233,77 @@ describe('AthenaConversation thread structure', () => {
     renderConversation();
 
     const message = await inThread('[data-athena-activity="chapter_start"]');
-    fireEvent.pointerDown(within(message).getByRole('button', { name: 'Chapter options' }), {
+    fireEvent.pointerDown(within(message).getByRole('button', { name: 'Section options' }), {
       button: 0,
       ctrlKey: false,
     });
-    fireEvent.change(await screen.findByRole('textbox', { name: 'Chapter name' }), {
+    fireEvent.change(await screen.findByRole('textbox', { name: 'Section name' }), {
       target: { value: 'Launch planning' },
     });
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Start chapter here' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Start section here' }));
     await waitFor(() => {
       expect(chaptersPost).toHaveBeenCalledWith({
         json: { startActivityId: 'chapter_start', title: 'Launch planning' },
       });
     });
   });
+
+  it.each([
+    { reducedMotion: false, behavior: 'smooth' },
+    { reducedMotion: true, behavior: 'auto' },
+  ])(
+    'reveals older messages and centers a section with $behavior scrolling',
+    async ({ reducedMotion, behavior }) => {
+      vi.mocked(Date.now).mockReturnValue(Date.parse('2026-09-28T10:00:00.000Z'));
+      vi.stubGlobal('matchMedia', () => ({ matches: reducedMotion }));
+      const scrollIntoView = vi.fn();
+      Element.prototype.scrollIntoView = scrollIntoView;
+      chatGet.mockResolvedValue(
+        okResponse(
+          thread([
+            {
+              id: 'section_start',
+              sessionId: 'chat_session',
+              organizationId: null,
+              type: 'response',
+              body: { text: 'Plan the launch', author: 'user' },
+              createdAt: '2026-09-27T10:00:00.000Z',
+            },
+          ]),
+        ),
+      );
+      chaptersGet.mockResolvedValue(
+        okResponse({
+          sessionId: 'chat_session',
+          items: [
+            {
+              id: 'section_1',
+              title: 'Launch planning',
+              startActivityId: 'section_start',
+              endActivityId: null,
+              createdAt: '2026-09-27T10:00:00.000Z',
+              updatedAt: '2026-09-27T10:00:00.000Z',
+            },
+          ],
+        }),
+      );
+      renderConversation();
+
+      const sections = await screen.findByRole('button', { name: 'Sections' });
+      expect(screen.queryByText('Plan the launch')).not.toBeInTheDocument();
+      fireEvent.pointerDown(sections, { button: 0, ctrlKey: false });
+      fireEvent.click(await screen.findByRole('menuitem', { name: 'Launch planning · Open' }));
+
+      const target = await inThread('[data-athena-activity="section_start"]');
+      expect(target).toBeVisible();
+      await waitFor(() => {
+        expect(scrollIntoView).toHaveBeenCalledWith({
+          block: 'center',
+          behavior,
+        });
+      });
+    },
+  );
 
   it('keeps an empty thread to its suggestions: no heading, no icon', async () => {
     chatGet.mockResolvedValue(okResponse(thread([])));

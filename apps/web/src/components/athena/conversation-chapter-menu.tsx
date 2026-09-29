@@ -45,7 +45,7 @@ export function ChapterMarkerMenu({
           controlSize="sm"
           iconOnly
           disabled={actions.pending}
-          aria-label="Chapter options"
+          aria-label="Section options"
           className="absolute -top-3 right-0 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-40"
         >
           <MoreHorizontal aria-hidden="true" />
@@ -54,7 +54,7 @@ export function ChapterMarkerMenu({
       <DropdownMenuContent align="end">
         {!open ? (
           <label className="text-label-small text-on-surface-variant flex flex-col gap-1 px-2 py-1">
-            Chapter name
+            Section name
             <Input
               value={title}
               maxLength={80}
@@ -64,7 +64,7 @@ export function ChapterMarkerMenu({
               onKeyDown={(event) => {
                 event.stopPropagation();
               }}
-              aria-label="Chapter name"
+              aria-label="Section name"
             />
           </label>
         ) : null}
@@ -75,7 +75,7 @@ export function ChapterMarkerMenu({
             else actions.onStart(activityId, title.trim());
           }}
         >
-          {open ? 'End chapter here' : 'Start chapter here'}
+          {open ? 'End section here' : 'Start section here'}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
@@ -97,7 +97,7 @@ export function ConversationChapterIndex({
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button type="button" variant="ghost" controlSize="sm">
-          Chapters
+          Sections
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start">

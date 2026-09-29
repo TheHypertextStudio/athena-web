@@ -34,10 +34,9 @@ export function athenaChapterRoutes(chatId: (ownerUserId: string) => Promise<str
       '/',
       apiDoc({
         tag: 'Athena',
-        summary: 'List marked conversation chapters',
+        summary: 'List marked conversation sections',
         response: AthenaChaptersOut,
-        description:
-          'Return the caller’s durable chapter spans in the current Athena conversation.',
+        description: 'Return the caller’s marked sections in the current Athena conversation.',
       }),
       async (c) => {
         const owner = requestOwner(c);
@@ -49,10 +48,10 @@ export function athenaChapterRoutes(chatId: (ownerUserId: string) => Promise<str
       apiDoc({
         status: 201,
         tag: 'Athena',
-        summary: 'Mark the start of a conversation chapter',
+        summary: 'Mark the start of a conversation section',
         response: AthenaChapterOut,
         description:
-          'Start one owner-only chapter at a visible message in the current conversation.',
+          'Start one owner-only section at a visible message in the current conversation.',
       }),
       zJson(AthenaChapterStart),
       async (c) => {
@@ -65,12 +64,12 @@ export function athenaChapterRoutes(chatId: (ownerUserId: string) => Promise<str
       },
     )
     .put(
-      '/:chapterId/end',
+      '/:chapterId',
       apiDoc({
         tag: 'Athena',
-        summary: 'Mark the end of a conversation chapter',
+        summary: 'Mark the end of a conversation section',
         response: AthenaChapterOut,
-        description: 'Close the caller’s open chapter at a message that follows its start.',
+        description: 'Close the caller’s open section at a message that follows its start.',
       }),
       zParam(z.object({ chapterId: z.string() })),
       zJson(AthenaChapterEnd),
@@ -92,9 +91,9 @@ export function athenaChapterRoutes(chatId: (ownerUserId: string) => Promise<str
       '/:chapterId',
       apiDoc({
         tag: 'Athena',
-        summary: 'Remove a conversation chapter',
+        summary: 'Remove a conversation section',
         response: z.object({ deleted: z.boolean() }),
-        description: 'Remove the caller’s chapter markers without deleting conversation activity.',
+        description: 'Remove the caller’s section markers without deleting conversation activity.',
       }),
       zParam(z.object({ chapterId: z.string() })),
       async (c) => {

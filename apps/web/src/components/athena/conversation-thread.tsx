@@ -444,7 +444,7 @@ export function ConversationThread(props: ConversationThreadProps): JSX.Element 
   useEffect(() => {
     const scroller = scrollerRef.current;
     if (scroller) scroller.scrollTop = scroller.scrollHeight;
-  }, [renderedCount, props.pendingTurn, props.sendFailure]);
+  }, [entries.length, props.pendingTurn, props.sendFailure]);
   useStickToEnd(scrollerRef, columnRef);
 
   // Honour a host's request to jump to one job's entry. The entry may not be mounted yet (the

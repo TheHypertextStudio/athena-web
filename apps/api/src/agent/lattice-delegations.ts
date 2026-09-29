@@ -38,7 +38,7 @@ import type { LatticeConnectionRow } from '../routes/lattice-connection';
 
 // The first submission can wait for the five-minute scheduler tick. Leave enough time after that
 // for a local model to finish and for transient relay/poll retries to return a sealed result.
-const STANDARD_DEADLINE_MS = 30 * 60_000;
+const DELEGATION_DEADLINE_MS = 30 * 60_000;
 const MAX_POLL_BATCH = 10;
 const MAX_SUBMIT_BATCH = 10;
 const TRANSIENT_RETRY_MS = 5_000;
@@ -140,7 +140,7 @@ export async function prepareLatticeAssignmentRun(
   const logicalSubmissionId = `athena:${delegationId}`;
   const replyKey = await deps.generateReplyKey(`docket-reply-${workId}`);
   const replyKeyCiphertext = storeReplyKey(replyKey);
-  const deadlineAt = new Date(now.getTime() + STANDARD_DEADLINE_MS);
+  const deadlineAt = new Date(now.getTime() + DELEGATION_DEADLINE_MS);
 
   return await db.transaction(async (tx) => {
     const [lockedAssignment] = await tx
@@ -875,7 +875,7 @@ async function submitPrepared(
       replyPublicKey: replyKey.publicKey,
       deadlineAt: row.deadlineAt,
       toolPolicy: [],
-      executionMode: 'standard',
+      executionMode: 'long_running',
       model: 'poolside/laguna-s-2.1',
       input: {
         organizationId: row.organizationId,

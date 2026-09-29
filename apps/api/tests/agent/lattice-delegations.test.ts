@@ -446,7 +446,7 @@ describe('durable Lattice assignment delegations', () => {
       replyPublicKey: 'reply-public',
       deadlineAt: prepared.deadlineAt,
       toolPolicy: [],
-      executionMode: 'standard',
+      executionMode: 'long_running',
       input: {
         organizationId: fixture.organization.id,
         taskId: fixture.targetTask.id,

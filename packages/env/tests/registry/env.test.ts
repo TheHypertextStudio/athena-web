@@ -210,7 +210,7 @@ describe('slices', () => {
     expect(sharedServer.NODE_ENV.parse(undefined)).toBe('development');
     // APP_MODE / API_URL / PORT have no hidden default — they fail fast when unset.
     expect(() => sharedServer.APP_MODE.parse(undefined)).toThrow();
-    expect(sharedServer.APP_MODE.parse('production')).toBe('production');
+    expect(sharedServer.APP_MODE.parse('staging')).toBe('staging');
     expect(() => sharedServer.API_URL.parse(undefined)).toThrow();
     expect(sharedServer.API_URL.parse('http://localhost:4000')).toBe('http://localhost:4000');
     expect(() => sharedServer.WEB_URL.parse(undefined)).toThrow();
@@ -218,7 +218,6 @@ describe('slices', () => {
     expect(() => sharedServer.PORT.parse(undefined)).toThrow();
     expect(sharedServer.PORT.parse('8080')).toBe(8080);
   });
-
   it('rejects an invalid PORT', () => {
     expect(() => sharedServer.PORT.parse('-1')).toThrow();
   });

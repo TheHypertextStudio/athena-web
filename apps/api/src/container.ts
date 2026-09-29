@@ -75,7 +75,7 @@ import {
 
 /** Runtime configuration values used to choose local mocks or production services. */
 export interface AppRuntimeEnv {
-  readonly APP_MODE?: 'local' | 'test' | 'production';
+  readonly APP_MODE?: 'local' | 'test' | 'staging' | 'production';
   readonly PHONE_VERIFICATION_ENABLED?: boolean;
   readonly PHONE_VERIFICATION_CANARY_EMAILS?: string;
   readonly BILLING_ENABLED?: boolean;

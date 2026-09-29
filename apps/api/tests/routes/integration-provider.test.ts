@@ -4,6 +4,7 @@ import type * as DbModule from '@docket/db';
 import type { ConnectorProvider } from '@docket/integrations';
 
 import type * as ProviderModule from '../../src/routes/integration-provider';
+import { env } from '../../src/env';
 import { getDb, seedBaseOrg } from '../support/routes-harness';
 import { assertDefined } from '@docket/test-utils';
 
@@ -197,6 +198,20 @@ describe('resolveLiveConnectorToken', () => {
 });
 
 describe('resolveActorConnectorIdentity', () => {
+  it('requires a linked owner in staging', async () => {
+    const { orgId } = await seedBaseOrg(db, schema);
+    const actorId = await seedUnlinkedActor(orgId);
+    const savedMode = env.APP_MODE;
+    (env as { APP_MODE: string }).APP_MODE = 'staging';
+    try {
+      await expect(resolveActorConnectorIdentity(actorId, 'linear', 'arbitrary')).rejects.toThrow(
+        /no linked sign-in identity/,
+      );
+    } finally {
+      (env as { APP_MODE: string }).APP_MODE = savedMode;
+    }
+  });
+
   it('auto-selects the actor’s single linked account for onboarding-style creates', async () => {
     const { orgId } = await seedBaseOrg(db, schema);
     const { actorId, userId } = await seedLinkedActor(orgId);

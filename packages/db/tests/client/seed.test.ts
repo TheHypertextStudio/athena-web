@@ -95,6 +95,12 @@ describe('roleForIdentifier / bootstrapRoleFor', () => {
     ).toBeNull();
   });
 
+  it('denies in staging regardless of the local bootstrap allowlist', () => {
+    expect(
+      bootstrapRoleFor('a@x.dev', { appMode: 'staging', bootstrapEmails: 'a@x.dev' }),
+    ).toBeNull();
+  });
+
   it('grants the configured tier in non-production', () => {
     expect(
       bootstrapRoleFor('b@x.dev', { appMode: 'local', bootstrapEmails: 'a@x.dev,b@x.dev:finance' }),

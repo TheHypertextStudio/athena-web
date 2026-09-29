@@ -91,7 +91,7 @@ export interface AuthDeps {
  * provider-present and provider-absent branches.
  */
 export interface AuthEnv {
-  readonly APP_MODE?: 'local' | 'test' | 'production' | undefined;
+  readonly APP_MODE?: 'local' | 'test' | 'staging' | 'production' | undefined;
   readonly BETTER_AUTH_SECRET: string;
   readonly BETTER_AUTH_URL: string;
   readonly BETTER_AUTH_TRUSTED_ORIGINS?: string | undefined;
@@ -177,7 +177,8 @@ export function canUseGoogleOAuth(
   e: Pick<AuthEnv, 'APP_MODE' | 'GOOGLE_OAUTH_PUBLIC' | 'GOOGLE_OAUTH_TEST_EMAILS'>,
   email: string | null | undefined,
 ): boolean {
-  if (e.APP_MODE !== 'production' || e.GOOGLE_OAUTH_PUBLIC === true) return true;
+  if (e.APP_MODE === 'local' || e.APP_MODE === 'test' || e.GOOGLE_OAUTH_PUBLIC === true)
+    return true;
   const normalized = email?.trim().toLowerCase();
   if (!normalized) return false;
   return parseTrustedOrigins(e.GOOGLE_OAUTH_TEST_EMAILS)
@@ -762,7 +763,7 @@ export function buildAuthOptions(e: AuthEnv, deps: AuthDeps): BetterAuthOptions 
   // providers' endpoints, not a stand-in). Gated exactly like every other local/test-only
   // shortcut in this codebase (`packages/mail/src/transport.ts`, `devEchoSignupCode` above,
   // `apps/api/src/lib/slack-app.ts`'s `mockMode`): structurally absent from the `plugins` array
-  // whenever `APP_MODE` is `production` or unset, so there is no code path that can offer, reach,
+  // whenever `APP_MODE` is `staging`, `production`, or unset, so there is no code path that can offer, reach,
   // or complete this ceremony outside `local`/`test`. See
   // `packages/auth/tests/builder/generic-oauth.test.ts` for the production-absence proof.
   if (e.APP_MODE === 'local' || e.APP_MODE === 'test') {

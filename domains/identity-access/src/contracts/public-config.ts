@@ -39,11 +39,11 @@ export type SignInProvider = z.infer<typeof SignInProvider>;
  */
 export const PublicConfigOut = z
   .object({
-    /** The deployment mode — `local` enables the mock-everything affordances. */
+    /** The deployment mode — only `local` enables the mock-everything affordances. */
     appMode: z
-      .enum(['local', 'test', 'production'])
+      .enum(['local', 'test', 'staging', 'production'])
       .describe(
-        'The deployment mode the API is running in. `local` enables mock-everything affordances (stub OAuth, fixtures); `test` is the CI/test profile; `production` is the live deployment. The web client branches dev-only UI on this.',
+        'The deployment mode the API is running in. `local` enables mock-everything affordances (stub OAuth, fixtures); `test` is the CI/test profile; `staging` uses real OAuth and model providers with separate data; `production` is the live deployment. The web client branches dev-only UI on this.',
       )
       .meta({ example: 'production' }),
     /** The social providers whose OAuth credentials are configured server-side. */

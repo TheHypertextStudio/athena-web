@@ -17,7 +17,7 @@ import { ResendInboundReceiver } from './resend-inbound';
 /** Runtime values used to select Docket's inbound-mail adapter. */
 export interface InboundMailEnv {
   /** Runtime mode. `local`/`test` always use the offline fixture adapter. */
-  readonly APP_MODE: 'local' | 'test' | 'production';
+  readonly APP_MODE: 'local' | 'test' | 'staging' | 'production';
   /** Resend API key — production reads message bodies from the receiving API with it. */
   readonly RESEND_API_KEY?: string;
   /** The `whsec_…` signing secret for the inbound webhook endpoint. */

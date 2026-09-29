@@ -38,8 +38,8 @@ export const sharedServer = {
    * must NOT be set in `.env` files, so a default is the correct, non-hidden behavior.
    */
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
-  /** Forces local test doubles when `local`/`test`, even if real keys are present. */
-  APP_MODE: z.enum(['local', 'test', 'production']),
+  /** Forces local test doubles when `local`/`test`; staging and production use real adapters. */
+  APP_MODE: z.enum(['local', 'test', 'staging', 'production']),
   API_URL: z.string().min(1),
   /**
    * Public origin of the product web app (sign-in + OAuth consent pages). The MCP

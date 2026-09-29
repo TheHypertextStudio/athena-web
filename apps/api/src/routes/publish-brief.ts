@@ -105,17 +105,17 @@ export interface BriefLocator {
  * this backwards in either direction is a tenancy bug, so the decision is made once, here, from
  * the resolved host contract rather than from string heuristics.
  *
- * The `.localhost` allowance is gated on the app mode, not merely conventional: outside
- * production the brief host, the app host, and the API host are all portless `*.localhost`
+ * The `.localhost` allowance is gated on the app mode, not merely conventional: in local
+ * and test the brief host, the app host, and the API host are all portless `*.localhost`
  * names that no host contract enumerates, and without it no local or CI request could reach a
- * brief at all. In production the branch is dead.
+ * brief at all. In staging and production the branch is dead.
  *
  * @param host - A bare hostname, already lowercased and port-stripped.
  * @returns `true` when the host belongs to Docket rather than to a workspace.
  */
 export function isProductHost(host: string): boolean {
   if (isOwnHost(host)) return true;
-  if (env.APP_MODE === 'production') return false;
+  if (env.APP_MODE !== 'local' && env.APP_MODE !== 'test') return false;
   return host === 'localhost' || host.endsWith('.localhost');
 }
 

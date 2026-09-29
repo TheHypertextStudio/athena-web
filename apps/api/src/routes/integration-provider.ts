@@ -124,7 +124,7 @@ export async function resolveActorConnectorIdentity(
     .where(eq(actor.id, actorId))
     .limit(1);
   if (!owner?.userId) {
-    if (env.APP_MODE !== 'production') return externalAccountId ?? null;
+    if (env.APP_MODE === 'local' || env.APP_MODE === 'test') return externalAccountId ?? null;
     throw new Error('The acting user has no linked sign-in identity.');
   }
   const linked = await db

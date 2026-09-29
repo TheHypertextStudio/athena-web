@@ -29,7 +29,7 @@ export const DEFAULT_RUNNER_REQUEST_TIMEOUT_MS = 10_000;
 
 /** Minimal config needed to choose and authenticate the execution path. */
 export interface AsyncRunnerConfig {
-  readonly APP_MODE?: 'local' | 'test' | 'production' | undefined;
+  readonly APP_MODE?: 'local' | 'test' | 'staging' | 'production' | undefined;
   readonly ATHENA_ASYNC_RUNNER_ENABLED?: boolean | undefined;
   readonly CLOUDFLARE_ATHENA_RUNNER_URL?: string | undefined;
   readonly DOCKET_TO_CLOUDFLARE_HMAC_SECRET?: string | undefined;
@@ -85,9 +85,12 @@ const defaultDependencies: AsyncRunnerDependencies = {
   fetch: (input, init) => fetch(input, init),
 };
 
-/** True only for an explicitly enabled production runner; local/test always stay synchronous. */
+/** True only for an explicitly enabled deployed runner; local/test always stay synchronous. */
 export function asynchronousRunnerEnabled(config: AsyncRunnerConfig = env): boolean {
-  return config.APP_MODE === 'production' && config.ATHENA_ASYNC_RUNNER_ENABLED === true;
+  return (
+    (config.APP_MODE === 'production' || config.APP_MODE === 'staging') &&
+    config.ATHENA_ASYNC_RUNNER_ENABLED === true
+  );
 }
 
 function configuredRunner(config: AsyncRunnerConfig): {

@@ -88,7 +88,7 @@ const PROVIDER_ORDER: readonly SignInProvider[] = ['google', 'apple', 'github', 
  *
  * @remarks
  * Configured is necessary but not sufficient for Google: while `googleOAuthPublic` is false, a
- * production deployment only admits the allowlisted test emails, and the sign-in screen has no
+ * staging or production deployment only admits the allowlisted test emails, and sign-in has no
  * email to test against. Rather than send most people into a grant that the server will refuse,
  * the button is withheld until the stage opens. Every other provider is offerable as soon as its
  * credentials exist.
@@ -100,7 +100,9 @@ const PROVIDER_ORDER: readonly SignInProvider[] = ['google', 'apple', 'github', 
 export function isOfferable(config: PublicConfigOut, provider: SignInProvider): boolean {
   if (!config.oauthProviders.includes(provider)) return false;
   if (provider !== 'google') return true;
-  return config.appMode !== 'production' || config.googleOAuthPublic === true;
+  return (
+    config.appMode === 'local' || config.appMode === 'test' || config.googleOAuthPublic === true
+  );
 }
 
 /**

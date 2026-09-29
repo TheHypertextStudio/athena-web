@@ -12,7 +12,7 @@ export type { Scope, Slice, Target, VarSpec } from './registry';
 export { findVar, VAR_REGISTRY } from './registry';
 
 /** The deploy modes; `local`/`test` force local test doubles in app containers. */
-export type AppMode = 'local' | 'test' | 'production';
+export type AppMode = 'local' | 'test' | 'staging' | 'production';
 export { isRealValue, realEnvValue } from './real-value';
 
 export type {

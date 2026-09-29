@@ -56,6 +56,10 @@ describe('selectModelBackendId', () => {
     }
   });
 
+  it('uses the selected live Lattice backend in staging', () => {
+    expect(selectModelBackendId({ ...LATTICE, APP_MODE: 'staging' })).toBe('lattice');
+  });
+
   it('prefers an operator Lattice endpoint over Docket’s own router', () => {
     expect(selectModelBackendId({ ...ROUTER, ...LATTICE })).toBe('lattice');
   });

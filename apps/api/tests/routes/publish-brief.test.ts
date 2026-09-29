@@ -56,9 +56,9 @@ describe('isProductHost', () => {
     expect(isProductHost('localhost.example')).toBe(false);
   });
 
-  it('denies the `.localhost` allowance in production, even for a bare `localhost` host', () => {
+  it.each(['staging', 'production'])('denies `.localhost` in %s', (mode) => {
     const savedMode = env.APP_MODE;
-    (env as { APP_MODE: string }).APP_MODE = 'production';
+    (env as { APP_MODE: string }).APP_MODE = mode;
     try {
       expect(isProductHost('localhost')).toBe(false);
       expect(isProductHost('foo.localhost')).toBe(false);

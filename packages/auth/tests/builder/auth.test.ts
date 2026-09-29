@@ -1887,6 +1887,7 @@ describe('buildAuthOptions env-gating', () => {
     };
     expect(canUseGoogleOAuth(staged, 'WillieEChalmers@gmail.com')).toBe(true);
     expect(canUseGoogleOAuth(staged, 'public@example.com')).toBe(false);
+    expect(canUseGoogleOAuth({ ...staged, APP_MODE: 'staging' }, 'public@example.com')).toBe(false);
     expect(canUseGoogleOAuth({ ...staged, GOOGLE_OAUTH_PUBLIC: true }, null)).toBe(true);
     expect(canUseGoogleOAuth({ ...staged, APP_MODE: 'local' }, null)).toBe(true);
     // No email at all (not yet resolved) is refused before an allowlist is even checked.

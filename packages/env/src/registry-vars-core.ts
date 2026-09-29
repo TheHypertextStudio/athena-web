@@ -20,7 +20,7 @@ export const CORE_VARS: readonly VarSpec[] = [
     targets: ALL,
     required: true,
     zod: sharedServer.APP_MODE,
-    where: 'local | test | production — local/test force the mock boundary adapters',
+    where: 'local | test | staging | production — local/test force the mock boundary adapters',
   },
   {
     name: 'API_URL',

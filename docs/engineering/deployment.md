@@ -28,6 +28,30 @@ All services use `--max-instances=10` and `--memory=512Mi`. Services scale to ze
 [webhook acknowledgement and first-response deadlines](https://linear.app/developers/agent-interaction)
 do not depend on a cold start.
 
+### Lattice staging boundary
+
+`docket-staging` is a separate Vercel project whose intended public origin is
+`https://docket-staging.vercel.app`. Its passkey RP ID is that exact hostname. The staging API
+must run as a separate `docket-api-staging` Cloud Run service with `APP_MODE=staging`, its own
+Neon schema-only branch, and separate `DATABASE_URL`, `BETTER_AUTH_SECRET`, `CRON_SECRET`, and
+`CREDENTIALS_ENCRYPTION_KEY` secrets. Never copy production Docket account or grant rows into
+that branch. Do not point the staging web project at `api.clearthedocket.com`.
+
+Staging uses real OAuth, Lattice, and mail adapters. The `local` and `test` modes use mocks and
+cannot establish a staging round trip. Set its public Lovelace client ID to
+`https://docket-staging.vercel.app/.well-known/lattice-client.json`; the metadata document must
+publish the staging API callback. Lovelace's issuer, gateway, and the existing Studio daemon may
+be shared as the external device under test; their grant in staging belongs only to the staging
+Docket account. Disable optional Docket integrations unless their staging credentials and callback
+URLs are configured. Set `ATHENA_ASYNC_RUNNER_ENABLED=false` unless a separate staging runner and
+both directional HMAC secrets exist.
+
+Before calling staging accepted, read back the Cloud Run service environment and secret bindings,
+verify the Neon branch has no production account rows, fetch the public Lattice client metadata,
+and complete Settings link → Studio selection → interactive Athena reply → one durable assignment
+and sealed proposal. Correlate the Docket request, Lattice work ID, Studio daemon, and LM Studio
+inference. A health check or a successful deploy alone is insufficient.
+
 ---
 
 ## One-time bootstrap

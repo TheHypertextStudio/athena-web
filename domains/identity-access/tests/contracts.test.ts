@@ -104,6 +104,7 @@ describe('identity and access contracts', () => {
     });
     expect(publicConfig.connectors).toEqual(['calendar']);
     expect(publicConfig.legacyPasskeyRpId).toBeNull();
+    expect(PublicConfigOut.shape.appMode.parse('staging')).toBe('staging');
 
     const session = SessionOut.parse({
       id: ID,

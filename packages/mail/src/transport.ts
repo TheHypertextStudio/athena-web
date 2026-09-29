@@ -9,7 +9,7 @@ import type { SmtpEnv } from './smtp';
 /** Runtime values used to select Docket's transactional mail transport. */
 export interface MailerEnv extends SmtpEnv {
   /** Runtime mode. Tests always capture messages in memory. */
-  readonly APP_MODE: 'local' | 'test' | 'production';
+  readonly APP_MODE: 'local' | 'test' | 'staging' | 'production';
   /** Resend API key used by production's HTTPS transport. */
   readonly RESEND_API_KEY?: string;
 }

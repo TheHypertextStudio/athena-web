@@ -64,7 +64,7 @@ export interface LatticeBackendConfig {
 /** Environment values that influence model-backend selection. */
 export interface ModelBackendEnv {
   /** Local and test modes always use the deterministic script. */
-  readonly APP_MODE?: 'local' | 'test' | 'production';
+  readonly APP_MODE?: 'local' | 'test' | 'staging' | 'production';
   /** Docket-owned Anthropic provider key. */
   readonly ANTHROPIC_API_KEY?: string;
   /** Cloudflare model-router endpoint. */

@@ -94,6 +94,16 @@ describe('isOfferable', () => {
     expect(isOfferable({ ...staged, googleOAuthPublic: true }, 'google')).toBe(true);
   });
 
+  it('withholds Google in staging until the stage is public', () => {
+    const staged = config({
+      appMode: 'staging',
+      oauthProviders: ['google'],
+      googleOAuthPublic: false,
+    });
+    expect(isOfferable(staged, 'google')).toBe(false);
+    expect(isOfferable({ ...staged, googleOAuthPublic: true }, 'google')).toBe(true);
+  });
+
   it('offers Google outside production, where the allowlist does not apply', () => {
     expect(isOfferable(config({ appMode: 'local', oauthProviders: ['google'] }), 'google')).toBe(
       true,

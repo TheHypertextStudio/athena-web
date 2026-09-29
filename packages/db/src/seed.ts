@@ -110,7 +110,7 @@ export function roleForIdentifier(
  *
  * @remarks
  * The pure decision behind the API's dev auto-grant: deny outright when `appMode` is
- * `production` (the allowlist is a local-dev convenience only) or when nothing is configured,
+ * `staging` or `production` (the allowlist is a local-dev convenience only) or when nothing is configured,
  * otherwise return the listed tier for `email`. Kept pure (no env/db access) so the policy is
  * unit-testable; the guard supplies `appMode`/`bootstrapEmails` and performs the actual grant.
  *
@@ -120,7 +120,7 @@ export function bootstrapRoleFor(
   email: string,
   opts: { appMode: string; bootstrapEmails: string | undefined },
 ): StaffRole | null {
-  if (opts.appMode === 'production' || !opts.bootstrapEmails) return null;
+  if ((opts.appMode !== 'local' && opts.appMode !== 'test') || !opts.bootstrapEmails) return null;
   return roleForIdentifier(parseStaffTargets(opts.bootstrapEmails), email);
 }
 

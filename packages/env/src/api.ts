@@ -187,6 +187,21 @@ function assertProviderConfig(e: typeof env): void {
   assertProductionMapbox(e, failCrossField);
 }
 
+function assertAsyncRunnerConfig(e: typeof env): void {
+  if (!e.ATHENA_ASYNC_RUNNER_ENABLED || (e.APP_MODE !== 'production' && e.APP_MODE !== 'staging')) {
+    return;
+  }
+  if (!e.CLOUDFLARE_ATHENA_RUNNER_URL) {
+    failCrossField('ATHENA_ASYNC_RUNNER_ENABLED=true requires CLOUDFLARE_ATHENA_RUNNER_URL.');
+  }
+  if (!e.CLOUDFLARE_TO_DOCKET_HMAC_SECRET || !e.DOCKET_TO_CLOUDFLARE_HMAC_SECRET) {
+    failCrossField('ATHENA_ASYNC_RUNNER_ENABLED=true requires both directional HMAC secrets.');
+  }
+  if (e.CLOUDFLARE_TO_DOCKET_HMAC_SECRET === e.DOCKET_TO_CLOUDFLARE_HMAC_SECRET) {
+    failCrossField('Cloudflare execution HMAC secrets must be distinct.');
+  }
+}
+
 /**
  * Cross-field invariants that a per-var schema cannot express. Runs at module load
  * so a misconfigured contract fails fast, the same as a missing required var.
@@ -276,17 +291,7 @@ function assertCrossFieldRules(e: typeof env): void {
     );
   }
 
-  if (e.ATHENA_ASYNC_RUNNER_ENABLED && e.APP_MODE === 'production') {
-    if (!e.CLOUDFLARE_ATHENA_RUNNER_URL) {
-      fail('ATHENA_ASYNC_RUNNER_ENABLED=true requires CLOUDFLARE_ATHENA_RUNNER_URL.');
-    }
-    if (!e.CLOUDFLARE_TO_DOCKET_HMAC_SECRET || !e.DOCKET_TO_CLOUDFLARE_HMAC_SECRET) {
-      fail('ATHENA_ASYNC_RUNNER_ENABLED=true requires both directional HMAC secrets.');
-    }
-    if (e.CLOUDFLARE_TO_DOCKET_HMAC_SECRET === e.DOCKET_TO_CLOUDFLARE_HMAC_SECRET) {
-      fail('Cloudflare execution HMAC secrets must be distinct.');
-    }
-  }
+  assertAsyncRunnerConfig(e);
 
   if (e.APP_MODE === 'production') {
     // A domain cutover moves several variables, and the dangerous state is the half-applied one:

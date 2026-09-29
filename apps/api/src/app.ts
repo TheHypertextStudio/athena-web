@@ -200,7 +200,7 @@ function verificationAvailability(identity: {
   readonly reason: 'rollout_restricted' | 'temporarily_unavailable' | null;
 } {
   if (
-    env.APP_MODE === 'production' &&
+    (env.APP_MODE === 'production' || env.APP_MODE === 'staging') &&
     !phoneVerificationEnabled(
       env.PHONE_VERIFICATION_ENABLED,
       env.PHONE_VERIFICATION_CANARY_EMAILS,

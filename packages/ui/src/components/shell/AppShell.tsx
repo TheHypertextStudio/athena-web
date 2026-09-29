@@ -332,12 +332,14 @@ export interface AppShellProps {
    * affordance. Rendered at the bar's right edge.
    */
   mobileActions?: React.ReactNode | undefined;
+  /** Keep the desktop rail while omitting its compact-header launcher on a dedicated page. */
+  mobileAsideTrigger?: boolean | undefined;
   /**
    * The optional right-hand **rail** — a curated set of Docket-native supplemental panels plus a
    * default. On `lg` and up it renders as a thin always-visible {@link ShellActivityBar} switcher
    * on the far edge plus a collapsible {@link ShellAside} panel host beside it; below `lg` the same
-   * panels are presented in a right-anchored {@link Sheet} opened from the mobile top bar. Omit it
-   * (or pass no panels) and no rail renders.
+   * panels are presented in a right-anchored {@link Sheet}. The mobile top bar opens it unless
+   * `mobileAsideTrigger` is false. Omit the rail (or pass no panels) and no rail renders.
    *
    * @remarks
    * A panel supplies content only. It never sizes itself: the rail's inline size is the shell's
@@ -394,6 +396,7 @@ export function AppShell({
   contentOverlay,
   mobileBrand,
   mobileActions,
+  mobileAsideTrigger = true,
   aside,
   railRequest,
   onRailStateChange,
@@ -602,7 +605,7 @@ export function AppShell({
             <>
               {mobileActions}
               {/* Mobile rail trigger — opens the panels as a right sheet. Uses the active panel's glyph. */}
-              {activePanel ? (
+              {activePanel && mobileAsideTrigger ? (
                 <button
                   type="button"
                   aria-label={`Show ${activePanel.label}`}

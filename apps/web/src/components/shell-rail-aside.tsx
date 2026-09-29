@@ -49,7 +49,8 @@ export function athenaRailUnavailable(
  * or question is waiting — and opens on the Agenda otherwise. The shell only reads this default
  * once per mount, so the open panel never moves under the viewer.
  *
- * `/athena` has no rail. The conversation owns that route, including its compact header.
+ * `/athena` keeps Agenda and Focus beside the wide conversation. Its compact header hides the
+ * panel launcher so those unrelated panels do not compete with the conversation title.
  *
  * @param identityUnknown - Whether the viewer is still unidentified; swaps panels for a placeholder.
  * @param timerStatus - The live tracker, which lends the Focus icon its status dot.

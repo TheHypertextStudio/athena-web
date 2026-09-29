@@ -246,7 +246,7 @@ describe('AthenaConversation reply feedback', () => {
     const threadElement = document.querySelector<HTMLElement>('[data-slot="athena-thread"]');
     if (!threadElement) throw new Error('missing thread');
     expect(within(threadElement).getByText('What is 10 + 10?')).toBeVisible();
-    expect(within(threadElement).getByRole('status')).toHaveTextContent('Athena is working');
+    expect(within(threadElement).getByRole('status').textContent).toBe('');
     expect(within(threadElement).queryByRole('list', { name: 'Suggestions' })).toBeNull();
 
     finishPost?.(okResponse(thread([])));

@@ -11965,6 +11965,17 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
 
 ## Completed Tasks
 
+### [ATHENA-HISTORY-IA-001] Make Athena navigation legible
+
+- **Completed**: 2026-09-28
+- **Summary**: The phone header names Athena and omits the unrelated Agenda icon. One small history menu holds earlier messages and saved places. The in-thread saved-place heading is gone. The desktop page retains Agenda and Focus beside the conversation.
+- **Approach**: Keep the one conversation and its durable markers. Suppress only the compact rail launcher on Athena's dedicated route, since removing the entire rail left a wide blank page. Keep pending reply status accessible without a visible narration line.
+- **Files changed**: Athena conversation and shell presentation, the shared shell's compact rail control, focused interaction tests, README, and this log.
+- **Validation**: Focused web tests passed, including the history jump, mobile header, reply state, and recorded plan action. Web and shared UI typechecks, focused ESLint, the complexity ledger, and the production web build passed. Local phone and desktop captures in both themes and the 320px overflow check show the final shell layout. The disposable local database was reset after capture.
+- **Release follow-up**: A concurrent recorded-action change made one plan-card assertion stale. The test now expects the action record beside the live plan card. The prior CI run, which would repeat that known failure, was canceled before the corrected delivery.
+- **Learning**: The full-width Athena route still needs the desktop rail, while the compact header should name only the conversation and its relevant actions. A fresh account has no thread or delegated work, so starter prompts are the only central content.
+- **Retrospective**: The first desktop capture exposed the overbroad rail removal. Restoring desktop context while keeping the phone title clean corrected it without adding filler to an empty account.
+
 ### [ATHENA-NAMED-JUMPS-001] Return to named work without a conversation index
 
 - **Completed**: 2026-09-28

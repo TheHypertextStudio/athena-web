@@ -390,9 +390,6 @@ function AthenaWorking(): JSX.Element {
       >
         <Sparkles className="size-4 animate-pulse motion-reduce:animate-none" />
       </span>
-      <span className="text-on-surface-variant text-body-small">
-        Athena is working on your message
-      </span>
     </div>
   );
 }

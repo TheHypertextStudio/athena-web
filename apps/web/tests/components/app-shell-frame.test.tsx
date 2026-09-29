@@ -181,7 +181,7 @@ describe('AppShellFrame session loading', () => {
     expect(screen.queryByRole('complementary', { name: 'Focus' })).not.toBeInTheDocument();
   });
 
-  it('names the Athena conversation and leaves unrelated panels out of its header', () => {
+  it('names the Athena conversation while keeping desktop panels off its phone header', () => {
     pathnameState.value = '/athena';
 
     renderFrame(SERVER_SESSION);
@@ -191,6 +191,11 @@ describe('AppShellFrame session loading', () => {
     expect(within(topBar as HTMLElement).getByText('Athena')).toBeVisible();
     expect(within(topBar as HTMLElement).getByRole('button', { name: 'Search' })).toBeEnabled();
     expect(within(topBar as HTMLElement).queryByRole('button', { name: 'Show Agenda' })).toBeNull();
+    expect(
+      within(screen.getByRole('navigation', { name: 'Panels' })).getByRole('button', {
+        name: /Agenda/,
+      }),
+    ).toBeInTheDocument();
   });
 
   it('puts Athena first in the rail', async () => {

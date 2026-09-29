@@ -943,6 +943,7 @@ function AthenaShellChrome({
       tabBar={tabBar}
       mobileBrand={mobileBrand}
       mobileActions={mobileActions}
+      mobileAsideTrigger={pathname !== '/athena'}
       contentOverlay={<NavigationProgress />}
       banner={
         standingNotice || hasQueuedWork ? (
@@ -953,7 +954,7 @@ function AthenaShellChrome({
         ) : undefined
       }
       aside={
-        athenaRailUnavailable(pathname, settingsSurface, calendarSurface)
+        settingsSurface || calendarSurface
           ? undefined
           : railAsideFor(identityUnknown, timerStatus, athenaRail, pathname)
       }

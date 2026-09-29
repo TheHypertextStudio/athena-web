@@ -153,7 +153,7 @@ afterEach(() => {
 });
 
 describe('AthenaConversation plan card', () => {
-  it('renders a plan_start action as one flat entry with the plan’s live state', async () => {
+  it('keeps a recorded plan_start action beside the plan’s live state', async () => {
     chatGet.mockResolvedValue(
       okResponse(
         thread([
@@ -176,8 +176,8 @@ describe('AthenaConversation plan card', () => {
       return found;
     });
     expect(within(entry).getByRole('link')).toHaveAttribute('href', '/orgs/org_1/plans/plan_1');
-    // A flat entry: no nested card and no chip naming the same call above it.
-    expect(screen.queryByText('Opened a plan')).toBeNull();
+    expect(screen.getByText('Opened a plan')).toBeVisible();
+    expect(document.querySelectorAll('[data-slot="athena-action"]')).toHaveLength(1);
     const state = entry.querySelector('[data-slot="athena-plan-state"]');
     await waitFor(() => {
       expect(state).toHaveTextContent(planStateLine(livePlan(), summary()));

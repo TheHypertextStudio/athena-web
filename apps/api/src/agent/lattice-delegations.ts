@@ -32,6 +32,7 @@ import { and, asc, eq, isNotNull, isNull, lte, or } from 'drizzle-orm';
 
 import { sealCredential, unsealCredential } from '../lib/credentials';
 import type { AthenaAssignmentRow } from './assignments';
+import { promptForSession } from './lattice-delegation-prompt';
 import type { LatticeConnectionRow } from '../routes/lattice-connection';
 
 const STANDARD_DEADLINE_MS = 120_000;
@@ -325,20 +326,6 @@ async function reconcileDecidedProposals(now: Date): Promise<void> {
       await tx.update(agentSession).set(sessionUpdate).where(eq(agentSession.id, row.sessionId));
     });
   }
-}
-
-async function promptForSession(sessionId: string): Promise<string> {
-  const [row] = await db
-    .select({ body: sessionActivity.body })
-    .from(sessionActivity)
-    .where(and(eq(sessionActivity.sessionId, sessionId), eq(sessionActivity.type, 'response')))
-    .orderBy(asc(sessionActivity.createdAt))
-    .limit(1);
-  const text = row?.body.text;
-  if (typeof text !== 'string' || text.trim().length === 0) {
-    throw new Error('prepared Lattice delegation has no instruction');
-  }
-  return text;
 }
 
 async function settleFailure(
@@ -914,7 +901,7 @@ async function submitPrepared(
         'failed',
       );
     }
-    const instruction = await promptForSession(row.sessionId);
+    const instruction = await promptForSession(row);
     const command = deps.buildAgentTaskCommand({
       instruction,
       logicalSubmissionId: row.logicalSubmissionId,

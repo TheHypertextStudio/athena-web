@@ -441,7 +441,7 @@ describe('durable Lattice assignment delegations', () => {
       latticeId: 'lat_mac_studio',
     });
     expect(deps.buildAgentTaskCommand).toHaveBeenCalledWith({
-      instruction: fixture.assignment.objective,
+      instruction: expect.stringContaining('Task: Prove the round trip'),
       logicalSubmissionId: prepared.logicalSubmissionId,
       replyPublicKey: 'reply-public',
       deadlineAt: prepared.deadlineAt,

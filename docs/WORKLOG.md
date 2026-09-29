@@ -17731,3 +17731,25 @@ xhigh` passes (10 finder angles each, one-vote verification, a gap sweep) agains
   API build, formatting, and the repository complexity ledger pass. These code checks do not
   establish a live Mac Studio inference or relay heartbeat. Production rollout remains gated on
   that device proof.
+
+### 2026-09-28 Personal Lattice durable task context
+
+- **Status**: IN PROGRESS
+- **State**: VALIDATING
+- **Description**: The first production scheduled assignment reached the Mac Studio and returned a
+  sealed result, but its proposed comment said the agent could not inspect the assigned task. The
+  relay command contained only the assignment objective and no task data or granted task tools.
+- **Approach**: At submission, read the currently authorized Docket task, project, or initiative
+  title, status, description, and five latest comments. Put that bounded snapshot inside the sealed
+  runtime instruction, distinguish it from instructions, and request only the proposed comment.
+  Keep tools ungranted; the snapshot is enough for this review task without widening device access.
+- **Files changed**: `apps/api/src/agent/lattice-delegations.ts`, its focused tests, and this worklog.
+- **Validation**: The snapshot assertion failed against the old objective-only command and passed
+  after implementation. The original production run submitted one work ID, returned one sealed
+  result, and created one proposed action on its original task. After the next scheduler tick it
+  still had one proposal, with its trigger disabled. The proposal remains unapproved because its
+  content predates this fix. The new snapshot and proposal quality still need a production run
+  after deployment.
+- **Retrospective**: A successful encrypted round trip is not sufficient when the selected runtime
+  lacks the facts needed to do useful work. The relay command now carries the bounded task context
+  that Docket already has and can authorize.

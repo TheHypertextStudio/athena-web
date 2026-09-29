@@ -3,6 +3,7 @@ import { parseMcpAppPresentation } from '@docket/integrations/mcp-apps-contract'
 import { type SessionActivityOut } from '@docket/athena/agent-contract';
 import type { z } from 'zod';
 
+import { knownLatticeFailureMessage } from '../agent/lattice-failure-copy';
 import { toActivityOut, type ActivityRow } from './agent-session-helpers';
 
 const FAILURE_COPY = 'Athena could not complete this step.';
@@ -79,8 +80,17 @@ function recordedChangeSet(result: Record<string, unknown> | null): RecordedChan
   return typeof changeSetId === 'string' ? { changeSetId } : {};
 }
 
+function personalErrorBody(activity: ActivityRow): Record<string, unknown> {
+  return {
+    text:
+      activity.body['source'] === 'lattice'
+        ? (knownLatticeFailureMessage(activity.body['code']) ?? FAILURE_COPY)
+        : FAILURE_COPY,
+  };
+}
+
 function personalBody(activity: ActivityRow): Record<string, unknown> {
-  if (activity.type === 'error') return { text: FAILURE_COPY };
+  if (activity.type === 'error') return personalErrorBody(activity);
   if (activity.type === 'response') {
     return {
       text: text(activity.body.text, 'Athena updated this work.'),

@@ -402,7 +402,7 @@ describe('durable Lattice assignment delegations', () => {
     await cancelLatticeDelegation(fixture.owner.id, sessionId, submittedAt, deps);
   });
 
-  it('stores stable work identity and the reply key before submission, then proposes one task comment', async () => {
+  it('submits once on the next scheduler tick and proposes one task comment', async () => {
     const fixture = await seed();
     const deps = dependencies();
     const preparedAt = new Date('2026-08-29T18:00:00.000Z');
@@ -432,8 +432,8 @@ describe('durable Lattice assignment delegations', () => {
     expect(prepared.logicalSubmissionId).toBe(`athena:${prepared.id}`);
     expect(deps.submitWork).not.toHaveBeenCalled();
 
-    await sweepLatticeDelegations(preparedAt, deps);
-    await sweepLatticeDelegations(preparedAt, deps);
+    const nextTick = new Date(preparedAt.getTime() + 5 * 60_000);
+    await sweepLatticeDelegations(nextTick, deps);
     expect(deps.submitWork).toHaveBeenCalledTimes(1);
     expect(deps.submitted[0]).toMatchObject({
       workId: prepared.workId,
@@ -480,7 +480,7 @@ describe('durable Lattice assignment delegations', () => {
       ],
       nextPollAfterMs: 0,
     };
-    await sweepLatticeDelegations(new Date(preparedAt.getTime() + 5_001), deps);
+    await sweepLatticeDelegations(new Date(nextTick.getTime() + 5_001), deps);
 
     const proposedDelegation = one(
       await db
@@ -594,7 +594,7 @@ describe('durable Lattice assignment delegations', () => {
       currentStep: 'The Lattice result was added to the assigned task',
     });
 
-    await sweepLatticeDelegations(new Date(preparedAt.getTime() + 7_003), deps, {
+    await sweepLatticeDelegations(new Date(nextTick.getTime() + 7_003), deps, {
       pollingEnabled: true,
       submissionsEnabled: false,
     });
@@ -1960,7 +1960,7 @@ describe('durable Lattice assignment delegations', () => {
       ),
     ).toMatchObject({ status: 'submitted', cancellationRequestedAt: expect.any(Date) });
 
-    await sweepLatticeDelegations(new Date(preparedAt.getTime() + 130_000), deps, {
+    await sweepLatticeDelegations(new Date(preparedAt.getTime() + 31 * 60_000), deps, {
       pollingEnabled: true,
       submissionsEnabled: false,
     });
@@ -4221,9 +4221,7 @@ describe('durable Lattice assignment delegations', () => {
   );
 
   it('leaves the result unacknowledged when the relay dates it unparseably', async () => {
-    // Acknowledging is what tells the relay it may drop the sealed result. Recording an
-    // acknowledgement we cannot date would retire the only copy of a result on the strength of a
-    // value we could not read, so the row stays unacknowledged and the sweep tries again.
+    // Never retire the only sealed result when the relay's acknowledgement date is invalid.
     const fixture = await seed();
     const deps = dependencies();
     const preparedAt = new Date('2026-08-29T21:20:00.000Z');

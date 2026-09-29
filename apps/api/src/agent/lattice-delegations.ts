@@ -32,10 +32,13 @@ import { and, asc, eq, isNotNull, isNull, lte, or } from 'drizzle-orm';
 
 import { sealCredential, unsealCredential } from '../lib/credentials';
 import type { AthenaAssignmentRow } from './assignments';
+import { failureMessage } from './lattice-failure-copy';
 import { promptForSession } from './lattice-delegation-prompt';
 import type { LatticeConnectionRow } from '../routes/lattice-connection';
 
-const STANDARD_DEADLINE_MS = 120_000;
+// The first submission can wait for the five-minute scheduler tick. Leave enough time after that
+// for a local model to finish and for transient relay/poll retries to return a sealed result.
+const STANDARD_DEADLINE_MS = 30 * 60_000;
 const MAX_POLL_BATCH = 10;
 const MAX_SUBMIT_BATCH = 10;
 const TRANSIENT_RETRY_MS = 5_000;
@@ -461,42 +464,6 @@ function settledAs<T extends string>(claimed: boolean, outcome: T): T | 'skipped
 function settledOrPending<T extends string>(claimed: boolean, outcome: T): T | 'pending' {
   /* v8 ignore next -- @preserve defensive: a settlement this pass did not claim belongs to another pass */
   return claimed ? outcome : 'pending';
-}
-
-function failureMessage(code: string): string {
-  switch (code) {
-    case 'access_lost':
-      return 'Athena stopped because you no longer have access to the assigned work.';
-    case 'oauth_invalid':
-      return 'Athena stopped because the Lattice connection needs authorization again.';
-    case 'scope_missing':
-      return 'Athena stopped because the Lattice connection does not grant compute access.';
-    case 'result_decryption_failed':
-      return 'Athena could not verify the encrypted result returned by Lattice.';
-    case 'result_key_invalid':
-      return 'Athena could not open the saved key for this Lattice assignment.';
-    case 'runtime_key_expired':
-      return 'Athena stopped because the Mac Studio work key expired.';
-    case 'runtime_not_found':
-      return 'Athena could not find the selected Mac Studio in this Lattice account.';
-    case 'submission_rejected':
-      return 'Athena could not submit this assignment to the selected Mac Studio.';
-    case 'relay_unavailable':
-      return 'Athena is waiting for the Lovelace Lattice relay to respond.';
-    case 'unknown_work':
-      return 'Athena stopped because Lattice no longer recognizes this assignment.';
-    case 'work_expired':
-      return 'Athena did not receive the Lattice result before it expired.';
-    case 'execution_failed':
-      return 'Athena could not finish the assignment on the selected Mac Studio.';
-    case 'result_invalid':
-      return 'Athena received a Lattice result that did not contain a usable report.';
-    case 'task_comment_failed':
-      return 'Athena could not add the Lattice result to the assigned task.';
-    /* v8 ignore next -- @preserve defensive: every settlement code this module writes has its own message */
-    default:
-      return 'Athena could not finish the Lattice assignment.';
-  }
 }
 
 function authorizationFailureCode(cause: unknown): 'oauth_invalid' | 'scope_missing' | null {

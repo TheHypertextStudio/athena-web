@@ -29,6 +29,25 @@ describe('toPersonalActivityOut', () => {
     expect(out.body).toEqual({ text: 'Athena could not complete this step.' });
   });
 
+  it('shows a Docket-owned explanation for a Lattice assignment failure', () => {
+    const out = toPersonalActivityOut(
+      row({
+        type: 'error',
+        body: { source: 'lattice', code: 'work_expired', text: 'Untrusted relay details' },
+      }),
+    );
+    expect(out.body).toEqual({
+      text: 'Athena did not receive the Lattice result before it expired.',
+    });
+  });
+
+  it('hides unknown Lattice failure details', () => {
+    const out = toPersonalActivityOut(
+      row({ type: 'error', body: { source: 'lattice', code: 'unexpected', text: 'secret' } }),
+    );
+    expect(out.body).toEqual({ text: 'Athena could not complete this step.' });
+  });
+
   it('falls back to a generic line when a response has no text, and omits a non-user author', () => {
     const out = toPersonalActivityOut(row({ type: 'response', body: { text: '   ' } }));
     expect(out.body).toEqual({ text: 'Athena updated this work.' });

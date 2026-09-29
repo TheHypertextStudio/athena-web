@@ -371,7 +371,7 @@ describe('AthenaJobCard', () => {
     expect(document.querySelector('[data-slot="athena-job-receipt"]')).toBeNull();
   });
 
-  it('collapses the steps behind a pluralised count, listing every step flat once opened', async () => {
+  it('shows the steps immediately and keeps a pluralised collapse control', async () => {
     const activities = Array.from({ length: 5 }, (_, index) => ({
       id: `tool_${String(index)}`,
       type: 'tool' as const,
@@ -382,11 +382,10 @@ describe('AthenaJobCard', () => {
     renderCard(job({ status: 'running' }), detailWith({ status: 'running', activities }));
 
     const trigger = await screen.findByRole('button', { name: /^5 steps$/ });
-    expect(screen.queryByRole('list', { name: 'Steps' })).not.toBeInTheDocument();
-
-    fireEvent.click(trigger);
     const steps = await screen.findByRole('list', { name: 'Steps' });
     expect(within(steps).getAllByRole('listitem')).toHaveLength(5);
+    fireEvent.click(trigger);
+    expect(screen.queryByRole('list', { name: 'Steps' })).not.toBeInTheDocument();
   });
 
   it('offers Undo on a finished step and its receipt, and clears both once reversed', async () => {
@@ -406,8 +405,6 @@ describe('AthenaJobCard', () => {
       ],
     });
     const api = renderCard(job({ status: 'completed', queueState: 'finished' }), detail);
-
-    fireEvent.click(await screen.findByRole('button', { name: /^1 step$/ }));
 
     const undoButtons = await screen.findAllByRole('button', { name: 'Undo' });
     expect(undoButtons).toHaveLength(2);

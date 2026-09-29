@@ -382,13 +382,16 @@ function AthenaWorking(): JSX.Element {
       role="status"
       aria-label="Athena is replying"
       aria-live="polite"
-      className="flex items-center pl-1"
+      className="flex items-center gap-2 pl-1"
     >
       <span
         className="text-on-surface-variant flex size-6 shrink-0 items-center justify-center"
         aria-hidden="true"
       >
         <Sparkles className="size-4 animate-pulse motion-reduce:animate-none" />
+      </span>
+      <span className="text-on-surface-variant text-body-small">
+        Athena is working on your message
       </span>
     </div>
   );

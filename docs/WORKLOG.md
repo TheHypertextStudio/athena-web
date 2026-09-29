@@ -17753,3 +17753,14 @@ xhigh` passes (10 finder angles each, one-vote verification, a gap sweep) agains
 - **Retrospective**: A successful encrypted round trip is not sufficient when the selected runtime
   lacks the facts needed to do useful work. The relay command now carries the bounded task context
   that Docket already has and can authorize.
+
+### 2026-09-28 Athena action visibility and reply feedback
+
+- **Status**: IN PROGRESS
+- **State**: VALIDATING
+- **Description**: A sent message exposes only an icon while Athena works. Conversation actions are truncated summary chips, and proposal actions disappear from history. Delegated work hides every recorded step behind a count.
+- **Approach**: Show a clear working sentence; render each saved action with its result or approval state, service/tool, time, and summary; disclose technical input and successful result on request. Keep raw reasoning and provider failure text hidden. Open the existing delegated-work timeline by default and make step outcomes and times scannable. Distinguish recorded Docket actions from the Mac runtime's coarse relay progress.
+- **Files to modify**: Conversation thread and action entries, delegated job step presentation, their focused tests, and this worklog.
+- **Risks**: Stored action bodies vary by age and provider; missing fields must render honestly. Tool inputs can contain private data, so technical details stay behind a disclosure. Long work histories must remain collapsible.
+- **Validation**: The new presentation tests failed against the former hidden actions and collapsed work steps, then 49 focused web tests passed. Web typecheck and affected ESLint passed. The local Next production build compiled successfully; it was stopped during its own TypeScript phase when other work left under 300 MB free on the shared disk. CI's remote build remains the release gate.
+- **Retrospective**: The conversation should expose the action records Docket actually stores, including proposals and failures, without presenting a sealed Lattice return as a full Mac-side tool trace.

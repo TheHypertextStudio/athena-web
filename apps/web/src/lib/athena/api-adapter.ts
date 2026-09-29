@@ -139,6 +139,7 @@ export function adaptAthenaActivity(activity: AthenaApiActivity): PersonalAthena
       createdAt: activity.createdAt,
       service: serviceLabel(connection),
       action: summary,
+      ...(activity.approvalStatus ? { approvalStatus: activity.approvalStatus } : {}),
       ...(outcome ? { outcome } : {}),
       ...(presentation ? { presentation } : {}),
       ...toolResultFlags(activity, result, presentation),

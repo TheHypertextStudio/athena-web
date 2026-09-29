@@ -89,6 +89,8 @@ export type PersonalAthenaActivity =
       readonly failed?: boolean;
       /** A gated change that was approved and landed. */
       readonly applied?: boolean;
+      /** The saved approval gate state, when this action went through review. */
+      readonly approvalStatus?: 'proposed' | 'approved' | 'rejected' | 'applied' | 'failed';
       readonly technical?: {
         readonly toolName?: string;
         readonly input?: unknown;
@@ -124,6 +126,8 @@ export interface AthenaActivityPresentation {
   readonly presentationUnavailable?: boolean;
   /** A tool step whose call ran and did not do what it was asked. */
   readonly failed?: boolean;
+  /** The saved approval gate state, when this action went through review. */
+  readonly approvalStatus?: 'proposed' | 'approved' | 'rejected' | 'applied' | 'failed';
   readonly technical?: {
     readonly toolName?: string;
     readonly input?: unknown;
@@ -188,6 +192,7 @@ function presentAthenaToolActivity(
       title: failedToolSentence(activity),
       createdAt: activity.createdAt,
       failed: true,
+      ...(activity.approvalStatus ? { approvalStatus: activity.approvalStatus } : {}),
       ...(activity.technical ? { technical: activity.technical } : {}),
     };
   }
@@ -198,6 +203,7 @@ function presentAthenaToolActivity(
     title: describeToolActivity(activity),
     ...(detail ? { detail } : {}),
     createdAt: activity.createdAt,
+    ...(activity.approvalStatus ? { approvalStatus: activity.approvalStatus } : {}),
     ...(activity.presentation ? { presentation: activity.presentation } : {}),
     ...(activity.presentationUnavailable ? { presentationUnavailable: true } : {}),
     ...(activity.technical ? { technical: activity.technical } : {}),

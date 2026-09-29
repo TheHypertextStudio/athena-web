@@ -2,8 +2,8 @@
  * Behavior tests for {@link JobSteps}.
  *
  * @remarks
- * Steps stay collapsed behind their count in every lifecycle state and only a person's own click
- * opens them. These also pin the step renderer's own rules: the count is pluralised, the job's
+ * Steps are readable immediately and can be collapsed by the person. These also pin the step
+ * renderer's own rules: the count is pluralised, the job's
  * initiating message is dropped (the objective already carries it as the entry's title), a later
  * message from the person is kept, a narration carries no label above it, and Details renders
  * labelled rows rather than a raw dump.
@@ -42,17 +42,17 @@ function renderSteps(activities: readonly AthenaActivityPresentation[], isFinish
 }
 
 describe('JobSteps', () => {
-  it('stays collapsed until clicked, behind a singular count for one step', () => {
+  it('shows a dated action immediately and lets the person collapse it', () => {
     renderSteps([TOOL_STEP], true);
 
-    expect(screen.queryByRole('list', { name: 'Steps' })).not.toBeInTheDocument();
+    expect(screen.getByRole('list', { name: 'Steps' })).toBeVisible();
+    expect(screen.getByText('Done')).toBeVisible();
+    expect(document.querySelector('time[datetime="2026-09-18T16:00:00.000Z"]')).toBeVisible();
     const trigger = screen.getByRole('button', { name: /^1 step$/ });
     expect(trigger).toHaveClass('min-h-10');
 
     fireEvent.click(trigger);
-    expect(
-      within(screen.getByRole('list', { name: 'Steps' })).getAllByRole('listitem'),
-    ).toHaveLength(1);
+    expect(screen.queryByRole('list', { name: 'Steps' })).not.toBeInTheDocument();
   });
 
   it('drops the initiating message and keeps a later one, counted among the steps', () => {
@@ -74,8 +74,6 @@ describe('JobSteps', () => {
       },
     ]);
 
-    fireEvent.click(screen.getByRole('button', { name: /^2 steps$/ }));
-
     const list = screen.getByRole('list', { name: 'Steps' });
     expect(within(list).getAllByRole('listitem')).toHaveLength(2);
     expect(list).not.toHaveTextContent('Protect two hours for the launch review');
@@ -92,17 +90,14 @@ describe('JobSteps', () => {
     };
     renderSteps([narration]);
 
-    fireEvent.click(screen.getByRole('button', { name: /^1 step$/ }));
-
     const item = within(screen.getByRole('list', { name: 'Steps' })).getByRole('listitem');
-    expect(item.querySelectorAll('p')).toHaveLength(1);
     expect(item).not.toHaveTextContent(narration.title);
+    expect(item).toHaveTextContent(narration.detail ?? '');
   });
 
   it('opens Details as labelled rows of the call, never a raw dump', () => {
     renderSteps([TOOL_STEP]);
 
-    fireEvent.click(screen.getByRole('button', { name: /^1 step$/ }));
     fireEvent.click(screen.getByRole('button', { name: 'Details' }));
 
     const item = within(screen.getByRole('list', { name: 'Steps' })).getByRole('listitem');
@@ -120,7 +115,6 @@ describe('JobSteps', () => {
       },
     ]);
 
-    fireEvent.click(screen.getByRole('button', { name: /^1 step$/ }));
     fireEvent.click(screen.getByRole('button', { name: 'Details' }));
 
     expect(screen.getByRole('list', { name: 'Steps' })).not.toHaveTextContent('provider said no');

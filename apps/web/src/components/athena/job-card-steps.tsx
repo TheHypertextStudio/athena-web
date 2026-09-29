@@ -10,6 +10,8 @@
  * Undo in `job-card-parts.tsx` — see §4.6 of the companion design.
  */
 import { ChevronDown } from '@docket/ui/icons';
+import { relativeTime } from '@docket/ui';
+import { RelativeTime } from '@docket/ui/components';
 import { cn } from '@docket/ui/lib/utils';
 import {
   Button,
@@ -110,7 +112,7 @@ interface StepDetailsProps {
 }
 
 /** A step's "Details" disclosure: its raw call as labelled rows, never a JSON dump. */
-function StepDetails({ entry }: StepDetailsProps): JSX.Element | null {
+export function JobStepDetails({ entry }: StepDetailsProps): JSX.Element | null {
   const rows = stepDetailRows(entry);
   if (Object.keys(rows).length === 0) return null;
   return (
@@ -179,6 +181,16 @@ function StepPresentation({ entry }: StepDetailsProps): JSX.Element | null {
   );
 }
 
+/** State we can substantiate from a saved tool row, without treating a proposal as an execution. */
+function stepState(entry: AthenaActivityPresentation): string {
+  if (entry.failed || entry.approvalStatus === 'failed') return 'Failed';
+  if (entry.approvalStatus === 'rejected') return 'Declined';
+  if (entry.approvalStatus === 'proposed') return 'Needs review';
+  if (entry.approvalStatus === 'approved') return 'Applying';
+  if (entry.approvalStatus === 'applied' || entry.detail) return 'Done';
+  return 'Recorded';
+}
+
 /** One step: its heading, a detail line, any app card, Undo, and the Details disclosure. */
 function JobStepRow({
   entry,
@@ -189,7 +201,20 @@ function JobStepRow({
 }: JobStepRowProps): JSX.Element {
   const heading = stepHeading(entry);
   return (
-    <li className="flex flex-col gap-1">
+    <li
+      className={cn(
+        'rounded-corner-md relative flex flex-col gap-1 py-2 pr-3 pl-8',
+        surfaceToneColor('floating'),
+      )}
+    >
+      <span
+        aria-hidden="true"
+        className={`absolute top-3 left-3 size-2.5 rounded-full ${entry.failed ? 'bg-error' : 'bg-primary'}`}
+      />
+      <div className="text-on-surface-variant text-label-small flex flex-wrap items-center gap-2">
+        {entry.kind === 'tool' ? <span className="text-on-surface">{stepState(entry)}</span> : null}
+        <RelativeTime iso={entry.createdAt}>{relativeTime(entry.createdAt)}</RelativeTime>
+      </div>
       {heading === null ? null : (
         <Text
           as="p"
@@ -209,7 +234,7 @@ function JobStepRow({
       {changeSetId ? (
         <StepUndo changeSetId={changeSetId} undone={undone} pending={undoPending} onUndo={onUndo} />
       ) : null}
-      {entry.technical ? <StepDetails entry={entry} /> : null}
+      {entry.technical ? <JobStepDetails entry={entry} /> : null}
     </li>
   );
 }
@@ -228,7 +253,7 @@ export interface JobStepsProps {
 }
 
 /**
- * The entry's step disclosure: "1 step" / "3 steps", collapsed until a person opens it.
+ * The entry's step disclosure: "1 step" / "3 steps", visible until a person collapses it.
  *
  * @remarks
  * Drops the job's own initiating message from the list: that message is the objective the entry
@@ -248,7 +273,7 @@ export function JobSteps({
   if (visibleActivities.length === 0) return null;
 
   return (
-    <Collapsible>
+    <Collapsible defaultOpen>
       <CollapsibleTrigger
         className={cn(
           'group text-on-surface-variant text-label-medium hover:text-on-surface -my-2 flex min-h-10 w-fit items-center gap-1 rounded-md',

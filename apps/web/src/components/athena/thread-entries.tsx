@@ -114,15 +114,9 @@ function ChatEntry({
   const fromUser = activity.body['author'] === 'user';
 
   if (activity.type === 'response') {
-    const starts = chapterActions?.chapters.find(
-      (chapter) => chapter.startActivityId === activity.id,
-    );
     const ends = chapterActions?.chapters.find((chapter) => chapter.endActivityId === activity.id);
     return (
       <div className="group relative flex w-full flex-col" data-athena-activity={activity.id}>
-        {starts ? (
-          <h3 className="text-on-surface-variant text-label-small mb-2">{starts.title}</h3>
-        ) : null}
         {fromUser ? <UserMessage text={text} /> : <AthenaMessage text={text} />}
         {ends ? <span className="sr-only">End of {ends.title}</span> : null}
         {chapterActions ? (

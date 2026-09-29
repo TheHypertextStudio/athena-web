@@ -201,9 +201,14 @@ describe('AthenaConversation thread structure', () => {
 
     const earlier = await screen.findByRole('button', { name: 'Earlier messages' });
     expect(screen.queryByText('Old answer')).not.toBeInTheDocument();
-    fireEvent.click(earlier);
+    fireEvent.pointerDown(earlier, { button: 0, ctrlKey: false });
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Show earlier messages' }));
     expect(screen.getByText('Old answer')).toBeVisible();
-    fireEvent.click(screen.getByRole('button', { name: 'Recent messages' }));
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'Earlier messages' }), {
+      button: 0,
+      ctrlKey: false,
+    });
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Back to recent messages' }));
     expect(screen.queryByText('Old answer')).not.toBeInTheDocument();
     const scroller = document.querySelector('[data-slot="athena-thread"]');
     if (!scroller) throw new Error('no thread scroller');
@@ -357,15 +362,16 @@ describe('AthenaConversation thread structure', () => {
       );
       renderConversation();
 
-      const jump = await screen.findByRole('button', { name: 'Jump to' });
+      const jump = await screen.findByRole('button', { name: 'Earlier messages' });
       expect(screen.queryByText('Plan the launch')).not.toBeInTheDocument();
       fireEvent.pointerDown(jump, { button: 0, ctrlKey: false });
       const menu = await screen.findByRole('menu');
-      expect(within(menu).getAllByRole('menuitem')).toHaveLength(1);
+      expect(within(menu).getAllByRole('menuitem')).toHaveLength(2);
       fireEvent.click(within(menu).getByRole('menuitem', { name: 'Launch planning' }));
 
       const target = await inThread('[data-athena-activity="section_start"]');
       expect(target).toBeVisible();
+      expect(within(target).queryByRole('heading', { name: 'Launch planning' })).toBeNull();
       await waitFor(() => {
         expect(scrollIntoView).toHaveBeenCalledWith({
           block: 'center',

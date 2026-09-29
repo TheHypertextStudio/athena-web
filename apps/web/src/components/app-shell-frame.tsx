@@ -570,6 +570,15 @@ export function RecentDocumentIdentity({ document }: { readonly document: OpenTa
   );
 }
 
+/** The compact header names the current conversation before its workspace. */
+function mobileBrandLabel(
+  homeKey: HomeNavKey | undefined,
+  workspaceName: string | undefined,
+): string {
+  if (homeKey === 'athena') return 'Athena';
+  return workspaceName ?? 'Docket';
+}
+
 /**
  * The shell body that lives inside the providers and wires shell selections to navigation.
  *
@@ -754,10 +763,10 @@ function AppShellInner({
     [workspaces, resolvedOrgId],
   );
 
-  // Statically known: the product name is the correct label until a workspace name displaces it.
+  // The conversation route needs its own name; the sidebar still exposes the workspace.
   const mobileBrand = (
     <span className="text-body-medium truncate font-semibold">
-      {activeWorkspaceName ?? 'Docket'}
+      {mobileBrandLabel(homeKey, activeWorkspaceName)}
     </span>
   );
 
@@ -944,7 +953,7 @@ function AthenaShellChrome({
         ) : undefined
       }
       aside={
-        settingsSurface || calendarSurface
+        athenaRailUnavailable(pathname, settingsSurface, calendarSurface)
           ? undefined
           : railAsideFor(identityUnknown, timerStatus, athenaRail, pathname)
       }

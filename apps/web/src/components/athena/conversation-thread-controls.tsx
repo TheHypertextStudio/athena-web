@@ -2,7 +2,6 @@
 
 /** Fresh-view disclosure and chapter controls for the one durable conversation. */
 import type { AgentSessionDetailOut } from '@docket/athena/agent-contract';
-import { Button } from '@docket/ui/primitives';
 import { cn } from '@docket/ui/lib/utils';
 import {
   type JSX,
@@ -17,7 +16,7 @@ import {
 import { useConversationChapters, type ConversationChapter } from '@/lib/athena/chapters';
 import type { ThreadEntry } from '@/lib/athena/job-presentation';
 
-import { ConversationChapterIndex, type ChapterActions } from './conversation-chapter-menu';
+import { ConversationHistoryMenu, type ChapterActions } from './conversation-chapter-menu';
 
 /** A quiet conversation opens on a fresh surface after this much time. */
 const FRESH_AFTER_MS = 6 * 60 * 60 * 1000;
@@ -233,16 +232,13 @@ export function ConversationScrollArea({
               : 'justify-end',
         )}
       >
-        {history.hasEarlier || chapters.length > 0 ? (
-          <div className="flex w-full flex-wrap items-center gap-1">
-            {history.hasEarlier ? (
-              <Button type="button" variant="ghost" controlSize="sm" onClick={history.toggle}>
-                {history.collapsed ? 'Earlier messages' : 'Recent messages'}
-              </Button>
-            ) : null}
-            <ConversationChapterIndex chapters={chapters} onJump={onJumpChapter} />
-          </div>
-        ) : null}
+        <ConversationHistoryMenu
+          chapters={chapters}
+          onJump={onJumpChapter}
+          hasEarlier={history.hasEarlier}
+          collapsed={history.collapsed}
+          onToggleEarlier={history.toggle}
+        />
         {children}
       </div>
     </div>

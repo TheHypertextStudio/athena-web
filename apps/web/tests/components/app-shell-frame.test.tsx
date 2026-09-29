@@ -181,6 +181,18 @@ describe('AppShellFrame session loading', () => {
     expect(screen.queryByRole('complementary', { name: 'Focus' })).not.toBeInTheDocument();
   });
 
+  it('names the Athena conversation and leaves unrelated panels out of its header', () => {
+    pathnameState.value = '/athena';
+
+    renderFrame(SERVER_SESSION);
+
+    const topBar = document.querySelector('[data-slot="shell-top-bar"]');
+    expect(topBar).not.toBeNull();
+    expect(within(topBar as HTMLElement).getByText('Athena')).toBeVisible();
+    expect(within(topBar as HTMLElement).getByRole('button', { name: 'Search' })).toBeEnabled();
+    expect(within(topBar as HTMLElement).queryByRole('button', { name: 'Show Agenda' })).toBeNull();
+  });
+
   it('puts Athena first in the rail', async () => {
     renderFrame(SERVER_SESSION);
 

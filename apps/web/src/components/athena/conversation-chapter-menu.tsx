@@ -1,13 +1,14 @@
 'use client';
 
 /** Quiet controls for marking and returning to chapters in one conversation. */
-import { MoreHorizontal } from '@docket/ui/icons';
+import { History, MoreHorizontal } from '@docket/ui/icons';
 import { cn } from '@docket/ui/lib/utils';
 import {
   Button,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
   Input,
 } from '@docket/ui/primitives';
@@ -107,23 +108,36 @@ export function ChapterMarkerMenu({
   );
 }
 
-/** A compact chapter index above the current conversation. */
-export function ConversationChapterIndex({
+/** One quiet entry point for earlier messages and saved places. */
+export function ConversationHistoryMenu({
   chapters,
   onJump,
+  hasEarlier,
+  collapsed,
+  onToggleEarlier,
 }: {
   readonly chapters: readonly ConversationChapter[];
   readonly onJump: (activityId: string) => void;
+  readonly hasEarlier: boolean;
+  readonly collapsed: boolean;
+  readonly onToggleEarlier: () => void;
 }): JSX.Element | null {
-  if (chapters.length === 0) return null;
+  if (!hasEarlier && chapters.length === 0) return null;
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button type="button" variant="ghost" controlSize="sm">
-          Jump to
+        <Button type="button" variant="ghost" controlSize="sm" className="gap-2 self-start">
+          <History aria-hidden="true" className="size-4" />
+          {hasEarlier ? 'Earlier messages' : 'Saved places'}
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start">
+        {hasEarlier ? (
+          <DropdownMenuItem onSelect={onToggleEarlier}>
+            {collapsed ? 'Show earlier messages' : 'Back to recent messages'}
+          </DropdownMenuItem>
+        ) : null}
+        {hasEarlier && chapters.length > 0 ? <DropdownMenuSeparator /> : null}
         {chapters.map((chapter) => (
           <DropdownMenuItem
             key={chapter.id}

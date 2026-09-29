@@ -19,10 +19,10 @@ import type { ProposalGroupOut, ProposalItemOut } from '@docket/athena/agent-con
 import { cn } from '@docket/ui/lib/utils';
 import { Button, Checkbox, Skeleton, Surface, surfaceToneColor } from '@docket/ui/primitives';
 import { type JSX, useMemo, useState } from 'react';
-import Link from 'next/link';
 
 import { ProposalInputRows } from '@/components/athena/proposal-input-rows';
 import { taskIdsFromInput, useHighlightHandlers } from '@/components/athena/proposal-highlight';
+import DocketLink from '@/components/docket-link';
 import { describeProposal, isOutwardProposal } from '@/lib/athena/describe-proposal';
 
 /** Props for {@link ProposalGroupCard}. */
@@ -382,11 +382,11 @@ function ProposalTargetStatus({
     );
   }
   return (
-    <Link
+    <DocketLink
       href={target.href}
       className="text-on-surface text-label-large w-fit max-w-full truncate hover:underline"
     >
       {target.title ?? 'Task'}
-    </Link>
+    </DocketLink>
   );
 }

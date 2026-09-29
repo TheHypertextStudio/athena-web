@@ -47,7 +47,7 @@ describe('personal Athena presentation', () => {
 
     expect(presented).toMatchObject({
       kind: 'tool',
-      title: 'Set state to In Progress',
+      title: 'Move to In Progress',
       detail: 'Task moved to In Progress',
     });
   });

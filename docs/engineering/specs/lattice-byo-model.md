@@ -130,11 +130,13 @@ An expired or narrowed grant remains visible in Settings with its selected devic
 reason-specific reconnect action. A failed reconnect keeps the existing sealed grant and device
 choice. A successful device read restores the connection to its usable state.
 
-An interactive turn that reaches an unavailable selected runtime returns a `503` Problem with the
-stable `lattice_unavailable` code. The API maps the expected Lattice refusal without returning
-provider diagnostics, and the web app supplies its own wake-or-reconnect guidance. Backend
-resolution runs inside the generation's failure handler so an unusable grant settles the claimed
-run as failed instead of leaving it running until its lease expires.
+An interactive turn that reaches an unavailable selected runtime fails the claimed generation.
+When the send is asynchronous, Docket saves a stable Lattice reason code in an error activity and
+the web conversation shows wake-or-reconnect guidance with the original prompt available to retry.
+A synchronous refusal returns a `503` Problem with the stable `lattice_unavailable` code. Neither
+path displays provider diagnostics. Backend resolution runs inside the generation's failure handler
+so an unusable grant settles the claimed run as failed instead of leaving it running until its
+lease expires.
 
 Tests count Docket generation rows and remote submissions. An offline selected runtime keeps the
 delegation queued and produces zero Docket generation rows.

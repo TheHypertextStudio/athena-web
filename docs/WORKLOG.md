@@ -8,6 +8,17 @@
 
 ## Active Tasks
 
+### [ATHENA-LATTICE-OFFLINE-001] Explain an unavailable personal runtime in the conversation
+
+- **Status**: VALIDATING
+- **Started**: 2026-09-29
+- **Priority**: P0
+- **Description**: A live production check stopped the selected Mac Studio relay. Settings correctly showed “Asleep” after its device read settled, and an Athena prompt failed without a cloud answer, but the conversation only said “Athena couldn't answer.”
+- **Approach**: Save Docket's stable Lattice refusal code with a safe error activity when an interactive generation fails. Use that code to show the existing device recovery guidance beside the saved prompt and Retry action; never render the gateway's diagnostic prose.
+- **Files changed**: `apps/api/src/agent/loop.ts`, `apps/api/src/agent/lattice-failure-copy.ts`, `apps/api/tests/agent/lattice-interactive-failure.test.ts`, `apps/web/src/components/athena/conversation-thread.tsx`, `apps/web/tests/athena/athena-failed-turn.test.tsx`, `docs/engineering/specs/lattice-byo-model.md`, and this worklog.
+- **Validation**: The API and web behavior tests failed for the missing reason before the change and pass afterward. Focused API tests pass 43/43; focused web tests pass 23/23. API and web typecheck, changed-file ESLint, both production builds, complexity and documentation checks, Prettier, and diff whitespace pass. The Studio daemon was restarted and Settings returned to “Ready.” Production deployment of the new failure copy remains open.
+- **Learning**: A device-state read can still be loading after a page reload. The first “Ready” seen during the outage was stale UI before the read completed; the settled response correctly showed “Asleep.”
+
 ### [RELEASE-CYCLE-FIXTURE-001] Use the current cycle in release screen fixtures
 
 - **Status**: VALIDATING

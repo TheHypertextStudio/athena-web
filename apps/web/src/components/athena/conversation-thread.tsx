@@ -40,6 +40,7 @@ import type { ThreadEntry } from '@/lib/athena/job-presentation';
 import type { PersonalAthenaContext } from '@/lib/athena/presentation';
 import type { PersonalAthenaTransport } from '@/lib/athena/query-defs';
 import { failureAction, type FailurePresentation } from '@/lib/failure-presentation';
+import { LATTICE_UNAVAILABLE_REASON_MESSAGE } from '@/app/(app)/settings/athena/lattice-copy';
 
 /** Find one job's entry inside a scroller, never elsewhere in the document. */
 function jobEntryIn(scroller: HTMLElement | null, jobId: string): HTMLElement | null {
@@ -279,6 +280,7 @@ function ConversationHistory({
       {sendFailure ? <SendFailure failure={sendFailure} /> : null}
       {!sendFailure && isUnansweredFailure(thread) ? (
         <UnansweredFailure
+          detail={latticeFailureDetail(thread)}
           onRetry={() => {
             onPickSuggestion(lastUserMessage(thread));
           }}
@@ -349,10 +351,34 @@ function lastUserMessage(thread: AgentSessionDetailOut | null): string {
   return typeof activity?.body['text'] === 'string' ? activity.body['text'] : '';
 }
 
+/** Resolve only a Docket-owned code from the most recent failed turn; never render stored diagnostics. */
+function latticeFailureDetail(thread: AgentSessionDetailOut | null): string | null {
+  if (!thread) return null;
+  let code: unknown;
+  for (let index = thread.activities.length - 1; index >= 0; index -= 1) {
+    const activity = thread.activities[index];
+    if (!activity) continue;
+    if (activity.type === 'response' && activity.body['author'] === 'user') break;
+    if (code === undefined && activity.type === 'error' && activity.body['source'] === 'lattice') {
+      code = activity.body['code'];
+    }
+  }
+  return typeof code === 'string' && Object.hasOwn(LATTICE_UNAVAILABLE_REASON_MESSAGE, code)
+    ? LATTICE_UNAVAILABLE_REASON_MESSAGE[code as keyof typeof LATTICE_UNAVAILABLE_REASON_MESSAGE]
+    : null;
+}
+
 /** A durable failure offers the saved message in the composer for a deliberate retry. */
-function UnansweredFailure({ onRetry }: { readonly onRetry: () => void }): JSX.Element {
+function UnansweredFailure({
+  detail,
+  onRetry,
+}: {
+  readonly detail: string | null;
+  readonly onRetry: () => void;
+}): JSX.Element {
   return (
     <InlineBanner tone="critical" title="Athena couldn't answer.">
+      {detail ? <p>{detail}</p> : null}
       <Button type="button" variant="ghost" controlSize="sm" onClick={onRetry}>
         Retry message
       </Button>

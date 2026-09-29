@@ -45,11 +45,12 @@ import { internalUserContext } from '../mcp/internal-session';
 import { resolveActor } from '../mcp/auth';
 import { decideActivity, decideProposalGroup } from '../routes/agent-session-approval';
 import type { SessionRow } from '../routes/agent-session-helpers';
-import { resolveOwnerTurnRuntime } from '../routes/lattice-backend';
+import { LatticeUnavailableError, resolveOwnerTurnRuntime } from '../routes/lattice-backend';
 import { elicitationRequestFromToolInput } from '../services/elicitation-service';
 import { materializeSessionElicitations } from './elicitation-scope';
 import { classifyTool, decideUserOwnedToolExecution } from './approval-policy';
 import { assertHostedExecutionSurface } from './execution-surface';
+import { failureMessage } from './lattice-failure-copy';
 import { markProvenance } from './provenance';
 import { promptContext } from './subject-task';
 import { buildSystemPrompt } from './system-prompt';
@@ -368,6 +369,21 @@ interface DriveAdmission {
   readonly lease?: RunGenerationLease;
   /** Return after one checkpoint instead of claiming the next generation in-process. */
   readonly stopAfterGeneration?: boolean;
+}
+
+/** Persist only a Docket-owned Lattice reason when an interactive run fails. */
+function latticeFailureActivity(
+  session: SessionRow,
+  error: unknown,
+): RunGenerationEffect<void> | undefined {
+  if (!(error instanceof LatticeUnavailableError)) return undefined;
+  return async (tx) => {
+    await insertActivity(tx, generalActivityOrganizationId(session), session.id, 'error', {
+      text: failureMessage(error.reason),
+      code: error.reason,
+      source: 'lattice',
+    });
+  };
 }
 
 /** Drive a session only after its entry-point states win durable admission atomically. */
@@ -725,7 +741,7 @@ async function driveSessionWithAdmission(
   } catch (error) {
     heartbeat.stop();
     const lastError = error instanceof Error ? error.message : 'Agent execution failed';
-    await settleRunGeneration(lease, 'failed', lastError);
+    await settleRunGeneration(lease, 'failed', lastError, latticeFailureActivity(session, error));
     throw error;
   } finally {
     heartbeat.stop();
@@ -1045,7 +1061,7 @@ async function executeApprovedGeneration(
     heartbeat.stop();
     if (!generationSettled) {
       const lastError = error instanceof Error ? error.message : 'Agent execution failed';
-      await settleRunGeneration(lease, 'failed', lastError);
+      await settleRunGeneration(lease, 'failed', lastError, latticeFailureActivity(session, error));
     }
     throw error;
   } finally {

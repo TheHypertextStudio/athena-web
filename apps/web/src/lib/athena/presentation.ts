@@ -145,7 +145,7 @@ export function athenaQueueState(status: PersonalAthenaStatus): AthenaQueueState
  * service is worth naming.
  *
  * @remarks
- * "Docket · Set state to In Progress" tells a person nothing "Set state to In Progress" doesn't;
+ * "Docket · Move to In Progress" tells a person nothing "Move to In Progress" doesn't;
  * "Gmail · Sent 3 emails" does. With no outcome there is nothing to prefix, so the service alone
  * never stands in as a detail.
  */

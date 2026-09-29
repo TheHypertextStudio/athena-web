@@ -134,9 +134,6 @@
   "apps/web/src/components/app-shell-frame.tsx": {
     "raw-type-utility": 1
   },
-  "apps/web/src/components/athena/athena-conversation-browser.tsx": {
-    "raw-radius-utility": 1
-  },
   "apps/web/src/components/billing/billing-recovery.tsx": {
     "ad-hoc-border": 2
   },

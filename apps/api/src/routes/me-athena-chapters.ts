@@ -94,7 +94,7 @@ export async function startAthenaChapter(
         ),
       )
       .limit(1);
-    if (open) throw new ConflictError('End the current section first');
+    if (open) throw new ConflictError('Finish the current saved place first');
     const [created] = await tx
       .insert(athenaConversationChapter)
       .values({
@@ -128,8 +128,8 @@ export async function endAthenaChapter(
       ),
     )
     .limit(1);
-  if (!chapter) throw new NotFoundError('Section not found');
-  if (chapter.endActivityId) throw new ConflictError('Section already ended');
+  if (!chapter) throw new NotFoundError('Saved place not found');
+  if (chapter.endActivityId) throw new ConflictError('Saved place already finished');
   const start = await chapterMessage(sessionId, chapter.startActivityId);
   if (
     end.createdAt < start.createdAt ||
@@ -147,7 +147,7 @@ export async function endAthenaChapter(
       ),
     )
     .returning();
-  if (!updated) throw new ConflictError('Section already ended');
+  if (!updated) throw new ConflictError('Saved place already finished');
   return chapterOut(updated);
 }
 
@@ -167,6 +167,6 @@ export async function deleteAthenaChapter(
       ),
     )
     .returning({ id: athenaConversationChapter.id });
-  if (!deleted) throw new NotFoundError('Section not found');
+  if (!deleted) throw new NotFoundError('Saved place not found');
   return { deleted: true };
 }

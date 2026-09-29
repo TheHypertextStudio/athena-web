@@ -69,7 +69,7 @@ function toolActivities(activities: readonly PersonalAthenaActivity[]): readonly
  * The API's `decision.title` is a generic label ("update task"). The newest `tool` activity, when
  * it carried its raw call through (`technical.toolName` + `technical.input`), describes the same
  * change through {@link describeToolActivity} — the same helper the batch-review card uses — which
- * reads "Set state to In Progress" instead. Falls back to `decision.title` when the newest tool
+ * reads "Move to In Progress" instead. Falls back to `decision.title` when the newest tool
  * step carries no raw call, or when the detail has no pending decision at all.
  *
  * This sentence appears on the decision line and nowhere else: the state line above it reads
@@ -93,7 +93,7 @@ export function decisionSentence(detail: PersonalAthenaSessionDetail): string {
 export interface JobChange {
   /** The step that made the change. */
   readonly id: string;
-  /** The change in plain words: "Set state to In Progress". */
+  /** The change in plain words: "Move to In Progress". */
   readonly text: string;
 }
 

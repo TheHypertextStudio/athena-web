@@ -11,9 +11,9 @@ An Athena turn assigned to an unavailable Lattice computer returns a `503` probl
 See the [Lattice model-routing specification](docs/engineering/specs/lattice-byo-model.md).
 
 Athena keeps one conversation across visits. After six quiet hours, the panel opens on a fresh
-view; Earlier messages or an upward pull reveals the older stream. People can mark section starts
-and ends on saved messages, then return to those spans from the Sections menu. The markers
-are stored separately from Athena's automatically derived topics.
+view; Earlier messages or an upward pull reveals the older stream. People can save a named starting
+point on a message and finish that work at a later message. Jump to returns to saved points. The
+app's search control finds exact Athena messages while the full conversation is open.
 
 Today opens a focused daily planning flow for reviewing prior work, choosing tasks, placing timed blocks, and confirming the day. Drafts resume where they stopped, accepted changes retain earlier versions, and recorded time stays in the time ledger. The data and recovery rules are in [the daily planning engineering spec](docs/engineering/specs/daily-planning.md).
 

@@ -35,6 +35,7 @@ import { usePageCommandMatches } from './page-commands';
 import { useCapabilityItems } from './use-capability-items';
 import { useCommandActions } from './use-command-actions';
 import { useHubSearch } from './use-hub-search';
+import { useAthenaMessageSearch } from './use-athena-message-search';
 import { PALETTE_MODES, parsePrefix, useLabelPaletteMode } from './sub-modes';
 
 /** The display order + heading label for each section in the list. */
@@ -73,6 +74,41 @@ function sectionLabel(
   if (section.section !== 'results') return section.label;
   if (context.mode !== null) return PALETTE_MODES[context.mode]?.label ?? section.label;
   return context.hasQuery ? section.label : 'Recent';
+}
+
+/** Keep page commands ahead of search hits while a typed query ranks the rest. */
+function orderedPaletteItems(input: {
+  readonly modeItems: readonly PaletteItem[] | null;
+  readonly page: readonly PaletteItem[];
+  readonly local: readonly PaletteItem[];
+  readonly remote: readonly PaletteItem[];
+  readonly query: string;
+}): readonly PaletteItem[] {
+  if (input.modeItems) return input.modeItems;
+  if (input.query.trim()) {
+    return [...input.page, ...mergePaletteResults(input.local, input.remote, input.query)];
+  }
+  return [...input.page, ...input.remote, ...input.local];
+}
+
+/** Show a placeholder only while every result source is still empty. */
+function pendingResults(
+  modeResult: { readonly loading: boolean; readonly items: readonly PaletteItem[] } | null,
+  hubLoading: boolean,
+  athenaLoading: boolean,
+  itemCount: number,
+): boolean {
+  if (modeResult) return modeResult.loading && modeResult.items.length === 0;
+  return (hubLoading || athenaLoading) && itemCount === 0;
+}
+
+/** Group the flat keyboard order under the palette's visible headings. */
+function groupedSections(items: readonly PaletteItem[], context: SectionLabelContext) {
+  return SECTION_ORDER.map((section) => ({
+    ...section,
+    label: sectionLabel(section, context),
+    rows: items.filter((item) => item.section === section.section),
+  })).filter((group) => group.rows.length > 0);
 }
 
 /** Props for {@link CommandPalette}. */
@@ -175,6 +211,7 @@ export function CommandPalette({
     close: onClose,
     open: open && mode === null,
   });
+  const athenaMessages = useAthenaMessageSearch(query, open && mode === null, onClose);
 
   // The static (navigation/actions/org) commands matching the query — suppressed while a mode is
   // active, since a mode's own item list takes over the list entirely.
@@ -190,12 +227,14 @@ export function CommandPalette({
   // then commands, or — while a mode is active — that mode's own items instead.
   const items = useMemo<readonly PaletteItem[]>(
     () =>
-      modeResult
-        ? modeResult.items
-        : query.trim().length > 0
-          ? [...pageMatches, ...mergePaletteResults(staticMatches, results, query)]
-          : [...pageMatches, ...results, ...staticMatches],
-    [modeResult, pageMatches, query, results, staticMatches],
+      orderedPaletteItems({
+        modeItems: modeResult?.items ?? null,
+        page: pageMatches,
+        local: staticMatches,
+        remote: [...results, ...athenaMessages.items],
+        query,
+      }),
+    [modeResult, pageMatches, query, results, staticMatches, athenaMessages.items],
   );
 
   // Preserve the active result by id while asynchronous sources reorder the list.
@@ -253,18 +292,17 @@ export function CommandPalette({
   /** Flat index of an item within `items`, for the row id + active marker. */
   const indexOf = (item: PaletteItem): number => items.indexOf(item);
 
-  const grouped = SECTION_ORDER.map((s) => ({
-    ...s,
-    label: sectionLabel(s, { pageLabel: pageCommands.label, mode, hasQuery }),
-    rows: items.filter((it) => it.section === s.section),
-  })).filter((g) => g.rows.length > 0);
+  const grouped = groupedSections(items, { pageLabel: pageCommands.label, mode, hasQuery });
 
   const orgLocalLabel = activeOrgId ? orgName(activeOrgId) : 'This org';
   const effectiveError = modeResult ? modeResult.error : error;
   const showNoOrgForMode = mode !== null && activeOrgId === null;
-  const showResultsSkeleton = modeResult
-    ? modeResult.loading && modeResult.items.length === 0
-    : loading && items.length === 0;
+  const showResultsSkeleton = pendingResults(
+    modeResult,
+    loading,
+    athenaMessages.loading,
+    items.length,
+  );
   const showEmpty =
     !showNoOrgForMode && items.length === 0 && !showResultsSkeleton && !effectiveError;
 

@@ -58,7 +58,7 @@ describe('describeProposal', () => {
       input: { taskId: '01HZ0000000000000000LN0001', state: 'in_progress' },
     });
 
-    expect(describeProposal(item)).toBe('Set state to In Progress');
+    expect(describeProposal(item)).toBe('Move to In Progress');
   });
 
   it('humanizes a state key it does not recognize', () => {
@@ -67,7 +67,7 @@ describe('describeProposal', () => {
       input: { taskId: '01HZ0000000000000000LN0001', state: 'blocked_on_review' },
     });
 
-    expect(describeProposal(item)).toBe('Set state to Blocked On Review');
+    expect(describeProposal(item)).toBe('Move to Blocked On Review');
   });
 
   it('describes a title change', () => {
@@ -113,7 +113,7 @@ describe('describeProposal', () => {
     });
 
     expect(describeProposal(item)).toBe(
-      'Set state to Done · Rename to "Ship the launch checklist" · Due 2026-08-01',
+      'Move to Done · Rename to "Ship the launch checklist" · Due 2026-08-01',
     );
   });
 
@@ -145,7 +145,7 @@ describe('describeToolActivity', () => {
       technical: { toolName: 'update_task', input: { state: 'in_progress' } },
     };
 
-    expect(describeToolActivity(activity)).toBe('Set state to In Progress');
+    expect(describeToolActivity(activity)).toBe('Move to In Progress');
   });
 
   it('names the created task for a recognized create_task call', () => {

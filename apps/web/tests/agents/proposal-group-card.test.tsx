@@ -52,12 +52,12 @@ describe('ProposalGroupCard', () => {
     );
 
     const section = screen.getByRole('region', { name: /Proposed changes/ });
-    expect(within(section).getByText('1 change proposed')).toBeVisible();
-    expect(within(section).getByText('Set state to In Progress')).toBeVisible();
+    expect(within(section).queryByText('1 change proposed')).not.toBeInTheDocument();
+    expect(within(section).getByText('Move to In Progress')).toBeVisible();
     expect(within(section).queryByText('update_task')).not.toBeInTheDocument();
     expect(within(section).queryByRole('checkbox')).not.toBeInTheDocument();
 
-    expect(within(section).getByRole('button', { name: 'Approve' })).toBeVisible();
+    expect(within(section).getByRole('button', { name: 'Apply change' })).toBeVisible();
     expect(within(section).getByRole('button', { name: 'Reject' })).toBeVisible();
   });
 
@@ -73,8 +73,87 @@ describe('ProposalGroupCard', () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Approve' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Apply change' }));
     expect(onDecide).toHaveBeenCalledWith('group_1', 'approve');
+  });
+
+  it('explains when a task has gone away and offers to dismiss its stale change', () => {
+    const onDecide = vi.fn();
+    const retry = vi.fn();
+    render(
+      <ProposalGroupCard
+        group={group([item()])}
+        canAct
+        pending={false}
+        target={{
+          title: null,
+          href: '/tasks/missing',
+          loading: false,
+          unavailable: 'missing',
+          retry,
+        }}
+        onDecide={onDecide}
+        onEdit={vi.fn()}
+      />,
+    );
+
+    expect(
+      screen.getByText('The task is no longer available. This suggestion can’t be applied.'),
+    ).toBeVisible();
+    expect(screen.queryByRole('button', { name: 'Apply change' })).not.toBeInTheDocument();
+    expect(screen.getByText('Move to In Progress')).toBeVisible();
+    expect(screen.queryByRole('button', { name: 'Try again' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
+    expect(retry).not.toHaveBeenCalled();
+    expect(onDecide).toHaveBeenCalledWith('group_1', 'reject');
+  });
+
+  it('offers another attempt when task details are temporarily unavailable', () => {
+    const retry = vi.fn();
+    render(
+      <ProposalGroupCard
+        group={group([item()])}
+        canAct
+        pending={false}
+        target={{
+          title: null,
+          href: '/tasks/one',
+          loading: false,
+          unavailable: 'temporary',
+          retry,
+        }}
+        onDecide={vi.fn()}
+        onEdit={vi.fn()}
+      />,
+    );
+    expect(screen.getByText(/The task is unavailable right now/)).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(retry).toHaveBeenCalledOnce();
+  });
+
+  it('names a verified task before its proposed change', () => {
+    render(
+      <ProposalGroupCard
+        group={group([item()])}
+        canAct
+        pending={false}
+        target={{
+          title: 'Launch review',
+          href: '/orgs/acme/tasks/task-1',
+          loading: false,
+          unavailable: null,
+          retry: vi.fn(),
+        }}
+        onDecide={vi.fn()}
+        onEdit={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole('link', { name: 'Launch review' })).toHaveAttribute(
+      'href',
+      '/orgs/acme/tasks/task-1',
+    );
+    expect(screen.getByText('Move to In Progress')).toBeVisible();
   });
 
   it('renders a checkbox per row and an "Approve N" label once there is more than one item', () => {
@@ -94,7 +173,7 @@ describe('ProposalGroupCard', () => {
     const section = screen.getByRole('region', { name: /Proposed changes/ });
     expect(within(section).getByText('2 changes proposed')).toBeVisible();
     expect(within(section).getAllByRole('checkbox')).toHaveLength(2);
-    expect(within(section).getByRole('button', { name: 'Approve 2' })).toBeVisible();
+    expect(within(section).getByRole('button', { name: 'Apply 2 changes' })).toBeVisible();
   });
 
   it('switches to "Approve selected (k)" and approves only the checked rows on a partial selection', () => {
@@ -115,7 +194,7 @@ describe('ProposalGroupCard', () => {
     const checkboxes = screen.getAllByRole('checkbox');
     fireEvent.click(assertDefined(checkboxes[0]));
 
-    const approveButton = screen.getByRole('button', { name: 'Approve selected (1)' });
+    const approveButton = screen.getByRole('button', { name: 'Apply selected (1)' });
     fireEvent.click(approveButton);
 
     expect(onDecide).toHaveBeenCalledWith('group_1', 'approve', ['activity_1']);
@@ -204,7 +283,7 @@ describe('ProposalGroupCard', () => {
     expect(within(section).getByText('Launch update')).toBeVisible();
     expect(within(section).getByText('We shipped it.')).toBeVisible();
 
-    const approveButton = within(section).getByRole('button', { name: 'Approve' });
+    const approveButton = within(section).getByRole('button', { name: 'Apply change' });
     fireEvent.click(approveButton);
     expect(onDecide).toHaveBeenCalledWith('group_1', 'approve');
   });
@@ -229,7 +308,7 @@ describe('ProposalGroupCard', () => {
 
     const section = screen.getByRole('region', { name: /Proposed changes/ });
     expect(within(section).getByRole('button', { name: 'Review' })).toBeVisible();
-    expect(within(section).queryByRole('button', { name: 'Approve' })).not.toBeInTheDocument();
+    expect(within(section).queryByRole('button', { name: 'Apply change' })).not.toBeInTheDocument();
   });
 
   it('approves a mixed group’s checked in-Docket row in one click, with no Review step', () => {
@@ -254,7 +333,7 @@ describe('ProposalGroupCard', () => {
 
     fireEvent.click(assertDefined(screen.getAllByRole('checkbox')[0]));
 
-    const approveButton = screen.getByRole('button', { name: 'Approve selected (1)' });
+    const approveButton = screen.getByRole('button', { name: 'Apply selected (1)' });
     fireEvent.click(approveButton);
 
     expect(onDecide).toHaveBeenCalledWith('group_1', 'approve', ['activity_1']);
@@ -271,7 +350,7 @@ describe('ProposalGroupCard', () => {
       />,
     );
 
-    expect(screen.queryByRole('button', { name: /Approve/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Apply/ })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Reject' })).not.toBeInTheDocument();
   });
 });

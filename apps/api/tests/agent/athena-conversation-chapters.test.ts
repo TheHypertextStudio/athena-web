@@ -99,7 +99,7 @@ describe('personal Athena chapters', () => {
         startActivityId: seeded.first,
         title: 'Overlapping chapter',
       }),
-    ).rejects.toThrow('End the current section first');
+    ).rejects.toThrow('Finish the current saved place first');
     await expect(
       chapters.endAthenaChapter(seeded.ownerUserId, seeded.sessionId, started.id, seeded.first),
     ).rejects.toThrow('The end must follow the start');
@@ -120,7 +120,7 @@ describe('personal Athena chapters', () => {
     ).toHaveLength(0);
     await expect(
       chapters.deleteAthenaChapter(other.ownerUserId, first.sessionId, started.id),
-    ).rejects.toThrow('Section not found');
+    ).rejects.toThrow('Saved place not found');
     await chapters.deleteAthenaChapter(first.ownerUserId, first.sessionId, started.id);
     expect(
       (await chapters.listAthenaChapters(first.ownerUserId, first.sessionId)).items,

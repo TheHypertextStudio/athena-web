@@ -27,9 +27,13 @@ afterEach(() => {
 Element.prototype.scrollIntoView = vi.fn();
 
 const push = vi.fn();
+const pathState = vi.hoisted(() => ({ pathname: '/' }));
 const signOutAndPurge = vi.hoisted(() => vi.fn(() => Promise.resolve()));
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push }),
+}));
+vi.mock('@/lib/app-location', () => ({
+  useAppPathname: () => pathState.pathname,
 }));
 vi.mock('@/lib/sign-out', () => ({
   signOutAndPurge,
@@ -74,6 +78,7 @@ const SEARCH_GET = vi.fn().mockResolvedValue({
   status: 200,
   json: () => Promise.resolve({ items: [] }),
 });
+const ATHENA_SEARCH_GET = vi.fn();
 const EMPTY_SEARCH_RESPONSE = {
   ok: true,
   status: 200,
@@ -101,6 +106,9 @@ vi.mock('@/lib/api', () => ({
   api: {
     v1: {
       hub: { search: { $get: (...args: unknown[]) => SEARCH_GET(...args) } },
+      me: {
+        athena: { chat: { search: { $get: (...args: unknown[]) => ATHENA_SEARCH_GET(...args) } } },
+      },
       orgs: {
         ':orgId': {
           search: { $get: (...args: unknown[]) => SEARCH_GET(...args) },
@@ -118,6 +126,12 @@ vi.mock('@/lib/api', () => ({
 // still on the mock.
 beforeEach(() => {
   SEARCH_GET.mockReset().mockResolvedValue(EMPTY_SEARCH_RESPONSE);
+  ATHENA_SEARCH_GET.mockReset().mockResolvedValue({
+    ok: true,
+    status: 200,
+    json: () => Promise.resolve({ items: [], total: 0, semantic: false, terms: [] }),
+  });
+  pathState.pathname = '/';
   LABELS_GET.mockClear();
   push.mockClear();
   signOutAndPurge.mockReset().mockResolvedValue();
@@ -150,6 +164,40 @@ function renderPalette(page: ReactNode = null) {
   };
   return { onClose, view, leavePage };
 }
+
+describe('CommandPalette — Athena messages', () => {
+  it('finds a conversation message through the app search and opens its place in the thread', async () => {
+    pathState.pathname = '/athena';
+    ATHENA_SEARCH_GET.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () =>
+        Promise.resolve({
+          items: [
+            {
+              activityId: 'message_1',
+              sessionId: 'chat_1',
+              author: 'athena',
+              text: 'The launch review is ready',
+              createdAt: '2026-09-28T10:00:00.000Z',
+              highlights: [],
+              lexical: true,
+            },
+          ],
+          total: 1,
+          semantic: false,
+          terms: ['launch'],
+        }),
+    });
+    const { onClose } = renderPalette();
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: 'launch' } });
+
+    const hit = await screen.findByRole('option', { name: /The launch review is ready/ });
+    fireEvent.click(hit);
+    expect(onClose).toHaveBeenCalled();
+    expect(push).toHaveBeenCalledWith('/athena?message=message_1');
+  });
+});
 
 describe('CommandPalette — sign-out recovery', () => {
   it('shows the cleanup recovery message when revoked data cannot be committed', async () => {

@@ -4,7 +4,15 @@
 import type { AgentSessionDetailOut } from '@docket/athena/agent-contract';
 import { Button } from '@docket/ui/primitives';
 import { cn } from '@docket/ui/lib/utils';
-import { type JSX, type ReactNode, type RefObject, useEffect, useRef, useState } from 'react';
+import {
+  type JSX,
+  type ReactNode,
+  type RefObject,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from 'react';
 
 import { useConversationChapters, type ConversationChapter } from '@/lib/athena/chapters';
 import type { ThreadEntry } from '@/lib/athena/job-presentation';
@@ -78,6 +86,9 @@ export function useConversationHistory(
   active = true,
 ) {
   const [history, setHistory] = useState<HistoryState | null>(null);
+  const reveal = useCallback(() => {
+    setHistory((state) => (state ? { ...state, visible: true } : state));
+  }, []);
   let current = history;
   if (thread && (history?.sessionId !== thread.id || history.active !== active)) {
     current = newHistoryState(thread, active);
@@ -89,9 +100,7 @@ export function useConversationHistory(
     entries: collapsed ? recentEntries(entries, cutoff) : entries,
     hasEarlier: hasEarlierEntries(entries, cutoff),
     collapsed,
-    reveal: () => {
-      setHistory((state) => (state ? { ...state, visible: true } : state));
-    },
+    reveal,
     toggle: () => {
       setHistory((state) => (state ? { ...state, visible: !state.visible } : state));
     },
@@ -104,12 +113,18 @@ export function useThreadChapters(
   scrollerRef: RefObject<HTMLDivElement | null>,
   visibleEntries: readonly ThreadEntry[],
   revealHistory: () => void,
+  jumpToActivityId?: string | null,
 ) {
   const chapters = useConversationChapters(thread !== null);
   const [targetId, setTargetId] = useState<string | null>(null);
   const rows =
     thread && chapters.query.data?.sessionId === thread.id ? chapters.query.data.items : [];
   const open = rows.find((chapter) => chapter.endActivityId === null);
+  useEffect(() => {
+    if (!jumpToActivityId || !thread?.id) return;
+    revealHistory();
+    setTargetId(jumpToActivityId);
+  }, [jumpToActivityId, thread?.id, revealHistory]);
   useEffect(() => {
     if (!targetId) return;
     const target = Array.from(
@@ -137,13 +152,16 @@ export function useThreadChapters(
   const actions: ChapterActions = {
     chapters: rows,
     openChapterId: open?.id ?? null,
-    pending: chapters.start.isPending || chapters.end.isPending,
+    pending: chapters.start.isPending || chapters.end.isPending || chapters.remove.isPending,
     canEndAt: (activityId) => !!open && isLaterMessage(thread, open.startActivityId, activityId),
     onStart: (activityId, title) => {
       chapters.start.mutate({ startActivityId: activityId, title });
     },
     onEnd: (activityId) => {
       if (open) chapters.end.mutate({ chapterId: open.id, endActivityId: activityId });
+    },
+    onRemove: (chapterId) => {
+      chapters.remove.mutate(chapterId);
     },
   };
   return {
@@ -152,9 +170,6 @@ export function useThreadChapters(
     jump: (activityId: string) => {
       revealHistory();
       setTargetId(activityId);
-    },
-    remove: (chapterId: string) => {
-      chapters.remove.mutate(chapterId);
     },
   };
 }
@@ -167,7 +182,6 @@ interface ConversationScrollAreaProps {
   readonly history: ReturnType<typeof useConversationHistory>;
   readonly chapters: readonly ConversationChapter[];
   readonly onJumpChapter: (activityId: string) => void;
-  readonly onRemoveChapter: (chapterId: string) => void;
   readonly children: ReactNode;
 }
 
@@ -179,7 +193,6 @@ export function ConversationScrollArea({
   history,
   chapters,
   onJumpChapter,
-  onRemoveChapter,
   children,
 }: ConversationScrollAreaProps): JSX.Element {
   const touchStartY = useRef<number | null>(null);
@@ -221,17 +234,13 @@ export function ConversationScrollArea({
         )}
       >
         {history.hasEarlier || chapters.length > 0 ? (
-          <div className="flex flex-wrap items-center gap-1 self-start">
+          <div className="flex w-full flex-wrap items-center gap-1">
             {history.hasEarlier ? (
               <Button type="button" variant="ghost" controlSize="sm" onClick={history.toggle}>
                 {history.collapsed ? 'Earlier messages' : 'Recent messages'}
               </Button>
             ) : null}
-            <ConversationChapterIndex
-              chapters={chapters}
-              onJump={onJumpChapter}
-              onRemove={onRemoveChapter}
-            />
+            <ConversationChapterIndex chapters={chapters} onJump={onJumpChapter} />
           </div>
         ) : null}
         {children}

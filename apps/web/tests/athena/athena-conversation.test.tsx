@@ -246,15 +246,15 @@ describe('AthenaConversation reply feedback', () => {
     const threadElement = document.querySelector<HTMLElement>('[data-slot="athena-thread"]');
     if (!threadElement) throw new Error('missing thread');
     expect(within(threadElement).getByText('What is 10 + 10?')).toBeVisible();
-    expect(within(threadElement).getByRole('status')).toHaveTextContent('Reply pending');
+    expect(within(threadElement).getByRole('status', { name: 'Athena is replying' })).toBeVisible();
     expect(within(threadElement).queryByRole('list', { name: 'Suggestions' })).toBeNull();
 
     finishPost?.(okResponse(thread([])));
     await waitFor(() => {
       expect(threadElement).toHaveTextContent('The answer is 20.');
-    });
-    await waitFor(() => {
-      expect(within(threadElement).queryByText('Reply pending')).toBeNull();
+      expect(
+        within(threadElement).queryByRole('status', { name: 'Athena is replying' }),
+      ).toBeNull();
     });
   });
 
@@ -295,7 +295,7 @@ describe('AthenaConversation reply feedback', () => {
 
     await waitFor(() => {
       expect(screen.getByRole('button', { name: 'Send' })).toBeDisabled();
-      expect(screen.getByRole('status')).toHaveTextContent('Reply pending');
+      expect(screen.getByRole('status', { name: 'Athena is replying' })).toBeVisible();
       expect(screen.getAllByText('Plan my day')).toHaveLength(1);
     });
   });

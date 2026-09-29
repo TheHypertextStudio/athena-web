@@ -8,7 +8,7 @@
  * A group is everything the agent proposed in ONE turn ("create these 3 tasks"), so it
  * reviews as a unit: a checkbox per member when there is more than one, inline title editing for
  * ghosts (the edit PATCHes the stored tool input — approval executes exactly what is shown), and
- * one `Approve` / `Reject` action pair. Each ghost row carries a stable `view-transition-name`
+ * one decision row. Each ghost row carries a stable `view-transition-name`
  * keyed by its activity id, so when approval materializes the real task the browser can morph
  * ghost → row instead of swapping views.
  *
@@ -17,8 +17,9 @@
  */
 import type { ProposalGroupOut, ProposalItemOut } from '@docket/athena/agent-contract';
 import { cn } from '@docket/ui/lib/utils';
-import { Button, Checkbox, surfaceToneColor } from '@docket/ui/primitives';
+import { Button, Checkbox, Skeleton, Surface, surfaceToneColor } from '@docket/ui/primitives';
 import { type JSX, useMemo, useState } from 'react';
+import Link from 'next/link';
 
 import { ProposalInputRows } from '@/components/athena/proposal-input-rows';
 import { taskIdsFromInput, useHighlightHandlers } from '@/components/athena/proposal-highlight';
@@ -26,6 +27,16 @@ import { describeProposal, isOutwardProposal } from '@/lib/athena/describe-propo
 
 /** Props for {@link ProposalGroupCard}. */
 export interface ProposalGroupCardProps {
+  /** Checked task context for a single change to an existing task. */
+  target?:
+    | {
+        readonly title: string | null;
+        readonly href: string;
+        readonly loading: boolean;
+        readonly unavailable: 'missing' | 'temporary' | null;
+        readonly retry: () => void;
+      }
+    | undefined;
   /** The pending group to review. */
   group: ProposalGroupOut;
   /** Whether the reviewer may decide/edit (the `assign` bar). */
@@ -42,13 +53,13 @@ export interface ProposalGroupCardProps {
   onEdit: (activityId: string, input: Record<string, unknown>) => void;
 }
 
-/** The header line: "1 change proposed" or "N changes proposed". */
+/** Batch size needs a heading only when selection changes what approval means. */
 function headline(count: number): string {
-  return count === 1 ? '1 change proposed' : `${String(count)} changes proposed`;
+  return `${String(count)} changes proposed`;
 }
 
 /**
- * The `Approve` button's label.
+ * The apply button's label.
  *
  * @remarks
  * A partial selection (some but not all rows checked) always reads as approving that selection;
@@ -56,15 +67,16 @@ function headline(count: number): string {
  */
 function approveLabel(count: number, selectedCount: number): string {
   if (selectedCount > 0 && selectedCount < count) {
-    return `Approve selected (${String(selectedCount)})`;
+    return `Apply selected (${String(selectedCount)})`;
   }
-  return count === 1 ? 'Approve' : `Approve ${String(count)}`;
+  return count === 1 ? 'Apply change' : `Apply ${String(count)} changes`;
 }
 
 /**
  * The batch-review card for one proposal group.
  */
 export function ProposalGroupCard({
+  target,
   group,
   canAct,
   pending,
@@ -91,64 +103,112 @@ export function ProposalGroupCard({
   };
 
   return (
-    <section
+    <Surface
+      as="section"
+      tone="card"
+      shape="medium"
+      pad="comfortable"
       aria-label={`Proposed changes: ${String(count)}`}
       className="flex w-full flex-col gap-3"
     >
-      <h3 className="text-on-surface text-label-large">{headline(count)}</h3>
+      {count > 1 ? <h3 className="text-on-surface text-label-large">{headline(count)}</h3> : null}
+      {target?.unavailable && group.items[0] ? (
+        <p className="text-on-surface text-label-large">{describeProposal(group.items[0])}</p>
+      ) : null}
+      {target ? <ProposalTargetStatus target={target} /> : null}
 
-      <ul className="flex flex-col gap-1.5">
-        {group.items.map((item) => (
-          <ProposalRow
-            key={item.activityId}
-            item={item}
-            canAct={canAct}
-            pending={pending}
-            showCheckbox={count > 1}
-            checked={checked.has(item.activityId)}
-            reviewed={reviewed}
-            onToggle={toggle}
-            onEdit={onEdit}
-          />
-        ))}
-      </ul>
+      {target?.unavailable ? null : (
+        <ul className="flex flex-col gap-1.5">
+          {group.items.map((item) => (
+            <ProposalRow
+              key={item.activityId}
+              item={item}
+              canAct={canAct}
+              pending={pending}
+              showCheckbox={count > 1}
+              checked={checked.has(item.activityId)}
+              reviewed={reviewed}
+              onToggle={toggle}
+              onEdit={onEdit}
+            />
+          ))}
+        </ul>
+      )}
 
       {canAct ? (
-        <div className="flex items-center gap-2">
-          <Button
-            size="sm"
-            disabled={pending}
-            onClick={() => {
-              if (needsReview) {
-                setReviewed(true);
-                return;
-              }
-              if (partialSelection) {
-                onDecide(
-                  group.proposalGroupId,
-                  'approve',
-                  selection.map((item) => item.activityId),
-                );
-                return;
-              }
-              onDecide(group.proposalGroupId, 'approve');
-            }}
-          >
-            {needsReview ? 'Review' : approveLabel(count, selection.length)}
-          </Button>
-          <Button
-            variant="ghost-destructive"
-            size="sm"
-            disabled={pending}
-            onClick={() => {
-              onDecide(group.proposalGroupId, 'reject');
-            }}
-          >
-            Reject
-          </Button>
-        </div>
+        <ProposalDecisionActions
+          group={group}
+          target={target}
+          pending={pending}
+          selection={selection}
+          needsReview={needsReview}
+          onReview={() => {
+            setReviewed(true);
+          }}
+          onDecide={onDecide}
+        />
       ) : null}
-    </section>
+    </Surface>
+  );
+}
+
+/** Keep the decision grammar in one place, including stale suggestions that can only be dismissed. */
+function ProposalDecisionActions({
+  group,
+  target,
+  pending,
+  selection,
+  needsReview,
+  onReview,
+  onDecide,
+}: {
+  readonly group: ProposalGroupOut;
+  readonly target: ProposalGroupCardProps['target'];
+  readonly pending: boolean;
+  readonly selection: readonly ProposalItemOut[];
+  readonly needsReview: boolean;
+  readonly onReview: () => void;
+  readonly onDecide: ProposalGroupCardProps['onDecide'];
+}): JSX.Element {
+  const count = group.items.length;
+  const decide = (): void => {
+    if (needsReview) {
+      onReview();
+      return;
+    }
+    if (selection.length > 0 && selection.length < count) {
+      onDecide(
+        group.proposalGroupId,
+        'approve',
+        selection.map((item) => item.activityId),
+      );
+      return;
+    }
+    onDecide(group.proposalGroupId, 'approve');
+  };
+  return (
+    <div className="flex items-center gap-2">
+      {target?.unavailable === 'temporary' ? (
+        <Button type="button" variant="secondary" size="sm" onClick={target.retry}>
+          Try again
+        </Button>
+      ) : null}
+      {target?.unavailable ? null : (
+        <Button size="sm" disabled={pending || target?.loading === true} onClick={decide}>
+          {needsReview ? 'Review' : approveLabel(count, selection.length)}
+        </Button>
+      )}
+      <Button
+        variant={target?.unavailable ? 'ghost' : 'ghost-destructive'}
+        size="sm"
+        disabled={pending}
+        onClick={() => {
+          onDecide(group.proposalGroupId, 'reject');
+        }}
+      >
+        {target?.unavailable ? 'Dismiss' : 'Reject'}
+      </Button>
+    </div>
   );
 }
 
@@ -270,11 +330,7 @@ function ProposalRow({
   return (
     <li
       style={{ viewTransitionName: `proposal-${item.activityId}` }}
-      className={cn(
-        // The ghost grammar: a tonal tint at reduced opacity, not a drawn outline —
-        // unmistakably "not real yet", solidified in place on approval.
-        'bg-primary-container/25 flex flex-col gap-1.5 rounded-lg px-3 py-2 opacity-80',
-      )}
+      className="flex flex-col gap-1.5"
       onPointerEnter={highlight.onPointerEnter}
       onPointerLeave={highlight.onPointerLeave}
     >
@@ -306,5 +362,31 @@ function ProposalRow({
         <ProposalInputRows input={item.input} className={surfaceToneColor('card')} />
       ) : null}
     </li>
+  );
+}
+
+/** Show a task name when verified and a concrete outcome when the suggestion cannot apply. */
+function ProposalTargetStatus({
+  target,
+}: {
+  readonly target: NonNullable<ProposalGroupCardProps['target']>;
+}): JSX.Element {
+  if (target.loading) return <Skeleton className="h-4 w-2/5" aria-hidden="true" />;
+  if (target.unavailable) {
+    return (
+      <p className="text-on-surface text-body-small">
+        {target.unavailable === 'missing'
+          ? 'The task is no longer available. This suggestion can’t be applied.'
+          : 'The task is unavailable right now. Try again to review this suggestion.'}
+      </p>
+    );
+  }
+  return (
+    <Link
+      href={target.href}
+      className="text-on-surface text-label-large w-fit max-w-full truncate hover:underline"
+    >
+      {target.title ?? 'Task'}
+    </Link>
   );
 }

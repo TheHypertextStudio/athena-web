@@ -16,15 +16,25 @@ import { okResponse } from '../support/query';
 
 const ORG_ID = '01ARZ3NDEKTSV4RRFFQ69G5FAV';
 
-const { chatGet, personalPost, elicitationsGet, presencePost, chaptersGet, chaptersPost } =
-  vi.hoisted(() => ({
-    chatGet: vi.fn(),
-    personalPost: vi.fn(),
-    elicitationsGet: vi.fn(),
-    presencePost: vi.fn(),
-    chaptersGet: vi.fn(),
-    chaptersPost: vi.fn(),
-  }));
+const {
+  chatGet,
+  personalPost,
+  elicitationsGet,
+  presencePost,
+  chaptersGet,
+  chaptersPost,
+  chaptersPut,
+  chaptersDelete,
+} = vi.hoisted(() => ({
+  chatGet: vi.fn(),
+  personalPost: vi.fn(),
+  elicitationsGet: vi.fn(),
+  presencePost: vi.fn(),
+  chaptersGet: vi.fn(),
+  chaptersPost: vi.fn(),
+  chaptersPut: vi.fn(),
+  chaptersDelete: vi.fn(),
+}));
 
 vi.mock('../../src/lib/api', () => ({
   api: {
@@ -37,6 +47,7 @@ vi.mock('../../src/lib/api', () => ({
             chapters: {
               $get: chaptersGet,
               $post: chaptersPost,
+              ':chapterId': { $put: chaptersPut, $delete: chaptersDelete },
             },
           },
         },
@@ -65,6 +76,17 @@ function thread(activities: readonly Record<string, unknown>[]) {
     createdAt: '2026-08-30T10:00:00.000Z',
     activities,
     result: null,
+  };
+}
+
+function response(id: string, text: string, author: 'user' | 'athena', createdAt: string) {
+  return {
+    id,
+    sessionId: 'chat_session',
+    organizationId: null,
+    type: 'response',
+    body: { text, author },
+    createdAt,
   };
 }
 
@@ -214,33 +236,24 @@ describe('AthenaConversation thread structure', () => {
     expect(screen.queryByText('Earlier answer')).not.toBeInTheDocument();
   });
 
-  it('names a chapter at a saved message', async () => {
+  it('saves a named place at a message', async () => {
     chatGet.mockResolvedValue(
       okResponse(
-        thread([
-          {
-            id: 'chapter_start',
-            sessionId: 'chat_session',
-            organizationId: null,
-            type: 'response',
-            body: { text: 'Plan the launch', author: 'user' },
-            createdAt: '2026-08-30T12:00:00.000Z',
-          },
-        ]),
+        thread([response('chapter_start', 'Plan the launch', 'user', '2026-08-30T12:00:00.000Z')]),
       ),
     );
     chaptersPost.mockResolvedValue(okResponse({ id: 'chapter_1' }));
     renderConversation();
 
     const message = await inThread('[data-athena-activity="chapter_start"]');
-    fireEvent.pointerDown(within(message).getByRole('button', { name: 'Section options' }), {
+    fireEvent.pointerDown(within(message).getByRole('button', { name: 'Save or finish here' }), {
       button: 0,
       ctrlKey: false,
     });
-    fireEvent.change(await screen.findByRole('textbox', { name: 'Section name' }), {
+    fireEvent.change(await screen.findByRole('textbox', { name: 'Name this place' }), {
       target: { value: 'Launch planning' },
     });
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Start section here' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Save this place' }));
     await waitFor(() => {
       expect(chaptersPost).toHaveBeenCalledWith({
         json: { startActivityId: 'chapter_start', title: 'Launch planning' },
@@ -248,11 +261,66 @@ describe('AthenaConversation thread structure', () => {
     });
   });
 
+  it('finishes named work at a later message and removes it at its start', async () => {
+    chatGet.mockResolvedValue(
+      okResponse(
+        thread([
+          response('work_start', 'Plan the launch', 'user', '2026-08-30T12:00:00.000Z'),
+          response('work_end', 'The plan is ready', 'athena', '2026-08-30T12:01:00.000Z'),
+        ]),
+      ),
+    );
+    chaptersGet.mockResolvedValue(
+      okResponse({
+        sessionId: 'chat_session',
+        items: [
+          {
+            id: 'saved_1',
+            title: 'Launch planning',
+            startActivityId: 'work_start',
+            endActivityId: null,
+            createdAt: '2026-08-30T12:00:00.000Z',
+            updatedAt: '2026-08-30T12:00:00.000Z',
+          },
+        ],
+      }),
+    );
+    chaptersPut.mockResolvedValue(okResponse({ id: 'saved_1' }));
+    chaptersDelete.mockResolvedValue(okResponse({ deleted: true }));
+    renderConversation();
+
+    const end = await inThread('[data-athena-activity="work_end"]');
+    fireEvent.pointerDown(within(end).getByRole('button', { name: 'Save or finish here' }), {
+      button: 0,
+      ctrlKey: false,
+    });
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Finish Launch planning here' }));
+    await waitFor(() => {
+      expect(chaptersPut).toHaveBeenCalledWith({
+        param: { chapterId: 'saved_1' },
+        json: { endActivityId: 'work_end' },
+      });
+    });
+
+    const start = await inThread('[data-athena-activity="work_start"]');
+    fireEvent.pointerDown(
+      within(start).getByRole('button', { name: 'Options for Launch planning' }),
+      {
+        button: 0,
+        ctrlKey: false,
+      },
+    );
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Remove Launch planning' }));
+    await waitFor(() => {
+      expect(chaptersDelete).toHaveBeenCalledWith({ param: { chapterId: 'saved_1' } });
+    });
+  });
+
   it.each([
     { reducedMotion: false, behavior: 'smooth' },
     { reducedMotion: true, behavior: 'auto' },
   ])(
-    'reveals older messages and centers a section with $behavior scrolling',
+    'reveals older messages and centers a saved place with $behavior scrolling',
     async ({ reducedMotion, behavior }) => {
       vi.mocked(Date.now).mockReturnValue(Date.parse('2026-09-28T10:00:00.000Z'));
       vi.stubGlobal('matchMedia', () => ({ matches: reducedMotion }));
@@ -289,10 +357,12 @@ describe('AthenaConversation thread structure', () => {
       );
       renderConversation();
 
-      const sections = await screen.findByRole('button', { name: 'Sections' });
+      const jump = await screen.findByRole('button', { name: 'Jump to' });
       expect(screen.queryByText('Plan the launch')).not.toBeInTheDocument();
-      fireEvent.pointerDown(sections, { button: 0, ctrlKey: false });
-      fireEvent.click(await screen.findByRole('menuitem', { name: 'Launch planning · Open' }));
+      fireEvent.pointerDown(jump, { button: 0, ctrlKey: false });
+      const menu = await screen.findByRole('menu');
+      expect(within(menu).getAllByRole('menuitem')).toHaveLength(1);
+      fireEvent.click(within(menu).getByRole('menuitem', { name: 'Launch planning' }));
 
       const target = await inThread('[data-athena-activity="section_start"]');
       expect(target).toBeVisible();
@@ -304,6 +374,26 @@ describe('AthenaConversation thread structure', () => {
       });
     },
   );
+
+  it('reveals and centers an older message selected through app search', async () => {
+    vi.mocked(Date.now).mockReturnValue(Date.parse('2026-09-28T10:00:00.000Z'));
+    vi.stubGlobal('matchMedia', () => ({ matches: false }));
+    const scrollIntoView = vi.fn();
+    Element.prototype.scrollIntoView = scrollIntoView;
+    chatGet.mockResolvedValue(
+      okResponse(
+        thread([
+          response('older_message', 'The earlier answer', 'athena', '2026-09-27T10:00:00.000Z'),
+        ]),
+      ),
+    );
+    renderConversation({ layout: 'page', jumpToActivityId: 'older_message' });
+
+    expect(await screen.findByText('The earlier answer')).toBeVisible();
+    await waitFor(() => {
+      expect(scrollIntoView).toHaveBeenCalledWith({ block: 'center', behavior: 'smooth' });
+    });
+  });
 
   it('keeps an empty thread to its suggestions: no heading, no icon', async () => {
     chatGet.mockResolvedValue(okResponse(thread([])));

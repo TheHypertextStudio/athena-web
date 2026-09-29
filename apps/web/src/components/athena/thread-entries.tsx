@@ -152,9 +152,7 @@ function ChatEntry({
           <h3 className="text-on-surface-variant text-label-small mb-2">{starts.title}</h3>
         ) : null}
         {fromUser ? <UserMessage text={text} /> : <AthenaMessage text={text} />}
-        {ends ? (
-          <p className="text-on-surface-variant text-label-small mt-2">End of {ends.title}</p>
-        ) : null}
+        {ends ? <span className="sr-only">End of {ends.title}</span> : null}
         {chapterActions ? (
           <ChapterMarkerMenu activityId={activity.id} text={text} actions={chapterActions} />
         ) : null}

@@ -170,6 +170,8 @@ export interface ConversationThreadProps {
   /** A job the host wants scrolled to, and the report that it was. */
   readonly scrollToJobId: string | null;
   readonly onScrolledToJob: ((jobId: string) => void) | undefined;
+  /** A message selected through the app's search control. */
+  readonly jumpToActivityId?: string | null | undefined;
 }
 
 /** Props for {@link ThreadBody}. */
@@ -181,6 +183,7 @@ type ThreadBodyProps = Omit<
   | 'waitingJobId'
   | 'scrollToJobId'
   | 'onScrolledToJob'
+  | 'jumpToActivityId'
 > & { readonly chapterActions?: ChapterActions | undefined };
 
 /**
@@ -375,14 +378,18 @@ function isWaitingForAthena(thread: AgentSessionDetailOut | null): boolean {
 /** Keep pending replies visible without inserting a second message-sized card. */
 function AthenaWorking(): JSX.Element {
   return (
-    <div role="status" aria-live="polite" className="flex items-center gap-2 pl-1">
+    <div
+      role="status"
+      aria-label="Athena is replying"
+      aria-live="polite"
+      className="flex items-center pl-1"
+    >
       <span
         className="text-on-surface-variant flex size-6 shrink-0 items-center justify-center"
         aria-hidden="true"
       >
         <Sparkles className="size-4 animate-pulse motion-reduce:animate-none" />
       </span>
-      <span className="text-on-surface-variant text-label-small">Reply pending</span>
     </div>
   );
 }
@@ -435,7 +442,13 @@ export function ConversationThread(props: ConversationThreadProps): JSX.Element 
   const scrollerRef = useRef<HTMLDivElement | null>(null);
   const columnRef = useRef<HTMLDivElement | null>(null);
   const history = useConversationHistory(props.thread, entries, props.active);
-  const chapters = useThreadChapters(props.thread, scrollerRef, history.entries, history.reveal);
+  const chapters = useThreadChapters(
+    props.thread,
+    scrollerRef,
+    history.entries,
+    history.reveal,
+    props.jumpToActivityId,
+  );
   // Keyed on the loading flag too: entries render only once the thread's own read settles.
   const renderedCount = props.query.isPending ? 0 : history.entries.length;
   const waitingOutOfView = useWaitingOutOfView(scrollerRef, waitingJobId, renderedCount);
@@ -474,7 +487,6 @@ export function ConversationThread(props: ConversationThreadProps): JSX.Element 
         history={history}
         chapters={chapters.rows}
         onJumpChapter={chapters.jump}
-        onRemoveChapter={chapters.remove}
       >
         <ThreadBody {...props} entries={history.entries} chapterActions={chapters.actions} />
         <AthenaHeadsUpSlot

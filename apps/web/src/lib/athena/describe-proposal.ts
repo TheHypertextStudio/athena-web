@@ -147,7 +147,7 @@ function stateLabel(value: unknown): string {
 
 /** One sentence fragment per `update_task` field, keyed by field name. */
 const UPDATE_TASK_DESCRIBERS: Readonly<Record<UpdateTaskField, (value: unknown) => string>> = {
-  state: (value) => `Set state to ${stateLabel(value)}`,
+  state: (value) => `Move to ${stateLabel(value)}`,
   title: (value) => `Rename to "${asString(value) ?? String(value)}"`,
   dueDate: (value) => `Due ${asString(value) ?? String(value)}`,
   assigneeId: () => `Move to another ${OWNER_FIELD_NOUN.assigneeId}`,
@@ -199,7 +199,7 @@ export interface ToolActivityLike {
  * Reuses {@link UPDATE_TASK_DESCRIBERS} — the same field-to-words mapping `describeProposal` reads
  * — whenever the activity carried its raw tool call through (`technical.toolName` +
  * `technical.input`), so a row and its originating proposal describe the same change the same way
- * (`update_task` + `{ state: 'in_progress' }` → `"Set state to In Progress"`). Every other
+ * (`update_task` + `{ state: 'in_progress' }` → `"Move to In Progress"`). Every other
  * activity — no raw call, or a tool this module does not recognize — falls back to the reported
  * action, capitalised (`"update task"` → `"Update task"`), which is still a sentence and not the
  * tool's machine name.
@@ -240,7 +240,7 @@ export function describeToolActivity(activity: ToolActivityLike): string {
  * @example
  * ```ts
  * describeProposal({ tool: 'update_task', input: { state: 'in_progress' }, … });
- * // 'Set state to In Progress'
+ * // 'Move to In Progress'
  * ```
  */
 export function describeProposal(item: ProposalItemOut): string {

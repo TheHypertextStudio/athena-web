@@ -34,9 +34,9 @@ export function athenaChapterRoutes(chatId: (ownerUserId: string) => Promise<str
       '/',
       apiDoc({
         tag: 'Athena',
-        summary: 'List marked conversation sections',
+        summary: 'List saved conversation places',
         response: AthenaChaptersOut,
-        description: 'Return the caller’s marked sections in the current Athena conversation.',
+        description: 'Return the caller’s named places in the current Athena conversation.',
       }),
       async (c) => {
         const owner = requestOwner(c);
@@ -48,10 +48,10 @@ export function athenaChapterRoutes(chatId: (ownerUserId: string) => Promise<str
       apiDoc({
         status: 201,
         tag: 'Athena',
-        summary: 'Mark the start of a conversation section',
+        summary: 'Save a starting point in the conversation',
         response: AthenaChapterOut,
         description:
-          'Start one owner-only section at a visible message in the current conversation.',
+          'Save one owner-only named place at a visible message in the current conversation.',
       }),
       zJson(AthenaChapterStart),
       async (c) => {
@@ -67,9 +67,9 @@ export function athenaChapterRoutes(chatId: (ownerUserId: string) => Promise<str
       '/:chapterId',
       apiDoc({
         tag: 'Athena',
-        summary: 'Mark the end of a conversation section',
+        summary: 'Mark where a saved place finishes',
         response: AthenaChapterOut,
-        description: 'Close the caller’s open section at a message that follows its start.',
+        description: 'Finish the caller’s open saved place at a later message.',
       }),
       zParam(z.object({ chapterId: z.string() })),
       zJson(AthenaChapterEnd),
@@ -91,9 +91,9 @@ export function athenaChapterRoutes(chatId: (ownerUserId: string) => Promise<str
       '/:chapterId',
       apiDoc({
         tag: 'Athena',
-        summary: 'Remove a conversation section',
+        summary: 'Remove a saved conversation place',
         response: z.object({ deleted: z.boolean() }),
-        description: 'Remove the caller’s section markers without deleting conversation activity.',
+        description: 'Remove the caller’s saved markers without deleting conversation activity.',
       }),
       zParam(z.object({ chapterId: z.string() })),
       async (c) => {

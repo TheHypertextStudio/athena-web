@@ -123,6 +123,8 @@ export interface AthenaConversationProps {
   scrollToJobId?: string | null | undefined;
   /** Reports that `scrollToJobId` was found and scrolled to, so the host can clear its request. */
   onScrolledToJob?: ((jobId: string) => void) | undefined;
+  /** A message selected through the app's search control. */
+  jumpToActivityId?: string | null;
 }
 
 /** The composer's draft, its form, and how a requested draft lands in it. */
@@ -464,6 +466,7 @@ export default function AthenaConversation(props: AthenaConversationProps): JSX.
         landingQuestionId={questions.landingId}
         scrollToJobId={settings.scrollToJobId}
         onScrolledToJob={props.onScrolledToJob}
+        jumpToActivityId={props.jumpToActivityId}
       />
       <Composer
         composerRef={composer.composerRef}

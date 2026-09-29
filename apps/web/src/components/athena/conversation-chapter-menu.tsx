@@ -2,6 +2,7 @@
 
 /** Quiet controls for marking and returning to chapters in one conversation. */
 import { MoreHorizontal } from '@docket/ui/icons';
+import { cn } from '@docket/ui/lib/utils';
 import {
   Button,
   DropdownMenu,
@@ -22,6 +23,7 @@ export interface ChapterActions {
   readonly canEndAt: (activityId: string) => boolean;
   readonly onStart: (activityId: string, text: string) => void;
   readonly onEnd: (activityId: string) => void;
+  readonly onRemove: (chapterId: string) => void;
 }
 
 /** A message's start or end marker, visible on focus and touch as well as hover. */
@@ -33,9 +35,12 @@ export function ChapterMarkerMenu({
   readonly activityId: string;
   readonly text: string;
   readonly actions: ChapterActions;
-}): JSX.Element {
-  const open = actions.openChapterId !== null;
+}): JSX.Element | null {
+  const startingHere = actions.chapters.find((chapter) => chapter.startActivityId === activityId);
+  const active = actions.chapters.find((chapter) => chapter.id === actions.openChapterId);
+  const canFinishHere = active !== undefined && actions.canEndAt(activityId);
   const [title, setTitle] = useState(() => text.replace(/\s+/g, ' ').trim().slice(0, 80));
+  if (active && !startingHere && !canFinishHere) return null;
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -45,16 +50,19 @@ export function ChapterMarkerMenu({
           controlSize="sm"
           iconOnly
           disabled={actions.pending}
-          aria-label="Section options"
-          className="absolute -top-3 right-0 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-40"
+          aria-label={startingHere ? `Options for ${startingHere.title}` : 'Save or finish here'}
+          className={cn(
+            'absolute -top-3 right-0 group-hover:opacity-100 focus-visible:opacity-100',
+            startingHere ? 'opacity-60' : 'opacity-0 [@media(hover:none)]:opacity-40',
+          )}
         >
           <MoreHorizontal aria-hidden="true" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
-        {!open ? (
+        {!active && !startingHere ? (
           <label className="text-label-small text-on-surface-variant flex flex-col gap-1 px-2 py-1">
-            Section name
+            Name
             <Input
               value={title}
               maxLength={80}
@@ -64,19 +72,36 @@ export function ChapterMarkerMenu({
               onKeyDown={(event) => {
                 event.stopPropagation();
               }}
-              aria-label="Section name"
+              aria-label="Name this place"
             />
           </label>
         ) : null}
-        <DropdownMenuItem
-          disabled={open ? !actions.canEndAt(activityId) : !title.trim()}
-          onSelect={() => {
-            if (open) actions.onEnd(activityId);
-            else actions.onStart(activityId, title.trim());
-          }}
-        >
-          {open ? 'End section here' : 'Start section here'}
-        </DropdownMenuItem>
+        {startingHere ? (
+          <DropdownMenuItem
+            onSelect={() => {
+              actions.onRemove(startingHere.id);
+            }}
+          >
+            Remove {startingHere.title}
+          </DropdownMenuItem>
+        ) : active && canFinishHere ? (
+          <DropdownMenuItem
+            onSelect={() => {
+              actions.onEnd(activityId);
+            }}
+          >
+            Finish {active.title} here
+          </DropdownMenuItem>
+        ) : (
+          <DropdownMenuItem
+            disabled={!title.trim()}
+            onSelect={() => {
+              actions.onStart(activityId, title.trim());
+            }}
+          >
+            Save this place
+          </DropdownMenuItem>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -86,18 +111,16 @@ export function ChapterMarkerMenu({
 export function ConversationChapterIndex({
   chapters,
   onJump,
-  onRemove,
 }: {
   readonly chapters: readonly ConversationChapter[];
   readonly onJump: (activityId: string) => void;
-  readonly onRemove: (chapterId: string) => void;
 }): JSX.Element | null {
   if (chapters.length === 0) return null;
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button type="button" variant="ghost" controlSize="sm">
-          Sections
+          Jump to
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start">
@@ -109,17 +132,6 @@ export function ConversationChapterIndex({
             }}
           >
             {chapter.title}
-            {chapter.endActivityId === null ? ' · Open' : ''}
-          </DropdownMenuItem>
-        ))}
-        {chapters.map((chapter) => (
-          <DropdownMenuItem
-            key={`remove-${chapter.id}`}
-            onSelect={() => {
-              onRemove(chapter.id);
-            }}
-          >
-            Remove {chapter.title}
           </DropdownMenuItem>
         ))}
       </DropdownMenuContent>

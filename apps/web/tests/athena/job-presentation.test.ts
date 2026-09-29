@@ -99,7 +99,7 @@ describe('jobChanges and jobFailureCause', () => {
     const detail = detailWith({ activities: [updateStep('failed_1', { failed: true })] });
 
     const cause = jobFailureCause(detail);
-    expect(cause).toContain('set state to In Progress');
+    expect(cause).toContain('move to In Progress');
     expect(cause).not.toContain('could not be completed');
     expect(jobFailureCause(detailWith({ activities: [] }))).toBeNull();
   });
@@ -210,7 +210,7 @@ describe('jobStatusLine', () => {
     const detail = detailWith({ status: 'canceled', activities: [updateStep('pending_1', {})] });
 
     const line = jobStatusLine(detail, summary, NOW);
-    expect(line).toContain('set state to In Progress');
+    expect(line).toContain('move to In Progress');
     expect(line).not.toBe(jobStatusLine(detailWith({ status: 'failed' }), summary, NOW));
   });
 
@@ -239,7 +239,7 @@ describe('decisionSentence', () => {
       activities: [updateStep('tool_1', {})],
     });
 
-    expect(decisionSentence(detail)).toBe('Set state to In Progress');
+    expect(decisionSentence(detail)).toBe('Move to In Progress');
   });
 
   it('falls back to the decision title when there is no raw tool call', () => {

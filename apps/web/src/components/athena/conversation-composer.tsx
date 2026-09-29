@@ -157,9 +157,7 @@ function ComposerControls({
 }: ComposerControlsProps): JSX.Element {
   return (
     <div className="flex h-8 shrink-0 items-center gap-1">
-      {/* There is no "New chat" control, and that is deliberate: a person has one Athena
-          conversation, and its topics are derived by {@link AthenaConversationBrowser} rather
-          than declared by hand. */}
+      {/* There is no "New chat" control because Athena keeps one durable conversation. */}
       <Button
         type="button"
         variant="ghost"

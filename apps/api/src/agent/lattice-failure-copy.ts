@@ -21,6 +21,12 @@ export function knownLatticeFailureMessage(code: unknown): string | null {
   return typeof code === 'string' && Object.hasOwn(COPY, code) ? (COPY[code] ?? null) : null;
 }
 
+/**
+ * Resolve a persisted Lattice failure code to safe activity and session copy.
+ *
+ * @param code - Docket's stable settlement code.
+ * @returns A Docket-owned message, including a generic fallback for unknown codes.
+ */
 export function failureMessage(code: string): string {
   return knownLatticeFailureMessage(code) ?? 'Athena could not finish the Lattice assignment.';
 }

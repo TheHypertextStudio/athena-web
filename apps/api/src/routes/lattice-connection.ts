@@ -27,7 +27,7 @@ import {
   type LatticeUnavailableReason,
   type StoredLatticeCredential,
 } from '@docket/integrations';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, lt } from 'drizzle-orm';
 
 import { credentialSealingConfigured } from '../lib/credentials';
 
@@ -127,6 +127,35 @@ export async function recordLatticeFailure(
       ...(terminal ? { status: 'error' as const } : {}),
     })
     .where(eq(latticeConnection.ownerUserId, ownerUserId));
+}
+
+/**
+ * Clear an older failure after the selected personal runtime answers.
+ *
+ * A later failure or authorization change wins over a delayed successful response. A failure
+ * recorded in the same millisecond as the request began is conservatively retained.
+ *
+ * @param ownerUserId - The connection's owner.
+ * @param deviceId - The runtime that answered.
+ * @param requestStartedAt - The instant before the gateway request began.
+ */
+export async function recordLatticeSuccess(
+  ownerUserId: string,
+  deviceId: string,
+  requestStartedAt: Date,
+): Promise<void> {
+  await db
+    .update(latticeConnection)
+    .set({ lastFailureReason: null, lastFailureAt: null })
+    .where(
+      and(
+        eq(latticeConnection.ownerUserId, ownerUserId),
+        eq(latticeConnection.deviceId, deviceId),
+        eq(latticeConnection.status, 'connected'),
+        eq(latticeConnection.enabled, true),
+        lt(latticeConnection.lastFailureAt, requestStartedAt),
+      ),
+    );
 }
 
 /** Persist a credential record against an owner-matched connection. */

@@ -129,6 +129,10 @@ It is enforced at four layers, deliberately redundantly:
 An expired or narrowed grant remains visible in Settings with its selected device and a
 reason-specific reconnect action. A failed reconnect keeps the existing sealed grant and device
 choice. A successful device read restores the connection to its usable state.
+After a selected device answers an interactive turn, Docket clears an older transient failure from
+Settings. The update requires the same enabled device and a connected grant, and only clears a
+failure recorded before that gateway request began. A later failure or revoked grant remains visible
+when an earlier request completes out of order.
 
 An interactive turn that reaches an unavailable selected runtime fails the claimed generation.
 When the send is asynchronous, Docket saves a stable Lattice reason code in an error activity and

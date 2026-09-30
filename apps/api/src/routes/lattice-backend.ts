@@ -38,6 +38,7 @@ import {
   latticeGatewayContext,
   loadLatticeConnection,
   recordLatticeFailure,
+  recordLatticeSuccess,
 } from './lattice-connection';
 
 /** Which backend a resolution landed on, for logging and for the session's own record. */
@@ -73,6 +74,7 @@ export function latticeChatPort(
   return {
     async runChat(request) {
       let completion;
+      const requestStartedAt = new Date();
       try {
         completion = await runLatticeChat(gateway, {
           deviceId,
@@ -90,6 +92,7 @@ export function latticeChatPort(
         }
         throw cause;
       }
+      await recordLatticeSuccess(ownerUserId, deviceId, requestStartedAt);
       const choice = completion.choices[0];
       return {
         text: choice?.message.content ?? '',

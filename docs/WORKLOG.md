@@ -8,6 +8,20 @@
 
 ## Active Tasks
 
+### [ATHENA-LATTICE-RELEASE-001] Finish the production round trip and release
+
+- **Status**: IN_PROGRESS
+- **Started**: 2026-09-29
+- **Priority**: P0
+- **Description**: Finish the Docket Settings to Mac Studio route for interactive and durable Athena work, then release it to all users without losing grants or accepted work.
+- **Approach**: Clear a stale transient failure only after a successful personal-runtime turn, with a database guard for concurrent failures and revoked or switched connections. Diagnose the staging sign-up and intermittent gateway 503 from existing evidence, validate the final source locally and in staging, then run one bounded production canary before broad release.
+- **Files to modify**: `apps/api/src/routes/lattice-backend.ts`, `apps/api/src/routes/lattice-connection.ts`, focused API tests, relevant release documentation, and this worklog.
+- **Risks**: A delayed success must not erase a newer failure or authorization change. Staging auth must be diagnosed before another passkey attempt. Existing OAuth grants and the accepted delegation must remain intact.
+- **Validation**: Focused red-green tests, affected API checks, read-only gateway diagnostics, staging acceptance, and a single production canary after release checks.
+- **Progress**: The production stale `gateway_error` came from the chat edge recording a failure without recording a later success. A local gateway regression failed on the stale Settings reason before the fix; a concurrent-failure regression then failed against an unconditional clear. Both pass with a guarded database update. Six affected Lattice and API test files pass 65 tests; API typecheck, changed-file lint, complexity, formatting, and the production API build pass.
+- **Staging auth finding**: The staging database has zero users, sessions, and Lattice connections. Cloud Run logged successful sign-up code requests but two `verify-code` 400 responses; the staging auth policy does not echo codes, and `example.invalid` cannot receive mail. Do not repeat a passkey prompt from this flow. Prepare a staging-only synthetic session for the routing check.
+- **Gateway finding**: Docket Cloud Run recorded the production chat 503 at 2026-09-30 02:38:14 UTC after 8.53 seconds. The Studio daemon was renewing its relay credential around that time but logged no inference request. Lovelace project logs are inaccessible because the `willie@reasonabletech.co` GCP credential requires interactive reauthentication; this does not establish the upstream 503 cause.
+
 ### [ATHENA-E2E-STAGING-001] Restore the Athena browser acceptance run
 
 - **Status**: VALIDATING

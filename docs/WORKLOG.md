@@ -8,23 +8,6 @@
 
 ## Active Tasks
 
-### [ATHENA-LATTICE-RELEASE-001] Finish the production round trip and release
-
-- **Status**: IN_PROGRESS
-- **Started**: 2026-09-29
-- **Priority**: P0
-- **Description**: Finish the Docket Settings to Mac Studio route for interactive and durable Athena work, then release it to all users without losing grants or accepted work.
-- **Approach**: Clear a stale transient failure only after a successful personal-runtime turn, with a database guard for concurrent failures and revoked or switched connections. Diagnose the staging sign-up and intermittent gateway 503 from existing evidence, validate the final source locally and in staging, then run one bounded production canary before broad release.
-- **Files to modify**: `apps/api/src/routes/lattice-backend.ts`, `apps/api/src/routes/lattice-connection.ts`, focused API tests, relevant release documentation, and this worklog.
-- **Risks**: A delayed success must not erase a newer failure or authorization change. Staging auth must be diagnosed before another passkey attempt. Existing OAuth grants and the accepted delegation must remain intact.
-- **Validation**: Focused red-green tests, affected API checks, read-only gateway diagnostics, staging acceptance, and a single production canary after release checks.
-- **Progress**: The production stale `gateway_error` came from the chat edge recording a failure without recording a later success. A local gateway regression failed on the stale Settings reason before the fix; a concurrent-failure regression then failed against an unconditional clear. Both pass with a guarded database update. Six affected Lattice and API test files pass 65 tests; API typecheck, changed-file lint, complexity, formatting, and the production API build pass.
-- **Staging auth finding**: The staging database has zero users, sessions, and Lattice connections. Cloud Run logged successful sign-up code requests but two `verify-code` 400 responses; the staging auth policy does not echo codes, and `example.invalid` cannot receive mail. Do not repeat a passkey prompt from this flow. Prepare a staging-only synthetic session for the routing check.
-- **Gateway finding**: Docket Cloud Run recorded the production chat 503 at 2026-09-30 02:38:14 UTC after 8.53 seconds. The Studio daemon was renewing its relay credential around that time but logged no inference request. Lovelace project logs are inaccessible because the `willie@reasonabletech.co` GCP credential requires interactive reauthentication; this does not establish the upstream 503 cause.
-- **Staging round trip**: Cloud Build `1258fba1-a83b-4dcf-8e06-cb7506380664` built the validated API image from `248b9ffa6`, and Cloud Run revision `docket-api-staging-00006-nnp` serves it at 100% traffic. A disposable `example.invalid` user, Hub, signed session, personal workspace, and task were added only to the initially empty staging database. The browser consent grant returned through the staging callback with exactly `openid offline_access lattice:compute:inference lattice:compute:catalog:read`. Settings reported the Mac Studio reachable and enabled. One interactive prompt returned the exact marker `STAGE-LATTICE-248B9FFA6`; the subsequent Settings read had no unavailable reason. One durable assignment submitted work `work_01M3RAGV53DR0BBBBQ1BZKCBBZ` through the Studio and returned one sealed proposed comment containing `STAGE-DURABLE-248B9FFA6` on its staging task. The session is awaiting approval; no proposal was accepted or posted. The Studio daemon recorded that marker while doing relay work.
-- **Staging scheduler limitation**: The staging `CRON_SECRET` has a trailing newline, so an HTTP header cannot satisfy the cron route's exact comparison. The one staging delegation was submitted and polled with the repository's `sweepLatticeDelegations` implementation using the existing staging environment and live service controls in a temporary local runner. This did not change credentials or start another work item. Staging has no installed Cloud Scheduler jobs; routine scheduled work is not yet operational there. The Better Auth secret also ends in a newline, which is valid for cookie signing and was preserved.
-- **Release gate**: `pnpm test:release` passed from the final source tree against a fresh local PostgreSQL database: API and web production builds, five release browser checks, and the phone-verification browser check. The staging proposal remains untouched. Production's `CRON_SECRET` has no trailing newline and its `docket-athena-triggers` job exists; the staging scheduler limitation is isolated to staging.
-
 ### [ATHENA-E2E-STAGING-001] Restore the Athena browser acceptance run
 
 - **Status**: VALIDATING
@@ -12003,6 +11986,15 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
 ---
 
 ## Completed Tasks
+
+### [ATHENA-LATTICE-RELEASE-001] Finish the production round trip and release
+
+- **Completed**: 2026-09-29
+- **Summary**: Released the current Athena conversation and personal Lattice path to all users on `main` at `bf7e8e671`. Cloud Run revision `docket-api-00324-crb` serves that image at 100% traffic; the Vercel production deployment and the `Deploy main` workflow passed. The existing production grant, selected Mac Studio, and prior durable proposal remain intact.
+- **Files changed**: The seven linear release commits cover staging configuration, Athena browser acceptance, guarded Lattice success state, tests, deployment/spec documentation, and this worklog. The final production evidence update is retained locally for the next documentation delivery so the release remains a single push.
+- **Validation**: The stale Settings `gateway_error` regression and a concurrent-failure guard failed before the fix and passed after it; 65 focused API tests, API typecheck, lint, complexity, formatting, and build passed. Staging completed the approved OAuth callback, selected the Mac Studio, returned `STAGE-LATTICE-248B9FFA6` in one interactive turn, and yielded one sealed `STAGE-DURABLE-248B9FFA6` comment proposal under work ID `work_01M3RAGV53DR0BBBBQ1BZKCBBZ`. It remains awaiting approval with one delegation and one proposal. `pnpm test:release` passed API/web production builds, five release browser checks, and phone verification against a fresh PostgreSQL database. Hosted CI and deployment passed. One production Athena turn returned exactly `PROD-LATTICE-BF7E8E671`; Cloud Run logged its POST as HTTP 200 on `docket-api-00324-crb`, and Settings then showed Mac Studio Ready and In use with no unavailable reason. `pnpm launch:verify-prod` passed all 11 public checks.
+- **Remaining operational findings**: The earlier transient production 503 reached Docket but not a logged Studio inference. Its upstream cause remains unconfirmed because Lovelace GCP logs require Reasonable Tech account reauthentication. Staging's cron secret ends in a newline and has no installed Scheduler jobs; the single staging durable work was submitted and polled through the existing sweep implementation in a temporary local runner without changing credentials. Production's cron secret and Scheduler job are valid. Neither finding is claimed as repaired by this release.
+- **Retrospective**: A live Settings read, returned model text, durable work/proposal state, and the deployed revision together gave a stronger acceptance signal than any one build or health probe. Guarding the success update by request start and current owner/device/grant preserved newer failures and revoked connections. A one-push release needs its final production evidence recorded locally for a later documentation delivery to avoid an otherwise redundant CI and redeployment cycle.
 
 ### [ATHENA-HISTORY-IA-001] Make Athena navigation legible
 

@@ -120,14 +120,14 @@ or unsupported rows retain a concrete reason and omission evidence.
 
 | Capability | End-to-end test |
 | --- | --- |
-| `openLinks` | `apps/web/e2e/athena/mcp-apps-stable.spec.ts :: canonical Athena invocation creates and restores a fully interactive stable MCP App` |
-| `serverTools` | `apps/web/e2e/athena/mcp-apps-stable.spec.ts :: canonical Athena invocation creates and restores a fully interactive stable MCP App` |
-| `message.text` | `apps/web/e2e/athena/mcp-apps-stable.spec.ts :: canonical Athena invocation creates and restores a fully interactive stable MCP App` |
+| `openLinks` | `apps/web/e2e/athena/mcp-apps-stable.spec.ts :: Athena work restores a fully interactive stable MCP App` |
+| `serverTools` | `apps/web/e2e/athena/mcp-apps-stable.spec.ts :: Athena work restores a fully interactive stable MCP App` |
+| `message.text` | `apps/web/e2e/athena/mcp-apps-stable.spec.ts :: Athena work restores a fully interactive stable MCP App` |
 | `sandbox.csp` | `apps/web/e2e/athena/mcp-apps-stable.spec.ts :: host CSP is installed before hostile executable markup and permits zero egress` |
-| `sandbox.permissions` | `apps/web/e2e/athena/mcp-apps-stable.spec.ts :: canonical Athena invocation creates and restores a fully interactive stable MCP App` |
-| `hostContext.theme` | `apps/web/e2e/athena/mcp-apps-stable.spec.ts :: canonical Athena invocation creates and restores a fully interactive stable MCP App` |
-| `hostContext.sizing` | `apps/web/e2e/athena/mcp-apps-stable.spec.ts :: canonical Athena invocation creates and restores a fully interactive stable MCP App` |
-| `displayMode.inline` | `apps/web/e2e/athena/mcp-apps-stable.spec.ts :: canonical Athena invocation creates and restores a fully interactive stable MCP App` |
-| `displayMode.fullscreen` | `apps/web/e2e/athena/mcp-apps-stable.spec.ts :: canonical Athena invocation creates and restores a fully interactive stable MCP App` |
-| `downloadFile` | `apps/web/e2e/athena/mcp-apps-stable.spec.ts :: canonical Athena invocation creates and restores a fully interactive stable MCP App` |
-| `updateModelContext.text` | `apps/web/e2e/athena/mcp-apps-stable.spec.ts :: canonical Athena invocation creates and restores a fully interactive stable MCP App` |
+| `sandbox.permissions` | `apps/web/e2e/athena/mcp-apps-stable.spec.ts :: Athena work restores a fully interactive stable MCP App` |
+| `hostContext.theme` | `apps/web/e2e/athena/mcp-apps-stable.spec.ts :: Athena work restores a fully interactive stable MCP App` |
+| `hostContext.sizing` | `apps/web/e2e/athena/mcp-apps-stable.spec.ts :: Athena work restores a fully interactive stable MCP App` |
+| `displayMode.inline` | `apps/web/e2e/athena/mcp-apps-stable.spec.ts :: Athena work restores a fully interactive stable MCP App` |
+| `displayMode.fullscreen` | `apps/web/e2e/athena/mcp-apps-stable.spec.ts :: Athena work restores a fully interactive stable MCP App` |
+| `downloadFile` | `apps/web/e2e/athena/mcp-apps-stable.spec.ts :: Athena work restores a fully interactive stable MCP App` |
+| `updateModelContext.text` | `apps/web/e2e/athena/mcp-apps-stable.spec.ts :: Athena work restores a fully interactive stable MCP App` |

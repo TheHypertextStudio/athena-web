@@ -9,11 +9,11 @@
  * `window.localStorage` for the same reason `matchMedia` needs one — see the remarks below.
  */
 import '@testing-library/jest-dom/vitest';
-import { vi } from 'vitest';
+import { beforeEach, vi } from 'vitest';
 
 // jsdom does not implement `matchMedia`; stub a minimal, non-matching implementation so components
 // reading responsive state via `useMediaQuery` render their narrow-viewport branch under test.
-vi.stubGlobal('matchMedia', (query: string) => ({
+const matchMedia = (query: string) => ({
   matches: false,
   media: query,
   onchange: null,
@@ -22,7 +22,9 @@ vi.stubGlobal('matchMedia', (query: string) => ({
   addEventListener: vi.fn(),
   removeEventListener: vi.fn(),
   dispatchEvent: vi.fn(() => false),
-}));
+});
+
+vi.stubGlobal('matchMedia', matchMedia);
 
 /**
  * A minimal in-memory `Storage` implementation, stubbed in for `window.localStorage`.
@@ -58,3 +60,11 @@ function createMemoryStorage(): Storage {
 
 vi.stubGlobal('localStorage', createMemoryStorage());
 vi.stubGlobal('sessionStorage', createMemoryStorage());
+
+// Some component tests call `vi.unstubAllGlobals()` during cleanup. Restore the shared browser
+// shims before every test so the next test never inherits Node's unavailable web storage globals.
+beforeEach(() => {
+  vi.stubGlobal('matchMedia', matchMedia);
+  vi.stubGlobal('localStorage', createMemoryStorage());
+  vi.stubGlobal('sessionStorage', createMemoryStorage());
+});

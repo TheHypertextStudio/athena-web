@@ -572,7 +572,7 @@ export const NORMATIVE_REQUIREMENTS: readonly NormativeRequirement[] = [
 
 /** Advertised stable optional surfaces and the end-to-end test that proves each promise. */
 const ATHENA_BROWSER_JOURNEY =
-  'apps/web/e2e/athena/mcp-apps-stable.spec.ts :: canonical Athena invocation creates and restores a fully interactive stable MCP App';
+  'apps/web/e2e/athena/mcp-apps-stable.spec.ts :: Athena work restores a fully interactive stable MCP App';
 const ATHENA_BROWSER_CSP =
   'apps/web/e2e/athena/mcp-apps-stable.spec.ts :: host CSP is installed before hostile executable markup and permits zero egress';
 

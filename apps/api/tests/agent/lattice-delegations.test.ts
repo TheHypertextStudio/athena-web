@@ -223,7 +223,9 @@ function dependencies(): LatticeDelegationDependencies & {
             keyId: 'work-key-1',
             publicKey: 'runtime-public',
             notBefore: '2026-08-01T00:00:00.000Z',
-            notAfter: '2026-09-30T00:00:00.000Z',
+            // This shared fixture also serves tests that submit at the real clock time.
+            // Expired-key behavior uses an explicit short-lived key below.
+            notAfter: '2100-01-01T00:00:00.000Z',
           },
         ],
       },

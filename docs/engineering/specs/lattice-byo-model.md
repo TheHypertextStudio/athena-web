@@ -240,6 +240,12 @@ reuses both identifiers. Terminal settlement clears the reply key in the same tr
 records the outcome. The state machine is in
 [`lattice-delegation-state.mmd`](./lattice-delegation-state.mmd).
 
+For a new personal assignment, Docket claims and submits its prepared delegation as soon as the
+transaction commits. This starts the selected Mac's work without waiting for the next cron tick.
+The same claim and logical submission id let the one-minute sweep recover an interrupted request
+without duplicating work. The sweep also polls for sealed results; the current relay controller
+contract has no result callback to Docket, so result visibility can still lag by up to one tick.
+
 The gateway's personal runtime record includes its authenticated Lovelace `accountId`. Device
 selection stores that binding with the selected runtime; a later successful device read repairs
 connections selected by older Docket builds. The public Settings device response omits account ID.
@@ -340,7 +346,8 @@ then prove native Chrome and redirect-only ceremonies against the deployed origi
 
 Submission and polling are product settings. The `service_control` table holds one row per control
 (`lattice_submissions` and `lattice_polling`), staff change them from the admin console, and the
-five-minute sweep reads them at the start of every pass, so a change takes effect on the next tick.
+immediate submission path and one-minute sweep read them before acting, so a change takes effect
+on the next request or tick.
 Turning submission off stops new durable submissions while existing work continues to settle.
 Turning polling off holds the delegation rows, work ids, and encrypted keys in place until polling
 resumes. A key with no row reads as enabled, so a fresh deployment serves the capability before

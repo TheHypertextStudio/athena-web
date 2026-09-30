@@ -36,8 +36,8 @@ import { failureMessage } from './lattice-failure-copy';
 import { promptForSession } from './lattice-delegation-prompt';
 import type { LatticeConnectionRow } from '../routes/lattice-connection';
 
-// The first submission can wait for the five-minute scheduler tick. Leave enough time after that
-// for a local model to finish and for transient relay/poll retries to return a sealed result.
+// Leave time for a local model to finish and for transient relay/poll retries after immediate
+// submission. The scheduler remains a recovery path if a request ends before dispatch.
 const DELEGATION_DEADLINE_MS = 30 * 60_000;
 const MAX_POLL_BATCH = 10;
 const MAX_SUBMIT_BATCH = 10;
@@ -1084,6 +1084,29 @@ async function submitPrepared(
     /* v8 ignore next -- @preserve defensive: a compensation that stays pending is retried by the scheduler */
     return outcome === 'pending' ? 'skipped' : outcome;
   }
+}
+
+/** Submit one newly prepared session immediately, using the scheduler's durable claim path. */
+export async function submitPreparedLatticeDelegation(
+  sessionId: string,
+  now: Date,
+  deps: LatticeDelegationDependencies,
+): Promise<'submitted' | 'failed' | 'canceled' | 'skipped'> {
+  const [row] = await db
+    .select()
+    .from(agentDelegation)
+    .where(
+      and(
+        eq(agentDelegation.sessionId, sessionId),
+        eq(agentDelegation.status, 'prepared'),
+        or(isNull(agentDelegation.nextPollAt), lte(agentDelegation.nextPollAt, now)),
+      ),
+    )
+    .limit(1);
+  if (!row) return 'skipped';
+  const claimed = await claimPreparedSubmission(row, now);
+  if (!claimed) return 'skipped';
+  return await submitPrepared(claimed, now, deps);
 }
 
 function progressText(payload: unknown): string | null {

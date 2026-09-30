@@ -12089,6 +12089,15 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
 - **Validation**: The MCP and web attribution regressions failed before implementation. Focused API tests passed 42/42 and focused web tests passed 11/11. API, web, work, connections, DB, and UI typechecks and lint passed. The complexity ledger, documentation checks, Prettier, and diff whitespace passed. Desktop and phone light/dark captures showed Codex as the update author without horizontal overflow; the preview database was reset afterward.
 - **Limits**: Older comments and status reports lack client provenance. Their original performer cannot be reconstructed from the content rows. Older edited comments lack editor provenance.
 - **Retrospective**: The permission actor and text performer were already distinct in request provenance, but content rows had collapsed them. Persisting that distinction lets readers name the writer without changing permission checks.
+### [ATHENA-LATTICE-IMMEDIATE-001] Submit new durable assignments without waiting for cron
+
+- **Completed**: 2026-09-30
+- **Priority**: P0
+- **Summary**: New personal Lattice assignments submit as soon as their durable row commits, through the existing authorization, lease, idempotency, and operator-control path. The Athena Scheduler job now runs every minute to recover missed submissions and collect sealed results; user-owned schedules still have a five-minute minimum.
+- **Files changed**: `apps/api/src/agent/assignments.ts`, `apps/api/src/agent/lattice-delegations.ts`, `apps/api/tests/agent/lattice-delegations.test.ts`, `scripts/scheduler-setup.ts`, `repo-tests/tooling/scheduler-setup.test.ts`, `docs/engineering/deployment.md`, `docs/engineering/specs/lattice-byo-model.md`, and this log.
+- **Validation**: The immediate-submit and one-minute cadence assertions failed before the changes and passed afterward. The 93 delegation tests, 37 adjacent API tests, 10 Scheduler tests, API build/typecheck/lint, complexity ledger, docs check, formatting, and whitespace check passed. A later sweep did not duplicate the direct submission, and the direct helper respected relay rate-limit backoff.
+- **Operations**: The production and staging Athena jobs each rise from up to 288 to 1,440 invocations per day (five times the previous cadence). This change adds no hosted validation workflow. A slow relay call can delay the assignment response; the durable prepared row lets the sweep retry a transient interruption. Result visibility can lag by up to one minute because Lattice currently has no completion callback into Docket.
+- **Learning and retrospective**: Reusing the scheduler's claim path avoided a second submission protocol. The first focused retry test caught an attempt to bypass `nextPollAt`; adding that guard before release kept controller pacing intact. The targeted tests made the latency change reviewable without rerunning unrelated suites.
 
 ### [ATHENA-STAGING-SCHEDULER-001] Run durable Athena work on the staging cadence
 

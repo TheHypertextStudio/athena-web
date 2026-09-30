@@ -31,9 +31,11 @@ import { NotFoundError } from '../error';
 import type { EmitEventInput } from '../routes/event-emit';
 import { runSession } from '../routes/agent-session-runner';
 import { loadLatticeConnection } from '../routes/lattice-connection';
+import { readLatticeServiceControls } from '../services/service-controls';
 import { admitAthenaGeneration } from './async-runner';
 import {
   prepareLatticeAssignmentRun,
+  submitPreparedLatticeDelegation,
   type LatticeDelegationDependencies,
 } from './lattice-delegations';
 import { latticeDelegationDependencies } from './lattice-delegation-runtime';
@@ -209,7 +211,7 @@ export async function startAssignmentRun(
 ): Promise<string> {
   const connection = await loadLatticeConnection(assignment.ownerUserId);
   if (connection?.enabled && connection.deviceId) {
-    return await prepareLatticeAssignmentRun(
+    const sessionId = await prepareLatticeAssignmentRun(
       assignment,
       actorId,
       prompt,
@@ -218,6 +220,10 @@ export async function startAssignmentRun(
       new Date(),
       latticeDeps,
     );
+    if ((await readLatticeServiceControls()).submissionsEnabled) {
+      await submitPreparedLatticeDelegation(sessionId, new Date(), latticeDeps);
+    }
+    return sessionId;
   }
   const session = await db.transaction(async (tx) => {
     const [session] = await tx

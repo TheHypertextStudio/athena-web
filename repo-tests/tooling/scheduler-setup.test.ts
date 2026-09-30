@@ -129,6 +129,11 @@ describe('scheduler-setup — the twenty-five jobs', () => {
 });
 
 describe('scheduler-setup — staging Athena', () => {
+  it('checks for finished Lattice work every minute', () => {
+    expect(JOBS.find((job) => job.name === 'docket-athena-triggers')?.schedule).toBe('* * * * *');
+    expect(selectSchedulerJobs(true)[0]?.schedule).toBe('* * * * *');
+  });
+
   it('selects only a distinct Athena job for staging', () => {
     expect(selectSchedulerJobs(true)).toEqual([
       {

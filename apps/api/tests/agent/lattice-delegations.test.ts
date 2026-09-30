@@ -20,6 +20,7 @@ import type {
   cancelLatticeDelegation as CancelLatticeDelegation,
   LatticeDelegationDependencies,
   prepareLatticeAssignmentRun as PrepareLatticeAssignmentRun,
+  submitPreparedLatticeDelegation as SubmitPreparedLatticeDelegation,
   sweepLatticeDelegations as SweepLatticeDelegations,
 } from '../../src/agent/lattice-delegations';
 import type { startAssignmentRun as StartAssignmentRun } from '../../src/agent/assignments';
@@ -29,6 +30,7 @@ import { getDb, one, seedStatuses } from '../support/routes-harness';
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
 let prepareLatticeAssignmentRun!: typeof PrepareLatticeAssignmentRun;
+let submitPreparedLatticeDelegation!: typeof SubmitPreparedLatticeDelegation;
 let sweepLatticeDelegationsImpl!: typeof SweepLatticeDelegations;
 let cancelLatticeDelegation!: typeof CancelLatticeDelegation;
 let startAssignmentRun!: typeof StartAssignmentRun;
@@ -40,6 +42,7 @@ beforeAll(async () => {
   ({
     cancelLatticeDelegation,
     prepareLatticeAssignmentRun,
+    submitPreparedLatticeDelegation,
     sweepLatticeDelegations: sweepLatticeDelegationsImpl,
   } = await import('../../src/agent/lattice-delegations'));
   ({ startAssignmentRun } = await import('../../src/agent/assignments'));
@@ -348,7 +351,7 @@ describe('durable Lattice assignment delegations', () => {
     const session = one(
       await db.select().from(schema.agentSession).where(eq(schema.agentSession.id, sessionId)),
     );
-    expect(session).toMatchObject({ executionSurface: 'lattice', status: 'pending' });
+    expect(session).toMatchObject({ executionSurface: 'lattice', status: 'running' });
     expect(
       await db
         .select()
@@ -374,6 +377,7 @@ describe('durable Lattice assignment delegations', () => {
     ).toHaveLength(1);
     const submittedAt = new Date(Date.now() + 1_000);
     await sweepLatticeDelegations(submittedAt, deps);
+    expect(deps.submitWork).toHaveBeenCalledTimes(1);
     expect(
       one(
         await db
@@ -395,12 +399,6 @@ describe('durable Lattice assignment delegations', () => {
       status: 'running',
       currentStep: 'Queued until the selected Lattice runtime comes online',
     });
-    expect(
-      await db
-        .select()
-        .from(schema.agentSessionRun)
-        .where(eq(schema.agentSessionRun.sessionId, sessionId)),
-    ).toHaveLength(0);
     await cancelLatticeDelegation(fixture.owner.id, sessionId, submittedAt, deps);
   });
 
@@ -1225,6 +1223,8 @@ describe('durable Lattice assignment delegations', () => {
       pollingEnabled: false,
       submissionsEnabled: true,
     });
+    expect(await submitPreparedLatticeDelegation(sessionId, preparedAt, deps)).toBe('skipped');
+    expect(deps.submitWork).toHaveBeenCalledTimes(1);
 
     const delegation = one(
       await db

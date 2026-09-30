@@ -175,13 +175,13 @@ export const JOBS: readonly CronJob[] = [
     description:
       'Docket: expired composer-draft sweep (deletes saved composer drafts past their expiresAt; reads already leave them out).',
   },
-  // User schedules have a five-minute floor (AthenaTriggerCreate.scheduleMinutes min 5), so a
-  // five-minute sweep keeps a run within one tick of its due time; the row claim and cooldown
-  // make an overlapping tick harmless.
+  // User schedules still have a five-minute floor (AthenaTriggerCreate.scheduleMinutes min 5).
+  // A one-minute sweep collects completed Lattice work promptly and recovers missed immediate
+  // submissions; the row claim and cooldown make overlapping ticks harmless.
   {
     name: 'docket-athena-triggers',
     path: '/internal/cron/athena-triggers',
-    schedule: '*/5 * * * *',
+    schedule: '* * * * *',
     description:
       'Docket: Athena assignment-trigger sweep (runs every due user-owned scheduled trigger).',
   },

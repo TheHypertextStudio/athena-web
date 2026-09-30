@@ -720,7 +720,7 @@ Cloud Run is scale-to-zero, so there is no in-process worker — scheduled work 
 | `expired-sessions-sweep`               | Delete session rows past their `expiresAt` (Better Auth only prunes lazily)                                                                         | hourly                   |
 | `expired-drafts-sweep`                 | Delete saved composer drafts past their `expiresAt` (six months after the last edit; reads already leave them out)                                  | daily at 03:30           |
 | `staff-google-sync`                    | Reconcile operator access against Google Workspace groups; revoke members removed from a mapped group                                               | every 15 min             |
-| `athena-triggers`                      | Run every due user-owned scheduled Athena trigger (five-minute minimum schedule)                                                                    | every 5 min              |
+| `athena-triggers`                      | Run due user-owned triggers, collect Lattice results, and recover missed submissions (user triggers retain their five-minute minimum)               | every 1 min              |
 | `elicitation-deadlines`                | Auto-answer derivable overdue Athena questions, park the rest                                                                                       | every 5 min              |
 | `search-index`                         | Drain durable search-projection jobs from entity writes and backfills                                                                               | every 5 min              |
 | `legacy-mentions`                      | Convert prose still holding the legacy shortcode mention form (self-limiting)                                                                       | hourly at :15            |
@@ -765,8 +765,11 @@ GCP_PROJECT_ID=<PROJECT_ID> GCP_REGION=<REGION> \
 The staging job reads `docket-staging-cron-secret`. Its bytes must be usable unchanged in an
 HTTP header: the setup script rejects a secret with a line break instead of silently trimming
 it. After changing that secret, deploy a new staging Cloud Run revision so its `CRON_SECRET`
-binding reads the new value. This adds one Scheduler invocation every five minutes (up to 288
-per day) and no hosted validation workflow.
+binding reads the new value. The one-minute cadence adds up to 1,440 staging invocations per day
+(five times the former cadence) and no hosted validation workflow. Production has the same
+one-minute Athena job cadence. New personal Lattice assignments submit directly after the durable
+row commits; the job recovers interrupted submissions and collects results without waiting for
+the former five-minute window.
 
 `pnpm bootstrap` enables `cloudscheduler.googleapis.com` and grants the deploy service account
 `roles/cloudscheduler.admin`, so CI may manage the jobs. (Re-run bootstrap on an existing

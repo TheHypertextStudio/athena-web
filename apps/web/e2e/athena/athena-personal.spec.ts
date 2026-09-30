@@ -120,5 +120,6 @@ test('Athena uses the utility rail on normal pages and its full workspace on Cal
     await page.keyboard.press('Meta+J');
     await expect(page).toHaveURL(/\/athena\?workspace=/, { timeout: 2_000 });
   }).toPass({ timeout: 60_000 });
-  await expect(page.getByRole('heading', { name: 'Your Athena work' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Athena conversation' })).toHaveCount(1);
+  await expect(page.getByRole('navigation', { name: 'Athena work' })).toBeVisible();
 });

@@ -8,6 +8,17 @@
 
 ## Active Tasks
 
+### [ATHENA-E2E-STAGING-001] Restore the Athena browser acceptance run
+
+- **Status**: VALIDATING
+- **Started**: 2026-09-29
+- **Priority**: P0
+- **Description**: The staging-mode branch built successfully, but Athena browser tests still assumed the former job-centered workspace and copy.
+- **Approach**: Assert the current conversation and work-ledger landmarks, restore the interactive MCP App from a delegated job, and choose viewport sizes on opposite sides of the work-ledger layout breakpoint. Forward the never-ending event stream directly to the test API instead of buffering its body.
+- **Files changed**: `apps/web/e2e/athena/athena-personal.spec.ts`, `apps/web/e2e/athena/plan-canvas.spec.ts`, `apps/web/e2e/athena/mcp-apps-stable.spec.ts`, and this worklog.
+- **Validation**: Run 36642749690 exposed the original failures. All five tests in the three affected Athena specs passed locally with one browser worker. The full CI run remains pending.
+- **Learning**: A successful stream response never closes, so a proxy based on `route.fetch` can block the page even after the API has returned HTTP 200. Delegated work is now rendered in its ledger, while sending through the main composer creates a separate conversation turn.
+
 ### [ATHENA-LATTICE-OFFLINE-001] Explain an unavailable personal runtime in the conversation
 
 - **Status**: VALIDATING

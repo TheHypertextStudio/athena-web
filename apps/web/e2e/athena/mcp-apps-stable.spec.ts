@@ -101,6 +101,8 @@ const LIVE_APP_HTML = `<!doctype html>
     }).then((answer) => {
       document.body.dataset.theme = answer.result?.hostContext?.theme || 'unknown';
       document.body.dataset.mode = answer.result?.hostContext?.displayMode || 'inline';
+      const dimensions = answer.result?.hostContext?.containerDimensions;
+      document.body.dataset.width = String(dimensions?.maxWidth || dimensions?.width || '');
       send({ jsonrpc: '2.0', method: 'ui/notifications/initialized', params: {} });
       send({ jsonrpc: '2.0', method: 'ui/notifications/size-changed', params: { width: 420, height: 180 } });
     });
@@ -191,7 +193,8 @@ function sessionDetail(orgId: string, withPresentation: boolean) {
 async function installAthenaMcpFixture(page: Page, orgId: string) {
   let modelInvocationCount = 0;
   let originalToolRouteCount = 0;
-  let persisted = false;
+  // Delegated work is restored from the work ledger; sending a chat message no longer steers it.
+  let persisted = true;
   const viewCalls: unknown[] = [];
   const appMessages: unknown[] = [];
   const contextUpdates: unknown[] = [];
@@ -303,6 +306,12 @@ async function installDirectAuthProxy(page: Page): Promise<void> {
   await page.route('**/v1/**', async (route) => {
     const source = new URL(route.request().url());
     const target = new URL(`${source.pathname}${source.search}`, apiOrigin);
+    // An event stream never finishes its response body, so route.fetch would hold the request
+    // until Playwright times out instead of letting the page consume the stream as it arrives.
+    if (source.pathname.endsWith('/stream')) {
+      await route.continue({ url: target.href });
+      return;
+    }
     const response = await route.fetch({ url: target.href });
     await route.fulfill({ response });
   });
@@ -364,29 +373,21 @@ async function authenticateAndOnboard(page: Page): Promise<string> {
   return orgId;
 }
 
-test('canonical Athena invocation creates and restores a fully interactive stable MCP App', async ({
-  page,
-}) => {
+test('Athena work restores a fully interactive stable MCP App', async ({ page }) => {
   await installDirectAuthProxy(page);
   const orgId = await authenticateAndOnboard(page);
   const fixture = await installAthenaMcpFixture(page, orgId);
+  await page.setViewportSize({ width: 1600, height: 900 });
   await page.goto(`/athena?session=${SESSION_ID}`);
 
-  await expect(page.getByTestId('mcp-app-view')).toHaveCount(0);
-  const composer = page.getByRole('combobox', { name: 'Steer this work' });
-  await composer.fill('Show me the interactive weather card.');
-  await page
-    .getByRole('form', { name: 'Steer Athena' })
-    .getByRole('button', { name: 'Send' })
-    .click();
-
-  await expect(page.getByText('Weather Service · Show Las Vegas weather')).toBeVisible();
-  await expect(page.getByText('72 degrees', { exact: true })).toBeVisible();
+  const composer = page.getByRole('combobox', { name: 'Message Athena' });
+  await expect(page.getByText('Show Las Vegas weather', { exact: true })).toBeVisible();
+  await expect(page.getByText('Weather Service · 72 degrees', { exact: true })).toBeVisible();
   await expect(appFrame(page).locator('#result')).toHaveText('72 degrees');
   const proxyFrame = page.locator('iframe[title="Weather Service: weather_card"]').contentFrame();
   await expect(proxyFrame.locator('iframe')).toHaveAttribute('sandbox', 'allow-scripts');
   await expect(proxyFrame.locator('iframe')).toHaveAttribute('allow', "clipboard-write 'src'");
-  expect(fixture.modelInvocationCount()).toBe(1);
+  expect(fixture.modelInvocationCount()).toBe(0);
   expect(fixture.originalToolRouteCount()).toBe(0);
 
   // A surrounding composer rerender must not teardown/reinitialize the already-live bridge.
@@ -441,7 +442,7 @@ test('canonical Athena invocation creates and restores a fully interactive stabl
   await expect
     .poll(() => appFrame(page).locator('body').getAttribute('data-width'))
     .not.toBe(wideWidth);
-  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.setViewportSize({ width: 1600, height: 900 });
 
   await page.evaluate(() => {
     document.documentElement.dataset['theme'] = 'dark';
@@ -461,7 +462,7 @@ test('canonical Athena invocation creates and restores a fully interactive stabl
   await page.getByRole('button', { name: 'Close' }).click();
 
   // The failed app retains the safe text and reaches owned fallback rather than a blank card.
-  await expect(page.getByText('Fallback survived', { exact: true })).toBeVisible();
+  await expect(page.getByText('Broken Service · Fallback survived', { exact: true })).toBeVisible();
   const failedFrame = page.locator('iframe[title="Broken Service: broken_card"]');
   await expect(failedFrame).toBeVisible();
   await failedFrame.evaluate((frame) => frame.dispatchEvent(new Event('error')));
@@ -471,7 +472,7 @@ test('canonical Athena invocation creates and restores a fully interactive stabl
 
   await page.reload();
   await expect(appFrame(page).locator('#result')).toHaveText('72 degrees');
-  expect(fixture.modelInvocationCount()).toBe(1);
+  expect(fixture.modelInvocationCount()).toBe(0);
   expect(fixture.originalToolRouteCount()).toBe(0);
 
   await appFrame(page).getByRole('button', { name: 'Close interactive view' }).click();

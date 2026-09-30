@@ -183,8 +183,11 @@ test.describe('Planning canvas', () => {
     await expect(root).toHaveAttribute('data-plan-status', 'confirmed');
     // The conversation is the shell's rail, a peer of the whole board, seeded with the opening line.
     const rail = page.getByRole('complementary', { name: 'Athena' });
-    await expect(rail.getByLabel('Message Athena')).toHaveValue(/Help me plan/, {
-      timeout: TIMEOUTS.ui,
-    });
+    await expect(rail.getByRole('combobox', { name: 'Message Athena' })).toHaveValue(
+      /Help me plan/,
+      {
+        timeout: TIMEOUTS.ui,
+      },
+    );
   });
 });

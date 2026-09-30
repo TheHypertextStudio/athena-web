@@ -24,6 +24,8 @@ import {
   CRON_ROUTES_FILE,
   JOBS,
   parseCronRoutes,
+  selectSchedulerJobs,
+  validateCronSecret,
 } from '../../scripts/scheduler-setup';
 
 const REPO_ROOT = fileURLToPath(new URL('../..', import.meta.url));
@@ -123,5 +125,23 @@ describe('scheduler-setup — the twenty-five jobs', () => {
 
   it('keeps every job id unique, since a duplicate would silently clobber its sibling', () => {
     expect(new Set(JOBS.map((job) => job.name)).size).toBe(JOBS.length);
+  });
+});
+
+describe('scheduler-setup — staging Athena', () => {
+  it('selects only a distinct Athena job for staging', () => {
+    expect(selectSchedulerJobs(true)).toEqual([
+      {
+        ...JOBS.find((job) => job.name === 'docket-athena-triggers'),
+        name: 'docket-staging-athena-triggers',
+      },
+    ]);
+    expect(selectSchedulerJobs(false)).toBe(JOBS);
+  });
+
+  it('rejects secret bytes that cannot match an HTTP header', () => {
+    expect(() => validateCronSecret('good-secret\n')).toThrow(/line break/);
+    expect(() => validateCronSecret('good\rsecret')).toThrow(/line break/);
+    expect(validateCronSecret('good-secret')).toBe('good-secret');
   });
 });

@@ -11987,6 +11987,17 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
 
 ## Completed Tasks
 
+### [ATHENA-STAGING-SCHEDULER-001] Run durable Athena work on the staging cadence
+
+- **Completed**: 2026-09-29
+- **Priority**: P0
+- **Summary**: Normalized the staging cron secret by removing its single trailing newline in new Secret Manager version 2, deployed staging Cloud Run revision `docket-api-staging-00007-78v` with that version, and installed the isolated `docket-staging-athena-triggers` job at a five-minute cadence. The existing production jobs and their secret were untouched.
+- **Approach**: Added `--staging-athena` to the config-as-code scheduler script. It selects only the Athena trigger, requires a staging Cloud Run URL, reads the distinct staging secret without trimming, and rejects line breaks before creating a header. The job adds up to 288 staging invocations per day and no hosted validation workflow.
+- **Files changed**: `scripts/scheduler-setup.ts`, `repo-tests/tooling/scheduler-setup.test.ts`, `docs/engineering/deployment.md`, and this worklog.
+- **Validation**: The new selection and secret tests failed before implementation and passed afterward. All 360 tooling tests, root TypeScript check, focused ESLint, complexity check, docs check, Prettier, and diff whitespace passed. The 06:05 Scheduler tick returned HTTP 200. A new staging assignment `01M3RESN2JBEG6869YXWWSZR37` was submitted by the 06:10 scheduled tick under work ID `work_01M3RESNA78DAVDT7THMJY61CF`; the 06:15 tick returned HTTP 200 and produced exactly one proposed comment containing `STAGING-SCHEDULER-56B4FF48`. No manual sweep was used. The prior staging work `work_01M3RAGV53DR0BBBBQ1BZKCBBZ` still has one proposed action awaiting review.
+- **Learning**: Secret Manager's `latest` reference does not repair an already running Cloud Run revision. Pinning the new version created a revision whose exact environment value matches the Scheduler header. A successful HTTP response alone was insufficient evidence; the prepared → submitted → proposed delegation states established the unattended result.
+- **Retrospective**: The staging-only selector kept the operational fix narrow. The first natural tick proved authentication, and the next two proved the durable path without touching production schedules or approving either proposal.
+
 ### [ATHENA-LATTICE-RELEASE-001] Finish the production round trip and release
 
 - **Completed**: 2026-09-29

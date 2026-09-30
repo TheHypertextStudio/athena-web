@@ -728,7 +728,7 @@ Cloud Run is scale-to-zero, so there is no in-process worker — scheduled work 
 | `directive-posture`                    | Recompute each configured Hub's daily posture and notify subscribed clients only on change                                                          | every 5 min              |
 | `day-cadence`                          | Materialize each configured Hub's check-ins, re-cut a drifted day's remainder, fire every check-in that has come due                                | every 5 min              |
 
-All nineteen jobs are provisioned **as code** by `scripts/scheduler-setup.ts`, the single source of
+All production jobs are provisioned **as code** by `scripts/scheduler-setup.ts`, the single source of
 truth. It runs automatically after every API deploy (the `Ensure Cloud Scheduler jobs` step in
 the `deploy-api` job) and can be run by hand. The script is idempotent — it `describe`s each job
 and `update`s or `create`s it — and reads the secret from `docket-cron-secret` (never logged).
@@ -751,6 +751,22 @@ Production resolves `SCHEDULER_API_URL` from the deployed `docket-api` Cloud Run
 public `API_URL` remains the browser-facing origin. Cloud Scheduler targets Cloud Run directly so a
 long connector pass can use the configured 600-second deadline instead of the public proxy's
 shorter request timeout.
+
+Staging runs only `docket-staging-athena-triggers` from the same definitions. This keeps
+unrelated staging cron routes idle while allowing durable Athena assignments to submit and
+settle. Provision or update that one job with:
+
+```bash
+GCP_PROJECT_ID=<PROJECT_ID> GCP_REGION=<REGION> \
+  STAGING_SCHEDULER_API_URL="https://<docket-api-staging-service>.run.app" \
+  pnpm exec tsx scripts/scheduler-setup.ts --staging-athena
+```
+
+The staging job reads `docket-staging-cron-secret`. Its bytes must be usable unchanged in an
+HTTP header: the setup script rejects a secret with a line break instead of silently trimming
+it. After changing that secret, deploy a new staging Cloud Run revision so its `CRON_SECRET`
+binding reads the new value. This adds one Scheduler invocation every five minutes (up to 288
+per day) and no hosted validation workflow.
 
 `pnpm bootstrap` enables `cloudscheduler.googleapis.com` and grants the deploy service account
 `roles/cloudscheduler.admin`, so CI may manage the jobs. (Re-run bootstrap on an existing

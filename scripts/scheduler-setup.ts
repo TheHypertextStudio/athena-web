@@ -26,8 +26,10 @@
  * `SCHEDULER_API_URL`, and `API_URL`. The scheduler target defaults to `API_URL` for local and
  * preview environments, while production supplies Cloud Run's service URL so background work does
  * not inherit the public proxy's request timeout.
- * Pass `--dry-run` (or set `DRY_RUN=1`) to print the exact `gcloud` commands — with the secret
- * redacted — without calling GCP. Requires an authenticated `gcloud` for a real run.
+ * Pass `--staging-athena` with `STAGING_SCHEDULER_API_URL` to provision only the staging Athena
+ * trigger job using its separate staging secret. Pass `--dry-run` (or set `DRY_RUN=1`) to print
+ * the exact `gcloud` commands — with the secret redacted — without calling GCP. Requires an
+ * authenticated `gcloud` for a real run.
  */
 
 import { execSync } from 'node:child_process';
@@ -38,6 +40,7 @@ import { fileURLToPath } from 'node:url';
 
 /** The Secret Manager secret holding the shared `CRON_SECRET` (created by `pnpm bootstrap`). */
 const SECRET_NAME = 'docket-cron-secret';
+const STAGING_SECRET_NAME = 'docket-staging-cron-secret';
 const SECRET_REDACTED = '***REDACTED***';
 
 /** A scheduled HTTP cron job: an endpoint to hit and how often. */
@@ -242,6 +245,21 @@ export const JOBS: readonly CronJob[] = [
       "Docket: day-cadence sweep (materializes each configured Hub's check-ins, re-cuts a drifted day's remainder, and fires every check-in that has come due).",
   },
 ];
+
+/** Select the full production schedule or staging's isolated Athena sweep. */
+export function selectSchedulerJobs(stagingAthena: boolean): readonly CronJob[] {
+  if (!stagingAthena) return JOBS;
+  const athena = JOBS.find((job) => job.name === 'docket-athena-triggers');
+  if (!athena) throw new Error('Athena trigger job is missing from the production schedule');
+  return [{ ...athena, name: 'docket-staging-athena-triggers' }];
+}
+
+/** Require exact, header-safe secret bytes; trimming would hide a broken Cloud Run binding. */
+export function validateCronSecret(secret: string): string {
+  if (secret.length === 0) throw new Error('Cron secret is empty');
+  if (/[\r\n]/.test(secret)) throw new Error('Cron secret contains a line break');
+  return secret;
+}
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -467,47 +485,68 @@ function warnOnRouteDrift(): void {
  * rather than `??` because a `SCHEDULER_API_URL` set to blank or whitespace must fall back too,
  * and `??` would accept the empty string as a configured value.
  */
-function resolveApiUrl(): string {
-  const configured = process.env['SCHEDULER_API_URL']?.trim() ?? '';
+function resolveApiUrl(stagingAthena: boolean): string {
+  const configured =
+    process.env[stagingAthena ? 'STAGING_SCHEDULER_API_URL' : 'SCHEDULER_API_URL']?.trim() ?? '';
+  if (stagingAthena && !configured) {
+    throw new Error('STAGING_SCHEDULER_API_URL is required for --staging-athena');
+  }
   const origin = configured === '' ? requireEnv('API_URL') : configured;
+  if (
+    stagingAthena &&
+    !/^docket-api-staging-[a-z0-9-]+(?:\.[a-z0-9-]+)*\.run\.app$/.test(new URL(origin).hostname)
+  ) {
+    throw new Error('STAGING_SCHEDULER_API_URL must target the staging Cloud Run service');
+  }
   return origin.replace(/\/+$/, '');
 }
 
 function main(): void {
   const dryRun = process.argv.includes('--dry-run') || process.env['DRY_RUN'] === '1';
+  const stagingAthena = process.argv.includes('--staging-athena');
+  const jobs = selectSchedulerJobs(stagingAthena);
+  const secretName = stagingAthena ? STAGING_SECRET_NAME : SECRET_NAME;
 
   const ctx: Ctx = {
     project: requireEnv('GCP_PROJECT_ID'),
     region: requireEnv('GCP_REGION'),
-    apiUrl: resolveApiUrl(),
+    apiUrl: resolveApiUrl(stagingAthena),
     dryRun,
   };
 
-  section(`Cloud Scheduler — ${ctx.project} / ${ctx.region}${dryRun ? '  (dry run)' : ''}`);
+  section(
+    `Cloud Scheduler — ${ctx.project} / ${ctx.region}${stagingAthena ? ' / staging Athena' : ''}${dryRun ? '  (dry run)' : ''}`,
+  );
   console.log(`  API host: ${ctx.apiUrl}`);
 
   warnOnRouteDrift();
 
   let secret = SECRET_REDACTED;
   if (!dryRun) {
-    const secretRes = gcloud(
-      `gcloud secrets versions access latest --secret=${SECRET_NAME} --project=${shq(ctx.project)}`,
-    );
-    if (!secretRes.ok) failOrSkip(`read secret ${SECRET_NAME}`, secretRes.err);
-    secret = secretRes.out;
-    if (!secret) {
-      console.error(`  ✗  secret ${SECRET_NAME} is empty — run pnpm bootstrap first.`);
+    let rawSecret: string;
+    try {
+      rawSecret = execSync(
+        `gcloud secrets versions access latest --secret=${shq(secretName)} --project=${shq(ctx.project)}`,
+        { encoding: 'utf8', stdio: 'pipe' },
+      );
+    } catch (error) {
+      failOrSkip(`read secret ${secretName}`, gcloudError(error));
+    }
+    try {
+      secret = validateCronSecret(rawSecret);
+    } catch (error) {
+      console.error(`  ✗  Could not read a header-safe ${secretName}: ${gcloudError(error)}`);
       process.exit(1);
     }
   }
 
-  for (const job of JOBS) {
+  for (const job of jobs) {
     const res = ensureJob(job, ctx, secret);
     if (!res.ok) failOrSkip(`provision ${job.name}`, res.err);
   }
 
   section('Done');
-  ok(`${JOBS.length} scheduler job(s) ${dryRun ? 'planned' : 'provisioned'}`);
+  ok(`${jobs.length} scheduler job(s) ${dryRun ? 'planned' : 'provisioned'}`);
   if (dryRun) console.log('  (dry run — no GCP calls were made)');
 }
 

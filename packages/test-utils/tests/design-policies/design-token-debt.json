@@ -223,12 +223,6 @@
   "apps/web/src/components/editor/table-controls.tsx": {
     "ad-hoc-border": 2
   },
-  "apps/web/src/components/entity-detail/latest-update-summary.tsx": {
-    "ad-hoc-border": 2
-  },
-  "apps/web/src/components/entity-detail/updates-panel.tsx": {
-    "ad-hoc-border": 5
-  },
   "apps/web/src/components/entity-display/entity-icon-picker-loaded.tsx": {
     "ad-hoc-border": 2,
     "hardcoded-color": 1
@@ -332,9 +326,6 @@
   "apps/web/src/components/programs/flow-snapshot.tsx": {
     "ad-hoc-border": 4,
     "raw-type-utility": 4
-  },
-  "apps/web/src/components/project-detail/agent-activity-feed.tsx": {
-    "ad-hoc-border": 2
   },
   "apps/web/src/components/project-detail/agents-strip.tsx": {
     "ad-hoc-border": 4

@@ -3,7 +3,7 @@
 /** A read-only agent activity trail, deliberately without social replies. */
 import type { SessionActivityType } from '@docket/athena/agent-contract';
 import { ActorAvatar } from '@docket/ui/components';
-import { Sparkles } from '@docket/ui/icons';
+import { Activity } from '@docket/ui/icons';
 import { DecorativeIcon } from '@docket/ui/primitives';
 import type { JSX } from 'react';
 
@@ -36,7 +36,10 @@ export function AgentActivityFeed({
   return (
     <section aria-labelledby="agent-activity-heading" className="flex flex-col gap-3">
       <div className="flex items-center gap-2">
-        <DecorativeIcon icon={Sparkles} className="bg-primary/12 text-primary" />
+        <DecorativeIcon
+          icon={Activity}
+          className="bg-primary-container text-on-primary-container"
+        />
         <h2 id="agent-activity-heading" className="text-on-surface text-title-small">
           Agent activity
         </h2>
@@ -45,7 +48,7 @@ export function AgentActivityFeed({
         {activities.map((entry) => (
           <li
             key={entry.id}
-            className="border-outline-variant bg-surface-container-low flex items-start gap-3 rounded-lg border px-3 py-2"
+            className="bg-surface-container-low flex items-start gap-3 rounded-lg px-3 py-2"
           >
             <ActorAvatar kind="agent" name={entry.agentName} size={24} />
             <div className="flex min-w-0 flex-1 flex-col">

@@ -7,7 +7,7 @@
  * on a workspace page. Detached: an assist chip that reattaches the page. No context, nothing
  * rendered.
  */
-import { Sparkles } from '@docket/ui/icons';
+import { Paperclip } from '@docket/ui/icons';
 import { Chip } from '@docket/ui/primitives';
 import type { JSX } from 'react';
 
@@ -52,7 +52,7 @@ export function AthenaContextChip({
     return (
       <Chip
         variant="assist"
-        icon={<Sparkles aria-hidden="true" />}
+        icon={<Paperclip aria-hidden="true" />}
         onClick={onAttach}
         className="max-w-full min-w-0 shrink"
       >
@@ -68,7 +68,7 @@ export function AthenaContextChip({
     >
       <Chip
         variant="input"
-        icon={<Sparkles aria-hidden="true" />}
+        icon={<Paperclip aria-hidden="true" />}
         onRemove={onDetach}
         removeLabel={`Remove ${label}`}
         className="max-w-full min-w-0 shrink"

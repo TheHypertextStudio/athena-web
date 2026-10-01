@@ -10,7 +10,7 @@
  * survives arrival; the route only reveals when nothing has been seeded.
  */
 import { useVocabulary } from '@docket/ui/hooks';
-import { Sparkles } from '@docket/ui/icons';
+import { MessageSquare } from '@docket/ui/icons';
 import { Button } from '@docket/ui/primitives';
 import { type JSX, useSyncExternalStore } from 'react';
 
@@ -65,7 +65,7 @@ export function PlanWithAthenaAction({
           .catch(() => undefined);
       }}
     >
-      <Sparkles className="size-4" />
+      <MessageSquare className="size-4" />
       Plan with Athena
     </Button>
   );

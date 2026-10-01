@@ -14,7 +14,7 @@
  * never the one that moves.
  */
 import type { AgentSessionDetailOut } from '@docket/athena/agent-contract';
-import { ChevronDown, Sparkles } from '@docket/ui/icons';
+import { ChevronDown } from '@docket/ui/icons';
 import { InlineBanner } from '@docket/ui/components';
 import { Button, Skeleton } from '@docket/ui/primitives';
 import { cn } from '@docket/ui/lib/utils';
@@ -414,7 +414,7 @@ function AthenaWorking(): JSX.Element {
         className="text-on-surface-variant flex size-6 shrink-0 items-center justify-center"
         aria-hidden="true"
       >
-        <Sparkles className="size-4 animate-pulse motion-reduce:animate-none" />
+        <span className="bg-primary size-1.5 animate-pulse rounded-full motion-reduce:animate-none" />
       </span>
     </div>
   );

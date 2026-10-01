@@ -13,7 +13,7 @@ import {
   RefreshCw,
   Search,
   Settings,
-  Sparkles,
+  MessageSquare,
   Target,
   Timer,
   User,
@@ -149,7 +149,7 @@ const DEFINITIONS: readonly NavigationDefinition[] = [
     group: 'home',
     moreGroup: null,
     rail: true,
-    icon: Sparkles,
+    icon: MessageSquare,
     label: label('Athena'),
   },
   {

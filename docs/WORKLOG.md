@@ -11987,6 +11987,16 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
 
 ## Completed Tasks
 
+### [ATHENA-VISUAL-MARKERS-001] Remove generic sparkle marks from Athena and agent surfaces
+
+- **Completed**: 2026-09-30
+- **Priority**: P1
+- **Summary**: Athena navigation, chat, voice, planning, and agent status surfaces no longer use a generic sparkle mark. Agent avatars now rely on shape and semantic fill. The project update card, composer, and agent activity surfaces use tone instead of a one-pixel outline.
+- **Approach**: Match glyphs to the visible action or state: conversation for Athena navigation, paperclip for attached context, workflow for agent sessions, schedule for queued work, shield for approvals, and phone for calls. Keep the icon catalog because unrelated product surfaces and user-selectable symbols still use it. Record the no-sparkle rule in the design-system guidance.
+- **Files changed**: Shared actor avatar and navigation components, Athena and agent web components, update presentation, affected UI tests, the reduced design-token debt ledger, design-system guidance, and this log.
+- **Validation**: The actor-avatar regression failed before implementation. Focused UI tests passed 33/33 and web tests passed 59/59. Web and UI typechecks and lint passed, as did the production web build. The design-token policy passed 9/9 after its stale entries were removed. The complexity ledger, documentation checks, Prettier, and diff whitespace passed. Desktop and phone captures of the project and Athena in both themes showed no sparkles or update-card outlines. The 320px overflow check passed, and the throwaway database was reset.
+- **Retrospective**: A single sparkle glyph had been reused for different concepts, including queued work, proposed approval, phone calls, and attached context. State-specific marks now carry more information without treating every agent action as magic.
+
 ### [CONTENT-ATTRIBUTION-001] Attribute agent-authored content to its performer
 
 - **Completed**: 2026-09-30

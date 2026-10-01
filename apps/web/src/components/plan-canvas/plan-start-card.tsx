@@ -9,7 +9,7 @@
  * links to the canvas route and the shell keeps the rail beside it. A reload finds the card where
  * it was, and a plan opened days ago can be reopened from the same place.
  */
-import { ArrowRight, Sparkles } from '@docket/ui/icons';
+import { ArrowRight, LayoutGrid } from '@docket/ui/icons';
 import { cn } from '@docket/ui/lib/utils';
 import { Surface, surfaceToneColor } from '@docket/ui/primitives';
 import type { JSX } from 'react';
@@ -90,7 +90,7 @@ export default function PlanStartCard({ plan, className }: PlanStartCardProps): 
             'text-primary flex size-9 shrink-0 items-center justify-center rounded-lg',
           )}
         >
-          <Sparkles aria-hidden="true" className="size-5" />
+          <LayoutGrid aria-hidden="true" className="size-5" />
         </span>
         <span className="flex min-w-0 flex-1 flex-col">
           <span className="text-on-surface-variant text-label-small">Plan on the canvas</span>

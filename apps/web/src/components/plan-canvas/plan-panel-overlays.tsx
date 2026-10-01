@@ -9,7 +9,7 @@
  * a notice winning when both are due, so no transient surface ever collides with the bar.
  */
 import { EmptyState } from '@docket/ui/components';
-import { Plus, Sparkles, Undo } from '@docket/ui/icons';
+import { CircleDot, FolderKanban, LayoutGrid, Plus, Undo } from '@docket/ui/icons';
 import { Button, Surface } from '@docket/ui/primitives';
 import type { JSX } from 'react';
 
@@ -32,7 +32,7 @@ function PlanStartHint({
       className="text-on-surface-variant text-body-small pointer-events-auto flex max-w-[calc(100vw-1rem)] items-center gap-3 px-3 py-2"
       data-testid="plan-start-hint"
     >
-      <Sparkles aria-hidden="true" className="text-primary size-4 shrink-0" />
+      <FolderKanban aria-hidden="true" className="text-primary size-4 shrink-0" />
       <span className="min-w-0">No projects yet</span>
       {onAddProject ? (
         <Button type="button" size="sm" variant="secondary" onClick={onAddProject}>
@@ -68,7 +68,7 @@ export function PlanStartOverlay({
   return (
     <CanvasOverlayPanel position="top-center" className="!top-1/2 !-translate-y-1/2">
       <EmptyState
-        icon={Sparkles}
+        icon={LayoutGrid}
         title="Nothing on the canvas yet"
         {...(onAddProject
           ? {
@@ -94,7 +94,7 @@ function PlanUpdatePill({ text }: { readonly text: string }): JSX.Element {
       className="text-primary text-label-medium pointer-events-auto flex items-center gap-1.5 px-2.5 py-1"
       data-testid="plan-update-pill"
     >
-      <Sparkles aria-hidden="true" className="size-3.5" />
+      <CircleDot aria-hidden="true" className="size-3.5" />
       {text}
     </Surface>
   );

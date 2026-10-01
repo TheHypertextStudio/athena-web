@@ -19,7 +19,7 @@
  */
 import type { CalendarItemOut, CalendarLayerOut } from '@docket/planning/calendar-contract';
 import type { WorkPlaceOut } from '@docket/planning/work-location-contract';
-import { Ellipsis, Home, Sparkles, Trash2 } from '@docket/ui/icons';
+import { Ellipsis, Home, MessageSquare, Trash2 } from '@docket/ui/icons';
 import {
   Button,
   DialogBody,
@@ -220,7 +220,7 @@ function AthenaAction({ item }: { readonly item: CalendarItemOut }): JSX.Element
         });
       }}
     >
-      <Sparkles aria-hidden="true" />
+      <MessageSquare aria-hidden="true" />
       Ask Athena
     </Button>
   );

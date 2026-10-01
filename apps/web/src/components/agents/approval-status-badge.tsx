@@ -13,7 +13,7 @@
  * density, expressed via the {@link ApprovalStatusBadgeProps.size | size} prop.
  */
 import type { SessionActivityOut } from '@docket/athena/agent-contract';
-import { CheckCircle2, Sparkles, XCircle } from '@docket/ui/icons';
+import { CheckCircle2, CircleDot, XCircle } from '@docket/ui/icons';
 import { cn } from '@docket/ui/lib/utils';
 import { Badge } from '@docket/ui/primitives';
 import type { JSX } from 'react';
@@ -38,7 +38,7 @@ const APPROVAL_TREATMENT: Record<
 > = {
   proposed: {
     label: 'Proposed',
-    Glyph: Sparkles,
+    Glyph: CircleDot,
     tone: 'border-primary/40 text-primary',
   },
   approved: {

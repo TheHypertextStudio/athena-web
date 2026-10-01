@@ -64,8 +64,8 @@ import {
   ChevronDown,
   Edit,
   Link as LinkIcon,
+  Play,
   RefreshCw,
-  Sparkles,
   TaskAlt,
   XCircle,
 } from '@docket/ui/icons';
@@ -121,7 +121,7 @@ import { resolveSessionStatus } from '@/lib/session-status';
 const SCOPE_ICON: Readonly<Record<string, ComponentType<{ className?: string }>>> = {
   'work:read': TaskAlt,
   'work:write': Edit,
-  'agents:run': Sparkles,
+  'agents:run': Play,
   'connectors:link': Cable,
   offline_access: RefreshCw,
 };

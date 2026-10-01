@@ -140,7 +140,7 @@ export function UpdatesPanel({
           event.preventDefault();
           void submit();
         }}
-        className="border-outline-variant bg-surface-container-low flex flex-col gap-3 rounded-xl border p-4"
+        className="bg-surface-container-low flex flex-col gap-3 rounded-xl p-4"
       >
         <p className="text-on-surface text-label-large">Post an update</p>
         <FreeformTextEditor
@@ -153,7 +153,7 @@ export function UpdatesPanel({
           {...(activeOrgId === null ? {} : { mentionOrgId: activeOrgId })}
           ariaLabel="Post an update"
           placeholder="Share how this line of work is flowing — wins, risks, or what changed…"
-          className="bg-surface-container-high hover:bg-surface-container-highest min-h-20 rounded-lg border border-transparent p-3 transition-colors"
+          className="bg-surface-container-high hover:bg-surface-container-highest min-h-20 rounded-lg p-3 transition-colors"
           disabled={posting}
           onSubmit={() => {
             void submit();

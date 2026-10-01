@@ -31,7 +31,15 @@ import type {
   VoiceTurnOut,
 } from '@docket/athena/voice';
 import { InlineBanner } from '@docket/ui/components';
-import { Mic, MicOff, PhoneOff, Sparkles, SoundWave } from '@docket/ui/icons';
+import {
+  CheckCircle2,
+  CircleDot,
+  Mic,
+  MicOff,
+  PhoneOff,
+  SoundWave,
+  XCircle,
+} from '@docket/ui/icons';
 import { cn } from '@docket/ui/lib/utils';
 import {
   Button,
@@ -342,7 +350,7 @@ function VoiceStatus({
         {state === 'speaking' ? (
           <SoundWave className="size-5" />
         ) : state === 'thinking' ? (
-          <Sparkles className="size-5" />
+          <CircleDot className="size-5" />
         ) : listening ? (
           <Mic className="size-5" />
         ) : (
@@ -422,9 +430,11 @@ function VoiceTurn({ turn }: { readonly turn: VoiceTurnOut }): JSX.Element {
 
 /** One action, rendered from the moment it starts. */
 function VoiceAction({ action }: { readonly action: VoiceActionOut }): JSX.Element {
+  const Icon =
+    action.status === 'running' ? CircleDot : action.status === 'done' ? CheckCircle2 : XCircle;
   return (
     <div className="flex items-center gap-2" data-voice-action={action.status}>
-      <Sparkles
+      <Icon
         aria-hidden="true"
         className={
           action.status === 'running' ? 'text-primary size-4' : 'text-on-surface-variant size-4'

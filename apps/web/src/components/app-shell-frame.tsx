@@ -20,7 +20,7 @@ import {
   type EntityDisplaySubjectType,
 } from '@docket/work/entity-display-contract';
 import { VocabularyProvider } from '@docket/ui/hooks';
-import { GanttChart, RefreshCw, Search, Sparkles, TaskAlt } from '@docket/ui/icons';
+import { GanttChart, MessageSquare, RefreshCw, Search, TaskAlt } from '@docket/ui/icons';
 import { Stack } from '@docket/ui/primitives';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAppRouter as useRouter } from '@/lib/interactions/navigation';
@@ -932,7 +932,7 @@ function AthenaShellChrome({
   const athenaRail: RailPanel = {
     id: 'athena',
     label: 'Athena',
-    icon: <Sparkles aria-hidden="true" />,
+    icon: <MessageSquare aria-hidden="true" />,
     node: identityUnknown ? <AppShellAgendaSkeleton /> : <AthenaRailPanel />,
     ...(identityUnknown || !athena.railStatus ? {} : { status: athena.railStatus }),
   };

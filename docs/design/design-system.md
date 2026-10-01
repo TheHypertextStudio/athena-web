@@ -19,6 +19,7 @@ The short version:
   Nothing else is pill-shaped.
 - **Fields** are one recipe with three variants, and none of them has a shadow.
 - **Shadows** exist only on overlays. **Borders** are the exception, not the separator of choice.
+- **Athena and agents** use icons for the action or state at hand. Athena navigation uses a conversation glyph. Agent avatars use shape and fill. Do not use sparkles as a generic AI label or thin outlines to give resting update and agent surfaces identity.
 - **Nothing changes size** when you hover, focus, press, or select it.
 
 Resting regions use the closed `Surface` role map. See

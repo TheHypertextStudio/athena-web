@@ -12,7 +12,7 @@
  * is interactive beyond navigating onward — the actionable queue lives on the Inbox tab.
  */
 import type { AuditEventOut } from '@docket/connections/activity-contract';
-import { CheckCircle2, type LucideIcon, Sparkles, XCircle } from '@docket/ui/icons';
+import { Activity, CheckCircle2, type LucideIcon, XCircle } from '@docket/ui/icons';
 import { cn } from '@docket/ui/lib/utils';
 import Link from '@/components/docket-link';
 import { type JSX, type ReactNode } from 'react';
@@ -31,7 +31,7 @@ function glyphFor(type: AuditEventOut['type']): { icon: LucideIcon; tone: string
     case 'deleted':
       return { icon: XCircle, tone: 'text-on-surface-variant' };
     default:
-      return { icon: Sparkles, tone: 'text-on-surface-variant' };
+      return { icon: Activity, tone: 'text-on-surface-variant' };
   }
 }
 

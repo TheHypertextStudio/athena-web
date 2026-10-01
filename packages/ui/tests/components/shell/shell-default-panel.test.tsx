@@ -4,7 +4,7 @@ import { cleanup, render, screen } from '@testing-library/react';
 import * as React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { Calendar, Sparkles } from '../../../src/icons';
+import { Calendar, MessageSquare } from '../../../src/icons';
 import { AppShell } from '../../../src/components/shell/AppShell';
 import { ContextProvider } from '../../../src/components/shell/ContextProvider';
 import { Sidebar } from '../../../src/components/shell/Sidebar';
@@ -39,7 +39,7 @@ function railAside(athenaTone: 'attention' | null): {
   const athena: RailPanel = {
     id: 'athena',
     label: 'Athena',
-    icon: <Sparkles />,
+    icon: <MessageSquare />,
     node: <div>Athena conversation</div>,
     ...(athenaTone ? { status: { tone: athenaTone, label: 'Waiting on you' } } : {}),
   };

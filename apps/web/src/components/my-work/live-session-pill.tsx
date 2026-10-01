@@ -1,7 +1,7 @@
 'use client';
 
 import type { SessionStatus } from '@docket/athena/agent-contract';
-import { CircleDot, RefreshCw, Sparkles, XCircle } from '@docket/ui/icons';
+import { CircleDot, RefreshCw, Schedule, XCircle } from '@docket/ui/icons';
 import { cn } from '@docket/ui/lib/utils';
 import Link from '@/components/docket-link';
 import type { JSX } from 'react';
@@ -66,7 +66,7 @@ const PILL_TREATMENT: Record<PillStatus, PillTreatment> = {
   pending: {
     label: 'Queued',
     hint: 'Run queued',
-    Glyph: Sparkles,
+    Glyph: Schedule,
     tone: 'border-outline-variant bg-surface-container text-on-surface-variant',
     pulse: false,
   },

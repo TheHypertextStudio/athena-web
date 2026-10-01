@@ -16,7 +16,7 @@ import type {
   EmailSuggestionOut,
   SuggestionAcceptBody,
 } from '@docket/athena/email-suggestion-contract';
-import { Sparkles } from '@docket/ui/icons';
+import { Mail } from '@docket/ui/icons';
 import { Badge, Button, Card, CardContent, DecorativeIcon, Input } from '@docket/ui/primitives';
 import { type JSX, useState } from 'react';
 
@@ -283,7 +283,7 @@ export default function SuggestionsLane({
   return (
     <section aria-labelledby="suggestions-heading" className="flex flex-col gap-2">
       <div className="flex items-center gap-2">
-        <DecorativeIcon icon={Sparkles} />
+        <DecorativeIcon icon={Mail} />
         <h2 id="suggestions-heading" className="text-sm font-semibold">
           Suggested by Athena
         </h2>

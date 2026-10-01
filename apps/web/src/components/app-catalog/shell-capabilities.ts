@@ -2,7 +2,7 @@ import {
   HOME_NAVIGATION_DESCRIPTORS,
   WORKSPACE_NAVIGATION_DESCRIPTORS,
 } from '@docket/ui/components';
-import { Calendar, Layers, LogOut, Plus, Sparkles, Timer } from '@docket/ui/icons';
+import { Calendar, Layers, LogOut, MessageSquare, Plus, Timer } from '@docket/ui/icons';
 
 import type { AppCapability, CapabilityContext } from './types';
 
@@ -141,7 +141,7 @@ export const PANEL_CAPABILITIES: readonly AppCapability[] = [
     label: 'Open Athena panel',
     description: 'Show your Athena conversation beside the current page.',
     aliases: ['assistant panel', 'chat panel'],
-    icon: Sparkles,
+    icon: MessageSquare,
     scope: 'global',
     target: { type: 'intent', intent: { type: 'open-panel', panelId: 'athena' } },
     available: (context) => context.panelsAvailable,

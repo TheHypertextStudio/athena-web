@@ -17,7 +17,7 @@
  * no duplicate of any of them.
  */
 import type { TaskDetail } from '@docket/work/task-model';
-import { Copy, Ellipsis, Sparkles, Trash2 } from '@docket/ui/icons';
+import { Copy, Ellipsis, NotePen, Trash2 } from '@docket/ui/icons';
 import {
   Button,
   ControlGroup,
@@ -81,7 +81,7 @@ export function TaskOverflowMenu({
       <DropdownMenuContent align="end" width="md">
         {canEdit ? (
           <DropdownMenuItem disabled={expansion.pending} onSelect={expansion.expand}>
-            <Sparkles className="size-4" />
+            <NotePen className="size-4" />
             Expand description
           </DropdownMenuItem>
         ) : null}

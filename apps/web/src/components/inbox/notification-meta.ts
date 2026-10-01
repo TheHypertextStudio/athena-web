@@ -19,9 +19,11 @@ import {
   Cable,
   CheckCircle2,
   CircleDot,
+  Phone,
+  Shield,
+  Workflow,
   MessageSquare,
   type LucideIcon,
-  Sparkles,
   User,
   Users,
   XCircle,
@@ -37,8 +39,8 @@ interface NotificationKindMeta {
 
 /** Per-type glyph + label, keyed by every {@link NotificationType}. */
 const NOTIFICATION_KIND: Record<NotificationType, NotificationKindMeta> = {
-  approval_request: { icon: Sparkles, label: 'Approval request' },
-  agent_session: { icon: Sparkles, label: 'Agent session' },
+  approval_request: { icon: Shield, label: 'Approval request' },
+  agent_session: { icon: Workflow, label: 'Agent session' },
   mention: { icon: User, label: 'Mention' },
   assignment: { icon: CircleDot, label: 'Assignment' },
   status_change: { icon: CheckCircle2, label: 'Status change' },
@@ -46,9 +48,9 @@ const NOTIFICATION_KIND: Record<NotificationType, NotificationKindMeta> = {
   invitation: { icon: Users, label: 'Invitation' },
   connector_sync_failed: { icon: XCircle, label: 'Sync failed' },
   connector_needs_reauth: { icon: Cable, label: 'Reconnect needed' },
-  automation: { icon: Sparkles, label: 'Automation' },
+  automation: { icon: Workflow, label: 'Automation' },
   service_announcement: { icon: MessageSquare, label: 'Service announcement' },
-  phone_call: { icon: Sparkles, label: 'Athena phone call' },
+  phone_call: { icon: Phone, label: 'Athena phone call' },
 };
 
 /**

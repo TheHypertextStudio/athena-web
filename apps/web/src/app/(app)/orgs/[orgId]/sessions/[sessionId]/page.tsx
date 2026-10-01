@@ -2,7 +2,7 @@
 
 import { EmptyState } from '@docket/ui/components';
 import { useVocabulary } from '@docket/ui/hooks';
-import { ChevronLeft, Sparkles } from '@docket/ui/icons';
+import { Activity, ChevronLeft } from '@docket/ui/icons';
 import { Skeleton } from '@docket/ui/primitives';
 import Link from '@/components/docket-link';
 import { LoadFailure } from '@/components/feedback';
@@ -132,7 +132,7 @@ export default function SessionViewPage(): JSX.Element {
           </h2>
           {session.activities.length === 0 ? (
             <EmptyState
-              icon={Sparkles}
+              icon={Activity}
               title="No activity yet"
               body="When the agent starts working, its steps will appear here."
             />

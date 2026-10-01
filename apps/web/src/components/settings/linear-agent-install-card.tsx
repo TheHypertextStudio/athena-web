@@ -25,7 +25,7 @@
  * `?linear_agent=error` (see `integrations-linear-agent-oauth.ts`'s `settingsRedirect`).
  */
 import type { IntegrationOut } from '@docket/connections/integration-contract';
-import { Sparkles } from '@docket/ui/icons';
+import { MessageSquare } from '@docket/ui/icons';
 import { Badge, Button, DecorativeIcon } from '@docket/ui/primitives';
 import { useAppSearchParams } from '@/lib/app-location';
 import type { JSX } from 'react';
@@ -119,7 +119,7 @@ export function LinearAgentInstallCard({
   return (
     <SettingsGroup capability={SETTINGS_NODES.connectionsAgents} body="rows" footer={footer}>
       <SettingRow
-        leading={<DecorativeIcon icon={Sparkles} />}
+        leading={<DecorativeIcon icon={MessageSquare} />}
         label="Athena as a Linear Agent"
         description={
           <>

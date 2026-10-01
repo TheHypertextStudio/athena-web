@@ -28,7 +28,7 @@ import {
   MapPin,
   Settings,
   Shield,
-  Sparkles,
+  MessageSquare,
   Tag,
   User,
   Users,
@@ -88,7 +88,7 @@ export const PERSONAL_SETTINGS_SECTIONS: readonly SettingsSection[] = [
     key: 'athena',
     label: 'Athena',
     description: 'Set how your chief of staff works with you.',
-    icon: Sparkles,
+    icon: MessageSquare,
     href: 'athena',
   },
   {

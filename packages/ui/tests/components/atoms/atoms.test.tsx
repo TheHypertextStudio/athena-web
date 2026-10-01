@@ -94,9 +94,11 @@ describe('ActorAvatar', () => {
     expect(box.parentElement).toHaveAttribute('data-actor-kind', kind);
   });
 
-  it('renders the Sparkles badge only for the agent kind', () => {
+  it('distinguishes agents by fill and shape without a sparkle badge or outline', () => {
     const { container: agentContainer } = render(<ActorAvatar kind="agent" name="Bot" />);
-    expect(agentContainer.querySelector('svg')).toBeInTheDocument();
+    expect(agentContainer.querySelector('svg')).not.toBeInTheDocument();
+    expect(screen.getByText('BO')).toHaveClass('bg-primary-container');
+    expect(screen.getByLabelText('Bot')).not.toHaveClass('ring-1');
 
     const { container: humanContainer } = render(<ActorAvatar kind="human" name="Bob" />);
     expect(humanContainer.querySelector('svg')).not.toBeInTheDocument();

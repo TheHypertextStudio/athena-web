@@ -5,21 +5,17 @@
  *
  * @remarks
  * Renders an org-scoped actor (the "who" behind any assignment) over the {@link Avatar}
- * primitive, distinguishing the three actor kinds by *shape* and *ring rule* so a human, an
+ * primitive, distinguishing the three actor kinds by shape and fill so a human, an
  * agent, and a team are visually separable at a glance:
  *
- * - `human` — fully rounded; a muted ring only.
- * - `agent` — squircle (rounded, not circular) with the {@link Sparkles} accent ring,
- *   marking automated actors.
- * - `team` — rounded-square; a dashed ring, signalling a collective rather than an
- *   individual.
+ * - `human` — fully rounded with a neutral fill.
+ * - `agent` — rounded-square with a primary-container fill.
+ * - `team` — rounded-square with a secondary-container fill.
  *
- * All colors come from semantic tokens (`ring-outline-variant`, `ring-primary`,
- * `bg-surface-container-high`) — never hardcoded.
+ * All colors come from semantic tokens.
  */
 import * as React from 'react';
 
-import { Sparkles } from '../../icons';
 import { cn } from '../../lib/utils';
 import { Avatar, AvatarFallback, AvatarImage } from '../../primitives';
 
@@ -42,11 +38,18 @@ function initialsOf(name: string): string {
   return (firstChar + lastChar).toUpperCase();
 }
 
-/** Per-kind shape + ring classes that make each actor kind visually distinct. */
+/** Per-kind shape classes that make each actor kind visually distinct. */
 const KIND_SHAPE_CLASS: Record<ActorKind, string> = {
-  human: 'rounded-full ring-1 ring-outline-variant',
-  agent: 'rounded-lg ring-1 ring-primary',
-  team: 'rounded-md ring-1 ring-dashed ring-outline-variant',
+  human: 'rounded-full',
+  agent: 'rounded-lg',
+  team: 'rounded-md',
+};
+
+/** Fill gives each kind an identity without a decorative badge or thin outline. */
+const KIND_TONE_CLASS: Record<ActorKind, string> = {
+  human: 'bg-surface-container-high text-on-surface-variant',
+  agent: 'bg-primary-container text-on-primary-container',
+  team: 'bg-secondary-container text-on-secondary-container',
 };
 
 /** Props for {@link ActorAvatar}. */
@@ -64,11 +67,10 @@ export interface ActorAvatarProps {
 }
 
 /**
- * An actor avatar whose shape and ring encode the actor's {@link ActorKind}.
+ * An actor avatar whose shape and fill encode the actor's {@link ActorKind}.
  *
  * @remarks
- * Agents additionally carry a small {@link Sparkles} badge so automated actors read as
- * non-human even without color. The element is labelled with the actor's name.
+ * The element is labelled with the actor's name.
  *
  * @example
  * ```tsx
@@ -95,20 +97,11 @@ export function ActorAvatar({
           <AvatarImage src={avatarUrl} alt={name} className={KIND_SHAPE_CLASS[kind]} />
         ) : null}
         <AvatarFallback
-          className={cn(
-            'bg-surface-container-high text-on-surface-variant text-label-small',
-            KIND_SHAPE_CLASS[kind],
-          )}
+          className={cn('text-label-small', KIND_SHAPE_CLASS[kind], KIND_TONE_CLASS[kind])}
         >
           {initialsOf(name)}
         </AvatarFallback>
       </Avatar>
-      {kind === 'agent' ? (
-        <Sparkles
-          aria-hidden="true"
-          className="bg-surface text-primary absolute -right-0.5 -bottom-0.5 h-2.5 w-2.5 rounded-full"
-        />
-      ) : null}
     </span>
   );
 }

@@ -8,6 +8,7 @@ import type { JSX } from 'react';
 import { StaticMarkdown } from '@/components/editor/static-markdown';
 import { HEALTH_FILL_CLASS, HEALTH_LABEL } from '@/components/entity-display/health';
 import { relativeTime } from '@docket/ui';
+import { contentAuthor } from './content-author';
 
 /** Props for {@link LatestUpdateSummary}. */
 export interface LatestUpdateSummaryProps {
@@ -29,7 +30,7 @@ export function LatestUpdateSummary({
   resolveActor,
 }: LatestUpdateSummaryProps): JSX.Element {
   const update = updates[0] ?? null;
-  const author = update ? resolveActor(update.authorId) : null;
+  const author = update ? contentAuthor(update, resolveActor) : null;
 
   return (
     <section aria-label="Latest update" className="flex flex-col gap-3">

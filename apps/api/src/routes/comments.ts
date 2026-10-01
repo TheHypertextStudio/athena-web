@@ -4,9 +4,9 @@
  * @remarks
  * Comments attach to a polymorphic subject (`task | project | program | initiative |
  * cycle`) and support single-level threading via `parentCommentId`. Every query is
- * scoped by `actorCtx.orgId`; the author is always the calling actor (agents post as
- * their Actor — this is how a Session's response/elicitation reaches the comment
- * stream, per api-rpc-contract §3.8). A reply's parent MUST be an existing comment in
+ * scoped by `actorCtx.orgId`; the author is the recorded performer while `createdBy`
+ * keeps the actor whose permissions allowed the write. Registered agents post as
+ * their Actor. A reply's parent MUST be an existing comment in
  * the same org on the same subject, so a thread never spans subjects or tenants.
  */
 import { comment, db } from '@docket/db';
@@ -27,6 +27,12 @@ import { z } from 'zod';
 import type { AppEnv } from '../context';
 import { CapabilityError, NotFoundError, ValidationError } from '../error';
 import { created, ok } from '../lib/ok';
+import {
+  authoredContent,
+  contentEventActor,
+  contentOrigin,
+  ownsAuthoredContent,
+} from '../lib/provenance/authored-content';
 import { pageResult, seekAfter } from '../lib/list-cursor';
 import { apiDoc } from '../lib/openapi-route';
 import { zJson, zParam, zQuery } from '../lib/validate';
@@ -43,11 +49,14 @@ function toOut(c: CommentRow): z.input<typeof CommentOut> {
     id: c.id,
     organizationId: c.organizationId,
     authorId: c.authorId,
+    origin: contentOrigin(c.origin),
     subjectType: c.subjectType,
     subjectId: c.subjectId,
     body: c.body,
     parentCommentId: c.parentCommentId,
     editedAt: c.editedAt?.toISOString() ?? null,
+    editedById: c.editedById,
+    editedOrigin: contentOrigin(c.editedOrigin),
     createdAt: c.createdAt.toISOString(),
   };
 }
@@ -149,8 +158,9 @@ function taskAwareCreateGuard(): MiddlewareHandler<AppEnv> {
  * Per api-rpc-contract §3.8 a comment is editable/deletable by its **author** (the
  * `comment` capability alone is not enough to touch someone else's comment), OR by an
  * actor holding `manage` (a moderator override). The subject-specific capability check has
- * already run before this gate. We compare the stored `authorId`
- * to the caller's `actorId`; a non-author without `manage` is `403` (the comment's
+ * already run before this gate. We compare the recorded performer and authority;
+ * an OAuth client owns only its own text under the same human authority. A non-author
+ * without `manage` is `403` (the comment's
  * existence is not hidden — tenant isolation already 404s a cross-org id in
  * {@link loadComment}, so reaching here means the row is in-org and the caller can see it).
  *
@@ -160,7 +170,7 @@ function taskAwareCreateGuard(): MiddlewareHandler<AppEnv> {
  * @throws {CapabilityError} When the caller is neither the author nor a `manage` holder.
  */
 function assertAuthorOrManage(row: CommentRow, actorId: string, held: readonly Capability[]): void {
-  if (row.authorId === actorId) return;
+  if (ownsAuthoredContent(row, actorId)) return;
   if (held.some((cap) => satisfies(cap, 'manage'))) return;
   throw new CapabilityError('Only the author can modify this comment');
 }
@@ -218,7 +228,7 @@ const comments = new Hono<AppEnv>()
       tag: 'Comments',
       summary: 'Add a comment',
       response: CommentOut,
-      description: `Post a comment on a subject. Task comments require \`contribute\` on the current task; non-task comments retain the \`comment\` capability, distinctly lower than \`contribute\`. The author is always the calling actor (taken from context, never the body), which is how an Agent Session's response/elicitation reaches the comment stream — it posts as its own Actor.
+      description: `Post a comment on a subject. Task comments require \`contribute\` on the current task; non-task comments retain the \`comment\` capability, distinctly lower than \`contribute\`. The verified request origin identifies the performer. A connected agent without its own Actor has a null authorId and an agent origin; the authorizing human is retained separately.
 
 Threading is single-level. Omit \`parentCommentId\` for a root comment; supply it to reply. A reply's parent must be an existing comment in the SAME org on the SAME subject (else 422), and the parent must itself be a root comment — replying to a reply is rejected (422), keeping the thread a strict two-level tree. Side effect: emits a \`comment\` observation onto the subject so its owners/followers are notified. Returns the created {@link CommentOut}.`,
     }),
@@ -270,7 +280,7 @@ Threading is single-level. Omit \`parentCommentId\` for a root comment; supply i
         .insert(comment)
         .values({
           organizationId: orgId,
-          authorId: actorId,
+          ...authoredContent(actorId, 'comment'),
           subjectType: body.subjectType,
           subjectId: body.subjectId,
           body: body.body,
@@ -286,7 +296,8 @@ Threading is single-level. Omit \`parentCommentId\` for a root comment; supply i
       await emitEvent({
         organizationId: orgId,
         kind: 'comment',
-        actorId,
+        actorId: row.authorId,
+        actorRef: contentEventActor(row.origin),
         title: row.body,
         summary: row.body,
         subject: { type: row.subjectType, id: row.subjectId },
@@ -320,7 +331,7 @@ Threading is single-level. Omit \`parentCommentId\` for a root comment; supply i
       tag: 'Comments',
       summary: 'Update a comment',
       response: CommentOut,
-      description: `Edit a comment's body. Only the \`body\` is mutable (subject and threading are fixed at creation); the edit stamps \`editedAt\` so clients can show an "edited" marker. A task comment requires \`contribute\` on its current task; a non-task comment requires \`comment\`. Both keep the authorship gate: only the author may edit unless they additionally hold \`manage\` (a moderator override). A non-author without \`manage\` is 403 (\`Only the author can modify this comment\`). Returns the updated {@link CommentOut}.`,
+      description: `Edit a comment's body. Only the \`body\` is mutable (subject and threading are fixed at creation); the edit records \`editedAt\` and the verified editor separately from the original author. A task comment requires \`contribute\` on its current task; a non-task comment requires \`comment\`. Both keep the authorship gate: only the author may edit unless they additionally hold \`manage\` (a moderator override). A non-author without \`manage\` is 403 (\`Only the author can modify this comment\`). Returns the updated {@link CommentOut}.`,
     }),
     zParam(idParam),
     zJson(CommentUpdate),
@@ -340,9 +351,15 @@ Threading is single-level. Omit \`parentCommentId\` for a root comment; supply i
       assertAuthorOrManage(existing, actorId, capabilities as Capability[]);
       await assertSharedWorkWritable(orgId, c.get('actorCtx').isPersonal);
 
+      const editor = authoredContent(actorId, 'edit_comment');
       const updated = await db
         .update(comment)
-        .set({ body: body.body, editedAt: new Date() })
+        .set({
+          body: body.body,
+          editedAt: new Date(),
+          editedById: editor.authorId,
+          editedOrigin: editor.origin,
+        })
         .where(and(eq(comment.id, id), eq(comment.organizationId, orgId)))
         .returning();
       const row = updated[0];

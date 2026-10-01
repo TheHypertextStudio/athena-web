@@ -2,6 +2,7 @@
  * `domain packages` — Update (status post) slice DTOs.
  */
 import { z } from 'zod';
+import { ActivityOriginOut } from './provenance';
 
 import { Health } from './capability';
 import { InitiativeSubjectRef, ProjectSubjectRef, ProgramSubjectRef } from './subject-ref';
@@ -54,7 +55,12 @@ export const UpdateOut = z
     organizationId: OrganizationId.describe('Owning org id (the tenant key).'),
     authorId: ActorId.nullable()
       .optional()
-      .describe('Actor who posted the update; null if the author record is gone.'),
+      .describe(
+        'Actor who posted the update; null for a connected agent without an Actor or if the author record is gone. See origin for the performer.',
+      ),
+    origin: ActivityOriginOut.nullable()
+      .optional()
+      .describe('The recorded performer; null for older updates.'),
     subjectType: UpdateSubjectType.describe(
       "Kind of subject: 'project' | 'program' | 'initiative'.",
     ),

@@ -6,6 +6,9 @@ application, operator console, API, background runner, shared packages, and depl
 The public REST API accepts an optional exact `Docket-Version` assertion and identifies each
 response with its contract and source revision. See the
 [API version policy](docs/engineering/specs/api-version-policy.md) before changing the contract.
+Comments and status updates include an `origin` that names a connected agent when it wrote the text.
+The authorizing human remains in the audit record and is not shown as the author of that text.
+Edited comments retain their original author and record the last editor separately.
 An Athena turn assigned to an unavailable Lattice computer returns a `503` problem with code
 `lattice_unavailable`; Docket keeps the chosen runtime and does not route the turn to a cloud model.
 See the [Lattice model-routing specification](docs/engineering/specs/lattice-byo-model.md).

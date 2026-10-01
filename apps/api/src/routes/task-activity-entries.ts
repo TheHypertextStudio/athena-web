@@ -5,7 +5,8 @@
  * `task-activity-routes.ts` reads the sources; this module turns their rows into the one entry
  * shape the route returns. Entries backed by the audit ledger carry the origin the ledger recorded,
  * normalized through `readOrigin`, and the creation entry carries the origin of the change set that
- * created the task. Comments, timers, delegated execution updates, and subtask creation carry none.
+ * created the task. Comments carry their stored performer. Timers, delegated execution updates,
+ * and subtask creation carry none.
  */
 import type { auditEvent, ChangeOrigin, comment, event, sessionActivity, task } from '@docket/db';
 import {
@@ -51,9 +52,9 @@ export type RelatedLedgerRow = LedgerRow & RelatedTask;
 /** A comment on the task. */
 export type CommentRow = Pick<
   typeof comment.$inferSelect,
-  'id' | 'authorId' | 'body' | 'createdAt'
+  'id' | 'authorId' | 'origin' | 'body' | 'createdAt' | 'editedAt' | 'editedById' | 'editedOrigin'
 > &
-  ActorNamed;
+  ActorNamed & { readonly editorName: string | null };
 
 /** A timer transition on the task. */
 export type TimerRow = Pick<typeof event.$inferSelect, 'id' | 'actor' | 'title' | 'occurredAt'>;
@@ -107,6 +108,7 @@ export function activityEntry(core: EntryCore, detail: Partial<ActivityEntry> = 
     subjectTaskId: null,
     subjectTaskTitle: null,
     origin: null,
+    commentEdit: null,
     ...core,
     ...detail,
   };
@@ -260,7 +262,20 @@ function contentEntries(taskId: string, sources: ActivitySources): ActivityEntry
           category: 'comment',
           createdAt: row.createdAt.toISOString(),
         },
-        { actorId: row.authorId, actorName: row.actorName, body: row.body },
+        {
+          actorId: row.authorId,
+          actorName: row.actorName,
+          body: row.body,
+          origin: activityOriginOf(row.origin),
+          commentEdit: row.editedAt
+            ? {
+                at: row.editedAt.toISOString(),
+                actorId: row.editedById,
+                actorName: row.editorName,
+                origin: activityOriginOf(row.editedOrigin),
+              }
+            : null,
+        },
       ),
     ),
     ...sources.timerEvents.map((row) =>

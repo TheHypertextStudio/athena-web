@@ -16,6 +16,7 @@ import {
 import { and, asc, eq, isNull } from 'drizzle-orm';
 
 import { NotFoundError } from '../error';
+import { contentOrigin } from '../lib/provenance/authored-content';
 import { subjectRefOf } from './hydrated-refs';
 import type { TaskViewFilter } from './resource-work-hydrators';
 
@@ -85,6 +86,7 @@ export async function hydrateUpdate(orgId: string, id: string): Promise<unknown>
   return {
     id: u.id,
     authorId: u.authorId,
+    origin: contentOrigin(u.origin),
     subjectType: u.subjectType,
     subjectId: u.subjectId,
     subject: await subjectRefOf(orgId, u.subjectType, u.subjectId),
@@ -135,6 +137,7 @@ export async function hydrateComment(
   return {
     id: c.id,
     authorId: c.authorId,
+    origin: contentOrigin(c.origin),
     subjectType: c.subjectType,
     subjectId: c.subjectId,
     subject: await subjectRefOf(orgId, c.subjectType, c.subjectId),
@@ -142,6 +145,8 @@ export async function hydrateComment(
     body: c.body,
     parentCommentId: c.parentCommentId,
     editedAt: c.editedAt?.toISOString() ?? null,
+    editedById: c.editedById,
+    editedOrigin: contentOrigin(c.editedOrigin),
     createdAt: c.createdAt.toISOString(),
   };
 }

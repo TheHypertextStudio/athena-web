@@ -13,6 +13,7 @@ import {
 } from './subject-ref';
 import { ActorId, OrganizationId } from '@docket/identity-access/ids';
 import { CommentId } from '../ids';
+import { ActivityOriginOut } from './provenance';
 
 /** The polymorphic subject kinds a Comment can attach to. */
 export const CommentSubjectType = z.enum(['task', 'project', 'program', 'initiative', 'cycle']);
@@ -70,8 +71,11 @@ export const CommentOut = z
     authorId: ActorId.nullable()
       .optional()
       .describe(
-        'Actor who wrote the comment (a human or an agent posting as its Actor); null if the author record is gone.',
+        'Actor who wrote the comment; null for a connected agent without an Actor or if the author record is gone. See origin for the performer.',
       ),
+    origin: ActivityOriginOut.nullable()
+      .optional()
+      .describe('The recorded performer; null for older comments.'),
     subjectType: CommentSubjectType.describe(
       "Kind of subject the comment is on: 'task' | 'project' | 'program' | 'initiative' | 'cycle'.",
     ),
@@ -85,6 +89,12 @@ export const CommentOut = z
       .nullable()
       .optional()
       .describe('When the body was last edited (ISO 8601); null if never edited.'),
+    editedById: ActorId.nullable()
+      .optional()
+      .describe('Actor who last edited the body; null for a connected agent without an Actor.'),
+    editedOrigin: ActivityOriginOut.nullable()
+      .optional()
+      .describe('The recorded performer of the last body edit; null for older comments.'),
     createdAt: z
       .string()
       .describe('Creation timestamp (ISO 8601); the thread sort key (ascending).'),

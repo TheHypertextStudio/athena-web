@@ -17,6 +17,12 @@ import { z } from 'zod';
 import type { AppEnv } from '../context';
 import { CapabilityError, NotFoundError } from '../error';
 import { created, ok } from '../lib/ok';
+import {
+  authoredContent,
+  contentEventActor,
+  contentOrigin,
+  ownsAuthoredContent,
+} from '../lib/provenance/authored-content';
 import { pageResult, seekAfter } from '../lib/list-cursor';
 import { apiDoc } from '../lib/openapi-route';
 import { zJson, zParam, zQuery } from '../lib/validate';
@@ -31,6 +37,7 @@ function toOut(u: UpdateRow): z.input<typeof UpdateOut> {
     id: u.id,
     organizationId: u.organizationId,
     authorId: u.authorId,
+    origin: contentOrigin(u.origin),
     subjectType: u.subjectType,
     subjectId: u.subjectId,
     health: u.health,
@@ -90,8 +97,9 @@ async function loadUpdate(orgId: string, id: string): Promise<UpdateRow> {
  * @remarks
  * Per api-rpc-contract §3.9 an Update is deletable by its **author** (the `contribute`
  * capability the route guard already required is not enough to delete someone else's
- * Update) OR by an actor holding `manage`. We compare the stored `authorId` to the
- * caller's `actorId`; a non-author without `manage` is `403`. Tenant isolation already
+ * Update) OR by an actor holding `manage`. We compare the recorded performer and
+ * authority, so an OAuth client cannot claim the human's text as its own. A non-author
+ * without `manage` is `403`. Tenant isolation already
  * 404s a cross-org id in {@link loadUpdate}, so reaching here means the row is in-org.
  *
  * @param row - The org-scoped update row being deleted.
@@ -100,7 +108,7 @@ async function loadUpdate(orgId: string, id: string): Promise<UpdateRow> {
  * @throws {CapabilityError} When the caller is neither the author nor a `manage` holder.
  */
 function assertAuthorOrManage(row: UpdateRow, actorId: string, held: readonly Capability[]): void {
-  if (row.authorId === actorId) return;
+  if (ownsAuthoredContent(row, actorId)) return;
   if (held.some((cap) => satisfies(cap, 'manage'))) return;
   throw new CapabilityError('Only the author can delete this update');
 }
@@ -196,7 +204,7 @@ const updates = new Hono<AppEnv>()
       summary: 'Post an update',
       capability: 'contribute',
       response: UpdateOut,
-      description: `Post a status update on a project, program, or initiative and return the created {@link UpdateOut}. Docket uses the caller as the author; the request body cannot name another author. \`body\` is required and \`health\` is optional.
+      description: `Post a status update on a project, program, or initiative and return the created {@link UpdateOut}. Docket records the verified performer as the author and retains the authorizing actor separately; the request body cannot name another author. \`body\` is required and \`health\` is optional.
 
 When \`health\` is supplied, Docket also sets the resource's current health to the same value. Both changes succeed together or neither change is stored. An update without \`health\` leaves the resource's current health unchanged. The operation adds a \`status_change\` event to organization activity.`,
     }),
@@ -211,7 +219,7 @@ When \`health\` is supplied, Docket also sets the resource's current health to t
           .insert(update)
           .values({
             organizationId: orgId,
-            authorId: actorId,
+            ...authoredContent(actorId, 'report_status'),
             subjectType: body.subjectType,
             subjectId: body.subjectId,
             health: body.health,
@@ -238,7 +246,8 @@ When \`health\` is supplied, Docket also sets the resource's current health to t
       await emitEvent({
         organizationId: orgId,
         kind: 'status_change',
-        actorId,
+        actorId: row.authorId,
+        actorRef: contentEventActor(row.origin),
         title: 'Posted an update',
         summary: row.body,
         subject: { type: row.subjectType, id: row.subjectId },

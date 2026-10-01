@@ -21,6 +21,7 @@ import {
 import { pageOf } from '../contracts/pagination';
 import { TaskActivityOut, TaskActivityQuery } from '@docket/connections/activity-contract';
 import { and, asc, eq, inArray, isNull, or, sql, type SQLWrapper } from 'drizzle-orm';
+import { alias } from 'drizzle-orm/pg-core';
 import { Hono } from 'hono';
 
 import type { AppEnv } from '../context';
@@ -156,16 +157,23 @@ export const taskActivityRoutes = new Hono<AppEnv>().get(
       )
       .orderBy(asc(auditEvent.createdAt), asc(auditEvent.id))
       .limit(sourceLimit);
+    const editor = alias(actor, 'comment_editor');
     const comments = await db
       .select({
         id: comment.id,
         authorId: comment.authorId,
+        origin: comment.origin,
         actorName: actor.displayName,
+        editedAt: comment.editedAt,
+        editedById: comment.editedById,
+        editedOrigin: comment.editedOrigin,
+        editorName: editor.displayName,
         body: comment.body,
         createdAt: comment.createdAt,
       })
       .from(comment)
       .leftJoin(actor, eq(comment.authorId, actor.id))
+      .leftJoin(editor, eq(comment.editedById, editor.id))
       .where(
         and(
           eq(comment.organizationId, orgId),

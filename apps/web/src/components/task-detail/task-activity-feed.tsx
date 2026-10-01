@@ -67,6 +67,12 @@ function entrySentence(entry: TaskActivityOut): string {
   return change;
 }
 
+/** An edited comment no longer presents its current body as the original author's words. */
+function entryAction(entry: TaskActivityOut): string {
+  if (entry.type !== 'comment') return entrySentence(entry);
+  return entry.commentEdit ? 'started this comment' : 'commented';
+}
+
 /** Props for {@link ActivityFilterMenu}. */
 interface ActivityFilterMenuProps {
   readonly filter: ActivityFilter;
@@ -107,6 +113,25 @@ interface ActivityRowProps {
   readonly orgId: string;
 }
 
+/** Name the last editor without replacing the original comment author. */
+function CommentEditNote({ entry, orgId }: ActivityRowProps): JSX.Element | null {
+  const editor = entry.commentEdit;
+  const viewerActorId = useViewerActorId(orgId, editor?.origin?.channel === 'mcp');
+  if (!editor) return null;
+  const editPerformer = activityPerformer(
+    { ...entry, actorId: editor.actorId, actorName: editor.actorName, origin: editor.origin },
+    viewerActorId,
+  );
+  return (
+    <p className="text-label-medium text-on-surface-variant mt-1">
+      {editor.actorName || editor.origin ? `Edited by ${editPerformer.name}` : 'Edited'}{' '}
+      <time dateTime={editor.at} title={editor.at}>
+        {relativeTime(editor.at)}
+      </time>
+    </p>
+  );
+}
+
 /** One chronological Activity row, naming whoever performed the change. */
 function ActivityRow({ entry, orgId }: ActivityRowProps): JSX.Element {
   // Only an agent working for someone reads its owner ("for You"), so only its row asks who is viewing.
@@ -118,8 +143,7 @@ function ActivityRow({ entry, orgId }: ActivityRowProps): JSX.Element {
       <ActorAvatar kind={performer.avatarKind} name={name} size={24} className="mt-0.5 shrink-0" />
       <div className="text-body-medium text-on-surface-variant min-w-0 flex-1">
         <div>
-          <span className="text-on-surface">{name}</span>{' '}
-          {entry.type === 'comment' ? 'commented' : entrySentence(entry)}{' '}
+          <span className="text-on-surface">{name}</span> {entryAction(entry)}{' '}
           <time
             dateTime={entry.createdAt}
             title={activityTimestampTitle(entry.createdAt, performer.detail)}
@@ -128,6 +152,7 @@ function ActivityRow({ entry, orgId }: ActivityRowProps): JSX.Element {
             {relativeTime(entry.createdAt)}
           </time>
         </div>
+        <CommentEditNote entry={entry} orgId={orgId} />
         {entry.type === 'comment' && entry.body ? (
           <StaticMarkdown value={entry.body} className="mt-1 [&>*]:max-w-none" />
         ) : null}

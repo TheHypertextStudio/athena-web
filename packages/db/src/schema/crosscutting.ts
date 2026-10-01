@@ -8,6 +8,7 @@
  * saved views. The universal audit feed lives in `./audit-event`.
  */
 import { sql } from 'drizzle-orm';
+import type { ChangeOrigin } from '@docket/work/provenance-contract';
 import {
   ENTITY_DISPLAY_COLOR_KEYS,
   ENTITY_DISPLAY_ICON_KEYS,
@@ -244,6 +245,7 @@ export const update = pgTable(
   {
     ...auditColumns(),
     authorId: text('author_id').references(() => actor.id, { onDelete: 'set null' }),
+    origin: jsonb('origin').$type<ChangeOrigin>(),
     subjectType: updateSubjectType('subject_type').notNull(),
     subjectId: text('subject_id').notNull(),
     health: health('health'),
@@ -789,11 +791,14 @@ export const comment = pgTable(
   {
     ...auditColumns(),
     authorId: text('author_id').references(() => actor.id, { onDelete: 'set null' }),
+    origin: jsonb('origin').$type<ChangeOrigin>(),
     subjectType: commentSubjectType('subject_type').notNull(),
     subjectId: text('subject_id').notNull(),
     body: text('body').notNull(),
     parentCommentId: text('parent_comment_id'),
     editedAt: timestamp('edited_at'),
+    editedById: text('edited_by_id').references(() => actor.id, { onDelete: 'set null' }),
+    editedOrigin: jsonb('edited_origin').$type<ChangeOrigin>(),
   },
   (t) => [index('comment_subject_idx').on(t.subjectType, t.subjectId)],
 );

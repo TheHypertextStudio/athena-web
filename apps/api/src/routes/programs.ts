@@ -32,6 +32,7 @@ import {
 import { detailCapabilities } from '../lib/detail-capabilities';
 import { deferAfterResponse } from '../lib/after-response';
 import { created, ok } from '../lib/ok';
+import { contentOrigin } from '../lib/provenance/authored-content';
 import { resolveContainerStatus } from '../lib/work-status';
 import { pageResult, seekAfter } from '../lib/list-cursor';
 import { apiDoc } from '../lib/openapi-route';
@@ -583,6 +584,7 @@ const programs = new Hono<AppEnv>()
           id: u.id,
           organizationId: u.organizationId,
           authorId: u.authorId,
+          origin: contentOrigin(u.origin),
           subjectType: u.subjectType,
           subjectId: u.subjectId,
           health: u.health,

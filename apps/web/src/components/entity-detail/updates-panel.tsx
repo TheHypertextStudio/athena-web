@@ -38,6 +38,7 @@ import { HEALTH_FILL_CLASS, HEALTH_LABEL } from '@/components/entity-display/hea
 import { FreeformTextEditor } from '@/components/editor/freeform-text';
 import { StaticMarkdown } from '@/components/editor/static-markdown';
 import { QueryLoadFailure, type QueryFailureSource } from '@/components/feedback';
+import { contentAuthor } from './content-author';
 
 /** Resolve an actor id to a display name + kind (passed by the caller). */
 export type ResolveActor = (actorId: string | null | undefined) => {
@@ -235,7 +236,7 @@ export function UpdatesPanel({
       ) : (
         <ol className="flex flex-col gap-6">
           {updates.map((update) => {
-            const author = resolveActor(update.authorId);
+            const author = contentAuthor(update, resolveActor);
             return (
               <li key={update.id} className="flex gap-3">
                 <ActorAvatar kind={author.kind} name={author.name} size={32} />

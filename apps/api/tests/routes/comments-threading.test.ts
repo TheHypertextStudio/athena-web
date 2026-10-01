@@ -342,7 +342,10 @@ describe('comments router', () => {
       body: JSON.stringify({ body: 'v2' }),
     });
     expect(patched.status).toBe(200);
-    expect((await body<CommentOut>(patched)).body).toBe('v2');
+    const edited = await body<CommentOut>(patched);
+    expect(edited.body).toBe('v2');
+    expect(edited.editedById).toBe(humanActorId);
+    expect(edited.editedOrigin?.performerKind).toBe('person');
 
     const del = await author.request(`/${created.id}`, { method: 'DELETE' });
     expect(del.status).toBe(200);
@@ -366,7 +369,10 @@ describe('comments router', () => {
       body: JSON.stringify({ body: 'moderated' }),
     });
     expect(patched.status).toBe(200);
-    expect((await body<CommentOut>(patched)).body).toBe('moderated');
+    const edited = await body<CommentOut>(patched);
+    expect(edited.body).toBe('moderated');
+    expect(edited.authorId).toBe(humanActorId);
+    expect(edited.editedById).toBe(assertDefined(mod).id);
 
     expect((await moderator.request(`/${created.id}`, { method: 'DELETE' })).status).toBe(200);
   });

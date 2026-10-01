@@ -229,8 +229,18 @@ export const TaskActivityOut = z
       .string()
       .describe('Exact ISO-8601 timestamp the change was recorded — the ascending sort key.'),
     origin: ActivityOriginOut.nullable().describe(
-      'Where the change came from: its channel and who performed it. Present on the task’s creation and on field changes when it was recorded; null for comments, timer transitions, delegated execution updates, subtask creation, and changes recorded before provenance.',
+      'Where the change came from: its channel and who performed it. Null when the source did not record provenance.',
     ),
+    commentEdit: z
+      .object({
+        at: z.string(),
+        actorId: ActorId.nullable(),
+        actorName: z.string().nullable(),
+        origin: ActivityOriginOut.nullable(),
+      })
+      .nullable()
+      .optional()
+      .describe('The last editor of a comment body; null for unedited comments.'),
   })
   .meta({
     id: 'TaskActivityOut',

@@ -10,6 +10,8 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { UpdateId } from '@docket/work/ids';
+import { OrganizationId } from '@docket/identity-access/ids';
 
 import {
   UpdatesPanel,
@@ -51,6 +53,40 @@ function submitDraft(): void {
 }
 
 describe('UpdatesPanel history', () => {
+  it('names the agent who wrote a status report without presenting it as the human author', () => {
+    render(
+      <UpdatesPanel
+        updates={[
+          {
+            id: UpdateId.parse('01ARZ3NDEKTSV4RRFFQ69G5FA1'),
+            organizationId: OrganizationId.parse('01ARZ3NDEKTSV4RRFFQ69G5FA2'),
+            authorId: null,
+            origin: {
+              channel: 'mcp',
+              surface: null,
+              performerKind: 'agent',
+              performerName: 'Codex',
+              clientName: 'Codex',
+              provider: null,
+            },
+            subjectType: 'project',
+            subjectId: 'project-1',
+            health: null,
+            body: 'Agent status',
+            createdAt: '2026-09-30T12:00:00.000Z',
+          },
+        ]}
+        loading={false}
+        resolveActor={() => ({ name: 'Grace Hopper', kind: 'human' })}
+        posting={false}
+        onPost={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText('Codex')).toBeTruthy();
+    expect(screen.queryByText('Grace Hopper')).toBeNull();
+  });
+
   it('replaces the history with a load failure that re-issues the read', () => {
     const refetch = vi.fn();
     render(

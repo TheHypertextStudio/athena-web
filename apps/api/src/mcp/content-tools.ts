@@ -14,6 +14,7 @@ import { jsonResult, runTool, scopedActor, authorize } from './result';
 import { DESCRIPTOR_HINT, resolveSubject } from './descriptors';
 import { orgIdParam, subjectTable } from './tools-shared';
 import { landingStatus } from '../lib/work-status';
+import { authoredContent } from '../lib/provenance/authored-content';
 
 /** Register comment, report_status, link_external on `server`. */
 export function registerContentTools(server: McpRegistrar, ctx: McpContext): void {
@@ -122,7 +123,7 @@ export function registerContentTools(server: McpRegistrar, ctx: McpContext): voi
           .insert(comment)
           .values({
             organizationId: input.orgId,
-            authorId: actorCtx.actorId,
+            ...authoredContent(actorCtx.actorId, 'comment'),
             subjectType: input.subjectType,
             subjectId,
             body: input.body,
@@ -187,7 +188,7 @@ export function registerContentTools(server: McpRegistrar, ctx: McpContext): voi
             .insert(update)
             .values({
               organizationId: input.orgId,
-              authorId: actorCtx.actorId,
+              ...authoredContent(actorCtx.actorId, 'report_status'),
               subjectType: input.subjectType,
               subjectId,
               health: input.health,

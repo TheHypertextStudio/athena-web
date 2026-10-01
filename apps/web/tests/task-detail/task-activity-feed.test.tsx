@@ -225,6 +225,43 @@ describe('TaskActivityFeed', () => {
     expect(personRow.querySelector('time')).toHaveAttribute('title', inApp.createdAt);
   });
 
+  it('credits an agent that edited a human comment without replacing its original author', () => {
+    queryState.data = {
+      pages: [
+        {
+          items: [
+            entry({
+              type: 'comment',
+              category: 'comment',
+              change: null,
+              body: 'Revised comment text.',
+              commentEdit: {
+                at: '2026-08-24T13:00:00.000Z',
+                actorId: null,
+                actorName: null,
+                origin: {
+                  channel: 'api',
+                  surface: null,
+                  performerKind: 'agent',
+                  performerName: 'Codex',
+                  clientName: 'Codex',
+                  provider: null,
+                },
+              },
+            }),
+          ],
+        },
+      ],
+    };
+
+    renderFeed();
+
+    const activity = screen.getByRole('region', { name: 'Activity' });
+    expect(activity).toHaveTextContent('Ada Lovelace started this comment');
+    expect(activity).toHaveTextContent('Edited by Codex');
+    expect(activity).toHaveTextContent('Revised comment text.');
+  });
+
   it('uses application-owned copy when the Activity read fails', () => {
     queryState.data = undefined;
     queryState.isError = true;

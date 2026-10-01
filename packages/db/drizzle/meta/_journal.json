@@ -1030,6 +1030,13 @@
       "when": 1790638082108,
       "tag": "0146_cultured_thunderbird",
       "breakpoints": true
+    },
+    {
+      "idx": 147,
+      "version": "7",
+      "when": 1790823191144,
+      "tag": "0147_abandoned_wendell_rand",
+      "breakpoints": true
     }
   ]
 }

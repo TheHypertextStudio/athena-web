@@ -11987,6 +11987,17 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
 
 ## Completed Tasks
 
+### [CONTENT-ATTRIBUTION-001] Attribute agent-authored content to its performer
+
+- **Completed**: 2026-09-30
+- **Priority**: P1
+- **Summary**: MCP and OAuth API comments and status reports now record the verified performer. The human whose grants allowed an agent's write stays in the audit field rather than appearing as the text's author. Human-only writes name only the human. Comment edits retain the original author and record the last editor separately. Stream events name connected agents and still notify their human owners.
+- **Approach**: Store the existing provenance contract on each content row. Resolve an Actor only when the performer has one. Limit author-owned edit and delete rights to the same verified performer and human authority. Expose origin on API and MCP reads, task activity, and update cards.
+- **Files changed**: Comment and update contracts, schema and migration 0147, MCP content tools and resource hydration, REST content routes and event emission, task activity projection, update and comment UI, focused tests, README, MCP surface specification, and this log.
+- **Validation**: The MCP and web attribution regressions failed before implementation. Focused API tests passed 42/42 and focused web tests passed 11/11. API, web, work, connections, DB, and UI typechecks and lint passed. The complexity ledger, documentation checks, Prettier, and diff whitespace passed. Desktop and phone light/dark captures showed Codex as the update author without horizontal overflow; the preview database was reset afterward.
+- **Limits**: Older comments and status reports lack client provenance. Their original performer cannot be reconstructed from the content rows. Older edited comments lack editor provenance.
+- **Retrospective**: The permission actor and text performer were already distinct in request provenance, but content rows had collapsed them. Persisting that distinction lets readers name the writer without changing permission checks.
+
 ### [ATHENA-STAGING-SCHEDULER-001] Run durable Athena work on the staging cadence
 
 - **Completed**: 2026-09-29

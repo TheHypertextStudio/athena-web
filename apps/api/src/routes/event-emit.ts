@@ -77,6 +77,8 @@ export interface EmitEventInput {
   readonly permalink?: string | null;
   /** The acting Docket Actor (excluded from its own event's recipients). */
   readonly actorId?: string | null;
+  /** A performer without a Docket Actor, such as an authorized OAuth client. */
+  readonly actorRef?: ActorRef | null;
   readonly subject: EmitSubject;
   /** Extra Docket Actor ids involved (e.g. @-mentioned actors); resolved to recipients. */
   readonly participantActorIds?: readonly string[];
@@ -138,6 +140,29 @@ export async function emitEventStrict(input: EmitEventInput): Promise<void> {
   await emitInternal(input, occurredAt, dedupeKey);
 }
 
+/** An open event transaction. */
+type EventTx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+/** Resolve the recorded performer without treating an OAuth client's owner as its actor. */
+async function eventActorRef(tx: EventTx, input: EmitEventInput): Promise<ActorRef | null> {
+  if (input.actorRef) return input.actorRef;
+  if (!input.actorId) return null;
+  const [row] = await tx
+    .select({ id: actor.id, displayName: actor.displayName, avatar: actor.avatar })
+    .from(actor)
+    .where(eq(actor.id, input.actorId))
+    .limit(1);
+  return row
+    ? {
+        source: 'docket',
+        externalId: row.id,
+        displayName: row.displayName,
+        avatarUrl: row.avatar,
+        docketActorId: row.id as ActorRef['docketActorId'],
+      }
+    : null;
+}
+
 /** The actual emit work, separated so {@link emitEvent} can swallow its failures. */
 async function emitInternal(
   input: EmitEventInput,
@@ -146,24 +171,7 @@ async function emitInternal(
 ): Promise<void> {
   const entityKind = DOCKET_ENTITY_KIND[input.subject.type] ?? null;
   const result = await db.transaction(async (tx) => {
-    const actorRef: ActorRef | null = input.actorId
-      ? await tx
-          .select({ id: actor.id, displayName: actor.displayName, avatar: actor.avatar })
-          .from(actor)
-          .where(eq(actor.id, input.actorId))
-          .limit(1)
-          .then(([a]) =>
-            a
-              ? {
-                  source: 'docket' as const,
-                  externalId: a.id,
-                  displayName: a.displayName,
-                  avatarUrl: a.avatar,
-                  docketActorId: a.id as ActorRef['docketActorId'],
-                }
-              : null,
-          )
-      : null;
+    const actorRef = await eventActorRef(tx, input);
 
     const [row] = await tx
       .insert(event)

@@ -3,7 +3,7 @@
  *
  * @remarks
  * The creation row reads the change set that created the task; field-change rows read the origin
- * their audit event recorded. Rows with no change behind them (comments here) carry none.
+ * their audit event recorded. Comments carry the performer recorded with the text.
  */
 import { beforeAll, describe, expect, it } from 'vitest';
 
@@ -44,6 +44,7 @@ interface EntryBody {
   readonly id: string;
   readonly type: string;
   readonly origin: OriginBody | null;
+  readonly commentEdit: { readonly origin: OriginBody | null } | null;
 }
 
 /** Seconds past now for the next seeded row, so the feed order is fixed. */
@@ -125,14 +126,41 @@ describe('task Activity origin', () => {
     );
     const legacyChange = await auditChange(org, task.id, { tool: 'update', client: 'Cursor' });
     const unrecorded = await auditChange(org, task.id, null);
-    await db.insert(schema.comment).values({
-      organizationId: org.orgId,
-      authorId: org.humanActorId,
-      subjectType: 'task',
-      subjectId: task.id,
-      body: 'A comment',
-      createdAt: nextAt(),
-    });
+    const [editedComment] = await db
+      .insert(schema.comment)
+      .values({
+        organizationId: org.orgId,
+        authorId: org.humanActorId,
+        subjectType: 'task',
+        subjectId: task.id,
+        body: 'An edited comment',
+        createdAt: nextAt(),
+        editedAt: nextAt(),
+        editedById: null,
+        editedOrigin: context.originFor(
+          'edit_comment',
+          {},
+          context.clientProvenance('api', { name: 'Codex', id: 'codex-client' }),
+        ),
+      })
+      .returning({ id: schema.comment.id });
+    const [agentComment] = await db
+      .insert(schema.comment)
+      .values({
+        organizationId: org.orgId,
+        authorId: null,
+        createdBy: org.humanActorId,
+        origin: context.originFor(
+          'comment',
+          {},
+          context.clientProvenance('mcp', { name: 'Codex' }),
+        ),
+        subjectType: 'task',
+        subjectId: task.id,
+        body: 'Agent comment',
+        createdAt: nextAt(),
+      })
+      .returning({ id: schema.comment.id });
 
     const items = await activityOf(org, task.id);
 
@@ -157,7 +185,20 @@ describe('task Activity origin', () => {
       clientName: 'Cursor',
     });
     expect(entry(items, unrecorded).origin).toBeNull();
-    expect(items.find((item) => item.type === 'comment')?.origin).toBeNull();
+    expect(
+      items.find((item) => item.type === 'comment' && item.id !== `comment:${agentComment?.id}`)
+        ?.origin,
+    ).toBeNull();
+    expect(entry(items, `comment:${editedComment?.id}`).commentEdit?.origin).toMatchObject({
+      channel: 'api',
+      performerKind: 'agent',
+      performerName: 'Codex',
+    });
+    expect(entry(items, `comment:${agentComment?.id}`).origin).toMatchObject({
+      channel: 'mcp',
+      performerKind: 'agent',
+      performerName: 'Codex',
+    });
   });
 
   it('leaves the creation origin empty for a task no recorded change created', async () => {

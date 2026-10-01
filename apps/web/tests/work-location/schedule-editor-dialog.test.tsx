@@ -3,7 +3,7 @@ import '@testing-library/jest-dom/vitest';
 import type { WorkPlaceOut } from '@docket/planning/work-location-contract';
 import { TooltipProvider } from '@docket/ui/primitives';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ScheduleEditorDialog } from '../../src/components/work-location/schedule-editor-dialog';
 
@@ -46,7 +46,15 @@ function renderEditor(onSave = vi.fn()): void {
   );
 }
 
-afterEach(cleanup);
+beforeEach(() => {
+  vi.useFakeTimers();
+  vi.setSystemTime(new Date('2026-09-05T12:00:00.000Z'));
+});
+
+afterEach(() => {
+  cleanup();
+  vi.useRealTimers();
+});
 
 describe('ScheduleEditorDialog', () => {
   it('flags an inverted time range on the date and time controls and clears it once fixed', () => {

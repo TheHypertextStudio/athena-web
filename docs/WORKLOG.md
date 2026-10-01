@@ -11987,6 +11987,16 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
 
 ## Completed Tasks
 
+### [CI-DATE-FIXTURE-001] Keep schedule dialog tests stable across calendar months
+
+- **Completed**: 2026-09-30
+- **Priority**: P1
+- **Summary**: The schedule dialog tests now freeze the clock while selecting September dates. The CI runner reached October 1 in UTC and opened the date picker on October, so two fixed-date assertions could not find September 15.
+- **Approach**: Use the same September 5 test clock as the neighboring work-schedule tests and restore real timers after each case. Keep the product's date picker behavior unchanged.
+- **Files changed**: Schedule dialog tests and this log.
+- **Validation**: Both tests failed with `TZ=UTC` before the fix and passed 2/2 with the same timezone after it. The existing Los Angeles-time run passed 2/2 before the change. The affected file passed lint and formatting, and the web typecheck passed with a 4 GB Node heap.
+- **Retrospective**: Calendar tests with fixed dates need a fixed clock when the picker opens to the current month. The UTC release runner exposed the missing fixture at the month boundary.
+
 ### [ATHENA-VISUAL-MARKERS-001] Remove generic sparkle marks from Athena and agent surfaces
 
 - **Completed**: 2026-09-30

@@ -60,7 +60,7 @@ test('an open app enters the saved daily planner at workday start and does not r
       return announcement.isVisible();
     })
     .toBe(true);
-  await expect(announcement.getByText('5', { exact: true })).toBeVisible();
+  await expect(announcement.getByText('Opening planner in 5 seconds.')).toBeVisible();
   await page.evaluate(async () => document.fonts.ready);
   await page.screenshot({
     path: testInfo.outputPath('announcement-desktop.png'),
@@ -97,7 +97,7 @@ test('an open app enters the saved daily planner at workday start and does not r
   });
   await page.setViewportSize({ width: 390, height: 844 });
   await page.clock.runFor(4_000);
-  await expect(announcement.getByText('1', { exact: true })).toBeVisible();
+  await expect(announcement.getByText('Opening planner in 1 second.')).toBeVisible();
   await expect(page).toHaveURL(/\/inbox$/);
   await page.clock.runFor(1_000);
   await expect(page).toHaveURL(`/plan?view=day&date=${date}`);

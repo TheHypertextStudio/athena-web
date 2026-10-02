@@ -11987,6 +11987,14 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
 
 ## Completed Tasks
 
+### [DAILY-PLANNING-COUNTDOWN-COPY-001] Label the countdown with its action and unit
+
+- **Completed**: 2026-10-02
+- **Summary**: Removed the bare number badge. The single visible countdown now reads “Opening planner in 5 seconds.” beneath the heading and updates each second. The static accessible description still announces once.
+- **Files changed**: The planning announcement, focused component and browser tests, and this log.
+- **Validation**: The updated copy assertions failed before the change. All 27 focused tests passed afterward. Changed-file ESLint, diff whitespace, and the authenticated browser check passed. Fresh desktop and phone captures show the labeled countdown. The browser check verifies “1 second,” navigation to the saved review stage, and 320px fit. Prior type and build checks cover the unchanged logic and interfaces.
+- **Learning**: A bare numeral does not communicate time or the action that happens at zero. One countdown sentence supplies both without duplicating the counter.
+
 ### [DAILY-PLANNING-HEADING-FIRST-001] Lead the announcement with its heading
 
 - **Completed**: 2026-10-02

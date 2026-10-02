@@ -116,11 +116,15 @@ describe('automatic daily planning', () => {
   it('announces once and shows a five second countdown before opening the existing route', async () => {
     mount();
     expect(screen.getByRole('dialog', { name: 'It’s time to plan your day' })).toBeVisible();
-    expect(screen.getByText('Opening planner in 5 seconds.')).toBeVisible();
+    expect(screen.getByText('5', { exact: true })).toBeVisible();
+    expect(screen.getByText('Opening your planner automatically.')).toBeVisible();
     expect(screen.queryByRole('button', { name: /close|later|skip|dismiss/i })).toBeNull();
     await advance(1000);
-    expect(screen.getByText('Opening planner in 4 seconds.')).toBeVisible();
-    expect(screen.getByText('Opening planner in 4 seconds.').closest('[aria-live]')).toBeNull();
+    expect(screen.getByText('4', { exact: true })).toBeVisible();
+    expect(screen.getByText('4', { exact: true }).closest('[aria-live]')).toBeNull();
+    expect(screen.getByRole('dialog')).toHaveAccessibleDescription(
+      'Opening planner in five seconds.',
+    );
     await advance(4000);
     expect(state.push).toHaveBeenCalledExactlyOnceWith('/plan?view=day&date=2026-10-02');
   });
@@ -130,7 +134,7 @@ describe('automatic daily planning', () => {
     await advance(1500);
     state.preferences.isSuccess = true;
     view.rerender(<AutomaticDailyPlanning userId={userId} />);
-    expect(screen.getByText('Opening planner in 5 seconds.')).toBeVisible();
+    expect(screen.getByText('5', { exact: true })).toBeVisible();
     await advance(4999);
     expect(state.push).not.toHaveBeenCalled();
     await advance(1);
@@ -162,7 +166,7 @@ describe('automatic daily planning', () => {
       expect(screen.queryByRole('dialog')).toBeNull();
       await foreground(true, event === 'blur' ? 'focus' : event);
       expect(state.day.refetch).toHaveBeenCalled();
-      expect(screen.getByText('Opening planner in 5 seconds.')).toBeVisible();
+      expect(screen.getByText('5', { exact: true })).toBeVisible();
       await advance(5000);
       expect(state.push).toHaveBeenCalledTimes(1);
     },
@@ -212,7 +216,7 @@ describe('automatic daily planning', () => {
     mount();
     expect(screen.queryByRole('dialog')).toBeNull();
     await advance(2000);
-    expect(screen.getByText('Opening planner in 5 seconds.')).toBeVisible();
+    expect(screen.getByText('5', { exact: true })).toBeVisible();
   });
   it('uses the Hub date rather than the browser or UTC date', () => {
     state.preferences.data.timezone = 'Pacific/Honolulu';
@@ -240,7 +244,7 @@ describe('automatic daily planning', () => {
     state.day.isSuccess = true;
     state.day.isError = false;
     view.rerender(<AutomaticDailyPlanning userId={userId} />);
-    expect(screen.getByText('Opening planner in 5 seconds.')).toBeVisible();
+    expect(screen.getByText('5', { exact: true })).toBeVisible();
   });
   it('does not reopen while already on the daily planner', () => {
     state.pathname = '/plan';
@@ -312,7 +316,7 @@ describe('automatic daily planning', () => {
     expect(state.push).toHaveBeenCalledTimes(1);
     await foreground(false);
     await foreground(true);
-    expect(screen.getByText('Opening planner in 5 seconds.')).toBeVisible();
+    expect(screen.getByText('5', { exact: true })).toBeVisible();
     await advance(5000);
     expect(state.push).toHaveBeenCalledTimes(2);
   });
@@ -327,14 +331,14 @@ describe('automatic daily planning', () => {
     await foreground(true);
     state.day.data = { accepted: null, draft: null };
     view.rerender(<AutomaticDailyPlanning userId={userId} />);
-    expect(screen.getByText('Opening planner in 5 seconds.')).toBeVisible();
+    expect(screen.getByText('5', { exact: true })).toBeVisible();
   });
   it('reevaluates a new local day while the shell stays mounted', async () => {
     mount();
     fireEvent.click(screen.getByRole('button', { name: 'Plan now' }));
     vi.setSystemTime(new Date('2026-10-09T17:00:00Z'));
     await advance(1000);
-    expect(screen.getByText('Opening planner in 5 seconds.')).toBeVisible();
+    expect(screen.getByText('5', { exact: true })).toBeVisible();
     fireEvent.click(screen.getByRole('button', { name: 'Plan now' }));
     expect(state.push).toHaveBeenLastCalledWith('/plan?view=day&date=2026-10-09');
   });

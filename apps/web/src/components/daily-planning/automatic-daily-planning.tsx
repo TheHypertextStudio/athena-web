@@ -158,9 +158,7 @@ function DailyPlanningAnnouncement({
             </DialogTitle>
             <DialogDescription className="text-body-large">
               <span className="sr-only">Opening planner in five seconds.</span>
-              <span aria-hidden="true">
-                Opening planner in {remaining} {remaining === 1 ? 'second' : 'seconds'}.
-              </span>
+              <span aria-hidden="true">Opening your planner automatically.</span>
             </DialogDescription>
           </div>
         </DialogBody>

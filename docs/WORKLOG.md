@@ -11987,6 +11987,14 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
 
 ## Completed Tasks
 
+### [DAILY-PLANNING-SINGLE-COUNTDOWN-001] Show one planning countdown
+
+- **Completed**: 2026-10-02
+- **Summary**: Removed the repeated number from the visible caption. The large numeral is the only visible countdown; the static accessible description still announces the five-second opening once.
+- **Files changed**: The automatic planning announcement, its component and browser tests, and this log.
+- **Validation**: All 27 focused behavior tests, changed-file ESLint, diff whitespace, and the authenticated browser test passed. Desktop, 390px phone, and 320px phone captures show the single countdown; navigation still resumes the saved review stage. Existing full type, lint, and build checks passed before this copy-only correction.
+- **Learning**: A prominent countdown numeral makes repeating its value in the caption redundant.
+
 ### [DAILY-PLANNING-PROMINENCE-001] Make the planning announcement prominent
 
 - **Completed**: 2026-10-02

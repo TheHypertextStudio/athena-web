@@ -33,3 +33,12 @@ export function clearableTextPatch<K extends string>(
   const trimmed = value.trim();
   return { [key]: trimmed === '' ? null : trimmed } as Partial<Record<K, string | null>>;
 }
+
+/** Preserve nonempty Markdown literally while retaining the PATCH convention for clearing bodies. */
+export function clearableMarkdownPatch<K extends string>(
+  key: K,
+  value: string | undefined,
+): Partial<Record<K, string | null>> {
+  if (value === undefined) return {};
+  return { [key]: value.trim() === '' ? null : value } as Partial<Record<K, string | null>>;
+}

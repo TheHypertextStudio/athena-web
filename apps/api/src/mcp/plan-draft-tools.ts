@@ -29,6 +29,8 @@ import { planCounts } from '@docket/work/plan-draft';
 import type { InitiativeId } from '@docket/work/ids';
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';
+import { requirePlanTemplateDecisions } from './plan-template-decisions';
+import { templateDecisionFields } from './template-selection';
 
 import { NotFoundError } from '../error';
 import { commitPlanNodes } from '../lib/plan-draft/commit';
@@ -280,10 +282,13 @@ function registerPlanCommit(server: McpRegistrar, ctx: McpContext): void {
     {
       title: 'Confirm part of a plan',
       description:
-        'Create the named draft nodes as real work, in one transaction.\n\nDraft ancestors come along, and anything already there by that name is matched rather than duplicated. Call it only for a part the person has settled, and say what it will create.',
+        'Create the named draft nodes as real work, in one transaction.\n\nDraft ancestors come along, and anything already there by that name is matched rather than duplicated. Call it only for a part the person has settled, and say what it will create. Generally apply relevant templates through plan_draft before confirmation. If eligible saved templates exist, untemplated nodes require withoutTemplateReason; otherwise confirmation returns choices without creating work.',
       inputSchema: {
         planId: planIdParam,
         refs: z.array(z.string()).min(1).max(200),
+        withoutTemplateReason: templateDecisionFields.withoutTemplateReason.describe(
+          'Why untemplated nodes and their unconfirmed ancestors use freeform content. Omit when those nodes have an applied template or no eligible templates exist.',
+        ),
       },
       outputSchema: {
         planId: z.string(),
@@ -320,6 +325,13 @@ function registerPlanCommit(server: McpRegistrar, ctx: McpContext): void {
           id: row.organizationId,
           orgId: row.organizationId,
         });
+        const selection = await requirePlanTemplateDecisions(
+          row,
+          actorCtx.actorId,
+          input.refs,
+          input.withoutTemplateReason,
+        );
+        if (selection) return selection;
         const result = await commitPlanNodes({
           row,
           refs: input.refs,

@@ -10,12 +10,14 @@
  * Every write here records a change set, because the surface executes immediately instead of
  * proposing. That is only a defensible trade if the caller can see what happened and reverse it.
  */
-import { db, task } from '@docket/db';
 import { TaskId } from '@docket/work/ids';
 import { z } from 'zod';
 
 import { NotFoundError } from '../error';
-import { deriveCaptureTitle } from '../lib/capture-title';
+import { createCapturedTasks } from './capture-template-tasks';
+import { templateDecisionFields, requireTemplateDecisions } from './template-selection';
+import { Priority } from '@docket/work/task-contract';
+import { LabelId } from '@docket/work/ids';
 import { originFor } from '../lib/provenance/context';
 import { resolveLandingTarget } from '../lib/task-landing';
 import { enqueueSearchUpsert } from '../search/write-through';
@@ -66,9 +68,18 @@ export function registerWriteTools(server: McpRegistrar, ctx: McpContext): void 
     {
       title: 'Capture',
       description:
-        'Create tasks from text. Before writing a structured task body, call list_templates with targetType task and look for a relevant template. Read its literal Markdown in payload.description, keep its sections, and fill them with the task details instead of inventing a format. Pass that completed Markdown as text; the template id alone does not apply it. Use freeform text when no template fits or quick capture needs no outline. The team, workflow state, current cycle, and assignee are all resolved for you, so this is the cheapest path from a sentence to a tracked piece of work. `text` takes a list, so capturing ten things said in one breath is one call and not ten. Use organize when the things need placing under a project or each other.',
+        'Create tasks from text. Before writing a structured task body, call list_templates with targetType task and look for a relevant template. Read its literal Markdown in payload.description, keep its sections, and fill them with the task details instead of inventing a format. Pass template by ID or name. With a template, one-line text is the title and omitted description copies the saved Markdown; multiline text is an explicit body. Explicit description, priority, and labelIds override defaults. The result returns the saved body for filling through update. Supply withoutTemplateReason for freeform text or quick capture. When eligible templates exist and neither choice is supplied, no tasks are created and choices are returned. The team, workflow state, current cycle, and assignee are all resolved for you, so this is the cheapest path from a sentence to a tracked piece of work. `text` takes a list, so capturing ten things said in one breath is one call and not ten. Use organize when the things need placing under a project or each other.',
       inputSchema: {
         orgId: orgIdParam,
+        ...templateDecisionFields,
+        description: z
+          .string()
+          .optional()
+          .describe(
+            'An explicit completed Markdown body, including an empty string to suppress the template body. Shared by all captures in this call.',
+          ),
+        priority: Priority.optional(),
+        labelIds: z.array(LabelId).optional(),
         text: z
           .union([z.string().min(1), z.array(z.string().min(1)).min(1).max(MAX_CAPTURES)])
           .describe(
@@ -81,6 +92,10 @@ export function registerWriteTools(server: McpRegistrar, ctx: McpContext): void 
             z.object({
               id: TaskId,
               title: z.string(),
+              description: z
+                .string()
+                .nullable()
+                .describe('The saved body. Fill template sections through update.'),
               href: z.string().describe('Where it lives in the product app.'),
               state: z.string().describe("The workflow state it landed in — the team's first."),
               teamId: z.string().describe('The team it landed on.'),
@@ -111,25 +126,22 @@ export function registerWriteTools(server: McpRegistrar, ctx: McpContext): void 
         if (!landing) throw new NotFoundError('No team to capture into');
 
         const texts = Array.isArray(input.text) ? input.text : [input.text];
-        // One insert for the whole list, against the landing target resolved once above, so every
-        // task in a call lands on the same team and cycle.
-        const rows = await db
-          .insert(task)
-          .values(
-            texts.map((text) => ({
-              organizationId: input.orgId,
-              title: deriveCaptureTitle(text),
-              description: text,
-              teamId: landing.teamId,
-              statusId: landing.statusId,
-              state: landing.state,
-              assigneeId: landing.assigneeId,
-              cycleId: landing.cycleId,
-              source: 'native' as const,
-              createdBy: actorCtx.actorId,
-            })),
-          )
-          .returning();
+        const selection = await requireTemplateDecisions(input.orgId, actorCtx.actorId, [
+          {
+            ...input,
+            ref: 'text',
+            kind: 'task',
+            teamId: landing.teamId,
+          },
+        ]);
+        if (selection) return selection;
+        const rows = await createCapturedTasks(
+          input.orgId,
+          actorCtx.actorId,
+          texts,
+          landing,
+          input,
+        );
         const first = rows[0];
         /* v8 ignore next -- @preserve defensive: insert always returns a row per value */
         if (!first) throw new Error('capture insert returned no row');
@@ -167,6 +179,7 @@ export function registerWriteTools(server: McpRegistrar, ctx: McpContext): void 
           items: rows.map((row) => ({
             id: row.id,
             title: row.title,
+            description: row.description,
             href: entityHref(input.orgId, 'task', row.id),
             state: row.state,
             teamId: row.teamId,

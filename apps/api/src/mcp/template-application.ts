@@ -1,7 +1,7 @@
 /** Shared template resolution and task-default application for MCP authoring. */
 import { db, template } from '@docket/db';
 import { TaskCreate } from '@docket/work/task-model';
-import { TemplateDraft } from '@docket/work/template-contract';
+import { TemplateDraft, type TemplateTargetType } from '@docket/work/template-contract';
 
 import { ValidationError } from '../error';
 import { resolveAttachedLabels, resolveLabelSet } from '../lib/labels';
@@ -14,12 +14,13 @@ export async function resolveVisibleTemplate(
   orgId: string,
   actorId: string,
   value: string,
+  targetType?: TemplateTargetType,
 ): Promise<TemplateRow> {
   if (isUlid(value)) return requireVisibleTemplate(orgId, actorId, value);
   const rows = await db
     .select({ id: template.id, label: template.name })
     .from(template)
-    .where(visibleTemplateWhere(orgId, actorId, {}));
+    .where(visibleTemplateWhere(orgId, actorId, { targetType }));
   return requireVisibleTemplate(orgId, actorId, await pick('template', value, rows));
 }
 
@@ -33,7 +34,7 @@ export async function taskFromTemplate(
   value: string,
   task: TaskCreate,
 ): Promise<TaskCreate> {
-  const row = await resolveVisibleTemplate(orgId, actorId, value);
+  const row = await resolveVisibleTemplate(orgId, actorId, value, 'task');
   const draft = TemplateDraft.parse(row.payload);
   if (draft.targetType !== 'task' || (row.scope === 'team' && row.teamId !== task.teamId)) {
     throw new ValidationError([

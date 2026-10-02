@@ -27,7 +27,10 @@ Today opens a focused daily planning flow for reviewing prior work, choosing tas
 MCP agents creating tasks, projects, initiatives, or programs should generally discover a relevant
 template through `list_templates`, read its literal Markdown body, and use that structure when
 writing the work. The server supplies this guidance during initialization and in creation tool
-contracts. See [template use over MCP](apps/docs/developers/mcp-tools-and-resources.mdx#create-work-from-a-template-body).
+contracts. Creation tools accept template references, copy omitted bodies and defaults, and return
+the saved description for editing. When eligible saved templates exist, agents must select one
+or supply `withoutTemplateReason` before creation. Explicit properties override defaults.
+See [template use over MCP](apps/docs/developers/mcp-tools-and-resources.mdx#create-work-from-a-template-body).
 
 ## From clone to a working app
 

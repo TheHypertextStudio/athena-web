@@ -19,6 +19,7 @@
  */
 import { z } from 'zod';
 
+import { prepareOrganizeItems } from './organize-templates';
 import { NotFoundError } from '../error';
 import {
   MAX_ITEMS,
@@ -29,7 +30,6 @@ import {
   inParentOrder,
   placeItem,
   placementUnder,
-  resolveItem,
 } from '../lib/organize/place';
 import { originFor } from '../lib/provenance/context';
 import { resolveLandingTarget } from '../lib/task-landing';
@@ -46,7 +46,7 @@ import { recordToolChangeSet } from './tool-activity';
 import { WIDGET, widgetMeta } from './apps';
 import { placedOutputSchema, placedWithContainers } from './organize-containers';
 import { authorize, jsonResult, runTool, scopedActor } from './result';
-import { orgIdParam, resolveStateTransition } from './tools-shared';
+import { orgIdParam } from './tools-shared';
 
 /**
  * The one-line summary an `organize` change set is recorded under.
@@ -76,7 +76,7 @@ export function registerOrganizeTool(server: McpRegistrar, ctx: McpContext): voi
     {
       title: 'Organize work',
       description:
-        'Create a whole plan — initiatives, programs, projects, milestones, and tasks — in one call. Before writing descriptions for tasks, projects, initiatives, or programs, call list_templates with the matching targetType. Read a relevant template’s literal Markdown in payload.description, retain its structure, and fill its sections with the work details instead of inventing a format. Pass the completed Markdown as each item description. Milestones have no work templates. Templates do not create child work. Place the plan with children naming their parent by a local `ref` you invent. A milestone sits under a project, and a task under a milestone lands on it. Running the same plan twice does not duplicate it: anything already there by that name in that place is matched and reused, and the result says which was which. Use this for turning a document or a conversation into structure; use capture for a single task.',
+        'Create a whole plan — initiatives, programs, projects, milestones, and tasks — in one call. Before writing descriptions for tasks, projects, initiatives, or programs, call list_templates with the matching targetType. Read a relevant template’s literal Markdown in payload.description, retain its structure, and fill its sections with the work details instead of inventing a format. Pass a relevant template ID or name as each item template. Omitted descriptions copy the literal body; explicit fields override defaults. The result returns each new body for filling through update. Supply withoutTemplateReason to choose freeform work. If eligible templates exist and neither choice is supplied, no work is created and template choices are returned. Milestones have no work templates. Templates do not create child work. Place the plan with children naming their parent by a local `ref` you invent. A milestone sits under a project, and a task under a milestone lands on it. Running the same plan twice does not duplicate it: anything already there by that name in that place is matched and reused, and the result says which was which. Use this for turning a document or a conversation into structure; use capture for a single task.',
       inputSchema: {
         orgId: orgIdParam,
         items: z
@@ -122,26 +122,14 @@ export function registerOrganizeTool(server: McpRegistrar, ctx: McpContext): voi
         // them depend on anything the plan writes, and resolving them inside would mean issuing
         // reads on a connection the transaction already holds — which does not merely read stale
         // data, it stalls. A bad name therefore fails before a single row is written.
-        const prepared = await Promise.all(
-          ordered.map(async (item, index) => {
-            const refs = await resolveItem(input.orgId, item);
-            const state =
-              item.state === undefined
-                ? {
-                    statusId: landing.statusId,
-                    state: landing.state,
-                    completedAt: null,
-                    canceledAt: null,
-                  }
-                : await resolveStateTransition(
-                    input.orgId,
-                    refs.teamId ?? landing.teamId,
-                    item.state,
-                    `items.${index}.state`,
-                  );
-            return { item, refs, state };
-          }),
+        const prepared = await prepareOrganizeItems(
+          input.orgId,
+          actorCtx.actorId,
+          ordered,
+          landing,
         );
+        if (!Array.isArray(prepared)) return prepared;
+        assertPriorities(prepared.map(({ item }) => item));
 
         const placed: Placed[] = [];
         const byRef = new Map<string, Placed>();
@@ -149,7 +137,7 @@ export function registerOrganizeTool(server: McpRegistrar, ctx: McpContext): voi
 
         const cascades = await serializableTx(async (tx) => {
           const parentTaskIds: (string | null)[] = [];
-          for (const { item, refs, state } of prepared) {
+          for (const { item, refs, state, templateId } of prepared) {
             /** The already-placed parent from this call, if the item named one. */
             const local = item.parent === undefined ? undefined : byRef.get(item.parent);
 
@@ -159,6 +147,7 @@ export function registerOrganizeTool(server: McpRegistrar, ctx: McpContext): voi
               orgId: input.orgId,
               actorId: actorCtx.actorId,
               item,
+              templateId,
               at,
               teamId: refs.teamId ?? landing.teamId,
               state,
@@ -167,7 +156,10 @@ export function registerOrganizeTool(server: McpRegistrar, ctx: McpContext): voi
               leadId: refs.leadId,
             });
 
-            placed.push(result.placed);
+            placed.push({
+              ...result.placed,
+              ...(result.placed.created && templateId ? { templateId } : {}),
+            });
             byRef.set(item.ref, result.placed);
             if (result.change) changes.push(result.change);
             if (result.placed.kind === 'task' && result.placed.created) {

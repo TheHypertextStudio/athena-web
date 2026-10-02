@@ -79,8 +79,8 @@ The creation paths accept the body in these places:
 
 | Tool                      | How to use the template body                                                                                                                                                                          |
 | ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `capture`                 | Put the task title first, then the completed Markdown in `text`.                                                                                                                                      |
-| `organize`                | Put the completed Markdown in each item's `description`.                                                                                                                                              |
+| `capture`                 | Pass `template` and a title in `text` to copy its body. Pass `description` or multiline `text` to supply an explicit body. The result includes the saved description for editing.                     |
+| `organize`                | Pass `items[].template` by ID or name. Omitted descriptions copy the literal body; explicit descriptions and properties override defaults. Each new placement returns its saved description.          |
 | `plan_start`, `plan_read` | Read each template's `body`; both return the full Markdown.                                                                                                                                           |
 | `plan_draft`              | Add a node, apply `{op: "apply_template", ref, templateId}` before drafting its body, then use `set_fields` to fill its sections.                                                                     |
 | `repeat_task`             | Pass a visible task template as `template` and the completed Markdown as `recurringTask.task.description`. Explicit body and properties win; omitted fields use the saved body, priority, and labels. |
@@ -90,6 +90,48 @@ existing body, or create child work. Setting a node's `templateId` alone copies 
 may carry secondary property defaults; preserve explicit values. An explicit empty label list
 keeps a repeating task unlabelled, deleted default labels are dropped, and a team template must
 match the repeating task's team. Personal and team templates remain permission-filtered.
+
+`capture`, `organize`, `repeat_task`, and MCP `plan_commit` require an explicit template decision
+when eligible saved templates exist. Select a relevant template or provide `withoutTemplateReason`
+when none fits, the person requests freeform content, or quick capture needs no outline. An
+undecided call returns `isError: true` with `code: "template_selection_required"` and visible
+choices before creating any work. The check considers the entity kind, destination team, and
+caller visibility. It does not seed templates; first catalog reads still install shipped defaults.
+
+For example, create a populated event project with `organize`:
+
+```json
+{
+  "orgId": "<workspace-id>",
+  "items": [
+    {
+      "ref": "event",
+      "kind": "project",
+      "title": "October launch event",
+      "template": "Event",
+      "targetDate": "2026-10-30"
+    }
+  ]
+}
+```
+
+Read `placed[0].description`, fill its sections, and call `update` with `entity: "project"`,
+`scope: { "ids": ["<returned-project-id>"] }`, and `set: { "description": "<completed Markdown>" }`.
+Nonempty Markdown remains literal through this edit. Creation and completion are separate writes,
+so an interrupted agent can leave a populated outline behind. Agents that already know the full
+body may provide the completed description in the creation call instead.
+
+Templates supply defaults rather than locking fields. Manual dates, placement, owners, leads,
+priorities, and labels remain available. Empty bodies and label lists explicitly suppress those
+defaults. Invalid saved statuses or label scopes fail rather than silently substituting other
+values; an explicit override can repair the creation call. Matching existing work never reapplies
+its template, overwrites its body, or adds default labels.
+
+Planning remains editable before confirmation. Apply templates through `plan_draft`, then fill
+sections through `set_fields`. MCP `plan_commit` checks selected nodes and their unconfirmed
+ancestors. It accepts `withoutTemplateReason` for untemplated nodes. A node that only names a
+template without applying its available body returns `template_application_required` before
+confirmation. These requirements apply to MCP agents; the human canvas remains unchanged.
 
 `list_templates` needs `work:read` and workspace `view` access. It initializes shipped defaults
 on the first template read, following the same rule as the template picker. `define_template`

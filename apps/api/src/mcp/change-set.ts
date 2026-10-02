@@ -38,6 +38,8 @@ import type { RecordedOrigin } from '@docket/work/provenance-contract';
 
 import { ConflictError, NotFoundError } from '../error';
 import { isCompanionKind, revertCompanion, revertCompanionIn } from './change-set-companions';
+import { TRACKED } from './change-set-fields';
+export { trackedFields } from './change-set-fields';
 import { restoredDate, unchangedSince } from './change-set-values';
 import { revertMilestone } from './milestone-undo';
 import { serializableTx } from '../lib/serializable-tx';
@@ -126,88 +128,6 @@ function isRelation(kind: string): kind is RelationKind {
 /** The composite key a relation entry is stored under, since an edge has no id of its own. */
 export function edgeKey(from: string, to: string): string {
   return `${from}:${to}`;
-}
-
-/**
- * The columns a change set records per kind, and the only ones undo restores.
- *
- * @remarks
- * Recording the whole row would make undo refuse on any unrelated edit — `updatedAt` alone would
- * defeat it. Narrowing to the fields a tool can actually write is what lets undo work on a live
- * workspace rather than only an untouched one. `archivedAt` is here because archive is a recorded
- * op; the external-provenance columns are not, because no tool on this surface writes them.
- */
-const TRACKED: Record<RecordableKind, readonly string[]> = {
-  task: [
-    'title',
-    'description',
-    'state',
-    'statusId',
-    'priority',
-    'assigneeId',
-    'delegateId',
-    'projectId',
-    'programId',
-    'milestoneId',
-    'cycleId',
-    'parentTaskId',
-    'teamId',
-    'templateId',
-    'estimate',
-    'estimateMinutes',
-    'startDate',
-    'dueDate',
-    'completedAt',
-    'canceledAt',
-    'autoCompletedBySubtasks',
-    'archivedAt',
-  ],
-  project: [
-    'name',
-    'description',
-    'status',
-    'statusId',
-    'priority',
-    'health',
-    'leadId',
-    'programId',
-    'teamId',
-    'startDate',
-    'startDateResolution',
-    'startDateFiscalYearStartMonth',
-    'targetDate',
-    'targetDateResolution',
-    'targetDateFiscalYearStartMonth',
-    'archivedAt',
-  ],
-  program: ['name', 'description', 'status', 'health', 'ownerId', 'archivedAt'],
-  initiative: [
-    'name',
-    'description',
-    'status',
-    'health',
-    'priority',
-    'ownerId',
-    'targetDate',
-    'targetDateResolution',
-    'targetDateFiscalYearStartMonth',
-    'archivedAt',
-  ],
-  milestone: ['projectId', 'name', 'description', 'targetDate', 'sort'],
-};
-
-/**
- * Project a row down to the fields a change set tracks for its kind.
- *
- * @param kind - The entity kind.
- * @param row - The full row.
- * @returns the tracked subset.
- */
-export function trackedFields(
-  kind: RecordableKind,
-  row: Record<string, unknown>,
-): Record<string, unknown> {
-  return Object.fromEntries(TRACKED[kind].map((key) => [key, row[key]]));
 }
 
 /** A single recorded change to one entity, before it is written. */
@@ -467,6 +387,7 @@ function taskPatchFromSnapshot(snapshot: Record<string, unknown>): Record<string
   return {
     title: snapshot['title'],
     description: snapshot['description'],
+    summary: snapshot['summary'],
     state: snapshot['state'],
     statusId: snapshot['statusId'],
     priority: snapshot['priority'],

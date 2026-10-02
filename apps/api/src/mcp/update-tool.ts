@@ -28,7 +28,7 @@ import type { PgTable } from 'drizzle-orm/pg-core';
 import { z } from 'zod';
 
 import { ApiError, ValidationError } from '../error';
-import { clearableTextPatch } from '../lib/clearable-text';
+import { clearableMarkdownPatch } from '../lib/clearable-text';
 import { originFor } from '../lib/provenance/context';
 import { assertPlanningDateRange, planningDatePatch } from '../lib/planning-timeframe';
 import {
@@ -254,7 +254,7 @@ async function buildPatch(
   const patch: Record<string, unknown> = {
     // `title` is the caller's word for it; the column is `name` on everything but a task.
     ...(set.title !== undefined ? { [entity === 'task' ? 'title' : 'name']: set.title } : {}),
-    ...clearableTextPatch('description', set.description),
+    ...clearableMarkdownPatch('description', set.description),
     // Resolved once by the caller, before the scope query, so a status this workspace does not
     // have is refused even when the scope matches nothing.
     ...(containerStatus === undefined

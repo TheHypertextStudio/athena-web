@@ -45,6 +45,17 @@ export const placedOutputSchema = z.object({
     })
     .optional()
     .describe('The existing project, program, or initiative a top-level item was filed into.'),
+  templateId: z
+    .string()
+    .optional()
+    .describe('The template applied to newly created work in this call. Omitted for matches.'),
+  description: z
+    .string()
+    .nullable()
+    .optional()
+    .describe(
+      'The saved body for newly created work. Fill its sections through update. Omitted for matched existing work.',
+    ),
   created: z.boolean().describe('False when an existing item of that name was matched instead.'),
   projectId: z.string().optional().describe('For a milestone, the project it is in.'),
 });

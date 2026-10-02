@@ -167,9 +167,10 @@ describe('MCP template discovery', () => {
       expect(page.templates).toHaveLength(1);
       expect(page.templates[0]?.payload.description).toBe(markdown);
     }
-    const start = body<{ planId: string; templates: { targetType: string; body: string }[] }>(
-      await client.callTool({ name: 'plan_start', arguments: { orgId: seed.orgId } }),
-    );
+    const start = body<{
+      planId: string;
+      templates: { id: string; targetType: string; body: string }[];
+    }>(await client.callTool({ name: 'plan_start', arguments: { orgId: seed.orgId } }));
     expect(start.templates).toHaveLength(4);
     for (const entry of start.templates) {
       expect(entry.body).toBe(
@@ -184,6 +185,7 @@ describe('MCP template discovery', () => {
       ref: entry.targetType,
       kind: entry.targetType,
       title: `Templated ${entry.targetType}`,
+      template: start.templates.find((t) => t.targetType === entry.targetType)?.id,
       description: entry.body.replace('Keep this structure.', 'Deliver the October review.'),
     }));
     const created = body<{ placed: { kind: string; id: string }[] }>(

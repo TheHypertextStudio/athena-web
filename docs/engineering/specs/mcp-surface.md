@@ -225,28 +225,44 @@ mapping are in [MCP tools and resources](../../../apps/docs/developers/mcp-tools
 `list_templates` exposes authorized payloads through `work:read` plus workspace `view`, with signed
 pagination bound to the actor, workspace, and target-kind filter. It uses the shared template
 visibility predicate and lazy shipped-default seeding. Both planning reads return template bodies.
-The `repeat_task.template` argument resolves a visible task template and validates its target team
-before the process service writes anything. Explicit body and properties win without trimming authored Markdown. Omitted fields use saved
-defaults. An explicit empty body or label list remains empty, and stale default label IDs drop.
+`capture.template`, `organize.items[].template`, and `repeat_task.template` resolve visible
+templates by ID or name. Creation copies omitted bodies literally and applies defaults beneath
+explicit values. Container defaults include summary, status, health, initiative priority and
+update cadence, and program visibility. Task defaults include priority and surviving labels.
+Manual placement, dates, owners, and leads remain available. Empty bodies and label lists remain
+empty. Task creation records its existing `templateId` column; container creation reports the
+selected template ID without adding a persistent template link.
 
-The sequence diagram shows a client reading the body before writing work through the same server.
+If eligible saved templates exist, direct creation requires either a selection or
+`withoutTemplateReason`. An undecided call returns an execution error with
+`template_selection_required` and visible full drafts before creating work. Eligibility includes
+kind, destination team, and the shared visibility boundary. The guard reads saved templates and
+does not seed new rows. Each suggestion list is capped at 20 with `hasMore`; `list_templates`
+provides signed pagination for the rest. MCP `plan_commit` checks its entire unconfirmed closure
+and requires applied templates or a freeform reason. A template ID alone cannot confirm a node
+whose available template body has never been applied. Human canvas confirmation is unchanged.
+
+The sequence diagram shows server-side application followed by an agent's completion edit.
 
 ```mermaid
 sequenceDiagram
     participant Client as Agent client
     participant Server as Docket MCP server
-    Client->>Server: initialize
-    Server-->>Client: Body-first template instructions
-    Client->>Server: list_templates(orgId, targetType)
-    Server-->>Client: Visible templates with full Markdown bodies
-    Client->>Client: Choose a relevant body and fill its sections
-    Client->>Server: capture, organize, plan_draft, or repeat_task
-    Server-->>Client: Created work or editable plan
+    Client->>Server: organize project with no template decision
+    Server-->>Client: template_selection_required and visible bodies; no work created
+    Client->>Server: organize project with template and manual target date
+    Server-->>Client: New project ID, literal description, and selected template ID
+    Client->>Client: Fill the returned Markdown sections
+    Client->>Server: update entity=project, scope.ids, set.description
+    Server-->>Client: Saved completed body
 ```
 
-The server cannot force a third-party model to follow the instructions or judge whether a template
-is relevant. It does provide the body and the instruction in the tool calls those clients consume.
-The catalog does not add template support to Milestones, Cycles, or Teams.
+Creation and completion remain separate writes. An interrupted agent leaves the populated outline
+in the workspace, and creation may already have triggered automation. An agent can instead submit
+its completed body with the template in the initial call. The server guarantees initial body and
+default application when omitted; it cannot judge relevance or the quality of later edits. Explicit
+freeform reasons keep arbitrary and title-only work possible. Existing matches remain untouched.
+Milestones, Cycles, and Teams have no work templates.
 
 ### 3.2 The tool surface
 

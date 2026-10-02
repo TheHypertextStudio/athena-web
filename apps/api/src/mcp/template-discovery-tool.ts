@@ -30,7 +30,7 @@ const cursorCodec = createCursorCodec({
 const definition = {
   title: 'List templates',
   description:
-    'Discover literal Markdown template bodies before writing tasks, projects, initiatives, or programs. Generally use a fitting template: read payload.description, preserve its structure, and fill its sections with work-specific content. The template description is only a usage summary. Returns only workspace templates, your personal templates, and templates for teams you belong to, with their full payloads. Use an id with plan_draft apply_template or repeat_task template. Use define_template to author or edit a draft. No matching template is required for quick capture or explicitly freeform work.',
+    'Discover literal Markdown template bodies before writing tasks, projects, initiatives, or programs. Generally use a fitting template: read payload.description, preserve its structure, and fill its sections with work-specific content. The template description is only a usage summary. Returns only workspace templates, your personal templates, and templates for teams you belong to, with their full payloads. Use an id with organize items[].template, capture template, repeat_task template, or plan_draft apply_template. Direct creation copies omitted fields and returns the saved body for editing; explicit fields override defaults. Supply withoutTemplateReason when deliberately creating freeform work. Use define_template to author or edit a draft. No matching template is required for quick capture or explicitly freeform work.',
   inputSchema: {
     orgId: orgIdParam,
     targetType: TemplateTargetType.optional().describe(

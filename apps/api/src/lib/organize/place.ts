@@ -17,87 +17,20 @@ import {
   task,
 } from '@docket/db';
 import { Priority } from '@docket/work/task-contract';
+import { InitiativePriority } from '@docket/work/initiative-contract';
+import { replaceLabels, resolveLabelSet } from '../labels';
 import { and, eq, isNull, sql } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { ValidationError } from '../../error';
 import { trackedFields, type ChangeRecord } from '../../mcp/change-set';
-import { DESCRIPTOR_HINT, resolveOptional } from '../../mcp/descriptors';
+import { resolveOptional } from '../../mcp/descriptors';
 import { entityHref } from '../../mcp/entity-href';
 import type { serializableTx } from '../serializable-tx';
 import { attachToMilestone, placeMilestone, resolveItemMilestone } from './place-milestone';
 import { resolveContainerStatus } from '../work-status';
-
-/** The kinds `organize` can place, outermost first — also the order they must be walked in. */
-export const KINDS = ['initiative', 'program', 'project', 'milestone', 'task'] as const;
-/** One placeable kind. */
-export type Kind = (typeof KINDS)[number];
-
-/**
- * The most nodes one plan may contain.
- *
- * @remarks
- * Generous enough for a real document — an initiative with a dozen projects and their tasks — and
- * small enough that the whole thing fits in one transaction without holding locks across a
- * meaningful span of time.
- */
-export const MAX_ITEMS = 200;
-
-/** One node of the plan. */
-export const OrganizeItem = z.object({
-  ref: z
-    .string()
-    .min(1)
-    .describe(
-      'A short handle you invent for this item, unique within the call, so other items can name it as their parent. Never stored.',
-    ),
-  kind: z.enum(KINDS).describe('What to place.'),
-  title: z
-    .string()
-    .min(1)
-    .describe('Its name or title. Also what an existing item is matched against.'),
-  description: z
-    .string()
-    .optional()
-    .describe(
-      'The full Markdown body. For tasks, projects, initiatives, and programs, generally start from a relevant template of the same kind discovered through list_templates, preserve its structure, and fill its sections. The template usage summary is not the body.',
-    ),
-  parent: z
-    .string()
-    .optional()
-    .describe(
-      'The `ref` of another item in this call that this one sits under — a task under a project or milestone, a milestone under a project, a project under a program or initiative, a program under an initiative. To attach to something that already exists instead, use `project`/`program`/`initiative`.',
-    ),
-  project: z
-    .string()
-    .optional()
-    .describe(`An existing project to file this task or milestone under. ${DESCRIPTOR_HINT}`),
-  milestone: z.string().optional().describe('An existing milestone for this task.'),
-  program: z
-    .string()
-    .optional()
-    .describe(`An existing program this rolls up to. ${DESCRIPTOR_HINT}`),
-  initiative: z
-    .string()
-    .optional()
-    .describe(`An existing initiative this contributes to. ${DESCRIPTOR_HINT}`),
-  assignee: z.string().optional().describe(`Who is accountable for the task. ${DESCRIPTOR_HINT}`),
-  owner: z.string().optional().describe(`Who owns the program or initiative. ${DESCRIPTOR_HINT}`),
-  lead: z.string().optional().describe(`Who leads the project. ${DESCRIPTOR_HINT}`),
-  team: z
-    .string()
-    .optional()
-    .describe(`The team that owns it. Defaults to the landing team. ${DESCRIPTOR_HINT}`),
-  priority: z.string().optional().describe("A task's priority."),
-  state: z.string().optional().describe("A task's workflow state, by key or display name."),
-  dueDate: z.iso.date().optional().describe('When the task is due, as `YYYY-MM-DD`.'),
-  targetDate: z.iso
-    .date()
-    .optional()
-    .describe('The target finish for a project, milestone, or initiative, as `YYYY-MM-DD`.'),
-});
-/** One node of the plan. */
-export type OrganizeItem = z.infer<typeof OrganizeItem>;
+import type { OrganizeItem, Kind } from './item';
+export { KINDS, OrganizeItem, MAX_ITEMS, type Kind } from './item';
 
 /** Which parent kinds each kind may sit under, in this call or already in the workspace. */
 const ALLOWED_PARENTS: Record<Kind, readonly Kind[]> = {
@@ -140,6 +73,10 @@ export interface Placed {
   readonly created: boolean;
   /** The project a milestone belongs to, so a task placed under it lands in the same project. */
   readonly projectId?: string | undefined;
+  /** The saved Markdown for newly created work; matched rows are never overwritten. */
+  readonly description?: string | null | undefined;
+  /** The template selected for this creation, when any. */
+  readonly templateId?: string | undefined;
 }
 
 /**
@@ -226,8 +163,9 @@ export function inParentOrder(items: readonly OrganizeItem[]): OrganizeItem[] {
 export function assertPriorities(items: readonly OrganizeItem[]): void {
   for (const [index, item] of items.entries()) {
     if (item.priority === undefined) continue;
-    if (!Priority.safeParse(item.priority).success) {
-      reject(`items.${index}.priority`, item.priority, 'Not a task priority.', Priority.options);
+    const schema = item.kind === 'initiative' ? InitiativePriority : Priority;
+    if (!schema.safeParse(item.priority).success) {
+      reject(`items.${index}.priority`, item.priority, 'Not a valid priority.', schema.options);
     }
   }
 }
@@ -316,6 +254,8 @@ export interface PlaceInput {
   readonly orgId: string;
   readonly actorId: string;
   readonly item: OrganizeItem;
+  /** Resolved template attribution for new tasks. */
+  readonly templateId?: string | undefined;
   readonly at: Placement;
   readonly teamId: string;
   /** The workflow state a new task lands in, already resolved against its team. */
@@ -378,9 +318,13 @@ async function placeInitiative(tx: Tx, input: PlaceInput): Promise<PlaceResult> 
     .insert(initiative)
     .values({
       organizationId: orgId,
-      ...(await containerStatus(tx, orgId, 'initiative', 'active')),
+      ...(await containerStatus(tx, orgId, 'initiative', item.status ?? 'active')),
       name: item.title,
       description: item.description,
+      summary: item.summary,
+      health: item.health,
+      priority: InitiativePriority.default('none').parse(item.priority),
+      updateCadence: item.updateCadence,
       ownerId: input.ownerId,
       targetDate: item.targetDate ? new Date(item.targetDate) : undefined,
       createdBy: input.actorId,
@@ -395,6 +339,7 @@ async function placeInitiative(tx: Tx, input: PlaceInput): Promise<PlaceResult> 
       kind: 'initiative',
       id: row.id,
       created: true,
+      description: row.description,
     },
     change: {
       kind: 'initiative',
@@ -425,9 +370,12 @@ async function placeProgram(tx: Tx, input: PlaceInput): Promise<PlaceResult> {
         .insert(program)
         .values({
           organizationId: orgId,
-          ...(await containerStatus(tx, orgId, 'program', 'active')),
+          ...(await containerStatus(tx, orgId, 'program', item.status ?? 'active')),
           name: item.title,
           description: item.description,
+          summary: item.summary,
+          health: item.health,
+          visibility: item.visibility,
           ownerId: input.ownerId,
           createdBy: input.actorId,
         })
@@ -450,6 +398,7 @@ async function placeProgram(tx: Tx, input: PlaceInput): Promise<PlaceResult> {
       kind: 'program',
       id,
       created: row !== undefined,
+      ...(row ? { description: row.description } : {}),
     },
     ...(row
       ? { change: { kind: 'program', id, op: 'create', after: trackedFields('program', row) } }
@@ -478,9 +427,13 @@ async function placeProject(tx: Tx, input: PlaceInput): Promise<PlaceResult> {
         .insert(project)
         .values({
           organizationId: orgId,
-          ...(await containerStatus(tx, orgId, 'project', 'planned')),
+          ...(await containerStatus(tx, orgId, 'project', item.status ?? 'planned')),
           name: item.title,
           description: item.description,
+          summary: item.summary,
+          health: item.health,
+          priority: Priority.default('none').parse(item.priority),
+          visibility: item.visibility,
           leadId: input.leadId,
           teamId: input.teamId,
           programId: at.programId,
@@ -504,6 +457,7 @@ async function placeProject(tx: Tx, input: PlaceInput): Promise<PlaceResult> {
       kind: 'project',
       id,
       created: row !== undefined,
+      ...(row ? { description: row.description } : {}),
     },
     ...(row
       ? { change: { kind: 'project', id, op: 'create', after: trackedFields('project', row) } }
@@ -555,6 +509,8 @@ async function placeTask(tx: Tx, input: PlaceInput): Promise<PlaceResult> {
       organizationId: orgId,
       title: item.title,
       description: item.description,
+      summary: item.summary,
+      templateId: input.templateId,
       teamId: input.teamId,
       statusId: input.state.statusId,
       state: input.state.state,
@@ -565,7 +521,7 @@ async function placeTask(tx: Tx, input: PlaceInput): Promise<PlaceResult> {
       programId: at.programId,
       milestoneId: at.milestoneId,
       parentTaskId: at.parentTaskId,
-      priority: Priority.parse(item.priority ?? 'none'),
+      priority: Priority.default('none').parse(item.priority),
       dueDate: item.dueDate ? new Date(item.dueDate) : undefined,
       source: 'native',
       createdBy: input.actorId,
@@ -580,6 +536,7 @@ async function placeTask(tx: Tx, input: PlaceInput): Promise<PlaceResult> {
       kind: 'task',
       id: row.id,
       created: true,
+      description: row.description,
     },
     change: { kind: 'task', id: row.id, op: 'create', after: trackedFields('task', row) },
   };
@@ -599,6 +556,19 @@ async function placeTask(tx: Tx, input: PlaceInput): Promise<PlaceResult> {
  * @returns what it became, and the change to record when it was created.
  */
 export async function placeItem(tx: Tx, input: PlaceInput): Promise<PlaceResult> {
+  const result = await placeByKind(tx, input);
+  if (result.placed.created && input.item.kind !== 'milestone' && input.item.labelIds?.length) {
+    const labels = await resolveLabelSet(input.orgId, input.item.labelIds, {
+      teamId: input.item.kind === 'task' ? input.teamId : null,
+      dbh: tx,
+    });
+    await replaceLabels(tx, input.item.kind, result.placed.id, input.orgId, labels);
+  }
+  return result;
+}
+
+/** Dispatch placement while keeping template label writes inside the same transaction. */
+async function placeByKind(tx: Tx, input: PlaceInput): Promise<PlaceResult> {
   switch (input.item.kind) {
     case 'initiative':
       return placeInitiative(tx, input);

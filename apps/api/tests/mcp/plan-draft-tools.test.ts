@@ -305,7 +305,11 @@ describe('plan tools', () => {
     const { planId } = await start(client, { orgId });
     await call(client, 'plan_draft', { planId, revision: 0, ops: SEED_OPS });
     const committed = structured(
-      await call(client, 'plan_commit', { planId, refs: ['t1'] }),
+      await call(client, 'plan_commit', {
+        withoutTemplateReason: 'This test confirms explicitly authored freeform work.',
+        planId,
+        refs: ['t1'],
+      }),
     ) as unknown as CommitOut;
     expect(committed.placed.map((item) => item.ref)).toEqual(['init', 'p1', 't1']);
     expect(committed.created).toBe(3);
@@ -401,7 +405,11 @@ describe('plan tools', () => {
     expect(drafted.added).toEqual(['init', 'p1', 't1', 'f1', 's1']);
 
     const committed = structured(
-      await call(client, 'plan_commit', { planId: started.planId, refs: ['s1'] }),
+      await call(client, 'plan_commit', {
+        withoutTemplateReason: 'This test confirms explicitly authored freeform work.',
+        planId: started.planId,
+        refs: ['s1'],
+      }),
     ) as unknown as CommitOut;
     expect(committed.createdCounts).toEqual({
       initiatives: 1,
@@ -427,7 +435,14 @@ describe('plan tools', () => {
     const attempts: readonly [string, Record<string, unknown>][] = [
       ['plan_read', { planId }],
       ['plan_draft', { planId, revision: 0, ops: SEED_OPS }],
-      ['plan_commit', { planId, refs: ['init'] }],
+      [
+        'plan_commit',
+        {
+          withoutTemplateReason: 'This test confirms explicitly authored freeform work.',
+          planId,
+          refs: ['init'],
+        },
+      ],
     ];
     for (const [name, args] of attempts) {
       const result = await call(otherClient, name, args);

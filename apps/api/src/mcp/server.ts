@@ -43,6 +43,7 @@ import { challenge401, challenge403, CONNECT_SCOPES, TOOL_SCOPE } from './scope'
 import { installTaskProtocolHandlers } from './task-protocol';
 import { taskStoreForContext } from './task-store';
 import { registerTools } from './tools';
+import { TEMPLATE_GUIDANCE } from './template-guidance';
 
 /** Replaced with the root release version by the production artifact build. */
 declare const __DOCKET_RELEASE_VERSION__: string;
@@ -113,6 +114,7 @@ export function buildServer(
   // three lists; only the tool list actually fires one, when a grant change alters what the
   // caller may call.
   const server = new McpServer(serverInfo(), {
+    instructions: TEMPLATE_GUIDANCE,
     capabilities: {
       tools: { listChanged: true },
       resources: { subscribe: true, listChanged: true },

@@ -24,6 +24,8 @@ import type { McpContext } from './auth';
 import type { McpRegistrar } from './catalog';
 import { authorize, jsonResult, runTool, scopedActor } from './result';
 import { orgIdParam } from './tools-shared';
+import { taskFromTemplate } from './template-application';
+import { DESCRIPTOR_HINT } from './descriptors';
 
 const MUTATION_ANNOTATIONS = {
   readOnlyHint: false,
@@ -106,17 +108,28 @@ export function registerRepeatingWorkTools(server: McpRegistrar, ctx: McpContext
       }),
   );
 
+  registerRepeatTask(server, ctx);
+}
+
+/** Register one-task recurrence separately from reusable multi-step processes. */
+function registerRepeatTask(server: McpRegistrar, ctx: McpContext): void {
   server.registerTool(
     'repeat_task',
     {
       title: 'Repeat task',
       description:
-        'Create one ordinary repeating Docket task in a single call. Use this for routines such as a daily run or a weekly meetup action. Docket creates the underlying one-step process, recurrence series, and rolling window of ordinary tasks.',
+        'Create one ordinary repeating Docket task in a single call. Generally discover a fitting task template through list_templates, read its literal Markdown body, and fill its sections instead of inventing a format. Pass its id or name as template and the completed body as recurringTask.task.description. Explicit body and properties take precedence; omitted fields use template defaults. Use this for routines such as a daily run or a weekly meetup action. Docket creates the underlying one-step process, recurrence series, and rolling window of ordinary tasks.',
       inputSchema: {
         orgId: orgIdParam,
         recurringTask: RecurringTaskCreate.describe(
           'The ordinary task draft plus its calendar or after-completion schedule.',
         ),
+        template: z
+          .string()
+          .optional()
+          .describe(
+            `A visible task template from list_templates. ${DESCRIPTOR_HINT} Team templates must match recurringTask.task.teamId. Omit when none fits or the person requests freeform work.`,
+          ),
       },
       outputSchema: RecurringTaskCreated.shape,
       annotations: MUTATION_ANNOTATIONS,
@@ -129,10 +142,22 @@ export function registerRepeatingWorkTools(server: McpRegistrar, ctx: McpContext
           id: input.orgId,
           orgId: input.orgId,
         });
+        const recurringTask =
+          input.template === undefined
+            ? input.recurringTask
+            : {
+                ...input.recurringTask,
+                task: await taskFromTemplate(
+                  input.orgId,
+                  actorCtx.actorId,
+                  input.template,
+                  input.recurringTask.task,
+                ),
+              };
         const created = await createRecurringTask(db, {
           organizationId: input.orgId,
           actorId: actorCtx.actorId,
-          recurringTask: input.recurringTask,
+          recurringTask,
         });
         return jsonResult(created);
       }),

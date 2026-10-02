@@ -258,6 +258,7 @@ export async function listPlanTemplates(
       targetType: template.targetType,
       name: template.name,
       description: template.description,
+      payload: template.payload,
     })
     .from(template)
     .where(visibleTemplateWhere(row.organizationId, actorId, {}));
@@ -266,6 +267,7 @@ export async function listPlanTemplates(
     targetType: entry.targetType,
     name: entry.name,
     description: entry.description,
+    ...(entry.payload.description === undefined ? {} : { body: entry.payload.description }),
   })) as PlanTemplateOption[];
 }
 

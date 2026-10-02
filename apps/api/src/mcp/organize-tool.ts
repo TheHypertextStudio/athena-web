@@ -76,7 +76,7 @@ export function registerOrganizeTool(server: McpRegistrar, ctx: McpContext): voi
     {
       title: 'Organize work',
       description:
-        'Create a whole plan — initiatives, programs, projects, milestones, and tasks — in one call, with children naming their parent by a local `ref` you invent. A milestone sits under a project, and a task under a milestone lands on it. Running the same plan twice does not duplicate it: anything already there by that name in that place is matched and reused, and the result says which was which. Use this for turning a document or a conversation into structure; use capture for a single task.',
+        'Create a whole plan — initiatives, programs, projects, milestones, and tasks — in one call. Before writing descriptions for tasks, projects, initiatives, or programs, call list_templates with the matching targetType. Read a relevant template’s literal Markdown in payload.description, retain its structure, and fill its sections with the work details instead of inventing a format. Pass the completed Markdown as each item description. Milestones have no work templates. Templates do not create child work. Place the plan with children naming their parent by a local `ref` you invent. A milestone sits under a project, and a task under a milestone lands on it. Running the same plan twice does not duplicate it: anything already there by that name in that place is matched and reused, and the result says which was which. Use this for turning a document or a conversation into structure; use capture for a single task.',
       inputSchema: {
         orgId: orgIdParam,
         items: z

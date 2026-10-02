@@ -56,7 +56,12 @@ export const OrganizeItem = z.object({
     .string()
     .min(1)
     .describe('Its name or title. Also what an existing item is matched against.'),
-  description: z.string().optional().describe('The full body, as markdown.'),
+  description: z
+    .string()
+    .optional()
+    .describe(
+      'The full Markdown body. For tasks, projects, initiatives, and programs, generally start from a relevant template of the same kind discovered through list_templates, preserve its structure, and fill its sections. The template usage summary is not the body.',
+    ),
   parent: z
     .string()
     .optional()

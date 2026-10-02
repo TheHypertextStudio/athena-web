@@ -19,6 +19,7 @@ import { z } from 'zod';
 
 import type { McpContext } from './auth';
 import { principalDisplayName } from './principal';
+import { TEMPLATE_GUIDANCE } from './template-guidance';
 
 /** The Docket system prompt: how an agent should operate over the Docket work model. */
 const SYSTEM_PROMPT = [
@@ -42,6 +43,8 @@ const SYSTEM_PROMPT = [
   'Prefer the smallest change that accomplishes the goal. When an action needs approval, it',
   'will surface as a pending action on the session -- do not retry it as a different tool.',
   'Never fabricate ids. Most tools accept a name directly; otherwise resolve one via find, list_work, or the resources.',
+  '',
+  TEMPLATE_GUIDANCE,
 ].join('\n');
 
 /**

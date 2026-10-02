@@ -131,7 +131,11 @@ export const PlanUpsertNode = z.object({
   initiativeRefs: z.array(z.string()).optional(),
   initiativeIds: z.array(InitiativeId).optional(),
   fields: PlanNodeFieldsPatch,
-  templateId: TemplateId.nullable().optional(),
+  templateId: TemplateId.nullable()
+    .optional()
+    .describe(
+      'Records which template was used; does not copy its body. Use apply_template to copy defaults, then set_fields to write the completed Markdown.',
+    ),
 });
 /** Upsert payload value. */
 export type PlanUpsertNode = z.infer<typeof PlanUpsertNode>;
@@ -149,7 +153,19 @@ export const PlanOp = z
     z.object({ op: z.literal('remove_node'), ref: z.string() }),
     z.object({ op: z.literal('add_edge'), fromRef: z.string(), toRef: z.string() }),
     z.object({ op: z.literal('remove_edge'), fromRef: z.string(), toRef: z.string() }),
-    z.object({ op: z.literal('apply_template'), ref: z.string(), templateId: TemplateId }),
+    z
+      .object({
+        op: z.literal('apply_template'),
+        ref: z
+          .string()
+          .describe('An existing draft node, including one added earlier in this ops batch.'),
+        templateId: TemplateId.describe(
+          'A visible template id from plan_start, plan_read, or list_templates whose targetType matches the node kind.',
+        ),
+      })
+      .describe(
+        'Copy missing draft fields, including the literal Markdown body. Already-set fields remain unchanged. Apply before drafting the body, then use set_fields to fill its sections.',
+      ),
   ])
   .meta({ id: 'PlanOp', description: 'One edit to a plan document.' });
 /** Plan op value. */
@@ -304,7 +320,16 @@ export const PlanTemplateOption = z
     id: TemplateId,
     targetType: PlanNodeKind,
     name: z.string(),
-    description: z.string().nullable(),
+    description: z
+      .string()
+      .nullable()
+      .describe('Short explanation of when to use this template; not its Markdown body.'),
+    body: z
+      .string()
+      .optional()
+      .describe(
+        'The full literal Markdown body. Preserve its structure and fill its sections when writing the work. Absent when the template has no body.',
+      ),
   })
   .meta({ id: 'PlanTemplateOption', description: 'A template available to a plan node.' });
 /** Plan template option value. */

@@ -214,9 +214,43 @@ This is how an agent that started **read-only** (engineering plan / product §4)
 - **Comment edits:** REST edits retain the original comment author and record the verified last editor in `editedById` and `editedOrigin`. Ownership checks use the performing Actor or the same OAuth client under the same human authority. A human session cannot claim an agent's comment as its own.
 - **Idempotency keys:** create-tools accept an optional `idempotency_key` (UUID); replaying with the same key returns the original result (enables safe retries on flaky SSE). Marked `idempotentHint: true` when present-semantics hold.
 
+### Template-body contract
+
+MCP client implementers and agent authors should use the literal Markdown body of a relevant
+template when creating tasks, projects, initiatives, or programs. The initialization `instructions`,
+`docket_system` prompt, and creation tool descriptions all state this policy. The agent reads and
+fills the body; template application does not generate section content. Public examples and field
+mapping are in [MCP tools and resources](../../../apps/docs/developers/mcp-tools-and-resources.mdx).
+
+`list_templates` exposes authorized payloads through `work:read` plus workspace `view`, with signed
+pagination bound to the actor, workspace, and target-kind filter. It uses the shared template
+visibility predicate and lazy shipped-default seeding. Both planning reads return template bodies.
+The `repeat_task.template` argument resolves a visible task template and validates its target team
+before the process service writes anything. Explicit body and properties win without trimming authored Markdown. Omitted fields use saved
+defaults. An explicit empty body or label list remains empty, and stale default label IDs drop.
+
+The sequence diagram shows a client reading the body before writing work through the same server.
+
+```mermaid
+sequenceDiagram
+    participant Client as Agent client
+    participant Server as Docket MCP server
+    Client->>Server: initialize
+    Server-->>Client: Body-first template instructions
+    Client->>Server: list_templates(orgId, targetType)
+    Server-->>Client: Visible templates with full Markdown bodies
+    Client->>Client: Choose a relevant body and fill its sections
+    Client->>Server: capture, organize, plan_draft, or repeat_task
+    Server-->>Client: Created work or editable plan
+```
+
+The server cannot force a third-party model to follow the instructions or judge whether a template
+is relevant. It does provide the body and the instruction in the tool calls those clients consume.
+The catalog does not add template support to Milestones, Cycles, or Teams.
+
 ### 3.2 The tool surface
 
-Fifteen tools, named for what someone is trying to do rather than for the row they touch. The
+The tools are named for what someone is trying to do rather than for the row they touch. The
 earlier draft of this section listed twenty-six that mapped roughly 1:1 onto SQL statements; that
 surface could not express ordinary sentences ("reassign Sarah's open work to me" needed a name→id
 lookup, a filtered query, and a bulk write, and offered none of the three) and was replaced.
@@ -224,6 +258,7 @@ lookup, a filtered query, and a bulk write, and offered none of the three) and w
 | Tool              | readOnly | destructive | idempotent | openWorld | Scope                            | Widget          |
 | ----------------- | :------: | :---------: | :--------: | :-------: | -------------------------------- | --------------- |
 | `workspaces`      |  **T**   |      F      |     T      |     F     | `work:read`                      | —               |
+| `list_templates`  |  **T**   |      F      |     T      |     F     | `work:read`                      | —               |
 | `list_work`       |  **T**   |      F      |     T      |     F     | `work:read`                      | `work-list`     |
 | `find`            |  **T**   |      F      |     T      |     F     | `work:read`                      | —               |
 | `get`             |  **T**   |      F      |     T      |     F     | `work:read`                      | —               |

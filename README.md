@@ -24,6 +24,11 @@ runtime is unavailable, the prompt retains the objective and links to Athena Set
 
 Today opens a focused daily planning flow for reviewing prior work, choosing tasks, placing timed blocks, and confirming the day. Drafts resume where they stopped, accepted changes retain earlier versions, and recorded time stays in the time ledger. The data and recovery rules are in [the daily planning engineering spec](docs/engineering/specs/daily-planning.md).
 
+MCP agents creating tasks, projects, initiatives, or programs should generally discover a relevant
+template through `list_templates`, read its literal Markdown body, and use that structure when
+writing the work. The server supplies this guidance during initialization and in creation tool
+contracts. See [template use over MCP](apps/docs/developers/mcp-tools-and-resources.mdx#create-work-from-a-template-body).
+
 ## From clone to a working app
 
 On macOS or Linux, the supported entrypoint is:

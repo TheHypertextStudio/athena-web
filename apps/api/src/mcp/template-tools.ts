@@ -11,7 +11,7 @@
  * wrote "Bug" deserves to hear that Bug belongs to another team now rather than when someone
  * creates a task from the template.
  */
-import { db, team, template } from '@docket/db';
+import { db, team } from '@docket/db';
 import { TemplateCreate, TemplateUpdate, type TemplateDraft } from '@docket/work/template-contract';
 import { eq } from 'drizzle-orm';
 import type { z } from 'zod';
@@ -19,22 +19,17 @@ import type { z } from 'zod';
 import { ValidationError } from '../error';
 import { resolveAttachedLabels, resolveLabelSet } from '../lib/labels';
 import { originFor } from '../lib/provenance/context';
-import { visibleTemplateWhere } from '../lib/templates/visibility';
-import {
-  createTemplate,
-  requireVisibleTemplate,
-  updateTemplate,
-  type TemplateRow,
-} from '../lib/templates/write';
+import { createTemplate, updateTemplate, type TemplateRow } from '../lib/templates/write';
 import type { McpActor, McpContext } from './auth';
 import type { McpRegistrar } from './catalog';
 import { fieldDiffs, nameOf, type CatalogRow } from './catalog-rows';
 import { recordChangeSet } from './change-set';
 import { catalogChange } from './change-set-catalog';
-import { isUlid, pick, resolveDescriptor, resolveOptional } from './descriptors';
+import { resolveDescriptor, resolveOptional } from './descriptors';
 import { entityListHref } from './entity-href';
 import { authorize, jsonResult, runTool, scopedActor } from './result';
 import { defineTemplateDefinition } from './template-tools-contract';
+import { resolveVisibleTemplate } from './template-application';
 
 /** The tool's validated input. */
 type DefineTemplateInput = {
@@ -54,16 +49,6 @@ const DRAFT_FIELD: Record<string, string> = {
 /** Raise a field error on one argument. */
 function invalid(field: string, message: string): never {
   throw new ValidationError([{ path: [field], message }]);
-}
-
-/** Find the template a caller named, from the ones visible to them. */
-async function findTemplate(actor: McpActor, orgId: string, value: string): Promise<TemplateRow> {
-  if (isUlid(value)) return requireVisibleTemplate(orgId, actor.actorId, value);
-  const visible = await db
-    .select({ id: template.id, label: template.name })
-    .from(template)
-    .where(visibleTemplateWhere(orgId, actor.actorId, {}));
-  return requireVisibleTemplate(orgId, actor.actorId, await pick('template', value, visible));
 }
 
 /**
@@ -158,7 +143,9 @@ async function writeTemplate(
   input: DefineTemplateInput,
 ): Promise<{ before: TemplateRow | null; after: TemplateRow }> {
   const orgId = input.orgId;
-  const before = input.template ? await findTemplate(actor, orgId, input.template) : null;
+  const before = input.template
+    ? await resolveVisibleTemplate(orgId, actor.actorId, input.template)
+    : null;
   if (before) assertSomethingToChange(input);
   const teamId = await resolveOptional(orgId, 'team', input.team, 'team');
   const payload = await payloadToWrite(input, before, teamId);

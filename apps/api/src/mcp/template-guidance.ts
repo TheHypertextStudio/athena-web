@@ -1,0 +1,23 @@
+/** Body-first template policy delivered during initialization and in the system prompt. */
+export const TEMPLATE_GUIDANCE = [
+  'Docket templates primarily provide a literal Markdown body for tasks, projects, initiatives, and programs.',
+  'Generally use a fitting template when writing tasks, projects, initiatives, or programs. Read its full body, retain its',
+  'headings and instructions, and fill its sections with the work-specific content. Do not merely',
+  'attach a template id, mention its name, or replace its body with a generic summary.',
+  'Discover visible drafts with list_templates(orgId, targetType). The literal Markdown is in',
+  'payload.description; the template description is only a short explanation of when to use it.',
+  'For a planning canvas, plan_start and plan_read return template choices with body. In plan_draft,',
+  'add a node, then send {op:"apply_template", ref, templateId} before writing its filled-in body.',
+  'apply_template copies missing draft fields, including description; it skips fields already set.',
+  'Use set_fields to save the completed Markdown body while preserving content already authored.',
+  "Setting a node's templateId alone records a reference and does not copy the body.",
+  'For repeat_task, pass template by id or name and write the completed Markdown in',
+  'recurringTask.task.description. Explicit body and properties take precedence; omitted fields',
+  'use template defaults. Omitting description copies the full saved Markdown body.',
+  'For capture or organize, put the filled-in Markdown in text or items[].description respectively.',
+  'Those tools do not accept a template reference. Use define_template to save or edit reusable bodies.',
+  'Other template properties are secondary defaults. Multi-step recurring work uses define_process',
+  'and schedule_process; a work template does not define a schedule or child work.',
+  'Proceed without a template when none fits, the person requests freeform work, or quick capture',
+  "would otherwise be delayed. Never invent ids or assume access to another person's template.",
+].join('\n');

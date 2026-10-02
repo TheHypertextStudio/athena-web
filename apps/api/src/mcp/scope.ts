@@ -117,6 +117,7 @@ export const TOOL_SCOPE: Readonly<Record<string, McpScope>> = {
   review_work_destination: 'agents:run',
   // work:read — reads exposed as tools
   list_work: 'work:read',
+  list_templates: 'work:read',
   find: 'work:read',
   get: 'work:read',
   brief: 'work:read',

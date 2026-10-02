@@ -17,7 +17,7 @@ import { orgIdParam } from './tools-shared';
 export const defineTemplateDefinition = {
   title: 'Define template',
   description:
-    'Create or edit one template, the starting point the composer offers for new tasks, projects, initiatives, or programs.\n\nOmit `template` to create one, which needs `name` and `payload`; pass `template` to edit one you can see, sending only what changes. `payload` replaces the whole draft when sent, and a template never changes the kind of work it creates. The change is reversible with `undo`.',
+    'Create or edit one reusable template for tasks, projects, initiatives, or programs. Its main content is the literal Markdown body in payload.description; description is only a short usage summary. Agents generally discover these with list_templates and write work using the body structure.\n\nOmit `template` to create one, which needs `name` and `payload`; pass `template` to edit one you can see, sending only what changes. `payload` replaces the whole draft when sent, and a template never changes the kind of work it creates. The change is reversible with `undo`.',
   inputSchema: {
     orgId: orgIdParam,
     template: z

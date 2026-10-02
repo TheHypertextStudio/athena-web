@@ -123,7 +123,7 @@ function registerPlanStart(server: McpRegistrar, ctx: McpContext, sessionId: str
     {
       title: 'Start a plan',
       description:
-        'Open a planning draft on the canvas, or reopen the one on an initiative.\n\nUse it as soon as the person describes initiative-sized work, and say so in a sentence. Returns the document, its link, the templates each kind may apply, and the workspace roster — `people` and `teams` are where `assigneeId`, `leadId`, `ownerId`, and `teamId` come from, so assign by picking a name from it. Nothing is created until `plan_commit`.',
+        'Open a planning draft on the canvas, or reopen the one on an initiative.\n\nUse it as soon as the person describes initiative-sized work, and say so in a sentence. Generally use a fitting template: read its literal Markdown body and fill its sections with work-specific content. Returns the document, its link, the templates each kind may apply with their full bodies, and the workspace roster — `people` and `teams` are where `assigneeId`, `leadId`, `ownerId`, and `teamId` come from, so assign by picking a name from it. Nothing is created until `plan_commit`.',
       inputSchema: {
         orgId: orgIdParam,
         initiative: z
@@ -140,7 +140,11 @@ function registerPlanStart(server: McpRegistrar, ctx: McpContext, sessionId: str
         revision: z.number().int(),
         counts: planCountsSchema,
         document: PlanDocument,
-        templates: z.array(PlanTemplateOption),
+        templates: z
+          .array(PlanTemplateOption)
+          .describe(
+            'Visible templates with their literal Markdown bodies. Generally choose one relevant to the work, preserve its structure, and fill its sections.',
+          ),
         people: z.array(PlanRosterPerson),
         teams: z.array(PlanRosterTeam),
       },
@@ -183,7 +187,7 @@ function registerPlanRead(server: McpRegistrar, ctx: McpContext): void {
     {
       title: 'Read a plan',
       description:
-        'The plan document, its revision, and the workspace roster.\n\nRead it at the start of each turn while a plan is active, since the person may have edited the canvas, and pass the revision to `plan_draft`. `people` and `teams` are the ids to assign work with.',
+        'The plan document, its revision, the workspace roster, and visible template bodies for all four supported work kinds. Generally use a relevant template’s Markdown structure when writing descriptions.\n\nRead it at the start of each turn while a plan is active, since the person may have edited the canvas, and pass the revision to `plan_draft`. `people` and `teams` are the ids to assign work with.',
       inputSchema: { planId: planIdParam },
       outputSchema: {
         planId: z.string(),
@@ -193,6 +197,11 @@ function registerPlanRead(server: McpRegistrar, ctx: McpContext): void {
         revision: z.number().int(),
         counts: planCountsSchema,
         document: PlanDocument,
+        templates: z
+          .array(PlanTemplateOption)
+          .describe(
+            'Visible templates and their full literal Markdown bodies. Match targetType to the node kind.',
+          ),
         people: z.array(PlanRosterPerson),
         teams: z.array(PlanRosterTeam),
       },
@@ -209,6 +218,7 @@ function registerPlanRead(server: McpRegistrar, ctx: McpContext): void {
         return jsonResult({
           ...planSummary(row),
           document: row.document,
+          templates: await listPlanTemplates(row),
           ...(await listPlanRoster(row)),
         });
       }),
@@ -222,7 +232,7 @@ function registerPlanDraft(server: McpRegistrar, ctx: McpContext): void {
     {
       title: 'Draft on the canvas',
       description:
-        'Edit the plan in one batch of ops; it applies whole or not at all.\n\nAdd or update nodes (invent a short `ref`, name parents by ref), set fields, move a task, remove a draft node, add or remove a dependency, or apply a template. A task’s parent is its project, or a feature task for an engineering subtask; subtasks go one level deep. Write a whole turn in one call so it lands together — a feature task and its subtasks belong in the same batch. Created nodes cannot be edited here; use `update` on the real object.',
+        'Edit the plan in one batch of ops; it applies whole or not at all.\n\nAdd or update nodes (invent a short `ref`, name parents by ref), set fields, move a task, remove a draft node, add or remove a dependency, or apply a template. Generally start structured work from a fitting template returned by plan_start or plan_read. Read its body first. Add the node and apply_template before drafting its description; apply_template only copies missing fields. Use set_fields to write the filled-in Markdown using the template structure. A task’s parent is its project, or a feature task for an engineering subtask; subtasks go one level deep. Write a whole turn in one call so it lands together — a feature task and its subtasks belong in the same batch. Created nodes cannot be edited here; use `update` on the real object.',
       inputSchema: {
         planId: planIdParam,
         revision: z

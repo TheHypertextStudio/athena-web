@@ -11,7 +11,7 @@ can change after consent or grant changes, so handle `notifications/tools/list_c
 The work and planning tools are `workspaces`, `find`, `list_work`, `brief`, `capture`, `organize`,
 `update`, `milestones`, `comment`, `report_status`, `link`, `archive`, `plan_day`, `undo`,
 `retrospect`, `define_process`, `schedule_process`, `repeat_task`, `define_labels`,
-`define_template`, and `track`.
+`define_template`, `list_templates`, `plan_start`, `plan_read`, `plan_draft`, `plan_commit`, and `track`.
 
 The agent, session, connector, and directive tools are `run_agent`, `manage_session`,
 `link_external`, `acknowledge_directive`, `pause_athena_assignment_trigger`, and
@@ -58,11 +58,50 @@ or move work on its own.
     | `schedule_process` | Schedules a process to run. |
     | `repeat_task` | Makes a task recur. |
 
+### Create work from a template body
+
+Agents writing tasks, projects, initiatives, or programs should generally look for a relevant
+template before composing a description. Docket sends this instruction during MCP initialization,
+in the system prompt, and in the creation tool descriptions.
+
+Call `list_templates` with `orgId` and the matching `targetType`. Follow `nextCursor` when needed.
+The full literal Markdown body is `payload.description`. The template's top-level `description`
+only explains when to use it. Read the body, keep its headings and instructions, and fill its
+sections with the work details. Do not replace it with an invented format or treat attaching an
+ID as using the template.
+
+For example, a Project template with `## Outcome`, `## Scope`, and `## Evidence` should produce a
+project description with those sections filled in. Use the same rule for a Task, Initiative, or
+Program template. If none fits, the person requests freeform work, or quick capture needs no
+outline, proceed without one. Milestones, Cycles, and Teams have no work templates.
+
+The creation paths accept the body in these places:
+
+| Tool                      | How to use the template body                                                                                                                                                                          |
+| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `capture`                 | Put the task title first, then the completed Markdown in `text`.                                                                                                                                      |
+| `organize`                | Put the completed Markdown in each item's `description`.                                                                                                                                              |
+| `plan_start`, `plan_read` | Read each template's `body`; both return the full Markdown.                                                                                                                                           |
+| `plan_draft`              | Add a node, apply `{op: "apply_template", ref, templateId}` before drafting its body, then use `set_fields` to fill its sections.                                                                     |
+| `repeat_task`             | Pass a visible task template as `template` and the completed Markdown as `recurringTask.task.description`. Explicit body and properties win; omitted fields use the saved body, priority, and labels. |
+
+`apply_template` copies missing fields. It does not write the content of the sections, replace an
+existing body, or create child work. Setting a node's `templateId` alone copies nothing. Templates
+may carry secondary property defaults; preserve explicit values. An explicit empty label list
+keeps a repeating task unlabelled, deleted default labels are dropped, and a team template must
+match the repeating task's team. Personal and team templates remain permission-filtered.
+
+`list_templates` needs `work:read` and workspace `view` access. It initializes shipped defaults
+on the first template read, following the same rule as the template picker. `define_template`
+authors reusable bodies. `define_process` and `schedule_process` separately define multi-step
+recurring work and its schedule.
+
 ### Labels and templates
 
     | Tool | Does |
     | --- | --- |
     | `define_labels` | Creates or edits label groups and labels in one call. Entries match by name, so a re-run changes nothing. |
+    | `list_templates` | Returns visible templates with literal Markdown bodies and property defaults. |
     | `define_template` | Creates or edits one task, project, initiative, or program template. |
 
     Put labels on work with `update`: `set.labels` takes `add` and `remove`, or `replace` on its
@@ -92,7 +131,7 @@ or move work on its own.
 
 | Scope             | Covers                                                                                                                                                                                                                                                                                         |
 | ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `work:read`       | `workspaces`, `find`, `list_work`, `get`, `brief`, `milestones` with `list`, and every resource read                                                                                                                                                                                           |
+| `work:read`       | `workspaces`, `find`, `list_work`, `list_templates`, `get`, `brief`, `milestones` with `list`, and every resource read                                                                                                                                                                         |
 | `work:write`      | `capture`, `organize`, `update`, `milestones` with `create`, `update`, or `delete`, `comment`, `report_status`, `link`, `archive`, `plan_day`, `undo`, `track`, `retrospect`, `acknowledge_directive`, `define_process`, `schedule_process`, `repeat_task`, `define_labels`, `define_template` |
 | `agents:run`      | `run_agent`, `manage_session`, `pause_athena_assignment_trigger`, `remove_athena_assignment_trigger`, `review_work_destination`                                                                                                                                                                |
 | `connectors:link` | `link_external`                                                                                                                                                                                                                                                                                |

@@ -66,13 +66,13 @@ export function registerWriteTools(server: McpRegistrar, ctx: McpContext): void 
     {
       title: 'Capture',
       description:
-        'Turn something said into a task, without needing to know where it should go. The team, workflow state, current cycle, and assignee are all resolved for you, so this is the cheapest path from a sentence to a tracked piece of work. `text` takes a list, so capturing ten things said in one breath is one call and not ten. Use organize when the things need placing under a project or each other.',
+        'Create tasks from text. Before writing a structured task body, call list_templates with targetType task and look for a relevant template. Read its literal Markdown in payload.description, keep its sections, and fill them with the task details instead of inventing a format. Pass that completed Markdown as text; the template id alone does not apply it. Use freeform text when no template fits or quick capture needs no outline. The team, workflow state, current cycle, and assignee are all resolved for you, so this is the cheapest path from a sentence to a tracked piece of work. `text` takes a list, so capturing ten things said in one breath is one call and not ten. Use organize when the things need placing under a project or each other.',
       inputSchema: {
         orgId: orgIdParam,
         text: z
           .union([z.string().min(1), z.array(z.string().min(1)).min(1).max(MAX_CAPTURES)])
           .describe(
-            'What to capture, as one string or a list of them. Each becomes its own task: the first line is the title, the whole thing is the description, so pasting several lines is fine.',
+            'The completed task text, as one string or a list. Generally write its body using a relevant template from list_templates: preserve the Markdown structure and fill its sections. Each becomes its own task: the first line is the title, the whole thing is the description, so pasting several lines is fine.',
           ),
       },
       outputSchema: {

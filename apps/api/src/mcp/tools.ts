@@ -33,6 +33,7 @@ import { registerRetrospectTools } from './retrospect-tools';
 import { registerRepeatingWorkTools } from './repeating-work-tools';
 import { registerSessionTools } from './session-tools';
 import { registerTemplateTools } from './template-tools';
+import { registerTemplateDiscoveryTool } from './template-discovery-tool';
 import { registerTimeTools } from './time-tools';
 import { registerUpdateTool } from './update-tool';
 import { registerViewPlanTools } from './view-plan-tools';
@@ -78,6 +79,7 @@ export function registerTools(
   registerMilestoneTool(server, ctx);
   registerLabelTools(server, ctx);
   registerTemplateTools(server, ctx);
+  registerTemplateDiscoveryTool(server, ctx);
   registerPlanTools(server, ctx);
   registerPlanDraftTools(server, ctx, sessionId);
   registerRetrospectTools(server, ctx);

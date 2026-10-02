@@ -11987,6 +11987,17 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
 
 ## Completed Tasks
 
+### [DAILY-PLANNING-PROMINENCE-001] Make the planning announcement prominent
+
+- **Completed**: 2026-10-02
+- **Priority**: P1
+- **Summary**: The announcement now uses the standard 512px dialog width, a 96px tonal countdown circle with a 57px numeral, a 28px phone/32px desktop headline, and a full-width Plan now action with a forward arrow. The existing five-second entry, eligibility, dismissal restrictions, and planner remain intact.
+- **Decision**: Strengthen the announcement inside the shared dialog rather than creating another planning screen. Keep Docket’s Plex type scale, semantic colors, shared panel geometry, and region spacing. Use spacing and surface tone without hairline dividers.
+- **Files changed**: `automatic-daily-planning.tsx`, its authenticated browser regression, and this worklog.
+- **Validation**: All 27 entry behavior tests passed. The authenticated browser regression passed with one worker and resumed the saved review stage after the countdown. Fresh 1440px desktop and 390px phone captures in light and dark themes were inspected. The 320×600 layout fits without horizontal overflow, and the primary action meets the 40px touch-target minimum. Captures remain in `.data/automatic-daily-planning-prominent/`. Final web typecheck, full lint, and production build passed through the affected Turbo graph with concurrency one. The unchanged complexity ledger and diff whitespace checks passed. The local stack was stopped and its throwaway database reset.
+- **Retrospective**: Shared overlay checks rejected manual rounding and region-padding overrides. Existing geometry contracts support the stronger hierarchy with fewer local styles. Finish finite entrance animations before screenshot capture so theme changes do not produce an unsettled phone frame.
+- **Delivery**: Commit the visual refinement on `codex/automatic-daily-planning`. Deployment remains outside this request.
+
 ### [DAILY-PLANNING-AUTO-ENTRY-001] Automatically open the existing daily planner
 
 - **Completed**: 2026-10-02

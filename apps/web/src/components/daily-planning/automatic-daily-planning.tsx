@@ -4,12 +4,13 @@ import { localDateString } from '@docket/planning/zoned-time';
 import {
   Button,
   Dialog,
+  DialogBody,
   DialogContent,
   DialogDescription,
   DialogFooter,
-  DialogHeader,
   DialogTitle,
 } from '@docket/ui/primitives';
+import { ArrowRight } from '@docket/ui/icons';
 import { type JSX, useCallback, useEffect, useState } from 'react';
 import { useAppPathname, useAppSearchParams } from '@/lib/app-location';
 import { useAppRouter } from '@/lib/interactions/navigation';
@@ -135,7 +136,7 @@ function DailyPlanningAnnouncement({
       <DialogContent
         data-daily-planning-entry=""
         showClose={false}
-        presentation={{ kind: 'centered', size: 'compact' }}
+        presentation={{ kind: 'centered', size: 'standard' }}
         onInteractOutside={(event) => {
           event.preventDefault();
         }}
@@ -144,17 +145,29 @@ function DailyPlanningAnnouncement({
           enter();
         }}
       >
-        <DialogHeader>
-          <DialogTitle>It’s time to plan your day</DialogTitle>
-          <DialogDescription>
-            <span className="sr-only">Opening planner in five seconds.</span>
-            <span aria-hidden="true">
-              Opening planner in {remaining} {remaining === 1 ? 'second' : 'seconds'}.
-            </span>
-          </DialogDescription>
-        </DialogHeader>
+        <DialogBody>
+          <div className="flex flex-col items-center gap-6 text-center">
+            <div
+              aria-hidden="true"
+              className="bg-primary-container text-on-primary-container text-display-large flex size-24 shrink-0 items-center justify-center rounded-full tabular-nums"
+            >
+              {remaining}
+            </div>
+            <DialogTitle className="text-headline-medium sm:text-headline-large text-balance">
+              It’s time to plan your day
+            </DialogTitle>
+            <DialogDescription className="text-body-large">
+              <span className="sr-only">Opening planner in five seconds.</span>
+              <span aria-hidden="true">
+                Opening planner in {remaining} {remaining === 1 ? 'second' : 'seconds'}.
+              </span>
+            </DialogDescription>
+          </div>
+        </DialogBody>
         <DialogFooter>
-          <Button onClick={enter}>Plan now</Button>
+          <Button controlSize="xl" className="w-full" onClick={enter}>
+            Plan now <ArrowRight aria-hidden="true" className="size-5" />
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

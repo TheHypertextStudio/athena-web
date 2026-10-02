@@ -62,9 +62,40 @@ test('an open app enters the saved daily planner at workday start and does not r
     .toBe(true);
   await expect(announcement.getByText('Opening planner in 5 seconds.')).toBeVisible();
   await page.evaluate(async () => document.fonts.ready);
-  await page.screenshot({ path: testInfo.outputPath('announcement-desktop.png') });
+  await page.screenshot({
+    path: testInfo.outputPath('announcement-desktop.png'),
+    animations: 'disabled',
+  });
+  await setColorScheme(page, 'dark');
+  await page.screenshot({
+    path: testInfo.outputPath('announcement-desktop-dark.png'),
+    animations: 'disabled',
+  });
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.screenshot({ path: testInfo.outputPath('announcement-phone.png') });
+  await page.screenshot({
+    path: testInfo.outputPath('announcement-phone-dark.png'),
+    animations: 'disabled',
+  });
+  await setColorScheme(page, 'light');
+  await page.screenshot({
+    path: testInfo.outputPath('announcement-phone.png'),
+    animations: 'disabled',
+  });
+  await page.setViewportSize({ width: 320, height: 600 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
+    true,
+  );
+  const dialogBounds = await announcement.boundingBox();
+  const actionBounds = await announcement.getByRole('button', { name: 'Plan now' }).boundingBox();
+  if (!dialogBounds || !actionBounds) throw new Error('The planning announcement must be visible');
+  expect(dialogBounds.y).toBeGreaterThanOrEqual(0);
+  expect(dialogBounds.y + dialogBounds.height).toBeLessThanOrEqual(600);
+  expect(actionBounds.height).toBeGreaterThanOrEqual(40);
+  await page.screenshot({
+    path: testInfo.outputPath('announcement-narrow-phone.png'),
+    animations: 'disabled',
+  });
+  await page.setViewportSize({ width: 390, height: 844 });
   await page.clock.runFor(4_000);
   await expect(announcement.getByText('Opening planner in 1 second.')).toBeVisible();
   await expect(page).toHaveURL(/\/inbox$/);

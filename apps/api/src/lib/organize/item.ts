@@ -11,6 +11,11 @@ export const KINDS = ['initiative', 'program', 'project', 'milestone', 'task'] a
 /** One placeable kind. */
 export type Kind = (typeof KINDS)[number];
 
+/** Return the owning team for label eligibility on work kinds that carry a team. */
+export function labelTeamForItem(kind: Kind, teamId: string): string | null {
+  return kind === 'task' || kind === 'project' ? teamId : null;
+}
+
 /**
  * The most nodes one plan may contain.
  *

@@ -137,14 +137,19 @@ function registerRepeatTask(server: McpRegistrar, ctx: McpContext): void {
           id: input.orgId,
           orgId: input.orgId,
         });
-        const selection = await requireTemplateDecisions(input.orgId, actorCtx.actorId, [
-          {
-            ...input,
-            ref: 'recurringTask',
-            kind: 'task',
-            teamId: input.recurringTask.task.teamId,
-          },
-        ]);
+        const selection = await requireTemplateDecisions(
+          input.orgId,
+          actorCtx.actorId,
+          [
+            {
+              ...input,
+              ref: 'recurringTask',
+              kind: 'task',
+              teamId: input.recurringTask.task.teamId,
+            },
+          ],
+          ctx.scopes,
+        );
         if (selection) return selection;
         const recurringTask =
           input.template === undefined

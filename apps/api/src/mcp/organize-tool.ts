@@ -122,12 +122,10 @@ export function registerOrganizeTool(server: McpRegistrar, ctx: McpContext): voi
         // them depend on anything the plan writes, and resolving them inside would mean issuing
         // reads on a connection the transaction already holds — which does not merely read stale
         // data, it stalls. A bad name therefore fails before a single row is written.
-        const prepared = await prepareOrganizeItems(
-          input.orgId,
-          actorCtx.actorId,
-          ordered,
+        const prepared = await prepareOrganizeItems(input.orgId, actorCtx.actorId, ordered, {
           landing,
-        );
+          scopes: ctx.scopes,
+        });
         if (!Array.isArray(prepared)) return prepared;
         assertPriorities(prepared.map(({ item }) => item));
 

@@ -97,6 +97,19 @@ when none fits, the person requests freeform content, or quick capture needs no 
 undecided call returns `isError: true` with `code: "template_selection_required"` and visible
 choices before creating any work. The check considers the entity kind, destination team, and
 caller visibility. It does not seed templates; first catalog reads still install shipped defaults.
+Reading the returned catalog requires `work:read` in addition to the creation tool's `work:write`.
+Applying a selected template also requires `work:read`. A deliberate freeform creation can use a
+write-only token.
+Each unresolved `choices` entry names a `catalogId`. The matching `catalogs` entry lists
+`templateIds` into the shared `templates` array, so each full payload appears once. Read its
+`payload.description` before choosing it. A write-only client receives `insufficient_scope`
+without saved template content. MCP plan confirmation also requires read scope before returning
+an unapplied template body.
+
+Plan confirmation preserves applied property defaults and explicit overrides, including summary,
+lifecycle status, health, initiative update cadence, program visibility, and task labels. Projects
+can carry labels from their owning team. Exclusive label groups use the original default label
+order, even when a group becomes exclusive after the template was saved.
 
 For example, create a populated event project with `organize`:
 
@@ -131,7 +144,10 @@ Planning remains editable before confirmation. Apply templates through `plan_dra
 sections through `set_fields`. MCP `plan_commit` checks selected nodes and their unconfirmed
 ancestors. It accepts `withoutTemplateReason` for untemplated nodes. A node that only names a
 template without applying its available body returns `template_application_required` before
-confirmation. These requirements apply to MCP agents; the human canvas remains unchanged.
+confirmation. The human canvas does not require a template choice or a freeform reason. Both
+confirmation paths validate selected template visibility, kind, and destination team. Applying a
+template records copied label defaults so deleted inherited labels can be dropped even after the
+template changes. Explicit label edits clear that record and remain strict.
 
 `list_templates` needs `work:read` and workspace `view` access. It initializes shipped defaults
 on the first template read, following the same rule as the template picker. `define_template`

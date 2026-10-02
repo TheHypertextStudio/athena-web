@@ -235,12 +235,24 @@ selected template ID without adding a persistent template link.
 
 If eligible saved templates exist, direct creation requires either a selection or
 `withoutTemplateReason`. An undecided call returns an execution error with
-`template_selection_required` and visible full drafts before creating work. Eligibility includes
+`template_selection_required` before creating work. Returning saved catalog content also requires
+`work:read`; applying a selected saved template also requires it. A write-only caller receives
+`insufficient_scope` without template disclosure and can still choose deliberate freeform creation.
+The response's `choices` reference `catalogId`; each entry in `catalogs` lists `templateIds` from
+the shared `templates` array. Each literal body appears once even when hundreds of items need it.
+Eligibility includes
 kind, destination team, and the shared visibility boundary. The guard reads saved templates and
 does not seed new rows. Each suggestion list is capped at 20 with `hasMore`; `list_templates`
 provides signed pagination for the rest. MCP `plan_commit` checks its entire unconfirmed closure
 and requires applied templates or a freeform reason. A template ID alone cannot confirm a node
-whose available template body has never been applied. Human canvas confirmation is unchanged.
+whose available template body has never been applied. Human canvas confirmation does not require
+a template choice or a freeform reason. Both confirmation paths validate selected template
+visibility, kind, and destination team before persisting attribution. Plan nodes record copied
+label defaults when applying a template. Deleted inherited labels are dropped even after the
+template changes; explicit label edits clear inheritance and remain strict.
+Confirmation preserves applied summaries, lifecycle status, health, initiative update cadence,
+program visibility, and labels beneath explicit draft values. Projects accept labels from their
+owning team; exclusive label groups retain the template's original default order.
 
 The sequence diagram shows server-side application followed by an agent's completion edit.
 

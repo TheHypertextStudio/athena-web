@@ -76,7 +76,16 @@ const FIELDS_BY_KIND: Readonly<Record<PlanNodeKind, ReadonlySet<keyof PlanNodeFi
     'labelIds',
     'targetDate',
   ]),
-  program: new Set(['title', 'summary', 'description', 'status', 'health', 'ownerId', 'labelIds']),
+  program: new Set([
+    'title',
+    'summary',
+    'description',
+    'status',
+    'health',
+    'visibility',
+    'ownerId',
+    'labelIds',
+  ]),
   project: new Set([
     'title',
     'summary',
@@ -84,6 +93,7 @@ const FIELDS_BY_KIND: Readonly<Record<PlanNodeKind, ReadonlySet<keyof PlanNodeFi
     'status',
     'priority',
     'health',
+    'visibility',
     'leadId',
     'teamId',
     'labelIds',
@@ -107,7 +117,7 @@ const FIELDS_BY_KIND: Readonly<Record<PlanNodeKind, ReadonlySet<keyof PlanNodeFi
 /** The template keys a kind merges, in the order they are copied. */
 const TEMPLATE_FIELD_KEYS: Readonly<Record<PlanNodeKind, readonly (keyof PlanNodeFields)[]>> = {
   initiative: ['summary', 'description', 'status', 'priority', 'updateCadence', 'health'],
-  program: ['summary', 'description', 'status', 'health'],
+  program: ['summary', 'description', 'status', 'health', 'visibility'],
   project: ['summary', 'description', 'status', 'health'],
   task: ['description', 'priority', 'labelIds'],
 };
@@ -298,6 +308,7 @@ function mergeUpsert(
     initiativeIds: supplied(node.initiativeIds, base.initiativeIds),
     fields: { ...base.fields, ...node.fields, title: node.fields.title ?? base.fields.title },
     templateId: supplied(node.templateId, base.templateId),
+    inheritedLabelIds: node.fields.labelIds === undefined ? base.inheritedLabelIds : undefined,
     status: 'draft',
     objectId: null,
   };
@@ -383,7 +394,15 @@ function applyTemplate(
     ...document,
     nodes: document.nodes.map((candidate) =>
       candidate.ref === op.ref
-        ? { ...candidate, fields: fields as PlanNodeFields, templateId: op.templateId }
+        ? {
+            ...candidate,
+            fields: fields as PlanNodeFields,
+            templateId: op.templateId,
+            inheritedLabelIds:
+              node.fields.labelIds === undefined && payload.targetType === 'task'
+                ? payload.labelIds
+                : candidate.inheritedLabelIds,
+          }
         : candidate,
     ),
   };
@@ -412,7 +431,14 @@ function applyOne(
       return {
         ...document,
         nodes: document.nodes.map((candidate) =>
-          candidate.ref === op.ref ? { ...candidate, fields } : candidate,
+          candidate.ref === op.ref
+            ? {
+                ...candidate,
+                fields,
+                inheritedLabelIds:
+                  patch['labelIds'] === undefined ? candidate.inheritedLabelIds : undefined,
+              }
+            : candidate,
         ),
       };
     }

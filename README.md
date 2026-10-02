@@ -30,6 +30,8 @@ writing the work. The server supplies this guidance during initialization and in
 contracts. Creation tools accept template references, copy omitted bodies and defaults, and return
 the saved description for editing. When eligible saved templates exist, agents must select one
 or supply `withoutTemplateReason` before creation. Explicit properties override defaults.
+Catalog errors require `work:read` and return shared catalogs instead of repeating Markdown for
+each item. Plan confirmation preserves applied template properties and explicit overrides.
 See [template use over MCP](apps/docs/developers/mcp-tools-and-resources.mdx#create-work-from-a-template-body).
 
 ## From clone to a working app

@@ -29,7 +29,7 @@ import { entityHref } from '../../mcp/entity-href';
 import type { serializableTx } from '../serializable-tx';
 import { attachToMilestone, placeMilestone, resolveItemMilestone } from './place-milestone';
 import { resolveContainerStatus } from '../work-status';
-import type { OrganizeItem, Kind } from './item';
+import { labelTeamForItem, type OrganizeItem, type Kind } from './item';
 export { KINDS, OrganizeItem, MAX_ITEMS, type Kind } from './item';
 
 /** Which parent kinds each kind may sit under, in this call or already in the workspace. */
@@ -559,7 +559,7 @@ export async function placeItem(tx: Tx, input: PlaceInput): Promise<PlaceResult>
   const result = await placeByKind(tx, input);
   if (result.placed.created && input.item.kind !== 'milestone' && input.item.labelIds?.length) {
     const labels = await resolveLabelSet(input.orgId, input.item.labelIds, {
-      teamId: input.item.kind === 'task' ? input.teamId : null,
+      teamId: labelTeamForItem(input.item.kind, input.teamId),
       dbh: tx,
     });
     await replaceLabels(tx, input.item.kind, result.placed.id, input.orgId, labels);

@@ -8,11 +8,12 @@ import { resolveLandingTarget } from '../lib/task-landing';
 import { requireTemplateDecisions } from './template-selection';
 import { resolveVisibleTemplate } from './template-application';
 import { jsonResult } from './result';
+import { requireScope } from './scope';
 
 /** Validate the template choice for every node confirmation will create, including ancestors. */
 export async function requirePlanTemplateDecisions(
   row: PlanDraftRow,
-  actorId: string,
+  { actorId, scopes }: { actorId: string; scopes: readonly string[] },
   refs: readonly string[],
   withoutTemplateReason: string | undefined,
 ): Promise<CallToolResult | null> {
@@ -31,6 +32,7 @@ export async function requirePlanTemplateDecisions(
       template: node.templateId ?? undefined,
       withoutTemplateReason: node.templateId === null ? withoutTemplateReason : undefined,
     })),
+    scopes,
   );
   if (selection) return selection;
   for (const node of nodes) {
@@ -49,6 +51,7 @@ export async function requirePlanTemplateDecisions(
       ]);
     }
     if (node.fields.description === undefined && draft.description !== undefined) {
+      requireScope(scopes, 'work:read');
       return {
         ...jsonResult({
           code: 'template_application_required',

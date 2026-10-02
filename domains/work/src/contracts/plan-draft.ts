@@ -18,7 +18,7 @@ import { z } from 'zod';
 
 import { InitiativeId, LabelId, TemplateId } from '../ids';
 import { Priority } from '../task-contract';
-import { Health } from './capability';
+import { Health, Visibility } from './capability';
 import { InitiativeUpdateCadence } from './initiative';
 
 /** The kinds a plan may place. `program` is reserved for a later slice and accepted by the reducer. */
@@ -51,6 +51,7 @@ export const PlanNodeFields = z
     status: z.string().min(1).optional().describe('A workflow or lifecycle status key.'),
     priority: Priority.optional().describe('Task or project priority.'),
     health: Health.optional().describe('A health verdict for a project or initiative.'),
+    visibility: Visibility.optional().describe('Project or program access scope.'),
     updateCadence: InitiativeUpdateCadence.optional().describe('An initiative’s update interval.'),
     ownerId: ActorId.nullable().optional().describe('The accountable owner of an initiative.'),
     leadId: ActorId.nullable().optional().describe('The lead of a project.'),
@@ -87,6 +88,12 @@ export const PlanNode = z
       .describe('Existing initiatives, by real id, a project also belongs to.'),
     fields: PlanNodeFields,
     templateId: TemplateId.nullable().describe('The template applied to this node, when any.'),
+    inheritedLabelIds: z
+      .array(LabelId)
+      .optional()
+      .describe(
+        'The label defaults copied by apply_template. Explicit label edits clear this snapshot.',
+      ),
     status: PlanNodeStatus,
     objectId: z.string().nullable().describe('The real id once confirmed.'),
   })

@@ -8,6 +8,7 @@ import { ValidationError } from '../error';
 import { visibleTemplateWhere } from '../lib/templates/visibility';
 import { toTemplateOut } from '../lib/templates/write';
 import { jsonResult } from './result';
+import { requireScope } from './scope';
 
 /** Creation callers either select a visible template or explain their freeform choice. */
 export const templateDecisionFields = {
@@ -42,14 +43,17 @@ export interface TemplateDecision {
  * Refuse an undecided creation with visible choices before any work rows are written.
  * @returns An MCP execution error with full drafts, or null when every decision is resolved.
  * @throws {ValidationError} When a caller both selects and declines a template.
+ * @throws {InsufficientScopeError} When applying or listing saved drafts without read scope.
  */
 export async function requireTemplateDecisions(
   orgId: string,
   actorId: string,
   items: readonly TemplateDecision[],
+  scopes: readonly string[],
 ): Promise<CallToolResult | null> {
   const choices = [];
-  const catalogs = new Map<string, ReturnType<typeof eligibleTemplates>>();
+  const catalogs = new Map<string, ReturnType<typeof readCatalog>>();
+  const templates = new Map<string, ReturnType<typeof toTemplateOut>>();
   for (const item of items) {
     if (item.template !== undefined && item.withoutTemplateReason !== undefined) {
       throw new ValidationError([
@@ -59,33 +63,58 @@ export async function requireTemplateDecisions(
         },
       ]);
     }
+    if (item.template !== undefined) requireScope(scopes, 'work:read');
     const kind = TemplateTargetType.safeParse(item.kind);
     if (!kind.success || item.template !== undefined || item.withoutTemplateReason !== undefined)
       continue;
     const key = `${kind.data}:${item.teamId}`;
     let catalog = catalogs.get(key);
     if (!catalog) {
-      catalog = eligibleTemplates(orgId, actorId, kind.data, item.teamId);
+      catalog = readCatalog(
+        { orgId, actorId, targetType: kind.data, teamId: item.teamId },
+        templates,
+      );
       catalogs.set(key, catalog);
     }
-    const templates = await catalog;
-    if (templates.length === 0) continue;
+    const resolved = await catalog;
+    if (!resolved) continue;
     choices.push({
       ref: item.ref,
       targetType: kind.data,
-      templates: templates.slice(0, 20).map(toTemplateOut),
-      hasMore: templates.length > 20,
+      catalogId: resolved.id,
     });
   }
   if (choices.length === 0) return null;
+  requireScope(scopes, 'work:read');
   return {
     ...jsonResult({
       code: 'template_selection_required',
       message:
-        'No work was created. Choose a relevant template for each listed item and retry, or provide withoutTemplateReason. Read payload.description and retain its structure when filling the returned body. Call list_templates for the full catalog.',
+        'No work was created. Each choice references a catalogId; catalogs list templateIds from the shared templates array. Choose a relevant template and retry, or provide withoutTemplateReason. Read payload.description and retain its structure when filling the returned body. Call list_templates for the full catalog.',
       choices,
+      catalogs: (await Promise.all(catalogs.values())).filter((catalog) => catalog !== null),
+      templates: [...templates.values()],
     }),
     isError: true,
+  };
+}
+
+/** Share catalog entries and literal bodies instead of repeating them for every unresolved item. */
+async function readCatalog(
+  context: { orgId: string; actorId: string; targetType: TemplateTargetType; teamId: string },
+  templates: Map<string, ReturnType<typeof toTemplateOut>>,
+) {
+  const { orgId, actorId, targetType, teamId } = context;
+  const rows = await eligibleTemplates(orgId, actorId, targetType, teamId);
+  if (rows.length === 0) return null;
+  const page = rows.slice(0, 20);
+  for (const row of page) templates.set(row.id, toTemplateOut(row));
+  return {
+    id: `${targetType}:${teamId}`,
+    targetType,
+    teamId,
+    templateIds: page.map((row) => row.id),
+    hasMore: rows.length > 20,
   };
 }
 

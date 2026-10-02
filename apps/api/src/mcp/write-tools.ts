@@ -126,14 +126,19 @@ export function registerWriteTools(server: McpRegistrar, ctx: McpContext): void 
         if (!landing) throw new NotFoundError('No team to capture into');
 
         const texts = Array.isArray(input.text) ? input.text : [input.text];
-        const selection = await requireTemplateDecisions(input.orgId, actorCtx.actorId, [
-          {
-            ...input,
-            ref: 'text',
-            kind: 'task',
-            teamId: landing.teamId,
-          },
-        ]);
+        const selection = await requireTemplateDecisions(
+          input.orgId,
+          actorCtx.actorId,
+          [
+            {
+              ...input,
+              ref: 'text',
+              kind: 'task',
+              teamId: landing.teamId,
+            },
+          ],
+          ctx.scopes,
+        );
         if (selection) return selection;
         const rows = await createCapturedTasks(
           input.orgId,

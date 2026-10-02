@@ -8,6 +8,22 @@
 
 ## Active Tasks
 
+### [MCP-TEMPLATE-DEPLOY-004] Deploy template creation and review fixes
+
+- **Status**: VALIDATING
+- **Started**: 2026-10-02
+- **Priority**: P1
+- **Description**: Land the three reviewed template commits on main with linear history, make one
+  delivery push, and verify the gated production rollout and deployed MCP guidance.
+- **Approach**: Rebase onto the current remote main, preserve valid focused API evidence, and
+  check the affected web consumer. The upstream Google-font build failure did not reproduce locally.
+  Wait for exact-commit CI and deployment, then verify Cloud Run revision and public endpoints.
+- **Validation**: Prior 106 focused tests and API/work checks remain valid after the conflict-free
+  rebase. Production Web compilation, the service-worker build, and Web typecheck pass. Hosted
+  release gates and production verification remain pending.
+- **Blockers**: None. The production Next.js build, including fonts and its typecheck, passed
+  locally. The service-worker build passed after installing its scoped dependencies.
+
 ### [ATHENA-E2E-STAGING-001] Restore the Athena browser acceptance run
 
 - **Status**: VALIDATING

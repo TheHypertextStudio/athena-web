@@ -3,6 +3,7 @@ import { LabelId } from '@docket/work/ids';
 import { TemplateDraft, TemplateTargetType } from '@docket/work/template-contract';
 import { ValidationError } from '../error';
 import { OrganizeItem, resolveItem, type ItemRefs } from '../lib/organize/place';
+import { labelTeamForItem } from '../lib/organize/item';
 import { resolveStateTransition } from './tools-shared';
 import { requireTemplateDecisions } from './template-selection';
 import type { LandingTarget } from '../lib/task-landing';
@@ -19,7 +20,7 @@ export async function populateOrganizeItem(
 ): Promise<{ item: OrganizeItem; templateId?: string }> {
   if (item.template === undefined) {
     const labels = await resolveLabelSet(orgId, item.labelIds, {
-      teamId: item.kind === 'task' ? teamId : null,
+      teamId: labelTeamForItem(item.kind, teamId),
     });
     return { item: { ...item, labelIds: labels.map((label) => LabelId.parse(label.id)) } };
   }
@@ -43,12 +44,13 @@ export async function populateOrganizeItem(
   );
   const populated = OrganizeItem.parse({ ...draft, ...explicit });
   const labelIds = item.labelIds ?? (draft.targetType === 'task' ? draft.labelIds : undefined);
+  const present = new Set(
+    (await resolveAttachedLabels(orgId, labelIds ?? [])).map((label) => label.id),
+  );
   const surviving =
-    item.labelIds === undefined
-      ? (await resolveAttachedLabels(orgId, labelIds ?? [])).map((label) => label.id)
-      : labelIds;
+    item.labelIds === undefined ? labelIds?.filter((id) => present.has(id)) : labelIds;
   const labels = await resolveLabelSet(orgId, surviving, {
-    teamId: item.kind === 'task' ? teamId : null,
+    teamId: labelTeamForItem(item.kind, teamId),
   });
   return {
     item: { ...populated, labelIds: labels.map((label) => LabelId.parse(label.id)) },
@@ -69,7 +71,7 @@ export async function prepareOrganizeItems(
   orgId: string,
   actorId: string,
   ordered: readonly OrganizeItem[],
-  landing: LandingTarget,
+  { landing, scopes }: { landing: LandingTarget; scopes: readonly string[] },
 ): Promise<PreparedOrganizeItem[] | CallToolResult> {
   const preparedRefs = await Promise.all(
     ordered.map(async (item, index) => ({ item, index, refs: await resolveItem(orgId, item) })),
@@ -78,6 +80,7 @@ export async function prepareOrganizeItems(
     orgId,
     actorId,
     preparedRefs.map(({ item, refs }) => ({ ...item, teamId: refs.teamId ?? landing.teamId })),
+    scopes,
   );
   if (selection) return selection;
   return Promise.all(

@@ -52,6 +52,7 @@ import { applySubtaskCompletionPolicyForParents, finishTaskStateTransition } fro
 import { resolveStateTransition } from '../../mcp/tools-shared';
 import { enqueueSearchUpsert } from '../../search/write-through';
 import { loadOwnedPlan, ownerActorInOrg, type PlanDraftRow } from './store';
+import { preparePlanTemplate } from './template-defaults';
 
 /** What a commit produced. */
 export interface CommitPlanResult {
@@ -181,7 +182,14 @@ function toOrganizeItem(
     ref: node.ref,
     kind: node.kind,
     title: fields.title,
-    ...(fields.description !== undefined ? { description: fields.description } : {}),
+    summary: fields.summary,
+    description: fields.description,
+    health: fields.health,
+    visibility: fields.visibility,
+    updateCadence: fields.updateCadence,
+    labelIds: fields.labelIds,
+    template: node.templateId ?? undefined,
+    status: node.kind === 'task' ? undefined : fields.status,
     ...existingParentRefs(node, byRef, closure),
     ...(fields.assigneeId ? { assignee: fields.assigneeId } : {}),
     ...(fields.ownerId ? { owner: fields.ownerId } : {}),
@@ -309,6 +317,7 @@ async function placePrepared(
       orgId: landing.orgId,
       actorId: landing.actorId,
       item: entry.item,
+      templateId: entry.item.template,
       at,
       teamId: entry.refs.teamId ?? landing.landingTeamId,
       state: entry.state,
@@ -353,7 +362,7 @@ export async function commitPlanNodes(input: CommitPlanInput): Promise<CommitPla
   const landing = await resolveLandingTarget(orgId, actorId);
   if (!landing) throw new NotFoundError('No team to plan into');
 
-  const prepared = await prepareItems(orgId, ordered, landing);
+  const prepared = await prepareItems({ orgId, actorId, byRef }, ordered, landing);
   const confirmedParents = await loadConfirmedParentTasks(orgId, closureRefs, byRef, closure);
 
   const ledger: PlacementLedger = {
@@ -425,13 +434,23 @@ interface PreparedItem {
  * connection the transaction already holds.
  */
 async function prepareItems(
-  orgId: string,
+  {
+    orgId,
+    actorId,
+    byRef,
+  }: { orgId: string; actorId: string; byRef: ReadonlyMap<string, PlanNode> },
   ordered: readonly OrganizeItem[],
   landing: NonNullable<Awaited<ReturnType<typeof resolveLandingTarget>>>,
 ): Promise<PreparedItem[]> {
   return Promise.all(
-    ordered.map(async (item, index) => {
-      const refs = await resolveItem(orgId, item);
+    ordered.map(async (supplied, index) => {
+      const refs = await resolveItem(orgId, supplied);
+      const item = await preparePlanTemplate(
+        { orgId, actorId },
+        supplied,
+        refs.teamId ?? landing.teamId,
+        byRef.get(supplied.ref)?.inheritedLabelIds,
+      );
       const state =
         item.state === undefined
           ? {

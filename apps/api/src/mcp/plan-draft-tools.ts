@@ -327,7 +327,7 @@ function registerPlanCommit(server: McpRegistrar, ctx: McpContext): void {
         });
         const selection = await requirePlanTemplateDecisions(
           row,
-          actorCtx.actorId,
+          { actorId: actorCtx.actorId, scopes: ctx.scopes },
           input.refs,
           input.withoutTemplateReason,
         );

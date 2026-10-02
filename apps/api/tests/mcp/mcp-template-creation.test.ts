@@ -81,9 +81,11 @@ describe('template-backed work creation', () => {
       choices: [
         {
           ref: 'p',
-          templates: [{ id: templateId, payload: { description: '## Venue\n\n## Guests\n' } }],
+          catalogId: `project:${seed.teamId}`,
         },
       ],
+      catalogs: [{ id: `project:${seed.teamId}`, templateIds: [templateId] }],
+      templates: [{ id: templateId, payload: { description: '## Venue\n\n## Guests\n' } }],
     });
     expect(
       await db

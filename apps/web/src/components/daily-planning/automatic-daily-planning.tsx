@@ -147,12 +147,6 @@ function DailyPlanningAnnouncement({
       >
         <DialogBody>
           <div className="flex flex-col items-center gap-6 text-center">
-            <div
-              aria-hidden="true"
-              className="bg-primary-container text-on-primary-container text-display-large flex size-24 shrink-0 items-center justify-center rounded-full tabular-nums"
-            >
-              {remaining}
-            </div>
             <DialogTitle className="text-headline-medium sm:text-headline-large text-balance">
               It’s time to plan your day
             </DialogTitle>
@@ -160,6 +154,12 @@ function DailyPlanningAnnouncement({
               <span className="sr-only">Opening planner in five seconds.</span>
               <span aria-hidden="true">Opening your planner automatically.</span>
             </DialogDescription>
+            <div
+              aria-hidden="true"
+              className="bg-primary-container text-on-primary-container text-headline-small flex size-16 shrink-0 items-center justify-center rounded-full tabular-nums"
+            >
+              {remaining}
+            </div>
           </div>
         </DialogBody>
         <DialogFooter>

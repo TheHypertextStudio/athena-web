@@ -11987,6 +11987,14 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
 
 ## Completed Tasks
 
+### [DAILY-PLANNING-HEADING-FIRST-001] Lead the announcement with its heading
+
+- **Completed**: 2026-10-02
+- **Summary**: Put the planning heading first. Move the single countdown beneath the opening message and reduce its numeral to 24px in a 64px circle so the timer supports the announcement.
+- **Files changed**: The automatic planning announcement and this log.
+- **Validation**: All 27 focused behavior tests, changed-file ESLint, diff whitespace, and the authenticated browser check passed. Inspected fresh desktop and 390px phone captures; the browser check also covers 320px fit and resumes the saved planner. This visual-only adjustment preserves the previously verified type and build contracts.
+- **Learning**: The planning instruction should lead the dialog; a countdown above it gives timing the wrong priority.
+
 ### [DAILY-PLANNING-SINGLE-COUNTDOWN-001] Show one planning countdown
 
 - **Completed**: 2026-10-02

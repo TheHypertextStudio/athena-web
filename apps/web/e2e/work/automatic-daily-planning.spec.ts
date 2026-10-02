@@ -51,9 +51,9 @@ test('an open app enters the saved daily planner at workday start and does not r
   await page.bringToFront();
   await setColorScheme(page, 'light');
   await expect(page.getByRole('heading', { name: 'Inbox', exact: true })).toBeVisible();
-  await expect(page.getByRole('dialog', { name: 'It’s time to plan your day' })).toHaveCount(0);
+  await expect(page.getByRole('dialog', { name: 'It’s time to plan your day.' })).toHaveCount(0);
   await page.clock.pauseAt(instantAt(date, 540, timezone));
-  const announcement = page.getByRole('dialog', { name: 'It’s time to plan your day' });
+  const announcement = page.getByRole('dialog', { name: 'It’s time to plan your day.' });
   await expect
     .poll(async () => {
       if (!(await announcement.isVisible())) await page.clock.runFor(100);

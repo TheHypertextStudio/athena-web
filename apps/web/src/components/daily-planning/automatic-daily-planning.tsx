@@ -7,7 +7,6 @@ import {
   DialogBody,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogTitle,
 } from '@docket/ui/primitives';
 import { ArrowRight } from '@docket/ui/icons';
@@ -136,7 +135,7 @@ function DailyPlanningAnnouncement({
       <DialogContent
         data-daily-planning-entry=""
         showClose={false}
-        presentation={{ kind: 'centered', size: 'standard' }}
+        presentation={{ kind: 'centered', size: 'large', height: 'medium' }}
         onInteractOutside={(event) => {
           event.preventDefault();
         }}
@@ -146,23 +145,21 @@ function DailyPlanningAnnouncement({
         }}
       >
         <DialogBody>
-          <div className="flex flex-col items-center gap-6 text-center">
-            <DialogTitle className="text-headline-medium sm:text-headline-large text-balance">
-              It’s time to plan your day
+          <div className="flex h-full flex-col items-center justify-center gap-6 px-4 text-center sm:px-8">
+            <DialogTitle className="text-display-small sm:text-display-medium max-w-lg text-balance">
+              It’s time to plan your day.
             </DialogTitle>
-            <DialogDescription className="text-body-large">
+            <DialogDescription className="text-body-large sm:text-title-large">
               <span className="sr-only">Opening planner in five seconds.</span>
               <span aria-hidden="true" className="tabular-nums">
                 Opening planner in {remaining} {remaining === 1 ? 'second' : 'seconds'}.
               </span>
             </DialogDescription>
+            <Button controlSize="xl" className="w-full max-w-xs" onClick={enter}>
+              Plan now <ArrowRight aria-hidden="true" className="size-5" />
+            </Button>
           </div>
         </DialogBody>
-        <DialogFooter>
-          <Button controlSize="xl" className="w-full" onClick={enter}>
-            Plan now <ArrowRight aria-hidden="true" className="size-5" />
-          </Button>
-        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

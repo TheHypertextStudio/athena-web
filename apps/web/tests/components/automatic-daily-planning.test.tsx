@@ -115,7 +115,7 @@ afterEach(() => {
 describe('automatic daily planning', () => {
   it('announces once and shows a five second countdown before opening the existing route', async () => {
     mount();
-    expect(screen.getByRole('dialog', { name: 'It’s time to plan your day' })).toBeVisible();
+    expect(screen.getByRole('dialog', { name: 'It’s time to plan your day.' })).toBeVisible();
     expect(screen.getByText('Opening planner in 5 seconds.')).toBeVisible();
     expect(screen.queryByRole('button', { name: /close|later|skip|dismiss/i })).toBeNull();
     await advance(1000);
@@ -291,7 +291,7 @@ describe('automatic daily planning', () => {
     other.setAttribute('data-state', 'open');
     document.body.append(other);
     await advance(1000);
-    expect(screen.queryByRole('dialog', { name: 'It’s time to plan your day' })).toBeNull();
+    expect(screen.queryByRole('dialog', { name: 'It’s time to plan your day.' })).toBeNull();
     await advance(5000);
     expect(state.push).not.toHaveBeenCalled();
     other.remove();

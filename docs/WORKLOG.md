@@ -11987,6 +11987,15 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
 
 ## Completed Tasks
 
+### [DAILY-PLANNING-PRESENCE-001] Give automatic planning entry more presence
+
+- **Completed**: 2026-10-02
+- **Summary**: Enlarge the announcement with the shared large dialog width and medium height. Center the heading, single labeled countdown, and primary action together. Increase the heading to 36px on phones and 45px on desktop and add the requested period. The existing planner and countdown behavior remain unchanged.
+- **Files changed**: The announcement, its component and browser assertions, the daily-planning specification, and this log.
+- **Decision**: The user wanted more presence. Shrinking the panel after removing the number badge would weaken the automatic planning entry. Keep the action near the message rather than stretching a footer across the enlarged panel.
+- **Validation**: All 27 focused behavior tests, changed-file ESLint, whitespace checks, and the authenticated browser test passed. Inspected fresh 1440px desktop and 390px phone renders in light and dark themes; the browser check also verifies 320px fit, the countdown, saved-stage resumption, and no redirect after returning. Prior type and build checks cover the unchanged logic and interfaces.
+- **Learning**: The announcement should occupy enough of the screen to signal that planning is the next step. Typography and shared panel dimensions provide that presence without another counter or another planning flow.
+
 ### [DAILY-PLANNING-COUNTDOWN-COPY-001] Label the countdown with its action and unit
 
 - **Completed**: 2026-10-02

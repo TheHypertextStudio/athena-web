@@ -95,6 +95,7 @@ import { CREATE_WORKSPACE_PATH } from '@/lib/workspace-creation';
 import { athenaHref } from '@/lib/athena/query-defs';
 import type { PersonalAthenaContext } from '@/lib/athena/presentation';
 import { usePersistedDensity } from '@/hooks/use-persisted-density';
+import { AutomaticDailyPlanning } from '@/components/daily-planning/automatic-daily-planning';
 
 /**
  * How long the session query may stay pending before the shell treats the server as unreachable.
@@ -373,7 +374,7 @@ export function AppShellFrame({ children, initialSession }: AppShellFrameProps):
             {/* The palette's navigate actions are static route pushes, so it is armed as soon as we
               know whose workspace to search — not once every workspace has loaded. */}
             <CommandPaletteProvider enabled={!identityUnknown}>
-              <NavigationSnapshotPersistence userId={userId} />
+              {dailyPlanningEntry(status, isPending, identitySwitching, userId)}
               {/* This is the first place that durable local state can bind to a resolved account. */}
               <OfflineSyncRuntime userId={userId} />
               <SessionSnapshotPersistence
@@ -422,6 +423,22 @@ export function AppShellFrame({ children, initialSession }: AppShellFrameProps):
         </ActiveOrgContext>
       </ReachabilityProvider>
     </ContextProvider>
+  );
+}
+
+function dailyPlanningEntry(
+  status: ReturnType<typeof resolveSessionStatus>,
+  pending: boolean,
+  identitySwitching: boolean,
+  userId: string | null,
+): JSX.Element {
+  return (
+    <>
+      {status === 'authenticated' && !pending && !identitySwitching && userId ? (
+        <AutomaticDailyPlanning userId={userId} />
+      ) : null}
+      <NavigationSnapshotPersistence userId={userId} />
+    </>
   );
 }
 

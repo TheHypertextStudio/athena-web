@@ -8,12 +8,13 @@ import { api } from '@/lib/api';
 import { apiQueryOptions, queryKeys, unwrap, useApiMutation, useApiQuery } from '@/lib/query';
 
 /** Read one day, including its accepted history and actual work. */
-export function useDailyPlanningDay(date: string) {
+export function useDailyPlanningDay(date: string, enabled = true) {
   return useApiQuery(
     apiQueryOptions(
       queryKeys.dailyPlanningDay(date),
       () => api.v1['daily-plan'].day[':date'].$get({ param: { date } }),
       'Could not load this day.',
+      { enabled },
     ),
   );
 }

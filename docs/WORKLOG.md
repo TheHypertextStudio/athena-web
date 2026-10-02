@@ -11987,6 +11987,18 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
 
 ## Completed Tasks
 
+### [DAILY-PLANNING-AUTO-ENTRY-001] Automatically open the existing daily planner
+
+- **Completed**: 2026-10-02
+- **Priority**: P1
+- **Summary**: The authenticated shell announces “It’s time to plan your day” and opens the existing daily planner after five foreground seconds. Plan now and Escape proceed immediately. The dialog has no dismissal action. Saved drafts resume their existing stage, and accepted days suppress entry.
+- **Approach**: Reuse the typed scheduling-preference and daily-plan reads, shared dialog, and app router. Evaluate the local workday from the scheduling timezone and outer non-personal availability bounds. Cancel entry on backgrounding, failed reads, confirmation, or editing interlocks. Refresh reads on foreground return and start a new full countdown. Record committed planner visits in a user, timezone, and date scoped browser marker with an in-memory fallback.
+- **Decisions**: Keep the existing planner, exit behavior, task editor, agenda, review, and confirmation. Manual visits also record entry so leaving the planner does not immediately send the person back. Automatic navigation never confirms a plan or starts tracking. No API or schema changes were needed.
+- **Files changed**: Application shell, daily-planning query hook, entry coordinator, foreground observer, entry eligibility/storage helpers, focused component tests, authenticated browser regression, daily-planning spec, and this log.
+- **Validation**: The initial entry tests failed before implementation. Final entry coverage passed 27/27. The combined entry/shell regression passed 45/45 before adding the final delayed-eligibility test. Existing planning-model tests passed 5/5. The authenticated browser regression passed against the final source with one worker. It verified entry from Inbox while the app stayed open across workday start, the visible countdown, saved review-stage resumption, and return/reload loop prevention. Desktop and phone announcement/planner captures were inspected and retained under `.data/automatic-daily-planning/`. Web typecheck passed with a command-scoped 4 GB heap after the default 2 GB heap exhausted. Full web lint and production build passed through the affected Turbo graph with bounded concurrency. The unchanged complexity ledger and all 52 documentation source checks passed. The local stack was stopped and its throwaway database reset.
+- **Retrospective**: Separate date-specific acceptance from foreground read readiness so yesterday’s accepted plan cannot suppress today after a suspended tab resumes. Scope navigation suppression to the entry key and route so the next workday can trigger without reloading. Start the countdown timer when the announcement appears so delayed reads still grant all five seconds. Keep read failure suppression tied to current query state so later recovery can proceed.
+- **Delivery**: Commit the verified slice on `codex/automatic-daily-planning`, based on `origin/main`. Deployment remains outside this request.
+
 ### [CI-DATE-FIXTURE-001] Keep schedule dialog tests stable across calendar months
 
 - **Completed**: 2026-09-30

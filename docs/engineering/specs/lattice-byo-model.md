@@ -2,9 +2,9 @@
 
 > **Reader**: the maintainer who must ship and verify the Docket–Lattice production round trip
 > **Required action**: preserve the no-fallback boundary and complete both production proofs
-> **Status**: implemented locally; production rollout and proof remain open
+> **Status**: deployed; interactive inference and offline recovery verified, full durable correlation and staging closure remain open
 > **Owner**: Athena model backend
-> **Last updated**: 2026-09-01
+> **Last updated**: 2026-10-03
 
 Someone can point Athena's model work at a computer they own. They authorize Docket from their
 Lovelace account, pick one of the machines they have paired with Lattice, and from then on Athena's

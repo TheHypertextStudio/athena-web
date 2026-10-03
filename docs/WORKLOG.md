@@ -8,6 +8,26 @@
 
 ## Active Tasks
 
+### [ATHENA-LATTICE-ACCEPTANCE-002] Finish the remaining production and staging proof
+
+- **Status**: BLOCKED
+- **Started**: 2026-10-03
+- **Priority**: P0
+- **Description**: Resume all six remaining Athena–Lattice acceptance items at the user's direct request to finish. Keep successful release evidence separate from correlated runtime acceptance.
+- **Plan**: Capture the existing `IMMEDIATE DISPATCH 1003` proposal on the original task and correlate Docket, relay, daemon, and LM Studio records; verify natural retry uniqueness and recovery paths; inspect the earlier 503; isolate staging mail and reject the two synthetic proposals; reconcile outdated tracking and the relay restart proof. Review each completed task and deliver one coherent set of changes after local validation.
+- **Current evidence**: Interactive offline refusal and recovery passed and were independently reviewed. The production proposal returned while paused and contains the task's actual completion criteria. LM Studio's October 3 log records its marker on `poolside/laguna-s-2.1` at 11:39 local time. The old reconnect error remains visible beside the returned proposal; trace its activity before changing behavior.
+- **Blockers**: Google Cloud requires a human passkey on `WillieStudio.local` for both `willie@hypertext.studio` (Docket production/staging) and `willie@reasonabletech.co` (relay-provider logs). The SDK verification-code exchange is still waiting; neither the closed sign-in tab nor the user's sign-in report refreshed this host's credential. Direct Cloud Console access also reaches the same passkey challenge. A SDK sign-in panel is queued in this chat for the user; do not discard the existing Lovelace grant. The synthetic staging actor also has no current authenticated session or available passkey. Finish the protected staging key mount, production records, and synthetic cleanup after access is restored.
+
+- **Completed acceptance slices**: Interactive offline refusal/Retry recovery and failed-send reconciliation passed in the live original-task UI, and each received independent review. No new product code was needed.
+- **Relay restart evidence audit**: The Lovelace runbook at `docs/operations/guides/lattice-relay-deployment-runbook.md:106` instructs a two-instance claimant proof but does not record it. A targeted docs search found no completed relay two-instance/restart receipt. `postgres-personal-control-relay-snapshot-store.test.ts` uses recording pool/client doubles; those unit tests do not substitute for the requested runtime proof. Keep that acceptance gate open pending actual evidence.
+- **Remaining subtasks**: [ ] Correlate the new durable `CORRELATED DISPATCH 1003` production return with authoritative delegation/runtime/lease records and natural retry counts. [ ] Verify a Docket OAuth expiry boundary without relinking. [ ] Diagnose the earlier 503 from provider logs. [ ] Isolate staging mail and reject the two named synthetic proposals. [ ] Obtain or run the two-instance restart-safe relay proof.
+
+- **New durable return**: One request through Work on this task created assignment `01M41KQSTHHXHKV61ZT4DXRW8K` and session `01M41KQT6S63KH2RSTV30F0N8N`. The daemon opened `work_01M41KQT1VN31JP02FGK5YQZ2R` at 19:27:05 UTC. LM Studio ran `poolside/laguna-s-2.1`; its `deliver_response` call at 12:28:31 local time contains the real remaining task work. The canonical session has exactly one pending comment action on task `01KZHHQZPG6RMQRV6REBN8MB1Z`. `CORRELATED DISPATCH 1003` identifies the objective; the model omitted that marker from its proposed comment. It is unapproved. The returned job is visible in the Athena work ledger; the earlier `IMMEDIATE DISPATCH 1003` screenshot records the original task panel. Do not claim full single-run acceptance until authoritative delegation/logical ID, lease, result, and retry records are obtained.
+- **Staging mail preparation**: Hypertext Studio Resend now has key `cdce6c35-2922-47e1-8842-de754cd64660`, named Docket Mailing Service (Staging), with Sending access restricted to `service.hypertext.studio`. This is a replacement for the staging consumer's shared production sending credential. The new value is held in protected mode-0600 `/tmp/docket-staging-resend-key`, outside the repository, pending Secret Manager mounting. No production key was changed; no mail was sent with the new key. Synthetic proposals `STAGE-DURABLE-248B9FFA6` and `STAGING-SCHEDULER-56B4FF48` remain awaiting review, not approved. Provider scope and key-list screenshots are saved in the October 3 acceptance directory.
+- **Cleanup**: Restored the original launchd descriptor and environment after the bounded debug capture, then restarted the managed service (PID 94952). Live Settings again reports Mac Studio Ready and In use. Removed browser response interception and the temporary service-worker bypass.
+- **Checkpoint validation and review**: The three-file documentation diff passed `pnpm docs:check` (52 pages), Prettier, and `git diff --check`. Independent review found no actionable findings and confirmed that all unverified provider/runtime gates remain open. The acceptance artifacts substantiate the bounded UI recovery cases, one unapproved proposal, and the unused staging key scope.
+- **Retrospective**: Re-reading canonical activity corrected a stale pending-job conclusion without relinking the grant. Capturing the actual request body prevented a false duplicate-draft fix. Provider identity and credential scope were verified before preparing the staging replacement; keep credentials protected until the authorized Cloud account can mount them.
+
 ### [ATHENA-LATTICE-IMMEDIATE-001] Submit new durable assignments without waiting for cron
 
 - **Status**: BLOCKED
@@ -19,9 +39,9 @@
 - **Validation**: The immediate-submit and one-minute cadence assertions failed before implementation and passed afterward. After rebasing, 130 affected API tests, 10 Scheduler tests, API build/typecheck/lint, complexity ledger, docs, formatting, and whitespace checks passed. Independent review found a stale-read retry race: a sweep could install a future backoff before the direct helper claimed its previously selected row. The concurrency regression reproduced two submissions before the atomic due-time predicate and one afterward. The second independent review found no remaining actionable source findings.
 - **Operations**: Each Athena job rises from up to 288 to 1,440 invocations per day, with no new hosted validation workflow. A slow relay call delays the assignment response. Result collection remains polling-based. Existing deadline-length submission fencing can hold an interrupted submitter until the work expires; the one-minute tick does not shorten that lease.
 - **Delivery**: One push landed `c43201de4` and `318f0429a` on main with no merge commits. CI run `37143543391` and production deployment `37144600597` succeeded for `318f0429ac7581b860d5530d7ef29d86bcae3eae`. The production API, admin, Scheduler provisioning, and documentation verification passed. Deployment logs confirm `docket-athena-triggers` changed to `* * * * *`.
-- **Live acceptance**: The original private task `01KZHHQZPG6RMQRV6REBN8MB1Z` received one proposal-only objective marked `IMMEDIATE DISPATCH 1003` through its normal Work on this task dialog. The request began at `2026-10-03T18:38:03.449Z` and returned HTTP 201 after 7.819 seconds with assignment `01M41GY6TZ6Z6AF87E2RS56PRB` and session `01M41GY76VPYKGB8MKSXQAT2MN`. The UI then showed “Reconnect Lovelace to restore access.” The canonical job remains pending; this proves request acceptance and visible refusal, not successful model execution or a duplicate-free remote return. No proposal was approved. Screenshot and scoped network evidence are saved under `/Users/williecubed/.codex/visualizations/2026/10/03/athena-immediate-dispatch/`.
-- **Learning and retrospective**: Reusing the scheduler's claim path avoided a second submission protocol. Retry eligibility belongs in the atomic claim as well as the initial read. The real-query race test catches that interleaving without timing sleeps or production test hooks. The release is deployed, but acceptance must remain open when the selected runtime refuses authorization. Final operational evidence is retained in a local documentation commit for the next coherent delivery, avoiding another full CI run for a release receipt.
-- **Blockers and next subtasks**: Reconnect the existing Lovelace account and verify one useful remote proposal and its IDs; refresh Hypertext Studio Google Cloud CLI authentication before staging deployment and inspection. Stop here and pause the broader plan at the user's explicit request to stop after this task.
+- **Live acceptance**: The original private task `01KZHHQZPG6RMQRV6REBN8MB1Z` received one proposal-only objective marked `IMMEDIATE DISPATCH 1003` through its normal Work on this task dialog. The request began at `2026-10-03T18:38:03.449Z` and returned HTTP 201 after 7.819 seconds with assignment `01M41GY6TZ6Z6AF87E2RS56PRB` and session `01M41GY76VPYKGB8MKSXQAT2MN`. The UI then showed “Reconnect Lovelace to restore access.” The same job returned one useful comment proposal around 18:40 UTC while paused. Its marker and actual Done when criteria appear on the original task and in the LM Studio log. Full delegation/work/runtime correlation and retry uniqueness still require the production records. No proposal was approved. Screenshot and scoped network evidence are saved under `/Users/williecubed/.codex/visualizations/2026/10/03/athena-immediate-dispatch/`.
+- **Learning and retrospective**: Reusing the scheduler's claim path avoided a second submission protocol. Retry eligibility belongs in the atomic claim as well as the initial read. The real-query race test catches that interleaving without timing sleeps or production test hooks. The release is deployed. A transient refusal is not a terminal outcome: re-read the canonical job before concluding that the run is blocked. Final operational evidence is retained in a local documentation commit for the next coherent delivery, avoiding another full CI run for a release receipt.
+- **Blockers and next subtasks**: Verify the returned proposal's authoritative IDs and retry uniqueness; finish the Hypertext Studio Google Cloud CLI credential exchange before staging inspection. The user resumed the broader acceptance work with “please finish.” Do not reconnect or discard the existing Lovelace grant merely because a historical error remains visible.
 
 ### [MCP-TEMPLATE-DEPLOY-004] Deploy template creation and review fixes
 
@@ -50,17 +70,6 @@
 - **Validation**: Run 36642749690 exposed the original failures. All five tests in the three affected Athena specs passed locally with one browser worker. The full CI run remains pending.
 - **Learning**: A successful stream response never closes, so a proxy based on `route.fetch` can block the page even after the API has returned HTTP 200. Delegated work is now rendered in its ledger, while sending through the main composer creates a separate conversation turn.
 
-### [ATHENA-LATTICE-OFFLINE-001] Explain an unavailable personal runtime in the conversation
-
-- **Status**: VALIDATING
-- **Started**: 2026-09-29
-- **Priority**: P0
-- **Description**: A live production check stopped the selected Mac Studio relay. Settings correctly showed “Asleep” after its device read settled, and an Athena prompt failed without a cloud answer, but the conversation only said “Athena couldn't answer.”
-- **Approach**: Save Docket's stable Lattice refusal code with a safe error activity when an interactive generation fails. Use that code to show the existing device recovery guidance beside the saved prompt and Retry action; never render the gateway's diagnostic prose.
-- **Files changed**: `apps/api/src/agent/loop.ts`, `apps/api/src/agent/lattice-failure-copy.ts`, `apps/api/tests/agent/lattice-interactive-failure.test.ts`, `apps/web/src/components/athena/conversation-thread.tsx`, `apps/web/tests/athena/athena-failed-turn.test.tsx`, `docs/engineering/specs/lattice-byo-model.md`, and this worklog.
-- **Validation**: The API and web behavior tests failed for the missing reason before the change and pass afterward. Focused API tests pass 43/43; focused web tests pass 23/23. API and web typecheck, changed-file ESLint, both production builds, complexity and documentation checks, Prettier, and diff whitespace pass. The Studio daemon was restarted and Settings returned to “Ready.” Production deployment of the new failure copy remains open.
-- **Learning**: A device-state read can still be loading after a page reload. The first “Ready” seen during the outage was stale UI before the read completed; the settled response correctly showed “Asleep.”
-
 ### [RELEASE-CYCLE-FIXTURE-001] Use the current cycle in release screen fixtures
 
 - **Status**: VALIDATING
@@ -71,18 +80,6 @@
 - **Files changed**: `apps/web/e2e/helpers/mobile-audit-fixture.ts`, `apps/web/e2e/release/work-roster-acceptance.spec.ts`, and this worklog.
 - **Validation**: The three focused local Playwright fixture tests pass against the local API and PostgreSQL. The production-build gate then passed four of five tests and exposed the nested-grid selector error in the fifth. A rerun with the corrected selector remains open.
 - **Learning**: Release fixtures must reuse auto-generated records when exercising surrounding screens; creating a second record on an occupied cadence boundary makes the gate depend on the calendar date. A page with multiple grids needs a named target in geometry assertions.
-
-### [ATHENA-SEND-RECONCILE-001] Reconcile a completed turn after a failed send response
-
-- **Status**: REVIEW
-- **Started**: 2026-09-28
-- **Priority**: P0
-- **Description**: A production Athena prompt returned an answer through the selected Mac Studio, but the web conversation also displayed a send failure and restored the same text in the composer. That invites a duplicate turn.
-- **Approach**: Re-read the canonical thread after an uncertain send response, match only a newly recorded copy of this attempt, and clear the failure and duplicate draft when the transcript proves acceptance. Preserve the draft and a visible error when the prompt was not recorded. Reconcile a later poll or stream update too.
-- **Files changed**: `apps/web/src/components/athena/athena-conversation.tsx`, `apps/web/tests/athena/athena-send-reconciliation.test.tsx`, and this worklog.
-- **Risks**: An earlier identical prompt cannot count as this attempt; a person editing the restored draft must not lose their edits.
-- **Validation**: The production-shaped regression failed first and passed after the fix. All 23 focused conversation and thread tests pass; web typecheck, focused ESLint, Prettier, the complexity ledger, diff whitespace, and the production web build pass with local public build variables. Production release and verification remain open.
-- **Learning**: A synchronous POST can finish the remote work and persist Athena's answer before its HTTP response fails. The canonical thread's new activity IDs, rather than the POST outcome alone, decide whether a retry would duplicate the turn.
 
 ### [DEVX-LOCAL-COST-001] Stop repeated local validation and cache waste
 
@@ -12018,6 +12015,32 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
 
 ## Completed Tasks
 
+### [ATHENA-SEND-RECONCILE-001] Reconcile a completed turn after a failed send response
+
+- **Completed**: 2026-10-03
+- **Started**: 2026-09-28
+- **Priority**: P0
+- **Description**: A production Athena prompt returned an answer through the selected Mac Studio, but the web conversation also displayed a send failure and restored the same text in the composer. That invites a duplicate turn.
+- **Approach**: Re-read the canonical thread after an uncertain send response, match only a newly recorded copy of this attempt, and clear the failure and duplicate draft when the transcript proves acceptance. Preserve the draft and a visible error when the prompt was not recorded. Reconcile a later poll or stream update too.
+- **Files changed**: `apps/web/src/components/athena/athena-conversation.tsx`, `apps/web/tests/athena/athena-send-reconciliation.test.tsx`, and this worklog.
+- **Risks**: An earlier identical prompt cannot count as this attempt; a person editing the restored draft must not lose their edits.
+- **Validation**: The production-shaped regression failed first and passed after the fix. All 23 focused conversation and thread tests pass; web typecheck, focused ESLint, Prettier, the complexity ledger, diff whitespace, and the production web build pass with local public build variables. The release is deployed. On October 3, one production POST marked `RECONCILE 1003 B` completed with HTTP 200 and its canonical answer became visible while its response was held. Injecting a connection reset for that held response left the answer visible, cleared failure and the restored draft, and generated no second POST. Artifacts `reconcile-interception.json`, `reconcile-outcome.json`, and `reconciled.jpg` preserve request identity, acceptance, and the final UI under the October 3 acceptance directory. Browser interception and the temporary service-worker bypass were removed afterward. Independent review found no actionable issue.
+- **Coverage**: This live case drops a response after canonical activity is already visible. Later canonical arrival, an earlier connection failure, and service-worker replay remain component-test or separate-case coverage, not outcomes claimed by this canary.
+- **Learning**: A synchronous POST can finish the remote work and persist Athena's answer before its HTTP response fails. The canonical thread's new activity IDs, rather than the POST outcome alone, decide whether a retry would duplicate the turn.
+
+### [ATHENA-LATTICE-OFFLINE-001] Explain an unavailable personal runtime in the conversation
+
+- **Completed**: 2026-10-03
+- **Started**: 2026-09-29
+- **Priority**: P0
+- **Description**: A live production check stopped the selected Mac Studio relay. Settings correctly showed “Asleep” after its device read settled, and an Athena prompt failed without a cloud answer, but the conversation only said “Athena couldn't answer.”
+- **Approach**: Save Docket's stable Lattice refusal code with a safe error activity when an interactive generation fails. Use that code to show the existing device recovery guidance beside the saved prompt and Retry action; never render the gateway's diagnostic prose.
+- **Files changed**: `apps/api/src/agent/loop.ts`, `apps/api/src/agent/lattice-failure-copy.ts`, `apps/api/tests/agent/lattice-interactive-failure.test.ts`, `apps/web/src/components/athena/conversation-thread.tsx`, `apps/web/tests/athena/athena-failed-turn.test.tsx`, `docs/engineering/specs/lattice-byo-model.md`, and this worklog.
+- **Validation**: The API and web behavior tests failed for the missing reason before the change and pass afterward. Focused API tests pass 43/43; focused web tests pass 23/23. API and web typecheck, changed-file ESLint, both production builds, complexity and documentation checks, Prettier, and diff whitespace pass. The Studio daemon was restarted and Settings returned to “Ready.” The production release is deployed. On October 3, stopping the managed `dev.williecubed.lattice-daemon` service produced the application-owned device-offline copy and Retry on the original task. Restarting that service restored Ready; Retry restored exactly one prompt and one successful POST returned `OFFLINE-RECOVERED-1003`. LM Studio recorded `poolside/laguna-s-2.1` execution at 12:17:17–12:17:55 local time. The returned answer, empty composer, and absence of a stale error are captured in `offline-recovered.jpg` under the October 3 acceptance artifact directory. Independent review found no product defect, with screenshot and saved-network coverage limits recorded separately.
+- **Learning**: A device-state read can still be loading after a page reload. The first “Ready” seen during the outage was stale UI before the read completed; the settled response correctly showed “Asleep.”
+
+- **Retrospective**: The browser DOM snapshot concatenates a textarea's text content and current value. A read-only DOM value check and the actual POST body disproved the apparent duplicate-draft bug; no code was changed. The recovered transcript correctly retains both the failed attempt and the deliberate retry. The Settings screenshot clips the device row and does not prove Asleep by itself.
+
 ### [DAILY-PLANNING-PRESENCE-001] Give automatic planning entry more presence
 
 - **Completed**: 2026-10-02
@@ -12122,8 +12145,10 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
 - **Summary**: Released the current Athena conversation and personal Lattice path to all users on `main` at `bf7e8e671`. Cloud Run revision `docket-api-00324-crb` serves that image at 100% traffic; the Vercel production deployment and the `Deploy main` workflow passed. The existing production grant, selected Mac Studio, and prior durable proposal remain intact.
 - **Files changed**: The seven linear release commits cover staging configuration, Athena browser acceptance, guarded Lattice success state, tests, deployment/spec documentation, and this worklog. The final production evidence update is retained locally for the next documentation delivery so the release remains a single push.
 - **Validation**: The stale Settings `gateway_error` regression and a concurrent-failure guard failed before the fix and passed after it; 65 focused API tests, API typecheck, lint, complexity, formatting, and build passed. Staging completed the approved OAuth callback, selected the Mac Studio, returned `STAGE-LATTICE-248B9FFA6` in one interactive turn, and yielded one sealed `STAGE-DURABLE-248B9FFA6` comment proposal under work ID `work_01M3RAGV53DR0BBBBQ1BZKCBBZ`. It remains awaiting approval with one delegation and one proposal. `pnpm test:release` passed API/web production builds, five release browser checks, and phone verification against a fresh PostgreSQL database. Hosted CI and deployment passed. One production Athena turn returned exactly `PROD-LATTICE-BF7E8E671`; Cloud Run logged its POST as HTTP 200 on `docket-api-00324-crb`, and Settings then showed Mac Studio Ready and In use with no unavailable reason. `pnpm launch:verify-prod` passed all 11 public checks.
-- **Remaining operational findings**: The earlier transient production 503 reached Docket but not a logged Studio inference. Its upstream cause remains unconfirmed because Lovelace GCP logs require Reasonable Tech account reauthentication. Staging's cron secret ends in a newline and has no installed Scheduler jobs; the single staging durable work was submitted and polled through the existing sweep implementation in a temporary local runner without changing credentials. Production's cron secret and Scheduler job are valid. Neither finding is claimed as repaired by this release.
+- **Operational findings at that release checkpoint**: The earlier transient production 503 reached Docket but not a logged Studio inference. Its upstream cause remains unconfirmed because Lovelace GCP logs require Reasonable Tech account reauthentication. Staging's cron secret ends in a newline and has no installed Scheduler jobs; the single staging durable work was submitted and polled through the existing sweep implementation in a temporary local runner without changing credentials. Production's cron secret and Scheduler job are valid. Neither finding is claimed as repaired by this release.
 - **Retrospective**: A live Settings read, returned model text, durable work/proposal state, and the deployed revision together gave a stronger acceptance signal than any one build or health probe. Guarding the success update by request start and current owner/device/grant preserved newer failures and revoked connections. A one-push release needs its final production evidence recorded locally for a later documentation delivery to avoid an otherwise redundant CI and redeployment cycle.
+
+- **Later reconciliation, 2026-10-03**: The staging cron newline and missing-job findings were resolved in ATHENA-STAGING-SCHEDULER-001; that entry records the natural 06:10/06:15 ticks. Production immediate submission and one-minute recovery shipped at `318f0429a`. The earlier 503 cause remains unconfirmed. A dedicated staging mail key is prepared but not yet mounted; synthetic proposals remain unapproved. See ATHENA-LATTICE-ACCEPTANCE-002 for current acceptance gaps.
 
 ### [ATHENA-HISTORY-IA-001] Make Athena navigation legible
 
@@ -17721,8 +17746,8 @@ xhigh` passes (10 finder angles each, one-vote verification, a gap sweep) agains
 
 ## [LATTICE-PRODUCTION-ROUND-TRIP-001] Restore the Docket to Mac Studio route — 2026-09-23
 
-- **Status**: READY FOR PRODUCTION PROOF
-- **State**: COMMITTING
+- **Status**: IN PROGRESS
+- **State**: VALIDATING
 - **Priority**: P0
 - **Description**: Complete the web Settings account link, device selection, interactive Athena
   turns, and durable task delegation through the owner's Mac Studio, then prove the production
@@ -17770,6 +17795,8 @@ xhigh` passes (10 finder angles each, one-vote verification, a gap sweep) agains
   The local Docket release browser test stalled at Docker startup because Docker Desktop did not
   answer `docker run` or `docker info`.
 
+- **Current checkpoint, 2026-10-03**: Source rollout and interactive offline/response-loss recovery are verified. Full correlated durable acceptance, OAuth expiry, provider diagnosis, staging key mounting/cleanup, and two-instance relay restart proof remain open in ATHENA-LATTICE-ACCEPTANCE-002. Historical notes below retain their dates.
+
 ### 2026-09-24 production follow-up: submit prepared work in the trigger tick
 
 - **Observed**: The production OAuth redirect renewed the saved grant, Settings again showed Mac
@@ -17814,8 +17841,8 @@ xhigh` passes (10 finder angles each, one-vote verification, a gap sweep) agains
 
 ### 2026-09-24 Athena conversation continuity and response clarity
 
-- **Status**: IN PROGRESS
-- **State**: VALIDATING
+- **Status**: COMPLETED
+- **State**: IDLE
 - **Description**: A production user sees a mostly empty Athena canvas, cannot tell whether a
   submitted turn is working, and loses the visible conversation after each answer. The reply also
   exposes Markdown punctuation instead of rendering it.
@@ -17884,8 +17911,8 @@ xhigh` passes (10 finder angles each, one-vote verification, a gap sweep) agains
 
 ### 2026-09-29 Start a personal Athena assignment from task context
 
-- **Status**: IN PROGRESS
-- **State**: COMMITTING
+- **Status**: COMPLETED
+- **State**: IDLE
 - **Description**: The owner-only durable assignment API exists, but a person opening an existing
   task has no visible way to start one in Docket. This blocks the requested task-level production
   proof from the signed-in web app and leaves durable work effectively hidden behind an API call.
@@ -17901,7 +17928,7 @@ xhigh` passes (10 finder angles each, one-vote verification, a gap sweep) agains
   conversation-context, and entry-point tests pass (26 tests). The first full web run identified
   the task-menu contract conflict; after moving the action, all 619 web test files and 4,751 tests
   pass with coverage. Root typecheck, lint, formatting, complexity, web performance, and secret
-  scan checks pass. Production use remains to be verified after deployment.
+  scan checks pass. Production use was verified on October 3: the signed-in original-task dialog accepted both IMMEDIATE DISPATCH 1003 and CORRELATED DISPATCH 1003 once, and each returned one proposal for review without changing task fields.
 
 ### 2026-09-28 Owner-bound Athena dispatch audit
 

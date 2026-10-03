@@ -285,8 +285,9 @@ idempotency and approval guarantees against the present schema.
 ## Rollback
 
 Docket carries two operator settings in the admin console, submission and polling, both on by
-default. Turning submission off takes effect on the next five-minute sweep and leaves existing rows
-to poll and settle. Turning polling off holds the delegation rows, work ids, and encrypted reply
+default. New assignment requests and subsequent scheduled sweeps observe the submission setting; turning
+it off leaves already accepted work to poll and settle. New assignments submit immediately after their durable row commits; the
+one-minute Athena sweep recovers eligible submissions and collects results. Turning polling off holds the delegation rows, work ids, and encrypted reply
 keys in place for a later pass. The database migration will remain additive.
 
 Lovelace can reject new controller submissions while preserving status and result reads for work

@@ -806,6 +806,7 @@ async function claimPreparedSubmission(
         eq(agentDelegation.id, row.id),
         eq(agentDelegation.status, 'prepared'),
         isNull(agentDelegation.cancellationRequestedAt),
+        or(isNull(agentDelegation.nextPollAt), lte(agentDelegation.nextPollAt, now)),
         or(
           isNull(agentDelegation.submissionLeaseExpiresAt),
           lte(agentDelegation.submissionLeaseExpiresAt, now),

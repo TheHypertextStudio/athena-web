@@ -1185,23 +1185,12 @@ describe('durable Lattice assignment delegations', () => {
     const fixture = await seed();
     const deps = dependencies();
     const preparedAt = new Date('2026-08-29T18:44:00.000Z');
+    const runtime = one(await deps.listRuntimes(fixture.connection));
     vi.mocked(deps.listRuntimes).mockResolvedValue([
       {
-        latticeId: 'lat_mac_studio',
-        accountId: 'acct_owner',
-        displayName: 'Mac Studio',
+        ...runtime,
         reachability: 'unreachable',
         lastSeenAt: '2026-08-29T18:43:00.000Z',
-        protocolVersion: 1,
-        capabilities: { agentRuntime: true, streamingProgress: true, cancellation: true },
-        workKeys: [
-          {
-            keyId: 'work-key-1',
-            publicKey: 'runtime-public',
-            notBefore: '2026-08-01T00:00:00.000Z',
-            notAfter: '2026-09-30T00:00:00.000Z',
-          },
-        ],
       },
     ]);
     vi.mocked(deps.submitWork).mockResolvedValue({
@@ -1219,9 +1208,18 @@ describe('durable Lattice assignment delegations', () => {
       deps,
     );
 
-    await sweepLatticeDelegations(preparedAt, deps, {
-      pollingEnabled: false,
-      submissionsEnabled: true,
+    const client = Reflect.get(db, '$client') as {
+      query: (...args: unknown[]) => Promise<unknown>;
+    };
+    const query = client.query.bind(client);
+    const firstRead = vi.spyOn(client, 'query').mockImplementationOnce(async (...args) => {
+      const staleRows = await query(...args);
+      firstRead.mockRestore();
+      await sweepLatticeDelegations(preparedAt, deps, {
+        pollingEnabled: false,
+        submissionsEnabled: true,
+      });
+      return staleRows;
     });
     expect(await submitPreparedLatticeDelegation(sessionId, preparedAt, deps)).toBe('skipped');
     expect(deps.submitWork).toHaveBeenCalledTimes(1);

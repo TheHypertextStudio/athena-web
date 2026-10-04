@@ -382,6 +382,10 @@ describe('the real workflows', () => {
       // The ungated-check-job rule is unaffected — it only governs the workflow that owns
       // `release-ready`, so a check job in another file is not a gate that file can skip.
       '.github/workflows/e2e.yml',
+      // Manual acceptance reads and bounded staging cleanup use the existing deployment identity.
+      // Neither workflow adds jobs to the push release gate.
+      '.github/workflows/lattice-acceptance-audit.yml',
+      '.github/workflows/lattice-staging-hygiene.yml',
       '.github/workflows/neon-branch.yml',
       // Runs after the release, never before it: Vercel promotes the web build only once
       // deploy.yml's API check passes, so the documentation site it probes does not exist at
@@ -398,12 +402,10 @@ describe('the real workflows', () => {
   });
 
   it('marks the non-gating browser suite as advisory without renaming its GitHub check', () => {
-    const e2e = workflows.find((workflow) => workflow.path === '.github/workflows/e2e.yml');
+    const e2e = assertDefined(workflows.find(({ path }) => path.endsWith('/e2e.yml')));
     const report = formatReport(workflows, checkGatePolicy(workflows));
 
-    expect(e2e?.name).toBe('E2E');
-    expect(e2e).toBeDefined();
-    if (!e2e) throw new Error('Expected the E2E workflow fixture');
+    expect(e2e.name).toBe('E2E');
     expect(isAdvisoryWorkflow(e2e)).toBe(true);
     expect(report).toContain('advisory check workflow(s): .github/workflows/e2e.yml');
   });

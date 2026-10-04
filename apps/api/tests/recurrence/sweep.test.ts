@@ -222,6 +222,7 @@ describe('rolling recurrence sweep', () => {
     await editRecurrenceSeries(db, {
       organizationId,
       seriesId: series.id,
+      asOf: '2026-10-01',
       edit: {
         scope: 'future',
         effectiveFrom: '2026-10-03',

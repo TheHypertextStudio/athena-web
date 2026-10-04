@@ -27,7 +27,7 @@ describe('staging cleanup authority', () => {
   const row = {
     ...stagingFixtures[0],
     ownerUserId: '01M3R6TXMS0GKF6CMT7R67S2XA',
-    ownerEmail: 'docket-lattice-proof-20260930@example.invalid',
+    ownerEmail: 'lattice-canary-01m3r6txms0gkf6cmt7r67s2xa@example.invalid',
     organizationId: '01M3RAG9W3VTHE2E34FY7Z078M',
     executionSurface: 'lattice',
     status: 'proposed',

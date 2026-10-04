@@ -1,6 +1,6 @@
 # Docket-to-Lattice Mac Studio Round Trip
 
-> **Status**: Approved; implementation in progress
+> **Status**: Approved; deployed with production correlation and recovery evidence; remaining gates recorded below
 > **Date**: 2026-08-28
 > **Audience**: Athena and Lovelace maintainers who will implement, deploy, and prove this path
 > **Required action**: Implement and verify each release gate against this boundary
@@ -24,7 +24,20 @@ failure code and show the failure on the Athena session instead.
 The container diagram records the deployable services and their network boundaries:
 [Docket-Lattice round-trip containers](./diagrams/2026-08-28-docket-lattice-roundtrip-containers.mmd).
 
-## Current Hold-Up
+## Current acceptance record (October 4, 2026)
+
+The implementation and immediate-dispatch release are deployed. The current production assignment
+and original recovery run each join one Docket delegation/logical submission, Mac Studio relay work,
+and reviewable returned action. Live offline/Retry, response-loss reconciliation, and expired-token
+refresh were verified without relinking and independently reviewed. See
+[the current production receipts and remaining gates](../../engineering/specs/lattice-byo-model.md#production-acceptance-october-4-2026).
+
+The staging hygiene operation remains active. No runtime receipt was found for the original
+two-instance/restart relay proof; the runbook describes the procedure and unit tests use doubles.
+Keep that engineering gate open. Exact historical lease payloads and unseen HTTP attempt counts
+are outside the retained production evidence.
+
+## Historical hold-ups (August 28, 2026)
 
 The path does not fail at one hidden switch. Five production boundaries are incomplete or broken
 as of August 28, 2026.

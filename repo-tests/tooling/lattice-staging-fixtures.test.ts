@@ -17,6 +17,10 @@ describe('staging cleanup authority', () => {
       'database_42703',
     );
     expect(providerFailureCode({ code: 'SECRET' })).toBe('provider_error');
+    expect(providerFailureCode({ code: '42883', message: 'SECRET' })).toBe('database_42883');
+    expect(providerFailureCode({ code: 'UNDEFINED_VALUE', message: 'SECRET' })).toBe(
+      'connection_undefined_value',
+    );
     expect(providerFailureCode(new Error('Missing staging fixtures'))).toBe('missing_fixtures');
     expect(providerFailureCode(new Error('Unexpected staging fixture'))).toBe('fixture_guard');
   });

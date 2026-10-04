@@ -64,12 +64,17 @@ function assertSettled(before: FixtureSnapshot, after: FixtureSnapshot): void {
   }
 }
 
-async function rejectFixtures(databaseUrl: string, output: string): Promise<FixtureSnapshot[]> {
+async function rejectFixtures(
+  databaseUrl: string,
+  output: string,
+  progress: { baseline: FixtureSnapshot[] },
+): Promise<FixtureSnapshot[]> {
   const sql = postgres(databaseUrl, { max: 1, connect_timeout: 15 });
   const { closeDb } = await import('../packages/db/src/index');
   try {
     operationPhase = 'fixture_snapshot_read';
     const before = await snapshots(sql);
+    progress.baseline = before;
     await saveReport(output, {
       generatedAt: new Date().toISOString(),
       fixtures: before,
@@ -186,11 +191,22 @@ async function main(): Promise<void> {
   operationPhase = 'operator_environment';
   const databaseUrl = configureStagingOperator(stage);
   operationPhase = 'fixture_rejection';
-  const fixtures = await rejectFixtures(databaseUrl, output);
+  let fixtures: FixtureSnapshot[];
+  const fixtureProgress: { baseline: FixtureSnapshot[] } = { baseline: [] };
+  let rejection: unknown = { status: 'rejected' };
+  let rejectionFailed = false;
+  try {
+    fixtures = await rejectFixtures(databaseUrl, output, fixtureProgress);
+  } catch (error: unknown) {
+    fixtures = fixtureProgress.baseline;
+    rejection = { status: 'failed', phase: operationPhase, code: providerFailureCode(error) };
+    rejectionFailed = true;
+  }
   // Preserve committed decisions before independent provider operations can fail.
   await saveReport(output, {
     generatedAt: new Date().toISOString(),
     fixtures,
+    rejection,
     mail: { status: 'not_started' },
     productionVerification: 'pending',
   });
@@ -206,6 +222,7 @@ async function main(): Promise<void> {
   await saveReport(output, {
     generatedAt: new Date().toISOString(),
     fixtures,
+    rejection,
     mail,
     productionVerification: 'pending',
   });
@@ -218,11 +235,12 @@ async function main(): Promise<void> {
   await saveReport(output, {
     generatedAt: new Date().toISOString(),
     fixtures,
+    rejection,
     mail,
     productionStable,
     productionVerification: productionStable === null ? 'unavailable' : 'verified',
   });
-  if (mailFailed || productionStable !== true) process.exitCode = 1;
+  if (rejectionFailed || mailFailed || productionStable !== true) process.exitCode = 1;
 }
 
 void main().catch((error: unknown) => {

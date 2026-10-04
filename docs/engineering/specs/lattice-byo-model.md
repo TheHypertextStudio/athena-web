@@ -2,9 +2,9 @@
 
 > **Reader**: the maintainer who must ship and verify the Docket–Lattice production round trip
 > **Required action**: preserve the no-fallback boundary and complete both production proofs
-> **Status**: deployed; interactive inference and offline recovery verified, full durable correlation and staging closure remain open
+> **Status**: deployed; production durable correlation and recovery verified; staging hygiene and relay two-instance/restart gate remain open
 > **Owner**: Athena model backend
-> **Last updated**: 2026-10-03
+> **Last updated**: 2026-10-04
 
 Someone can point Athena's model work at a computer they own. They authorize Docket from their
 Lovelace account, pick one of the machines they have paired with Lattice, and from then on Athena's
@@ -394,3 +394,71 @@ the registry without a `link:` or `file:` override.
   `pnpm --filter @docket/api exec tsx tests/lattice/verify-lattice-local.ts`.
 - `apps/api/tests/lattice/lattice-flow.test.ts` — the whole flow, hermetically, in CI.
 - `apps/web/.data/design-review/lattice/` — the recorded UI flow at both widths in both themes.
+
+### Production acceptance, October 4, 2026
+
+Immediate submission and one-minute recovery shipped on `318f0429a`; CI `37143543391` and
+production deploy `37144600597` passed. This changes admission latency: new assignments attempt
+submission after their durable row commits. The Scheduler recovers refused/interrupted submissions
+and collects results; it does not schedule the normal initial dispatch.
+
+The original task `01KZHHQZPG6RMQRV6REBN8MB1Z` remains backlog with no assignee/delegate change.
+Both normal web assignments produced useful, unapproved comment proposals on that task.
+Production WIF audit `37189175988` joined each to exactly one delegation, logical submission,
+Mac Studio work item, and returned action:
+
+| Record             | Original recovery run               | Current task-context run            |
+| ------------------ | ----------------------------------- | ----------------------------------- |
+| Assignment         | `01M41GY6TZ6Z6AF87E2RS56PRB`        | `01M41KQSTHHXHKV61ZT4DXRW8K`        |
+| Delegation         | `01M41GY71M1BYRR15A1Y570NZ9`        | `01M41KQT1VRBSR1PX33ZZ1WEM2`        |
+| Logical submission | `athena:01M41GY71M1BYRR15A1Y570NZ9` | `athena:01M41KQT1VRBSR1PX33ZZ1WEM2` |
+| Relay work         | `work_01M41GY71M4ZMWJX3DNFMJA9PK`   | `work_01M41KQT1VN31JP02FGK5YQZ2R`   |
+| Session            | `01M41GY76VPYKGB8MKSXQAT2MN`        | `01M41KQT6S63KH2RSTV30F0N8N`        |
+| Returned action    | `01M41H2833ACHHV3DMVC78H008`        | `01M41KXY3TQWJJKMFSDA3AK8XD`        |
+
+Both used runtime `lat_08d4fe1741e9b8d4229e02aa9008b836` (Mac Studio), the managed version
+`0.1.0` daemon under `dev.williecubed.lattice-daemon`, and LM Studio `poolside/laguna-s-2.1`.
+The original assignment's direct discovery request failed before submission; the following-minute
+request accepted the same work and produced one persisted return. The current delegation records
+`created_at=19:27:00.171Z` and `submitted_at=19:27:00.658Z` on October 3. The latter is the
+submit pass’s supplied clock value, not measured network acceptance. The relay accepted the work
+at `19:27:04.959Z` during the original dispatch pass. Its valid model response
+at `19:28:31Z` was bracketed by successful lease renewals at approximately `19:28:08Z` and
+`19:28:39Z`; result upload completed at `19:29:46.219Z`, and Docket recorded its proposal at
+`19:30:20.445Z`. Creating that proposal traverses the authenticated sealed-result open path.
+Exact historical lease IDs/expiry payloads and unseen HTTP attempt counts were not retained.
+
+Live recovery checks independently reviewed:
+
+- Stop the managed daemon, observe Asleep and refused Retry, restart, then receive one exact
+  `OFFLINE-RECOVERED-1003` response on the same selected device.
+- Reset a send response after the canonical answer is visible: the answer remains, with no Retry,
+  empty composer, and no second POST. This covers that observed response-loss timing.
+- Send through the original task composer after persisted token expiry: receive exact
+  `TOKEN-REFRESH-RECOVERED-1004`. Issuer rotation at October 4 `08:34:21.533Z` matches the same
+  owner/connection credential persisted at `08:34:21.552Z` in audit `37189395397`; the earlier
+  token expired October 3 `20:21:41.455Z`. No relink occurred. Decoded JWT metadata is not itself
+  signature verification.
+
+The September 30 503 interval contains a gateway five-second Auth token-check timeout. The same
+Auth instance started at `02:38:18.062841Z`, listened at `02:38:23.583Z`, and passed startup at
+`02:38:28.513Z`; its token-status request took 10.522 seconds. Provider evidence supports Auth
+startup exceeding the gateway budget before Studio dispatch. The exact Docket trace join is
+unavailable to the existing deployment identity. No expiry rejection was recorded and the valid
+grant was preserved.
+
+Safe receipts and screenshots are retained under
+`/Users/williecubed/.codex/visualizations/2026/10/04/athena-remaining-proof/`, including production
+and staging audit reports, provider timelines, and `expired-token-recovery.jpg`. Original task
+screenshots remain in the October 3 `athena-immediate-dispatch` directory. Every acceptance slice
+above received independent review.
+
+### Remaining gates
+
+- Staging hygiene: reject the two exact synthetic proposals and mount the prepared dedicated
+  sending-only staging mail key. The existing WIF operator is being diagnosed; no human SDK
+  sign-in is required. See `ATHENA-LATTICE-ACCEPTANCE-002` for current run outcomes.
+- Relay two-instance/restart proof: the Lovelace deployment runbook instructs this proof but no
+  completed runtime receipt was found. Recording pool/client unit doubles and the observed
+  single signaling instance do not establish restart survival or competing-instance ownership.
+  This audit confirms the missing receipt; it does not declare that engineering gate passed.

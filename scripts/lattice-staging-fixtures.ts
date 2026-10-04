@@ -79,9 +79,7 @@ function databaseFailureCode(error: object): string | null {
   const cause = 'cause' in error ? error.cause : error;
   if (typeof cause !== 'object' || cause === null || !('code' in cause)) return null;
   const code = String(cause.code);
-  return ['42703', '42P01', '23503', '23514', '42501', '28P01'].includes(code)
-    ? `database_${code}`
-    : null;
+  return /^(08|22|23|28|42|53|54|55|57|58|XX)[0-9A-Z]{3}$/.test(code) ? `database_${code}` : null;
 }
 
 function guardFailureCode(error: object): string | null {
@@ -95,11 +93,28 @@ function guardFailureCode(error: object): string | null {
   return guards[error.message] ?? null;
 }
 
+function connectionFailureCode(error: object): string | null {
+  if (!('code' in error)) return null;
+  const code = String(error.code);
+  return [
+    'ENOTFOUND',
+    'ECONNRESET',
+    'ECONNREFUSED',
+    'CONNECT_TIMEOUT',
+    'CONNECTION_CLOSED',
+    'UNDEFINED_VALUE',
+    'INVALID_URL',
+  ].includes(code)
+    ? `connection_${code.toLowerCase()}`
+    : null;
+}
+
 /** Reduce provider failures to stable codes without exposing subprocess output or secrets. */
 export function providerFailureCode(error: unknown): string {
   if (typeof error !== 'object' || error === null) return 'provider_error';
   if ('code' in error && error.code === 'ETIMEDOUT') return 'timeout';
-  const knownCode = databaseFailureCode(error) ?? guardFailureCode(error);
+  const knownCode =
+    connectionFailureCode(error) ?? databaseFailureCode(error) ?? guardFailureCode(error);
   if (knownCode) return knownCode;
   const stderr = 'stderr' in error ? error.stderr : null;
   const message = Buffer.isBuffer(stderr)

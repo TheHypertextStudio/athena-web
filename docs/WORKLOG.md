@@ -16,10 +16,12 @@
 - **Description**: Resume all six remaining Athena–Lattice acceptance items at the user's direct request to finish. Keep successful release evidence separate from correlated runtime acceptance.
 - **Plan**: Capture the existing `IMMEDIATE DISPATCH 1003` proposal on the original task and correlate Docket, relay, daemon, and LM Studio records; verify natural retry uniqueness and recovery paths; inspect the earlier 503; isolate staging mail and reject the two synthetic proposals; reconcile outdated tracking and the relay restart proof. Review each completed task and deliver one coherent set of changes after local validation.
 - **Current evidence**: Interactive offline refusal and recovery passed and were independently reviewed. The production proposal returned while paused and contains the task's actual completion criteria. LM Studio's October 3 log records its marker on `poolside/laguna-s-2.1` at 11:39 local time. The old reconnect error remains visible beside the returned proposal; trace its activity before changing behavior.
-- **Revised access plan, October 4**: After repeated human Google sign-ins did not finish the SDK exchange, stop reopening login flows. Reuse the existing GitHub production environment and `docket-deploy` Workload Identity Federation path. Add a manually dispatched, read-only acceptance audit scoped to the two recorded production assignments and two named staging work items. Resolve actual Cloud Run secret bindings, read the matching database rows, project credential timing/subject metadata without tokens, and sanitize the historical Docket request logs. This is one bounded operational delivery, with no schedule or push trigger for the new workflow; expected footprint is one Ubuntu runner for roughly 3–5 minutes per dispatch, capped at 10 minutes. Validate secret redaction and scope guards locally, typecheck/lint the script, review it, commit and integrate linearly, then make one delivery push and run the audit. Use its records to complete the remaining operation-specific steps. Preserve the current grant and existing SDK exchange; no further interactive login is required for this path.
+- **Revised access plan, October 4**: After repeated human Google sign-ins did not finish the SDK exchange, stop reopening login flows. Reuse the existing GitHub production environment and `docket-deploy` Workload Identity Federation path. Add a manually dispatched, read-only acceptance audit scoped to the two recorded production assignments and two named staging work items. Resolve actual Cloud Run secret bindings, read the matching database rows, project credential timing/subject metadata without tokens, and sanitize the historical Docket request logs. This is one bounded operational delivery, with no schedule or push trigger for the new workflow; expected footprint is one Ubuntu runner for roughly 3–5 minutes per dispatch, capped at 10 minutes. Validate secret redaction and scope guards locally, typecheck/lint the script, review it, commit and integrate linearly, then make one delivery push and run the audit. Use its records to complete the remaining operation-specific steps. Preserve the current Lovelace grant; the expired SDK exchange was closed and no further interactive login is required for this path.
 - **Access and blockers**: The Reasonable Tech Cloud Console is now authenticated as `willie@reasonabletech.co` in the dedicated Chrome profile, so relay-provider inspection can proceed. The expired Hypertext Studio SDK exchange and its verification pages were closed. The existing deployment identity completed both database audits, replacing the repeated interactive sign-in requirement. The manual acceptance audit now uses the existing deployment WIF identity for Docket records; the user is not required to repeat this SDK sign-in. The protected staging key mount and synthetic cleanup will use operation-specific provider access after the read-only audit verifies their exact records. The synthetic staging actor also has no current authenticated session or available passkey. Preserve the existing Lovelace grant.
 
 - **Staging hygiene plan, October 4**: The read-only WIF audit confirms the exact two synthetic owner/workspace/task/session/activity records, both still proposed, and the separate `docket-staging-resend-api-key` reference. Add a manually dispatched staging-only operation that rechecks those immutable IDs and the synthetic owner, rejects through the existing server decision service, verifies no task/comment changes, and rotates only the existing staging mail secret with the prepared sending-only key. Transport that replacement through a temporary protected GitHub environment secret, remove it after the bounded run, pin the new secret version on staging, and verify production revision/binding stability. Do not add IAM permissions if the deployment identity lacks version-write authority; report that precise operation failure while completing independent fixture rejection. Validate the scope and decision guards locally and review before one delivery push.
+
+- **Staging diagnosis result and independent-mail plan**: Run `37191214487` reached `fixture_snapshot_read` and stopped there; no decision had run. The local migrated-schema snapshot query passes. Broaden the safe SQLSTATE projection to known PostgreSQL error classes and finite connection codes to distinguish the deployed database failure. Preserve the rejection failure receipt and execute the independent, already-scoped staging mail operation even when snapshot rejection fails. Production-boundary checks remain mandatory and fixed fixture authority is not relaxed. Temporary GitHub transport secret was removed again.
 
 - **Staging operator diagnosis plan**: Corrected run `37190707707` authenticated but stopped in fixture rejection before emitting a report. The broad failure code cannot distinguish an absent fixture join, a database schema mismatch, or a decision-service failure. Add bounded, allowlisted database/guard codes and individual rejection phases, retain a safe snapshot receipt before decisions, and reproduce the snapshot query against the local migrated schema before the next operation. No raw exceptions, SQL parameters, or secret values may enter runner logs. The snapshot query passed against a fully migrated in-memory PostgreSQL database; the added failure-classification regression failed before implementation and passed afterwards. The temporary GitHub mail secret was removed after this run.
 
@@ -35,33 +37,24 @@
 
 - **Completed acceptance slices**: Interactive offline refusal/Retry recovery and failed-send reconciliation passed in the live original-task UI, and each received independent review. No new product code was needed.
 - **Relay restart evidence audit**: The Lovelace runbook at `docs/operations/guides/lattice-relay-deployment-runbook.md:106` instructs a two-instance claimant proof but does not record it. A targeted docs search found no completed relay two-instance/restart receipt. `postgres-personal-control-relay-snapshot-store.test.ts` uses recording pool/client doubles; those unit tests do not substitute for the requested runtime proof. Keep that acceptance gate open pending actual evidence.
-- **Remaining subtasks**: [ ] Correlate the new durable `CORRELATED DISPATCH 1003` production return with authoritative delegation/runtime/lease records and natural retry counts. [ ] Verify a Docket OAuth expiry boundary without relinking. [ ] Diagnose the earlier 503 from provider logs. [ ] Isolate staging mail and reject the two named synthetic proposals. [ ] Obtain or run the two-instance restart-safe relay proof.
+- **Acceptance checklist, October 4**:
+  - [x] Correlate the current production assignment, useful proposal, and original following-minute recovery with authoritative Docket/provider IDs; each persisted one delegation and returned action.
+  - [x] Capture the original task proposal and managed Mac Studio/model evidence, with sealed-result processing and observed lease renewals recorded. Exact historical lease payloads and unseen HTTP attempt counts were not retained.
+  - [x] Verify live offline/Retry, failed-send reconciliation, and expired-token refresh without relinking; review each case.
+  - [x] Diagnose the earlier provider 503 narrowly as Auth startup exceeding the gateway token-check budget; direct Docket trace join remains unavailable.
+  - [ ] Reject the two exact staging synthetic proposals and mount the prepared dedicated staging mail key; bounded operator diagnosis is active.
+  - [x] Reconcile rollout/proof documentation and confirm the two-instance/restart proof has no recorded runtime receipt. That engineering gate remains open; unit doubles and single-instance logs do not close it.
 
-- **New durable return**: One request through Work on this task created assignment `01M41KQSTHHXHKV61ZT4DXRW8K` and session `01M41KQT6S63KH2RSTV30F0N8N`. The daemon opened `work_01M41KQT1VN31JP02FGK5YQZ2R` at 19:27:05 UTC. LM Studio ran `poolside/laguna-s-2.1`; its `deliver_response` call at 12:28:31 local time contains the real remaining task work. The canonical session has exactly one pending comment action on task `01KZHHQZPG6RMQRV6REBN8MB1Z`. `CORRELATED DISPATCH 1003` identifies the objective; the model omitted that marker from its proposed comment. It is unapproved. The returned job is visible in the Athena work ledger; the earlier `IMMEDIATE DISPATCH 1003` screenshot records the original task panel. Do not claim full single-run acceptance until authoritative delegation/logical ID, lease, result, and retry records are obtained.
+- **New durable return**: One request through Work on this task created assignment `01M41KQSTHHXHKV61ZT4DXRW8K` and session `01M41KQT6S63KH2RSTV30F0N8N`. The daemon opened `work_01M41KQT1VN31JP02FGK5YQZ2R` at 19:27:05 UTC. LM Studio ran `poolside/laguna-s-2.1`; its `deliver_response` call at 12:28:31 local time contains the real remaining task work. The canonical session has exactly one pending comment action on task `01KZHHQZPG6RMQRV6REBN8MB1Z`. `CORRELATED DISPATCH 1003` identifies the objective; the model omitted that marker from its proposed comment. It is unapproved. The returned job is visible in the Athena work ledger; the earlier `IMMEDIATE DISPATCH 1003` screenshot records the original task panel. The later WIF audit supplies the authoritative delegation/logical IDs and one persisted return. Exact historical lease payloads and unseen HTTP retry counts remain outside the retained evidence.
 - **Provider correlation added (October 4)**: The original run's relay acceptance is now authoritative: signaling revision `lattice-signaling-service-00009-74z` accepted work `work_01M41GY71M4ZMWJX3DNFMJA9PK` for lattice `lat_08d4fe1741e9b8d4229e02aa9008b836` at `18:39:04.257Z` on October 3 (insert ID `6ac14bc80003e9e7370c9201`). Its acknowledgement returned 200 at `18:39:05.607Z`; one result PUT started at `18:39:21.057Z` and completed at `18:39:22.467Z`; the gateway collected events at `18:40:13.839Z` through `18:40:15.508Z`. These times match the saved original task proposal and LM Studio inference. Acceptance happened on the following minute, after the initial assignment request; do not label this original run a successful immediate submission without the Docket retry record.
-- **Original refusal and following-minute submission**: The gateway logged `/v1/personal-relay/lattices` at `18:38:05.506Z`, returning 503 after 5.091 seconds, with another five-second Auth token-status timeout at `18:38:10.608Z` and `ECONNRESET` at `18:38:10.613Z`. It then logged the same lattices route successfully at `18:39:01.153Z` and one work-items POST starting at `18:39:02.757Z` and returning 202 after 1.508 seconds. The original work's relay acceptance at `18:39:04.257Z` occurred during that request. This is consistent with a natural following-minute recovery after the direct attempt failed before submission. The scoped original interval contains one accepted work record and one result upload; a Docket record is still needed to join the attempt count and logical submission ID authoritatively. Saved `original-gateway-submit-timeline.txt` with the provider evidence.
+- **Original refusal and following-minute submission**: The gateway logged `/v1/personal-relay/lattices` at `18:38:05.506Z`, returning 503 after 5.091 seconds, with another five-second Auth token-status timeout at `18:38:10.608Z` and `ECONNRESET` at `18:38:10.613Z`. It then logged the same lattices route successfully at `18:39:01.153Z` and one work-items POST starting at `18:39:02.757Z` and returning 202 after 1.508 seconds. The original work's relay acceptance at `18:39:04.257Z` occurred during that request. This is consistent with a natural following-minute recovery after the direct attempt failed before submission. The scoped original interval contains one accepted work record and one result upload; the later WIF audit joins the logical submission ID and confirms one persisted delegation/return; it does not count unseen HTTP attempts. Saved `original-gateway-submit-timeline.txt` with the provider evidence.
 - **New run's relay timeline**: The relay accepted `work_01M41KQT1VN31JP02FGK5YQZ2R` for that same lattice at `19:27:04.959Z` (insert ID `6ac15708000ea1e351fce4aa`). Its acknowledgement returned 200, and lease PUTs succeeded at approximately `19:27:37`, `19:28:08`, `19:28:39`, `19:29:10`, and `19:29:41` UTC. One result PUT began at `19:29:44.851391Z` and completed successfully at `19:29:46.219Z` (insert ID `6ac157aa000358f1ff25f6d8`, request ID `02a1b9f3-07b0-45e4-af18-9951a3ccda48`). The gateway collected the larger event response at `19:30:18.011052Z` through `19:30:19.950Z`. Execution overlapped successful lease renewals; the valid model response at `19:28:31Z` fell between the renewals completing at approximately `19:28:08Z` and `19:28:39Z`. These transport records add real acceptance evidence, but do not expose the lease ID/expiry, sealed payload, logical submission ID, Docket delegation metadata, or retry count. All expanded relay records observed so far used the same signaling instance; they are not a two-instance/restart proof. Saved the provider timelines and expanded request records in the October 4 acceptance directory.
-- **Live OAuth refresh evidence (October 4)**: GitHub's production environment variable confirms the deployed client ID is `https://clearthedocket.com/.well-known/lattice-client.json`. Auth's provider logs record `refresh_token` issuance at `2026-10-03T18:20:33.417Z` and `19:21:43.447Z`, 61 minutes and 10 seconds apart. Both accompanying `Refresh token exchange completed` records use the same client and subject `OSCQFmoaf7x58XHClvnRd`, report four scopes, and record `tokenRotated: true`. The second precedes the saved `RECONCILE 1003 B` Studio execution and the subsequent durable return. Docket's existing source refreshes only when the stored lifetime is within its 60-second skew (or its obtained-at value is malformed), under the credential row lock, then persists the rotated credential. This is live issuer evidence of refresh/rotation without a relink; the exact previous-token expiry and its join to the selected Docket connection still require the protected Docket record. Do not infer that expiry timestamp solely from the 61-minute interval. Saved `docket-oauth-refresh-timeline.txt` and `docket-oauth-owner-timeline.txt` with the provider evidence.
+- **Live OAuth refresh evidence (October 4)**: GitHub's production environment variable confirms the deployed client ID is `https://clearthedocket.com/.well-known/lattice-client.json`. Auth's provider logs record `refresh_token` issuance at `2026-10-03T18:20:33.417Z` and `19:21:43.447Z`, 61 minutes and 10 seconds apart. Both accompanying `Refresh token exchange completed` records use the same client and subject `OSCQFmoaf7x58XHClvnRd`, report four scopes, and record `tokenRotated: true`. The second precedes the saved `RECONCILE 1003 B` Studio execution and the subsequent durable return. Docket's existing source refreshes only when the stored lifetime is within its 60-second skew (or its obtained-at value is malformed), under the credential row lock, then persists the rotated credential. This is live issuer evidence of refresh/rotation without a relink; the later expired-token acceptance case joins the selected Docket connection and its before/after expiry records explicitly. Do not infer that expiry timestamp solely from the 61-minute interval. Saved `docket-oauth-refresh-timeline.txt` and `docket-oauth-owner-timeline.txt` with the provider evidence.
 - **Staging mail preparation**: Hypertext Studio Resend now has key `cdce6c35-2922-47e1-8842-de754cd64660`, named Docket Mailing Service (Staging), with Sending access restricted to `service.hypertext.studio`. This is a replacement for the staging consumer's shared production sending credential. The new value is held in protected mode-0600 `/tmp/docket-staging-resend-key`, outside the repository, pending Secret Manager mounting. No production key was changed; no mail was sent with the new key. Synthetic proposals `STAGE-DURABLE-248B9FFA6` and `STAGING-SCHEDULER-56B4FF48` remain awaiting review, not approved. Provider scope and key-list screenshots are saved in the October 3 acceptance directory.
 - **Cleanup**: Restored the original launchd descriptor and environment after the bounded debug capture, then restarted the managed service (PID 94952). Live Settings again reports Mac Studio Ready and In use. Removed browser response interception and the temporary service-worker bypass.
 - **October 4 review**: Independent review matched the provider timestamps and found one minor request-start wording error. Corrected the work-items POST record to distinguish its start, 1.508-second duration, and relay acceptance during the request. The final review found no remaining actionable findings and confirmed the narrow qualifications for grant state, Docket correlation, retry uniqueness, lease payloads, restart proof, and the live issuer refresh records. This one-file documentation update passed Prettier, `pnpm docs:check` (52 pages), and `git diff --check`.
 - **Checkpoint validation and review**: The three-file documentation diff passed `pnpm docs:check` (52 pages), Prettier, and `git diff --check`. Independent review found no actionable findings and confirmed that all unverified provider/runtime gates remain open. The acceptance artifacts substantiate the bounded UI recovery cases, one unapproved proposal, and the unused staging key scope.
 - **Retrospective**: Re-reading canonical activity corrected a stale pending-job conclusion without relinking the grant. Capturing the actual request body prevented a false duplicate-draft fix. Provider identity and credential scope were verified before preparing the staging replacement; keep credentials protected until the authorized Cloud account can mount them.
-
-### [ATHENA-LATTICE-IMMEDIATE-001] Submit new durable assignments without waiting for cron
-
-- **Status**: BLOCKED
-- **Started**: 2026-09-30; resumed 2026-10-03
-- **Priority**: P0
-- **Description**: New personal Lattice assignments submit as soon as their durable row commits, through the existing authorization, lease, idempotency, and operator-control path. The Athena Scheduler configuration runs every minute to recover eligible submissions and collect sealed results; user-owned schedules retain their five-minute minimum.
-- **Plan**: Rebase onto current main, reproduce the review finding with a stale-read concurrency test, recheck retry eligibility inside the atomic claim, validate and review the final slice, then deliver once and verify staging.
-- **Files changed**: `apps/api/src/agent/assignments.ts`, `apps/api/src/agent/lattice-delegations.ts`, `apps/api/tests/agent/lattice-delegations.test.ts`, `scripts/scheduler-setup.ts`, `repo-tests/tooling/scheduler-setup.test.ts`, `docs/engineering/deployment.md`, `docs/engineering/specs/lattice-byo-model.md`, and this log.
-- **Validation**: The immediate-submit and one-minute cadence assertions failed before implementation and passed afterward. After rebasing, 130 affected API tests, 10 Scheduler tests, API build/typecheck/lint, complexity ledger, docs, formatting, and whitespace checks passed. Independent review found a stale-read retry race: a sweep could install a future backoff before the direct helper claimed its previously selected row. The concurrency regression reproduced two submissions before the atomic due-time predicate and one afterward. The second independent review found no remaining actionable source findings.
-- **Operations**: Each Athena job rises from up to 288 to 1,440 invocations per day, with no new hosted validation workflow. A slow relay call delays the assignment response. Result collection remains polling-based. Existing deadline-length submission fencing can hold an interrupted submitter until the work expires; the one-minute tick does not shorten that lease.
-- **Delivery**: One push landed `c43201de4` and `318f0429a` on main with no merge commits. CI run `37143543391` and production deployment `37144600597` succeeded for `318f0429ac7581b860d5530d7ef29d86bcae3eae`. The production API, admin, Scheduler provisioning, and documentation verification passed. Deployment logs confirm `docket-athena-triggers` changed to `* * * * *`.
-- **Live acceptance**: The original private task `01KZHHQZPG6RMQRV6REBN8MB1Z` received one proposal-only objective marked `IMMEDIATE DISPATCH 1003` through its normal Work on this task dialog. The request began at `2026-10-03T18:38:03.449Z` and returned HTTP 201 after 7.819 seconds with assignment `01M41GY6TZ6Z6AF87E2RS56PRB` and session `01M41GY76VPYKGB8MKSXQAT2MN`. The UI then showed “Reconnect Lovelace to restore access.” The same job returned one useful comment proposal around 18:40 UTC while paused. Its marker and actual Done when criteria appear on the original task and in the LM Studio log. Full delegation/work/runtime correlation and retry uniqueness still require the production records. No proposal was approved. Screenshot and scoped network evidence are saved under `/Users/williecubed/.codex/visualizations/2026/10/03/athena-immediate-dispatch/`.
-- **Learning and retrospective**: Reusing the scheduler's claim path avoided a second submission protocol. Retry eligibility belongs in the atomic claim as well as the initial read. The real-query race test catches that interleaving without timing sleeps or production test hooks. The release is deployed. A transient refusal is not a terminal outcome: re-read the canonical job before concluding that the run is blocked. Final operational evidence is retained in a local documentation commit for the next coherent delivery, avoiding another full CI run for a release receipt.
-- **Blockers and next subtasks**: Verify the returned proposal's authoritative IDs and retry uniqueness; finish the Hypertext Studio Google Cloud CLI credential exchange before staging inspection. The user resumed the broader acceptance work with “please finish.” Do not reconnect or discard the existing Lovelace grant merely because a historical error remains visible.
 
 ### [MCP-TEMPLATE-DEPLOY-004] Deploy template creation and review fixes
 
@@ -4071,250 +4064,6 @@ db:reset` completed. The migration changes no UI behavior, but the requested des
   Athena usage including token capture. Tracked as `ADMIN-OBS-001`.
 
 ---
-
-### [ATHENA-LATTICE-ROUNDTRIP-001] Prove the durable Docket–Lattice round trip
-
-- **Status**: COMPLETED
-- **Completed**: 2026-09-01
-- **Started**: 2026-08-28
-- **Priority**: P0
-- **Description**: Complete the Docket-to-Lattice Mac Studio round trip so one private Athena
-  assignment remains on its durable execution surface from preparation through approval,
-  settlement, and result acknowledgement. Docket now owns the durable delegation, immutable work
-  identity, encrypted reply key, scheduler fence, approval proposal, and terminal acknowledgement.
-- **Package state**: The five production dependencies are public at version `0.0.1`:
-  `@lovelace-ai/acsp`, `@lovelace-ai/compute`, `@lovelace-ai/lattice-relay-client`,
-  `@lovelace-ai/lattice-relay-crypto`, and `@reasonabletech/lattice-client`. The lockfile resolves
-  registry artifacts and contains no `link:` or `file:` override for them.
-- **Production state**: Lovelace production bootstraps the public PKCE client `docket-athena`. The
-  exact Docket authorization request reaches the Lovelace login redirect. Docket pins the accounts
-  issuer to `https://auth.uselovelace.com` and the gateway to `https://lattice.uselovelace.com`.
-  Production keeps submission and polling disabled unless operators set both emergency controls
-  explicitly. No client secret belongs in Docket's public-PKCE flow.
-- **Subtasks**:
-  - [x] Prevent ordinary Athena runners from claiming Lattice assignment sessions.
-  - [x] Settle the delegation and parent session together after proposal decisions.
-  - [x] Reauthorize after every relay network call and inside every progress or retry transaction.
-  - [x] Carry cancellation as durable intent and settle it only after Lattice drops the work.
-  - [x] Complete the controller command and accepted-submission metadata boundary.
-  - [x] Derive the logical submission id from the pre-minted delegation id.
-  - [x] Fence concurrent scheduler submission before the relay call.
-  - [x] Acknowledge every safely retained terminal delivery.
-  - [x] Require both emergency controls at the scheduler function boundary.
-  - [x] Persist `offline_queued` as the selected runtime's visible offline condition.
-  - [x] Replace copied relay types with official exported types where available.
-- **Cancellation lifecycle**: `agent_delegation.cancellation_requested_at` records that Docket has
-  given up on a delegation while the row is still `prepared` or `submitted`, and its `failure_code`
-  names how that intent must settle: an empty code belongs to the owner and settles `canceled`,
-  while an authorization code settles `failed`. A cancellation that arrives while a submission
-  lease is live records intent alone, so the in-flight submitter keeps the reply key, work id, and
-  lease it needs to compensate. The submitter rechecks intent immediately before `submitWork` and
-  rechecks both intent and authorization immediately after, and work the relay accepted moves to
-  `submitted` before Docket asks Lattice to drop it. A compensating cancellation that fails leaves
-  the row non-terminal with a retry time, and the scheduler settles that intent ahead of every poll
-  and submission.
-- **One rule, everywhere**: every terminal settlement of a delegation the relay may still be
-  running now goes through that path. Access loss found before `pollEvents`, after it, on an
-  account change, inside the progress transaction, in the write fence over accepted work, and in
-  either ambiguous relay failure all record intent and ask Lattice to drop the work before Docket
-  settles. An owner cancelling submitted work the relay refuses to drop keeps its reply key and is
-  driven to `canceled` by the scheduler once Lattice confirms, rather than being settled on the
-  spot while the runtime keeps going. Confirmation means a `cancelled` state or the stable
-  unknown-work answer, and that answer only counts from the grant that accepted the work: a
-  connection relinked to another Lovelace account or another runtime cannot speak for it, so its
-  404 proves nothing. That case, and a relay still unanswered past the delegation's deadline, end
-  the delegation instead of retrying forever, because an unsettled row holds the assignment's one
-  open-delegation slot. An owner's cancellation survives all of it: their marker is an empty
-  `failure_code` beside recorded intent, and no authorization code, relay code, or deadline may
-  replace it, so a delegation the owner cancelled always ends `canceled`.
-- **Whose account holds the work**: `agent_delegation.lattice_account_id` (migration 0117) records
-  the Lovelace account a delegation was created against, and cancellation addresses that account
-  rather than whichever runtime the owner has selected since. Switching Mac Studios inside one
-  account still cancels; a connection relinked to a different account is treated as out of reach,
-  because its answers describe someone else's relay.
-- **Validation**: The delegation suite passes 92 tests. The API package passes 424 test files under
-  its coverage thresholds, with lint, type check, and Prettier clean through Turbo. The database
-  package passes 39 files and 228 tests with lint and type check clean. CI on `main` was failing on
-  exactly the eight cancellation tests this work implements, and nothing else. Two independent
-  adversarial reviews ran against the finished implementation, then ran again against the fixes.
-  The first round rejected and confirmed nine defects, three of them critical; the second round
-  confirmed seven more, of which five were already fixed while it ran. Every confirmed defect from
-  both rounds is fixed here. Two existing tests encoded behaviour those reviews proved wrong and
-  were rewritten: `settles local cancellation when revoked relay access cannot cancel submitted
-work` asserted a local `canceled` settlement while the Mac Studio kept running, and the
-  accepted-submission write fence asserted a terminal row for work the relay had already taken. One
-  assertion was corrected for a different reason: it required `cancelWork` to receive the connection
-  row as it read before the test revoked it, which no implementation can produce, so it now matches
-  that connection's identity.
-- **Coverage**: `apps/api/src/agent/lattice-delegations.ts` did not exist at the last green CI run,
-  so the whole Lattice slice arrived with its branch debt and the API branch gate had been failing
-  behind the eight red tests. This change repays it: the delegation module goes from 72% to 98%
-  branches, and 55 new tests bring `lattice-oauth`, `lattice-connection`, and the Lattice routes up
-  with it, which puts the package back over its 88% gate. Twenty-two guards against interleavings a
-  single-connection test database cannot produce carry the file's existing
-  `/* v8 ignore next -- @preserve defensive: … */` marker with the reason each is unreachable. Two
-  gaps found along the way had no test at all and now do: approving a Lattice result and completing
-  the delegation, which is the feature's primary success path, and settling each of the five
-  submission failure codes.
-- **Known residue**: `packages/db` cannot run `test:coverage` on this Mac Studio. V8 aborts with
-  `Check failed: end > addr` while freeing WASM code across vitest's worker threads, which PGlite
-  and v8 coverage together provoke. Linux CI runs the same command green, and every db test passes
-  here without `--coverage`, so this is a host toolchain fault rather than a repository one.
-- **Blockers for launch**: The remaining work is external and needs the user. `@lovelace-ai/compute`
-  and `@lovelace-ai/lattice-relay-client` are still `0.0.1` in the registry, the reviewed `0.0.2`
-  tarballs are gone from this machine, the Lovelace checkout sits on
-  `codex/rewrite-unpublished-lovelace-main-20260828` a hundred commits ahead of its remote with a
-  large staged tree, and npm write operations need manual web TFA. `auth.uselovelace.com` and
-  `lattice.uselovelace.com` both answer HTTP 200 and serve OAuth discovery, but through Cloud Run
-  domain mappings rather than the mTLS load balancer, so the Google edge recovery is unfinished and
-  the `willie@reasonabletech.co` credentials need an interactive `gcloud auth login`. The Mac Studio
-  is this host. LM Studio serves `poolside/laguna-s-2.1`, and `~/.lovelace/lattice/config.toml`
-  already carries the required shape: provider `lmstudio`, that model, `http://127.0.0.1:1234/v1`,
-  one concurrent task, relay tools on, and no auto-consented tools.
-- **Mac Studio runtime, as found**: two conditions the handoff did not know about. The daemon could
-  not start at all — `Failed to initialize device identity: Invalid DID: Keypair does not match
-stored DID` — because `~/.lovelace/lattice/device.json` and `device.key`, both written
-  2026-06-16, had drifted apart. That identity read `trust_status: "unregistered"`, so nothing was
-  bound to it and nothing was lost by replacing it; both files were moved aside in place with a
-  `.corrupt-20260830-230702` suffix rather than removed. The managed launchd job is installed under
-  the label the tool chooses, `com.lovelace.lattice-daemon`, and the daemon now mints a fresh
-  identity and answers `ping`.
-- **Pairing was two Lovelace bugs, both now fixed**: `lattice-ctl auth login` was refused with
-  `invalid_scope`. The installed CLI asked `/device_authorization` for `openid profile
-offline_access marketplace`, and a bare `marketplace` names nothing in Lovelace's own registry:
-  `packages/core/auth-core/src/scopes/lovelace-scopes.ts` calls it `lattice:compute:marketplace`
-  canonically and `lattice:marketplace` as a legacy alias, and a host that serves compute wants
-  neither — it wants `lattice:compute:provider`, the provider control plane. Probing production
-  directly settled it: all three marketplace spellings return 400 `invalid_scope`, and
-  `lattice:compute:provider` returns 200 with a device code.
-  `crates/lattice-daemon/src/bin/ctl/auth.rs` now asks for that scope, and the rebuilt binary
-  carries it.
-  With the scope fixed the device page still hung on "Signing you in" and no passkey prompt ever
-  appeared, on that screen and anywhere else browser autofill had nothing to attach to. In
-  `apps/lovelace-accounts/src/components/auth/WebAuthnLoginForm`, the login form and the autofill
-  hook share one attempt lock. Autofill takes it on mount and starts a conditional-mediation
-  ceremony, which settles only when somebody picks a passkey out of an autofill dropdown; a screen
-  that renders no field for that dropdown never offers the chance, so the ceremony waits forever
-  and the lock is never released. The person's own sign-in then failed the lock check and returned
-  before it ever called the WebAuthn client, so the browser was never asked for a passkey. A
-  sign-in now takes the lock from a waiting autofill ceremony, which is safe because the WebAuthn
-  client already aborts an outstanding ceremony when the next one begins. That fix is
-  `fda3d38409` on Lovelace `main`, deployed to `accounts.uselovelace.com` and verified by finding
-  `preemptAutofillAttempt` in the served bundle.
-- **The attestation wall was the wrong path, and the Mac Studio is paired**: `device link` enrolls a
-  _marketplace provider_ and does require a `developer_id`-signed binary, which no local build can
-  satisfy. The round trip does not need it. A personal runtime pairs through
-  `lattice-ctl relay connect`, redeeming a one-time bootstrap token against an unauthenticated
-  redemption route — no attestation, no signing, no release pipeline. Runtime
-  `lat_08d4fe1741e9b8d4229e02aa9008b836` is registered on `beacon.uselovelace.com` with work keys
-  valid to 8 September, runs under launchd, and its heartbeats advance.
-- **Three things that path taught, all cheap to hit again**: `cp` invalidates an ad-hoc signature on
-  Apple Silicon and the kernel then SIGKILLs the binary, which reads as a mysterious `exit 137` —
-  re-sign after every install. The daemon blocks forever on a keychain prompt when its code identity
-  changes, so `LOVELACE_DEVICE_KEY_BACKEND=file` keeps a stable identity without one, and the
-  launchd plist needs that variable or the service hangs invisibly. A relay credential inherits the
-  bootstrap token's ten-minute expiry, so pairing and starting the daemon must happen in one go.
-- **`Connect Lattice` was a dead button in production**: starting the flow seals a PKCE verifier, and
-  sealing raises a conflict when `CREDENTIALS_ENCRYPTION_KEY` is absent. Production bound twenty-eight
-  secrets to the API and that key was not among them, so every authorization returned 409 and told the
-  person their request conflicted. The key is provisioned and bound, the 409 is gone, and
-  `latticeConfigured()` now also asks whether a credential can be sealed so an unconfigured
-  deployment says so instead of offering a control that cannot work.
-- **What remains**: the Lovelace authorization endpoint identified callers only by a session cookie
-  set during a server-to-server call, so a browser never held one and every authorization read as
-  anonymous and looped back to login. The endpoint now also accepts a bearer token and the accounts
-  app presents the person's token from its own server; both halves are deployed. Proving inference
-  and the duplicate-free round trip needs one passkey sign-in to establish the grant. See
-  `docs/superpowers/plans/2026-08-30-docket-lattice-roundtrip-claude-handoff.md`, noting that its
-  worktree paths, tarball paths, `gcloud` path, and Lovelace branch state are stale.
-- **Credential renewal failed for three stacked reasons, and each hid the next**: the Lovelace
-  Neon project `lovelace-platform` was still on the free plan, burned its 5 GB monthly transfer
-  allowance, and Neon paused it, so every `prisma.$queryRaw` failed with `53000`, both
-  `lattice.uselovelace.com` and `auth.uselovelace.com` reported `critical`, and a freshly deployed
-  gateway revision failed its startup probe for a reason that had nothing to do with its image.
-  Rolling that revision back made things worse, because `2a0a0fa2c5` is the commit that adds
-  `POST /v1/personal-runtimes/:id/credential-refreshes`, so the older revision answered renewal
-  with 404. That 404 stayed invisible because the daemon sent a bodyless POST, which carries no
-  `Content-Length`, and Google's front end answered 411 before the request reached the gateway at
-  all. The plan is now on Launch, traffic serves the revision that owns the route, and the daemon
-  sends a body with a regression test that fails without one.
-- **A rollback is not a diagnosis**: when a Cloud Run revision fails `/health/ready` and rolling
-  back does not restore service, the dependency is the suspect, not the image. Reading the
-  container's own log named the cause in one query after two deploys had already been spent on it.
-- **The five-minute renewal window is the fragility worth fixing next**: a relay credential lives
-  fifteen minutes and renews five minutes before expiry, with no offline recovery. Any gateway
-  outage longer than five minutes therefore strands every personal runtime permanently and forces a
-  manual, browser-authorized re-pair. That is what turned one database incident into a lost
-  pairing, and renewal working correctly does not prevent the next occurrence.
-- **Inference reached the Mac Studio, on the wrong runtime**: with relay tracing on
-  (`RUST_LOG=lattice_daemon::compute::relay=trace`), a Docket turn decrypted on the runtime at
-  18:22:10, dispatched at 18:22:29, and completed at 18:23:20 with 98 tokens — on **Ollama**,
-  model `lovelace:gemma4:latest`, even though `config.toml` names LM Studio and
-  `poolside/laguna-s-2.1`. The relay picker in `crates/lattice-daemon/src/compute/relay/startup.rs`
-  took the first catalog entry that served the task class, and the catalog is built in probe order
-  with Ollama first; `orchestrator.default_provider` was never consulted. Every earlier "the chat
-  never arrives" reading was wrong for a simpler reason: the daemon's success path logs at `debug!`,
-  and I was grepping for `laguna` while the work ran on gemma.
-- **Fix one, Lovelace `89230ca96e`**: `preferred_local_model(&LatticeConfig)` reads the operator's
-  provider and model; `resolve_agent_runtime_model` prefers the configured model when the catalog
-  serves it, then any model on the configured runtime, then the old first-entry fallback; a
-  concrete model named by the command still wins. Ollama is deprecated for relay work — the relay
-  no longer constructs that runtime and a config naming it warns and falls through. 40 relay
-  startup tests pass including 7 new cases against a two-runtime catalog probed Ollama-first. The
-  marketplace tunnel and `DEFAULT_LOCAL_FIRST_*` still assume Ollama and are tracked separately.
-- **The relay itself was the next wall**: every beacon request — heartbeat, lease, ack, result —
-  took 20–40 s (`work-leases` 27.9 s avg, `heartbeat` 18.9 s). `durable-personal-control-relay.ts`
-  persists the whole relay state as one JSONB snapshot under a global advisory lock on every
-  mutation, and the snapshot kept each work item's 1.4 MB sealed command for the 24-hour retention
-  window, so a day of turns meant every request read, re-serialised, and rewrote many megabytes.
-  A 60-second lease could not survive one acknowledgement round trip: the daemon answered in a
-  second and `PUT /result` came back 404. Not caused by any push — the serving revision was two
-  days old; it surfaced once enough sealed commands had accumulated.
-- **Fix two, Lovelace `495585fcc7`, deployed as `lattice-signaling-service-00009-74z`**: the relay
-  releases a work item's sealed command at its terminal transition and prunes it from any snapshot
-  it loads, so legacy state shrinks on first read; the sealed result keeps its own retention.
-  `deploy.yaml` memory 512Mi → 1Gi (the deploy tooling forbids `minInstances` above 0 for
-  production, so scale-to-zero stays). Measured on the new revision from the daemon's own traffic:
-  `work-leases` 27.9 s → **0.73 s**, `voice-streams` 18.1 s → **0.63 s**. Three new unit tests;
-  54 relay tests pass.
-- **Then the time budget**: with the relay fast, LM Studio rejected the turn — `request (39760
-tokens) exceeds the available context size (32768 tokens)`. An Athena turn ships its full tool
-  set. The Mac Studio's launchd watchdog (`~/CelloWork/bin/lmstudio-server-watchdog.zsh`) pins
-  laguna to a 32k context as a memory bound; it now pins 64k (loads at ~66 GiB; the model allows
-  262k). With 64k the model finished the turn (`LM Studio chat completed … tokens=Some(9)`,
-  39,760-token prefill in 111 s at 358 tok/s) but the gateway's 120 s standard deadline had already
-  cancelled the work and Docket's SDK client had given up at 120 s. The gateway now runs with
-  `LATTICE_PERSONAL_RELAY_STANDARD_DEADLINE_MS=300000` (revision `00010-j9l`, request timeout
-  300 s), and Docket's turn path drives it with a matching five-minute client timeout
-  (`turnGatewayContext`, this commit). The prompt size itself is the real defect and is tracked as
-  its own task.
-- **Two machine-level traps recorded as memories**: `lattice-ctl` auto-spawns an untracked daemon
-  whenever the launchd instance is down, which throws launchd into a respawn storm; and the
-  shared Cargo target dir was poisoned by another worktree's build (two copies of
-  `platform-resource`), fixed with a targeted `cargo clean` of four crates.
-- **Proof on LM Studio** (workspace `01KV6378GSKDVFRX5FZQ63C9W8`, per the instruction to stop
-  using Las Vegans for Better Transit for tests): work `work_755a85e7` at 22:57 UTC. Docket `POST /v1/me/athena/sessions` → **200 in 38.5 s**; gateway `POST /v1/chat/completions` → **200 in 32.9 s**; beacon `POST /work-items` → 202 in 1.3 s; the daemon opened the item at 22:57:52 and dispatched at 22:57:56 to `runtime=LmStudio model=lovelace:poolside/laguna-s-2.1`; `LM Studio chat completed … tokens=Some(9)` at 22:58:09; beacon `PUT /result` → **200** at 22:58:10. Every hop returned success and the reply reached Docket inside the shared five-minute budget; the daemon's own record is the `dispatching to runtime` and `chat completed` lines above, the gateway's and Docket's are their request logs at those timestamps.
-- **Prompt size was the last wall, and it is Athena's**: a one-line turn reached LM Studio as
-  39,760 tokens because `renderToolInstructions` rendered every tool's full description and its
-  JSON Schema pretty-printed with every `description`, `title`, and `examples` at every level.
-  The renderer now emits the lead paragraph of each description and the shape-preserving part of
-  each schema as compact JSON — every keyword that decides validity kept, documentation-only
-  keywords removed at every level, property names never treated as keywords, literal arrays
-  copied as they are. Validation still runs against the registered schema. Measured on the real
-  built-in toolbox: 38 tools render to 57,508 characters (~14k tokens), down from ~160k
-  characters; a synthetic forty-tool set renders under 40% of its verbose size. Two tests pin
-  those budgets (`domains/athena/tests/lattice-adapter.test.ts`,
-  `apps/api/tests/mcp/mcp-athena-user.test.ts`) so a tool added with an oversized schema fails
-  in CI before it reaches a device. `docs/engineering/specs/lattice-byo-model.md` §4 records the
-  rule, the ~64k context a paired model needs today, and the shared five-minute turn budget.
-- **The daemon now says why a turn failed**: `dispatch_canonical_request` logged nothing when the
-  local runtime returned an error, so the only record of "request exceeds the available context
-  size" was LM Studio's own log. Lovelace `60df9a0984` adds a warning at that branch (request id,
-  model, error code and message, elapsed) and logs LM Studio's status and the first 512
-  characters of its response body on a rejected completion — identifiers and the server's
-  message, never prompt content. A runtime that rejects every request is driven through the
-  local relay dispatcher in a new test; 41 relay startup tests pass, clippy clean.
-- **Cold proof on the trimmed prompt**: work `work_7d068882` at 23:38 UTC on the first docket-api revision carrying the trimmed renderer (`f6bf55fa`, deployed 23:3x), in workspace `01KV6378GSKDVFRX5FZQ63C9W8`. LM Studio recorded the request as **20,133 prompt tokens** (the earlier proof turn was 39,760 and its prefill came from the prefix cache), processed the whole prompt cold in **47.8 s at 421 tokens/s**, and returned 6 completion tokens. Docket `POST /v1/me/athena/sessions` → 200 in 76.5 s; gateway `POST /v1/chat/completions` → 200 in 67.4 s; the daemon opened the item at 23:38:49, dispatched to `runtime=LmStudio model=lovelace:poolside/laguna-s-2.1` at 23:38:54, and logged `chat completed tokens=Some(6)` at 23:39:42. A one-line turn therefore costs about fifty seconds of prefill on this device when nothing is cached, which is the number the five-minute budget and the 64k context recommendation in `lattice-byo-model.md` §4 are sized against.
 
 ### [MCP-APPS-CHAT-001] Render MCP apps in the Athena chat and complete the optional spec surface
 
@@ -12034,6 +11783,267 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
 ---
 
 ## Completed Tasks
+
+### [ATHENA-LATTICE-IMMEDIATE-001] Submit new durable assignments without waiting for cron
+
+- **Status**: COMPLETED
+- **Completed**: 2026-10-04
+- **Started**: 2026-09-30; resumed 2026-10-03
+- **Priority**: P0
+- **Description**: New personal Lattice assignments submit as soon as their durable row commits, through the existing authorization, lease, idempotency, and operator-control path. The Athena Scheduler configuration runs every minute to recover eligible submissions and collect sealed results; user-owned schedules retain their five-minute minimum.
+- **Plan**: Rebase onto current main, reproduce the review finding with a stale-read concurrency test, recheck retry eligibility inside the atomic claim, validate and review the final slice, then deliver once and verify staging.
+- **Files changed**: `apps/api/src/agent/assignments.ts`, `apps/api/src/agent/lattice-delegations.ts`, `apps/api/tests/agent/lattice-delegations.test.ts`, `scripts/scheduler-setup.ts`, `repo-tests/tooling/scheduler-setup.test.ts`, `docs/engineering/deployment.md`, `docs/engineering/specs/lattice-byo-model.md`, and this log.
+- **Validation**: The immediate-submit and one-minute cadence assertions failed before implementation and passed afterward. After rebasing, 130 affected API tests, 10 Scheduler tests, API build/typecheck/lint, complexity ledger, docs, formatting, and whitespace checks passed. Independent review found a stale-read retry race: a sweep could install a future backoff before the direct helper claimed its previously selected row. The concurrency regression reproduced two submissions before the atomic due-time predicate and one afterward. The second independent review found no remaining actionable source findings.
+- **Operations**: Each Athena job rises from up to 288 to 1,440 invocations per day, with no new hosted validation workflow. A slow relay call delays the assignment response. Result collection remains polling-based. Existing deadline-length submission fencing can hold an interrupted submitter until the work expires; the one-minute tick does not shorten that lease.
+- **Delivery**: One push landed `c43201de4` and `318f0429a` on main with no merge commits. CI run `37143543391` and production deployment `37144600597` succeeded for `318f0429ac7581b860d5530d7ef29d86bcae3eae`. The production API, admin, Scheduler provisioning, and documentation verification passed. Deployment logs confirm `docket-athena-triggers` changed to `* * * * *`.
+- **Live acceptance**: The original private task `01KZHHQZPG6RMQRV6REBN8MB1Z` received one proposal-only objective marked `IMMEDIATE DISPATCH 1003` through its normal Work on this task dialog. The request began at `2026-10-03T18:38:03.449Z` and returned HTTP 201 after 7.819 seconds with assignment `01M41GY6TZ6Z6AF87E2RS56PRB` and session `01M41GY76VPYKGB8MKSXQAT2MN`. The UI then showed “Reconnect Lovelace to restore access.” The same job returned one useful comment proposal around 18:40 UTC while paused. Its marker and actual Done when criteria appear on the original task and in the LM Studio log. October 4 WIF records correlate delegation `01M41GY71M1BYRR15A1Y570NZ9`, logical `athena:01M41GY71M1BYRR15A1Y570NZ9`, work `work_01M41GY71M4ZMWJX3DNFMJA9PK`, the Mac Studio runtime, and returned activity `01M41H2833ACHHV3DMVC78H008`, each unique for this assignment. The initial provider discovery failed before submission; the following-minute retry produced one persisted return. No proposal was approved. Screenshot and scoped network evidence are saved under `/Users/williecubed/.codex/visualizations/2026/10/03/athena-immediate-dispatch/`.
+- **Learning and retrospective**: Reusing the scheduler's claim path avoided a second submission protocol. Retry eligibility belongs in the atomic claim as well as the initial read. The real-query race test catches that interleaving without timing sleeps or production test hooks. The release is deployed. A transient refusal is not a terminal outcome: re-read the canonical job before concluding that the run is blocked. Final operational evidence is retained in a local documentation commit for the next coherent delivery, avoiding another full CI run for a release receipt.
+- **Scope and follow-through**: Immediate dispatch and one-minute recovery are shipped and reviewed. The new October 3 delegation records `created_at=19:27:00.171Z` and `submitted_at=19:27:00.658Z`; that second field is the submit pass’s supplied clock value, not measured relay acceptance. The relay accepted the work at `19:27:04.959Z`, during the original dispatch pass, and it returned one useful proposal. Broader staging cleanup is tracked in `ATHENA-LATTICE-ACCEPTANCE-002`; no Google SDK login is required for the existing WIF path. Preserve the Lovelace grant.
+
+### [ATHENA-LATTICE-ROUNDTRIP-001] Prove the durable Docket–Lattice round trip
+
+- **Status**: COMPLETED
+- **Historical snapshot**: This September 1 entry records implementation and the provider state observed then. Its old package-publish, disabled-control, authentication, and rollout notes are historical, not current blockers. October 3 release `318f0429a` and October 4 authoritative production audits supersede those rollout statements; see §12 of `docs/engineering/specs/lattice-byo-model.md`. A completed implementation entry does not close the still-unrecorded two-instance/restart engineering proof.
+- **Completed**: 2026-09-01
+- **Started**: 2026-08-28
+- **Priority**: P0
+- **Description**: Complete the Docket-to-Lattice Mac Studio round trip so one private Athena
+  assignment remains on its durable execution surface from preparation through approval,
+  settlement, and result acknowledgement. Docket now owns the durable delegation, immutable work
+  identity, encrypted reply key, scheduler fence, approval proposal, and terminal acknowledgement.
+- **Package state**: The five production dependencies are public at version `0.0.1`:
+  `@lovelace-ai/acsp`, `@lovelace-ai/compute`, `@lovelace-ai/lattice-relay-client`,
+  `@lovelace-ai/lattice-relay-crypto`, and `@reasonabletech/lattice-client`. The lockfile resolves
+  registry artifacts and contains no `link:` or `file:` override for them.
+- **Production state**: Lovelace production bootstraps the public PKCE client `docket-athena`. The
+  exact Docket authorization request reaches the Lovelace login redirect. Docket pins the accounts
+  issuer to `https://auth.uselovelace.com` and the gateway to `https://lattice.uselovelace.com`.
+  Production keeps submission and polling disabled unless operators set both emergency controls
+  explicitly. No client secret belongs in Docket's public-PKCE flow.
+- **Subtasks**:
+  - [x] Prevent ordinary Athena runners from claiming Lattice assignment sessions.
+  - [x] Settle the delegation and parent session together after proposal decisions.
+  - [x] Reauthorize after every relay network call and inside every progress or retry transaction.
+  - [x] Carry cancellation as durable intent and settle it only after Lattice drops the work.
+  - [x] Complete the controller command and accepted-submission metadata boundary.
+  - [x] Derive the logical submission id from the pre-minted delegation id.
+  - [x] Fence concurrent scheduler submission before the relay call.
+  - [x] Acknowledge every safely retained terminal delivery.
+  - [x] Require both emergency controls at the scheduler function boundary.
+  - [x] Persist `offline_queued` as the selected runtime's visible offline condition.
+  - [x] Replace copied relay types with official exported types where available.
+- **Cancellation lifecycle**: `agent_delegation.cancellation_requested_at` records that Docket has
+  given up on a delegation while the row is still `prepared` or `submitted`, and its `failure_code`
+  names how that intent must settle: an empty code belongs to the owner and settles `canceled`,
+  while an authorization code settles `failed`. A cancellation that arrives while a submission
+  lease is live records intent alone, so the in-flight submitter keeps the reply key, work id, and
+  lease it needs to compensate. The submitter rechecks intent immediately before `submitWork` and
+  rechecks both intent and authorization immediately after, and work the relay accepted moves to
+  `submitted` before Docket asks Lattice to drop it. A compensating cancellation that fails leaves
+  the row non-terminal with a retry time, and the scheduler settles that intent ahead of every poll
+  and submission.
+- **One rule, everywhere**: every terminal settlement of a delegation the relay may still be
+  running now goes through that path. Access loss found before `pollEvents`, after it, on an
+  account change, inside the progress transaction, in the write fence over accepted work, and in
+  either ambiguous relay failure all record intent and ask Lattice to drop the work before Docket
+  settles. An owner cancelling submitted work the relay refuses to drop keeps its reply key and is
+  driven to `canceled` by the scheduler once Lattice confirms, rather than being settled on the
+  spot while the runtime keeps going. Confirmation means a `cancelled` state or the stable
+  unknown-work answer, and that answer only counts from the grant that accepted the work: a
+  connection relinked to another Lovelace account or another runtime cannot speak for it, so its
+  404 proves nothing. That case, and a relay still unanswered past the delegation's deadline, end
+  the delegation instead of retrying forever, because an unsettled row holds the assignment's one
+  open-delegation slot. An owner's cancellation survives all of it: their marker is an empty
+  `failure_code` beside recorded intent, and no authorization code, relay code, or deadline may
+  replace it, so a delegation the owner cancelled always ends `canceled`.
+- **Whose account holds the work**: `agent_delegation.lattice_account_id` (migration 0117) records
+  the Lovelace account a delegation was created against, and cancellation addresses that account
+  rather than whichever runtime the owner has selected since. Switching Mac Studios inside one
+  account still cancels; a connection relinked to a different account is treated as out of reach,
+  because its answers describe someone else's relay.
+- **Validation**: The delegation suite passes 92 tests. The API package passes 424 test files under
+  its coverage thresholds, with lint, type check, and Prettier clean through Turbo. The database
+  package passes 39 files and 228 tests with lint and type check clean. CI on `main` was failing on
+  exactly the eight cancellation tests this work implements, and nothing else. Two independent
+  adversarial reviews ran against the finished implementation, then ran again against the fixes.
+  The first round rejected and confirmed nine defects, three of them critical; the second round
+  confirmed seven more, of which five were already fixed while it ran. Every confirmed defect from
+  both rounds is fixed here. Two existing tests encoded behaviour those reviews proved wrong and
+  were rewritten: `settles local cancellation when revoked relay access cannot cancel submitted
+work` asserted a local `canceled` settlement while the Mac Studio kept running, and the
+  accepted-submission write fence asserted a terminal row for work the relay had already taken. One
+  assertion was corrected for a different reason: it required `cancelWork` to receive the connection
+  row as it read before the test revoked it, which no implementation can produce, so it now matches
+  that connection's identity.
+- **Coverage**: `apps/api/src/agent/lattice-delegations.ts` did not exist at the last green CI run,
+  so the whole Lattice slice arrived with its branch debt and the API branch gate had been failing
+  behind the eight red tests. This change repays it: the delegation module goes from 72% to 98%
+  branches, and 55 new tests bring `lattice-oauth`, `lattice-connection`, and the Lattice routes up
+  with it, which puts the package back over its 88% gate. Twenty-two guards against interleavings a
+  single-connection test database cannot produce carry the file's existing
+  `/* v8 ignore next -- @preserve defensive: … */` marker with the reason each is unreachable. Two
+  gaps found along the way had no test at all and now do: approving a Lattice result and completing
+  the delegation, which is the feature's primary success path, and settling each of the five
+  submission failure codes.
+- **Known residue**: `packages/db` cannot run `test:coverage` on this Mac Studio. V8 aborts with
+  `Check failed: end > addr` while freeing WASM code across vitest's worker threads, which PGlite
+  and v8 coverage together provoke. Linux CI runs the same command green, and every db test passes
+  here without `--coverage`, so this is a host toolchain fault rather than a repository one.
+- **Blockers for launch**: The remaining work is external and needs the user. `@lovelace-ai/compute`
+  and `@lovelace-ai/lattice-relay-client` are still `0.0.1` in the registry, the reviewed `0.0.2`
+  tarballs are gone from this machine, the Lovelace checkout sits on
+  `codex/rewrite-unpublished-lovelace-main-20260828` a hundred commits ahead of its remote with a
+  large staged tree, and npm write operations need manual web TFA. `auth.uselovelace.com` and
+  `lattice.uselovelace.com` both answer HTTP 200 and serve OAuth discovery, but through Cloud Run
+  domain mappings rather than the mTLS load balancer, so the Google edge recovery is unfinished and
+  the `willie@reasonabletech.co` credentials need an interactive `gcloud auth login`. The Mac Studio
+  is this host. LM Studio serves `poolside/laguna-s-2.1`, and `~/.lovelace/lattice/config.toml`
+  already carries the required shape: provider `lmstudio`, that model, `http://127.0.0.1:1234/v1`,
+  one concurrent task, relay tools on, and no auto-consented tools.
+- **Mac Studio runtime, as found**: two conditions the handoff did not know about. The daemon could
+  not start at all — `Failed to initialize device identity: Invalid DID: Keypair does not match
+stored DID` — because `~/.lovelace/lattice/device.json` and `device.key`, both written
+  2026-06-16, had drifted apart. That identity read `trust_status: "unregistered"`, so nothing was
+  bound to it and nothing was lost by replacing it; both files were moved aside in place with a
+  `.corrupt-20260830-230702` suffix rather than removed. The managed launchd job is installed under
+  the label the tool chooses, `com.lovelace.lattice-daemon`, and the daemon now mints a fresh
+  identity and answers `ping`.
+- **Pairing was two Lovelace bugs, both now fixed**: `lattice-ctl auth login` was refused with
+  `invalid_scope`. The installed CLI asked `/device_authorization` for `openid profile
+offline_access marketplace`, and a bare `marketplace` names nothing in Lovelace's own registry:
+  `packages/core/auth-core/src/scopes/lovelace-scopes.ts` calls it `lattice:compute:marketplace`
+  canonically and `lattice:marketplace` as a legacy alias, and a host that serves compute wants
+  neither — it wants `lattice:compute:provider`, the provider control plane. Probing production
+  directly settled it: all three marketplace spellings return 400 `invalid_scope`, and
+  `lattice:compute:provider` returns 200 with a device code.
+  `crates/lattice-daemon/src/bin/ctl/auth.rs` now asks for that scope, and the rebuilt binary
+  carries it.
+  With the scope fixed the device page still hung on "Signing you in" and no passkey prompt ever
+  appeared, on that screen and anywhere else browser autofill had nothing to attach to. In
+  `apps/lovelace-accounts/src/components/auth/WebAuthnLoginForm`, the login form and the autofill
+  hook share one attempt lock. Autofill takes it on mount and starts a conditional-mediation
+  ceremony, which settles only when somebody picks a passkey out of an autofill dropdown; a screen
+  that renders no field for that dropdown never offers the chance, so the ceremony waits forever
+  and the lock is never released. The person's own sign-in then failed the lock check and returned
+  before it ever called the WebAuthn client, so the browser was never asked for a passkey. A
+  sign-in now takes the lock from a waiting autofill ceremony, which is safe because the WebAuthn
+  client already aborts an outstanding ceremony when the next one begins. That fix is
+  `fda3d38409` on Lovelace `main`, deployed to `accounts.uselovelace.com` and verified by finding
+  `preemptAutofillAttempt` in the served bundle.
+- **The attestation wall was the wrong path, and the Mac Studio is paired**: `device link` enrolls a
+  _marketplace provider_ and does require a `developer_id`-signed binary, which no local build can
+  satisfy. The round trip does not need it. A personal runtime pairs through
+  `lattice-ctl relay connect`, redeeming a one-time bootstrap token against an unauthenticated
+  redemption route — no attestation, no signing, no release pipeline. Runtime
+  `lat_08d4fe1741e9b8d4229e02aa9008b836` is registered on `beacon.uselovelace.com` with work keys
+  valid to 8 September, runs under launchd, and its heartbeats advance.
+- **Three things that path taught, all cheap to hit again**: `cp` invalidates an ad-hoc signature on
+  Apple Silicon and the kernel then SIGKILLs the binary, which reads as a mysterious `exit 137` —
+  re-sign after every install. The daemon blocks forever on a keychain prompt when its code identity
+  changes, so `LOVELACE_DEVICE_KEY_BACKEND=file` keeps a stable identity without one, and the
+  launchd plist needs that variable or the service hangs invisibly. A relay credential inherits the
+  bootstrap token's ten-minute expiry, so pairing and starting the daemon must happen in one go.
+- **`Connect Lattice` was a dead button in production**: starting the flow seals a PKCE verifier, and
+  sealing raises a conflict when `CREDENTIALS_ENCRYPTION_KEY` is absent. Production bound twenty-eight
+  secrets to the API and that key was not among them, so every authorization returned 409 and told the
+  person their request conflicted. The key is provisioned and bound, the 409 is gone, and
+  `latticeConfigured()` now also asks whether a credential can be sealed so an unconfigured
+  deployment says so instead of offering a control that cannot work.
+- **What remains**: the Lovelace authorization endpoint identified callers only by a session cookie
+  set during a server-to-server call, so a browser never held one and every authorization read as
+  anonymous and looped back to login. The endpoint now also accepts a bearer token and the accounts
+  app presents the person's token from its own server; both halves are deployed. Proving inference
+  and the duplicate-free round trip needs one passkey sign-in to establish the grant. See
+  `docs/superpowers/plans/2026-08-30-docket-lattice-roundtrip-claude-handoff.md`, noting that its
+  worktree paths, tarball paths, `gcloud` path, and Lovelace branch state are stale.
+- **Credential renewal failed for three stacked reasons, and each hid the next**: the Lovelace
+  Neon project `lovelace-platform` was still on the free plan, burned its 5 GB monthly transfer
+  allowance, and Neon paused it, so every `prisma.$queryRaw` failed with `53000`, both
+  `lattice.uselovelace.com` and `auth.uselovelace.com` reported `critical`, and a freshly deployed
+  gateway revision failed its startup probe for a reason that had nothing to do with its image.
+  Rolling that revision back made things worse, because `2a0a0fa2c5` is the commit that adds
+  `POST /v1/personal-runtimes/:id/credential-refreshes`, so the older revision answered renewal
+  with 404. That 404 stayed invisible because the daemon sent a bodyless POST, which carries no
+  `Content-Length`, and Google's front end answered 411 before the request reached the gateway at
+  all. The plan is now on Launch, traffic serves the revision that owns the route, and the daemon
+  sends a body with a regression test that fails without one.
+- **A rollback is not a diagnosis**: when a Cloud Run revision fails `/health/ready` and rolling
+  back does not restore service, the dependency is the suspect, not the image. Reading the
+  container's own log named the cause in one query after two deploys had already been spent on it.
+- **The five-minute renewal window is the fragility worth fixing next**: a relay credential lives
+  fifteen minutes and renews five minutes before expiry, with no offline recovery. Any gateway
+  outage longer than five minutes therefore strands every personal runtime permanently and forces a
+  manual, browser-authorized re-pair. That is what turned one database incident into a lost
+  pairing, and renewal working correctly does not prevent the next occurrence.
+- **Inference reached the Mac Studio, on the wrong runtime**: with relay tracing on
+  (`RUST_LOG=lattice_daemon::compute::relay=trace`), a Docket turn decrypted on the runtime at
+  18:22:10, dispatched at 18:22:29, and completed at 18:23:20 with 98 tokens — on **Ollama**,
+  model `lovelace:gemma4:latest`, even though `config.toml` names LM Studio and
+  `poolside/laguna-s-2.1`. The relay picker in `crates/lattice-daemon/src/compute/relay/startup.rs`
+  took the first catalog entry that served the task class, and the catalog is built in probe order
+  with Ollama first; `orchestrator.default_provider` was never consulted. Every earlier "the chat
+  never arrives" reading was wrong for a simpler reason: the daemon's success path logs at `debug!`,
+  and I was grepping for `laguna` while the work ran on gemma.
+- **Fix one, Lovelace `89230ca96e`**: `preferred_local_model(&LatticeConfig)` reads the operator's
+  provider and model; `resolve_agent_runtime_model` prefers the configured model when the catalog
+  serves it, then any model on the configured runtime, then the old first-entry fallback; a
+  concrete model named by the command still wins. Ollama is deprecated for relay work — the relay
+  no longer constructs that runtime and a config naming it warns and falls through. 40 relay
+  startup tests pass including 7 new cases against a two-runtime catalog probed Ollama-first. The
+  marketplace tunnel and `DEFAULT_LOCAL_FIRST_*` still assume Ollama and are tracked separately.
+- **The relay itself was the next wall**: every beacon request — heartbeat, lease, ack, result —
+  took 20–40 s (`work-leases` 27.9 s avg, `heartbeat` 18.9 s). `durable-personal-control-relay.ts`
+  persists the whole relay state as one JSONB snapshot under a global advisory lock on every
+  mutation, and the snapshot kept each work item's 1.4 MB sealed command for the 24-hour retention
+  window, so a day of turns meant every request read, re-serialised, and rewrote many megabytes.
+  A 60-second lease could not survive one acknowledgement round trip: the daemon answered in a
+  second and `PUT /result` came back 404. Not caused by any push — the serving revision was two
+  days old; it surfaced once enough sealed commands had accumulated.
+- **Fix two, Lovelace `495585fcc7`, deployed as `lattice-signaling-service-00009-74z`**: the relay
+  releases a work item's sealed command at its terminal transition and prunes it from any snapshot
+  it loads, so legacy state shrinks on first read; the sealed result keeps its own retention.
+  `deploy.yaml` memory 512Mi → 1Gi (the deploy tooling forbids `minInstances` above 0 for
+  production, so scale-to-zero stays). Measured on the new revision from the daemon's own traffic:
+  `work-leases` 27.9 s → **0.73 s**, `voice-streams` 18.1 s → **0.63 s**. Three new unit tests;
+  54 relay tests pass.
+- **Then the time budget**: with the relay fast, LM Studio rejected the turn — `request (39760
+tokens) exceeds the available context size (32768 tokens)`. An Athena turn ships its full tool
+  set. The Mac Studio's launchd watchdog (`~/CelloWork/bin/lmstudio-server-watchdog.zsh`) pins
+  laguna to a 32k context as a memory bound; it now pins 64k (loads at ~66 GiB; the model allows
+  262k). With 64k the model finished the turn (`LM Studio chat completed … tokens=Some(9)`,
+  39,760-token prefill in 111 s at 358 tok/s) but the gateway's 120 s standard deadline had already
+  cancelled the work and Docket's SDK client had given up at 120 s. The gateway now runs with
+  `LATTICE_PERSONAL_RELAY_STANDARD_DEADLINE_MS=300000` (revision `00010-j9l`, request timeout
+  300 s), and Docket's turn path drives it with a matching five-minute client timeout
+  (`turnGatewayContext`, this commit). The prompt size itself is the real defect and is tracked as
+  its own task.
+- **Two machine-level traps recorded as memories**: `lattice-ctl` auto-spawns an untracked daemon
+  whenever the launchd instance is down, which throws launchd into a respawn storm; and the
+  shared Cargo target dir was poisoned by another worktree's build (two copies of
+  `platform-resource`), fixed with a targeted `cargo clean` of four crates.
+- **Proof on LM Studio** (workspace `01KV6378GSKDVFRX5FZQ63C9W8`, per the instruction to stop
+  using Las Vegans for Better Transit for tests): work `work_755a85e7` at 22:57 UTC. Docket `POST /v1/me/athena/sessions` → **200 in 38.5 s**; gateway `POST /v1/chat/completions` → **200 in 32.9 s**; beacon `POST /work-items` → 202 in 1.3 s; the daemon opened the item at 22:57:52 and dispatched at 22:57:56 to `runtime=LmStudio model=lovelace:poolside/laguna-s-2.1`; `LM Studio chat completed … tokens=Some(9)` at 22:58:09; beacon `PUT /result` → **200** at 22:58:10. Every hop returned success and the reply reached Docket inside the shared five-minute budget; the daemon's own record is the `dispatching to runtime` and `chat completed` lines above, the gateway's and Docket's are their request logs at those timestamps.
+- **Prompt size was the last wall, and it is Athena's**: a one-line turn reached LM Studio as
+  39,760 tokens because `renderToolInstructions` rendered every tool's full description and its
+  JSON Schema pretty-printed with every `description`, `title`, and `examples` at every level.
+  The renderer now emits the lead paragraph of each description and the shape-preserving part of
+  each schema as compact JSON — every keyword that decides validity kept, documentation-only
+  keywords removed at every level, property names never treated as keywords, literal arrays
+  copied as they are. Validation still runs against the registered schema. Measured on the real
+  built-in toolbox: 38 tools render to 57,508 characters (~14k tokens), down from ~160k
+  characters; a synthetic forty-tool set renders under 40% of its verbose size. Two tests pin
+  those budgets (`domains/athena/tests/lattice-adapter.test.ts`,
+  `apps/api/tests/mcp/mcp-athena-user.test.ts`) so a tool added with an oversized schema fails
+  in CI before it reaches a device. `docs/engineering/specs/lattice-byo-model.md` §4 records the
+  rule, the ~64k context a paired model needs today, and the shared five-minute turn budget.
+- **The daemon now says why a turn failed**: `dispatch_canonical_request` logged nothing when the
+  local runtime returned an error, so the only record of "request exceeds the available context
+  size" was LM Studio's own log. Lovelace `60df9a0984` adds a warning at that branch (request id,
+  model, error code and message, elapsed) and logs LM Studio's status and the first 512
+  characters of its response body on a rejected completion — identifiers and the server's
+  message, never prompt content. A runtime that rejects every request is driven through the
+  local relay dispatcher in a new test; 41 relay startup tests pass, clippy clean.
+- **Cold proof on the trimmed prompt**: work `work_7d068882` at 23:38 UTC on the first docket-api revision carrying the trimmed renderer (`f6bf55fa`, deployed 23:3x), in workspace `01KV6378GSKDVFRX5FZQ63C9W8`. LM Studio recorded the request as **20,133 prompt tokens** (the earlier proof turn was 39,760 and its prefill came from the prefix cache), processed the whole prompt cold in **47.8 s at 421 tokens/s**, and returned 6 completion tokens. Docket `POST /v1/me/athena/sessions` → 200 in 76.5 s; gateway `POST /v1/chat/completions` → 200 in 67.4 s; the daemon opened the item at 23:38:49, dispatched to `runtime=LmStudio model=lovelace:poolside/laguna-s-2.1` at 23:38:54, and logged `chat completed tokens=Some(6)` at 23:39:42. A one-line turn therefore costs about fifty seconds of prefill on this device when nothing is cached, which is the number the five-minute budget and the 64k context recommendation in `lattice-byo-model.md` §4 are sized against.
 
 ### [ATHENA-SEND-RECONCILE-001] Reconcile a completed turn after a failed send response
 

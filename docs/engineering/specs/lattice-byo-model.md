@@ -2,7 +2,7 @@
 
 > **Reader**: the maintainer who must ship and verify the Docket–Lattice production round trip
 > **Required action**: preserve the no-fallback boundary and complete both production proofs
-> **Status**: deployed; production durable correlation and recovery verified; staging hygiene and relay two-instance/restart gate remain open
+> **Status**: deployed; production durable correlation and recovery verified; synthetic staging proposals rejected; staging mail mount and relay two-instance/restart gate remain open
 > **Owner**: Athena model backend
 > **Last updated**: 2026-10-04
 
@@ -455,9 +455,14 @@ above received independent review.
 
 ### Remaining gates
 
-- Staging hygiene: reject the two exact synthetic proposals and mount the prepared dedicated
-  sending-only staging mail key. The existing WIF operator is being diagnosed; no human SDK
-  sign-in is required. See `ATHENA-LATTICE-ACCEPTANCE-002` for current run outcomes.
+- Staging mail: the dedicated sending-only key is prepared but unmounted. The existing deployment
+  identity was denied `secretmanager.versions.add` on `docket-staging-resend-api-key` in run
+  `37191632254`; no secret version was acquired. An operator with that permission must add and pin
+  the staging version. No SDK sign-in is requested. The two exact synthetic proposals were rejected
+  in run `37192530284`; both sessions/delegations are canceled, reply keys cleared, tasks unchanged,
+  and comments remain zero. Its overall workflow is nonzero because the independent mail key was
+  not supplied for that rejection-only retry. Production revision/bindings remained stable.
+  See `ATHENA-LATTICE-ACCEPTANCE-002` for the safe receipts and the explicit remaining blocker.
 - Relay two-instance/restart proof: the Lovelace deployment runbook instructs this proof but no
   completed runtime receipt was found. Recording pool/client unit doubles and the observed
   single signaling instance do not establish restart survival or competing-instance ownership.

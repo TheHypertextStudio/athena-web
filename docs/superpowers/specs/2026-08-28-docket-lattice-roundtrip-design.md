@@ -32,7 +32,7 @@ and reviewable returned action. Live offline/Retry, response-loss reconciliation
 refresh were verified without relinking and independently reviewed. See
 [the current production receipts and remaining gates](../../engineering/specs/lattice-byo-model.md#production-acceptance-october-4-2026).
 
-The staging hygiene operation remains active. No runtime receipt was found for the original
+The two synthetic staging proposals are rejected with task fields/comments unchanged. The dedicated staging mail key remains unmounted because the deployment identity lacks secret-version write permission. No runtime receipt was found for the original
 two-instance/restart relay proof; the runbook describes the procedure and unit tests use doubles.
 Keep that engineering gate open. Exact historical lease payloads and unseen HTTP attempt counts
 are outside the retained production evidence.

@@ -24,8 +24,7 @@ interface FixtureSnapshot extends StagingFixtureRow {
   sessionStatus: string;
 }
 
-/** Compare persisted subject text without coercing a literal into a deployed enum version. */
-async function snapshots(sql: postgres.Sql): Promise<FixtureSnapshot[]> {
+async function snapshots(sql: postgres.TransactionSql): Promise<FixtureSnapshot[]> {
   return sql<FixtureSnapshot[]>`
     select d.id as "delegationId", d.work_id as "workId", d.session_id as "sessionId",
       d.task_id as "taskId", a.id as "activityId", d.owner_user_id as "ownerUserId",
@@ -34,7 +33,7 @@ async function snapshots(sql: postgres.Sql): Promise<FixtureSnapshot[]> {
       a.type, t.state as "taskState", t.assignee_id as "taskAssigneeId",
       t.delegate_id as "taskDelegateId", s.status as "sessionStatus",
       d.reply_key_ciphertext is null as "keyCleared", d.returned_activity_id is null as "returnCleared",
-      (select count(*)::int from comment c where c.subject_type::text = 'task'
+      (select count(*)::int from comment c where c.subject_type = 'task'
         and c.subject_id = t.id and c.organization_id = d.organization_id) as "commentCount"
     from agent_delegation d
     join agent_session s on s.id = d.session_id and s.owner_user_id = d.owner_user_id
@@ -74,7 +73,8 @@ async function rejectFixtures(
   const { closeDb } = await import('../packages/db/src/index');
   try {
     operationPhase = 'fixture_snapshot_read';
-    const before = await snapshots(sql);
+    // BEGIN opens the connection and loads driver array types before constructing array parameters.
+    const before = await sql.begin('isolation level repeatable read read only', snapshots);
     progress.baseline = before;
     await saveReport(output, {
       generatedAt: new Date().toISOString(),
@@ -97,7 +97,7 @@ async function rejectFixtures(
       }
     }
     operationPhase = 'fixture_postcondition';
-    const after = await snapshots(sql);
+    const after = await sql.begin('isolation level repeatable read read only', snapshots);
     for (const original of before) {
       const settled = after.find((row) => row.workId === original.workId);
       if (!settled) throw new Error('Staging fixture disappeared');

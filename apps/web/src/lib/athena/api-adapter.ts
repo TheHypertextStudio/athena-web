@@ -121,6 +121,24 @@ function toolResultFlags(
   };
 }
 
+/** Preserve native preview content and diagnostic call fields as separate presentation inputs. */
+function adaptTechnicalCall(
+  toolCall: Readonly<Record<string, unknown>>,
+  result: Readonly<Record<string, unknown>> | null,
+  action: Readonly<Record<string, unknown>> | null,
+): NonNullable<Extract<PersonalAthenaActivity, { type: 'tool' }>['technical']> {
+  const toolName = string(toolCall['tool']);
+  const connection = string(toolCall['connection']);
+  return {
+    ...(toolName ? { toolName } : {}),
+    ...(connection ? { connection } : {}),
+    ...('commentPreview' in (action ?? {}) ? { commentPreview: action?.['commentPreview'] } : {}),
+    ...('input' in toolCall ? { input: toolCall['input'] } : {}),
+    ...('content' in (result ?? {}) ? { output: result?.['content'] } : {}),
+    ...recordedChangeSet(result),
+  };
+}
+
 /** Adapt one existing activity to a safe, structured work-log beat. */
 export function adaptAthenaActivity(activity: AthenaApiActivity): PersonalAthenaActivity | null {
   if (activity.type === 'thought') return null;
@@ -131,7 +149,6 @@ export function adaptAthenaActivity(activity: AthenaApiActivity): PersonalAthena
     const summary = string(action?.['summary']) ?? 'Updated your work';
     const connection = string(toolCall?.['connection']);
     const outcome = string(result?.['content']);
-    const toolName = string(toolCall?.['tool']);
     const presentation = parseMcpAppPresentation(result?.['presentation']);
     return {
       id: activity.id,
@@ -145,12 +162,7 @@ export function adaptAthenaActivity(activity: AthenaApiActivity): PersonalAthena
       ...toolResultFlags(activity, result, presentation),
       ...(toolCall
         ? {
-            technical: {
-              ...(toolName ? { toolName } : {}),
-              ...('input' in toolCall ? { input: toolCall['input'] } : {}),
-              ...('content' in (result ?? {}) ? { output: result?.['content'] } : {}),
-              ...recordedChangeSet(result),
-            },
+            technical: adaptTechnicalCall(toolCall, result, action),
           }
         : {}),
     };

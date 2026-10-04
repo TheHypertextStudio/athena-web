@@ -14,6 +14,7 @@ const MAX_KEYS = 20;
 const MAX_ITEMS = 20;
 const MAX_DEPTH = 3;
 const MAX_TECHNICAL_BYTES = 4_096;
+const MAX_COMMENT_PREVIEW = 65_536;
 const SECRET_KEY = /(?:authorization|cookie|credential|password|secret|token|api[-_]?key)/i;
 const SECRET_VALUE = /(?:bearer\s+[a-z0-9._~-]+|\bsk-[a-z0-9_-]{8,})/i;
 
@@ -54,6 +55,25 @@ function boundedTechnicalValue(value: unknown): unknown {
   return JSON.stringify(sanitized).length <= MAX_TECHNICAL_BYTES
     ? sanitized
     : { notice: 'Technical input omitted because it was too large.' };
+}
+
+/** Project native comment content separately from diagnostic excerpts, with explicit safety flags. */
+function nativeCommentPreview(toolCall: Record<string, unknown> | null): Record<string, unknown> {
+  if (toolCall?.['connection'] !== 'docket' || toolCall['tool'] !== 'comment') return {};
+  const input = record(toolCall['input']);
+  const body = input?.['body'];
+  if (typeof body !== 'string' || !body.trim()) return {};
+  const redacted = SECRET_VALUE.test(body);
+  return {
+    commentPreview: {
+      body: redacted ? '' : body.slice(0, MAX_COMMENT_PREVIEW),
+      truncated: !redacted && body.length > MAX_COMMENT_PREVIEW,
+      redacted,
+      orgId: text(input?.['orgId'], '', 120),
+      subjectId: text(input?.['subjectId'], '', 120),
+      subjectType: text(input?.['subjectType'], '', 120),
+    },
+  };
 }
 
 /** The change set a successful tool call recorded, so the person can undo it. */
@@ -128,6 +148,7 @@ function personalBody(activity: ActivityRow): Record<string, unknown> {
       action: {
         ...(typeof action['kind'] === 'string' ? { kind: action['kind'].slice(0, 120) } : {}),
         summary,
+        ...nativeCommentPreview(toolCall),
         ...(toolCall
           ? {
               toolCall: {

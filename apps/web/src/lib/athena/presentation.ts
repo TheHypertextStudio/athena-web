@@ -93,6 +93,9 @@ export type PersonalAthenaActivity =
       readonly approvalStatus?: 'proposed' | 'approved' | 'rejected' | 'applied' | 'failed';
       readonly technical?: {
         readonly toolName?: string;
+        readonly connection?: string;
+        /** Owner-safe native content, separate from bounded diagnostic input. */
+        readonly commentPreview?: unknown;
         readonly input?: unknown;
         readonly output?: unknown;
         /** The change set the call wrote, which Undo reverses. */
@@ -130,6 +133,9 @@ export interface AthenaActivityPresentation {
   readonly approvalStatus?: 'proposed' | 'approved' | 'rejected' | 'applied' | 'failed';
   readonly technical?: {
     readonly toolName?: string;
+    readonly connection?: string;
+    /** Owner-safe native content, separate from bounded diagnostic input. */
+    readonly commentPreview?: unknown;
     readonly input?: unknown;
     readonly output?: unknown;
     /** The change set the call wrote, which Undo reverses. */

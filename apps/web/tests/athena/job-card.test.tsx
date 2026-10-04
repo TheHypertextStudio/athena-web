@@ -110,6 +110,42 @@ afterEach(() => {
 });
 
 describe('AthenaJobCard', () => {
+  it('previews a task comment while keeping approval an explicit decision', async () => {
+    const api = renderCard(
+      job({ status: 'awaiting_approval', queueState: 'needs_you' }),
+      detailWith({
+        status: 'awaiting_approval',
+        queueState: 'needs_you',
+        decision: { ...APPROVAL, title: 'Post a status comment' },
+        activities: [
+          updateStep({
+            action: 'Post a status comment',
+            approvalStatus: 'proposed',
+            technical: {
+              toolName: 'comment',
+              connection: 'docket',
+              commentPreview: {
+                body: 'Remaining work: Ship the submit command.',
+                orgId: 'org_1',
+                subjectId: 'task_1',
+                subjectType: 'task',
+              },
+            },
+          }),
+        ],
+      }),
+    );
+
+    expect(await screen.findByRole('region', { name: 'Comment preview' })).toBeVisible();
+    expect(screen.getByText('Remaining work: Ship the submit command.')).toBeVisible();
+    expect(api.decide).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'Reject' })).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Approve' }));
+    await waitFor(() => {
+      expect(api.decide).toHaveBeenCalledWith('session_1', 'proposal_1', 'approve');
+    });
+  });
+
   it('renders the objective as a flat entry with a state dot and one state line, and no badge', async () => {
     renderCard(job(), detailWith({ activities: [updateStep()] }));
 

@@ -24,6 +24,95 @@ function row(overrides: Partial<ActivityRow> & Pick<ActivityRow, 'type' | 'body'
 }
 
 describe('toPersonalActivityOut', () => {
+  it('projects the complete native comment separately from bounded diagnostic input', () => {
+    const body = 'Remaining work. '.repeat(400);
+    const out = toPersonalActivityOut(
+      row({
+        type: 'action',
+        body: {
+          action: {
+            kind: 'comment',
+            summary: 'Post a comment',
+            toolCall: {
+              connection: 'docket',
+              tool: 'comment',
+              toolUseId: 'comment_fixture',
+              input: {
+                body,
+                orgId: 'org_1',
+                subjectId: 'task_1',
+                subjectType: 'task',
+                apiKey: 'secret',
+              },
+            },
+          },
+        },
+      }),
+    );
+    expect(out.body['action']).toMatchObject({
+      commentPreview: {
+        body,
+        orgId: 'org_1',
+        subjectId: 'task_1',
+        subjectType: 'task',
+        truncated: false,
+        redacted: false,
+      },
+      toolCall: { input: { body: body.slice(0, 512), apiKey: '[redacted]' } },
+    });
+    expect((out.body['action'] as Record<string, unknown>)['commentPreview']).not.toHaveProperty(
+      'apiKey',
+    );
+  });
+
+  it.each([
+    {
+      body: 'x'.repeat(65_537),
+      expected: { body: 'x'.repeat(65_536), truncated: true, redacted: false },
+    },
+    { body: 'Bearer abc.def-ghi', expected: { body: '', truncated: false, redacted: true } },
+  ])('marks a bounded or redacted native comment explicitly', ({ body, expected }) => {
+    const out = toPersonalActivityOut(
+      row({
+        type: 'action',
+        body: {
+          action: {
+            kind: 'comment',
+            summary: 'Post a comment',
+            toolCall: {
+              connection: 'docket',
+              tool: 'comment',
+              toolUseId: 'comment_fixture',
+              input: { body },
+            },
+          },
+        },
+      }),
+    );
+    expect(out.body['action']).toMatchObject({ commentPreview: expected });
+  });
+
+  it('does not project an external tool named comment as a native comment', () => {
+    const out = toPersonalActivityOut(
+      row({
+        type: 'action',
+        body: {
+          action: {
+            kind: 'comment',
+            summary: 'Post a comment',
+            toolCall: {
+              connection: 'support',
+              tool: 'comment',
+              toolUseId: 'comment_fixture',
+              input: { body: 'Reply', recipient: 'customer' },
+            },
+          },
+        },
+      }),
+    );
+    expect(out.body['action']).not.toHaveProperty('commentPreview');
+  });
+
   it('maps an error activity to the fixed failure copy', () => {
     const out = toPersonalActivityOut(row({ type: 'error', body: {} }));
     expect(out.body).toEqual({ text: 'Athena could not complete this step.' });

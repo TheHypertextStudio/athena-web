@@ -8,9 +8,23 @@
 
 ## Active Tasks
 
+### [ATHENA-COMMENT-PREVIEW-001] Make saved comment proposals readable
+
+- **Status**: REVIEW
+- **Started**: 2026-10-04
+- **Priority**: P1
+- **Description**: The live Athena step renders a proposed task comment as raw `body`, organization, and subject input rows in a narrow Details column.
+- **Plan**: Project owner-safe native `docket`/`comment` content separately from diagnostic excerpts, show its Markdown as a full-width preview immediately, and provide a task destination link. Mark the 65,536-character display bound and credential-shaped content explicitly. Preserve lifecycle labels and approval controls, generic tool disclosures, and safe failure handling.
+- **Files changed**: `apps/api/src/routes/me-athena-activity.ts` and its tests; `apps/web/src/components/athena/comment-preview.tsx`, `job-card-steps.tsx`, the activity adapter and presentation types, their behavior tests, `apps/web/e2e/athena/companion-work.spec.ts`, and this worklog.
+- **Validation**: The preview behavior regression failed before implementation. All 36 affected web tests and 23 owner-safe API projection tests pass; the existing authenticated companion-work browser test verifies immediate preview, destination, and explicit approval. API and web typechecks, changed-file ESLint, formatting, and the complexity ratchet pass. The final filtered production build passes. Production screenshot review at desktop/mobile widths and both themes is pending deployment. The disposable local database was reset after the browser test.
+- **Research**: The production saved action uses `tool: comment` and string `body`, `orgId`, `subjectId`, and `subjectType: task`. Existing `StaticMarkdown` renders persisted comments without embedded HTML; `Surface` owns shared surface styling.
+- **Risks**: Unrecognized tools retain their existing disclosure. Stored provider failure text remains excluded. Rendering the preview does not approve or apply the proposed comment. The browser test uses the existing stateful Athena API fixture; it is not a production persistence receipt.
+- **Learnings**: Saved native comments need their domain content shown directly, rather than the generic input-row layout used for other calls. The shared Markdown renderer preserves formatting and excludes executable embedded HTML. Independent review found diagnostic truncation and external same-name tool identity issues; both were fixed and the second review found no remaining code findings.
+- **Retrospection**: The regression reproduced the visible issue before the fix. A lint complexity finding was resolved by extracting destination validation. The first build invocation lacked the root environment wrapper; the declared root build with a web filter passed.
+
 ### [ATHENA-LATTICE-RELEASE-CHECKS-001] Repair the remaining release checks
 
-- **Status**: VALIDATING
+- **Status**: REVIEW
 - **Started**: 2026-10-04
 - **Priority**: P0
 - **Description**: CI run `37192530592` found two isolated fixture failures after the acceptance tooling delivery.
@@ -19,6 +33,7 @@
 - **Validation**: Both failures reproduced locally. All 37 workflow-policy tests and six recurrence sweep tests pass after correction. Root typecheck, changed-file ESLint, documentation checks (52 pages), Prettier, and `git diff --check` pass. Independent review of the final diff found no actionable findings. Consolidated the existing E2E fixture guard with `assertDefined` to stay within its existing line cap without changing the debt ledger.
 - **Research**: The workflow parser successfully found ten workflows; the fixture expected eight. The recurrence edit omitted `asOf`, so October 3 became a past date on October 4. Neighboring recurrence tests already supply an explicit reference date.
 - **Risks**: The inventory remains explicit and the existing past-boundary rejection test still passes. Application behavior is unchanged.
+- **Release receipt**: Exact-source CI `37223301592` and Deploy main `37225021524` both succeeded at commit `31cbc50c1`. Verified through the GitHub MCP connection.
 - **Learnings**: Manual operator workflows belong in the workflow inventory even though they have no push multiplier. Date-specific recurrence fixtures must provide their reference date to both materialization and edits.
 
 ### [ATHENA-LATTICE-ACCEPTANCE-002] Finish the remaining production and staging proof

@@ -25,6 +25,7 @@ import {
 import { type JSX } from 'react';
 
 import { McpAppPresentationCard } from '@/components/athena/mcp-app-presentation-card';
+import { CommentPreview, commentPreviewContent } from '@/components/athena/comment-preview';
 import { ProposalInputRows } from '@/components/athena/proposal-input-rows';
 import { countLabel } from '@/lib/athena/job-presentation';
 import type { AthenaActivityPresentation } from '@/lib/athena/presentation';
@@ -111,8 +112,10 @@ interface StepDetailsProps {
   readonly entry: AthenaActivityPresentation;
 }
 
-/** A step's "Details" disclosure: its raw call as labelled rows, never a JSON dump. */
+/** Show native comment content directly; disclose other saved calls as labelled Details rows. */
 export function JobStepDetails({ entry }: StepDetailsProps): JSX.Element | null {
+  const comment = commentPreviewContent(entry.technical);
+  if (comment) return <CommentPreview content={comment} />;
   const rows = stepDetailRows(entry);
   if (Object.keys(rows).length === 0) return null;
   return (

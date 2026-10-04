@@ -78,7 +78,30 @@ async function installAthenaFixture(page: Page, orgId: string): Promise<JobFixtu
       organizationId: orgId,
       type: 'action',
       approvalStatus: decided ? 'applied' : 'proposed',
-      body: { action: { kind: 'update', summary: 'Move 2 printing tasks to next cycle' } },
+      body: {
+        action: {
+          kind: 'comment',
+          summary: 'Post a status comment on the printing task',
+          commentPreview: {
+            orgId,
+            subjectType: 'task',
+            subjectId: 'printing_task',
+            body: '**Remaining work:** Move the printing tasks to next cycle.',
+            truncated: false,
+            redacted: false,
+          },
+          toolCall: {
+            connection: 'docket',
+            tool: 'comment',
+            input: {
+              orgId,
+              subjectType: 'task',
+              subjectId: 'printing_task',
+              body: '**Remaining work:** Move the printing tasks to next cycle.',
+            },
+          },
+        },
+      },
       createdAt,
     };
     const receipt = {
@@ -183,6 +206,14 @@ test('delegated work is decided in the thread, and the ledger finds it after', a
   const railJobCard = rail.getByRole('article', { name: objective });
   await expect(railJobCard).toBeVisible();
   await expect(railJobCard).toHaveAttribute('data-state', 'attention');
+
+  await expect(railJobCard.getByRole('region', { name: 'Comment preview' })).toBeVisible();
+  await expect(railJobCard.getByText('Remaining work:')).toBeVisible();
+  await expect(railJobCard.getByRole('link', { name: 'View task' })).toHaveAttribute(
+    'href',
+    `/orgs/${orgId}/tasks/printing_task`,
+  );
+  await expect(railJobCard.getByRole('button', { name: 'Details' })).toHaveCount(0);
 
   // Its first decision option is Approve — clicking it settles the gated action.
   await railJobCard.getByRole('button', { name: 'Approve' }).click();

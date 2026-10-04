@@ -42,6 +42,94 @@ function renderSteps(activities: readonly AthenaActivityPresentation[], isFinish
 }
 
 describe('JobSteps', () => {
+  it('shows the native task comment preview immediately with its destination and review state', () => {
+    renderSteps([
+      {
+        ...TOOL_STEP,
+        approvalStatus: 'proposed',
+        title: "Post Athena's result on the assigned task",
+        technical: {
+          toolName: 'comment',
+          connection: 'docket',
+          commentPreview: {
+            body: '**Remaining work:** Ship the submit command.\n\nDone when a verified result returns.',
+            orgId: 'org_1',
+            subjectId: 'task_1',
+            subjectType: 'task',
+          },
+        },
+      },
+    ]);
+
+    const preview = screen.getByRole('region', { name: 'Comment preview' });
+    expect(within(preview).getByText('Remaining work:')).toBeVisible();
+    expect(within(preview).getByText('Done when a verified result returns.')).toBeVisible();
+    expect(preview.querySelector('strong')).toHaveTextContent('Remaining work:');
+    expect(screen.getByRole('link', { name: 'View task' })).toHaveAttribute(
+      'href',
+      '/orgs/org_1/tasks/task_1',
+    );
+    expect(screen.getByText('Needs review')).toBeVisible();
+    expect(screen.queryByRole('button', { name: 'Details' })).not.toBeInTheDocument();
+    expect(screen.queryByText('subjectId')).not.toBeInTheDocument();
+    expect(screen.queryByText('org_1')).not.toBeInTheDocument();
+  });
+
+  it('keeps an external tool named comment in Details with its other arguments', () => {
+    renderSteps([
+      {
+        ...TOOL_STEP,
+        technical: {
+          toolName: 'comment',
+          connection: 'support',
+          input: { body: 'Reply to the customer', recipient: 'Customer' },
+          commentPreview: { body: 'Reply to the customer' },
+        },
+      },
+    ]);
+    expect(screen.queryByRole('region', { name: 'Comment preview' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Details' }));
+    expect(screen.getByText('Customer')).toBeVisible();
+  });
+
+  it('explains a bounded or redacted native preview instead of implying it is complete', () => {
+    renderSteps([
+      {
+        ...TOOL_STEP,
+        technical: {
+          toolName: 'comment',
+          connection: 'docket',
+          commentPreview: { body: 'Beginning only.', truncated: true },
+        },
+      },
+    ]);
+    expect(screen.getByRole('region', { name: 'Comment preview' })).toHaveTextContent(
+      'Approval posts the complete comment.',
+    );
+    cleanup();
+    renderSteps([
+      {
+        ...TOOL_STEP,
+        technical: {
+          toolName: 'comment',
+          connection: 'docket',
+          commentPreview: { body: '', redacted: true },
+        },
+      },
+    ]);
+    expect(screen.getByRole('region', { name: 'Comment preview' })).toHaveTextContent(
+      'Comment content is hidden because it contains credential-like text.',
+    );
+  });
+
+  it('keeps malformed comment inputs in the generic disclosure', () => {
+    renderSteps([{ ...TOOL_STEP, technical: { toolName: 'comment', input: { body: 42 } } }]);
+
+    expect(screen.queryByRole('region', { name: 'Comment preview' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Details' }));
+    expect(screen.getByText('42')).toBeVisible();
+  });
+
   it('shows a dated action immediately and lets the person collapse it', () => {
     renderSteps([TOOL_STEP], true);
 

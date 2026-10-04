@@ -21,6 +21,41 @@ const base: AthenaApiSessionDetail = AthenaSessionDetailOut.parse({
 });
 
 describe('personal Athena API adapter', () => {
+  it('keeps native comment content separate from the diagnostic input excerpt', () => {
+    const body = 'Remaining work. '.repeat(400);
+    const detail = adaptAthenaDetail(
+      AthenaSessionDetailOut.parse({
+        ...base,
+        activities: [
+          {
+            id: '01J22222222222222222222222',
+            sessionId: base.id,
+            organizationId: base.workspace?.id ?? null,
+            type: 'action',
+            createdAt: base.createdAt,
+            body: {
+              action: {
+                commentPreview: { body, truncated: false, redacted: false },
+                toolCall: {
+                  connection: 'docket',
+                  tool: 'comment',
+                  input: { body: body.slice(0, 512) },
+                },
+              },
+            },
+          },
+        ],
+      }),
+    );
+    expect(detail.activities[0]).toMatchObject({
+      technical: {
+        connection: 'docket',
+        commentPreview: { body },
+        input: { body: body.slice(0, 512) },
+      },
+    });
+  });
+
   it('turns an unanswered elicitation into a structured private question', () => {
     const detail = adaptAthenaDetail(
       AthenaSessionDetailOut.parse({

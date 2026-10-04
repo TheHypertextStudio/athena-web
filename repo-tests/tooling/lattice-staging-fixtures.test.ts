@@ -53,6 +53,12 @@ describe('staging cleanup authority', () => {
   });
   it('refuses a production secret or a reused staging database/encryption reference', () => {
     const bindings = [
+      { environmentName: 'MAIL_FROM', secretName: 'docket-staging-mail-from', version: 'latest' },
+      {
+        environmentName: 'BETTER_AUTH_SECRET',
+        secretName: 'docket-staging-auth-secret',
+        version: 'latest',
+      },
       {
         environmentName: 'DATABASE_URL',
         secretName: 'docket-staging-database-url',

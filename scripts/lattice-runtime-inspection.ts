@@ -6,13 +6,14 @@ import {
 } from './lattice-acceptance-report';
 
 /** Capture bounded gcloud output without printing provider errors. */
-export function gcloud(args: string[]): string {
-  return execFileSync('gcloud', args, {
+export function gcloud(args: string[], preserveWhitespace = false): string {
+  const output = execFileSync('gcloud', args, {
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'pipe'],
     timeout: 60_000,
     maxBuffer: 8 * 1024 * 1024,
-  }).trim();
+  });
+  return preserveWhitespace ? output : output.trim();
 }
 
 function mask(value: string): void {
@@ -62,15 +63,18 @@ export function boundSecret(deployed: ReturnType<typeof runtime>, environmentNam
     (candidate) => candidate.environmentName === environmentName,
   );
   if (!binding) throw new Error(`Missing deployed binding: ${environmentName}`);
-  const value = gcloud([
-    'secrets',
-    'versions',
-    'access',
-    binding.version,
-    `--secret=${binding.secretName}`,
-    '--project=athena-services',
-    '--quiet',
-  ]);
+  const value = gcloud(
+    [
+      'secrets',
+      'versions',
+      'access',
+      binding.version,
+      `--secret=${binding.secretName}`,
+      '--project=athena-services',
+      '--quiet',
+    ],
+    true,
+  );
   mask(value);
   return value;
 }

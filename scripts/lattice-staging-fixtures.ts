@@ -65,6 +65,8 @@ export function assertStagingBindings(bindings: RuntimeSecretBindings['bindings'
     DATABASE_URL: 'docket-staging-database-url',
     CREDENTIALS_ENCRYPTION_KEY: 'docket-staging-credentials-encryption-key',
     RESEND_API_KEY: 'docket-staging-resend-api-key',
+    MAIL_FROM: 'docket-staging-mail-from',
+    BETTER_AUTH_SECRET: 'docket-staging-auth-secret',
   };
   for (const [environmentName, secretName] of Object.entries(expected)) {
     if (bindings.find((b) => b.environmentName === environmentName)?.secretName !== secretName) {

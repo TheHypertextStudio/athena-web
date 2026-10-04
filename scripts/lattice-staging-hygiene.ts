@@ -12,6 +12,8 @@ import {
 } from './lattice-staging-fixtures';
 import type { StagingFixtureRow } from './lattice-staging-fixtures';
 
+let operationPhase = 'runtime_binding_resolution';
+
 interface FixtureSnapshot extends StagingFixtureRow {
   taskState: string;
   taskAssigneeId: string | null;
@@ -143,6 +145,25 @@ async function saveReport(output: string, report: unknown): Promise<void> {
   await writeFile(output, `${JSON.stringify(report, null, 2)}\n`, { mode: 0o600 });
 }
 
+function configureStagingOperator(stage: ReturnType<typeof runtime>): string {
+  if (!stage.url) throw new Error('Staging runtime URL unavailable');
+  for (const name of [
+    'DATABASE_URL',
+    'CREDENTIALS_ENCRYPTION_KEY',
+    'RESEND_API_KEY',
+    'MAIL_FROM',
+    'BETTER_AUTH_SECRET',
+  ]) {
+    process.env[name] = boundSecret(stage, name);
+  }
+  // Approval imports Auth and MCP configuration, but rejection sends neither mail nor tool calls.
+  process.env['WEB_URL'] = 'https://docket-staging-gilt.vercel.app';
+  process.env['API_URL'] = stage.url;
+  process.env['BETTER_AUTH_URL'] = stage.url;
+  process.env['SKIP_ENV_VALIDATION'] = '1';
+  return process.env['DATABASE_URL'] ?? '';
+}
+
 async function main(): Promise<void> {
   const output = process.argv[2];
   if (!output || process.env['APP_MODE'] !== 'staging')
@@ -150,10 +171,9 @@ async function main(): Promise<void> {
   const stage = runtime('staging');
   assertStagingBindings(stage.bindings);
   const productionBefore = runtime('production');
-  const databaseUrl = boundSecret(stage, 'DATABASE_URL');
-  process.env['DATABASE_URL'] = databaseUrl;
-  process.env['CREDENTIALS_ENCRYPTION_KEY'] = boundSecret(stage, 'CREDENTIALS_ENCRYPTION_KEY');
-  process.env['SKIP_ENV_VALIDATION'] = '1';
+  operationPhase = 'operator_environment';
+  const databaseUrl = configureStagingOperator(stage);
+  operationPhase = 'fixture_rejection';
   const fixtures = await rejectFixtures(databaseUrl);
   // Preserve committed decisions before independent provider operations can fail.
   await saveReport(output, {
@@ -193,7 +213,9 @@ async function main(): Promise<void> {
   if (mailFailed || productionStable !== true) process.exitCode = 1;
 }
 
-void main().catch(() => {
-  process.stderr.write('Staging hygiene failed; no raw database/provider error was emitted.\n');
+void main().catch((error: unknown) => {
+  process.stderr.write(
+    `Staging hygiene failed at ${operationPhase}: ${providerFailureCode(error)}. No raw error was emitted.\n`,
+  );
   process.exitCode = 1;
 });

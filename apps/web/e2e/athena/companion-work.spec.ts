@@ -237,3 +237,54 @@ test('delegated work is decided in the thread, and the ledger finds it after', a
   await expect(page.getByRole('article', { name: objective })).toHaveCount(1);
   await expect(page.getByRole('form', { name: 'Message Athena' })).toHaveCount(1);
 });
+
+for (const width of [1440, 390]) {
+  test(`comment review has usable space at ${width}px without clipping its preview`, async ({
+    page,
+  }) => {
+    const { orgId } = await signUpAndOnboard(page, 'CommentPreviewGeometry');
+    const { objective } = await installAthenaFixture(page, orgId);
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto(`/athena?workspace=${orgId}`);
+    const work = page.getByRole('navigation', { name: 'Athena work' });
+    const preview = work
+      .getByRole('article', { name: objective })
+      .getByRole('region', { name: 'Comment preview' });
+    await expect(preview).toBeVisible();
+    await expect
+      .poll(async () => {
+        const pane = await work.boundingBox();
+        const content = await preview.boundingBox();
+        return (
+          !!pane &&
+          !!content &&
+          pane.height > 250 &&
+          content.y >= pane.y &&
+          content.y + content.height <= pane.y + pane.height
+        );
+      })
+      .toBe(true);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(
+      false,
+    );
+  });
+}
+
+test('an expanded draft stays usable on a short phone screen with pending work', async ({
+  page,
+}) => {
+  const { orgId } = await signUpAndOnboard(page, 'ShortPhoneComposer');
+  await installAthenaFixture(page, orgId);
+  await page.setViewportSize({ width: 390, height: 600 });
+  await page.goto(`/athena?workspace=${orgId}`);
+  const composer = page.getByRole('form', { name: 'Message Athena' });
+  await composer.getByRole('combobox', { name: 'Message Athena' }).fill('Draft line\n'.repeat(10));
+  await expect(composer.getByRole('button', { name: 'Send', exact: true })).toBeEnabled();
+  await expect
+    .poll(async () => {
+      const bounds = await composer.boundingBox();
+      return !!bounds && bounds.y >= 0 && bounds.y + bounds.height <= 600;
+    })
+    .toBe(true);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false);
+});

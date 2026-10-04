@@ -113,7 +113,7 @@ interface WorkColumnProps {
   readonly transport: PersonalAthenaTransport;
 }
 
-/** The left column holds delegated work when any exists. */
+/** Work shares the available height with the conversation until the layout can use two columns. */
 function WorkColumn({ queue, jobs, focus, transport }: WorkColumnProps): JSX.Element {
   return (
     <Surface
@@ -121,7 +121,7 @@ function WorkColumn({ queue, jobs, focus, transport }: WorkColumnProps): JSX.Ele
       tone="card"
       shape="none"
       aria-label="Athena work"
-      className="flex max-h-40 shrink-0 flex-col gap-8 overflow-y-auto p-4 2xl:max-h-none 2xl:min-h-0"
+      className="flex min-h-0 flex-1 flex-col gap-8 overflow-y-auto p-4"
     >
       <WorkLedgerRead queue={queue} jobs={jobs} focus={focus} transport={transport} />
     </Surface>
@@ -186,10 +186,7 @@ function ThreadColumn({
     );
   }
   return (
-    <section
-      aria-label="Conversation"
-      className="flex min-h-[32rem] min-w-0 flex-1 flex-col 2xl:min-h-0"
-    >
+    <section aria-label="Conversation" className="flex min-h-0 min-w-0 flex-1 flex-col">
       <h1 className="sr-only">Athena conversation</h1>
       <AthenaConversation
         orgId={workspaceId}

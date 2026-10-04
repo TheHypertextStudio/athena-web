@@ -52,6 +52,22 @@ and complete Settings link → Studio selection → interactive Athena reply →
 and sealed proposal. Correlate the Docket request, Lattice work ID, Studio daemon, and LM Studio
 inference. A health check or a successful deploy alone is insufficient.
 
+### Manual Lattice acceptance audit
+
+The `Lattice acceptance audit` workflow reuses the production environment's deployment WIF identity
+to read the two recorded October 3 production assignments or the two September 30 staging fixtures.
+It accepts only `production` or `staging`, resolves each deployed service's actual secret references,
+and runs parameterized reads inside a read-only PostgreSQL transaction. It does not refresh OAuth,
+link an account, approve a proposal, or change runtime configuration. Its seven-day artifact contains
+IDs, status, return counts, and credential timing metadata; it excludes tokens, sealed keys, literal
+environment values, and provider payloads. Decoded JWT claims are inspection metadata, not signature
+verification. Missing log-read permission is reported without changing IAM.
+
+Dispatch from main with `gh workflow run lattice-acceptance-audit.yml -f target=production` (or
+`staging`). This workflow has no schedule or push trigger: one dispatch starts one Ubuntu runner,
+normally 3–5 minutes, with a ten-minute timeout. Its limited dependency install and explicit manual
+trigger keep this evidence collection outside the every-push release graph.
+
 ---
 
 ## One-time bootstrap

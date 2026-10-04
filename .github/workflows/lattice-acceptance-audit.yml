@@ -1,0 +1,45 @@
+name: Lattice acceptance audit
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Recorded acceptance environment
+        type: choice
+        options: [production, staging]
+        required: true
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  audit:
+    name: Read recorded Lattice acceptance state
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: production
+    steps:
+      - uses: actions/checkout@v6
+      - uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+      - uses: ./.github/actions/setup
+        with:
+          filter: '--filter @docket/root --filter @docket/api...'
+      - name: Read scoped evidence
+        env:
+          AUDIT_TARGET: ${{ inputs.target }}
+          APP_MODE: production
+          BILLING_ENABLED: 'false'
+          SKIP_ENV_VALIDATION: '1'
+        run: pnpm exec tsx scripts/lattice-acceptance-audit.ts "$AUDIT_TARGET" "$RUNNER_TEMP/lattice-audit/report.json"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: lattice-acceptance-${{ inputs.target }}
+          path: ${{ runner.temp }}/lattice-audit/report.json
+          retention-days: 7

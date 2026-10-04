@@ -68,6 +68,17 @@ Dispatch from main with `gh workflow run lattice-acceptance-audit.yml -f target=
 normally 3–5 minutes, with a ten-minute timeout. Its limited dependency install and explicit manual
 trigger keep this evidence collection outside the every-push release graph.
 
+The separate `Lattice staging hygiene` manual workflow rejects only the two audited synthetic
+proposals through the existing approval service. It checks the synthetic owner, workspace, task,
+session, work, and action identities, and verifies that rejection clears reply keys without changing
+task fields or inserting comments. It then rotates the existing `docket-staging-resend-api-key`
+Secret Manager secret and pins that version on staging. It never grants IAM permissions. The
+prepared sending-only replacement is supplied through the temporary production environment secret
+`DOCKET_STAGING_MAIL_REPLACEMENT`, which the operator removes after the run. Its report contains
+only fixture metadata, operation status, the mounted version, and production revision/binding
+stability. A failed mail operation does not undo the independent proposal rejection. This workflow
+also has no schedule or push trigger and uses one ten-minute-capped Ubuntu runner per dispatch.
+
 ---
 
 ## One-time bootstrap

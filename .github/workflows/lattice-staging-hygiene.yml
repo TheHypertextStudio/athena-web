@@ -1,0 +1,37 @@
+name: Lattice staging hygiene
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+  id-token: write
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+jobs:
+  hygiene:
+    name: Reject fixed fixtures and isolate staging mail
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: production
+    steps:
+      - uses: actions/checkout@v6
+      - uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+      - uses: ./.github/actions/setup
+        with:
+          filter: '--filter @docket/root --filter @docket/api...'
+      - name: Reject fixtures and rotate existing staging mail binding
+        env:
+          APP_MODE: staging
+          BILLING_ENABLED: 'false'
+          SKIP_ENV_VALIDATION: '1'
+          STAGING_MAIL_REPLACEMENT: ${{ secrets.DOCKET_STAGING_MAIL_REPLACEMENT }}
+        run: pnpm exec tsx scripts/lattice-staging-hygiene.ts "$RUNNER_TEMP/lattice-hygiene/report.json"
+      - uses: actions/upload-artifact@v7
+        if: ${{ !cancelled() }}
+        with:
+          name: lattice-staging-hygiene
+          path: ${{ runner.temp }}/lattice-hygiene/report.json
+          if-no-files-found: warn
+          retention-days: 7

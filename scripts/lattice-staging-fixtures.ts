@@ -75,10 +75,32 @@ export function assertStagingBindings(bindings: RuntimeSecretBindings['bindings'
   }
 }
 
+function databaseFailureCode(error: object): string | null {
+  const cause = 'cause' in error ? error.cause : error;
+  if (typeof cause !== 'object' || cause === null || !('code' in cause)) return null;
+  const code = String(cause.code);
+  return ['42703', '42P01', '23503', '23514', '42501', '28P01'].includes(code)
+    ? `database_${code}`
+    : null;
+}
+
+function guardFailureCode(error: object): string | null {
+  if (!(error instanceof Error)) return null;
+  const guards: Record<string, string> = {
+    'Missing staging fixtures': 'missing_fixtures',
+    'Unexpected staging fixture': 'fixture_guard',
+    'Staging rejection postcondition failed': 'rejection_postcondition',
+    'Staging fixture disappeared': 'fixture_disappeared',
+  };
+  return guards[error.message] ?? null;
+}
+
 /** Reduce provider failures to stable codes without exposing subprocess output or secrets. */
 export function providerFailureCode(error: unknown): string {
   if (typeof error !== 'object' || error === null) return 'provider_error';
   if ('code' in error && error.code === 'ETIMEDOUT') return 'timeout';
+  const knownCode = databaseFailureCode(error) ?? guardFailureCode(error);
+  if (knownCode) return knownCode;
   const stderr = 'stderr' in error ? error.stderr : null;
   const message = Buffer.isBuffer(stderr)
     ? stderr.toString('utf8')

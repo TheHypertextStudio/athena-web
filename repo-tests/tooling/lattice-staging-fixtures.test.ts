@@ -13,6 +13,12 @@ describe('staging cleanup authority', () => {
     );
     expect(providerFailureCode({ code: 'ETIMEDOUT', stderr: 'SECRET' })).toBe('timeout');
     expect(providerFailureCode(new Error('SECRET'))).toBe('provider_error');
+    expect(providerFailureCode({ cause: { code: '42703', message: 'SECRET' } })).toBe(
+      'database_42703',
+    );
+    expect(providerFailureCode({ code: 'SECRET' })).toBe('provider_error');
+    expect(providerFailureCode(new Error('Missing staging fixtures'))).toBe('missing_fixtures');
+    expect(providerFailureCode(new Error('Unexpected staging fixture'))).toBe('fixture_guard');
   });
   const row = {
     ...stagingFixtures[0],

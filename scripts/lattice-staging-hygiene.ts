@@ -64,21 +64,33 @@ function assertSettled(before: FixtureSnapshot, after: FixtureSnapshot): void {
   }
 }
 
-async function rejectFixtures(databaseUrl: string): Promise<FixtureSnapshot[]> {
+async function rejectFixtures(databaseUrl: string, output: string): Promise<FixtureSnapshot[]> {
   const sql = postgres(databaseUrl, { max: 1, connect_timeout: 15 });
   const { closeDb } = await import('../packages/db/src/index');
   try {
+    operationPhase = 'fixture_snapshot_read';
     const before = await snapshots(sql);
+    await saveReport(output, {
+      generatedAt: new Date().toISOString(),
+      fixtures: before,
+      mail: { status: 'not_started' },
+      productionVerification: 'pending',
+      rejection: 'not_started',
+    });
+    operationPhase = 'fixture_identity_guard';
     if (before.length !== stagingFixtures.length) throw new Error('Missing staging fixtures');
     before.forEach(assertStagingFixture);
+    operationPhase = 'approval_service_import';
     const { decideActivity } = await import('../apps/api/src/routes/agent-session-approval');
     for (const row of before) {
       if (row.approvalStatus === 'proposed') {
+        operationPhase = `fixture_decision_${stagingFixtures.findIndex((f) => f.workId === row.workId) + 1}`;
         await decideActivity(row.organizationId, null, row.sessionId, row.activityId, {
           decision: 'reject',
         });
       }
     }
+    operationPhase = 'fixture_postcondition';
     const after = await snapshots(sql);
     for (const original of before) {
       const settled = after.find((row) => row.workId === original.workId);
@@ -174,7 +186,7 @@ async function main(): Promise<void> {
   operationPhase = 'operator_environment';
   const databaseUrl = configureStagingOperator(stage);
   operationPhase = 'fixture_rejection';
-  const fixtures = await rejectFixtures(databaseUrl);
+  const fixtures = await rejectFixtures(databaseUrl, output);
   // Preserve committed decisions before independent provider operations can fail.
   await saveReport(output, {
     generatedAt: new Date().toISOString(),

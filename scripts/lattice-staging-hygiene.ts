@@ -24,6 +24,7 @@ interface FixtureSnapshot extends StagingFixtureRow {
   sessionStatus: string;
 }
 
+/** Compare persisted subject text without coercing a literal into a deployed enum version. */
 async function snapshots(sql: postgres.Sql): Promise<FixtureSnapshot[]> {
   return sql<FixtureSnapshot[]>`
     select d.id as "delegationId", d.work_id as "workId", d.session_id as "sessionId",
@@ -33,7 +34,7 @@ async function snapshots(sql: postgres.Sql): Promise<FixtureSnapshot[]> {
       a.type, t.state as "taskState", t.assignee_id as "taskAssigneeId",
       t.delegate_id as "taskDelegateId", s.status as "sessionStatus",
       d.reply_key_ciphertext is null as "keyCleared", d.returned_activity_id is null as "returnCleared",
-      (select count(*)::int from comment c where c.subject_type = 'task'
+      (select count(*)::int from comment c where c.subject_type::text = 'task'
         and c.subject_id = t.id and c.organization_id = d.organization_id) as "commentCount"
     from agent_delegation d
     join agent_session s on s.id = d.session_id and s.owner_user_id = d.owner_user_id

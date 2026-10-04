@@ -40,12 +40,18 @@ function historyCutoff(thread: AgentSessionDetailOut, openedAt: number): string 
 }
 
 /** Keep decisions visible on a fresh surface even when the job began earlier. */
-function recentEntries(entries: readonly ThreadEntry[], cutoff: string): readonly ThreadEntry[] {
+function recentEntries(
+  entries: readonly ThreadEntry[],
+  cutoff: string,
+  focusedJobId?: string,
+): readonly ThreadEntry[] {
   return entries.filter(
     (entry) =>
       entry.at > cutoff ||
       (entry.kind === 'job' &&
-        (entry.job.status === 'awaiting_approval' || entry.job.status === 'awaiting_input')),
+        (entry.job.id === focusedJobId ||
+          entry.job.status === 'awaiting_approval' ||
+          entry.job.status === 'awaiting_input')),
   );
 }
 
@@ -83,6 +89,7 @@ export function useConversationHistory(
   thread: AgentSessionDetailOut | null,
   entries: readonly ThreadEntry[],
   active = true,
+  focusedJobId?: string,
 ) {
   const [history, setHistory] = useState<HistoryState | null>(null);
   const reveal = useCallback(() => {
@@ -96,7 +103,7 @@ export function useConversationHistory(
   const cutoff = current?.cutoff ?? null;
   const collapsed = cutoff !== null && !current?.visible;
   return {
-    entries: collapsed ? recentEntries(entries, cutoff) : entries,
+    entries: collapsed ? recentEntries(entries, cutoff, focusedJobId) : entries,
     hasEarlier: hasEarlierEntries(entries, cutoff),
     collapsed,
     reveal,

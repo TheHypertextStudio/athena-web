@@ -8,6 +8,25 @@
 
 ## Active Tasks
 
+### [ATHENA-REVIEW-HIERARCHY-001] Make Athena work review readable
+
+- **Status**: REVIEW
+- **Started**: 2026-10-04
+- **Priority**: P1
+- **Description**: Correct the competing work ledger, empty conversation, repeated status, and review controls identified in the owner’s full-screen review.
+- **Approach**: Restore the specified compact work navigation beside one ongoing conversation. Linked work opens its actual conversation entry. Put saved comment content before its decision controls, with request/history secondary. Preserve approvals, drafts, context, and real task navigation.
+- **Files to modify**: Athena workspace, work ledger, job presentation, their owning tests, and a craft audit.
+- **Validation**: Focused behavior tests, affected typecheck/lint/build, keyboard flow and full desktop/phone screenshots in both themes, 320 px overflow, and live production review after one coherent delivery.
+- **Boundary**: Finish this UI task and stop. The older provider acceptance goal remains paused.
+
+- **Implementation**: Compact selectable rows replace full cards in Work navigation. One selected entry renders in the ongoing conversation; on phones the picker collapses after selection. The main route owns its width without Agenda/Focus. Native comment content precedes approval, with original request and remaining history disclosed separately. Duplicate overdue reminders are suppressed only for this host.
+- **Review corrections**: Persisted default selection through polling; selected older Running/Done work bypasses the chat history fold; keyboard row selection focuses the selected article. The original comment remains an unapproved proposal.
+- **Validation so far**: The final 37 affected Athena/shell/navigation files pass 349 tests; the focused job/workspace/shell check passes 45 tests. Five owning browser cases pass including 320 px overflow, light/dark approval contrast >=4.5, visible keyboard focus, coarse-touch controls >=40 px, and ten-line composer preservation. Web typecheck and changed-file ESLint pass. Production web build passes. Documentation source checks pass all 52 pages. An initial complexity check caught one added branch in the shell; reusing the existing full-width-route decision removes it rather than expanding the debt ledger.
+- **Visual evidence**: Full fixture review captures are retained in `/Users/williecubed/.codex/visualizations/2026/10/04/athena-hierarchy/`; they are explicitly test evidence, not production acceptance. Existing capture-shots produced the standard empty-account set in `athena-hierarchy-empty/`. Independent final source and screenshot review has no actionable findings.
+- **Remaining acceptance**: One coherent delivery, CI/deployment checks, and full production captures with the owner’s longer saved comment.
+
+---
+
 ### [ATHENA-LATTICE-RELEASE-CHECKS-001] Repair the remaining release checks
 
 - **Status**: REVIEW

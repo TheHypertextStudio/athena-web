@@ -19,7 +19,7 @@ const ATHENA_ROUTE = '/athena';
 
 /**
  * Whether "open Athena" has no rail panel to land in on this route: settings and the calendar
- * render no rail, and `/athena` is the conversation itself, so each opens the page instead.
+ * render no rail, and `/athena` owns the full conversation width. Each opens the page instead.
  *
  * @param pathname - The current route's path.
  * @param settingsSurface - Whether the route is a settings surface.

@@ -1,20 +1,7 @@
 'use client';
 
-/**
- * `athena-work-ledger` — the wide view's history of delegated work.
- *
- * @remarks
- * Lists the workspace's work behind three filters — Running, Needs you, Done — per §4.7 of
- * `docs/superpowers/specs/2026-09-12-athena-companion-design.md`. Each row is the same flat work
- * entry the thread renders ({@link AthenaJobCard}), so a ledger row and a thread entry are
- * recognisably the same object, and the ledger is the one place on `/athena` that entry lives.
- *
- * A filter with nothing in it is hidden rather than shown with a zero, and there are no counts: the
- * entries under the active filter already say how many there are. When the chosen filter empties
- * out, the ledger falls back to the first filter that has work, waiting work first. It is a
- * controlled list: the active filter is reported to the caller rather than owned here.
- */
-import { ControlGroup, Tabs, type TabsItem } from '@docket/ui/primitives';
+/** Compact navigation to the selected work entry in the ongoing conversation. */
+import { Button, ControlGroup, Tabs, type TabsItem } from '@docket/ui/primitives';
 import { type JSX, useMemo } from 'react';
 
 import {
@@ -22,9 +9,10 @@ import {
   type AthenaQueueState,
   type PersonalAthenaSessionSummary,
 } from '@/lib/athena/presentation';
-import { personalAthenaTransport, type PersonalAthenaTransport } from '@/lib/athena/query-defs';
+import { type PersonalAthenaTransport } from '@/lib/athena/query-defs';
 
-import { AthenaJobCard } from './athena-job-card';
+import { relativeTime } from '@docket/ui';
+import { RelativeTime } from '@docket/ui/components';
 
 /** The Work ledger's three filters. */
 export type AthenaWorkLedgerFilter = 'running' | 'needs_you' | 'done';
@@ -56,7 +44,11 @@ export interface AthenaWorkLedgerProps {
   /** The chosen filter (controlled by the caller). */
   readonly filter: AthenaWorkLedgerFilter;
   readonly onFilterChange: (filter: AthenaWorkLedgerFilter) => void;
-  /** Transport each entry drives its own detail read and actions through. */
+  /** The entry currently open in the conversation. */
+  readonly selectedId?: string | undefined;
+  /** Open a row in the conversation; navigation never fetches its own detail. */
+  readonly onSelect?: ((jobId: string) => void) | undefined;
+  /** Retained for existing callers; detail reads belong to the conversation. */
   readonly transport?: PersonalAthenaTransport | undefined;
 }
 
@@ -97,14 +89,15 @@ function jobsUnder(
 }
 
 /**
- * The Work ledger: the filters that have work, then that filter's entries as flat work entries.
+ * The Work picker: occupied filters followed by compact choices for the conversation.
  * Renders nothing when there is no work at all.
  */
 export function AthenaWorkLedger({
   jobs,
   filter,
   onFilterChange,
-  transport = personalAthenaTransport,
+  selectedId,
+  onSelect,
 }: AthenaWorkLedgerProps): JSX.Element | null {
   const active = resolveLedgerFilter(jobs, filter);
   const items: readonly TabsItem[] = useMemo(() => {
@@ -118,7 +111,11 @@ export function AthenaWorkLedger({
 
   if (!active) return null;
   return (
-    <section aria-label="Work" data-slot="athena-work-ledger" className="flex flex-col gap-6">
+    <section
+      aria-label="Work"
+      data-slot="athena-work-ledger"
+      className="flex min-w-0 flex-col gap-4"
+    >
       {/* On a phone-width column the tab row scrolls inside itself rather than widening the page. */}
       <div className="overflow-x-auto">
         <ControlGroup controlSize="sm">
@@ -132,9 +129,23 @@ export function AthenaWorkLedger({
           />
         </ControlGroup>
       </div>
-      <div className="flex flex-col gap-8">
+      <div className="flex flex-col gap-1">
         {visible.map((job) => (
-          <AthenaJobCard key={job.id} job={job} transport={transport} />
+          <Button
+            key={job.id}
+            variant={selectedId === job.id ? 'secondary' : 'ghost'}
+            data-athena-work-row={job.id}
+            aria-pressed={selectedId === job.id}
+            className="h-auto min-h-12 w-full flex-col items-start gap-1 px-3 py-3 text-left whitespace-normal"
+            onClick={() => {
+              onSelect?.(job.id);
+            }}
+          >
+            <span className="text-body-small line-clamp-2 w-full break-words">{job.objective}</span>
+            <RelativeTime iso={job.updatedAt} className="text-on-surface-variant text-label-small">
+              {relativeTime(job.updatedAt)}
+            </RelativeTime>
+          </Button>
         ))}
       </div>
     </section>

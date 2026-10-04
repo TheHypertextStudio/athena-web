@@ -1,5 +1,6 @@
 import type { Locator, Page, Route } from '@playwright/test';
 
+import { hasVisibleKeyboardFocus, renderedContrastRatio } from '../helpers/calendar-ui';
 import { signUpAndOnboard } from '../helpers/app';
 import { expect, test } from '../helpers/fixtures';
 
@@ -194,7 +195,7 @@ async function installAthenaFixture(page: Page, orgId: string): Promise<JobFixtu
 
 test('delegated work is decided in the thread, and the ledger finds it after', async ({ page }) => {
   const { orgId } = await signUpAndOnboard(page, 'companion-work');
-  const { objective } = await installAthenaFixture(page, orgId);
+  const { objective, jobId } = await installAthenaFixture(page, orgId);
 
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto('/today');
@@ -203,7 +204,7 @@ test('delegated work is decided in the thread, and the ledger finds it after', a
   await openAthenaPanel(page, rail);
 
   // The job is a flat entry in the thread, named by its objective and waiting on the person.
-  const railJobCard = rail.getByRole('article', { name: objective });
+  const railJobCard = rail.locator(`[data-athena-job="${jobId}"]`);
   await expect(railJobCard).toBeVisible();
   await expect(railJobCard).toHaveAttribute('data-state', 'attention');
 
@@ -228,42 +229,61 @@ test('delegated work is decided in the thread, and the ledger finds it after', a
   const ledger = page.getByRole('navigation', { name: 'Athena work' });
   await ledger.getByRole('tab', { name: /Done/ }).click();
 
-  const doneEntry = ledger.getByRole('article', { name: objective });
+  const doneEntry = page.getByRole('article', { name: objective });
   await expect(doneEntry).toBeVisible();
   await expect(doneEntry).toHaveAttribute('data-state', 'done');
 
-  // One live copy per document: the page's thread merges no jobs, and the rail offers no Athena
-  // panel on this route, so the ledger's entry is the only one.
+  // Work navigation opens one full entry in the conversation; it never renders a second review.
   await expect(page.getByRole('article', { name: objective })).toHaveCount(1);
   await expect(page.getByRole('form', { name: 'Message Athena' })).toHaveCount(1);
 });
 
-for (const width of [1440, 390]) {
+for (const width of [1440, 390, 320]) {
   test(`comment review has usable space at ${width}px without clipping its preview`, async ({
     page,
   }) => {
     const { orgId } = await signUpAndOnboard(page, 'CommentPreviewGeometry');
-    const { objective } = await installAthenaFixture(page, orgId);
-    await page.setViewportSize({ width, height: 900 });
+    await installAthenaFixture(page, orgId);
+    await page.setViewportSize({ width, height: width === 1440 ? 900 : 844 });
     await page.goto(`/athena?workspace=${orgId}`);
-    const work = page.getByRole('navigation', { name: 'Athena work' });
-    const preview = work
-      .getByRole('article', { name: objective })
+    const preview = page
+      .getByRole('article', { name: 'Review comment' })
       .getByRole('region', { name: 'Comment preview' });
     await expect(preview).toBeVisible();
     await expect
       .poll(async () => {
-        const pane = await work.boundingBox();
+        const pane = await page.getByRole('region', { name: 'Conversation' }).boundingBox();
         const content = await preview.boundingBox();
         return (
           !!pane &&
           !!content &&
-          pane.height > 250 &&
+          pane.height > 400 &&
           content.y >= pane.y &&
           content.y + content.height <= pane.y + pane.height
         );
       })
       .toBe(true);
+    const approve = page
+      .getByRole('article', { name: 'Review comment' })
+      .getByRole('button', { name: 'Approve', exact: true });
+    const contentBox = await preview.boundingBox();
+    const actionBox = await approve.boundingBox();
+    if (!actionBox || !contentBox)
+      throw new Error('Review content and its approval must be visible.');
+    expect(actionBox.y).toBeGreaterThanOrEqual(contentBox.y + contentBox.height);
+    await expect(page.getByRole('article')).toHaveCount(1);
+    await expect(page.locator('[data-slot="athena-heads-up"]')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Original request' })).toBeVisible();
+    for (const colorScheme of ['light', 'dark'] as const) {
+      await page.emulateMedia({ colorScheme, reducedMotion: 'reduce' });
+      await expect.poll(() => renderedContrastRatio(approve)).toBeGreaterThanOrEqual(4.5);
+      expect(await hasVisibleKeyboardFocus(page, approve)).toBe(true);
+      await page.screenshot({
+        path: test.info().outputPath(`review-${width}-${colorScheme}.png`),
+        fullPage: true,
+        animations: 'disabled',
+      });
+    }
     expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(
       false,
     );
@@ -276,10 +296,24 @@ test('an expanded draft stays usable on a short phone screen with pending work',
   const { orgId } = await signUpAndOnboard(page, 'ShortPhoneComposer');
   await installAthenaFixture(page, orgId);
   await page.setViewportSize({ width: 390, height: 600 });
+  const touch = await page.context().newCDPSession(page);
+  await touch.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 1 });
   await page.goto(`/athena?workspace=${orgId}`);
+  const approve = page.getByRole('button', { name: 'Approve', exact: true });
+  await expect
+    .poll(async () => (await approve.boundingBox())?.height ?? 0)
+    .toBeGreaterThanOrEqual(40);
   const composer = page.getByRole('form', { name: 'Message Athena' });
   await composer.getByRole('combobox', { name: 'Message Athena' }).fill('Draft line\n'.repeat(10));
   await expect(composer.getByRole('button', { name: 'Send', exact: true })).toBeEnabled();
+  await page.getByRole('button', { name: 'Work Browse' }).click();
+  await page.getByRole('button', { name: /Move the printing tasks/ }).focus();
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('article', { name: 'Review comment' })).toBeFocused();
+  await expect(composer.getByRole('combobox', { name: 'Message Athena' })).toHaveValue(
+    'Draft line\n'.repeat(10),
+  );
+
   await expect
     .poll(async () => {
       const bounds = await composer.boundingBox();

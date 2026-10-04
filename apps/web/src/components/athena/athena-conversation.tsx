@@ -123,6 +123,10 @@ export interface AthenaConversationProps {
    * exactly one mounted conversation should own them.
    */
   questions?: boolean | undefined;
+  /** The work picker’s selected entry stays visible even when older messages are folded. */
+  focusedJobId?: string | undefined;
+  /** Whether overdue work needs a separate reminder; a work picker already provides it. */
+  jobReminders?: boolean | undefined;
   /** A job id the host wants this thread scrolled to, e.g. from a ledger row elsewhere. */
   scrollToJobId?: string | null | undefined;
   /** Reports that `scrollToJobId` was found and scrolled to, so the host can clear its request. */
@@ -464,9 +468,10 @@ export default function AthenaConversation(props: AthenaConversationProps): JSX.
           composer.setDraft(prompt);
           composer.composerRef.current?.querySelector('textarea')?.focus({ preventScroll: true });
         }}
-        headsUps={headsUps.headsUps}
+        headsUps={props.jobReminders === false ? [] : headsUps.headsUps}
         closedHeadsUpId={headsUps.closedId}
         onDismissHeadsUp={headsUps.dismiss}
+        focusedJobId={props.focusedJobId}
         waitingJobId={jobsNeedingYou(jobs).at(0)?.id ?? null}
         landingQuestionId={questions.landingId}
         scrollToJobId={settings.scrollToJobId}

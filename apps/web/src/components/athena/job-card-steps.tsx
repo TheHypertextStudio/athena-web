@@ -253,10 +253,12 @@ export interface JobStepsProps {
   /** Whether an undo request is in flight, disabling every Undo control while it settles. */
   readonly undoPending: boolean;
   readonly onUndo: (changeSetId: string) => void;
+  /** Keep history secondary when a review already presents its pending content. */
+  readonly defaultOpen?: boolean;
 }
 
 /**
- * The entry's step disclosure: "1 step" / "3 steps", visible until a person collapses it.
+ * The entry's step disclosure: "1 step" / "3 steps", with review history initially folded.
  *
  * @remarks
  * Drops the job's own initiating message from the list: that message is the objective the entry
@@ -265,6 +267,7 @@ export interface JobStepsProps {
  */
 export function JobSteps({
   activities,
+  defaultOpen = true,
   isFinished,
   undoneChangeSetIds,
   undoPending,
@@ -276,7 +279,7 @@ export function JobSteps({
   if (visibleActivities.length === 0) return null;
 
   return (
-    <Collapsible defaultOpen>
+    <Collapsible defaultOpen={defaultOpen}>
       <CollapsibleTrigger
         className={cn(
           'group text-on-surface-variant text-label-medium hover:text-on-surface -my-2 flex min-h-10 w-fit items-center gap-1 rounded-md',

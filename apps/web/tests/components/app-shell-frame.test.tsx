@@ -191,11 +191,7 @@ describe('AppShellFrame session loading', () => {
     expect(within(topBar as HTMLElement).getByText('Athena')).toBeVisible();
     expect(within(topBar as HTMLElement).getByRole('button', { name: 'Search' })).toBeEnabled();
     expect(within(topBar as HTMLElement).queryByRole('button', { name: 'Show Agenda' })).toBeNull();
-    expect(
-      within(screen.getByRole('navigation', { name: 'Panels' })).getByRole('button', {
-        name: /Agenda/,
-      }),
-    ).toBeInTheDocument();
+    expect(screen.queryByRole('navigation', { name: 'Panels' })).not.toBeInTheDocument();
   });
 
   it('puts Athena first in the rail', async () => {

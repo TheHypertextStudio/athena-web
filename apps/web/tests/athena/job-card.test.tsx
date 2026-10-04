@@ -138,6 +138,16 @@ describe('AthenaJobCard', () => {
 
     expect(await screen.findByRole('region', { name: 'Comment preview' })).toBeVisible();
     expect(screen.getByText('Remaining work: Ship the submit command.')).toBeVisible();
+    expect(screen.getByRole('article', { name: 'Review comment' })).toBeVisible();
+    const preview = screen.getByRole('region', { name: 'Comment preview' });
+    const approve = screen.getByRole('button', { name: 'Approve' });
+    expect(
+      preview.compareDocumentPosition(approve) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /^1 step/ })).toBeNull();
+    expect(screen.queryByText('Protect two hours for the launch review')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Original request' }));
+    expect(screen.getByText('Protect two hours for the launch review')).toBeVisible();
     expect(api.decide).not.toHaveBeenCalled();
     expect(screen.getByRole('button', { name: 'Reject' })).toBeVisible();
     fireEvent.click(screen.getByRole('button', { name: 'Approve' }));

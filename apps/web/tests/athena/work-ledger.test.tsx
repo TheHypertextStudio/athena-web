@@ -76,12 +76,12 @@ describe('AthenaWorkLedger', () => {
     expect(screen.queryByRole('tab', { name: /needs you/i })).toBeNull();
     for (const tab of tabs) expect(tab.textContent).not.toMatch(/\d/);
 
-    const entries = screen.getAllByRole('article');
+    const entries = screen.getAllByRole('button', { name: /Protect two hours/ });
     expect(entries).toHaveLength(1);
-    expect(entries[0]).toHaveAttribute('data-athena-job', 'running_1');
+    expect(entries[0]).toHaveAttribute('data-athena-work-row', 'running_1');
   });
 
-  it('renders each row as the same flat work entry the thread uses', () => {
+  it('opens a work entry without loading a second review in the navigation', () => {
     const jobs = [job({ id: 'running_1' })];
     renderWithClient(
       <AthenaWorkLedger
@@ -92,9 +92,9 @@ describe('AthenaWorkLedger', () => {
       />,
     );
 
-    const entry = screen.getByRole('article', { name: /Protect two hours/ });
-    expect(entry.querySelector('[data-slot="athena-job-dot"]')).not.toBeNull();
-    expect(entry.querySelector('[data-slot="athena-job-state"]')).not.toBeNull();
+    const entry = screen.getByRole('button', { name: /Protect two hours/ });
+    fireEvent.click(entry);
+    expect(screen.queryByRole('article')).toBeNull();
   });
 
   it('reports the picked filter without owning it', () => {
@@ -142,8 +142,8 @@ describe('AthenaWorkLedger', () => {
     );
 
     const ids = screen
-      .getAllByRole('article')
-      .map((entry) => entry.getAttribute('data-athena-job'));
+      .getAllByRole('button', { name: /Protect two hours/ })
+      .map((entry) => entry.getAttribute('data-athena-work-row'));
     expect(ids).toEqual(['done_new', 'done_old']);
   });
 
@@ -160,7 +160,10 @@ describe('AthenaWorkLedger', () => {
 
     const tablist = screen.getByRole('tablist');
     expect(within(tablist).getByRole('tab', { selected: true })).toHaveTextContent(/needs you/i);
-    expect(screen.getByRole('article')).toHaveAttribute('data-athena-job', 'needs_1');
+    expect(screen.getByRole('button', { name: /Protect two hours/ })).toHaveAttribute(
+      'data-athena-work-row',
+      'needs_1',
+    );
   });
 
   it('renders nothing when there is no work at all', () => {

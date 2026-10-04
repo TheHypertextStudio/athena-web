@@ -55,6 +55,7 @@ function jobEntryIn(scroller: HTMLElement | null, jobId: string): HTMLElement | 
 export function scrollToJobIn(scroller: HTMLElement | null, jobId: string): boolean {
   const entry = jobEntryIn(scroller, jobId);
   entry?.scrollIntoView({ block: 'center' });
+  entry?.focus({ preventScroll: true });
   return entry !== null;
 }
 
@@ -166,6 +167,8 @@ export interface ConversationThreadProps {
   readonly onDismissHeadsUp: (id: string) => void;
   /** The first job waiting on the person, for the jump control. */
   readonly waitingJobId: string | null;
+  /** Keep selected work outside the quiet conversation’s history fold. */
+  readonly focusedJobId?: string | undefined;
   /** The question a notification landed on. */
   readonly landingQuestionId: string | null;
   /** A job the host wants scrolled to, and the report that it was. */
@@ -467,7 +470,7 @@ export function ConversationThread(props: ConversationThreadProps): JSX.Element 
   const { scrollToJobId, onScrolledToJob, landingQuestionId } = props;
   const scrollerRef = useRef<HTMLDivElement | null>(null);
   const columnRef = useRef<HTMLDivElement | null>(null);
-  const history = useConversationHistory(props.thread, entries, props.active);
+  const history = useConversationHistory(props.thread, entries, props.active, props.focusedJobId);
   const chapters = useThreadChapters(
     props.thread,
     scrollerRef,

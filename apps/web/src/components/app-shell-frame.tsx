@@ -971,7 +971,7 @@ function AthenaShellChrome({
         ) : undefined
       }
       aside={
-        settingsSurface || calendarSurface
+        athenaRailUnavailable(pathname, settingsSurface, calendarSurface)
           ? undefined
           : railAsideFor(identityUnknown, timerStatus, athenaRail, pathname)
       }

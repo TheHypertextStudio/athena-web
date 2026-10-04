@@ -280,29 +280,31 @@ with no toggle, attach control, or send button, so the screen holds one composer
 
 ### 4.7 The wide view
 
-`/athena` is the conversation at full width, in two columns from the `xl` **viewport** breakpoint
-(not a container query, so the view is wide whether or not a rail panel is open beside it): the
-conversation browser (topics, search, date range) and then the **Work ledger** on the left, and
-the thread under a 44px header — the context chip and Talk, the same header the panel has — on
-the right. The shell offers no Athena rail panel on this route (§4.1), so the screen holds one
-header, one Talk, and one composer. Connecting a tool or app lives in the composer's attach menu
-and Settings › Connections; there is no connections band.
+`/athena` gives the ongoing conversation the main page width, with compact Work navigation on
+its left from the `md` viewport breakpoint. On a phone, Work is an expandable picker above the
+conversation; choosing an entry closes the picker and moves focus to that entry. The page owns
+one composer and Talk control. Agenda and Focus remain available on their own surfaces rather
+than occupying a competing right rail on this route.
 
-The Work ledger answers "what has Athena done for me?" without reinstating the queue as the front
-door. It lists the workspace's work behind three filters — Running, Needs you, Done — with no
-counts; a filter with nothing in it is hidden, and the ledger falls back to the first filter that
-has work, waiting work first. Done sorts newest first. Each row is the thread's own work entry, so
-a ledger row and a thread entry are the same object, and on this page the ledger is the only place
-a job renders: the thread here carries the conversation (messages, questions, plans) and merges no
-jobs. A link to `/athena?session=<id>` opens the ledger on that job's filter and scrolls to it.
+The picker lists occupied Running, Needs you, and Done lanes without counts. Done sorts newest
+first. Each row opens one full work entry inside the ongoing conversation; navigation never
+mounts a second detail read or set of approval controls. Selection remains stable through queue
+refreshes, and selected older work remains visible independently of the chat history fold.
+A link to `/athena?session=<id>` selects that job, reveals it, and moves focus to it.
+
+A pending native task comment leads with “Review comment,” the saved comment content and its
+actual task link, then Approve and Reject. The original request and other history are secondary
+disclosures. The displayed comment is not posted until the owner approves. The work picker owns
+review awareness here, so a separate overdue reminder does not duplicate the selected review.
+Connecting an app remains in the composer’s attach menu and Settings › Connections.
 
 ### 4.8 Where ongoing and past work are visible
 
 | Question                      | Panel                                                   | Wide view                                 | Task or project page                |
 | ----------------------------- | ------------------------------------------------------- | ----------------------------------------- | ----------------------------------- |
-| What is Athena doing now?     | Working strip rows; job card in the thread; icon status | Work ledger › Running; card in the thread | Job card on the task's Activity     |
-| What needs me?                | Strip row with inline decision; card's decision block   | Work ledger › Needs you; heads-up entry   | Card's decision block               |
-| What did Athena do last week? | Scroll back; receipt cards collapsed to their summary   | Work ledger › Done; topics; search; dates | Receipt on whatever the job touched |
+| What is Athena doing now?     | Working strip rows; job card in the thread; icon status | Work picker › Running; selected entry     | Job card on the task's Activity     |
+| What needs me?                | Strip row with inline decision; card's decision block   | Work picker › Needs you; selected review  | Card's decision block               |
+| What did Athena do last week? | Scroll back; receipt cards collapsed to their summary   | Work picker › Done; topics; search; dates | Receipt on whatever the job touched |
 
 ### 4.9 What is removed
 

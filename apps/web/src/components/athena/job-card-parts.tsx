@@ -22,6 +22,8 @@ import {
 import { MoreHorizontal } from '@docket/ui/icons';
 import { type JSX, type SyntheticEvent, useEffect, useMemo, useRef, useState } from 'react';
 
+import { CommentPreview } from './comment-preview';
+import { pendingCommentReview } from './pending-comment-review';
 import { JobSteps, newestChangeSetId, StepUndo } from '@/components/athena/job-card-steps';
 import { ProposalInputRows } from '@/components/athena/proposal-input-rows';
 import { taskIdsFromInput, useHighlightHandlers } from '@/components/athena/proposal-highlight';
@@ -340,7 +342,7 @@ export function JobDecision({
       onPointerEnter={highlight.onPointerEnter}
       onPointerLeave={highlight.onPointerLeave}
     >
-      <p className="text-on-surface text-body-medium break-words">{sentence}</p>
+      {sentence ? <p className="text-on-surface text-body-medium break-words">{sentence}</p> : null}
       {decision.description ? (
         <p className="text-on-surface-variant text-body-small break-words">
           {decision.description}
@@ -491,7 +493,7 @@ function JobCardOutcome({
     return (
       <JobDecision
         decision={decision}
-        sentence={decisionSentence(detail)}
+        sentence={pendingCommentReview(detail) ? '' : decisionSentence(detail)}
         pending={pending}
         mentionOrgId={mentionOrgId}
         outwardInput={outwardDecisionInput(activities)}
@@ -553,8 +555,10 @@ export function JobCardBody({
     });
   }
 
+  const commentReview = pendingCommentReview(detail);
   return (
     <>
+      {commentReview ? <CommentPreview content={commentReview.content} /> : null}
       {detail ? (
         <JobCardOutcome
           detail={detail}
@@ -570,7 +574,8 @@ export function JobCardBody({
         />
       ) : null}
       <JobSteps
-        activities={activities}
+        activities={activities.filter((entry) => entry.id !== commentReview?.activityId)}
+        defaultOpen={!commentReview}
         isFinished={isFinished}
         undoneChangeSetIds={undoneChangeSetIds}
         undoPending={undoPending}

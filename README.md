@@ -17,6 +17,9 @@ Athena keeps one conversation across visits. After six quiet hours, the panel op
 view; the Earlier messages menu or an upward pull reveals the older stream. People can save a named
 starting point on a message and finish that work at a later message. The same menu returns to saved
 places. The app's search control finds exact Athena messages while the full conversation is open.
+The full Athena page uses compact work navigation to open one review in that conversation. On a
+phone, choosing work closes the picker and preserves the message draft. Native task comments show
+the saved content and task link before approval, with the original request available separately.
 While viewing a task, open Athena in the rail and choose **Work on this task** beside its message
 composer to start a private assignment using the runtime selected in Settings. Enter an objective
 and start work; any returned proposal waits for review before the task changes. If the selected

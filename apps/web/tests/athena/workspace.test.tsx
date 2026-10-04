@@ -36,6 +36,7 @@ vi.mock('../../src/lib/api', () => ({
   },
 }));
 
+import { queryKeys } from '../../src/lib/query-keys';
 import { AthenaWorkspace } from '../../src/components/athena/athena-workspace';
 import type { PersonalAthenaSessionSummary } from '../../src/lib/athena/presentation';
 import type { PersonalAthenaTransport } from '../../src/lib/athena/query-defs';
@@ -115,11 +116,14 @@ function transport(): PersonalAthenaTransport {
 
 function renderWorkspace(props: Partial<Parameters<typeof AthenaWorkspace>[0]> = {}) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return render(
-    <QueryClientProvider client={client}>
-      <AthenaWorkspace transport={transport()} workspaceFilter={WORKSPACE_ID} {...props} />
-    </QueryClientProvider>,
-  );
+  return {
+    ...render(
+      <QueryClientProvider client={client}>
+        <AthenaWorkspace transport={transport()} workspaceFilter={WORKSPACE_ID} {...props} />
+      </QueryClientProvider>,
+    ),
+    client,
+  };
 }
 
 afterEach(() => {
@@ -128,6 +132,72 @@ afterEach(() => {
 });
 
 describe('AthenaWorkspace', () => {
+  it.each([
+    ['working_1', 'Prepare the launch review'],
+    ['finished_1', 'Send the weekly recap'],
+  ])(
+    'reveals selected older work %s while retaining the chat history fold',
+    async (id, objective) => {
+      chatGet.mockResolvedValue(
+        okResponse({
+          ...chatThread(),
+          activities: [
+            {
+              id: 'old_reply',
+              sessionId: 'chat_1',
+              organizationId: null,
+              type: 'response',
+              body: { text: 'Earlier answer', author: 'athena' },
+              createdAt: '2026-09-27T10:01:00.000Z',
+            },
+          ],
+        }),
+      );
+      elicitationsGet.mockResolvedValue(okResponse({ items: [] }));
+      renderWorkspace({ initialSessionId: id });
+      expect(await screen.findByRole('article', { name: objective })).toBeVisible();
+      expect(screen.queryByText('Earlier answer')).not.toBeInTheDocument();
+    },
+  );
+
+  it('retains the default review when a queue refresh adds another waiting item', async () => {
+    chatGet.mockResolvedValue(okResponse(chatThread()));
+    elicitationsGet.mockResolvedValue(okResponse({ items: [] }));
+    const api = transport();
+    const { client } = renderWorkspace({ transport: api });
+    await screen.findByRole('article', { name: 'Approve the recap email' });
+    vi.mocked(api.queue).mockResolvedValue(
+      okResponse({
+        counts: { needsYou: 2, working: 0, finished: 0 },
+        currentChat: null,
+        sessions: {
+          needsYou: [
+            job({
+              id: 'new_review',
+              objective: 'Review the new invitation',
+              status: 'awaiting_approval',
+              queueState: 'needs_you',
+            }),
+            job({
+              id: 'needs_1',
+              objective: 'Approve the recap email',
+              status: 'awaiting_approval',
+              queueState: 'needs_you',
+            }),
+          ],
+          working: [],
+          finished: [],
+        },
+      }),
+    );
+    await client.invalidateQueries({ queryKey: queryKeys.athenaWorkspaceQueue(WORKSPACE_ID) });
+    expect(
+      await screen.findByRole('button', { name: /Review the new invitation/ }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('article', { name: 'Approve the recap email' })).toBeVisible();
+    expect(screen.getAllByRole('article')).toHaveLength(1);
+  });
+
   it('shows only the ledger filters that have work, with no counts', async () => {
     chatGet.mockResolvedValue(okResponse(chatThread()));
     elicitationsGet.mockResolvedValue(okResponse({ items: [] }));
@@ -139,16 +209,18 @@ describe('AthenaWorkspace', () => {
     for (const tab of tabs) expect(tab.textContent).not.toMatch(/\d/);
   });
 
-  it('keeps each piece of work in the ledger only, never also in the thread', async () => {
+  it('shows one selected work entry in the conversation and compact navigation', async () => {
     chatGet.mockResolvedValue(okResponse(chatThread()));
     elicitationsGet.mockResolvedValue(okResponse({ items: [] }));
     renderWorkspace();
 
     // The ledger opens on waiting work first.
     const entry = await screen.findByRole('article', { name: /Approve the recap email/ });
-    expect(entry.closest('[data-slot="athena-work-ledger"]')).not.toBeNull();
+    expect(entry.closest('[data-slot="athena-work-ledger"]')).toBeNull();
     expect(screen.getAllByRole('article', { name: /Approve the recap email/ })).toHaveLength(1);
-    expect(document.querySelector('[data-slot="athena-thread"] [data-athena-job]')).toBeNull();
+    expect(document.querySelector('[data-slot="athena-thread"] [data-athena-job]')).not.toBeNull();
+    expect(screen.getAllByRole('article')).toHaveLength(1);
+    expect(screen.queryByText('What can I help with?')).toBeNull();
   });
 
   it('keeps context and Talk with the composer, without a promotional header', async () => {

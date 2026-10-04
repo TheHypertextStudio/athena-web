@@ -5,8 +5,8 @@
  *
  * @remarks
  * A list row with a body, not a card: an 8px state dot in a 24px gutter, a one-line title with its
- * time and an always-present overflow menu, one state line, then the decision (waiting) or receipt
- * (finished), then the step disclosure. It renders the same in the rail, the wide view's ledger,
+ * time and an always-present overflow menu, one state line, then saved review content and its decision (waiting) or receipt
+ * (finished), then the step disclosure. It renders the same in the rail, the wide conversation,
  * and a task page, and never grows past a 640px measure. See "What to build instead" §1 of
  * `docs/design/audits/2026-09-18-athena-companion.md`.
  *
@@ -39,6 +39,7 @@ import {
 import { queryKeys, useApiQuery } from '@/lib/query';
 
 import { JobCardBody, type JobMenuAction, JobOverflowMenu, JobReplyForm } from './job-card-parts';
+import { pendingCommentReview, ReviewRequest } from './pending-comment-review';
 import { useAthenaActions } from './use-athena-actions';
 
 /** Props for {@link AthenaJobCard}. */
@@ -224,7 +225,7 @@ export function AthenaJobCard({
       />
       <JobTitleLine
         titleId={titleId}
-        objective={job.objective}
+        objective={pendingCommentReview(detail) ? 'Review comment' : job.objective}
         createdAt={job.createdAt}
         permissions={permissions}
         onAction={handleAction}
@@ -259,6 +260,7 @@ export function AthenaJobCard({
           actions.undo(changeSetId, { onSuccess: onReverted });
         }}
       />
+      {pendingCommentReview(detail) ? <ReviewRequest objective={job.objective} /> : null}
     </article>
   );
 }

@@ -1,9 +1,9 @@
 'use client';
 
 import { Button, Text } from '@docket/ui/primitives';
-import Link from 'next/link';
 import type { JSX } from 'react';
 
+import DocketLink from '@/components/docket-link';
 import { StaticMarkdown } from '@/components/editor/static-markdown';
 import type { AthenaActivityPresentation } from '@/lib/athena/presentation';
 
@@ -57,7 +57,7 @@ export function CommentPreview({
         </Text>
         {content.taskHref ? (
           <Button asChild variant="link" controlSize="md" className="-my-2">
-            <Link href={content.taskHref}>View task</Link>
+            <DocketLink href={content.taskHref}>View task</DocketLink>
           </Button>
         ) : null}
       </div>

@@ -10,6 +10,8 @@ Register: app, calm Plex/MD3. Scope: the full `/athena` review surface and its p
 - Owning browser cases: `apps/web/e2e/athena/companion-work.spec.ts`, five cases passed. Checks cover native comment approval/receipt, one review per document, content before decisions, phone picker keyboard selection, preserved ten-line draft, overflow, contrast, focus, and coarse-touch target size.
 - Independent source and full screenshot review: no remaining actionable findings after correcting selection persistence and the chat history fold.
 
+- Actual owner production record: full `production-1440-light.jpg`, `production-1440-dark.jpg`, `production-390-light.jpg`, and `production-390-dark.jpg` in the hierarchy evidence directory. Saved content is fully visible once, before decisions, and remains an unapproved proposal. Source `f7183dec0`, CI `37234597086`, Deploy main `37236455951`, and Vercel production `4k6pLCUSLHpojgHGUaQBXDv14U9J` passed.
+
 ## Scorecard
 
 | Dimension                         | Score | Evidence                                                                                                                                                                                                                                                                                                                    |
@@ -26,10 +28,10 @@ Register: app, calm Plex/MD3. Scope: the full `/athena` review surface and its p
 ## Hard gates
 
 - **A11y**: Local pass. Approval contrast >=4.5 in both themes; visible keyboard focus; semantic Work/Conversation landmarks; keyboard picker selection focuses the selected article; coarse-touch approval target >=40 px. Existing native decision authorization is unchanged.
-- **Responsive**: Local pass at 320, 390, and 1440 px, with no document overflow; short 390×600 composer case passes. Wider production verification remains pending.
+- **Responsive**: Local pass at 320, 390, and 1440 px, with no document overflow; short 390×600 composer case passes. Actual production checks at 320, 390, and 1920 px show no document overflow.
 - **Theme parity**: Local pass with full desktop and phone light/dark captures. Reduced motion prevents capturing a half-finished theme transition.
 - **No placeholder**: Pass. Fixture screenshots are identified as tests; empty-account screenshots are genuinely empty. Production proposals and task fields have not been altered.
-- **Screenshot-verified**: Local pass. Actual owner record with the longer saved comment remains the final production acceptance gate.
+- **Screenshot-verified**: Local pass. Actual owner record with the longer saved comment passes in desktop and phone themes. Phone keyboard selection opens its saved review and closes the picker.
 
 ## Findings addressed
 
@@ -38,4 +40,4 @@ Register: app, calm Plex/MD3. Scope: the full `/athena` review surface and its p
 3. Agenda and a redundant overdue reminder competed with the review. The route owns its main width and the picker owns review awareness.
 4. Queue updates could replace the default review, and the history fold could hide selected older work. Persisted selection and explicit focused-work visibility fix both, with regression coverage.
 
-Verdict: **Local ship bar met; production acceptance pending.** Do not call the delivery complete until the actual owner’s saved comment is verified after deployment.
+Verdict: **SHIP.** The actual owner’s saved comment and work selection are verified on promoted production. No approval was submitted; the older provider acceptance goal remains paused.

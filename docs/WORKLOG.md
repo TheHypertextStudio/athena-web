@@ -11855,6 +11855,27 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
 
 ## Completed Tasks
 
+### [ATHENA-REVIEW-HIERARCHY-001] Make Athena work review readable
+
+- **Completed**: 2026-10-04
+- **Started**: 2026-10-04
+- **Priority**: P1
+- **Description**: Correct the competing work ledger, empty conversation, repeated status, and review controls identified in the owner’s full-screen review.
+- **Approach**: Restore the specified compact work navigation beside one ongoing conversation. Linked work opens its actual conversation entry. Put saved comment content before its decision controls, with request/history secondary. Preserve approvals, drafts, context, and real task navigation.
+- **Files to modify**: Athena workspace, work ledger, job presentation, their owning tests, and a craft audit.
+- **Validation**: Focused behavior tests, affected typecheck/lint/build, keyboard flow and full desktop/phone screenshots in both themes, 320 px overflow, and live production review after one coherent delivery.
+- **Boundary**: Finish this UI task and stop. The older provider acceptance goal remains paused.
+
+- **Implementation**: Compact selectable rows replace full cards in Work navigation. One selected entry renders in the ongoing conversation; on phones the picker collapses after selection. The main route owns its width without Agenda/Focus. Native comment content precedes approval, with original request and remaining history disclosed separately. Duplicate overdue reminders are suppressed only for this host.
+- **Review corrections**: Persisted default selection through polling; selected older Running/Done work bypasses the chat history fold; keyboard row selection focuses the selected article. The original comment remains an unapproved proposal.
+- **Validation so far**: The final 37 affected Athena/shell/navigation files pass 349 tests; the focused job/workspace/shell check passes 45 tests. Five owning browser cases pass including 320 px overflow, light/dark approval contrast >=4.5, visible keyboard focus, coarse-touch controls >=40 px, and ten-line composer preservation. Web typecheck and changed-file ESLint pass. Production web build passes. Documentation source checks pass all 52 pages. An initial complexity check caught one added branch in the shell; reusing the existing full-width-route decision removes it rather than expanding the debt ledger.
+- **Visual evidence**: Full fixture review captures are retained in `/Users/williecubed/.codex/visualizations/2026/10/04/athena-hierarchy/`; they are explicitly test evidence, not production acceptance. Existing capture-shots produced the standard empty-account set in `athena-hierarchy-empty/`. Independent final source and screenshot review has no actionable findings.
+- **Production acceptance**: Source `f7183dec0e175aa6432cbf28346bd42397c06553` was pushed once to main with linear history. CI `37234597086` succeeded; all required Deploy main `37236455951` jobs succeeded. Vercel production `4k6pLCUSLHpojgHGUaQBXDv14U9J` promoted successfully. The actual owner account shows one selected review with the complete saved comment before Approve/Reject, exact View task navigation, collapsed Original request, and no competing Agenda. Full production light/dark captures at 1440×900 and 390×844 are in the evidence directory. Live checks at 320, 390, and 1920 px found no document overflow. Keyboard selection of IMMEDIATE DISPATCH opens its actual saved review and closes the phone picker; CORRELATED DISPATCH was restored. No decision was submitted. Temporary viewport/theme overrides were cleared.
+- **Retrospective**: Containment and a passing screenshot capture were insufficient acceptance for the prior layout. Assess the hierarchy with the actual owner record, not only a short fixture. The browser viewport wrapper did not resize the claimed user tab; verify actual dimensions and use the existing tab-scoped development emulation when needed. Let media changes settle before retaining theme captures.
+- **Completion record**: This local documentation receipt accompanies the delivered source; keep it for the next coherent delivery rather than triggering another full release for acceptance prose. The UI task is finished, and work stops here. Older provider acceptance remains paused.
+
+---
+
 ### [ATHENA-COMMENT-PREVIEW-001] Make saved comment proposals readable
 
 - **Status**: COMPLETED

@@ -13,7 +13,7 @@ verifyDepsBeforeRun: error
 # graph so transitive peers don't drift to an older major. Keeps the dependency tree
 # deduped on one Node typings version, consistent with engines.node ">=24.15 <27".
 overrides:
-  '@types/node': 26.1.1
+  '@types/node': 26.6.4
   # Force a single Vite across the graph (vitest + @vitejs/plugin-react both consume it;
   # Next has its own bundler). @vitejs/plugin-react@6 requires vite ^8 (it imports
   # vite/internal), and vitest 4 supports vite 8 — so pin the one shared vite to 8 (latest).
@@ -119,20 +119,20 @@ catalog:
   '@types/react-dom': ^19.2.3
 
   # Shared TypeScript, test, bundler, and lint tooling — one repo-wide version range.
-  '@types/node': 26.1.1
+  '@types/node': 26.6.4
   typescript: ^6.0.3
   vite: ^8.0.16
   vitest: 4.1.11
   '@vitejs/plugin-react': ^6.0.2
   '@vitest/coverage-v8': 4.1.11
-  eslint: ^10.7.0
+  eslint: ^10.11.0
   '@eslint/js': ^10.0.1
-  typescript-eslint: ^8.63.0
+  typescript-eslint: ^8.71.0
   # Cognitive complexity (S3776) for the complexity ratchet. Only that ONE rule is enabled
   # — the recommended preset (~300 rules) is deliberately not used. Consumed by both
   # @docket/eslint-config (the gate) and @docket/test-utils (the ledger scanner), which is
   # why it must be catalog-pinned rather than ranged per package.
-  eslint-plugin-sonarjs: ^4.2.0
+  eslint-plugin-sonarjs: ^4.2.2
   '@dnd-kit/collision': 0.5.0
   '@dnd-kit/react': 0.5.0
   '@dnd-kit/dom': 0.5.0

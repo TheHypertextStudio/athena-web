@@ -201,8 +201,9 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
-          # The launch-history policy test compares this checkout with main. The default shallow
-          # checkout omits origin/main on pull requests, so that policy silently cannot run.
+          # The launch-history policy test must inspect the PR branch, not GitHub's synthetic
+          # merge commit. It also needs main's history to count merges from the correct base.
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
 
       - uses: ./.github/actions/setup

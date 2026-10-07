@@ -453,6 +453,28 @@ and staging audit reports, provider timelines, and `expired-token-recovery.jpg`.
 screenshots remain in the October 3 `athena-immediate-dispatch` directory. Every acceptance slice
 above received independent review.
 
+### October 6 acceptance refresh
+
+The existing fixed-target WIF audit completed on current main `f7183dec0`: staging run
+`37577923468` and production run `37577952290`. Reports generated October 7 at 05:46/05:47 UTC
+(October 6 locally) record serving revisions `docket-api-staging-00007-78v` and
+`docket-api-00331-rsp`. Both production assignments still have exactly one delegation, action,
+and returned-work activity, with proposed approval status and the original task backlog/unassigned.
+The staging delegations remain canceled with null returned pointers and backlog/unassigned tasks.
+The prior immutable rejection receipt establishes rejected action status, cleared keys, and zero
+comments; the narrower refreshed audit does not independently read those fields.
+
+The authenticated original review remains visible and links to its original task. Full screenshot
+and reports are retained in
+`/Users/williecubed/.codex/visualizations/2026/10/06/athena-acceptance-refresh/`.
+
+Current main passed CI `37234597086` and Deploy main `37236455951`; earlier acceptance tooling
+passed CI `37223301592` and Deploy main `37225021524` at `31cbc50c1`. Release success does not
+close the two gates below. Staging's secret reference remains `docket-staging-resend-api-key:latest`;
+that metadata alone cannot verify the prepared dedicated value is installed. The last version-add
+attempt remains the October 4 denial. Today's audits were read-only; local CLI and Studio Cloud
+Console require reauthentication. No grant, approval, provider key, or IAM authority was changed.
+
 ### Remaining gates
 
 - Staging mail: the dedicated sending-only key is prepared but unmounted. The existing deployment

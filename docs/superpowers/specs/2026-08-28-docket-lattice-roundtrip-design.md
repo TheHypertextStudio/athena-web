@@ -37,6 +37,13 @@ two-instance/restart relay proof; the runbook describes the procedure and unit t
 Keep that engineering gate open. Exact historical lease payloads and unseen HTTP attempt counts
 are outside the retained production evidence.
 
+October 6 refresh: current main passed its CI and deployment gates. Fixed-target WIF audits
+`37577923468` (staging) and `37577952290` (production) preserve one recorded return per assignment,
+proposed production actions, and canceled staging delegations. Current authenticated UI still shows
+the original review linked to the same task. See the refreshed production acceptance section for
+exact serving revisions and evidence limits. Secret-reference metadata does not prove installation
+of the dedicated staging value; the mail and relay runtime gates above remain open.
+
 ## Historical hold-ups (August 28, 2026)
 
 The path does not fail at one hidden switch. Five production boundaries are incomplete or broken

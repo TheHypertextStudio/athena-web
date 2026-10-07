@@ -21,3 +21,4 @@ export {
   type UseRelationDropTargetOptions,
   useRelationDropTarget,
 } from './use-relation-drop-target';
+export { useWorkRowDropTarget } from './use-work-row-drop-target';

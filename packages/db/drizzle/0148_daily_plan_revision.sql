@@ -1,0 +1,1 @@
+ALTER TABLE "daily_plan_day" ADD COLUMN "revision" integer DEFAULT 0 NOT NULL;

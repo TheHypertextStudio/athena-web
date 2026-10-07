@@ -30,6 +30,7 @@ import {
 import { type JSX, useRef, useState } from 'react';
 
 import { DatePicker } from '@/components/date-picker';
+import Link from '@/components/docket-link';
 
 import { AgendaTimeboxForm } from './agenda-timebox-form';
 import { type AgendaEntry, isTimeboxed, shiftISODate, useAgenda } from './agenda-context';
@@ -43,8 +44,20 @@ export interface AgendaEntryActionsProps {
   entry: AgendaEntry;
 }
 
-/** The `⋯` actions menu + popover editor for a single agenda entry. */
+/** Route accepted sessions through revisions and retain legacy actions for unaccepted days. */
 export default function AgendaEntryActions({ entry }: AgendaEntryActionsProps): JSX.Element {
+  const { date } = useAgenda();
+  return entry.sessionId ? (
+    <Button variant="secondary" size="sm" asChild>
+      <Link href={`/plan?view=day&date=${date}`}>Adjust plan</Link>
+    </Button>
+  ) : (
+    <LegacyEntryActions entry={entry} />
+  );
+}
+
+/** The `⋯` actions menu + popover editor for a single agenda entry. */
+function LegacyEntryActions({ entry }: AgendaEntryActionsProps): JSX.Element {
   const { date, clearTimebox, moveToDay, removeFromPlan } = useAgenda();
   const [editor, setEditor] = useState<EntryEditor>(null);
   const [menuOpen, setMenuOpen] = useState(false);

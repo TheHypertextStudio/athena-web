@@ -48,6 +48,7 @@ import { idempotency } from './lib/idempotency';
 import { conditionalWriteFor } from './lib/work-schedule-conditional';
 import dailyPlan from './routes/daily-plan';
 import dailyPlanReview from './routes/daily-plan-review';
+import dailyPlanAssessment from './routes/daily-plan-assessment';
 import scheduleWeek from './routes/schedule-week';
 import directiveFeed from './routes/schedule-week-directive';
 import hubRouter from './routes/hub';
@@ -224,6 +225,7 @@ const routes = app
   .route('/orgs', orgs)
   .route('/daily-plan', dailyPlan)
   .route('/daily-plan', dailyPlanReview)
+  .route('/daily-plan', dailyPlanAssessment)
   .route('/schedule-week', scheduleWeek)
   .route('/directive', directiveFeed)
   .route('/agenda', agenda)

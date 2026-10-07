@@ -15,6 +15,13 @@ import type { ReactElement } from 'react';
 
 import NeedsAttention from '../../src/components/today/needs-attention';
 import DayPlan from '../../src/components/today/day-plan';
+import type * as DailyQueries from '../../src/components/daily-planning/daily-planning-queries';
+
+const planningDay = vi.hoisted((): { data: unknown } => ({ data: null }));
+vi.mock('../../src/components/daily-planning/daily-planning-queries', async (importOriginal) => ({
+  ...(await importOriginal<typeof DailyQueries>()),
+  useDailyPlanningDay: () => planningDay,
+}));
 
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn() }) }));
 vi.mock('../../src/components/time-tracking/task-timer-button', () => ({
@@ -85,7 +92,34 @@ function planItem(overrides: TaskOverrides & { sort?: number }): HubTodayPlanIte
   } as HubTodayPlanItem;
 }
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  planningDay.data = null;
+});
+
+it('routes changes to an accepted plan through the planner rather than legacy row edits', () => {
+  planningDay.data = {
+    accepted: { current: { snapshot: { sessions: [] } } },
+    actual: [],
+    agenda: { entries: [] },
+  };
+  const current = planItem({ id: 'c1', title: 'Current', sort: 0 });
+  const after = planItem({ id: 'a1', title: 'After', sort: 1 });
+  const promote = vi.fn();
+  render(
+    <DayPlan
+      date="2026-10-06"
+      plan={[current, after]}
+      now={current}
+      orgName={orgName}
+      loading={false}
+      onPromote={promote}
+    />,
+  );
+  expect(screen.getAllByRole('link', { name: 'Adjust plan' })).toHaveLength(2);
+  expect(screen.queryByRole('button', { name: 'Make next' })).not.toBeInTheDocument();
+  expect(promote).not.toHaveBeenCalled();
+});
 
 describe('NeedsAttention', () => {
   it('renders nothing at all when nothing is waiting', () => {

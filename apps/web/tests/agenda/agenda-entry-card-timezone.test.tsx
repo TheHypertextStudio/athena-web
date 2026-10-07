@@ -2,7 +2,7 @@ import '@testing-library/jest-dom/vitest';
 
 import { OrganizationId } from '@docket/identity-access/ids';
 import { TaskId } from '@docket/work/ids';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -54,9 +54,29 @@ const ENTRY: AgendaEntry = {
 afterEach(() => {
   cleanup();
   agendaState.displayTimezone = 'Asia/Tokyo';
+  agendaState.toggleDone.mockClear();
 });
 
 describe('AgendaEntryCard timezone presentation', () => {
+  it('omits the legacy completion control from an accepted session card', () => {
+    render(
+      <AgendaEntryCard
+        entry={{ ...ENTRY, sessionId: 'accepted-session', planItemId: 'legacy-item' }}
+        layout="block"
+      />,
+    );
+    expect(screen.getByText(ENTRY.title)).toBeVisible();
+    expect(screen.queryByRole('button', { name: 'Mark done' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Mark not done' })).not.toBeInTheDocument();
+    expect(agendaState.toggleDone).not.toHaveBeenCalled();
+  });
+  it('retains legacy daily item completion when no accepted session owns it', () => {
+    render(<AgendaEntryCard entry={{ ...ENTRY, planItemId: 'legacy-item' }} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Mark done' }));
+    expect(agendaState.toggleDone).toHaveBeenCalledWith(
+      expect.objectContaining({ planItemId: 'legacy-item' }),
+    );
+  });
   it('renders the timebox in the selected display timezone', () => {
     render(<AgendaEntryCard entry={ENTRY} layout="block" />);
 

@@ -128,9 +128,10 @@ const config = new Hono<AppEnv>().get(
       appleAppClientId: resolveAppleAppClientId(env, oauthProviders),
       passkeyRpId: env.BETTER_AUTH_PASSKEY_RP_ID,
       legacyPasskeyRpId: resolveLegacyPasskeyRpId(env),
-      googleOAuthPublic: env.GOOGLE_OAUTH_PUBLIC,
+      googleOAuthPublic: String(env.GOOGLE_OAUTH_PUBLIC) === 'true',
       googleServerClientId: resolveGoogleServerClientId(env, oauthProviders),
-      adminGoogleSso: env.ADMIN_GOOGLE_SSO_ENABLED && oauthProviders.includes('google'),
+      adminGoogleSso:
+        String(env.ADMIN_GOOGLE_SSO_ENABLED) === 'true' && oauthProviders.includes('google'),
       stripePublishableKey: env.STRIPE_PUBLISHABLE_KEY ?? null,
       connectors,
       mcpUrl: env.MCP_RESOURCE_URL ?? null,

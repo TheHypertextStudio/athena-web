@@ -12,24 +12,31 @@ import * as React from 'react';
 import { cn } from '../lib/utils';
 
 /**
- * Outer card surface — rounded, hairline-outlined, token-colored container.
+ * Composable tonal card with an optional outline for a semantic boundary.
  *
  * @remarks
  * In the MD3 tonal system a card sits ABOVE a `bg-surface` panel, so it steps up the
  * container ramp (`surface-container-low`). The same utility reads correctly in both light
  * (a darker step) and dark (a lighter step) because the surface tokens encode that direction.
  *
- * The hairline border and the `shadow-sm` this used to carry are both gone. A tonal step already
- * separates the card from the panel underneath it, so the border was a second, redundant
- * separator and the shadow was a third — and a grid of shadowed cards is the single most reliable
- * way to make a dense product look like a template. Where a card genuinely needs a hard edge (it
- * sits on a surface at the same tone), reach for `border-outline-variant` explicitly at that
- * callsite and say why; do not put it back here.
+ * Ordinary cards use the tonal step alone. The outlined variant identifies an independent
+ * movable object whose boundary must remain visible beside other objects at the same tone.
+ * The primitive owns that outline so product code does not recreate border styles.
  */
-export function Card({ className, ...props }: React.ComponentProps<'div'>): React.JSX.Element {
+export function Card({
+  className,
+  variant = 'tonal',
+  ...props
+}: React.ComponentProps<'div'> & {
+  variant?: 'tonal' | 'outlined';
+}): React.JSX.Element {
   return (
     <div
-      className={cn('bg-surface-container-low text-on-surface rounded-xl', className)}
+      className={cn(
+        'bg-surface-container-low text-on-surface rounded-xl',
+        variant === 'outlined' && 'border-outline-variant/50 border',
+        className,
+      )}
       data-surface-tone="card"
       {...props}
     />

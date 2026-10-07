@@ -1,8 +1,8 @@
 'use client';
 
 /** Searchable work picker separate from the agenda. */
-import { Button, Card, CardContent, Input } from '@docket/ui/primitives';
-import { InlineBanner } from '@docket/ui/components';
+import { Button, Input, Skeleton } from '@docket/ui/primitives';
+import { EntityList, EntityListRow, InlineBanner } from '@docket/ui/components';
 import type { JSX } from 'react';
 
 import type { ReadyPlanningController } from './daily-planning-controller';
@@ -21,14 +21,11 @@ function AvailableWorkRow({
   if (!organizationId) return null;
   const added = plan.draft.tasks.some((task) => task.taskId === item.entityId);
   return (
-    <Card>
-      <CardContent className="flex items-center justify-between gap-3 py-3">
-        <div className="min-w-0">
-          <strong className="block truncate">{item.title}</strong>
-          {item.subject ? (
-            <p className="text-on-surface-variant text-body-small">{item.subject.title}</p>
-          ) : null}
-        </div>
+    <EntityListRow
+      interactive={false}
+      title={item.title}
+      {...(item.subject ? { subtitle: item.subject.title } : {})}
+      trailing={
         <Button
           variant="secondary"
           disabled={added}
@@ -38,8 +35,8 @@ function AvailableWorkRow({
         >
           {added ? 'Added' : 'Add'}
         </Button>
-      </CardContent>
-    </Card>
+      }
+    />
   );
 }
 
@@ -77,7 +74,17 @@ export function AddWorkStage({ plan }: { readonly plan: ReadyPlanningController 
           plan.setSearch(event.target.value);
         }}
       />
-      {plan.searchQ.isPending ? <p>Loading tasks…</p> : null}
+      {plan.searchQ.isPending ? (
+        <div
+          role="status"
+          aria-label="Loading available tasks"
+          className="bg-surface-container-low space-y-2 rounded-xl p-3"
+        >
+          <Skeleton className="h-9 w-full rounded-lg" />
+          <Skeleton className="h-9 w-full rounded-lg" />
+          <Skeleton className="h-9 w-full rounded-lg" />
+        </div>
+      ) : null}
       {plan.searchQ.isError ? (
         <InlineBanner
           tone="critical"
@@ -91,13 +98,17 @@ export function AddWorkStage({ plan }: { readonly plan: ReadyPlanningController 
         />
       ) : null}
       {!plan.searchQ.isPending && !plan.searchQ.isError && items.length === 0 ? (
-        <p>No tasks found.</p>
+        <div className="bg-surface-container-low rounded-xl px-4 py-5">
+          <p>No tasks found. Create a task to add work to this plan.</p>
+        </div>
       ) : null}
-      <div className="space-y-2">
-        {items.map((item) => (
-          <AvailableWorkRow key={item.id} plan={plan} item={item} />
-        ))}
-      </div>
+      {items.length > 0 ? (
+        <EntityList aria-label="Available tasks">
+          {items.map((item) => (
+            <AvailableWorkRow key={item.id} plan={plan} item={item} />
+          ))}
+        </EntityList>
+      ) : null}
       <Button
         onClick={() => {
           void plan.go('plan');

@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it } from 'vitest';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 
 import type * as DbModule from '@docket/db';
 import type dailyPlanRouter from '../../src/routes/daily-plan';
@@ -38,7 +38,117 @@ function required<T>(value: T | undefined): T {
   return value;
 }
 
+async function assertAcceptedMutationGuard(
+  app: ReturnType<typeof appWithSession>,
+  itemId: string,
+): Promise<void> {
+  const before = await (await app.request(`/day/${date}`)).json();
+  for (const body of [{ timeboxStartsAt: '2026-09-22T17:00:00.000Z' }, { timeboxEndsAt: null }]) {
+    const response = await app.request(`/${itemId}`, {
+      method: 'PATCH',
+      headers,
+      body: JSON.stringify(body),
+    });
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({ code: 'accepted_plan_requires_revision' });
+  }
+  const removal = await app.request(`/${itemId}`, { method: 'DELETE' });
+  expect(removal.status).toBe(409);
+  expect(await removal.json()).toMatchObject({ code: 'accepted_plan_requires_revision' });
+  expect(await (await app.request(`/day/${date}`)).json()).toEqual(before);
+  expect(
+    (
+      await app.request(`/${itemId}`, {
+        method: 'PATCH',
+        headers,
+        body: JSON.stringify({ status: 'done', sort: 1 }),
+      })
+    ).status,
+  ).toBe(200);
+}
+
 describe('daily planning draft and accepted history', () => {
+  it('binds the acceptance release timestamp as a driver-safe ISO value', async () => {
+    const userId = await seedUserWithHub(schema.db, schema, 'DailyPlanningTimestamp');
+    const app = appWithSession(dailyPlan, fakeSession(userId));
+    await app.request(`/day/${date}/draft`, {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify({ draft, resumeStep: 'review_plan' }),
+    });
+    let parameters: readonly unknown[] = [];
+    schema.setDatabaseQueryObserver((query, values) => {
+      if (query.includes('day_directive') && query.includes('coalesce')) parameters = values;
+    });
+    try {
+      expect((await app.request(`/day/${date}/confirm`, { method: 'POST' })).status).toBe(200);
+      expect(parameters.length).toBeGreaterThan(0);
+      expect(parameters.some((value) => value instanceof Date)).toBe(false);
+    } finally {
+      schema.setDatabaseQueryObserver(undefined);
+    }
+  });
+  it('rejects stale draft saves and increments the accepted revision', async () => {
+    const userId = await seedUserWithHub(schema.db, schema, 'DailyPlanningRevision');
+    const app = appWithSession(dailyPlan, fakeSession(userId));
+    const save = (expectedRevision: number) =>
+      app.request(`/day/${date}/draft`, {
+        method: 'PUT',
+        headers,
+        body: JSON.stringify({ draft, resumeStep: 'plan_today', expectedRevision }),
+      });
+    expect(await (await app.request(`/day/${date}`)).json()).toMatchObject({ revision: 0 });
+    expect(await (await save(0)).json()).toMatchObject({ revision: 1 });
+    expect((await save(0)).status).toBe(409);
+    expect(
+      (
+        await app.request(`/day/${date}/confirm`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ expectedRevision: 0 }),
+        })
+      ).status,
+    ).toBe(409);
+    expect(
+      await (
+        await app.request(`/day/${date}/confirm`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ expectedRevision: 1 }),
+        })
+      ).json(),
+    ).toMatchObject({ revision: 2 });
+    const [release] = await schema.db
+      .select()
+      .from(schema.dayDirective)
+      .innerJoin(schema.hub, eq(schema.hub.id, schema.dayDirective.hubId))
+      .where(eq(schema.hub.userId, userId));
+    expect(release?.day_directive.agendaAcknowledgedAt).toBeInstanceOf(Date);
+  });
+
+  it('returns a read-only proposal with an editable fallback when no schedule exists', async () => {
+    const userId = await seedUserWithHub(schema.db, schema, 'DailyPlanningProposal');
+    const app = appWithSession(dailyPlan, fakeSession(userId));
+    const response = await app.request('/day/2027-01-05/proposal', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({}),
+    });
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      revision: 0,
+      workScheduleMissing: true,
+      tasks: [],
+      unplaced: [],
+      draft: { date: '2027-01-05' },
+    });
+    expect(await (await app.request('/day/2027-01-05')).json()).toMatchObject({
+      draft: null,
+      accepted: null,
+      revision: 0,
+    });
+  });
+
   it('resumes a saved draft and keeps the first accepted plan after revision', async () => {
     const userId = await seedUserWithHub(schema.db, schema, 'DailyPlanning');
     const app = appWithSession(dailyPlan, fakeSession(userId));
@@ -204,6 +314,7 @@ describe('daily planning draft and accepted history', () => {
           entry.kind === 'task_timebox' && entry.taskId === taskId,
       ),
     ).toHaveLength(2);
+    await assertAcceptedMutationGuard(app, required(items[0]).id);
   });
 
   it('returns unfinished work from several earlier days in one review', async () => {
@@ -226,19 +337,20 @@ describe('daily planning draft and accepted history', () => {
       .returning({ id: schema.task.id });
     const taskId = required(task).id;
     const app = appWithSession(dailyPlan, fakeSession(userId));
-    expect(
-      (
-        await app.request('/', {
-          method: 'POST',
-          headers,
-          body: JSON.stringify({
-            date: '2026-09-18',
-            refOrganizationId: orgId,
-            refTaskId: taskId,
-          }),
-        })
-      ).status,
-    ).toBe(201);
+    for (const plannedDate of ['2026-09-17', '2026-09-18'])
+      expect(
+        (
+          await app.request('/', {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({
+              date: plannedDate,
+              refOrganizationId: orgId,
+              refTaskId: taskId,
+            }),
+          })
+        ).status,
+      ).toBe(201);
     const read = await app.request(`/day/${date}`);
     expect(read.status).toBe(200);
     expect(await read.json()).toMatchObject({
@@ -253,7 +365,12 @@ describe('daily planning draft and accepted history', () => {
     const prior = await schema.db
       .select({ id: schema.dailyPlanItem.id })
       .from(schema.dailyPlanItem)
-      .where(eq(schema.dailyPlanItem.refTaskId, taskId));
+      .where(
+        and(
+          eq(schema.dailyPlanItem.refTaskId, taskId),
+          eq(schema.dailyPlanItem.date, '2026-09-18'),
+        ),
+      );
     const reviewApp = appWithSession(dailyReview, fakeSession(userId));
     expect(
       (

@@ -2,6 +2,7 @@ import '@testing-library/jest-dom/vitest';
 
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
+import { createRef } from 'react';
 
 import { Avatar, AvatarFallback, AvatarImage } from '../../src/primitives/avatar';
 import { Badge, badgeVariants, type BadgeProps } from '../../src/primitives/badge';
@@ -167,6 +168,40 @@ describe('Avatar', () => {
 });
 
 describe('Card family', () => {
+  it('supports outlined composition and forwards its draggable element ref', () => {
+    const ref = createRef<HTMLDivElement>();
+    const clicked: string[] = [];
+    render(
+      <Card
+        variant="outlined"
+        ref={ref}
+        role="group"
+        aria-label="Movable work"
+        onClick={() => {
+          clicked.push('work');
+        }}
+      >
+        <CardHeader>
+          <CardTitle>Work</CardTitle>
+        </CardHeader>
+        <CardContent>Allocated time</CardContent>
+      </Card>,
+    );
+    const card = screen.getByRole('group', { name: 'Movable work' });
+    expect(ref.current).toBe(card);
+    expect(card).toHaveClass('border', 'border-outline-variant/50');
+    expect(screen.getByText('Allocated time')).toBeVisible();
+    fireEvent.click(card);
+    expect(clicked).toEqual(['work']);
+  });
+  it('keeps ordinary cards tonal without a drawn boundary', () => {
+    render(
+      <Card role="group" aria-label="Summary">
+        Summary
+      </Card>,
+    );
+    expect(screen.getByRole('group', { name: 'Summary' })).not.toHaveClass('border');
+  });
   it('composes every sub-component', () => {
     render(
       <Card className="card-x">

@@ -57,6 +57,8 @@ export interface FocusCardProps {
   readonly date: string;
   /** The timezone times are read in. */
   readonly displayTimezone: string;
+  /** Accepted schedules are changed through the planner's visible revision preview. */
+  readonly planningHref?: string | undefined;
 }
 
 /** The single item you are on now: a filled surface carrying its own inline actions. */
@@ -69,6 +71,7 @@ export function FocusCard({
   onTimebox,
   date,
   displayTimezone,
+  planningHref,
 }: FocusCardProps): JSX.Element {
   const time = planTiming(item, displayTimezone);
   return (
@@ -122,11 +125,60 @@ export function FocusCard({
           onComplete={onComplete}
           onDefer={onDefer}
           onTimebox={onTimebox}
+          planningHref={planningHref}
         />
       </Stack>
     </Card>
   );
 }
+
+function FocusPlanningActions({
+  item,
+  planningHref,
+  timeboxLabel,
+  openTimebox,
+  onDefer,
+}: {
+  readonly item: HubTodayPlanItem;
+  readonly planningHref: string | undefined;
+  readonly timeboxLabel: string;
+  readonly openTimebox: () => void;
+  readonly onDefer: (item: HubTodayPlanItem) => void;
+}): JSX.Element {
+  return (
+    <>
+      {' '}
+      {planningHref ? (
+        <DropdownMenuItem asChild>
+          <Link href={`${planningHref}&task=${encodeURIComponent(item.id)}`}>Adjust plan</Link>
+        </DropdownMenuItem>
+      ) : (
+        <>
+          <DropdownMenuItem onSelect={openTimebox}>{timeboxLabel}…</DropdownMenuItem>
+          <DropdownMenuItem
+            onSelect={() => {
+              onDefer(item);
+            }}
+          >
+            Defer
+          </DropdownMenuItem>
+        </>
+      )}
+    </>
+  );
+}
+
+type FocusActionsProps = Pick<
+  FocusCardProps,
+  | 'item'
+  | 'completing'
+  | 'date'
+  | 'displayTimezone'
+  | 'onComplete'
+  | 'onDefer'
+  | 'onTimebox'
+  | 'planningHref'
+>;
 
 function FocusActions({
   item,
@@ -136,15 +188,8 @@ function FocusActions({
   onComplete,
   onDefer,
   onTimebox,
-}: {
-  readonly item: HubTodayPlanItem;
-  readonly completing: boolean;
-  readonly date: string;
-  readonly displayTimezone: string;
-  readonly onComplete: (item: HubTodayPlanItem) => void;
-  readonly onDefer: (item: HubTodayPlanItem) => void;
-  readonly onTimebox: (item: HubTodayPlanItem, startsAt: string, endsAt: string) => void;
-}): JSX.Element {
+  planningHref,
+}: FocusActionsProps): JSX.Element {
   const [timeboxOpen, setTimeboxOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const openingTimebox = useRef(false);
@@ -173,7 +218,13 @@ function FocusActions({
             >
               <Check aria-hidden="true" /> Complete
             </Button>
-            <TaskTimerButton taskId={item.id} title={item.title} />
+            <TaskTimerButton
+              taskId={item.id}
+              title={item.title}
+              idleLabel="Start"
+              resumeLabel="Continue"
+              emphasis="prominent"
+            />
             <DropdownMenuTrigger asChild>
               <Button type="button" variant="ghost" iconOnly aria-label="More actions">
                 <Ellipsis aria-hidden="true" />
@@ -195,14 +246,13 @@ function FocusActions({
             event.preventDefault();
           }}
         >
-          <DropdownMenuItem onSelect={openTimebox}>{timeboxLabel}…</DropdownMenuItem>
-          <DropdownMenuItem
-            onSelect={() => {
-              onDefer(item);
-            }}
-          >
-            Defer
-          </DropdownMenuItem>
+          <FocusPlanningActions
+            item={item}
+            planningHref={planningHref}
+            timeboxLabel={timeboxLabel}
+            openTimebox={openTimebox}
+            onDefer={onDefer}
+          />
         </DropdownMenuContent>
       </DropdownMenu>
       <PopoverContent align="end" presentation="panel" width="xl">

@@ -28,8 +28,6 @@ import { loadDayContext, type DayContext } from '../services/scheduling/directiv
 import { spanMinutes } from '@docket/planning/intervals';
 import { loadSchedulingPreferences } from '../services/scheduling/repository';
 import {
-  derivePlanState,
-  selectFocus,
   selectMomentum,
   selectStatusCards,
   type TodayPlanCandidate,
@@ -39,12 +37,19 @@ import { addDays, instantAt, weekStartOf } from '@docket/planning/zoned-time';
 import {
   callerActorIds,
   callerOrgIds,
-  sameDay,
   taskCategoriesFor,
   toTaskItem,
   type TaskRow,
 } from './hub-helpers';
 import type { WorkStatusCategory } from '@docket/work/work-status-contract';
+import {
+  loadAcceptedToday,
+  acceptedTodayRows,
+  acceptedTodayCandidates,
+  acceptedTodayCalendar,
+  acceptedTodayState,
+  acceptedTodayFocus,
+} from './hub-today-accepted';
 
 /**
  * Select the caller's live tasks blocked by at least one blocker that is still open.
@@ -131,13 +136,11 @@ export async function buildHubTodayPayload(
       )
       .limit(1),
   ]);
-  const scopedPlanRows = planRows
-    .filter((row) => orgIds.includes(row.refOrganizationId))
-    .sort((left, right) => left.sort - right.sort || left.id.localeCompare(right.id));
-  const plannedTaskIds = [...new Set(scopedPlanRows.map((row) => row.refTaskId))];
-
   const dayStart = instantAt(date, 0, context.timezone);
   const dayEnd = instantAt(addDays(date, 1), 0, context.timezone);
+  const accepted = await loadAcceptedToday({ hubId, userId, date, dayStart, dayEnd });
+  const scopedPlanRows = acceptedTodayRows(planRows, orgIds, accepted);
+  const plannedTaskIds = [...new Set(scopedPlanRows.map((row) => row.refTaskId))];
   const duePredicate = and(
     inArray(task.organizationId, orgIds),
     isNull(task.archivedAt),
@@ -391,42 +394,26 @@ export async function buildHubTodayPayload(
     access.get(resourceAccessKey(ref))?.canView === true;
   const visibleTask = (row: TaskRow): boolean => canView(resourceRef(row, 'task'));
   const visiblePlanned = plannedRows.filter(visibleTask);
-  const planByTaskId = new Map(visiblePlanned.map((row) => [row.id, row]));
   const activeTaskId = activeIntervals[0]?.taskId ?? null;
   const now = new Date();
   const planCategories = await taskCategoriesFor(visiblePlanned);
   const planCategoryOf = (row: TaskRow): WorkStatusCategory =>
     planCategories.get(row.id) ?? 'backlog';
-  const planCandidates: TodayPlanCandidate[] = scopedPlanRows
-    .filter((planRow) => planByTaskId.has(planRow.refTaskId))
-    .map((planRow, position) => {
-      const row = planByTaskId.get(planRow.refTaskId);
-      /* v8 ignore next -- @preserve filtered by the same map immediately above */
-      if (!row) throw new Error('visible plan task disappeared');
-      const impact = dependencyFacts.impactByTaskId.get(row.id) ?? 0;
-      return {
-        ...toTaskItem(row, planCategoryOf(row)),
-        planItemId: planRow.id,
-        planStatus:
-          planRow.status === 'done' ||
-          row.completedAt !== null ||
-          row.canceledAt !== null ||
-          row.archivedAt !== null
-            ? 'done'
-            : 'planned',
-        sort: planRow.sort,
-        position,
-        estimateMinutes:
-          row.estimateMinutes !== null && row.estimateMinutes > 0 ? row.estimateMinutes : null,
-        timeboxStartsAt: planRow.timeboxStartsAt?.toISOString() ?? null,
-        timeboxEndsAt: planRow.timeboxEndsAt?.toISOString() ?? null,
-        blocked: dependencyFacts.blockedTaskIds.has(row.id),
-        dependencyImpact: impact,
-        reason: planReason(row, planRow, activeTaskId, now, impact),
-      };
-    });
-  const planState = derivePlanState({ readiness: context.readiness, items: planCandidates });
-  const focus = selectFocus({ items: planCandidates, now, activeTaskId });
+  const planCandidates = acceptedTodayCandidates({
+    rows: scopedPlanRows,
+    visibleTasks: visiblePlanned,
+    categoryOf: planCategoryOf,
+    accepted,
+    activeTaskId,
+    now,
+    ...dependencyFacts,
+  });
+  const planState = acceptedTodayState(accepted, context.readiness, planCandidates);
+  const focus = acceptedTodayFocus(accepted, {
+    items: planCandidates,
+    now,
+    activeTaskId,
+  });
 
   const visibleProjects = projectRows.filter((row) => canView(resourceRef(row, 'project')));
   const visibleInitiatives = initiativeRows.filter((row) =>
@@ -532,18 +519,7 @@ export async function buildHubTodayPayload(
     focus,
     statusCards,
     suggestions,
-    calendar: planCandidates.flatMap((item) =>
-      item.timeboxStartsAt && item.timeboxEndsAt
-        ? [
-            {
-              taskId: item.id,
-              organizationId: item.organizationId,
-              startsAt: item.timeboxStartsAt,
-              endsAt: item.timeboxEndsAt,
-            },
-          ]
-        : [],
-    ),
+    calendar: acceptedTodayCalendar(accepted, planCandidates),
     needsAttention: { approvals, blocked, dueToday, inbox },
   };
 }
@@ -607,31 +583,6 @@ async function loadDependencyFacts(
     }
   }
   return { blockedTaskIds, impactByTaskId };
-}
-
-function planReason(
-  row: TaskRow,
-  planRow: typeof dailyPlanItem.$inferSelect,
-  activeTaskId: string | null,
-  now: Date,
-  dependencyImpact: number,
-): string | null {
-  if (row.id === activeTaskId) return 'Timer running';
-  if (
-    planRow.timeboxStartsAt &&
-    planRow.timeboxEndsAt &&
-    planRow.timeboxStartsAt <= now &&
-    now < planRow.timeboxEndsAt
-  ) {
-    return 'Scheduled now';
-  }
-  if (sameDay(row.dueDate?.toISOString(), planRow.date)) return 'Due today';
-  if (dependencyImpact > 0) {
-    return `Unblocks ${String(dependencyImpact)} ${dependencyImpact === 1 ? 'task' : 'tasks'}`;
-  }
-  // No reason. Position 0 is where the caller put it, and "You chose this first" restated the
-  // person's own action back at them under a card already labelled "Now".
-  return null;
 }
 
 function suggestionReason(row: TaskRow, date: string, dependencyImpact: number): string {

@@ -47,6 +47,8 @@ export type SameWorkspaceCompletion = 'stay' | 'open';
 export interface CreateTaskRequest extends CreateObjectRequestBase {
   /** Select the task composer. */
   readonly kind: 'task';
+  /** Seed an editable task title when a person accepts a contextual suggestion. */
+  readonly initialTitle?: string;
   /** Stay on the invoking surface or open the new task when creation stays in the shell workspace. */
   readonly sameWorkspaceCompletion: SameWorkspaceCompletion;
   /** Notify the launcher after the task is created. */

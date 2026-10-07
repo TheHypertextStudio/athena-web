@@ -7,6 +7,9 @@ export const DailyPlanTask = z.object({
   organizationId: z.string().min(1),
   plannedMinutes: z.number().int().positive(),
   sort: z.number().int().nonnegative(),
+  selectionSource: z.enum(['explicit', 'suggested']).optional(),
+  durationSource: z.enum(['edited', 'estimate', 'history', 'default']).optional(),
+  durationResolved: z.boolean().optional(),
 });
 /** Validated selected task. */
 export type DailyPlanTask = z.infer<typeof DailyPlanTask>;
@@ -27,6 +30,7 @@ export const DailyPlanSession = z
     endsAt: z.iso.datetime(),
     allocations: z.array(DailyPlanAllocation).min(1),
     pinned: z.boolean(),
+    placementSource: z.enum(['automatic', 'manual']).optional(),
   })
   .superRefine((session, context) => {
     const length = (Date.parse(session.endsAt) - Date.parse(session.startsAt)) / 60_000;
@@ -59,6 +63,14 @@ export const DailyPlanSnapshot = z
     mainTaskId: z.string().nullable(),
     tasks: z.array(DailyPlanTask),
     sessions: z.array(DailyPlanSession),
+    settings: z
+      .object({
+        startAt: z.iso.datetime().optional(),
+        bufferPercent: z.number().min(0).max(100).optional(),
+        excludedTaskIds: z.array(z.string().min(1)).optional(),
+        sequenceEdited: z.boolean().optional(),
+      })
+      .optional(),
   })
   .superRefine((snapshot, context) => {
     const taskIds = new Set(snapshot.tasks.map((entry) => entry.taskId));

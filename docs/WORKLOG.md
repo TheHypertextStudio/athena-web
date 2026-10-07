@@ -1,12 +1,38 @@
 # Project Athena Work Log
 
 > **Purpose**: Comprehensive tracking of all work - past, present, and future.
-> **Last Updated**: 2026-09-22
-> **Last Updated**: 2026-09-23
+> **Last Updated**: 2026-10-06
 
 ---
 
 ## Active Tasks
+
+### [DAILY-PLAN-RELEASE-002] Finish automatic daily planning and execution
+
+- **Status**: REVIEW
+- **Started**: 2026-10-06
+- **Priority**: P0
+- **Description**: Give a person an ordered, scheduled draft every day, then use the accepted sessions to present explicit work in Today.
+- **Approach**: Recover owned planner changes onto current main, implement a deterministic proposal with revision guards, connect editable planning and schedule previews, complete Today execution and recovery, and add optional grounded Athena assessment.
+- **Validation**: Exercise morning, late start, active work, resumed drafts, revisions, missed days, and tomorrow planning. Capture desktop and phone in both themes. Run local release checks before one direct-main delivery and authenticated production verification.
+- **Baseline**: The startup snapshot removed domains and tooling. The recovery branch preserves it; this delivery starts at f7183dec0 and restores only planner edits. Upstream already repaired the shared clock hydration hook, so its implementation remains in use.
+- **Subtasks**:
+  - [x] Recover a safe baseline.
+  - [x] Generate and validate a daily proposal.
+  - [x] Connect planning, review, and revision controls.
+  - [x] Complete Today execution and optional Athena input.
+  - [x] Verify visual and interactive acceptance.
+  - [ ] Integrate, deploy, and verify production.
+
+- **Decisions**: Planned minutes retain the full daily intention. The proposal subtracts recorded work once and preserves the time already reserved in current, pinned, and manual allocations. Task reordering changes today's sequence rather than task priority. Confirmation guards the saved revision and never starts tracking. An accepted change and its Undo append history rather than rewriting the original plan.
+- **Behavior evidence so far**: Proposal coverage passes 267 tests. Database coverage passes 265 tests. Focused API and web cases cover dependency blockers, grouped and split work, minute estimate precedence, concurrent saves, early recorded work, optional Athena, retained tomorrow selections, and active-session continuity. The browser scenarios passed in focused development runs; the final production-artifact run remains required.
+- **Visual verification**: Fresh October 6 captures show full-width phone titles, contained numeric controls, proportional timed blocks, and final review with the agenda first on phones. The old September audit remains below bar and is not release evidence. The complete main-stage capture matrix now includes narrow and short phones. Additional captures show the proposed remaining-day revision and the accepted Today schedule.
+- **Production-artifact correction**: The first PostgreSQL run rejected confirmation because the acknowledgment upsert interpolated a JavaScript Date without the column encoder. Confirmation now binds its existing ISO timestamp. A query-wire regression detected the invalid value before the fix. The same run exposed raw deployment flag strings in the public config response; config now returns strict booleans. Nineteen fresh API checks pass. The failed run was stopped before release. Later captures exposed a retained weekly-planning component after client navigation; Go to Today now reloads the confirmed operating surface. The geometry capture now selects the visible agenda rather than both mounted desktop and phone presentations. The final built application is running against PostgreSQL.
+- **Shared interaction corrections**: The reorder monitor now lives in the declared drag adapter boundary. Confirmation exits through a guarded document navigation so Today replaces the planning route. The date/time inventory names the extracted workday and session editors. Fresh navigation and planning tests pass 93 cases; the drag and picker policy tests pass nine cases.
+- **Final review corrections**: Guard delayed saves, recovery, confirmation, and exit against planning-date changes. Forty focused regressions cover those transitions, including returning to the same date while an older save completes. Confirmation excludes blocked work from Start and names the condition; its eleven execution tests pass. Retain selected active work in the proposal. Guard navigation and confirmation while moving work to tomorrow. Preserve legacy acceptance timestamps. Accepted shared-agenda edits use revisions rather than legacy writes. Retained blocks beyond an edited finish time expose Move or shorten block.
+- **Local release evidence**: The official PostgreSQL artifact runner passed all 19 core-screen and daily-planning cases plus the separate phone verification case. The final frozen-source rerun passed all fourteen daily-planning cases in 2.9 minutes after the date-entry guard and retained eighty-eight authenticated frames. Repository-wide typecheck passed 28 tasks; the final date-entry patch also passed web typecheck and 40 focused regressions. Full web coverage passed 4,888 tests in 631 files (95.91% statements, 90.19% branches). UI coverage passed 855 tests, planning coverage passed 267, and database coverage passed 265. The broad API coverage run met its unchanged gate with 94.01% statements and 88.67% branches; two cases used a build that predated the final legacy-write guards, and nineteen freshly built API cases passed afterward. Affected lint passed; final staged hooks will recheck the delivery. The complexity ledger remains unchanged at 832 files and 1,416 entries.
+- **Release checks pending**: Commit, integrate linearly, and verify the authenticated deployed flow.
+- **Retrospective**: The real PostgreSQL artifact exposed a timestamp encoding failure that test doubles did not detect. Stage heading assertions caught a retained weekly route rather than accepting a screenshot of the wrong page. Date-entry identity prevents old saves from reviving after returning to the same date. Keep the existing artifact stack and the daily-planning cases in the release gate rather than relying on isolated component checks.
 
 ### [ATHENA-REVIEW-HIERARCHY-001] Make Athena work review readable
 

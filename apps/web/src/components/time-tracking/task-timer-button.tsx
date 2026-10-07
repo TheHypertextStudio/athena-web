@@ -60,6 +60,10 @@ export interface TaskTimerButtonProps {
    * action: filled tonal at rest, filled primary while the timer runs.
    */
   readonly emphasis?: 'quiet' | 'prominent';
+  /** Override the idle verb in a focused execution placement. */
+  readonly idleLabel?: string;
+  /** Override the paused verb in a focused execution placement. */
+  readonly resumeLabel?: string;
 }
 
 /** The button style for an emphasis and a timer state. */
@@ -111,17 +115,25 @@ function TimerGlyph({ active, tracking }: TimerStateProps): JSX.Element {
 interface TimerTextProps extends TimerStateProps {
   /** Whether the placement shows a word beside the glyph. */
   readonly withLabel: boolean;
+  readonly idleLabel: string;
+  readonly resumeLabel: string;
 }
 
 /**
  * The text beside the glyph: a labelled placement shows its verb, and a dense row's control shows
  * the elapsed time only while this task is tracked.
  */
-function TimerText({ active, tracking, withLabel }: TimerTextProps): JSX.Element | null {
+function TimerText({
+  active,
+  tracking,
+  withLabel,
+  idleLabel,
+  resumeLabel,
+}: TimerTextProps): JSX.Element | null {
   if (!withLabel) return tracking ? <TrackedElapsed /> : null;
   if (active) return <>Tracking</>;
-  if (tracking) return <>Resume</>;
-  return <>Track</>;
+  if (tracking) return <>{resumeLabel}</>;
+  return <>{idleLabel}</>;
 }
 
 /**
@@ -159,6 +171,13 @@ function useTaskTimerAction(taskId: string, title: string): TaskTimerAction {
   };
 }
 
+function timerActionLabel(action: TaskTimerAction, props: TaskTimerButtonProps): string {
+  if (!props.idleLabel && !props.resumeLabel) return action.label;
+  if (action.active) return `${action.label} ${props.title}`;
+  const verb = action.tracking ? (props.resumeLabel ?? 'Resume') : (props.idleLabel ?? 'Track');
+  return `${verb} ${props.title}`;
+}
+
 /**
  * Start (or pause) tracking this specific task.
  *
@@ -171,8 +190,16 @@ export function TaskTimerButton({
   controlSize,
   withLabel = true,
   emphasis = 'quiet',
+  idleLabel,
+  resumeLabel,
 }: TaskTimerButtonProps): JSX.Element {
   const action = useTaskTimerAction(taskId, title);
+  const label = timerActionLabel(action, {
+    taskId,
+    title,
+    ...(idleLabel ? { idleLabel } : {}),
+    ...(resumeLabel ? { resumeLabel } : {}),
+  });
 
   return (
     <ControlGroup {...(controlSize ? { controlSize } : {})} className="shrink-0">
@@ -182,7 +209,7 @@ export function TaskTimerButton({
             variant={timerVariant(emphasis, action)}
             iconOnly={!withLabel && !action.tracking}
             className={timerButtonClassName(action.tracking, withLabel)}
-            aria-label={action.label}
+            aria-label={label}
             aria-pressed={action.active}
             // Lets a host keep the tracked task's control visible where it hides idle ones.
             data-tracking={action.tracking ? '' : undefined}
@@ -201,10 +228,16 @@ export function TaskTimerButton({
             }}
           >
             <TimerGlyph active={action.active} tracking={action.tracking} />
-            <TimerText active={action.active} tracking={action.tracking} withLabel={withLabel} />
+            <TimerText
+              active={action.active}
+              tracking={action.tracking}
+              withLabel={withLabel}
+              idleLabel={idleLabel ?? 'Track'}
+              resumeLabel={resumeLabel ?? 'Resume'}
+            />
           </Button>
         </TooltipTrigger>
-        <TooltipContent>{action.label}</TooltipContent>
+        <TooltipContent>{label}</TooltipContent>
       </Tooltip>
     </ControlGroup>
   );

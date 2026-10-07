@@ -76,6 +76,16 @@ afterEach(() => {
 });
 
 describe('AgendaEntryActions', () => {
+  it('routes accepted session changes through the planning flow', () => {
+    render(<AgendaEntryActions entry={{ ...ENTRY, sessionId: 'accepted-session' }} />);
+    expect(screen.getByRole('link', { name: 'Adjust plan' })).toHaveAttribute(
+      'href',
+      '/plan?view=day&date=2026-07-01',
+    );
+    expect(screen.queryByRole('button', { name: 'Entry actions' })).not.toBeInTheDocument();
+    expect(removeFromPlan).not.toHaveBeenCalled();
+  });
+
   it('dispatches direct menu actions for a timeboxed task', async () => {
     render(<AgendaEntryActions entry={ENTRY} />);
 

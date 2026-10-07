@@ -1,5 +1,5 @@
 /** Read contract and visible data for one planning day. */
-import { dailyPlanItem, db, hub, task } from '@docket/db';
+import { dailyPlanItem, db, hub, project, task } from '@docket/db';
 import type { dailyPlanDay } from '@docket/db';
 import { AgendaOut } from '@docket/planning/agenda-contract';
 import { AcceptedDailyPlan, DailyPlanSnapshot } from '@docket/planning/daily-plan-flow';
@@ -12,15 +12,26 @@ import { loadSchedulingPreferences } from '../services/scheduling/repository';
 import { buildAgendaPayload } from './calendar-shared';
 import { loadUnfinishedPriorWork } from './daily-plan-carryover';
 import { loadRecordedDayWork } from './daily-plan-work';
+import { loadProposalAvailability } from '../services/daily-proposal-availability';
 
 /** Date parameter shared by day read and write routes. */
 export const dayParam = z.object({ date: z.iso.date() });
 const resumeStep = z.enum(['review_yesterday', 'plan_today', 'review_plan']);
+
+/** Optional revision binds confirmation to the draft that the caller reviewed. */
+export const confirmInput = z.object({
+  expectedRevision: z.number().int().nonnegative().optional(),
+});
 /** Input for a resumable daily draft. */
-export const draftInput = z.object({ draft: DailyPlanSnapshot, resumeStep });
+export const draftInput = z.object({
+  draft: DailyPlanSnapshot,
+  resumeStep,
+  expectedRevision: z.number().int().nonnegative().optional(),
+});
 /** Saved draft and accepted-history response. */
 export const dayOut = z.object({
   date: z.iso.date(),
+  revision: z.number().int().nonnegative(),
   draft: DailyPlanSnapshot.nullable(),
   accepted: AcceptedDailyPlan.nullable(),
   resumeStep,
@@ -28,6 +39,15 @@ export const dayOut = z.object({
 /** One planning day with visible work, events, and recorded intervals. */
 export const dayReadOut = dayOut.extend({
   timezone: z.string(),
+  fixedIntervals: z.array(
+    z.object({
+      id: z.string(),
+      title: z.string(),
+      startsAt: z.iso.datetime(),
+      endsAt: z.iso.datetime(),
+      kind: z.enum(['event', 'protected']),
+    }),
+  ),
   tasks: z.array(
     z.object({
       taskId: z.string(),
@@ -36,6 +56,7 @@ export const dayReadOut = dayOut.extend({
       title: z.string(),
       state: z.string(),
       projectId: z.string().nullable(),
+      projectName: z.string().nullable(),
       completedAt: z.iso.datetime().nullable(),
     }),
   ),
@@ -59,6 +80,45 @@ export const dayReadOut = dayOut.extend({
   ),
 });
 
+/** Resolve project names only when the caller can view the containing project. */
+export async function visibleProjectNames(
+  userId: string,
+  tasks: readonly { projectId: string | null; organizationId: string }[],
+): Promise<Map<string, string>> {
+  const refs = [
+    ...new Map(
+      tasks.flatMap((item) =>
+        item.projectId
+          ? [
+              [
+                item.projectId,
+                {
+                  kind: 'project' as const,
+                  id: item.projectId,
+                  organizationId: item.organizationId,
+                },
+              ] as const,
+            ]
+          : [],
+      ),
+    ).values(),
+  ];
+  if (refs.length === 0) return new Map();
+  const access = await resolveResourceAccess(userId, refs);
+  const visible = refs.filter((ref) => access.get(resourceAccessKey(ref))?.canView);
+  if (visible.length === 0) return new Map();
+  const rows = await db
+    .select({ id: project.id, name: project.name })
+    .from(project)
+    .where(
+      inArray(
+        project.id,
+        visible.map((ref) => ref.id),
+      ),
+    );
+  return new Map(rows.map((row) => [row.id, row.name]));
+}
+
 /** Serialize a saved day row without mutating its accepted history. */
 export function toDayOut(
   date: string,
@@ -66,6 +126,7 @@ export function toDayOut(
 ): z.input<typeof dayOut> {
   return {
     date,
+    revision: row?.revision ?? 0,
     draft: row?.draft ?? null,
     accepted: row?.accepted ?? null,
     resumeStep: resumeStep.parse(row?.resumeStep ?? 'review_yesterday'),
@@ -131,6 +192,10 @@ async function loadVisibleDayTasks(
       ),
     );
   const visibleKeys = new Set(visibleRefs.map((ref) => `${ref.organizationId}:${ref.id}`));
+  const projectNames = await visibleProjectNames(
+    userId,
+    taskRows.filter((entry) => visibleKeys.has(`${entry.organizationId}:${entry.taskId}`)),
+  );
   const planItemIds = new Map(legacyItems.map((item) => [item.refTaskId, item.id]));
   const order = new Map(refs.map((ref, index) => [`${ref.organizationId}:${ref.id}`, index]));
   return taskRows
@@ -142,6 +207,7 @@ async function loadVisibleDayTasks(
     )
     .map((entry) => ({
       ...entry,
+      projectName: entry.projectId ? (projectNames.get(entry.projectId) ?? null) : null,
       planItemId: planItemIds.get(entry.taskId) ?? null,
       completedAt: entry.completedAt?.toISOString() ?? null,
     }));
@@ -163,11 +229,27 @@ export async function buildDayRead(
   const timezone = hubRow?.preferences.timezone ?? preferences.timezone;
   const dayStart = instantAt(date, 0, timezone);
   const dayEnd = instantAt(addDays(date, 1), 0, timezone);
-  const [tasks, agenda, actual, carryover] = await Promise.all([
+  const [tasks, agenda, actual, carryover, availability] = await Promise.all([
     loadVisibleDayTasks(userId, date, hubId, row),
     buildAgendaPayload(userId, { date, dayStart, dayEnd }),
     loadRecordedDayWork(hubId, dayStart, dayEnd),
     loadUnfinishedPriorWork(userId, hubId, date),
+    loadProposalAvailability({
+      userId,
+      hubId,
+      date,
+      timezone,
+      draft: row?.draft ?? row?.accepted?.current.snapshot ?? null,
+      now: new Date(),
+    }),
   ]);
-  return { ...toDayOut(date, row), timezone, tasks, agenda, actual, carryover };
+  return {
+    ...toDayOut(date, row),
+    timezone,
+    tasks,
+    agenda,
+    actual,
+    carryover,
+    fixedIntervals: [...availability.fixedIntervals],
+  };
 }

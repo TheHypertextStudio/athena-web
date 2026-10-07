@@ -1,6 +1,6 @@
 /** Durable daily planning drafts and accepted commitments. */
 import type { AcceptedDailyPlan, DailyPlanSnapshot } from '@docket/planning/daily-plan-flow';
-import { date, jsonb, pgTable, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-core';
+import { date, integer, jsonb, pgTable, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-core';
 
 import { genId } from '../id';
 import { hub } from './identity';
@@ -17,6 +17,7 @@ export const dailyPlanDay = pgTable(
     date: date('date').notNull(),
     draft: jsonb('draft').$type<DailyPlanSnapshot>(),
     accepted: jsonb('accepted').$type<AcceptedDailyPlan>(),
+    revision: integer('revision').notNull().default(0),
     resumeStep: text('resume_step').notNull().default('review_yesterday'),
     updatedAt: timestamp('updated_at', { withTimezone: true })
       .notNull()

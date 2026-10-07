@@ -25,7 +25,7 @@ composer to start a private assignment using the runtime selected in Settings. E
 and start work; any returned proposal waits for review before the task changes. If the selected
 runtime is unavailable, the prompt retains the objective and links to Athena Settings for recovery.
 
-Today opens a focused daily planning flow for reviewing prior work, choosing tasks, placing timed blocks, and confirming the day. Drafts resume where they stopped, accepted changes retain earlier versions, and recorded time stays in the time ledger. The data and recovery rules are in [the daily planning engineering spec](docs/engineering/specs/daily-planning.md).
+Today opens a daily planning flow with an ordered schedule based on commitments, available work, events, and the time left in the workday. People can review earlier work, edit tasks and blocks, confirm the day, and start the next accepted task from Today. Drafts resume where they stopped, accepted changes retain earlier versions, and recorded time stays in the time ledger. Athena can assess the plan but is optional. The data and recovery rules are in [the daily planning engineering spec](docs/engineering/specs/daily-planning.md).
 
 MCP agents creating tasks, projects, initiatives, or programs should generally discover a relevant
 template through `list_templates`, read its literal Markdown body, and use that structure when

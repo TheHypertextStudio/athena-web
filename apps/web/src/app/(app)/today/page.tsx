@@ -19,6 +19,13 @@ import { useTodayActions } from './use-today-actions';
 /** Today's payload, once loaded. */
 type TodayPayload = NonNullable<ReturnType<typeof useTodayData>['data']>;
 
+function showSuggestions(data: TodayPayload): boolean {
+  return (
+    data.planState === 'cleared' ||
+    (data.planState === 'active' && data.focus.now === null && data.focus.after === null)
+  );
+}
+
 /** The needs-attention lists Today shows, each without the tasks the plan already carries. */
 interface TodayAttention {
   readonly approvals: TodayPayload['needsAttention']['approvals'];
@@ -144,8 +151,7 @@ export default function TodayPage(): JSX.Element {
 
       <ProjectStatus cards={data?.statusCards ?? []} orgName={orgName} />
 
-      {data &&
-      (data.planState === 'cleared' || (data.planState === 'active' && data.focus.now === null)) ? (
+      {data && showSuggestions(data) ? (
         <SuggestedTasks
           suggestions={data.suggestions}
           orgName={orgName}

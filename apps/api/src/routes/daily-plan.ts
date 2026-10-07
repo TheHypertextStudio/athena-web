@@ -21,7 +21,7 @@ import {
   DailyPlanItemUpdate,
 } from '@docket/planning/daily-plan-contract';
 import { CursorQuery, pageOf } from '../contracts/pagination';
-import { and, asc, eq, gt, isNull, or } from 'drizzle-orm';
+import { and, asc, eq, gt, isNull, or, sql } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
 
@@ -33,6 +33,7 @@ import { apiDoc } from '../lib/openapi-route';
 import { zJson, zParam, zQuery } from '../lib/validate';
 import {
   buildDayRead,
+  confirmInput,
   dayOut,
   dayParam,
   dayReadOut,
@@ -40,8 +41,17 @@ import {
   toDayOut,
 } from './daily-plan-day-read';
 import { buildTaskViewFilter } from './task-helpers';
+import { saveDailyDraft } from './daily-plan-draft-write';
+import { buildDailyProposal, proposalInput, proposalOut } from './daily-plan-proposal';
+import { loadSchedulingPreferences } from '../services/scheduling/repository';
+import { projectAcceptedDailyPlan } from './daily-plan-confirm-write';
+import { requireLegacyPlanMutation } from '../services/scheduling/daily-plan-compatibility';
 
 type DailyPlanItemRow = typeof dailyPlanItem.$inferSelect;
+
+function changesTimebox(body: z.infer<typeof DailyPlanItemUpdate>): boolean {
+  return body.timeboxStartsAt !== undefined || body.timeboxEndsAt !== undefined;
+}
 
 function toOut(d: DailyPlanItemRow): z.input<typeof DailyPlanItemOut> {
   return {
@@ -139,6 +149,41 @@ const dailyPlan = new Hono<AppEnv>()
       return ok(c, dayReadOut, await buildDayRead(session.user.id, hubId, date, row));
     },
   )
+  .post(
+    '/day/:date/proposal',
+    apiDoc({
+      tag: 'DailyPlan',
+      summary: 'Propose an editable daily plan',
+      response: proposalOut,
+      description:
+        'Build a deterministic proposal from visible work, actual time, dependencies, and the person’s work windows without writing a draft or accepting a plan.',
+    }),
+    zParam(dayParam),
+    zJson(proposalInput),
+    async (c) => {
+      const session = c.get('session');
+      if (!session?.user) throw new AuthError();
+      const { date } = c.req.valid('param');
+      const body = c.req.valid('json');
+      if (body.draft && body.draft.date !== date)
+        throw new ValidationError([
+          { path: ['draft', 'date'], message: 'Draft date must match the requested day' },
+        ]);
+      for (const entry of body.draft?.tasks ?? [])
+        await requireViewableTask(session.user.id, entry.organizationId, entry.taskId);
+      const hubId = await resolveHubId(session.user.id);
+      const [row] = await db
+        .select()
+        .from(dailyPlanDay)
+        .where(and(eq(dailyPlanDay.hubId, hubId), eq(dailyPlanDay.date, date)))
+        .limit(1);
+      return ok(
+        c,
+        proposalOut,
+        await buildDailyProposal({ userId: session.user.id, hubId, date, row, ...body }),
+      );
+    },
+  )
   .put(
     '/day/:date/draft',
     apiDoc({
@@ -154,7 +199,7 @@ const dailyPlan = new Hono<AppEnv>()
       const session = c.get('session');
       if (!session?.user) throw new AuthError();
       const { date } = c.req.valid('param');
-      const { draft, resumeStep: step } = c.req.valid('json');
+      const { draft, resumeStep: step, expectedRevision } = c.req.valid('json');
       if (draft.date !== date) {
         throw new ValidationError([
           { path: ['draft', 'date'], message: 'Draft date must match the requested day' },
@@ -164,14 +209,13 @@ const dailyPlan = new Hono<AppEnv>()
         await requireViewableTask(session.user.id, entry.organizationId, entry.taskId);
       }
       const hubId = await resolveHubId(session.user.id);
-      const [row] = await db
-        .insert(dailyPlanDay)
-        .values({ hubId, date, draft, resumeStep: step })
-        .onConflictDoUpdate({
-          target: [dailyPlanDay.hubId, dailyPlanDay.date],
-          set: { draft, resumeStep: step },
-        })
-        .returning();
+      const row = await saveDailyDraft({
+        hubId,
+        date,
+        draft,
+        resumeStep: step,
+        ...(expectedRevision !== undefined ? { expectedRevision } : {}),
+      });
       return ok(c, dayOut, toDayOut(date, row));
     },
   )
@@ -185,10 +229,12 @@ const dailyPlan = new Hono<AppEnv>()
         'Accept the draft as the original commitment or a later revision. Confirmation never starts a timer or rewrites actual work.',
     }),
     zParam(dayParam),
+    zJson(confirmInput),
     async (c) => {
       const session = c.get('session');
       if (!session?.user) throw new AuthError();
       const { date } = c.req.valid('param');
+      const { expectedRevision } = c.req.valid('json');
       const hubId = await resolveHubId(session.user.id);
       const [existing] = await db
         .select()
@@ -196,63 +242,43 @@ const dailyPlan = new Hono<AppEnv>()
         .where(and(eq(dailyPlanDay.hubId, hubId), eq(dailyPlanDay.date, date)))
         .limit(1);
       if (!existing?.draft) throw new ConflictError('No draft is ready to confirm');
+      if (expectedRevision !== undefined && expectedRevision !== existing.revision)
+        throw new ConflictError('The planning draft changed before confirmation');
       const confirmedDraft = existing.draft;
       for (const entry of confirmedDraft.tasks) {
         await requireViewableTask(session.user.id, entry.organizationId, entry.taskId);
       }
       const acceptedAt = new Date().toISOString();
+      const preferences = await loadSchedulingPreferences(db, hubId);
       const accepted = existing.accepted
         ? reviseDailyPlan(AcceptedDailyPlan.parse(existing.accepted), confirmedDraft, acceptedAt)
         : acceptDailyDraft(confirmedDraft, acceptedAt);
       const row = await db.transaction(async (tx) => {
         const [updated] = await tx
           .update(dailyPlanDay)
-          .set({ draft: null, accepted, resumeStep: 'plan_today' })
+          .set({
+            draft: null,
+            accepted,
+            resumeStep: 'plan_today',
+            revision: sql`${dailyPlanDay.revision} + 1`,
+          })
           .where(
             and(
               eq(dailyPlanDay.hubId, hubId),
               eq(dailyPlanDay.date, date),
               eq(dailyPlanDay.draft, confirmedDraft),
+              eq(dailyPlanDay.revision, existing.revision),
             ),
           )
           .returning();
         if (!updated) throw new ConflictError('The planning draft changed before confirmation');
-
-        // Today still reads daily_plan_item. Keep its task projection in step with the accepted
-        // version until Today and the agenda read the version directly. One row represents work,
-        // while the accepted snapshot retains every planned session for that work.
-        const legacy = await tx
-          .select()
-          .from(dailyPlanItem)
-          .where(and(eq(dailyPlanItem.hubId, hubId), eq(dailyPlanItem.date, date)));
-        const selected = new Set(confirmedDraft.tasks.map((entry) => entry.taskId));
-        for (const item of legacy) {
-          if (item.status !== 'done' && !selected.has(item.refTaskId)) {
-            await tx.delete(dailyPlanItem).where(eq(dailyPlanItem.id, item.id));
-          }
-        }
-        for (const entry of confirmedDraft.tasks) {
-          const firstSession = confirmedDraft.sessions.find((session) =>
-            session.allocations.some((allocation) => allocation.taskId === entry.taskId),
-          );
-          const current = legacy.find((item) => item.refTaskId === entry.taskId);
-          const values = {
-            sort: entry.sort,
-            timeboxStartsAt: firstSession ? new Date(firstSession.startsAt) : null,
-            timeboxEndsAt: firstSession ? new Date(firstSession.endsAt) : null,
-          };
-          if (current) {
-            await tx.update(dailyPlanItem).set(values).where(eq(dailyPlanItem.id, current.id));
-          } else {
-            await tx.insert(dailyPlanItem).values({
-              hubId,
-              date,
-              refOrganizationId: entry.organizationId,
-              refTaskId: entry.taskId,
-              ...values,
-            });
-          }
-        }
+        await projectAcceptedDailyPlan(tx, {
+          hubId,
+          date,
+          snapshot: confirmedDraft,
+          acceptedAt: accepted.original.acceptedAt,
+          timezone: preferences.timezone,
+        });
         return updated;
       });
       return ok(c, dayOut, toDayOut(date, row));
@@ -360,7 +386,7 @@ The new item starts with status \`planned\` and appears in \`GET /daily-plan\` a
       tag: 'DailyPlan',
       summary: 'Update a daily-plan item',
       response: DailyPlanItemOut,
-      description: `Update a daily-plan item's lifecycle: mark it \`done\`/\`planned\` (\`status\`), reorder it within the day (\`sort\`), or set/clear its calendar timebox (\`timeboxStartsAt\`/\`timeboxEndsAt\`). All body fields are optional — only the keys present are written, so this is a partial update; a null timebox value clears that side of the window. The task reference and date are immutable here (remove and re-add to retarget).
+      description: `Update a daily-plan item's lifecycle: mark it \`done\`/\`planned\` (\`status\`), reorder it within the day (\`sort\`), or set/clear its calendar timebox (\`timeboxStartsAt\`/\`timeboxEndsAt\`). All body fields are optional — only the keys present are written, so this is a partial update; a null timebox value clears that side of the window. An accepted daily plan requires a previewed revision for timebox changes and returns **409 (\`accepted_plan_requires_revision\`)**. The task reference and date are immutable here (remove and re-add to retarget).
 
 **Ownership is enforced first:** the item must exist under the caller's own Hub (\`(id, hubId)\`), else **404 (Daily plan item not found)** — a caller cannot patch another person's plan item. The status/timebox changes flow into \`GET /daily-plan\` and the Hub Today calendar pane. Session-only, no capability; 401 when unauthenticated, 404 if the caller has no Hub or the item isn't theirs.`,
     }),
@@ -374,11 +400,12 @@ The new item starts with status \`planned\` and appears in \`GET /daily-plan\` a
       const hubId = await resolveHubId(session.user.id);
 
       const existing = await db
-        .select({ id: dailyPlanItem.id })
+        .select({ id: dailyPlanItem.id, date: dailyPlanItem.date })
         .from(dailyPlanItem)
         .where(and(eq(dailyPlanItem.id, id), eq(dailyPlanItem.hubId, hubId)))
         .limit(1);
       if (!existing[0]) throw new NotFoundError('Daily plan item not found');
+      if (changesTimebox(body)) await requireLegacyPlanMutation(db, hubId, existing[0].date);
 
       const updated = await db
         .update(dailyPlanItem)
@@ -406,7 +433,7 @@ The new item starts with status \`planned\` and appears in \`GET /daily-plan\` a
       tag: 'DailyPlan',
       summary: 'Remove a daily-plan item',
       response: DailyPlanItemOut,
-      description: `Remove a Task from the caller's daily plan and return the removed item so the client can confirm the change or offer Undo. This only removes the Task from that day. The Task itself is unchanged.
+      description: `Remove a Task from the caller's daily plan and return the removed item so the client can confirm the change or offer Undo. This only removes the Task from that day. The Task itself is unchanged. An accepted daily plan requires a previewed revision and returns **409 (\`accepted_plan_requires_revision\`)**.
 
 An item that does not belong to the caller, or an unknown id, returns **404 (Daily plan item not found)**. Session-only, no capability. Returns 401 when unauthenticated and 404 when the caller has no Hub.`,
     }),
@@ -416,6 +443,13 @@ An item that does not belong to the caller, or an unknown id, returns **404 (Dai
       if (!session?.user) throw new AuthError();
       const { id } = c.req.valid('param');
       const hubId = await resolveHubId(session.user.id);
+      const [existing] = await db
+        .select({ date: dailyPlanItem.date })
+        .from(dailyPlanItem)
+        .where(and(eq(dailyPlanItem.id, id), eq(dailyPlanItem.hubId, hubId)))
+        .limit(1);
+      if (!existing) throw new NotFoundError('Daily plan item not found');
+      await requireLegacyPlanMutation(db, hubId, existing.date);
       const deleted = await db
         .delete(dailyPlanItem)
         .where(and(eq(dailyPlanItem.id, id), eq(dailyPlanItem.hubId, hubId)))

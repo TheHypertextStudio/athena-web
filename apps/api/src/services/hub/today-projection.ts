@@ -1,5 +1,13 @@
 import type { WorkStatusCategory } from '@docket/work/work-status-contract';
 import type { Priority } from '@docket/work/task-contract';
+import type { DailyPlanSession } from '@docket/planning/daily-plan-flow';
+import {
+  selectDailyExecution,
+  remainingDailyTaskIds,
+  type DailyExecutionActual,
+  type DailyExecutionAllocation,
+  type DailyExecutionEvent,
+} from '@docket/planning/daily-plan-execution';
 
 /** Scheduling evidence used to distinguish an untouched day from a generated empty one. */
 export type TodayReadiness = 'not_generated' | 'ready' | 'empty_week';
@@ -92,13 +100,20 @@ export function selectFocus(input: {
   readonly items: readonly TodayPlanCandidate[];
   readonly now: Date;
   readonly activeTaskId?: string | null;
+  readonly sessions?: readonly DailyPlanSession[];
+  readonly taskBudgets?: readonly { readonly taskId: string; readonly plannedMinutes: number }[];
+  readonly actual?: readonly DailyExecutionActual[];
+  readonly events?: readonly DailyExecutionEvent[];
 }): { now: TodayPlanCandidate | null; after: TodayPlanCandidate | null } {
   const actionable = [...input.items]
-    .filter((item) => item.planStatus === 'planned' && !item.blocked)
+    .filter(
+      (item) => item.planStatus === 'planned' && (!item.blocked || item.id === input.activeTaskId),
+    )
     .sort((left, right) => left.position - right.position || left.id.localeCompare(right.id));
   const active = input.activeTaskId
     ? actionable.find((item) => item.id === input.activeTaskId)
     : undefined;
+  if (input.sessions) return acceptedFocus(input, actionable, active);
   const currentTimebox = actionable.find((item) => {
     if (!item.timeboxStartsAt || !item.timeboxEndsAt) return false;
     const startsAt = new Date(item.timeboxStartsAt).getTime();
@@ -109,6 +124,55 @@ export function selectFocus(input: {
   const current = active ?? currentTimebox ?? actionable[0] ?? null;
   const after = actionable.find((item) => item.id !== current?.id) ?? null;
   return { now: current, after };
+}
+
+function acceptedFocus(
+  input: Parameters<typeof selectFocus>[0],
+  actionable: readonly TodayPlanCandidate[],
+  active: TodayPlanCandidate | undefined,
+): ReturnType<typeof selectFocus> {
+  const sessions = input.sessions ?? [];
+  const executionInput = {
+    sessions,
+    taskBudgets: input.taskBudgets,
+    actionableTaskIds: actionable.map((item) => item.id),
+    now: input.now.getTime(),
+    actual: input.actual,
+    events: input.events,
+    activeTaskId: input.activeTaskId,
+  };
+  const execution = selectDailyExecution(executionInput);
+  const remaining = new Set(remainingDailyTaskIds(executionInput));
+  const scheduledIds = new Set(
+    sessions.flatMap((session) => session.allocations.map((part) => part.taskId)),
+  );
+  const available = actionable.filter((item) => remaining.has(item.id));
+  const unplaced = available.filter((item) => !scheduledIds.has(item.id));
+  const scheduled = allocationCandidate(actionable, execution.now);
+  const current = active
+    ? scheduled?.id === active.id
+      ? scheduled
+      : active
+    : (scheduled ?? (execution.event ? null : (unplaced[0] ?? null)));
+  const after =
+    allocationCandidate(actionable, execution.after) ??
+    unplaced.find((item) => item.id !== current?.id) ??
+    null;
+  return { now: current, after };
+}
+
+function allocationCandidate(
+  items: readonly TodayPlanCandidate[],
+  allocation: DailyExecutionAllocation | null,
+): TodayPlanCandidate | null {
+  const item = allocation ? items.find((candidate) => candidate.id === allocation.taskId) : null;
+  return item && allocation
+    ? {
+        ...item,
+        timeboxStartsAt: allocation.startsAt,
+        timeboxEndsAt: allocation.endsAt,
+      }
+    : null;
 }
 
 /** Select a finite set of non-repeating status stories. */

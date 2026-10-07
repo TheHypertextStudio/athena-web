@@ -143,6 +143,8 @@ export interface TaskGlobalCreation {
 
 /** Props for {@link CreateTaskDialog}. */
 export interface CreateTaskDialogProps {
+  /** Seed an editable title before templates or a saved draft supply their fields. */
+  initialTitle?: string | undefined;
   /** The org the task is created in (from the route). */
   orgId: string;
   /** The teams a task may be created in (the active org's teams). */
@@ -186,6 +188,7 @@ export const CreateTaskDialog = withComposerReset(function CreateTaskComposer({
   onOpenChange,
   onCreated,
   defaultProjectId = null,
+  initialTitle = '',
   defaultAssigneeId = null,
   defaultTemplateId = null,
   resumeDraftId,
@@ -203,7 +206,7 @@ export const CreateTaskDialog = withComposerReset(function CreateTaskComposer({
 
   const { scale: estimationScale } = useEstimationScale(orgId, open && destinationReady);
   const { draft, setField, updateDraft } = useComposerDraft<TaskDraft>({
-    title: '',
+    title: initialTitle,
     description: '',
     teamOverride: null,
     state: null,
@@ -671,6 +674,7 @@ function GlobalTaskComposerDialog({
         }}
         onCreated={() => undefined}
         defaultProjectId={targetIsOriginalWorkspace ? request.defaultProjectId : null}
+        initialTitle={request.initialTitle}
         defaultAssigneeId={targetIsOriginalWorkspace ? request.defaultAssigneeId : null}
         defaultTemplateId={targetIsOriginalWorkspace ? request.defaultTemplateId : null}
         resumeDraftId={resume.draftId}

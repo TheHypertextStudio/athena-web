@@ -1,0 +1,18 @@
+stateDiagram-v2
+    [*] --> Today
+    Today --> ReviewYesterday: Plan day with unresolved work
+    Today --> Proposal: Plan day without review
+    Today --> Draft: Resume planning
+    Today --> Draft: Adjust accepted day
+    Today --> ReviewDay: Review day
+    ReviewDay --> Draft: Bulk decisions and tomorrow draft
+    ReviewYesterday --> Proposal: Decide or skip
+    Proposal --> Draft: Use proposed schedule
+    Draft --> Proposal: Rebuild remaining work preview
+    Draft --> ReviewPlan: Review current draft
+    ReviewPlan --> Draft: Edit work or agenda
+    ReviewPlan --> Accepted: Confirm first plan
+    ReviewPlan --> Revised: Confirm adjustment
+    Accepted --> Today: Start or go to Today
+    Revised --> Today: Continue or go to Today
+    Revised --> Accepted: Undo revision

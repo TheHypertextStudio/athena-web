@@ -57,6 +57,15 @@ function entry(overrides: Partial<AgendaEntry> = {}): AgendaEntry {
 }
 
 describe('toAgendaScheduleItem', () => {
+  it('keeps accepted session bounds out of legacy inline edits', () => {
+    const item = toAgendaScheduleItem(
+      entry({ source: 'task', sessionId: 'accepted-session', planItemId: 'legacy-item' }),
+      '2026-07-02',
+      'UTC',
+    );
+    expect(item?.editable).toBe(false);
+  });
+
   it.each([
     ['provider_event', 'event'],
     ['native_event', 'event'],

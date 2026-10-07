@@ -508,6 +508,12 @@ function taskTemplate(
 }
 
 describe('CreateTaskDialog — robust composer', () => {
+  it('opens a suggested title for review before creating a task', () => {
+    renderGlobalTask({ request: { initialTitle: 'Prepare release checklist' } });
+    expect(screen.getByLabelText('Task title')).toHaveValue('Prepare release checklist');
+    expect(taskPost).not.toHaveBeenCalled();
+  });
+
   it('states empty task properties as current values', async () => {
     workStructureGet.mockResolvedValue(jsonResponse(true, { estimationScale: 'fibonacci' }));
     renderComposer();

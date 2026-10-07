@@ -11,6 +11,7 @@
  * - no data → no entries.
  */
 import { HubTodayOut } from '../../src/lib/contracts/hub';
+import { AgendaOut } from '@docket/planning/agenda-contract';
 import { describe, expect, it } from 'vitest';
 
 import { toAgendaEntries } from '@/components/agenda/agenda-context';
@@ -62,6 +63,31 @@ function block(taskId: string, startsAt: string, endsAt: string): unknown {
 }
 
 describe('toAgendaEntries', () => {
+  it('preserves each accepted session identity for repeated task allocations', () => {
+    const projection = AgendaOut.parse({
+      date: '2026-06-29',
+      entries: ['first', 'second'].map((sessionId, index) => ({
+        kind: 'task_timebox',
+        sessionId,
+        taskId: T1,
+        organizationId: ORG,
+        title: 'Split task',
+        state: 'open',
+        priority: 'medium',
+        startsAt: `2026-06-29T${index === 0 ? '09' : '13'}:00:00.000Z`,
+        endsAt: `2026-06-29T${index === 0 ? '10' : '14'}:00:00.000Z`,
+      })),
+    });
+    const entries = toAgendaEntries(projection);
+    expect(entries.map(({ id, sessionId, taskId }) => ({ id, sessionId, taskId }))).toEqual([
+      { id: `${T1}:first`, sessionId: 'first', taskId: T1 },
+      { id: `${T1}:second`, sessionId: 'second', taskId: T1 },
+    ]);
+    expect(entries.map(({ startsAt }) => startsAt)).toEqual([
+      '2026-06-29T09:00:00.000Z',
+      '2026-06-29T13:00:00.000Z',
+    ]);
+  });
   it('returns no entries for no data', () => {
     expect(toAgendaEntries(null)).toEqual([]);
   });

@@ -44,7 +44,6 @@ import {
   deferCalendarItemToDate,
   displaceCalendarItem,
   ensureDayDirective,
-  hasRunCovering,
   loadCheckIns,
   loadDayBlocks,
   loadDayReview,
@@ -52,6 +51,13 @@ import {
   moveCalendarItem,
 } from './repository';
 import { addDays, instantAt } from '@docket/planning/zoned-time';
+import { ConflictError } from '../../error';
+import { toPlanItem } from './directive-plan-item';
+import {
+  dailyDirectiveReadiness,
+  dailyAcknowledgedAt,
+  requireLegacyPlanMutation,
+} from './daily-plan-compatibility';
 
 /** The fixed questions the end-of-day review asks, in order. */
 const REVIEW_PROMPTS: Readonly<Record<ReviewPromptKey, string>> = Object.freeze({
@@ -82,6 +88,7 @@ export interface DayContext {
   readonly timezone: string;
   readonly blocks: readonly DayBlock[];
   readonly readiness: DirectiveAgendaReadiness;
+  readonly acceptedAt?: Date | null;
 }
 
 /**
@@ -110,39 +117,14 @@ export async function loadDayContext(
     done: r.done,
     schedulerOwned: r.schedulerOwned,
   }));
-  const planned = await hasRunCovering(db, input.hubId, input.date);
-  // "not planned yet" and "planned, and today is genuinely clear" are different answers, and a
-  // consumer deciding whether to hold a gate needs to tell them apart.
-  const readiness: DirectiveAgendaReadiness = !planned
-    ? 'not_generated'
-    : blocks.length === 0
-      ? 'empty_week'
-      : 'ready';
+  const acceptance = await dailyDirectiveReadiness(db, input.hubId, input.date, blocks.length);
   return {
     hubId: input.hubId,
     userId: input.userId,
     date: input.date,
     timezone: preferences.timezone,
     blocks,
-    readiness,
-  };
-}
-
-/** Serialize a block as a directive plan item. */
-function toPlanItem(
-  block: DayBlock,
-  appUrl: string | null,
-): z.input<typeof DirectiveOut>['plan'][number] {
-  return {
-    taskId: block.taskId,
-    calendarItemId: block.calendarItemId,
-    organizationId: block.organizationId,
-    title: block.title,
-    shape: block.shape,
-    status: block.done ? 'done' : 'planned',
-    startsAt: new Date(block.start).toISOString(),
-    endsAt: new Date(block.end).toISOString(),
-    url: appUrl === null ? null : `${appUrl}/calendar?item=${block.calendarItemId}`,
+    ...acceptance,
   };
 }
 
@@ -234,7 +216,7 @@ export async function computeDirective(
     gates: [
       dayStartGate({
         agendaReady: context.readiness === 'ready',
-        acknowledgedAt: existing.agendaAcknowledgedAt,
+        acknowledgedAt: dailyAcknowledgedAt(context, existing.agendaAcknowledgedAt),
       }),
       dayEndGate({
         reconciled: reviewState.reconciled,
@@ -296,7 +278,9 @@ export async function readDayStart(
     directiveId: genId(),
   });
   const ready = context.readiness === 'ready';
-  const proposals = ready ? buildMorningProposals(context, row.morningDecisions) : [];
+  const proposals =
+    ready && !context.acceptedAt ? buildMorningProposals(context, row.morningDecisions) : [];
+  const acknowledgedAt = dailyAcknowledgedAt(context, row.agendaAcknowledgedAt);
   const outstanding = proposals.filter((p) => p.decision === 'proposed').length;
   return {
     date: context.date,
@@ -312,12 +296,12 @@ export async function readDayStart(
       // on it has nothing to answer, so it is confirmable immediately rather than never.
       available: ready && outstanding === 0,
       outstanding,
-      confirmedAt: row.agendaAcknowledgedAt?.toISOString() ?? null,
+      confirmedAt: acknowledgedAt?.toISOString() ?? null,
     },
-    acknowledgedAt: row.agendaAcknowledgedAt?.toISOString() ?? null,
+    acknowledgedAt: acknowledgedAt?.toISOString() ?? null,
     gate: dayStartGate({
       agendaReady: ready,
-      acknowledgedAt: row.agendaAcknowledgedAt,
+      acknowledgedAt,
     }),
   };
 }
@@ -405,6 +389,10 @@ export async function decideMorningProposal(
     readonly now: Date;
   },
 ): Promise<MorningDecisionResult> {
+  if (context.acceptedAt)
+    throw new ConflictError(
+      'Preview changes through the daily-plan proposal before confirming them',
+    );
   const block = context.blocks.find((b) => b.calendarItemId === input.key);
   if (block === undefined) return { status: 'not_found' };
   if (input.decision === 'defer' && !block.schedulerOwned) return { status: 'not_deferable' };
@@ -492,6 +480,8 @@ export async function acknowledgeAgenda(
     timezone: context.timezone,
     directiveId: genId(),
   });
+  if (context.acceptedAt)
+    return { status: 'already', at: row.agendaAcknowledgedAt ?? context.acceptedAt };
   const updated = await db
     .update(dayDirective)
     .set({ agendaAcknowledgedAt: now })
@@ -660,6 +650,7 @@ export async function reorganizeRemainingDay(
   context: DayContext,
   now: Date,
 ): Promise<ReorganizeOutcome> {
+  await requireLegacyPlanMutation(db, context.hubId, context.date);
   const preferences = await loadSchedulingPreferences(db, context.hubId);
   const result = reorganizeDay({
     blocks: context.blocks,

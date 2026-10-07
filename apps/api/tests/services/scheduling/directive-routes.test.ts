@@ -1,18 +1,12 @@
 import type * as DbModule from '@docket/db';
 import type { DayStartOut } from '@docket/planning/scheduling-directive-contract';
 import { and, eq } from 'drizzle-orm';
-import { beforeAll, describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
 
 import directiveFeed from '../../../src/routes/schedule-week-directive';
-import scheduleWeek from '../../../src/routes/schedule-week';
-import {
-  appWithSession,
-  fakeSession,
-  getDb,
-  one,
-  seedUserWithHub,
-} from '../../support/routes-harness';
+import { appWithSession, fakeSession, getDb, one } from '../../support/routes-harness';
 import { assertDefined } from '@docket/test-utils';
+import { seedDay } from '../../support/seed-directive-day';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -22,66 +16,7 @@ beforeAll(async () => {
   db = schema.db;
 });
 
-const TZ = 'America/Los_Angeles';
-/** A Monday, and the Tuesday inside that week. */
-const WEEK = '2026-10-05';
 const DAY = '2026-10-06';
-
-interface Fixture {
-  readonly directive: ReturnType<typeof appWithSession>;
-  readonly planner: ReturnType<typeof appWithSession>;
-  readonly userId: string;
-  readonly hubId: string;
-}
-
-/** Seed a person with a planned week, so the day loop has a real day to run against. */
-async function seedDay(label: string, options: { plan?: boolean } = {}): Promise<Fixture> {
-  const userId = await seedUserWithHub(db, schema, label);
-  const [hubRow] = await db
-    .select({ id: schema.hub.id })
-    .from(schema.hub)
-    .where(eq(schema.hub.userId, userId))
-    .limit(1);
-  if (!hubRow) throw new Error('seeded user has no hub');
-
-  const session = fakeSession(userId, label, `${label}@example.com`);
-  const planner = appWithSession(scheduleWeek, session);
-  const directive = appWithSession(directiveFeed, session);
-
-  await planner.request('/preferences', {
-    method: 'PUT',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({
-      timezone: TZ,
-      commitments: [
-        {
-          shape: 'deep_writing',
-          title: 'Write and plan longer-term work',
-          organizationId: null,
-          taskId: null,
-          sessionsPerWeek: 3,
-          minutesPerSession: 120,
-          location: null,
-          attendees: [],
-          active: true,
-        },
-      ],
-      reflectionForMeetings: false,
-      backfillShapes: ['deep_writing', 'architecture_brainstorm'],
-    }),
-  });
-
-  if (options.plan !== false) {
-    const res = await planner.request('/', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ weekStartDate: WEEK }),
-    });
-    expect(res.status).toBe(200);
-  }
-
-  return { directive, planner, userId, hubId: hubRow.id };
-}
 
 /** The Hub id belonging to a seeded user. */
 async function hubOf(userId: string): Promise<string | null> {
@@ -839,15 +774,21 @@ describe('the end-of-day review gates the close of the day', () => {
 
 describe('POST /directive/reorganize', () => {
   it('is safe on a day that has not drifted', async () => {
-    const { directive } = await seedDay('DirectiveReorgNoop');
-    const res = await directive.request(`/reorganize?date=${DAY}`, { method: 'POST' });
-    expect(res.status).toBe(200);
-    const body = (await res.json()) as {
-      movedBlocks: unknown[];
-      displacedBlocks: unknown[];
-      driftMinutes: number;
-    };
-    expect(body.driftMinutes).toBe(0);
-    expect(body.displacedBlocks).toEqual([]);
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-10-06T16:00:00.000Z'));
+    try {
+      const { directive } = await seedDay('DirectiveReorgNoop');
+      const res = await directive.request(`/reorganize?date=${DAY}`, { method: 'POST' });
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as {
+        movedBlocks: unknown[];
+        displacedBlocks: unknown[];
+        driftMinutes: number;
+      };
+      expect(body.driftMinutes).toBe(0);
+      expect(body.displacedBlocks).toEqual([]);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

@@ -48,9 +48,16 @@ export function DailyPlanningEntry({ date }: { readonly date: string }): JSX.Ele
               </Button>
             )}
             {showTomorrow ? (
-              <Button asChild variant="ghost">
-                <Link href={`/plan?view=day&date=${addDays(date, 1)}`}>Plan tomorrow</Link>
-              </Button>
+              <>
+                <Button asChild variant="secondary">
+                  <Link href={`/plan?view=day&date=${addDays(date, 1)}&review=day`}>
+                    Review day
+                  </Link>
+                </Button>
+                <Button asChild variant="ghost">
+                  <Link href={`/plan?view=day&date=${addDays(date, 1)}`}>Plan tomorrow</Link>
+                </Button>
+              </>
             ) : null}
           </div>
         </CardContent>

@@ -1,9 +1,19 @@
 'use client';
 
 /** Compact, directly editable work rows shared by planning and review. */
-import { instantAt } from '@docket/planning/zoned-time';
-import { GripVertical, OpenInNew, Schedule, X } from '@docket/ui/icons';
-import { Button, Card, CardContent, Input, Select, Text } from '@docket/ui/primitives';
+import { Schedule, Ellipsis, GripVertical } from '@docket/ui/icons';
+import { EntityList, EntityListRow } from '@docket/ui/components';
+import {
+  Button,
+  Card,
+  CardContent,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  Input,
+} from '@docket/ui/primitives';
+import { useEffect, useState } from 'react';
 import Link from '@/components/docket-link';
 import { EditableTitle } from '@/components/editor/editable-title';
 import { useDraggable } from '@/components/dnd/use-draggable';
@@ -11,10 +21,10 @@ import type { DailyPlanTask } from '@docket/planning/daily-plan-flow';
 import type { JSX } from 'react';
 
 import type { ReadyPlanningController } from './daily-planning-controller';
-import { clockValue } from './daily-planning-agenda';
-import { remainingMinutes, setPlannedMinutes } from './daily-planning-model';
+import { movePlannedTask, unplacedMinutes, setPlannedMinutes } from './daily-planning-model';
+import { useWorkRowDropTarget } from '@/components/dnd';
 
-function WorkRowActions({
+function WorkRowMenu({
   plan,
   entry,
   title,
@@ -25,41 +35,114 @@ function WorkRowActions({
   readonly title: string;
   readonly remaining: number;
 }): JSX.Element {
+  const index = plan.draft.tasks.findIndex((task) => task.taskId === entry.taskId);
+  const previous = plan.draft.tasks[index - 1];
+  const next = plan.draft.tasks[index + 1];
+  const reorder = (targetId: string, placement: 'before' | 'after'): void => {
+    plan.editDraft(movePlannedTask(plan.draft, entry.taskId, targetId, placement));
+  };
   return (
-    <>
-      <div className="flex shrink-0 gap-0.5">
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
         <Button
           variant="ghost"
           size="sm"
           iconOnly
+          className="min-h-10 min-w-10 sm:min-h-8 sm:min-w-8"
+          aria-label={`Actions for ${title}`}
+        >
+          <Ellipsis aria-hidden="true" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" width="md">
+        <DropdownMenuItem
           disabled={remaining === 0}
+          onSelect={() => {
+            plan.setEditing({ taskId: entry.taskId });
+          }}
+        >
+          Schedule
+        </DropdownMenuItem>
+        {previous ? (
+          <DropdownMenuItem
+            onSelect={() => {
+              reorder(previous.taskId, 'before');
+            }}
+          >
+            Move earlier
+          </DropdownMenuItem>
+        ) : null}
+        {next ? (
+          <DropdownMenuItem
+            onSelect={() => {
+              reorder(next.taskId, 'after');
+            }}
+          >
+            Move later
+          </DropdownMenuItem>
+        ) : null}
+        <DropdownMenuItem asChild>
+          <Link href={`/orgs/${entry.organizationId}/tasks/${entry.taskId}`}>
+            Open task details
+          </Link>
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          onSelect={() => {
+            plan.removeTask(entry.taskId);
+          }}
+        >
+          Remove from today
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+function WorkRowContents({
+  plan,
+  entry,
+  title,
+  remaining,
+}: {
+  readonly plan: ReadyPlanningController;
+  readonly entry: DailyPlanTask;
+  readonly title: string;
+  readonly remaining: number;
+}): JSX.Element {
+  const projectName = plan.allTasks.get(entry.taskId)?.projectName;
+  return (
+    <span className="flex w-full min-w-0 flex-col gap-0.5">
+      <span className="min-w-0">
+        <WorkRowTitle plan={plan} entry={entry} title={title} />
+      </span>
+      <span className="flex min-w-0 items-center gap-1">
+        <span className="text-on-surface-variant text-body-small min-w-0 flex-1 truncate">
+          {projectName ?? ''}
+          {entry.selectionSource === 'suggested'
+            ? `${projectName ? ' · ' : ''}${plan.proposalContext?.tasks.find((value) => value.taskId === entry.taskId)?.reason ?? 'Suggested'}`
+            : ''}
+        </span>
+        <PlannedTime plan={plan} entry={entry} title={title} />
+        <Button
+          variant="ghost"
+          size="sm"
+          iconOnly
+          className="min-h-10 min-w-10 sm:min-h-8 sm:min-w-8"
           aria-label={`Schedule ${title}`}
           onClick={() => {
-            plan.setEditing({ taskId: entry.taskId });
+            const session = plan.draft.sessions.find((value) =>
+              value.allocations.some((part) => part.taskId === entry.taskId),
+            );
+            plan.setEditing({
+              taskId: entry.taskId,
+              ...(session ? { sessionId: session.id } : {}),
+            });
           }}
         >
           <Schedule aria-hidden="true" />
         </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          iconOnly
-          aria-label={`Remove ${title} from today`}
-          onClick={() => {
-            plan.removeTask(entry.taskId);
-          }}
-        >
-          <X aria-hidden="true" />
-        </Button>
-        <Button asChild variant="ghost" size="sm" iconOnly>
-          <Link
-            href={`/orgs/${entry.organizationId}/tasks/${entry.taskId}`}
-            aria-label={`Open ${title} details`}
-          >
-            <OpenInNew aria-hidden="true" />
-          </Link>
-        </Button>
-      </div>
+        <WorkRowMenu plan={plan} entry={entry} title={title} remaining={remaining} />
+      </span>
       {plan.failedTitle?.taskId === entry.taskId ? (
         <Button
           size="sm"
@@ -70,7 +153,92 @@ function WorkRowActions({
           Retry rename
         </Button>
       ) : null}
-    </>
+    </span>
+  );
+}
+
+function WorkRowTitle({
+  plan,
+  entry,
+  title,
+}: {
+  readonly plan: ReadyPlanningController;
+  readonly entry: DailyPlanTask;
+  readonly title: string;
+}): JSX.Element {
+  return (
+    <EditableTitle
+      value={title}
+      onSave={(value) => {
+        void plan.renameTask(entry, value);
+      }}
+      canEdit
+      ariaLabel={`Task title: ${title}`}
+      className="text-on-surface text-label-medium sm:text-label-large min-h-10 min-w-0 flex-1 sm:min-h-6"
+    />
+  );
+}
+
+function PlannedTime({
+  plan,
+  entry,
+  title,
+}: {
+  readonly plan: ReadyPlanningController;
+  readonly entry: DailyPlanTask;
+  readonly title: string;
+}): JSX.Element {
+  const [value, setValue] = useState(String(entry.plannedMinutes));
+  useEffect(() => {
+    setValue(String(entry.plannedMinutes));
+  }, [entry.plannedMinutes]);
+  const commit = (text: string): void => {
+    const minutes = Number(text);
+    if (!Number.isInteger(minutes) || minutes < 1) {
+      setValue(String(entry.plannedMinutes));
+      return;
+    }
+    if (minutes !== entry.plannedMinutes) {
+      const next = setPlannedMinutes(plan.draft, entry.taskId, minutes);
+      const kept =
+        next.tasks.find((task) => task.taskId === entry.taskId)?.plannedMinutes ?? minutes;
+      setValue(String(kept));
+      plan.editDraft(next);
+      if (kept > minutes)
+        plan.setError(
+          `${kept} minutes are in pinned or elapsed blocks. Remove or unpin future blocks before reducing this time.`,
+        );
+    }
+  };
+  return (
+    <label className="text-on-surface-variant text-body-small inline-flex shrink-0 items-center gap-1 tabular-nums">
+      <Input
+        type="number"
+        min={1}
+        step={1}
+        inputMode="numeric"
+        variant="outlined"
+        controlSize="sm"
+        className="min-h-10 w-12 px-1.5 text-right tabular-nums sm:min-h-8"
+        aria-label={`Planned time for ${title}`}
+        value={value}
+        onChange={(event) => {
+          setValue(event.target.value);
+        }}
+        onBlur={(event) => {
+          commit(event.currentTarget.value);
+        }}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter') event.currentTarget.blur();
+          if (event.key === 'Escape') {
+            setValue(String(entry.plannedMinutes));
+            event.currentTarget.value = String(entry.plannedMinutes);
+            event.currentTarget.blur();
+          }
+        }}
+      />
+      <span aria-hidden="true">min</span>
+    </label>
   );
 }
 
@@ -82,70 +250,46 @@ function WorkRow({
   readonly entry: DailyPlanTask;
 }): JSX.Element {
   const title = plan.titleFor(entry.taskId);
-  const task = plan.allTasks.get(entry.taskId);
-  const remaining = remainingMinutes(plan.draft, entry.taskId);
-  const durationOptions = [...new Set([entry.plannedMinutes, 15, 30, 45, 60, 90, 120, 180])].sort(
-    (a, b) => a - b,
-  );
+  const remaining = unplacedMinutes(plan.draft, entry.taskId, plan.dayQ.data?.actual ?? []);
   const drag = useDraggable({
     object: { kind: 'task', id: entry.taskId, organizationId: entry.organizationId, title },
     actionScope: 'all',
     surfaceId: 'daily-planning',
-    disabled: remaining === 0,
+  });
+  const drop = useWorkRowDropTarget({
+    taskId: entry.taskId,
+    title,
+    onReorder: (taskId, targetId, placement) => {
+      plan.editDraft(movePlannedTask(plan.draft, taskId, targetId, placement));
+    },
   });
   return (
-    <Card>
-      <CardContent className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 py-2">
-        <Button
-          ref={drag.ref}
-          variant="ghost"
-          size="sm"
-          iconOnly
-          className={drag.className}
-          data-object-id={entry.taskId}
-          data-drag-state={drag['data-drag-state']}
-          aria-label={`Drag ${title} to agenda`}
-          disabled={remaining === 0}
-        >
-          <GripVertical aria-hidden="true" />
-        </Button>
-        <div className="min-w-0 flex-1">
-          <EditableTitle
-            value={title}
-            onSave={(value) => {
-              void plan.renameTask(entry, value);
-            }}
-            canEdit
-            ariaLabel={`Task title: ${title}`}
-            className="text-on-surface text-title-small"
-          />
-          {task?.completedAt ? (
-            <span className="text-on-surface-variant text-label-small">Completed</span>
-          ) : null}
-        </div>
-        <label
-          className="text-on-surface-variant text-body-small w-20 shrink-0"
-          title="Planned time"
-        >
-          <span className="sr-only">Planned time</span>
-          <Select
-            aria-label={`Planned time for ${title}`}
-            value={entry.plannedMinutes}
-            onChange={(event) => {
-              plan.editDraft(
-                setPlannedMinutes(plan.draft, entry.taskId, Number(event.target.value)),
-              );
-            }}
+    <Card
+      variant="outlined"
+      ref={drop.ref}
+      data-drop-state={drop.isOver ? 'accept' : 'idle'}
+      data-drop-placement={drop.isOver ? drop.placement : undefined}
+      className={`hover:bg-surface-container-high relative rounded-xl transition-[background-color,opacity] duration-(--dur-fast) ${drag['data-drag-state'] === 'dragging' ? 'opacity-45' : ''} ${drop.isOver ? `bg-secondary-container before:bg-primary before:absolute before:right-3 before:left-3 before:z-10 before:h-1 before:rounded-full ${drop.placement === 'before' ? 'before:-top-1.5' : 'before:-bottom-1.5'}` : ''}`}
+    >
+      <EntityListRow
+        interactive={false}
+        className="min-w-0 gap-1 px-2 py-1"
+        leading={
+          <Button
+            ref={drag.ref}
+            variant="ghost"
+            size="sm"
+            iconOnly
+            className={`${drag.className} coarse:min-w-10 min-h-10 min-w-10 sm:min-h-8 sm:min-w-6`}
+            data-object-id={entry.taskId}
+            data-drag-state={drag['data-drag-state']}
+            aria-label={`Drag ${title} to reorder or schedule`}
           >
-            {durationOptions.map((minutes) => (
-              <option key={minutes} value={minutes}>
-                {minutes}m
-              </option>
-            ))}
-          </Select>
-        </label>
-        <WorkRowActions plan={plan} entry={entry} title={title} remaining={remaining} />
-      </CardContent>
+            <GripVertical aria-hidden="true" />
+          </Button>
+        }
+        title={<WorkRowContents plan={plan} entry={entry} title={title} remaining={remaining} />}
+      />
     </Card>
   );
 }
@@ -164,15 +308,6 @@ function WorkSignals({ plan }: { readonly plan: ReadyPlanningController }): JSX.
           {plan.timer.record.taskId ? plan.titleFor(plan.timer.record.taskId) : plan.timer.title}
         </p>
       ) : null}
-      {plan.total > plan.capacity ? (
-        <Text as="p" token="body-medium" tone="error">
-          {plan.total - plan.capacity} minutes over capacity
-        </Text>
-      ) : (
-        <p className="text-on-surface-variant text-body-small">
-          {plan.total} minutes planned · {plan.capacity} minutes available
-        </p>
-      )}
     </>
   );
 }
@@ -181,16 +316,13 @@ function WorkSignals({ plan }: { readonly plan: ReadyPlanningController }): JSX.
 export function WorkColumn({ plan }: { readonly plan: ReadyPlanningController }): JSX.Element {
   const completed = plan.dayQ.data?.tasks.filter((task) => task.completedAt !== null) ?? [];
   return (
-    <section
-      className={
-        plan.stage === 'review' ? 'order-1 min-w-0 space-y-4 lg:order-2' : 'min-w-0 space-y-4'
-      }
-    >
+    <section className="min-w-0 space-y-3">
       <div className="flex items-center justify-between gap-2">
         <h2 className="text-title-large">Work</h2>
-        {plan.stage === 'plan' ? (
+        {plan.stage !== 'confirmed' ? (
           <Button
             variant="secondary"
+            disabled={plan.deferPending}
             onClick={() => {
               plan.setStage('add');
             }}
@@ -200,14 +332,19 @@ export function WorkColumn({ plan }: { readonly plan: ReadyPlanningController })
         ) : null}
       </div>
       <WorkSignals plan={plan} />
-      <p className="text-on-surface-variant text-label-small text-right">Planned time</p>
-      <div className="space-y-2">
+      <div>
         {plan.draft.tasks.length === 0 ? (
           <Card>
-            <CardContent className="pt-5">No tasks selected.</CardContent>
+            <CardContent className="pt-5">
+              No work selected. Add work to build this plan.
+            </CardContent>
           </Card>
         ) : (
-          plan.draft.tasks.map((entry) => <WorkRow key={entry.taskId} plan={plan} entry={entry} />)
+          <EntityList aria-label="Work selected for today" className="gap-2 bg-transparent p-0">
+            {plan.draft.tasks.map((entry) => (
+              <WorkRow key={entry.taskId} plan={plan} entry={entry} />
+            ))}
+          </EntityList>
         )}
       </div>
       {completed.length > 0 ? (
@@ -220,25 +357,6 @@ export function WorkColumn({ plan }: { readonly plan: ReadyPlanningController })
           ))}
         </div>
       ) : null}
-      <label className="text-on-surface-variant text-body-small flex items-center justify-between gap-3">
-        Finish work at
-        <Input
-          className="w-28"
-          type="time"
-          value={clockValue(plan.draft.finishAt, plan.timezone)}
-          onChange={(event) => {
-            const [hours, minutes] = event.target.value.split(':').map(Number);
-            plan.editDraft({
-              ...plan.draft,
-              finishAt: instantAt(
-                plan.date,
-                (hours ?? 17) * 60 + (minutes ?? 0),
-                plan.timezone,
-              ).toISOString(),
-            });
-          }}
-        />
-      </label>
     </section>
   );
 }

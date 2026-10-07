@@ -10,6 +10,7 @@ import { TIMEOUTS } from './constants';
 import { expect } from './fixtures';
 import { apiFetch, waitForApiResponse, type ApiInit } from './net';
 import { clearVirtualCredentials } from './webauthn';
+import { requestSignupCodeWithRateLimit } from './signup-code';
 import { assertDefined } from '@docket/test-utils';
 
 /** A throwaway test account: display name + unique email. */
@@ -149,15 +150,20 @@ export async function signUp(page: Page, { name, email }: TestUser): Promise<voi
       expect(await continueButton.isEnabled()).toBe(true);
     }).toPass({ timeout: TIMEOUTS.pageReady });
 
-    const codeResponse = page.waitForResponse(
-      (r) => r.url().includes('/api/auth/sign-up/request-code') && r.request().method() === 'POST',
-      { timeout: TIMEOUTS.ceremony },
+    const devCode = await requestSignupCodeWithRateLimit(
+      async () => {
+        const codeResponse = page.waitForResponse(
+          (r) =>
+            r.url().includes('/api/auth/sign-up/request-code') && r.request().method() === 'POST',
+          { timeout: TIMEOUTS.ceremony },
+        );
+        await continueButton.click();
+        return codeResponse;
+      },
+      async (milliseconds) => {
+        await page.waitForTimeout(milliseconds);
+      },
     );
-    await continueButton.click();
-    const devCode = await codeResponse
-      .then((r) => r.json())
-      .then((b: { devCode?: string }) => b.devCode)
-      .catch(() => undefined);
 
     // Step 2: enter the code and complete the passkey ceremony.
     if (devCode) {
@@ -195,10 +201,8 @@ export async function signUp(page: Page, { name, email }: TestUser): Promise<voi
     ]);
     if (reached === true) return;
     // Reset to a clean step 1 before retrying (a prior attempt may have consumed the code).
-    await page
-      .getByRole('button', { name: 'Use a different email' })
-      .click()
-      .catch(() => undefined);
+    const reset = page.getByRole('button', { name: 'Use a different email' });
+    if (await reset.isVisible()) await reset.click();
     await page.waitForTimeout(1500); // let the dev route settle, then retry
   }
   throw new Error('sign-up never reached onboarding after retries');

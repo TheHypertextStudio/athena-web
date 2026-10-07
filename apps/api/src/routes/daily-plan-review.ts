@@ -1,6 +1,6 @@
 /** Durable decisions about unfinished work from earlier days. */
 import { dailyPlanItem, dailyPlanReview, db, hub } from '@docket/db';
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray, isNull, lte } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
 
@@ -19,6 +19,50 @@ const decision = z.object({
 });
 const input = z.object({ decisions: z.array(decision).max(100) });
 const output = z.object({ reviewed: z.number().int().nonnegative() });
+
+type Transaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+async function saveTaskReview(
+  tx: Transaction,
+  hubId: string,
+  source: typeof dailyPlanItem.$inferSelect,
+  choice: z.output<typeof decision>,
+): Promise<void> {
+  const earlier = await tx
+    .select({ id: dailyPlanItem.id })
+    .from(dailyPlanItem)
+    .leftJoin(dailyPlanReview, eq(dailyPlanReview.sourceItemId, dailyPlanItem.id))
+    .where(
+      and(
+        eq(dailyPlanItem.hubId, hubId),
+        eq(dailyPlanItem.refTaskId, source.refTaskId),
+        eq(dailyPlanItem.refOrganizationId, source.refOrganizationId),
+        lte(dailyPlanItem.date, source.date),
+        eq(dailyPlanItem.status, 'planned'),
+        isNull(dailyPlanReview.id),
+      ),
+    );
+  // The review shows one row per task, so its decision must also settle older unresolved rows.
+  const sourceIds = [...new Set([source.id, ...earlier.map((row) => row.id)])];
+  await tx
+    .insert(dailyPlanReview)
+    .values(
+      sourceIds.map((sourceItemId) => ({
+        hubId,
+        sourceItemId,
+        decision: choice.action,
+        targetDate: choice.targetDate ?? null,
+      })),
+    )
+    .onConflictDoUpdate({
+      target: dailyPlanReview.sourceItemId,
+      set: {
+        decision: choice.action,
+        targetDate: choice.targetDate ?? null,
+        reviewedAt: new Date(),
+      },
+    });
+}
 
 /** Save review decisions and any future day item in one transaction. */
 async function persistReviewChoices(
@@ -50,22 +94,7 @@ async function persistReviewChoices(
             refTaskId: source.refTaskId,
           });
       }
-      await tx
-        .insert(dailyPlanReview)
-        .values({
-          hubId,
-          sourceItemId: source.id,
-          decision: item.action,
-          targetDate: item.targetDate ?? null,
-        })
-        .onConflictDoUpdate({
-          target: dailyPlanReview.sourceItemId,
-          set: {
-            decision: item.action,
-            targetDate: item.targetDate ?? null,
-            reviewedAt: new Date(),
-          },
-        });
+      await saveTaskReview(tx, hubId, source, item);
     }
   });
 }

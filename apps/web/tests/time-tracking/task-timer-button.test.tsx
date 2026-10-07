@@ -69,8 +69,8 @@ const NOTHING_TRACKED = {
   activeAgentExecutions: [],
 };
 
-/** The viewer's own running session on a task, opened at `startedAt`. */
-function tracking(taskId: string, startedAt: Date) {
+/** The viewer's task session, with a closed interval when paused. */
+function tracking(taskId: string, startedAt: Date, endedAt: string | null = null) {
   const at = startedAt.toISOString();
   return {
     ...NOTHING_TRACKED,
@@ -100,7 +100,7 @@ function tracking(taskId: string, startedAt: Date) {
           mode: 'human_active',
           source: 'user_timer',
           startedAt: at,
-          endedAt: null,
+          endedAt,
           supersededById: null,
           createdAt: at,
           closedAt: null,
@@ -124,6 +124,7 @@ function renderInsideActivatableRow(options: {
   readonly taskId: string;
   readonly title: string;
   readonly onRowActivate: () => void;
+  readonly labels?: boolean;
 }): { readonly client: QueryClient; readonly anchor: HTMLElement } {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
@@ -141,7 +142,12 @@ function renderInsideActivatableRow(options: {
             options.onRowActivate();
           }}
         >
-          <TaskTimerButton taskId={options.taskId} title={options.title} withLabel={false} />
+          <TaskTimerButton
+            taskId={options.taskId}
+            title={options.title}
+            withLabel={options.labels ?? false}
+            {...(options.labels ? { idleLabel: 'Start', resumeLabel: 'Continue' } : {})}
+          />
         </a>
       </TooltipProvider>
       <Toaster />
@@ -247,6 +253,23 @@ describe('TaskTimerButton', () => {
       expect(button).toHaveAttribute('aria-pressed', 'true');
     });
     expect(button).toHaveTextContent(/^12:0\d$/);
+  });
+
+  it('names Today start and continuation controls with the task title', async () => {
+    activeGet.mockResolvedValue(jsonResponse(NOTHING_TRACKED));
+    const { client } = renderInsideActivatableRow({
+      taskId: 'task_1',
+      title: 'Ship it',
+      onRowActivate: vi.fn(),
+      labels: true,
+    });
+    expect(await screen.findByRole('button', { name: 'Start Ship it' })).toHaveTextContent('Start');
+    const paused = tracking('task_1', new Date(Date.now() - 60_000), new Date().toISOString());
+    activeGet.mockResolvedValue(jsonResponse(paused));
+    await client.invalidateQueries();
+    expect(await screen.findByRole('button', { name: 'Continue Ship it' })).toHaveTextContent(
+      'Continue',
+    );
   });
 
   it('starts the same task from a real overflow menu item', async () => {

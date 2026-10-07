@@ -69,6 +69,67 @@ describe('derivePlanState', () => {
 });
 
 describe('selectFocus', () => {
+  it('follows accepted allocations rather than a task legacy first timebox', () => {
+    const first = planCandidate('first', { position: 0 });
+    const second = planCandidate('second', { position: 1 });
+    const sessions = [
+      {
+        id: 'afternoon',
+        startsAt: '2026-08-13T16:45:00.000Z',
+        endsAt: '2026-08-13T17:45:00.000Z',
+        pinned: true,
+        allocations: [
+          { taskId: 'second', plannedMinutes: 30 },
+          { taskId: 'first', plannedMinutes: 30 },
+        ],
+      },
+    ];
+    const focus = selectFocus({ items: [first, second], sessions, now: NOW });
+    expect(focus.now?.id).toBe('second');
+    expect(focus.now?.timeboxEndsAt).toBe('2026-08-13T17:15:00.000Z');
+    expect(focus.after?.id).toBe('first');
+    expect(focus.after?.timeboxStartsAt).toBe('2026-08-13T17:15:00.000Z');
+  });
+
+  it('keeps fixed events ahead of work without interrupting an active task', () => {
+    const item = planCandidate('work');
+    const sessions = [
+      {
+        id: 'after-meeting',
+        startsAt: '2026-08-13T17:30:00.000Z',
+        endsAt: '2026-08-13T18:00:00.000Z',
+        pinned: false,
+        allocations: [{ taskId: 'work', plannedMinutes: 30 }],
+      },
+    ];
+    const events = [
+      {
+        title: 'Meeting',
+        startsAt: '2026-08-13T17:00:00.000Z',
+        endsAt: '2026-08-13T17:30:00.000Z',
+      },
+    ];
+    const input = { items: [item], sessions, events, now: NOW };
+    expect(selectFocus(input).now).toBeNull();
+    expect(selectFocus(input).after?.id).toBe('work');
+    expect(selectFocus({ ...input, activeTaskId: 'work' }).now?.id).toBe('work');
+  });
+
+  it('does not offer budget-covered unplaced work, while retaining the active task', () => {
+    const item = planCandidate('early');
+    const input = {
+      items: [item],
+      sessions: [],
+      now: NOW,
+      taskBudgets: [{ taskId: 'early', plannedMinutes: 30 }],
+      actual: [
+        { taskId: 'early', startedAt: '2026-08-13T12:00:00Z', endedAt: '2026-08-13T12:30:00Z' },
+      ],
+    };
+    expect(selectFocus(input).now).toBeNull();
+    expect(selectFocus({ ...input, activeTaskId: 'early' }).now?.id).toBe('early');
+  });
+
   it('prefers an active timer, then the current timebox, then accepted plan order', () => {
     const first = planCandidate('first', { position: 0 });
     const currentTimebox = planCandidate('timeboxed', {

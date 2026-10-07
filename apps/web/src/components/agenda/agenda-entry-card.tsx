@@ -51,6 +51,14 @@ export interface AgendaEntryCardProps {
   onOpenCalendarItem?: (itemId: string, anchor: HTMLElement | null) => void;
 }
 
+function isLegacyPlanEntry(entry: AgendaEntry): boolean {
+  return Boolean(entry.planItemId && !entry.sessionId);
+}
+
+function hasAgendaActions(entry: AgendaEntry): boolean {
+  return Boolean(entry.planItemId ?? entry.sessionId);
+}
+
 /** The shared entry card, reshaped by `layout`, with a check-off and a link to the task. */
 export default function AgendaEntryCard({
   entry,
@@ -142,7 +150,7 @@ export default function AgendaEntryCard({
         entry.done && 'opacity-60',
       )}
     >
-      {entry.planItemId ? (
+      {isLegacyPlanEntry(entry) ? (
         <button
           ref={checkRef}
           type="button"
@@ -212,7 +220,7 @@ export default function AgendaEntryCard({
           {content}
         </div>
       )}
-      {entry.planItemId && isTask ? (
+      {hasAgendaActions(entry) && isTask ? (
         <span className="relative z-10 flex shrink-0">
           <AgendaEntryActions entry={entry} />
         </span>

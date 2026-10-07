@@ -27,7 +27,16 @@
 import type { HubTodayPlanItem } from '../../lib/contracts/hub';
 import { EmptyState, EntityList } from '@docket/ui/components';
 import { Check, ListChecks } from '@docket/ui/icons';
-import { Button, ControlGroup, Row, Skeleton, Stack } from '@docket/ui/primitives';
+import {
+  Button,
+  Card,
+  CardContent,
+  ControlGroup,
+  Row,
+  Skeleton,
+  Stack,
+} from '@docket/ui/primitives';
+import { selectDailyExecution } from '@docket/planning/daily-plan-execution';
 import Link from '@/components/docket-link';
 import type { JSX } from 'react';
 import { useMemo } from 'react';
@@ -35,6 +44,7 @@ import { useMemo } from 'react';
 import { FocusCard } from './focus-card';
 import HubTaskRow from './hub-task-row';
 import { TodaySection } from './today-section';
+import { useDailyPlanningDay } from '../daily-planning/daily-planning-queries';
 
 /** Props for {@link DayPlan}. */
 export interface DayPlanProps {
@@ -68,46 +78,89 @@ interface PlanGroup {
   readonly tasks: HubTodayPlanItem[];
 }
 
-/** The accepted plan: the current task promoted, the rest as rows grouped by workspace. */
-export default function DayPlan({
+function acceptedPlanningHref(
+  day: ReturnType<typeof useDailyPlanningDay>,
+  date: string,
+): string | undefined {
+  return day.data?.accepted ? `/plan?view=day&date=${date}` : undefined;
+}
+
+function activeTaskFromEvidence(
+  day: ReturnType<typeof useDailyPlanningDay>,
+  plan: readonly HubTodayPlanItem[],
+): string | null {
+  // The Hub read refreshes before the day ledger after a timer starts.
+  return (
+    plan.find((item) => item.reason === 'Timer running')?.id ??
+    day.data?.actual.find((interval) => interval.endedAt === null)?.taskId ??
+    null
+  );
+}
+
+function AcceptedEvent({
+  day,
   plan,
-  now = null,
-  orgName,
-  loading,
-  unplanned = false,
-  completing = false,
-  onComplete,
-  onDefer,
+  displayTimezone,
+}: {
+  readonly day: ReturnType<typeof useDailyPlanningDay>;
+  readonly plan: readonly HubTodayPlanItem[];
+  readonly displayTimezone: string;
+}): JSX.Element | null {
+  const snapshot = day.data?.accepted?.current.snapshot;
+  if (!snapshot) return null;
+  const events =
+    day.data?.agenda.entries.flatMap((entry) =>
+      entry.kind === 'google_calendar_event' && entry.event.startsAt && entry.event.endsAt
+        ? [{ title: entry.event.title, startsAt: entry.event.startsAt, endsAt: entry.event.endsAt }]
+        : [],
+    ) ?? [];
+  const execution = selectDailyExecution({
+    sessions: snapshot.sessions,
+    taskBudgets: snapshot.tasks,
+    now: Date.now(),
+    actionableTaskIds: plan
+      .filter((item) => item.planStatus === 'planned' && !item.blocked)
+      .map((item) => item.id),
+    actual: day.data?.actual ?? [],
+    activeTaskId: activeTaskFromEvidence(day, plan),
+    events,
+  });
+  const event = execution.event;
+  if (!event) return null;
+  const time = new Intl.DateTimeFormat(undefined, {
+    timeZone: displayTimezone,
+    hour: 'numeric',
+    minute: '2-digit',
+  }).format(new Date(event.startsAt));
+  return (
+    <Card role="article" aria-label={`Next event: ${event.title}`}>
+      <CardContent className="space-y-1 py-5">
+        <p className="text-primary text-label-large">
+          {Date.parse(event.startsAt) <= Date.now() ? 'Now' : 'Next'}
+        </p>
+        <p className="text-on-surface text-title-medium">{event.title}</p>
+        <p className="text-on-surface-variant text-body-small">{time}</p>
+      </CardContent>
+    </Card>
+  );
+}
+
+function PlanRowActions({
+  item,
+  now,
+  planningHref,
+  completing,
   onPromote,
-  onTimebox,
-  date = '',
-  displayTimezone = 'UTC',
-}: DayPlanProps): JSX.Element {
-  // The promoted task is not repeated as a row. Everything else keeps its accepted order — the
-  // server already sorted `plan`, and re-sorting here would disagree with the order the person
-  // accepted.
-  // Only skipped when the promoted card is actually rendered. `FocusCard` needs all three action
-  // handlers, and every one of them is optional, so skipping unconditionally dropped the task from
-  // the page entirely whenever a host supplied fewer.
-  const promoted = now && onComplete && onDefer && onTimebox ? now : null;
-
-  const groups = useMemo<PlanGroup[]>(() => {
-    const byOrg = new Map<string, PlanGroup>();
-    for (const item of plan) {
-      if (item.planItemId === promoted?.planItemId) continue;
-      const group = byOrg.get(item.organizationId);
-      if (group) group.tasks.push(item);
-      else
-        byOrg.set(item.organizationId, {
-          orgId: item.organizationId,
-          orgLabel: orgName(item.organizationId),
-          tasks: [item],
-        });
-    }
-    return [...byOrg.values()];
-  }, [plan, promoted, orgName]);
-
-  const rowActions = (item: HubTodayPlanItem): JSX.Element => (
+  onComplete,
+}: {
+  readonly item: HubTodayPlanItem;
+  readonly now: HubTodayPlanItem | null;
+  readonly planningHref: string | undefined;
+  readonly completing: boolean;
+  readonly onPromote: DayPlanProps['onPromote'];
+  readonly onComplete: DayPlanProps['onComplete'];
+}): JSX.Element {
+  return (
     // Overlaid, not reserved. At `opacity-0` in the flow these still occupied their full width,
     // which is the gap that opened between every row's metadata and the list's right edge.
     <ControlGroup
@@ -115,7 +168,11 @@ export default function DayPlan({
       className="bg-surface-container-high absolute inset-y-1 right-1 rounded-md pl-2 opacity-0 transition-opacity group-focus-within/planrow:opacity-100 group-hover/planrow:opacity-100"
     >
       {/* Promoting is only meaningful relative to a task already ahead of this one. */}
-      {now && onPromote ? (
+      {planningHref ? (
+        <Button asChild type="button" variant="ghost">
+          <Link href={`${planningHref}&task=${encodeURIComponent(item.id)}`}>Adjust plan</Link>
+        </Button>
+      ) : now && onPromote ? (
         <Button
           type="button"
           variant="ghost"
@@ -142,68 +199,121 @@ export default function DayPlan({
       ) : null}
     </ControlGroup>
   );
+}
+
+/** The accepted plan: the current task promoted, the rest as rows grouped by workspace. */
+export default function DayPlan({
+  plan,
+  now = null,
+  orgName,
+  loading,
+  unplanned = false,
+  completing = false,
+  onComplete,
+  onDefer,
+  onPromote,
+  onTimebox,
+  date = '',
+  displayTimezone = 'UTC',
+}: DayPlanProps): JSX.Element {
+  const day = useDailyPlanningDay(date, Boolean(date));
+  const planningHref = acceptedPlanningHref(day, date);
+  // The promoted task is not repeated as a row. Everything else keeps its accepted order — the
+  // server already sorted `plan`, and re-sorting here would disagree with the order the person
+  // accepted.
+  // Only skipped when the promoted card is actually rendered. `FocusCard` needs all three action
+  // handlers, and every one of them is optional, so skipping unconditionally dropped the task from
+  // the page entirely whenever a host supplied fewer.
+  const promoted = now && onComplete && onDefer && onTimebox ? now : null;
+
+  const groups = useMemo<PlanGroup[]>(() => {
+    const byOrg = new Map<string, PlanGroup>();
+    for (const item of plan) {
+      if (item.planItemId === promoted?.planItemId) continue;
+      const group = byOrg.get(item.organizationId);
+      if (group) group.tasks.push(item);
+      else
+        byOrg.set(item.organizationId, {
+          orgId: item.organizationId,
+          orgLabel: orgName(item.organizationId),
+          tasks: [item],
+        });
+    }
+    return [...byOrg.values()];
+  }, [plan, promoted, orgName]);
 
   // placeholder: the tasks planned for today, across every workspace.
   return (
-    <TodaySection
-      id="today-work-heading"
-      heading="Plan"
-      count={plan.length > 0 ? plan.length : undefined}
-    >
-      {loading ? (
-        <Stack gap={1} aria-hidden="true">
-          {[0, 1, 2].map((row) => (
-            <Skeleton key={row} className="h-9 w-full rounded-lg" />
-          ))}
-        </Stack>
-      ) : plan.length === 0 ? (
-        <EmptyState
-          icon={ListChecks}
-          tone="accent"
-          title={unplanned ? 'No plan for today yet' : 'No tasks left on today’s plan'}
-          action={
-            <Button asChild variant="ghost" controlSize="sm">
-              <Link href="/tasks">Browse all tasks</Link>
-            </Button>
-          }
-        />
-      ) : (
-        <Stack gap={2}>
-          {promoted && onComplete && onDefer && onTimebox ? (
-            <FocusCard
-              item={promoted}
-              orgName={orgName}
-              completing={completing}
-              onComplete={onComplete}
-              onDefer={onDefer}
-              onTimebox={onTimebox}
-              date={date}
-              displayTimezone={displayTimezone}
-            />
-          ) : null}
-          {groups.map((group) => (
-            <Stack key={group.orgId} gap={1}>
-              {/* Only worth a workspace heading when the plan spans more than one. */}
-              {groups.length > 1 ? (
-                <h3 className="text-on-surface-variant text-label-large">{group.orgLabel}</h3>
-              ) : null}
-              <EntityList aria-label={group.orgLabel} tone="tonal">
-                {group.tasks.map((item) => (
-                  <Row key={item.planItemId} className="group/planrow relative rounded-lg">
-                    <HubTaskRow
-                      task={item}
-                      orgLabel={group.orgLabel}
-                      className="min-w-0 flex-1"
-                      displayTimezone={displayTimezone}
-                    />
-                    {rowActions(item)}
-                  </Row>
-                ))}
-              </EntityList>
-            </Stack>
-          ))}
-        </Stack>
-      )}
-    </TodaySection>
+    <Stack gap={3}>
+      <AcceptedEvent day={day} plan={plan} displayTimezone={displayTimezone} />
+      <TodaySection
+        id="today-work-heading"
+        heading="Plan"
+        count={plan.length > 0 ? plan.length : undefined}
+      >
+        {loading ? (
+          <Stack gap={1} aria-hidden="true">
+            {[0, 1, 2].map((row) => (
+              <Skeleton key={row} className="h-9 w-full rounded-lg" />
+            ))}
+          </Stack>
+        ) : plan.length === 0 ? (
+          <EmptyState
+            icon={ListChecks}
+            tone="accent"
+            title={unplanned ? 'No plan for today yet' : 'No tasks left on today’s plan'}
+            action={
+              <Button asChild variant="ghost" controlSize="sm">
+                <Link href="/tasks">Browse all tasks</Link>
+              </Button>
+            }
+          />
+        ) : (
+          <Stack gap={2}>
+            {promoted && onComplete && onDefer && onTimebox ? (
+              <FocusCard
+                item={promoted}
+                orgName={orgName}
+                completing={completing}
+                onComplete={onComplete}
+                onDefer={onDefer}
+                onTimebox={onTimebox}
+                date={date}
+                displayTimezone={displayTimezone}
+                planningHref={planningHref}
+              />
+            ) : null}
+            {groups.map((group) => (
+              <Stack key={group.orgId} gap={1}>
+                {/* Only worth a workspace heading when the plan spans more than one. */}
+                {groups.length > 1 ? (
+                  <h3 className="text-on-surface-variant text-label-large">{group.orgLabel}</h3>
+                ) : null}
+                <EntityList aria-label={group.orgLabel} tone="tonal">
+                  {group.tasks.map((item) => (
+                    <Row key={item.planItemId} className="group/planrow relative rounded-lg">
+                      <HubTaskRow
+                        task={item}
+                        orgLabel={group.orgLabel}
+                        className="min-w-0 flex-1"
+                        displayTimezone={displayTimezone}
+                      />
+                      <PlanRowActions
+                        item={item}
+                        now={now}
+                        planningHref={planningHref}
+                        completing={completing}
+                        onPromote={onPromote}
+                        onComplete={onComplete}
+                      />
+                    </Row>
+                  ))}
+                </EntityList>
+              </Stack>
+            ))}
+          </Stack>
+        )}
+      </TodaySection>
+    </Stack>
   );
 }

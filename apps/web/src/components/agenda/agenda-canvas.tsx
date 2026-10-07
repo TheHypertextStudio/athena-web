@@ -41,6 +41,15 @@ import { isAgendaEntryInlineEditable, toAgendaScheduleItem } from './agenda-sche
 const INLINE_UPDATE_FAILURE_COPY =
   'Could not update this item. Your previous time has been restored.';
 
+function useHydratedNow(): string | undefined {
+  const now = useNow().toISOString();
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+  return mounted ? now : undefined;
+}
+
 /** Arranges the agenda for the active list/timeline view. */
 export default function AgendaCanvas(): JSX.Element {
   const { date, displayTimezone, entries, loading, view } = useAgenda();
@@ -142,7 +151,7 @@ function TimelineArrangement({
     workPlaces,
     workLocationComposition,
   } = useAgenda();
-  const now = useNow().toISOString();
+  const now = useHydratedNow();
   const [draftSelection, setDraftSelection] = useState<{
     readonly selection: CalendarRegionSelection;
     readonly canvasRegion: ScheduleRegionSelection | null;
@@ -336,6 +345,7 @@ function TimelineArrangement({
       ) : (
         <SchedulingCanvas
           presentation="agenda"
+          preserveTimedGeometry
           displayTimezone={displayTimezone}
           lanes={[lane]}
           pixelsPerHour={pixelsPerHour}

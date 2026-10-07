@@ -86,18 +86,18 @@ has no way to express (the calendar fields let a person resolve the ambiguous ho
 twice on a fall-back night). They are inventoried here for completeness and are **not** held to the
 calendar-day contract.
 
-| Surface                             | File                                                                    | Field                    | Control                                               |
-| ----------------------------------- | ----------------------------------------------------------------------- | ------------------------ | ----------------------------------------------------- |
-| Calendar → create/edit block        | `apps/web/src/components/calendar/calendar-time-field.tsx`              | Starts at, Ends at       | `datetime-local` + explicit Earlier/Later fold choice |
-| Relation command → schedule Task    | `apps/web/src/components/pickers/relation-target-picker-overlay.tsx`    | Schedule start           | Shared `CalendarTimeField` + explicit DST fold choice |
-| Athena → elicitation answer         | `apps/web/src/components/athena/elicitation-control.tsx`                | Agent-requested datetime | `datetime-local`, shape chosen by the agent's schema  |
-| Settings → notification quiet hours | `apps/web/src/components/settings/notification-preferences-section.tsx` | Quiet hours start/end    | `time` (a clock, no date)                             |
-| Settings → work schedule            | `apps/web/src/components/work-location/work-schedule-editor-dialog.tsx` | Work period start/end    | `time` for owner-defined local schedule times         |
-| Admin → notification console        | `apps/admin/src/app/(admin)/notifications/compose-stage.tsx`            | Scheduled send           | `datetime-local`                                      |
-| Time → add past time                | `apps/web/src/components/time-tracking/time-add-past-dialog.tsx`        | Starts at, Ends at       | Shared `CalendarTimeField` + explicit DST fold choice |
-| Time → repair a manual interval     | `apps/web/src/components/time-tracking/time-record-dialog.tsx`          | Starts at, Ends at       | Shared `CalendarTimeField` + explicit DST fold choice |
-| Daily planning → session editor     | `apps/web/src/components/daily-planning/daily-planning-agenda.tsx`      | Block start              | `time` in the planning date's timezone                |
-| Daily planning → planned task row   | `apps/web/src/components/daily-planning/daily-planning-work.tsx`        | Finish work at           | `time` in the planning date's timezone                |
+| Surface                             | File                                                                          | Field                    | Control                                               |
+| ----------------------------------- | ----------------------------------------------------------------------------- | ------------------------ | ----------------------------------------------------- |
+| Calendar → create/edit block        | `apps/web/src/components/calendar/calendar-time-field.tsx`                    | Starts at, Ends at       | `datetime-local` + explicit Earlier/Later fold choice |
+| Relation command → schedule Task    | `apps/web/src/components/pickers/relation-target-picker-overlay.tsx`          | Schedule start           | Shared `CalendarTimeField` + explicit DST fold choice |
+| Athena → elicitation answer         | `apps/web/src/components/athena/elicitation-control.tsx`                      | Agent-requested datetime | `datetime-local`, shape chosen by the agent's schema  |
+| Settings → notification quiet hours | `apps/web/src/components/settings/notification-preferences-section.tsx`       | Quiet hours start/end    | `time` (a clock, no date)                             |
+| Settings → work schedule            | `apps/web/src/components/work-location/work-schedule-editor-dialog.tsx`       | Work period start/end    | `time` for owner-defined local schedule times         |
+| Admin → notification console        | `apps/admin/src/app/(admin)/notifications/compose-stage.tsx`                  | Scheduled send           | `datetime-local`                                      |
+| Time → add past time                | `apps/web/src/components/time-tracking/time-add-past-dialog.tsx`              | Starts at, Ends at       | Shared `CalendarTimeField` + explicit DST fold choice |
+| Time → repair a manual interval     | `apps/web/src/components/time-tracking/time-record-dialog.tsx`                | Starts at, Ends at       | Shared `CalendarTimeField` + explicit DST fold choice |
+| Daily planning → session editor     | `apps/web/src/components/daily-planning/daily-planning-session-editor.tsx`    | Block start              | `time` in the planning date's timezone                |
+| Daily planning → planned task row   | `apps/web/src/components/daily-planning/daily-planning-schedule-controls.tsx` | Workday start/end        | `time` in the planning date's timezone                |
 
 ## Formatting
 

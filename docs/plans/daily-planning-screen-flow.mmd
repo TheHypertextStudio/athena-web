@@ -1,0 +1,15 @@
+flowchart LR
+    Today[Today home] -->|Plan day or resume| Yesterday[Review yesterday]
+    Today -->|No unresolved work| Plan[Plan today]
+    Yesterday -->|Continue or skip| Plan
+    Plan -->|Add work| Browse[Available work]
+    Browse -->|Add or return| Plan
+    Plan -->|Review| Review[Review plan]
+    Review -->|Edit| Plan
+    Review -->|Confirm| Confirmed[Confirmation]
+    Confirmed -->|Go to Today| Today
+    Today -->|Adjust today| Plan
+    Today -->|Review day| ReviewToday[Review today]
+    ReviewToday -->|Keep or move unfinished work| Tomorrow[Plan tomorrow]
+    Today -->|Plan tomorrow| Tomorrow
+    Tomorrow -->|Review| Review

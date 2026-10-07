@@ -121,7 +121,8 @@ export const RULE_ROOTS: Partial<Record<DesignTokenRule, readonly string[]>> = {
  *   filled, tonal, or text.
  * - **A boundary between things not contained by one another.** `AppShell.tsx`'s skip link is
  *   `page` tone landing over content of the same tone, so the surface ramp separates nothing and
- *   the line is the only thing that can.
+ *   the line is the only thing that can. `card.tsx` owns the outlined variant for independent
+ *   movable objects whose boundaries must remain visible beside objects at the same tone.
  *
  * This is an allow-set, not a ledger: it does not shrink on a schedule and nothing is parked here
  * pending a migration. Adding a file means arguing it into one of those four cases.
@@ -129,6 +130,7 @@ export const RULE_ROOTS: Partial<Record<DesignTokenRule, readonly string[]>> = {
 export const BORDER_EARNED_FILES: readonly string[] = [
   'packages/ui/src/components/shell/AppShell.tsx',
   'packages/ui/src/primitives/badge.tsx',
+  'packages/ui/src/primitives/card.tsx',
   'packages/ui/src/primitives/chip.tsx',
   'packages/ui/src/primitives/field.tsx',
   'packages/ui/src/primitives/switch.tsx',

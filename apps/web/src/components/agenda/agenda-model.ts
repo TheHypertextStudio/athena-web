@@ -27,6 +27,8 @@ export interface AgendaEntry {
   source: AgendaEntrySource;
   /** Underlying task id for task entries. */
   taskId?: string | undefined;
+  /** Accepted session identity; edits must append a plan revision. */
+  sessionId?: string | undefined;
   /** Organization that owns the task, when applicable. */
   organizationId?: string | undefined;
   /** User-visible entry title. */
@@ -75,6 +77,7 @@ export function toAgendaEntries(data: HubTodayOut | AgendaOut | null): AgendaEnt
             id: entry.sessionId ? `${entry.taskId}:${entry.sessionId}` : entry.taskId,
             source: 'task',
             taskId: entry.taskId,
+            sessionId: entry.sessionId,
             organizationId: entry.organizationId,
             title: entry.title,
             startsAt: entry.startsAt,

@@ -281,6 +281,8 @@ export interface SchedulingCanvasProps {
   readonly lanes: readonly ScheduleLane[];
   /** Continuous vertical zoom. Every positive value is supported. */
   readonly pixelsPerHour: number;
+  /** Keep timed rectangles proportional; consumers provide separate full-size editing controls. */
+  readonly preserveTimedGeometry?: boolean | undefined;
   /** Optional ISO instant used for deterministic current-time rendering. */
   readonly now?: string | undefined;
   /** Deterministic width override; when omitted the canvas observes its own viewport. */

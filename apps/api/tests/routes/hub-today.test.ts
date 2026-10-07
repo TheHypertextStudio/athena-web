@@ -101,6 +101,107 @@ async function seedTask(
 }
 
 describe('buildHubTodayPayload', () => {
+  it('uses the accepted current sessions for split and packed work without rewriting history', async () => {
+    const { orgId, teamId, userId } = await seedPerson();
+    const [hubRow] = await db
+      .select({ id: schema.hub.id })
+      .from(schema.hub)
+      .where(eq(schema.hub.userId, userId));
+    const hubId = assertDefined(hubRow).id;
+    const first = await seedTask(orgId, teamId, userId, { title: 'Split launch' });
+    const second = await seedTask(orgId, teamId, userId, { title: 'Packed review' });
+    await db.insert(schema.dailyPlanItem).values([
+      {
+        hubId,
+        refOrganizationId: orgId,
+        refTaskId: first,
+        date: DATE,
+        sort: 0,
+        timeboxStartsAt: new Date(`${DATE}T07:00:00.000Z`),
+        timeboxEndsAt: new Date(`${DATE}T07:30:00.000Z`),
+      },
+      { hubId, refOrganizationId: orgId, refTaskId: second, date: DATE, sort: 1 },
+    ]);
+    const snapshot = {
+      date: DATE,
+      finishAt: `${DATE}T17:00:00.000Z`,
+      mainTaskId: null,
+      tasks: [
+        { taskId: first, organizationId: orgId, plannedMinutes: 60, sort: 0 },
+        { taskId: second, organizationId: orgId, plannedMinutes: 30, sort: 1 },
+      ],
+      sessions: [
+        {
+          id: 'early',
+          startsAt: `${DATE}T07:00:00.000Z`,
+          endsAt: `${DATE}T07:30:00.000Z`,
+          pinned: false,
+          allocations: [{ taskId: first, plannedMinutes: 30 }],
+        },
+        {
+          id: 'packed',
+          startsAt: `${DATE}T08:45:00.000Z`,
+          endsAt: `${DATE}T09:45:00.000Z`,
+          pinned: true,
+          allocations: [
+            { taskId: second, plannedMinutes: 30 },
+            { taskId: first, plannedMinutes: 30 },
+          ],
+        },
+      ],
+    };
+    const version = { acceptedAt: `${DATE}T06:00:00.000Z`, snapshot };
+    const accepted = { original: version, current: version, history: [version] };
+    await db.insert(schema.dailyPlanDay).values({ hubId, date: DATE, accepted });
+
+    const payload = await buildHubTodayPayload(userId, DATE);
+    expect(payload.focus.now?.id).toBe(second);
+    expect(payload.focus.now?.timeboxEndsAt).toBe(`${DATE}T09:15:00.000Z`);
+    expect(payload.focus.after?.id).toBe(first);
+    expect(payload.focus.after?.timeboxStartsAt).toBe(`${DATE}T09:15:00.000Z`);
+    expect(payload.calendar).toHaveLength(3);
+    const record = one(
+      await db
+        .insert(schema.timeRecord)
+        .values({
+          hubId,
+          createdByUserId: userId,
+          taskId: second,
+          title: 'Packed review',
+          status: 'closed',
+          startedAt: new Date(`${DATE}T08:45:00.000Z`),
+          endedAt: new Date(`${DATE}T09:15:00.000Z`),
+        })
+        .returning({ id: schema.timeRecord.id }),
+    );
+    await db.insert(schema.timeInterval).values({
+      hubId,
+      timeRecordId: record.id,
+      taskId: second,
+      userId,
+      actorKind: 'human',
+      mode: 'human_active',
+      source: 'manual_entry',
+      startedAt: new Date(`${DATE}T08:45:00.000Z`),
+      endedAt: new Date(`${DATE}T09:15:00.000Z`),
+    });
+    vi.setSystemTime(new Date(`${DATE}T09:20:00.000Z`));
+    const afterRecorded = await buildHubTodayPayload(userId, DATE);
+    vi.setSystemTime(NOW);
+    expect(afterRecorded.focus.now?.id).toBe(first);
+    expect(afterRecorded.plan.find((entry) => entry.id === second)?.planStatus).toBe('planned');
+    const [unfinished] = await db
+      .select({ completedAt: schema.task.completedAt })
+      .from(schema.task)
+      .where(eq(schema.task.id, second));
+    expect(unfinished?.completedAt).toBeNull();
+    const [saved] = await db
+      .select()
+      .from(schema.dailyPlanDay)
+      .where(eq(schema.dailyPlanDay.hubId, hubId));
+    expect(saved?.accepted).toEqual(accepted);
+  });
+
   it('answers with an empty day rather than failing when there is nothing to read', async () => {
     // A user with no Hub and no org memberships is a real state — mid-onboarding, or an account whose
     // last org was deleted. The surface has to render something rather than throw.

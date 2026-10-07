@@ -12,6 +12,25 @@ beforeAll(async () => {
 });
 
 describe('GET /config', () => {
+  it.each(['false', 'true', ''])(
+    'returns a boolean for an unparsed OAuth flag %j',
+    async (flag) => {
+      vi.stubEnv('GOOGLE_OAUTH_PUBLIC', flag);
+      vi.stubEnv('SKIP_ENV_VALIDATION', '1');
+      vi.resetModules();
+      try {
+        const freshConfig = (await import('../../src/routes/config')).default;
+        const response = await appWithSession(freshConfig, null).request('/');
+        expect(response.status).toBe(200);
+        expect(PublicConfigOut.parse(await response.json()).googleOAuthPublic).toBe(
+          flag === 'true',
+        );
+      } finally {
+        vi.unstubAllEnvs();
+        vi.resetModules();
+      }
+    },
+  );
   it('is public (no session) and returns a valid, env-derived PublicConfig', async () => {
     const app = appWithSession(config, null);
     const res = await app.request('/', { method: 'GET' });

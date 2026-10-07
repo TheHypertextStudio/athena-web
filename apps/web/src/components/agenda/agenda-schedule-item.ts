@@ -22,6 +22,7 @@ export function isAgendaRelationshipTarget(entry: AgendaEntry): boolean {
 
 /** Return whether the Agenda owns a supported persistence path for one entry's bounds. */
 function canPersistAgendaEntryBounds(entry: AgendaEntry): boolean {
+  if (entry.sessionId) return false;
   if (entry.planItemId && entry.source === 'task') return true;
   const item = entry.calendarItem;
   return Boolean(

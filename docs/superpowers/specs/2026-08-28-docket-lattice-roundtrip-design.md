@@ -44,6 +44,13 @@ the original review linked to the same task. See the refreshed production accept
 exact serving revisions and evidence limits. Secret-reference metadata does not prove installation
 of the dedicated staging value; the mail and relay runtime gates above remain open.
 
+October 6 local runtime proof supersedes the earlier absence of any runtime receipt: two isolated
+HTTP relay processes sharing real PostgreSQL preserved duplicate-free submissions, one claimant,
+queued work, live leases, and one terminal result through hard process restarts. The unchanged
+Lovelace source and receipt scope are recorded in the linked engineering spec. This does not
+verify deployment cutover or competing deployed instances; staging mail installation and deployed
+relay acceptance remain open. Independent review found no actionable findings in the local proof.
+
 ## Historical hold-ups (August 28, 2026)
 
 The path does not fail at one hidden switch. Five production boundaries are incomplete or broken

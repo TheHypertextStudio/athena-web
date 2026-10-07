@@ -471,21 +471,44 @@ and reports are retained in
 Current main passed CI `37234597086` and Deploy main `37236455951`; earlier acceptance tooling
 passed CI `37223301592` and Deploy main `37225021524` at `31cbc50c1`. Release success does not
 close the two gates below. Staging's secret reference remains `docket-staging-resend-api-key:latest`;
-that metadata alone cannot verify the prepared dedicated value is installed. The last version-add
-attempt remains the October 4 denial. Today's audits were read-only; local CLI and Studio Cloud
+that metadata alone cannot verify the prepared dedicated value is installed. At this earlier read-only checkpoint, the last recorded version-add
+attempt was the October 4 denial; the fresh write attempt below supersedes it. These audits were read-only; local CLI and Studio Cloud
 Console require reauthentication. No grant, approval, provider key, or IAM authority was changed.
+
+### Local two-process runtime receipt (October 6)
+
+The unchanged Lovelace HTTP relay and PostgreSQL durable adapter at
+`f900d18e0a148cff0f0af5f326925f66d6ff2462` passed an isolated real-process proof. Two OS
+processes shared PostgreSQL 18.6. Concurrent duplicate submission retained one work item; after
+hard restarts, competing polls granted one claimant, the live lease prevented redelivery, and
+one terminal result remained durable. The receipt, harness, process IDs, and source hashes are
+in `/Users/williecubed/.codex/visualizations/2026/10/06/relay-runtime-proof/`. Independent review
+found no actionable findings for this bounded scope. All probe processes stopped.
+
+This is local implementation runtime evidence with opaque synthetic payloads and local authorization.
+It does not verify the deployed topology, database restart, lease-expiry recovery, cutover, encryption,
+or Studio inference. Concurrent requests were issued once without deterministic overlap instrumentation.
+
+### Fresh staging write attempt (October 6)
+
+Existing workflow `37579271109` retried the prepared key using the same WIF identity and existing
+named staging secret. Secret version creation again returned `permission_denied`; the report records
+`secretVersion: null`. No binding changed. The exact two synthetic fixtures are reconfirmed rejected
+and canceled, with keys/returns cleared, task fields unchanged, and zero comments. Production stability
+was verified. The temporary GitHub transport secret was removed and its absence verified. Receipt:
+`/Users/williecubed/.codex/visualizations/2026/10/06/staging-mail-retry/report.json`.
 
 ### Remaining gates
 
 - Staging mail: the dedicated sending-only key is prepared but unmounted. The existing deployment
-  identity was denied `secretmanager.versions.add` on `docket-staging-resend-api-key` in run
-  `37191632254`; no secret version was acquired. An operator with that permission must add and pin
+  identity was denied `secretmanager.versions.add` on `docket-staging-resend-api-key` in runs
+  `37191632254` and `37579271109`; no secret version was acquired. An operator with that permission must add and pin
   the staging version. No SDK sign-in is requested. The two exact synthetic proposals were rejected
   in run `37192530284`; both sessions/delegations are canceled, reply keys cleared, tasks unchanged,
   and comments remain zero. Its overall workflow is nonzero because the independent mail key was
   not supplied for that rejection-only retry. Production revision/bindings remained stable.
   See `ATHENA-LATTICE-ACCEPTANCE-002` for the safe receipts and the explicit remaining blocker.
-- Relay two-instance/restart proof: the Lovelace deployment runbook instructs this proof but no
-  completed runtime receipt was found. Recording pool/client unit doubles and the observed
-  single signaling instance do not establish restart survival or competing-instance ownership.
-  This audit confirms the missing receipt; it does not declare that engineering gate passed.
+- Deployed relay two-instance/restart acceptance: the local real-process receipt above establishes
+  implementation behavior, superseding the previous missing-runtime-receipt finding. The observed
+  production signaling instance and unit doubles still do not verify deployment cutover or
+  competing deployed instances. Keep that deployment gate open until its topology is verified.

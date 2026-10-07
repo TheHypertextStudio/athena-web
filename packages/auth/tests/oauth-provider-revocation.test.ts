@@ -279,7 +279,7 @@ describe('Docket OAuth provider handler preservation', () => {
   });
 
   it('persists an explicit narrowed refresh scope without restoring renewal authority', async () => {
-    const { db, oauthResourceGrant } = await import('@docket/db');
+    const { db, oauthRefreshToken, oauthResourceGrant } = await import('@docket/db');
     const fixture = await seedTrustedRefresh();
     const narrowed = await formRequest('/oauth2/token', {
       grant_type: 'refresh_token',
@@ -311,6 +311,23 @@ describe('Docket OAuth provider handler preservation', () => {
     });
     expect(replay.status).toBe(400);
     expect(await replay.json()).toMatchObject({ error: 'invalid_grant' });
+    await db
+      .update(oauthRefreshToken)
+      .set({ revoked: new Date(Date.now() - 31_000) })
+      .where(
+        eq(
+          oauthRefreshToken.token,
+          createHash('sha256').update(fixture.refreshToken).digest('base64url'),
+        ),
+      );
+    const delayedReplay = await formRequest('/oauth2/token', {
+      grant_type: 'refresh_token',
+      client_id: fixture.clientId,
+      refresh_token: fixture.refreshToken,
+      resource: 'http://localhost:4000/mcp',
+    });
+    expect(delayedReplay.status).toBe(400);
+    expect(await delayedReplay.json()).toMatchObject({ error: 'invalid_grant' });
     const [revokedGrant] = await db
       .select({ revokedAt: oauthResourceGrant.revokedAt })
       .from(oauthResourceGrant)
@@ -318,7 +335,7 @@ describe('Docket OAuth provider handler preservation', () => {
     expect(revokedGrant?.revokedAt).toBeInstanceOf(Date);
   });
 
-  it('rolls back broad provider replay revocation before invalidating one exact grant family', async () => {
+  it('tolerates a refresh retry briefly before revoking the exact replayed grant', async () => {
     const { db, oauthRefreshToken, oauthResourceGrant, session } = await import('@docket/db');
     const owner = await signInWithRecoveryCode();
     const client = await registerConfidentialClient(owner.cookie);
@@ -362,6 +379,9 @@ describe('Docket OAuth provider handler preservation', () => {
       resource: 'http://localhost:4000/mcp',
     });
     expect(rotated.status, await rotated.clone().text()).toBe(200);
+    const rotatedTokens = z
+      .object({ access_token: z.string(), refresh_token: z.string() })
+      .parse(await rotated.json());
     const replay = await formRequest('/oauth2/token', {
       grant_type: 'refresh_token',
       client_id: client.clientId,
@@ -371,6 +391,39 @@ describe('Docket OAuth provider handler preservation', () => {
     });
     expect(replay.status).toBe(400);
     expect(await replay.json()).toMatchObject({ error: 'invalid_grant' });
+
+    const [recentGrant] = await db
+      .select({ revokedAt: oauthResourceGrant.revokedAt })
+      .from(oauthResourceGrant)
+      .where(eq(oauthResourceGrant.id, first.grantId));
+    expect(recentGrant?.revokedAt).toBeNull();
+    const retry = await formRequest('/oauth2/token', {
+      grant_type: 'refresh_token',
+      client_id: client.clientId,
+      client_secret: client.clientSecret,
+      refresh_token: rotatedTokens.refresh_token,
+      resource: 'http://localhost:4000/mcp',
+    });
+    expect(retry.status, await retry.clone().text()).toBe(200);
+
+    await db
+      .update(oauthRefreshToken)
+      .set({ revoked: new Date(Date.now() - 31_000) })
+      .where(
+        eq(
+          oauthRefreshToken.token,
+          createHash('sha256').update(first.refreshToken).digest('base64url'),
+        ),
+      );
+    const delayedReplay = await formRequest('/oauth2/token', {
+      grant_type: 'refresh_token',
+      client_id: client.clientId,
+      client_secret: client.clientSecret,
+      refresh_token: first.refreshToken,
+      resource: 'http://localhost:4000/mcp',
+    });
+    expect(delayedReplay.status).toBe(400);
+    expect(await delayedReplay.json()).toMatchObject({ error: 'invalid_grant' });
 
     const grants = await db
       .select({ id: oauthResourceGrant.id, revokedAt: oauthResourceGrant.revokedAt })

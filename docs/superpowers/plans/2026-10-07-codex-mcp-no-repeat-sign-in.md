@@ -5,20 +5,21 @@
 **Goal:** Keep Codex connected to Docket MCP through normal access-token expiry without repeated
 browser sign-in or manual token repair.
 
-**Current evidence:** Codex previously rejected Docket's OAuth callback because its `iss` value
-used the Web host while discovery named the API auth mount. The current checkout still registers
-Better Auth's `jwt()` plugin without an explicit canonical issuer at
-`packages/auth/src/auth-builder.ts:596`. The OAuth provider offers 15-minute access tokens and
-30-day refresh tokens, but the refresh-token path only works when `offline_access` is granted.
-The prior production callback and discovery evidence dates to August 2026, so the live deployment
-must be checked before implementation assumes this is still the only failure.
+**Current evidence (2026-10-07):** Production protected-resource metadata, authorization-server
+metadata, the 401 challenge, and the Codex `docket` MCP entry all agree on
+`https://api.clearthedocket.com/api/auth` as issuer and include `offline_access`. Current
+`origin/main` already pins the JWT issuer to that URL and offers 15-minute access tokens plus
+30-day rotating refresh tokens. The live callback, the user's stored grant, and Codex's use of a
+returned refresh token remain unobserved. Code review found a second failure path: after refresh
+rotation, any same-client replay of the old token revoked the entire Docket grant. A concurrent
+Codex request can produce that replay after another request already stored the rotated token.
 
-**Approach:** Make the authorization server's callback issuer match the canonical issuer in
-protected-resource and authorization-server metadata. Preserve the Web-host authorization route
-needed for the user's session cookie. Prove that Codex can exchange the code, receive
-`offline_access` and a refresh token, and renew access without returning to the browser. Keep
-refresh tokens revocable and rolling; routine use must not require sign-in. Revocation, a security
-event, or a grant unused past its refresh-token lifetime may still require consent.
+**Approach:** Keep the existing canonical API issuer and Web-host consent route. Give legitimate
+refresh retries a 30-second grace period before treating a same-client replay as theft and
+revoking its grant. The replay still returns `invalid_grant`, while the successful rotation remains
+usable. Replays after the grace period still revoke the exact grant family. Prove refresh-token
+rotation locally, then verify a real Codex connection after a release. Explicit revocation, a
+security event, and a grant unused past its refresh-token lifetime may still require consent.
 
 **OAuth sequence:**
 
@@ -44,26 +45,19 @@ sequenceDiagram
 
 ## Implementation tasks
 
-### 1. Verify the live failure before changing the issuer
+### 1. Verify current production configuration
 
 - Read the deployed protected-resource metadata and authorization-server metadata from the
   configured Docket MCP origin.
-- Capture one real Codex OAuth callback. Treat `127.0.0.1:<port>/callback` as the expected Codex
-  receiver. Compare the callback's `iss` exactly with the discovered issuer.
-- Record whether the authorization request includes `offline_access`, whether the code exchange
-  returns `refresh_token`, and whether a refresh-token grant succeeds. Never record token values.
-- If the callback issuer already matches, follow the token exchange and refresh response instead
-  of changing issuer configuration blindly.
+- Confirmed production metadata and Codex MCP configuration agree. The actual callback `iss`, the
+  existing grant's scopes, and token refresh remain unobserved without a new authenticated Codex
+  authorization.
+- Never record token values.
 
-### 2. Pin the authorization issuer to the discovered canonical issuer
+### 2. Preserve the canonical issuer and consent host
 
-- Configure the Better Auth JWT plugin in `packages/auth/src/auth-builder.ts` with the same
-  canonical API auth issuer that MCP discovery publishes. Do not derive issuer identity from the
-  incoming Web authorization host.
+- Current `origin/main` already configures the API `/api/auth` issuer. Do not duplicate that fix.
 - Keep `consentPage` on the Web host so the host-only browser session cookie remains available.
-- Add a regression test in `packages/auth/tests/builder/auth.test.ts` with distinct Web and API
-  hosts. Assert the authorization response and provider issuer use the API `/api/auth` URL while
-  the consent route uses the Web host.
 
 ### 3. Prove refresh-token issuance and renewal
 
@@ -74,10 +68,12 @@ sequenceDiagram
 - Keep the existing 15-minute access-token and rolling 30-day refresh-token policy unless live
   evidence shows Codex fails to refresh despite receiving and successfully using the refresh token.
   Do not increase token lifetime to hide an issuer or client-refresh defect.
+- A same-client replay within 30 seconds of rotation returns `invalid_grant` without revoking the
+  fresh grant. A replay after that window still revokes the exact grant family.
 - Confirm the supported-scope list, 401 challenge, authorization-server metadata, and consent
   screen all continue to include `offline_access`. Do not widen existing consent rows silently.
 
-### 4. Deploy and verify the actual Codex connection
+### 4. Release and verify the actual Codex connection
 
 - Run focused auth and MCP OAuth tests, package typechecks, lint, and required deployment gates.
 - Deploy the verified revision and re-read production metadata. Confirm the deployed issuer is the

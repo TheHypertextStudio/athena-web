@@ -18,7 +18,18 @@ const live = vi.hoisted(() => ({
   clientId: 'client_1',
   liveIntrospectionResult: vi.fn(async (_adapter, _body, response) => response),
   presentedRevocationToken: vi.fn((body: { token?: string }) => body.token ?? 'token'),
-  revokeGrant: vi.fn(async () => undefined),
+  revokeGrant: vi.fn(async (_adapter: unknown, _grantId: string, _now: Date) => undefined),
+  revokeStaleRefresh: vi.fn(
+    async (_adapter: unknown, refresh: { docketGrantId: string | null; revoked: Date | null }) => {
+      if (
+        refresh.docketGrantId &&
+        refresh.revoked &&
+        Date.now() - refresh.revoked.getTime() > 30_000
+      ) {
+        await live.revokeGrant(_adapter, refresh.docketGrantId, new Date());
+      }
+    },
+  ),
   verifyRevocableJwt: vi.fn(async () => null as Record<string, unknown> | null),
 }));
 
@@ -63,6 +74,7 @@ vi.mock('../src/oauth-provider-live-state', () => ({
   liveIntrospectionResult: live.liveIntrospectionResult,
   presentedRevocationToken: live.presentedRevocationToken,
   revokeGrant: live.revokeGrant,
+  revokeStaleRefresh: live.revokeStaleRefresh,
   verifyRevocableJwt: live.verifyRevocableJwt,
 }));
 
@@ -320,7 +332,11 @@ describe('OAuth token endpoint wrapper', () => {
       live.clientId = nextClientId;
       return {
         kind: 'stale-refresh',
-        refresh: { clientId: 'client_1', docketGrantId: grantId },
+        refresh: {
+          clientId: 'client_1',
+          docketGrantId: grantId,
+          revoked: new Date(Date.now() - 31_000),
+        },
       };
     });
     const raw = vi.fn(endpoint(() => ({ access_token: 'unreachable' })));

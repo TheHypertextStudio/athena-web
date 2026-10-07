@@ -17056,6 +17056,22 @@ resolveIdentityLabel(actorId, externalAccountId) ?? result.account` (Actor→use
 
 ## Active Tasks
 
+### [CODEX-MCP-AUTH-001] Keep Codex MCP refresh retries from forcing sign-in
+
+- **Status**: REVIEW
+- **State**: VALIDATING
+- **Started**: 2026-10-07
+- **Priority**: P1
+- **Description**: Prevent a concurrent Codex refresh retry from revoking a grant after another request has already rotated its refresh token.
+- **Subtasks**:
+  - [x] Verify production discovery, challenge scopes, and current issuer configuration.
+  - [x] Add a regression test for a duplicate refresh within the retry window and a delayed replay.
+  - [x] Preserve the rotated grant for 30 seconds while retaining delayed replay revocation.
+  - [x] Validate focused auth tests, package typecheck, lint, and formatting.
+  - [ ] Verify the actual Codex callback and refresh flow after release.
+- **Blockers**: Production callback and stored-grant behavior require a real Codex authorization. No production callback or refresh request was triggered during implementation.
+- **Notes**: Production metadata and current `origin/main` agree on `https://api.clearthedocket.com/api/auth` and advertise `offline_access`. The stale-refresh handler previously revoked the owning Docket grant for every replay, even when a successful concurrent refresh had just rotated it. The fix returns `invalid_grant` for retries within 30 seconds without invalidating the rotated grant. A replay after that window still revokes the exact grant. Focused auth revocation and token-endpoint tests pass: 27 tests. The auth package typecheck, focused ESLint, and Prettier checks pass. The actual Codex callback and refresh path still need production release verification.
+
 ### [MCP-004] Streamable HTTP cancellation support
 
 - **Status**: REVIEW

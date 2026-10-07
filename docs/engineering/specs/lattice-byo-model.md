@@ -2,9 +2,9 @@
 
 > **Reader**: the maintainer who must ship and verify the Docket–Lattice production round trip
 > **Required action**: preserve the no-fallback boundary and complete both production proofs
-> **Status**: deployed; production durable correlation and recovery verified; synthetic staging proposals rejected; staging mail mount and relay two-instance/restart gate remain open
+> **Status**: deployed; production durable correlation and recovery verified; synthetic staging proposals rejected; dedicated staging mail installed; deployed relay two-instance/restart gate remains open
 > **Owner**: Athena model backend
-> **Last updated**: 2026-10-04
+> **Last updated**: 2026-10-06
 
 Someone can point Athena's model work at a computer they own. They authorize Docket from their
 Lovelace account, pick one of the machines they have paired with Lattice, and from then on Athena's
@@ -498,16 +498,10 @@ and canceled, with keys/returns cleared, task fields unchanged, and zero comment
 was verified. The temporary GitHub transport secret was removed and its absence verified. Receipt:
 `/Users/williecubed/.codex/visualizations/2026/10/06/staging-mail-retry/report.json`.
 
+October 6 authenticated staging installation: the user-confirmed Hypertext Studio Cloud Console session stored the prepared sending-only key as enabled version `2` of `docket-staging-resend-api-key`. Only `RESEND_API_KEY` changed from `latest` to `2`; `CRON_SECRET:2`, the image, and other configuration were preserved. Healthy revision `docket-api-staging-00008-4qv` receives 100% of traffic. Read-only WIF run `37581039553` independently confirms that serving revision and pinned binding. Production runs `37580719642` before and `37581003425` after have identical runtime revision/binding metadata (`docket-api-00331-rsp`). The two exact synthetic proposals remain rejected as verified by `37579271109`. Safe receipt and full screenshots: `/Users/williecubed/.codex/visualizations/2026/10/06/staging-mail-installed/`. This supersedes the earlier unmounted-key blocker; the WIF identity's write denial remains historical and IAM was not expanded. Direct entry provenance establishes the stored dedicated key; no secret payload equality re-read or mail-delivery canary was performed.
+
 ### Remaining gates
 
-- Staging mail: the dedicated sending-only key is prepared but unmounted. The existing deployment
-  identity was denied `secretmanager.versions.add` on `docket-staging-resend-api-key` in runs
-  `37191632254` and `37579271109`; no secret version was acquired. An operator with that permission must add and pin
-  the staging version. No SDK sign-in is requested. The two exact synthetic proposals were rejected
-  in run `37192530284`; both sessions/delegations are canceled, reply keys cleared, tasks unchanged,
-  and comments remain zero. Its overall workflow is nonzero because the independent mail key was
-  not supplied for that rejection-only retry. Production revision/bindings remained stable.
-  See `ATHENA-LATTICE-ACCEPTANCE-002` for the safe receipts and the explicit remaining blocker.
 - Deployed relay two-instance/restart acceptance: the local real-process receipt above establishes
   implementation behavior, superseding the previous missing-runtime-receipt finding. The observed
   production signaling instance and unit doubles still do not verify deployment cutover or

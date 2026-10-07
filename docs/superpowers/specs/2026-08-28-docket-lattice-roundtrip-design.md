@@ -32,7 +32,7 @@ and reviewable returned action. Live offline/Retry, response-loss reconciliation
 refresh were verified without relinking and independently reviewed. See
 [the current production receipts and remaining gates](../../engineering/specs/lattice-byo-model.md#production-acceptance-october-4-2026).
 
-The two synthetic staging proposals are rejected with task fields/comments unchanged. The dedicated staging mail key remains unmounted because the deployment identity lacks secret-version write permission. No runtime receipt was found for the original
+At the October 4 checkpoint, the two synthetic staging proposals were rejected with task fields/comments unchanged. The dedicated staging mail key remained unmounted because the deployment identity lacks secret-version write permission. No runtime receipt was found for the original
 two-instance/restart relay proof; the runbook describes the procedure and unit tests use doubles.
 Keep that engineering gate open. Exact historical lease payloads and unseen HTTP attempt counts
 are outside the retained production evidence.
@@ -42,14 +42,15 @@ October 6 refresh: current main passed its CI and deployment gates. Fixed-target
 proposed production actions, and canceled staging delegations. Current authenticated UI still shows
 the original review linked to the same task. See the refreshed production acceptance section for
 exact serving revisions and evidence limits. Secret-reference metadata does not prove installation
-of the dedicated staging value; the mail and relay runtime gates above remain open.
+of the dedicated staging value; at that checkpoint the mail and relay runtime gates remained open.
 
 October 6 local runtime proof supersedes the earlier absence of any runtime receipt: two isolated
 HTTP relay processes sharing real PostgreSQL preserved duplicate-free submissions, one claimant,
 queued work, live leases, and one terminal result through hard process restarts. The unchanged
 Lovelace source and receipt scope are recorded in the linked engineering spec. This does not
-verify deployment cutover or competing deployed instances; staging mail installation and deployed
-relay acceptance remain open. Independent review found no actionable findings in the local proof.
+verify deployment cutover or competing deployed instances; deployed relay acceptance remains open. Independent review found no actionable findings in the local proof.
+
+October 6 authenticated staging installation: the user-confirmed Hypertext Studio Cloud Console session stored the prepared sending-only key as enabled version `2` of `docket-staging-resend-api-key`. Only `RESEND_API_KEY` changed from `latest` to `2`; `CRON_SECRET:2`, the image, and other configuration were preserved. Healthy revision `docket-api-staging-00008-4qv` receives 100% of traffic. Read-only WIF run `37581039553` independently confirms that serving revision and pinned binding. Production runs `37580719642` before and `37581003425` after have identical runtime revision/binding metadata (`docket-api-00331-rsp`). The two exact synthetic proposals remain rejected as verified by `37579271109`. Safe receipt and full screenshots: `/Users/williecubed/.codex/visualizations/2026/10/06/staging-mail-installed/`. This supersedes the earlier unmounted-key blocker; the WIF identity's write denial remains historical and IAM was not expanded. Direct entry provenance establishes the stored dedicated key; no secret payload equality re-read or mail-delivery canary was performed.
 
 ## Historical hold-ups (August 28, 2026)
 

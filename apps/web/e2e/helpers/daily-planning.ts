@@ -238,6 +238,11 @@ async function assertPlanningEvidenceStage(page: Page, stage: string): Promise<v
   if (!heading) throw new Error(`Unknown planning evidence stage: ${stage}`);
   const pathname = stage.endsWith('today') ? '/today' : '/plan';
   await expect.poll(() => new URL(page.url()).pathname).toBe(pathname);
+  if (pathname === '/plan') {
+    await expect(page.locator('[data-navigation-context="activity"]')).toBeVisible();
+    await expect(page.getByRole('complementary', { name: 'Navigation' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Open navigation' })).toHaveCount(0);
+  }
   const stageHeading = page.getByRole('heading', {
     name: heading,
     exact: true,

@@ -2,7 +2,19 @@
 
 This document is for engineers changing the morning planning flow. They should preserve the distinction between intended work, accepted revisions, and the time ledger when they edit Today, planning, or recovery.
 
-Today is the default home. Its daily-plan card links to `/plan?view=day&date=YYYY-MM-DD` and names the saved state: Plan day, Resume planning, or Adjust today. After 3 p.m. in the Hub timezone, Today also offers Plan tomorrow. The `/plan` route without `view=day` keeps weekly planning. The daily route owns the full content width because it renders its own agenda.
+Today is the default home. Its daily-plan card links to `/plan?view=day&date=YYYY-MM-DD` and names the saved state: Plan day, Resume planning, or Adjust today. After 3 p.m. in the Hub timezone, Today also offers Plan tomorrow. The `/plan` route without `view=day` keeps weekly planning in the application shell. Daily planning uses the shared immersive shell instead. It omits the sidebar, mobile workspace header, document tabs, and side panels. The date, stage controls, and saved exit to Today provide navigation within the activity. The surrounding session, workspace, query, offline, and overlay providers remain mounted.
+
+This component diagram shows the two navigation contexts beneath the same authenticated providers.
+
+```mermaid
+flowchart TB
+    Providers[Authenticated application providers] --> Navigation[Navigation context]
+    Navigation --> Daily[Immersive daily planning]
+    Navigation --> App[Application shell]
+    Daily --> Stages[Daily planning stages]
+    App --> Today[Today]
+    App --> Weekly[Weekly planning]
+```
 
 The daily flow has four screens: Review yesterday, Plan today, Review plan, and Confirmation. Review yesterday also collects unresolved commitments from earlier days in one list. Plan today combines editable selected work with a timed agenda. Add work opens a separate search view and the existing task composer. Review plan keeps the agenda and editable work together. Athena can supply a short qualitative assessment asynchronously; confirmation does not wait for it. Confirmation does not start a timer. Its Start action does.
 

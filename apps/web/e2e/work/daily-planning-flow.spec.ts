@@ -21,6 +21,8 @@ test('an empty day opens Plan today before the separate available-work browser',
 }, testInfo) => {
   const context = await setupPlan(page, 'daily-empty', []);
   await openPlan(page, context.date);
+  await expect(page.getByRole('complementary', { name: 'Navigation' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Open navigation' })).toHaveCount(0);
   let releaseDay: () => void = () => undefined;
   const heldDay = new Promise<void>((resolve) => {
     releaseDay = resolve;
@@ -41,6 +43,12 @@ test('an empty day opens Plan today before the separate available-work browser',
   await captureDailyPlanningEvidence(page, testInfo, 'add-work');
   await page.getByRole('button', { name: 'Done', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Plan today' })).toBeVisible();
+  await page.getByRole('button', { name: 'Today', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Today', exact: true })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Tasks', exact: true })).toHaveCount(1);
+  await openPlan(page, context.date);
+  await expect(page.getByRole('heading', { name: 'Plan today', exact: true })).toBeVisible();
+  await expect(page.getByRole('complementary', { name: 'Navigation' })).toHaveCount(0);
 });
 
 test('a large assigned backlog proposes only work that fits and starts the accepted next task', async ({

@@ -1,7 +1,6 @@
 'use client';
 
 import {
-  AppShell,
   ContextProvider,
   type HomeNavKey,
   IdentityGlyph,
@@ -65,6 +64,7 @@ import {
 } from '@/components/command-palette';
 import { OfflineBanner, OfflineContent } from '@/components/offline-state';
 import { NavigationProgress } from '@/components/navigation-progress';
+import { NavigationShell } from '@/components/navigation-shell';
 import { EntityIconGlyph } from '@/components/entity-display/entity-icon-glyph';
 import { OfflineSyncIndicator, OfflineSyncRuntime, useOutboxSummary } from '@/components/pwa';
 import { waitForOutboxSessionTransition } from '@/components/pwa/outbox';
@@ -955,7 +955,7 @@ function AthenaShellChrome({
   };
 
   return (
-    <AppShell
+    <NavigationShell
       sidebar={sidebar}
       tabBar={tabBar}
       mobileBrand={mobileBrand}
@@ -992,6 +992,6 @@ function AthenaShellChrome({
         <GlobalProgramComposer />
         <GlobalTeamComposer />
       </CreationDestinationProvider>
-    </AppShell>
+    </NavigationShell>
   );
 }

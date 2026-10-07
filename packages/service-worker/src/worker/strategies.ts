@@ -135,7 +135,7 @@ export async function navigateWithDocumentCache(
   const path = new URL(request.url).pathname;
   const userId = await readOfflineIdentity();
   const key = userId === null ? null : documentCacheKey(options.origin, path, userId);
-  const shellKey = userId === null ? null : shellCacheKey(options.origin, userId);
+  const shellKey = userId === null ? null : shellCacheKey(options.origin, userId, path);
 
   if (key !== null && !options.online) {
     const cached = await matchDocument(options.documentCache, key);
@@ -165,7 +165,7 @@ export async function navigateWithDocumentCache(
     if (key !== null && shellKey !== null && isCacheableDocument(settled.response)) {
       const cache = await caches.open(options.documentCache);
       void cache.put(key, settled.response.clone());
-      // The same document again, under the shell key. Every authenticated document carries the same
+      // The same document again, under its navigation-context key. Workspace documents share
       // chrome, and `RouteSlot` swaps the page for whatever the address bar asks for, so the most
       // recent one is a perfectly good stand-in for a route that has no document at all. Keeping it
       // this way costs one extra copy and no request — the alternative was a dedicated route in the

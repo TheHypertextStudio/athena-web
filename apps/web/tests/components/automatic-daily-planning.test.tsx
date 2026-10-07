@@ -125,7 +125,7 @@ describe('automatic daily planning', () => {
       'Opening planner in five seconds.',
     );
     await advance(4000);
-    expect(state.push).toHaveBeenCalledExactlyOnceWith('/plan?view=day&date=2026-10-02');
+    expect(state.push).toHaveBeenCalledExactlyOnceWith('/plan/day?date=2026-10-02');
   });
   it('gives a full five seconds when eligibility arrives between foreground heartbeats', async () => {
     state.preferences.isSuccess = false;
@@ -145,14 +145,14 @@ describe('automatic daily planning', () => {
     fireEvent.click(document.body);
     expect(screen.getByRole('dialog')).toBeVisible();
     fireEvent.click(screen.getByRole('button', { name: 'Plan now' }));
-    expect(state.push).toHaveBeenCalledExactlyOnceWith('/plan?view=day&date=2026-10-02');
+    expect(state.push).toHaveBeenCalledExactlyOnceWith('/plan/day?date=2026-10-02');
     await advance(6000);
     expect(state.push).toHaveBeenCalledTimes(1);
   });
   it('Escape proceeds immediately', () => {
     mount();
     fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape', code: 'Escape' });
-    expect(state.push).toHaveBeenCalledExactlyOnceWith('/plan?view=day&date=2026-10-02');
+    expect(state.push).toHaveBeenCalledExactlyOnceWith('/plan/day?date=2026-10-02');
   });
   it.each(['visibilitychange', 'blur'])(
     'cancels on %s and restarts all five seconds after a fresh read',
@@ -179,7 +179,7 @@ describe('automatic daily planning', () => {
     state.day.data.draft = { resumeStep: 'review_plan' };
     mount();
     fireEvent.click(screen.getByRole('button', { name: 'Plan now' }));
-    expect(state.push).toHaveBeenCalledWith('/plan?view=day&date=2026-10-02');
+    expect(state.push).toHaveBeenCalledWith('/plan/day?date=2026-10-02');
   });
   it('cancels if the accepted query changes during countdown', async () => {
     const view = mount();
@@ -222,7 +222,7 @@ describe('automatic daily planning', () => {
     vi.setSystemTime(new Date('2026-10-03T00:00:00Z'));
     mount();
     fireEvent.click(screen.getByRole('button', { name: 'Plan now' }));
-    expect(state.push).toHaveBeenCalledWith('/plan?view=day&date=2026-10-02');
+    expect(state.push).toHaveBeenCalledWith('/plan/day?date=2026-10-02');
   });
   it.each(['day', 'preferences'] as const)('stays quiet on a %s read failure', (query) => {
     state[query].isSuccess = false;
@@ -339,7 +339,7 @@ describe('automatic daily planning', () => {
     await advance(1000);
     expect(screen.getByText('Opening planner in 5 seconds.')).toBeVisible();
     fireEvent.click(screen.getByRole('button', { name: 'Plan now' }));
-    expect(state.push).toHaveBeenLastCalledWith('/plan?view=day&date=2026-10-09');
+    expect(state.push).toHaveBeenLastCalledWith('/plan/day?date=2026-10-09');
   });
   it('stays quiet while the person edits another surface', () => {
     const input = document.createElement('input');

@@ -2,7 +2,7 @@
 
 /** A missed timed block on Today with three concrete next actions. */
 import { Button, Card, CardContent } from '@docket/ui/primitives';
-import Link from '@/components/docket-link';
+import Link from 'next/link';
 import { useState, type JSX } from 'react';
 import { missedDailyAllocation } from '@docket/planning/daily-plan-execution';
 
@@ -39,7 +39,7 @@ export function MissedBlock({
   const taskId = allocation?.taskId;
   const task = day.tasks.find((item) => item.taskId === taskId);
   if (!allocation || !task) return null;
-  const recoveryHref = `/plan?view=day&date=${day.date}&missed=${encodeURIComponent(allocation.sessionId)}&task=${encodeURIComponent(task.taskId)}`;
+  const recoveryHref = `/plan/day?date=${day.date}&missed=${encodeURIComponent(allocation.sessionId)}&task=${encodeURIComponent(task.taskId)}`;
   return (
     <>
       <Card>
@@ -58,10 +58,14 @@ export function MissedBlock({
               Done
             </Button>
             <Button asChild variant="secondary">
-              <Link href={`${recoveryHref}&recovery=still_working`}>Still working</Link>
+              <Link prefetch={false} href={`${recoveryHref}&recovery=still_working`}>
+                Still working
+              </Link>
             </Button>
             <Button asChild>
-              <Link href={`${recoveryHref}&recovery=not_started`}>Not started</Link>
+              <Link prefetch={false} href={`${recoveryHref}&recovery=not_started`}>
+                Not started
+              </Link>
             </Button>
           </div>
         </CardContent>

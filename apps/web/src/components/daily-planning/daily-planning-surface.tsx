@@ -1,9 +1,13 @@
 'use client';
 
 /** Focused morning planning flow, separate from the default Today page. */
-import { InlineBanner } from '@docket/ui/components';
+import { ImmersiveShell, InlineBanner } from '@docket/ui/components';
 import { Skeleton, SkeletonText } from '@docket/ui/primitives';
-import type { JSX } from 'react';
+import { useEffect, useState, type JSX, type ReactNode } from 'react';
+import { Button } from '@docket/ui/primitives';
+import Link from 'next/link';
+import { useOptionalResolvedAccountId } from '@/components/resolved-account';
+import { dailyPlanningEntryKey, recordDailyPlanningEntry } from './automatic-daily-planning-model';
 
 import { AddWorkStage } from './daily-planning-add';
 import { ConfirmedStage } from './daily-planning-confirmed';
@@ -12,10 +16,17 @@ import {
   type ReadyPlanningController,
 } from './daily-planning-controller';
 import { DailyPlanningHeader } from './daily-planning-header';
-import { PlanStage } from './daily-planning-plan';
+import { PlanningPanelControls, type PlanningPanels } from './daily-planning-panels';
+import { PlanStage, PlanningActions } from './daily-planning-plan';
 import { YesterdayStage } from './daily-planning-yesterday';
 
-function StageView({ plan }: { readonly plan: ReadyPlanningController }): JSX.Element {
+function StageView({
+  plan,
+  panels,
+}: {
+  readonly plan: ReadyPlanningController;
+  readonly panels: PlanningPanels;
+}): JSX.Element {
   switch (plan.stage) {
     case 'yesterday':
       return <YesterdayStage plan={plan} />;
@@ -24,47 +35,23 @@ function StageView({ plan }: { readonly plan: ReadyPlanningController }): JSX.El
     case 'confirmed':
       return <ConfirmedStage plan={plan} />;
     default:
-      return <PlanStage plan={plan} />;
+      return <PlanStage plan={plan} panels={panels} />;
   }
 }
 
-/** Enter a resumable day draft from Today, or adjust an accepted plan. */
-export function DailyPlanningSurface(): JSX.Element {
-  const controller = useDailyPlanningController();
-  if (
-    controller.dayQ.isError ||
-    controller.previousQ.isError ||
-    (!controller.draft && Boolean(controller.error))
-  ) {
-    return (
-      <div className="mx-auto max-w-5xl p-8">
-        <InlineBanner
-          tone="critical"
-          title="Could not load your plan."
-          action={{
-            label: 'Retry',
-            onSelect: () => {
-              void controller.dayQ.refetch();
-              void controller.previousQ.refetch();
-              void controller.retryInitialProposal();
-            },
-          }}
-        />
-      </div>
-    );
-  }
-  if (controller.dayQ.isPending || controller.previousQ.isPending || !controller.draft) {
-    return (
+function PlanningLoading({ exit }: { readonly exit: ReactNode }): JSX.Element {
+  return (
+    <ImmersiveShell header={exit}>
       <div
         role="status"
         aria-label="Loading daily plan"
-        className="mx-auto flex w-full max-w-6xl flex-col gap-4 px-4 py-5 sm:gap-6 sm:py-8 @2xl:px-8"
+        className="flex w-full flex-col gap-4 px-4 pb-4 sm:px-6 sm:pb-6"
       >
         <div className="space-y-2">
           <SkeletonText className="w-44" />
           <SkeletonText scale="headline" className="w-56" />
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Skeleton className="h-8 w-28" />
           <Skeleton className="h-8 w-24" />
           <Skeleton className="h-8 w-28" />
@@ -81,13 +68,76 @@ export function DailyPlanningSurface(): JSX.Element {
           </div>
         </div>
       </div>
+    </ImmersiveShell>
+  );
+}
+
+/** Enter a resumable day draft from Today, or adjust an accepted plan. */
+export function DailyPlanningSurface(): JSX.Element {
+  const controller = useDailyPlanningController();
+  const [panels, setPanels] = useState<PlanningPanels>({ work: true, agenda: true });
+  const userId = useOptionalResolvedAccountId();
+  useEffect(() => {
+    if (userId)
+      recordDailyPlanningEntry(dailyPlanningEntryKey(userId, controller.timezone, controller.date));
+  }, [userId, controller.timezone, controller.date]);
+  useEffect(() => {
+    document.getElementById('main-content')?.scrollTo({ top: 0 });
+  }, [controller.stage]);
+  const exit = (
+    <Button variant="secondary" asChild>
+      <Link href="/today">Today</Link>
+    </Button>
+  );
+  if (
+    controller.dayQ.isError ||
+    controller.previousQ.isError ||
+    (!controller.draft && Boolean(controller.error))
+  ) {
+    return (
+      <ImmersiveShell header={exit}>
+        <div className="p-4 sm:p-6">
+          <InlineBanner
+            tone="critical"
+            title="Could not load your plan."
+            action={{
+              label: 'Retry',
+              onSelect: () => {
+                void controller.dayQ.refetch();
+                void controller.previousQ.refetch();
+                void controller.retryInitialProposal();
+              },
+            }}
+          />
+        </div>
+      </ImmersiveShell>
     );
+  }
+  if (controller.dayQ.isPending || controller.previousQ.isPending || !controller.draft) {
+    return <PlanningLoading exit={exit} />;
   }
   const plan: ReadyPlanningController = { ...controller, draft: controller.draft };
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-4 px-4 py-5 sm:gap-6 sm:py-8 @2xl:px-8">
-      <DailyPlanningHeader plan={plan} />
-      <StageView plan={plan} />
-    </div>
+    <ImmersiveShell
+      footer={
+        plan.stage === 'plan' || plan.stage === 'review' ? (
+          <PlanningActions plan={plan} />
+        ) : undefined
+      }
+      header={
+        <DailyPlanningHeader
+          plan={plan}
+          panelControls={
+            plan.stage === 'plan' || plan.stage === 'review' ? (
+              <PlanningPanelControls panels={panels} onChange={setPanels} />
+            ) : undefined
+          }
+        />
+      }
+    >
+      <div className="px-3 pb-4 sm:px-6 sm:pb-6">
+        <StageView plan={plan} panels={panels} />
+      </div>
+    </ImmersiveShell>
   );
 }

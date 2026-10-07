@@ -174,6 +174,10 @@ export function syncLocation(): void {
  * @param href - The destination, as a same-origin path with optional query.
  */
 export function navigateWithoutRouter(href: string): void {
+  if ((pathnameOf(href) === '/plan/day') !== (window.location.pathname === '/plan/day')) {
+    window.location.assign(href);
+    return;
+  }
   navigateHistory(href, false, true);
 }
 
@@ -248,8 +252,12 @@ export function navigateAuthenticated<TPattern extends AuthenticatedRoutePattern
 /** Subscribe to location changes. */
 function subscribe(onStoreChange: () => void): () => void {
   listeners.add(onStoreChange);
+  window.addEventListener('online', onStoreChange);
+  window.addEventListener('offline', onStoreChange);
   return () => {
     listeners.delete(onStoreChange);
+    window.removeEventListener('online', onStoreChange);
+    window.removeEventListener('offline', onStoreChange);
   };
 }
 
@@ -271,6 +279,7 @@ function getSnapshot(): Href {
  * outlives the request that made it.
  */
 const ServerHrefContext = createContext<Href | null>(null);
+const ClientHrefContext = createContext<(() => Href) | null>(null);
 
 /** Props for {@link AppLocationProvider}. */
 export interface AppLocationProviderProps {
@@ -288,6 +297,8 @@ export interface AppLocationProviderProps {
    * render, which is correct for every document that was not replayed.
    */
   readonly serverPath: string | null;
+  /** Activities follow the router destination rather than swapping local workspace pages. */
+  readonly navigationContext?: 'workspace' | 'activity';
   /** The subtree that may read the location. */
   readonly children: ReactNode;
 }
@@ -305,9 +316,14 @@ export interface AppLocationProviderProps {
  * hydration, then compares it with the client snapshot and re-renders if they differ — which is
  * exactly what the mismatched-document case needs. The first client render matches the server's
  * HTML, and the real URL is applied in a follow-up render rather than as a hydration error.
+ *
+ * Activities use Next's destination during online navigation so their initial reads cannot use
+ * the previous page's address before the browser commits. Offline they read the browser address
+ * so a cached activity document can still open another date.
  */
 export function AppLocationProvider({
   serverPath,
+  navigationContext = 'workspace',
   children,
 }: AppLocationProviderProps): JSX.Element {
   const routerPathname = usePathname();
@@ -319,15 +335,22 @@ export function AppLocationProvider({
     serverPath ??
     (routerSearch.size > 0 ? `${routerPathname}?${routerSearch.toString()}` : routerPathname);
   const getServerSnapshot = useCallback(() => serverHref, [serverHref]);
-  const locationHref = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
+  const routerHref = routerSearch.size > 0 ? `${routerPathname}?${routerSearch}` : routerPathname;
+  const getClientSnapshot = useCallback(
+    () => (navigationContext === 'activity' && navigator.onLine ? routerHref : getSnapshot()),
+    [navigationContext, routerHref],
+  );
+  const locationHref = useSyncExternalStore(subscribe, getClientSnapshot, getServerSnapshot);
 
   const navigate = useCallback(
     (href: string, replace: boolean, options?: ResponsiveNavigationOptions): boolean => {
+      // Activity layouts cannot be swapped underneath the workspace's local route outlet.
+      if (navigationContext === 'activity' || pathnameOf(href) === '/plan/day') return false;
       if (parseAuthenticatedRoute(pathnameOf(href)).kind !== 'matched') return false;
       navigateHistory(href, replace, options?.scroll !== false, options?.transition);
       return true;
     },
-    [],
+    [navigationContext],
   );
 
   useEffect(() => {
@@ -354,9 +377,11 @@ export function AppLocationProvider({
 
   return (
     <ServerHrefContext.Provider value={serverHref}>
-      <ResponsiveNavigationProvider canonicalHref={locationHref} navigate={navigate}>
-        {children}
-      </ResponsiveNavigationProvider>
+      <ClientHrefContext.Provider value={getClientSnapshot}>
+        <ResponsiveNavigationProvider canonicalHref={locationHref} navigate={navigate}>
+          {children}
+        </ResponsiveNavigationProvider>
+      </ClientHrefContext.Provider>
     </ServerHrefContext.Provider>
   );
 }
@@ -374,8 +399,9 @@ export function AppLocationProvider({
  */
 export function useAppLocation(): AppLocation {
   const serverHref = useContext(ServerHrefContext);
+  const getClientSnapshot = useContext(ClientHrefContext) ?? getSnapshot;
   const getServerSnapshot = useCallback(() => serverHref ?? '/', [serverHref]);
-  const href = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
+  const href = useSyncExternalStore(subscribe, getClientSnapshot, getServerSnapshot);
 
   const location = useMemo(() => {
     const pathname = pathnameOf(href);

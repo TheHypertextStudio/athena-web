@@ -5,6 +5,8 @@ import type { DailyPlanSession } from '@docket/planning/daily-plan-flow';
 import { instantAt } from '@docket/planning/zoned-time';
 import { Button, Card, CardContent } from '@docket/ui/primitives';
 import type { JSX } from 'react';
+import type { PlanningPanels } from './daily-planning-panels';
+import { ActivityPanels } from '@docket/ui/components';
 
 import { DailyAgenda } from './daily-planning-agenda';
 import { SessionEditor } from './daily-planning-session-editor';
@@ -104,7 +106,6 @@ function AgendaHeading({ plan }: { readonly plan: ReadyPlanningController }): JS
             </p>
           ) : null}
         </div>
-        {plan.stage === 'review' ? <ConfirmPlanButton plan={plan} /> : null}
       </div>
       <div
         className={
@@ -271,6 +272,38 @@ function PlanFooter({ plan }: { readonly plan: ReadyPlanningController }): JSX.E
   );
 }
 
+function ReviewFooter({ plan }: { readonly plan: ReadyPlanningController }): JSX.Element {
+  return (
+    <Card>
+      <CardContent className="flex flex-wrap items-center justify-between gap-3 py-3">
+        <Button
+          variant="secondary"
+          disabled={plan.deferPending}
+          onClick={() => {
+            void plan.go('plan');
+          }}
+        >
+          Edit plan
+        </Button>
+        <ConfirmPlanButton plan={plan} />
+      </CardContent>
+    </Card>
+  );
+}
+
+/** Keep the current stage's main action independent of panel visibility and scrolling. */
+export function PlanningActions({ plan }: { readonly plan: ReadyPlanningController }): JSX.Element {
+  return (
+    <fieldset
+      disabled={plan.confirming}
+      aria-busy={plan.confirming}
+      className="min-w-0 border-0 p-0"
+    >
+      {plan.stage === 'review' ? <ReviewFooter plan={plan} /> : <PlanFooter plan={plan} />}
+    </fieldset>
+  );
+}
+
 function assessmentToken(plan: ReadyPlanningController): string {
   let hash = 2166136261;
   for (const character of [...plan.names].map(([id, title]) => `${id}:${title}`).join('|'))
@@ -279,7 +312,13 @@ function assessmentToken(plan: ReadyPlanningController): string {
 }
 
 /** Give the final agenda precedence while keeping its chosen work directly editable. */
-export function PlanStage({ plan }: { readonly plan: ReadyPlanningController }): JSX.Element {
+export function PlanStage({
+  plan,
+  panels = { work: true, agenda: true },
+}: {
+  readonly plan: ReadyPlanningController;
+  readonly panels?: PlanningPanels;
+}): JSX.Element {
   const reviewing = plan.stage === 'review';
   return (
     <fieldset
@@ -296,13 +335,12 @@ export function PlanStage({ plan }: { readonly plan: ReadyPlanningController }):
           }}
         />
       ) : null}
-      <div
-        className={`grid min-w-0 items-start gap-6 ${reviewing ? 'xl:grid-cols-[minmax(0,1.5fr)_minmax(18rem,0.8fr)]' : 'xl:grid-cols-[minmax(20rem,0.8fr)_minmax(0,1.2fr)]'}`}
-      >
-        {reviewing ? <AgendaColumn plan={plan} /> : <WorkColumn plan={plan} />}
-        {reviewing ? <WorkColumn plan={plan} /> : <AgendaColumn plan={plan} />}
-      </div>
-      {!reviewing ? <PlanFooter plan={plan} /> : null}
+      <ActivityPanels
+        showPrimary={reviewing ? panels.agenda : panels.work}
+        showSecondary={reviewing ? panels.work : panels.agenda}
+        primary={reviewing ? <AgendaColumn plan={plan} /> : <WorkColumn plan={plan} />}
+        secondary={reviewing ? <WorkColumn plan={plan} /> : <AgendaColumn plan={plan} />}
+      />
     </fieldset>
   );
 }

@@ -56,7 +56,8 @@ export function AddWorkStage({ plan }: { readonly plan: ReadyPlanningController 
             {
               kind: 'task',
               sameWorkspaceCompletion: 'stay',
-              onCreated: (task) => {
+              navigateAfterCreate: false,
+              afterCreate: (task) => {
                 plan.addTask(task.id, task.organizationId, task.title);
               },
             },

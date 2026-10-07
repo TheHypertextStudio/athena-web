@@ -1,10 +1,9 @@
 'use client';
 
 import type { JSX } from 'react';
-import { Suspense } from 'react';
+import { Suspense, useEffect } from 'react';
 
 import { PlanSurface } from '@/components/scheduling-plan/plan-surface';
-import { DailyPlanningSurface } from '@/components/daily-planning/daily-planning-surface';
 import { useAppSearchParams } from '@/lib/app-location';
 
 /**
@@ -24,7 +23,14 @@ export default function PlanPage(): JSX.Element {
   );
 }
 
-function PlanRouteContent(): JSX.Element {
+function PlanRouteContent(): JSX.Element | null {
   const search = useAppSearchParams();
-  return search.get('view') === 'day' ? <DailyPlanningSurface /> : <PlanSurface />;
+  const legacyDay = search.get('view') === 'day';
+  useEffect(() => {
+    if (!legacyDay) return;
+    const next = new URLSearchParams(search);
+    next.delete('view');
+    window.location.replace(`/plan/day?${next.toString()}`);
+  }, [legacyDay, search]);
+  return legacyDay ? null : <PlanSurface />;
 }

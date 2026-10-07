@@ -12,6 +12,7 @@ import { NextResponse, type NextRequest } from 'next/server';
  */
 const PROTECTED_SEGMENTS: readonly string[] = [
   'today',
+  'plan',
   'focus',
   'inbox',
   'stream',
@@ -183,6 +184,25 @@ function isApplicationHost(host: string, canonicalHost: string): boolean {
   );
 }
 
+/** Preserve old daily links while moving planning into its own layout. */
+function legacyPlanningRedirect(request: NextRequest): NextResponse | null {
+  if (request.nextUrl.pathname !== '/plan' || request.nextUrl.searchParams.get('view') !== 'day')
+    return null;
+  const activity = request.nextUrl.clone();
+  activity.pathname = '/plan/day';
+  activity.searchParams.delete('view');
+  return NextResponse.redirect(activity);
+}
+
+function entryRedirect(request: NextRequest): NextResponse | null {
+  const legacy = legacyPlanningRedirect(request);
+  if (legacy) return legacy;
+  const { pathname, search } = request.nextUrl;
+  return isProtectedPath(pathname) && !hasSessionCookie(request)
+    ? NextResponse.redirect(signInUrl(request, `${pathname}${search}`))
+    : null;
+}
+
 /**
  * Two request-time responsibilities: restore the browser-facing host for proxied API calls, and
  * gate the authenticated `(app)` surfaces.
@@ -259,11 +279,9 @@ export function proxy(request: NextRequest): NextResponse {
   }
 
   const { pathname, search } = request.nextUrl;
+  const redirect = entryRedirect(request);
+  if (redirect) return redirect;
   const protectedPath = isProtectedPath(pathname);
-
-  if (protectedPath && !hasSessionCookie(request)) {
-    return NextResponse.redirect(signInUrl(request, `${pathname}${search}`));
-  }
 
   const forwardedHost = request.headers.get('x-forwarded-host');
   const restoreHost = forwardedHost !== null && forwardedHost !== request.headers.get('host');
@@ -302,6 +320,8 @@ export const config = {
     '/v1/:path*',
     '/today',
     '/today/:path*',
+    '/plan',
+    '/plan/:path*',
     '/focus',
     '/focus/:path*',
     '/inbox',

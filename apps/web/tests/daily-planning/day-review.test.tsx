@@ -84,7 +84,7 @@ describe('reviewing the current day', () => {
     render(<DailyPlanningEntry date="2026-10-06" />);
     expect(screen.getByRole('link', { name: 'Review day' })).toHaveAttribute(
       'href',
-      '/plan?view=day&date=2026-10-07&review=day',
+      '/plan/day?date=2026-10-07&review=day',
     );
   });
 

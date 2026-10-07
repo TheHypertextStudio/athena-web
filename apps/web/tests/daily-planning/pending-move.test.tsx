@@ -22,7 +22,10 @@ vi.mock('../../src/components/daily-planning/daily-planning-work', () => ({
 vi.mock('../../src/components/daily-planning/daily-planning-session-editor', () => ({
   SessionEditor: () => null,
 }));
-import { PlanStage } from '../../src/components/daily-planning/daily-planning-plan';
+import {
+  PlanStage,
+  PlanningActions,
+} from '../../src/components/daily-planning/daily-planning-plan';
 
 afterEach(cleanup);
 function controller(pending: boolean): ReadyPlanningController {
@@ -54,6 +57,27 @@ function controller(pending: boolean): ReadyPlanningController {
   } as unknown as ReadyPlanningController;
 }
 describe('confirmation during a pending move', () => {
+  it('keeps confirmation available when the agenda panel is hidden', async () => {
+    const plan = controller(false);
+    vi.mocked(plan.confirm.mutateAsync).mockResolvedValue({
+      date: plan.date,
+      revision: 13,
+      draft: null,
+      accepted: null,
+      resumeStep: 'plan_today',
+    });
+    render(
+      <>
+        <PlanStage plan={plan} panels={{ work: true, agenda: false }} />
+        <PlanningActions plan={plan} />
+      </>,
+    );
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Confirm plan' }));
+    });
+    expect(plan.confirm.mutateAsync).toHaveBeenCalledTimes(1);
+    expect(plan.setStage).toHaveBeenCalledWith('confirmed');
+  });
   it('does not confirm the prior day after its save resolves on another date', async () => {
     const plan = controller(false);
     let finishSave: (() => void) | undefined;
@@ -65,7 +89,12 @@ describe('confirmation during a pending move', () => {
     );
     let current = true;
     plan.isCurrentDate = () => current;
-    render(<PlanStage plan={plan} />);
+    render(
+      <>
+        <PlanStage plan={plan} />
+        <PlanningActions plan={plan} />
+      </>,
+    );
     fireEvent.click(screen.getByRole('button', { name: 'Confirm plan' }));
     current = false;
     await act(async () => {
@@ -86,7 +115,12 @@ describe('confirmation during a pending move', () => {
     );
     let current = true;
     plan.isCurrentDate = () => current;
-    render(<PlanStage plan={plan} />);
+    render(
+      <>
+        <PlanStage plan={plan} />
+        <PlanningActions plan={plan} />
+      </>,
+    );
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Confirm plan' }));
     });
@@ -107,7 +141,12 @@ describe('confirmation during a pending move', () => {
   });
   it('disables confirmation while moving a task', () => {
     const plan = controller(true);
-    render(<PlanStage plan={plan} />);
+    render(
+      <>
+        <PlanStage plan={plan} />
+        <PlanningActions plan={plan} />
+      </>,
+    );
     const button = screen.getByRole('button', { name: 'Confirm plan' });
     expect(button).toBeDisabled();
     fireEvent.click(button);
@@ -115,7 +154,12 @@ describe('confirmation during a pending move', () => {
   });
   it('guards confirmation before React renders the pending disabled state', () => {
     const plan = { ...controller(false), isMovingTask: () => true };
-    render(<PlanStage plan={plan} />);
+    render(
+      <>
+        <PlanStage plan={plan} />
+        <PlanningActions plan={plan} />
+      </>,
+    );
     fireEvent.click(screen.getByRole('button', { name: 'Confirm plan' }));
     expect(plan.setConfirming).not.toHaveBeenCalled();
     expect(plan.persist).not.toHaveBeenCalled();

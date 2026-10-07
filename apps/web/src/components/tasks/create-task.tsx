@@ -715,7 +715,7 @@ function GlobalTaskComposerDialog({
               onCreated: request.onCreated,
               invalidationKeys,
               invalidate,
-              navigationEnabled: !continueCreating,
+              navigationEnabled: !continueCreating && request.navigateAfterCreate !== false,
               seed: () => {
                 seedTaskRecord(queryClient, taskOrgId, task, references);
               },

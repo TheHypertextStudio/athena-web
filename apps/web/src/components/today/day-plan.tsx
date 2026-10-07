@@ -43,6 +43,7 @@ import {
 import type { CalendarEventOut } from '@docket/planning/calendar-contract';
 import { addDays, instantAt } from '@docket/planning/zoned-time';
 import Link from '@/components/docket-link';
+import ActivityLink from 'next/link';
 import type { JSX } from 'react';
 import { useMemo } from 'react';
 
@@ -87,7 +88,7 @@ function acceptedPlanningHref(
   day: ReturnType<typeof useDailyPlanningDay>,
   date: string,
 ): string | undefined {
-  return day.data?.accepted ? `/plan?view=day&date=${date}` : undefined;
+  return day.data?.accepted ? `/plan/day?date=${date}` : undefined;
 }
 
 function activeTaskFromEvidence(
@@ -196,7 +197,12 @@ function PlanRowActions({
       {/* Promoting is only meaningful relative to a task already ahead of this one. */}
       {planningHref ? (
         <Button asChild type="button" variant="ghost">
-          <Link href={`${planningHref}&task=${encodeURIComponent(item.id)}`}>Adjust plan</Link>
+          <ActivityLink
+            prefetch={false}
+            href={`${planningHref}&task=${encodeURIComponent(item.id)}`}
+          >
+            Adjust plan
+          </ActivityLink>
         </Button>
       ) : now && onPromote ? (
         <Button

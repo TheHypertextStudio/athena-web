@@ -39,7 +39,7 @@ function hasUnacceptedWorkday(
 }
 
 function isDailyPlanner(pathname: string, search: URLSearchParams): boolean {
-  return pathname === '/plan' && search.get('view') === 'day';
+  return pathname === '/plan/day' || (pathname === '/plan' && search.get('view') === 'day');
 }
 
 function remainingSeconds(countdown: { remaining: number } | null): number {
@@ -102,7 +102,7 @@ export function AutomaticDailyPlanning({
     if (dailyPlanningOwnsInput()) return;
     setRequestedFrom(`${key}:${pathname}`);
     setCountdown(null);
-    router.push(`/plan?view=day&date=${date}`);
+    router.push(`/plan/day?date=${date}`);
   }, [eligible, router, date, key, pathname]);
   useEffect(() => {
     const timer = window.setInterval(() => {

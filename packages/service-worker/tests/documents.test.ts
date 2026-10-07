@@ -226,6 +226,37 @@ describe('navigateWithDocumentCache', () => {
     expect(await stored?.text()).toBe('<html>today</html>');
   });
 
+  it('does not replay planning as the application shell or the application shell as planning', async () => {
+    await writeOfflineIdentity('u1');
+    await seedOfflinePage();
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(htmlResponse('<html>planning activity</html>'));
+    await navigateWithDocumentCache(new Request(`${ORIGIN}/plan/day`), OPTIONS);
+    fetchMock.mockRejectedValue(new Error('offline'));
+    const app = await navigateWithDocumentCache(new Request(`${ORIGIN}/never-seen`), {
+      ...OPTIONS,
+      online: false,
+    });
+    expect(await app.text()).toBe('<h1>offline</h1>');
+    fetchMock.mockResolvedValue(htmlResponse('<html>workspace</html>'));
+    await navigateWithDocumentCache(new Request(`${ORIGIN}/today`), OPTIONS);
+    fetchMock.mockRejectedValue(new Error('offline'));
+    const plan = await navigateWithDocumentCache(new Request(`${ORIGIN}/plan/day`), {
+      ...OPTIONS,
+      online: false,
+    });
+    expect(await plan.text()).toBe('<html>planning activity</html>');
+    const cache = await caches.open(OPTIONS.documentCache);
+    await cache.delete(documentCacheKey(ORIGIN, '/plan/day', 'u1'));
+    await cache.delete(shellCacheKey(ORIGIN, 'u1', '/plan/day'));
+    const unseenPlan = await navigateWithDocumentCache(new Request(`${ORIGIN}/plan/day`), {
+      ...OPTIONS,
+      online: false,
+    });
+    expect(await unseenPlan.text()).toBe('<h1>offline</h1>');
+  });
+
   it('stores nothing at all while nobody is signed in', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(htmlResponse('<html>sign in</html>'));
 

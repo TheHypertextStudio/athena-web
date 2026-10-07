@@ -33,7 +33,7 @@ describe('release acceptance runner', () => {
 
     expect(rootPackage.scripts['test:release']).toBe('scripts/run-release-acceptance.sh');
     expect(webPackage.scripts['test:e2e:release']).toBe(
-      'playwright test e2e/release e2e/work/daily-planning-flow.spec.ts e2e/work/daily-planning-day-review.spec.ts e2e/work/daily-planning-short-blocks.spec.ts --workers=1',
+      'playwright test e2e/release e2e/work/daily-planning-flow.spec.ts e2e/work/daily-planning-activity.spec.ts e2e/work/daily-planning-day-review.spec.ts e2e/work/daily-planning-short-blocks.spec.ts --workers=1',
     );
 
     if (!existsSync(runnerPath)) {

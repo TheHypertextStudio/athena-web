@@ -18,7 +18,11 @@ describe('ImmersiveShell', () => {
   it('keeps activity content and standing notices in one full-window landmark', () => {
     render(
       <ContextProvider initialContext="workspace" initialDensity="compact">
-        <ImmersiveShell banner={<p>Changes saved locally</p>}>
+        <ImmersiveShell
+          header={<button>Exit activity</button>}
+          footer={<button>Confirm activity</button>}
+          banner={<p>Changes saved locally</p>}
+        >
           <h1>Plan today</h1>
         </ImmersiveShell>
       </ContextProvider>,
@@ -27,8 +31,18 @@ describe('ImmersiveShell', () => {
     expect(screen.getByRole('main')).not.toContainElement(
       screen.getByText('Changes saved locally'),
     );
-    expect(screen.getByRole('main').parentElement).toHaveAttribute('data-density', 'compact');
+    expect(screen.getByRole('main').closest('[data-navigation-context]')).toHaveAttribute(
+      'data-density',
+      'compact',
+    );
     expect(screen.queryByRole('navigation')).not.toBeInTheDocument();
+    expect(screen.getByRole('main')).not.toContainElement(
+      screen.getByRole('button', { name: 'Exit activity' }),
+    );
+    expect(screen.getByRole('main').closest('[data-activity-workspace]')).not.toBeNull();
+    expect(screen.getByRole('main')).not.toContainElement(
+      screen.getByRole('button', { name: 'Confirm activity' }),
+    );
   });
 
   it('gives self-scrolling activities the full main region and an overlay host', () => {

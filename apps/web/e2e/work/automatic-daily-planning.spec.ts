@@ -100,7 +100,7 @@ test('an open app enters the saved daily planner at workday start and does not r
   await expect(announcement.getByText('Opening planner in 1 second.')).toBeVisible();
   await expect(page).toHaveURL(/\/inbox$/);
   await page.clock.runFor(1_000);
-  await expect(page).toHaveURL(`/plan?view=day&date=${date}`);
+  await expect(page).toHaveURL(`/plan/day?date=${date}`);
   await page.clock.resume();
   await expect(page.getByRole('heading', { name: 'Review plan', exact: true })).toBeVisible();
   await expect(page.getByText('Write the launch update').first()).toBeVisible();

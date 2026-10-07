@@ -340,6 +340,7 @@ describe('/open entry gateway', () => {
 describe('protected-path matcher', () => {
   const SEGMENTS = [
     'today',
+    'plan',
     'focus',
     'inbox',
     'stream',

@@ -1,23 +1,25 @@
-import { act, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { OrganizationId } from '@docket/identity-access/ids';
 import { TaskId } from '@docket/work/ids';
 
 import type * as AuthenticatedRouteModule from '@/lib/authenticated-route';
 
-const { nextPush, nextReplace, routeWarmth, scrollTo, startViewTransition } = vi.hoisted(() => ({
-  nextPush: vi.fn(),
-  nextReplace: vi.fn(),
-  routeWarmth: { warm: false },
-  scrollTo: vi.fn(),
-  startViewTransition: vi.fn((update: () => void) => {
-    update();
-  }),
-}));
+const { nextPush, nextReplace, routeWarmth, scrollTo, startViewTransition, routerLocation } =
+  vi.hoisted(() => ({
+    nextPush: vi.fn(),
+    nextReplace: vi.fn(),
+    routeWarmth: { warm: false },
+    routerLocation: { pathname: '/today', search: '' },
+    scrollTo: vi.fn(),
+    startViewTransition: vi.fn((update: () => void) => {
+      update();
+    }),
+  }));
 
 vi.mock('next/navigation', () => ({
-  usePathname: () => '/today',
-  useSearchParams: () => new URLSearchParams(),
+  usePathname: () => routerLocation.pathname,
+  useSearchParams: () => new URLSearchParams(routerLocation.search),
   useRouter: () => ({ push: nextPush, replace: nextReplace }),
 }));
 
@@ -27,6 +29,8 @@ vi.mock('@/lib/authenticated-route', async (importOriginal) => ({
   ...(await importOriginal<typeof AuthenticatedRouteModule>()),
   loadedAuthenticatedRoute: () => (routeWarmth.warm ? () => null : undefined),
 }));
+
+import { useAppRouter } from '@/lib/interactions/navigation';
 
 const { AppLocationProvider, navigateAuthenticated, useAppLocation, useTypedRoute } =
   await import('@/lib/app-location');
@@ -44,6 +48,8 @@ function TaskRouteProbe(): React.JSX.Element {
 }
 
 beforeEach(() => {
+  routerLocation.pathname = '/today';
+  routerLocation.search = '';
   window.history.replaceState(null, '', '/today');
   window.scrollTo = scrollTo;
   window.requestAnimationFrame = vi.fn((callback: FrameRequestCallback) => {
@@ -61,10 +67,43 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.restoreAllMocks();
   document.getElementById('main-content')?.remove();
 });
 
 describe('authenticated app location', () => {
+  it('uses the browser address when an activity document is replayed offline', () => {
+    routerLocation.pathname = '/plan/day';
+    routerLocation.search = 'date=2026-10-07';
+    window.history.replaceState(null, '', '/plan/day?date=2026-10-08');
+    vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
+    function DateProbe(): React.JSX.Element {
+      return <output>{useAppLocation().searchParams.get('date')}</output>;
+    }
+    render(
+      <AppLocationProvider serverPath="/plan/day?date=2026-10-07" navigationContext="activity">
+        <DateProbe />
+      </AppLocationProvider>,
+    );
+    expect(screen.getByText('2026-10-08')).toBeVisible();
+  });
+  it('reads an activity recovery destination before the browser commits its address', () => {
+    routerLocation.pathname = '/plan/day';
+    routerLocation.search = 'date=2026-10-07&recovery=still_working';
+    function RecoveryProbe(): React.JSX.Element {
+      return <output>{useAppLocation().searchParams.get('recovery')}</output>;
+    }
+    render(
+      <AppLocationProvider
+        serverPath="/plan/day?date=2026-10-07&recovery=still_working"
+        navigationContext="activity"
+      >
+        <RecoveryProbe />
+      </AppLocationProvider>,
+    );
+    expect(screen.getByText('still_working')).toBeVisible();
+    expect(window.location.pathname).toBe('/today');
+  });
   it('commits a validated authenticated route without asking Next for a transition', () => {
     render(
       <AppLocationProvider serverPath="/today">
@@ -249,4 +288,30 @@ describe('authenticated app location', () => {
       expect(main.scrollTop).toBe(64);
     });
   });
+});
+
+function LeaveActivityProbe(): React.JSX.Element {
+  const router = useAppRouter();
+  return (
+    <button
+      onClick={() => {
+        router.push('/today');
+      }}
+    >
+      Leave planning
+    </button>
+  );
+}
+
+it('leaves the activity through the route layout instead of swapping Today under it', () => {
+  routerLocation.pathname = '/plan/day';
+  window.history.replaceState(null, '', '/plan/day?date=2026-10-07');
+  render(
+    <AppLocationProvider serverPath="/plan/day?date=2026-10-07" navigationContext="activity">
+      <LeaveActivityProbe />
+    </AppLocationProvider>,
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Leave planning' }));
+  expect(nextPush).toHaveBeenCalledWith('/today', undefined);
+  expect(window.location.pathname).toBe('/plan/day');
 });

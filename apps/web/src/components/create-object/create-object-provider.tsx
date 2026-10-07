@@ -38,7 +38,7 @@ interface CreateObjectRequestBase {
  *
  * @remarks
  * This policy applies only when the selected destination matches the shell workspace. The global
- * composer owns cross-workspace routing and opens the created object's destination instead. Teams
+ * composer owns cross-workspace routing unless the request preserves an independent activity. Teams
  * use their fixed destination-workspace Teams-page behavior rather than this policy.
  */
 export type SameWorkspaceCompletion = 'stay' | 'open';
@@ -51,6 +51,8 @@ export interface CreateTaskRequest extends CreateObjectRequestBase {
   readonly initialTitle?: string;
   /** Stay on the invoking surface or open the new task when creation stays in the shell workspace. */
   readonly sameWorkspaceCompletion: SameWorkspaceCompletion;
+  /** Set false to keep an independent activity open after creation in any workspace. */
+  readonly navigateAfterCreate?: boolean;
   /** Notify the launcher after the task is created. */
   readonly onCreated?: (task: TaskOut) => void;
   /**

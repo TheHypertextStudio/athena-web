@@ -1,5 +1,7 @@
 # Docket
 
+Daily planning opens from Today into its own activity at `/plan/day`. Its centered workspace keeps the agenda and editable work together without the application sidebar. Panel controls show Work, Agenda, or both. Leaving saves the draft and returns to Today.
+
 Docket is a local-first workspace for planning and doing work. The repository contains the web
 application, operator console, API, background runner, shared packages, and deployment tooling.
 

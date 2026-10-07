@@ -80,7 +80,7 @@ describe('AgendaEntryActions', () => {
     render(<AgendaEntryActions entry={{ ...ENTRY, sessionId: 'accepted-session' }} />);
     expect(screen.getByRole('link', { name: 'Adjust plan' })).toHaveAttribute(
       'href',
-      '/plan?view=day&date=2026-07-01',
+      '/plan/day?date=2026-07-01',
     );
     expect(screen.queryByRole('button', { name: 'Entry actions' })).not.toBeInTheDocument();
     expect(removeFromPlan).not.toHaveBeenCalled();

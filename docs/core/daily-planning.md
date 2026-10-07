@@ -2,7 +2,7 @@
 
 This is for product designers and engineers changing the daily flow. They should preserve the existing daily planner and its saved stages. Today remains the default home after planning.
 
-Daily planning occupies a separate full-window activity context. Its navigation consists of the target date, planning stages, and Today exit. The application sidebar, workspace header, document tabs, and side panels return after leaving the flow. Weekly planning retains the normal application layout.
+Daily planning uses an independent activity layout with a centered workspace. It never mounts the application sidebar, document tabs, or global rails. Work and Agenda can be shown alone or together without discarding edits. Its navigation consists of the target date, planning stages, and Today exit. The application sidebar, workspace header, document tabs, and side panels return after leaving the flow. Weekly planning retains the normal application layout.
 
 Docket automatically opens the daily planner once per eligible local workday. The authenticated application shell shows “It’s time to plan your day.” and “Opening planner in 5 seconds.” Plan now opens the planner immediately. Escape also proceeds immediately. The dialog has no Later, close, skip, or dismissal action. Outside clicks leave it open.
 
@@ -10,7 +10,7 @@ Eligibility uses the scheduling timezone and the outer bounds of today’s non-p
 
 The countdown runs only while the document is visible and the window has focus. Losing either cancels entry without navigation. Returning reloads eligibility and starts a fresh five-second countdown. An active editor, another dialog, or an authentication transition prevents entry. Confirmation arriving during the countdown cancels it.
 
-Navigation uses `/plan?view=day&date=YYYY-MM-DD` and the existing controller resumes the saved stage. A browser marker scoped to the user, timezone, and date records the committed destination and prevents repeated entry across reloads and tabs. Unavailable browser storage falls back to an in-memory marker. Automatic entry does not accept a plan or start tracking. The planner keeps its existing exit behavior.
+Navigation uses `/plan/day?date=YYYY-MM-DD` and the existing controller resumes the saved stage. A browser marker scoped to the user, timezone, and date records the committed destination and prevents repeated entry across reloads and tabs. Unavailable browser storage falls back to an in-memory marker. Automatic entry does not accept a plan or start tracking. The planner keeps its existing exit behavior.
 
 This state machine shows the automatic entry lifecycle. Eligibility and successful reads allow the announcement. Leaving the foreground cancels it. Navigation records entry when the daily route commits.
 

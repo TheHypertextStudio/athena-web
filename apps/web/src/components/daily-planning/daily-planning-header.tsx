@@ -6,7 +6,7 @@ import { Button } from '@docket/ui/primitives';
 import { addDays } from '@docket/planning/zoned-time';
 import { formatDay } from '@/components/date-picker';
 import { PageHeader, PageHeading, PageTitle } from '@/components/views/page-layout';
-import type { JSX } from 'react';
+import type { JSX, ReactNode } from 'react';
 
 import type { ReadyPlanningController } from './daily-planning-controller';
 
@@ -122,12 +122,14 @@ function RecoveryControls({
 /** Render the current planning stage and a safe exit back to Today. */
 export function DailyPlanningHeader({
   plan,
+  panelControls,
 }: {
   readonly plan: ReadyPlanningController;
+  readonly panelControls?: ReactNode;
 }): JSX.Element {
   const { planLabel, heading } = planningHeading(plan);
   return (
-    <>
+    <div className="space-y-3">
       <PageHeader className="items-center">
         <PageHeading>
           <p className="text-on-surface-variant text-label-medium">
@@ -140,7 +142,7 @@ export function DailyPlanningHeader({
           <PageTitle>{heading}</PageTitle>
         </PageHeading>
         <Button
-          variant="ghost"
+          variant="secondary"
           disabled={plan.confirming || plan.deferPending}
           onClick={() => {
             if (plan.isMovingTask()) return;
@@ -159,8 +161,11 @@ export function DailyPlanningHeader({
           Today
         </Button>
       </PageHeader>
-      <PlanningSteps plan={plan} planLabel={planLabel} />
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <PlanningSteps plan={plan} planLabel={planLabel} />
+        {panelControls}
+      </div>
       <RecoveryControls plan={plan} />
-    </>
+    </div>
   );
 }

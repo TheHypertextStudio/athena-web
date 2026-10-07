@@ -109,7 +109,7 @@ export async function saveDraft(
 }
 /** Open and apply the initial proposed schedule before editing. */
 export async function openPlan(page: Page, date: string): Promise<void> {
-  await page.goto(`/plan?view=day&date=${date}`, { waitUntil: 'domcontentloaded' });
+  await page.goto(`/plan/day?date=${date}`, { waitUntil: 'domcontentloaded' });
   await expect(page.getByRole('heading', { name: /^Plan (today|tomorrow|day)$/ })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Organize day', exact: true })).toBeEnabled();
   const apply = page.getByRole('button', { name: 'Apply schedule', exact: true });
@@ -222,6 +222,7 @@ export async function confirmPlanningTouchPlan(page: Page): Promise<void> {
 async function assertPlanningEvidenceStage(page: Page, stage: string): Promise<void> {
   const headings: Record<string, string> = {
     plan: 'Plan today',
+    'agenda-panel': 'Plan today',
     'bounded-backlog': 'Plan today',
     review: 'Review plan',
     confirmation: 'Your plan is set',
@@ -236,9 +237,9 @@ async function assertPlanningEvidenceStage(page: Page, stage: string): Promise<v
   };
   const heading = headings[stage];
   if (!heading) throw new Error(`Unknown planning evidence stage: ${stage}`);
-  const pathname = stage.endsWith('today') ? '/today' : '/plan';
+  const pathname = stage.endsWith('today') ? '/today' : '/plan/day';
   await expect.poll(() => new URL(page.url()).pathname).toBe(pathname);
-  if (pathname === '/plan') {
+  if (pathname === '/plan/day') {
     await expect(page.locator('[data-navigation-context="activity"]')).toBeVisible();
     await expect(page.getByRole('complementary', { name: 'Navigation' })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Open navigation' })).toHaveCount(0);
@@ -250,12 +251,8 @@ async function assertPlanningEvidenceStage(page: Page, stage: string): Promise<v
   });
   await expect(stageHeading).toBeVisible();
   if (!stage.startsWith('short-blocks-')) {
-    await stageHeading.evaluate((element) => {
-      let ancestor = element.parentElement;
-      while (ancestor) {
-        ancestor.scrollTop = 0;
-        ancestor = ancestor.parentElement;
-      }
+    await page.locator('#main-content').evaluate((element) => {
+      element.scrollTop = 0;
       window.scrollTo(0, 0);
     });
   }

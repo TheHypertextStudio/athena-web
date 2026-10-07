@@ -30,7 +30,7 @@ import {
 import { type JSX, useRef, useState } from 'react';
 
 import { DatePicker } from '@/components/date-picker';
-import Link from '@/components/docket-link';
+import Link from 'next/link';
 
 import { AgendaTimeboxForm } from './agenda-timebox-form';
 import { type AgendaEntry, isTimeboxed, shiftISODate, useAgenda } from './agenda-context';
@@ -49,7 +49,9 @@ export default function AgendaEntryActions({ entry }: AgendaEntryActionsProps): 
   const { date } = useAgenda();
   return entry.sessionId ? (
     <Button variant="secondary" size="sm" asChild>
-      <Link href={`/plan?view=day&date=${date}`}>Adjust plan</Link>
+      <Link prefetch={false} href={`/plan/day?date=${date}`}>
+        Adjust plan
+      </Link>
     </Button>
   ) : (
     <LegacyEntryActions entry={entry} />

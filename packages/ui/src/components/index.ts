@@ -11,6 +11,7 @@ export { ActorAvatar, type ActorAvatarProps, type ActorKind } from './atoms/Acto
 export { AuthLayout, type AuthLayoutProps } from './auth/AuthLayout';
 export { DragHandle, type DragHandleProps } from './atoms/DragHandle';
 export { ImmersiveShell, type ImmersiveShellProps } from './shell/ImmersiveShell';
+export { ActivityPanels, type ActivityPanelsProps } from './shell/ActivityPanels';
 
 export {
   EmptyState,

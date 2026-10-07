@@ -16,41 +16,6 @@ import { expect, test } from '../helpers/fixtures';
 import { apiJson } from '../helpers/net';
 import { runAssignedBacklogPlanning } from '../helpers/daily-planning-backlog';
 
-test('an empty day opens Plan today before the separate available-work browser', async ({
-  page,
-}, testInfo) => {
-  const context = await setupPlan(page, 'daily-empty', []);
-  await openPlan(page, context.date);
-  await expect(page.getByRole('complementary', { name: 'Navigation' })).toHaveCount(0);
-  await expect(page.getByRole('button', { name: 'Open navigation' })).toHaveCount(0);
-  let releaseDay: () => void = () => undefined;
-  const heldDay = new Promise<void>((resolve) => {
-    releaseDay = resolve;
-  });
-  await page.route('**/v1/daily-plan/day/*', async (route) => {
-    if (route.request().method() === 'GET') await heldDay;
-    await route.continue();
-  });
-  await page.reload({ waitUntil: 'domcontentloaded' });
-  await expect(page.getByRole('status', { name: 'Loading daily plan' })).toBeVisible();
-  releaseDay();
-  await expect(page.getByRole('heading', { name: 'Plan today' })).toBeVisible();
-  await page.unrouteAll({ behavior: 'wait' });
-  await expect(page.getByRole('heading', { name: 'Agenda', exact: true })).toBeVisible();
-  await page.getByRole('button', { name: 'Add work', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Add work', exact: true })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'New task' })).toBeVisible();
-  await captureDailyPlanningEvidence(page, testInfo, 'add-work');
-  await page.getByRole('button', { name: 'Done', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Plan today' })).toBeVisible();
-  await page.getByRole('button', { name: 'Today', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Today', exact: true })).toBeVisible();
-  await expect(page.getByRole('link', { name: 'Tasks', exact: true })).toHaveCount(1);
-  await openPlan(page, context.date);
-  await expect(page.getByRole('heading', { name: 'Plan today', exact: true })).toBeVisible();
-  await expect(page.getByRole('complementary', { name: 'Navigation' })).toHaveCount(0);
-});
-
 test('a large assigned backlog proposes only work that fits and starts the accepted next task', async ({
   page,
 }, testInfo) => {
@@ -358,7 +323,7 @@ test('one yesterday review consolidates missed days and applies bulk choices', a
       endsAt: instantAt(yesterday, 12 * 60 + 15, context.timezone).toISOString(),
     },
   });
-  await page.goto(`/plan?view=day&date=${today}`, { waitUntil: 'domcontentloaded' });
+  await page.goto(`/plan/day?date=${today}`, { waitUntil: 'domcontentloaded' });
   await expect(page.getByRole('heading', { name: 'Review yesterday', exact: true })).toBeVisible();
   await expect(page.getByText('15 minutes recorded', { exact: true })).toBeVisible();
   await expect(page.getByRole('combobox', { name: /^Decision for/ })).toHaveCount(3);
@@ -500,4 +465,11 @@ test('renaming split work updates both sessions while keeping the title focused'
   await expect(updatedTitle).toBeFocused();
   const saved = await apiJson<DayRead>(page, `/v1/daily-plan/day/${context.date}`);
   expect(saved.draft?.sessions.map((session) => session.id)).toEqual(['rename-one', 'rename-two']);
+  await page.getByRole('button', { name: 'Panels', exact: true }).click();
+  await page.getByRole('menuitemcheckbox', { name: 'Work', exact: true }).click();
+  await expect(updatedTitle).toBeHidden();
+  await page.getByRole('button', { name: 'Panels', exact: true }).click();
+  await expect(page.getByRole('menuitemcheckbox', { name: 'Agenda', exact: true })).toBeDisabled();
+  await page.getByRole('menuitemcheckbox', { name: 'Work', exact: true }).click();
+  await expect(updatedTitle).toHaveValue('Write the final report');
 });

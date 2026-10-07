@@ -46,7 +46,7 @@ export interface CompleteCreateObjectOptions<Created> {
   readonly seed?: () => void;
   /** Open the destination object's canonical surface. */
   readonly openDestination: () => void;
-  /** Whether this completion may navigate; false while a create-more flow continues. */
+  /** Whether completion may navigate; false during repeat creation or an independent activity. */
   readonly navigationEnabled?: boolean;
 }
 
@@ -56,7 +56,8 @@ export interface CompleteCreateObjectOptions<Created> {
  * @remarks
  * Every success invalidates destination-owned reads. An unchanged destination honors the
  * launcher's stay/open choice and may notify its page. A changed destination always routes to the
- * created object's destination and never invokes an origin-page callback with foreign data.
+ * created object's destination when navigation is enabled. It never invokes an origin-page
+ * callback with foreign data.
  *
  * @param options - Created object, workspace comparison, invalidations, and completion effects.
  */

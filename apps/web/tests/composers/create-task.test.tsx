@@ -1091,12 +1091,15 @@ describe('CreateTaskDialog — robust composer', () => {
     );
   });
 
-  it('routes a normal cross-workspace Task without invoking the origin callback', async () => {
+  it.each([
+    ['opens cross-workspace task details', true],
+    ['keeps the invoking activity open', false],
+  ] as const)('%s without invoking the origin callback', async (_label, navigateAfterCreate) => {
     taskPost.mockResolvedValue(jsonResponse(true, { id: 'task_cross', title: 'Cross task' }));
     const afterCreate = vi.fn();
     const { closeCreate, onCreated } = renderGlobalTask({
       teams: TEAMS,
-      request: { afterCreate },
+      request: { afterCreate, navigateAfterCreate },
     });
 
     fireEvent.change(screen.getByRole('combobox', { name: 'Workspace' }), {
@@ -1111,13 +1114,13 @@ describe('CreateTaskDialog — robust composer', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Create task' }));
 
     await waitFor(() => {
-      expect(routerPush).toHaveBeenCalledWith(`/orgs/${TARGET_ORG_ID}/tasks/task_cross`);
+      expect(closeCreate).toHaveBeenCalledOnce();
     });
-    expect(closeCreate).toHaveBeenCalledOnce();
-    expect(onCreated).not.toHaveBeenCalled();
-    expect(afterCreate).toHaveBeenCalledWith(
-      expect.objectContaining({ id: 'task_cross', title: 'Cross task' }),
+    expect(routerPush.mock.calls).toEqual(
+      navigateAfterCreate ? [[`/orgs/${TARGET_ORG_ID}/tasks/task_cross`]] : [],
     );
+    expect(onCreated).not.toHaveBeenCalled();
+    expect(afterCreate).toHaveBeenCalledOnce();
   });
 
   it('awaits destination-independent work before cross-workspace routing', async () => {

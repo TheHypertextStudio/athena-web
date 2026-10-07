@@ -2,21 +2,24 @@
 
 This document is for engineers changing the morning planning flow. They should preserve the distinction between intended work, accepted revisions, and the time ledger when they edit Today, planning, or recovery.
 
-Today is the default home. Its daily-plan card links to `/plan?view=day&date=YYYY-MM-DD` and names the saved state: Plan day, Resume planning, or Adjust today. After 3 p.m. in the Hub timezone, Today also offers Plan tomorrow. The `/plan` route without `view=day` keeps weekly planning in the application shell. Daily planning uses the shared immersive shell instead. It omits the sidebar, mobile workspace header, document tabs, and side panels. The date, stage controls, and saved exit to Today provide navigation within the activity. The surrounding session, workspace, query, offline, and overlay providers remain mounted.
+Today is the default home. Its daily-plan card links to `/plan/day?date=YYYY-MM-DD` and names the saved state: Plan day, Resume planning, or Adjust today. After 3 p.m. in the Hub timezone, Today also offers Plan tomorrow. Weekly `/plan` stays in the application layout. Legacy `/plan?view=day` links redirect to the daily activity while preserving the date and recovery parameters.
 
-This component diagram shows the two navigation contexts beneath the same authenticated providers.
+The `(activity)` layout authenticates and hydrates planning without mounting `AppShellFrame`. Both layouts use the same identity reconciliation hook and private-state purge boundary. Activities receive workspace vocabulary, typed queries, offline ownership, and task creation without the application sidebar, document tabs, command palette, or global rails. Activity entry links use the router without background prefetching. Their initial reads use its destination before the browser commits the address. Offline activity reads use the browser address when a cached document represents another date. Cross-context navigation never swaps pages beneath the wrong shell. The service worker keeps planning and application fallback documents separate.
+
+The shared immersive shell centers a contained workspace on the canvas. It keeps activity navigation and primary actions visible while its content scrolls. The footer occupies its own space outside the timed canvas. Work and Agenda panels can be shown alone or together. Hiding a panel retains its mounted edits; narrow windows stack visible panels. The target date, stage buttons, and saved exit to Today are the activity's navigation.
+
+This component diagram shows the independent route layouts and their shared identity boundary.
 
 ```mermaid
 flowchart TB
-    Providers[Authenticated application providers] --> Navigation[Navigation context]
-    Navigation --> Daily[Immersive daily planning]
-    Navigation --> App[Application shell]
-    Daily --> Stages[Daily planning stages]
+    Identity[Authenticated identity boundary] --> Activity[Activity layout]
+    Identity --> App[Application layout]
+    Activity --> Daily[Daily planning workspace]
     App --> Today[Today]
     App --> Weekly[Weekly planning]
 ```
 
-The daily flow has four screens: Review yesterday, Plan today, Review plan, and Confirmation. Review yesterday also collects unresolved commitments from earlier days in one list. Plan today combines editable selected work with a timed agenda. Add work opens a separate search view and the existing task composer. Review plan keeps the agenda and editable work together. Athena can supply a short qualitative assessment asynchronously; confirmation does not wait for it. Confirmation does not start a timer. Its Start action does.
+The daily flow has four screens: Review yesterday, Plan today, Review plan, and Confirmation. Review yesterday also collects unresolved commitments from earlier days in one list. Plan today combines editable selected work with a timed agenda. Add work opens a separate search view and the existing task composer. Creating a task in another workspace adds it to the draft without leaving planning. Review plan keeps the agenda and editable work together. Athena can supply a short qualitative assessment asynchronously; confirmation does not wait for it. Confirmation does not start a timer. Its Start action does.
 
 The state machine is:
 
@@ -38,7 +41,7 @@ Planned time is minutes of daily work. It is separate from a workspace task esti
 
 The planner autosaves drafts after edits and saves on stage transitions. A failed save leaves the edit visible and exposes Retry. Task titles use the in-place editor in both planning and Today; task details have a separate action. Calendar placement has drag and explicit Schedule, Move, Duration, and Unschedule controls. The timed rectangles scale with duration. Short-block details appear outside the rectangle.
 
-The work list has its own order. Dragging a task onto another row, or choosing Move earlier or Move later, changes the intended sequence and the stored `sort` values. It does not change the task's priority, planned duration, or timed sessions. A separate drag onto the agenda places time. Confirmation projects the selected order into Today's existing daily-plan items. The day read includes project names only when the caller can view the project, and the row leaves that label out when no visible project exists. Review plan puts the agenda first in visual and reading order at every width, with confirmation beside its heading. Selected work remains directly editable in a secondary column. Workday settings collapse during review, and task cards have one scheduling and movement menu. Planning exposes editable bounds when no work schedule exists.
+The work list has its own order. Dragging a task onto another row, or choosing Move earlier or Move later, changes the intended sequence and the stored `sort` values. It does not change the task's priority, planned duration, or timed sessions. A separate drag onto the agenda places time. Confirmation projects the selected order into Today's existing daily-plan items. The day read includes project names only when the caller can view the project, and the row leaves that label out when no visible project exists. Review plan puts the agenda first in visual and reading order at every width, with confirmation outside the optional panels. Selected work remains directly editable in a secondary column. Workday settings collapse during review, and task cards have one scheduling and movement menu. Planning exposes editable bounds when no work schedule exists.
 
 The unresolved-work read is limited to the most recent 100 older plan items. Review decisions are stored per older plan item. Backlog keeps the task out of future carryover prompts, Today adds it to the draft, and Another date creates a future daily item without changing the older accepted version. Athena uses the selected owner runtime to assess the visible plan and propose up to three missing project tasks. A person must open the task composer and add a proposal; Docket never creates it silently. Stale assessment responses are discarded after draft edits. Work creation uses the existing task composer, and manual planning remains complete without Athena.
 
@@ -64,4 +67,4 @@ Accepted shared-agenda entries retain their session identity. Legacy inline boun
 
 ## Release acceptance
 
-The existing core-screen acceptance job runs the daily-planning browser journeys through `test:e2e:release`. This adds fifteen cases to the existing single browser worker and adds no workflow trigger or runner. The October 6 local artifact run took about five minutes for these cases, including signup rate-limit waits and visual evidence. The signal belongs on each delivery because the planner spans confirmation, recorded work, and accepted-history mutations.
+The existing core-screen acceptance job runs the daily-planning browser journeys through `test:e2e:release`. This adds sixteen cases to the existing single browser worker and adds no workflow trigger or runner. The October 6 local artifact run took about five minutes for these cases, including signup rate-limit waits and visual evidence. The signal belongs on each delivery because the planner spans confirmation, recorded work, and accepted-history mutations.

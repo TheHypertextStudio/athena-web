@@ -3,7 +3,7 @@
 /** Entry to the focused planning flow from the default Today page. */
 import { Button, Card, CardContent } from '@docket/ui/primitives';
 import { addDays, localMinuteOfDay } from '@docket/planning/zoned-time';
-import Link from '@/components/docket-link';
+import Link from 'next/link';
 import type { JSX } from 'react';
 
 import { useDailyPlanningDay } from './daily-planning-queries';
@@ -44,18 +44,22 @@ export function DailyPlanningEntry({ date }: { readonly date: string }): JSX.Ele
               <Button onClick={() => void day.refetch()}>Retry</Button>
             ) : (
               <Button asChild>
-                <Link href={`/plan?view=day&date=${date}`}>{label}</Link>
+                <Link prefetch={false} href={`/plan/day?date=${date}`}>
+                  {label}
+                </Link>
               </Button>
             )}
             {showTomorrow ? (
               <>
                 <Button asChild variant="secondary">
-                  <Link href={`/plan?view=day&date=${addDays(date, 1)}&review=day`}>
+                  <Link prefetch={false} href={`/plan/day?date=${addDays(date, 1)}&review=day`}>
                     Review day
                   </Link>
                 </Button>
                 <Button asChild variant="ghost">
-                  <Link href={`/plan?view=day&date=${addDays(date, 1)}`}>Plan tomorrow</Link>
+                  <Link prefetch={false} href={`/plan/day?date=${addDays(date, 1)}`}>
+                    Plan tomorrow
+                  </Link>
                 </Button>
               </>
             ) : null}

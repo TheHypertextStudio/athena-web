@@ -24,6 +24,7 @@ import {
   liveIntrospectionResult,
   presentedRevocationToken,
   revokeGrant,
+  revokeStaleRefresh,
   verifyRevocableJwt,
 } from './oauth-provider-live-state';
 import { coordinatingAdapter, rawInput } from './oauth-provider-transaction';
@@ -243,9 +244,7 @@ async function finishTokenRequest(
   }
   if (prepared.kind === 'stale-refresh') {
     const clientOwnsRefresh = clientIdFromRequest(ctx, body) === prepared.refresh.clientId;
-    if (clientOwnsRefresh && prepared.refresh.docketGrantId) {
-      await revokeGrant(adapter, prepared.refresh.docketGrantId, new Date());
-    }
+    if (clientOwnsRefresh) await revokeStaleRefresh(adapter, prepared.refresh);
     return { kind: 'stale' };
   }
   await issuanceState.set(prepared.state);

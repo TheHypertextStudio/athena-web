@@ -29,6 +29,9 @@ import {
   oauthServerError,
 } from './oauth-provider-types';
 
+// Concurrent clients may retry the old token before they persist the rotated one.
+const REFRESH_RETRY_GRACE_MS = 30_000;
+
 /** Decode an issued JWT payload for post-provider invariant checks without verifying it again. */
 export function decodeJwtPayload(token: string): Record<string, unknown> {
   const encoded = token.split('.')[1];
@@ -90,6 +93,22 @@ export async function revokeGrant(
     ],
     update: { revoked: now },
   });
+}
+
+/** Keep a rotated grant alive when its previous refresh token is retried concurrently. */
+export async function revokeStaleRefresh(
+  adapter: DBTransactionAdapter,
+  refresh: OAuthRefreshRecord,
+): Promise<void> {
+  const revokedAt = refresh.revoked?.getTime();
+  if (
+    !refresh.docketGrantId ||
+    revokedAt === undefined ||
+    Date.now() - revokedAt <= REFRESH_RETRY_GRACE_MS
+  ) {
+    return;
+  }
+  await revokeGrant(adapter, refresh.docketGrantId, new Date());
 }
 
 /** Verify a candidate access JWT against stored keys and either Docket protected resource. */

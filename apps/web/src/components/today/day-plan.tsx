@@ -36,7 +36,12 @@ import {
   Skeleton,
   Stack,
 } from '@docket/ui/primitives';
-import { selectDailyExecution } from '@docket/planning/daily-plan-execution';
+import {
+  type DailyExecutionEvent,
+  selectDailyExecution,
+} from '@docket/planning/daily-plan-execution';
+import type { CalendarEventOut } from '@docket/planning/calendar-contract';
+import { addDays, instantAt } from '@docket/planning/zoned-time';
 import Link from '@/components/docket-link';
 import type { JSX } from 'react';
 import { useMemo } from 'react';
@@ -97,6 +102,27 @@ function activeTaskFromEvidence(
   );
 }
 
+function acceptedCalendarEvent(
+  event: CalendarEventOut,
+  day: NonNullable<ReturnType<typeof useDailyPlanningDay>['data']>,
+): DailyExecutionEvent | null {
+  if (event.blocksTime === false) return null;
+  if (event.startsAt && event.endsAt)
+    return { title: event.title, startsAt: event.startsAt, endsAt: event.endsAt };
+  if (
+    !event.allDayStartDate ||
+    !event.allDayEndDate ||
+    event.allDayStartDate > day.date ||
+    event.allDayEndDate <= day.date
+  )
+    return null;
+  return {
+    title: event.title,
+    startsAt: instantAt(day.date, 0, day.timezone).toISOString(),
+    endsAt: instantAt(addDays(day.date, 1), 0, day.timezone).toISOString(),
+  };
+}
+
 function AcceptedEvent({
   day,
   plan,
@@ -106,14 +132,14 @@ function AcceptedEvent({
   readonly plan: readonly HubTodayPlanItem[];
   readonly displayTimezone: string;
 }): JSX.Element | null {
-  const snapshot = day.data?.accepted?.current.snapshot;
+  const data = day.data;
+  const snapshot = data?.accepted?.current.snapshot;
   if (!snapshot) return null;
-  const events =
-    day.data?.agenda.entries.flatMap((entry) =>
-      entry.kind === 'google_calendar_event' && entry.event.startsAt && entry.event.endsAt
-        ? [{ title: entry.event.title, startsAt: entry.event.startsAt, endsAt: entry.event.endsAt }]
-        : [],
-    ) ?? [];
+  const events = data.agenda.entries.flatMap((entry) => {
+    if (entry.kind !== 'google_calendar_event') return [];
+    const event = acceptedCalendarEvent(entry.event, data);
+    return event ? [event] : [];
+  });
   const execution = selectDailyExecution({
     sessions: snapshot.sessions,
     taskBudgets: snapshot.tasks,
@@ -121,7 +147,7 @@ function AcceptedEvent({
     actionableTaskIds: plan
       .filter((item) => item.planStatus === 'planned' && !item.blocked)
       .map((item) => item.id),
-    actual: day.data?.actual ?? [],
+    actual: data.actual,
     activeTaskId: activeTaskFromEvidence(day, plan),
     events,
   });

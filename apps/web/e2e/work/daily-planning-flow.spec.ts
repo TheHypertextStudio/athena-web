@@ -14,6 +14,7 @@ import {
 } from '../helpers/daily-planning';
 import { expect, test } from '../helpers/fixtures';
 import { apiJson } from '../helpers/net';
+import { runAssignedBacklogPlanning } from '../helpers/daily-planning-backlog';
 
 test('an empty day opens Plan today before the separate available-work browser', async ({
   page,
@@ -40,6 +41,12 @@ test('an empty day opens Plan today before the separate available-work browser',
   await captureDailyPlanningEvidence(page, testInfo, 'add-work');
   await page.getByRole('button', { name: 'Done', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Plan today' })).toBeVisible();
+});
+
+test('a large assigned backlog proposes only work that fits and starts the accepted next task', async ({
+  page,
+}, testInfo) => {
+  await runAssignedBacklogPlanning(page, testInfo);
 });
 
 test('a late proposal preserves actual work, excludes completed tasks, and resumes after reload', async ({

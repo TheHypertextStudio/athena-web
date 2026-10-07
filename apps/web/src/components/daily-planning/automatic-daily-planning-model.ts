@@ -46,13 +46,13 @@ export function isDailyPlanningWorkday(
   );
 }
 
-/** Do not replace an active editor or another modal with the planning announcement. */
+/** Let active editors, pickers, menus, and modals retain input before announcing planning. */
 export function dailyPlanningOwnsInput(): boolean {
   const active = document.activeElement;
   return (
     Boolean(
       document.querySelector(
-        '[role="dialog"][data-state="open"]:not([data-daily-planning-entry]), [role="alertdialog"]',
+        '[role="dialog"][data-state="open"]:not([data-daily-planning-entry]), [role="alertdialog"], [role="menu"][data-state="open"], [role="listbox"][data-state="open"]',
       ),
     ) ||
     (active instanceof HTMLElement &&

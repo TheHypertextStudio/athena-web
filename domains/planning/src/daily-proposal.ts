@@ -105,6 +105,39 @@ function dependencyOrder(candidates: readonly ProposalCandidate[]): ProposalCand
   return ordered;
 }
 
+function commitmentIds(
+  input: DailyProposalInput,
+  preserved: readonly DailyPlanSession[],
+): Set<string> {
+  return new Set([
+    ...input.draft.tasks.map((task) => task.taskId),
+    ...preserved.flatMap((session) => session.allocations.map((allocation) => allocation.taskId)),
+    ...input.candidates
+      .filter((candidate) => candidate.selectionSource === 'explicit')
+      .map((candidate) => candidate.taskId),
+  ]);
+}
+
+function prioritizedCandidates(
+  candidates: readonly ProposalCandidate[],
+  commitments: ReadonlySet<string>,
+): ProposalCandidate[] {
+  const priority = new Set(commitments);
+  const byId = new Map(candidates.map((candidate) => [candidate.taskId, candidate]));
+  const pending = [...priority];
+  for (const taskId of pending) {
+    for (const blocker of byId.get(taskId)?.blockerIds ?? []) {
+      if (priority.has(blocker)) continue;
+      priority.add(blocker);
+      pending.push(blocker);
+    }
+  }
+  return dependencyOrder([
+    ...candidates.filter((candidate) => priority.has(candidate.taskId)),
+    ...candidates.filter((candidate) => !priority.has(candidate.taskId)),
+  ]);
+}
+
 function sessionChanges(
   before: readonly DailyPlanSession[],
   after: readonly DailyPlanSession[],
@@ -192,7 +225,7 @@ function placeCandidate(
 ): number {
   while (remaining > 0 && state.budget > 0) {
     const free = state.pool.spans.find(
-      (span) => span.end > Math.max(span.start, notBefore, state.cursor),
+      (span) => span.end - Math.max(span.start, notBefore, state.cursor) >= 60_000,
     );
     if (!free) break;
     const start = Math.max(free.start, notBefore, state.cursor);
@@ -205,6 +238,17 @@ function placeCandidate(
     remaining -= minutes;
   }
   return remaining;
+}
+
+function canFitSuggestion(state: PlacementState, remaining: number, notBefore: number): boolean {
+  if (remaining <= 0 || remaining > state.budget) return false;
+  const capacity = state.pool.spans.reduce(
+    (sum, span) =>
+      sum +
+      Math.max(0, Math.floor((span.end - Math.max(span.start, notBefore, state.cursor)) / 60_000)),
+    0,
+  );
+  return remaining <= capacity;
 }
 
 function committedMinutes(
@@ -244,6 +288,7 @@ function scheduleCandidate(input: {
   readonly unplaced: DailyProposalResult['unplaced'][number][];
   readonly finished: Map<string, number>;
   readonly availableMinutes: number;
+  readonly commitments: ReadonlySet<string>;
 }): void {
   const { candidate, preserved, now, state, tasks, unplaced, finished, availableMinutes } = input;
   const allocations = dailyAllocations(preserved)
@@ -255,6 +300,12 @@ function scheduleCandidate(input: {
     }));
   const assigned = allocations.reduce((sum, allocation) => sum + allocation.minutes, 0);
   const plannedMinutes = Math.max(candidate.plannedMinutes, assigned);
+  let remaining = Math.max(0, plannedMinutes - committedMinutes(allocations, candidate, now));
+  const blocked = candidate.blockerIds.some((id) => !finished.has(id));
+  const notBefore = Math.max(now, ...candidate.blockerIds.map((id) => finished.get(id) ?? now));
+  if (!input.commitments.has(candidate.taskId)) {
+    if (candidate.active || blocked || !canFitSuggestion(state, remaining, notBefore)) return;
+  }
   tasks.push({
     taskId: candidate.taskId,
     organizationId: candidate.organizationId,
@@ -265,9 +316,6 @@ function scheduleCandidate(input: {
     durationResolved: true,
   });
   if (candidate.active) return;
-  let remaining = Math.max(0, plannedMinutes - committedMinutes(allocations, candidate, now));
-  const blocked = candidate.blockerIds.some((id) => !finished.has(id));
-  const notBefore = Math.max(now, ...candidate.blockerIds.map((id) => finished.get(id) ?? now));
   if (!blocked) remaining = placeCandidate(state, candidate, remaining, notBefore);
   if (remaining > 0)
     unplaced.push({
@@ -330,7 +378,8 @@ export function proposeDailyPlan(input: DailyProposalInput): DailyProposalResult
   const tasks: DailyPlanTask[] = [];
   const unplaced: DailyProposalResult['unplaced'][number][] = [];
   const finished = new Map<string, number>();
-  for (const candidate of dependencyOrder(input.candidates))
+  const commitments = commitmentIds(input, preserved);
+  for (const candidate of prioritizedCandidates(input.candidates, commitments))
     scheduleCandidate({
       candidate,
       preserved,
@@ -340,6 +389,7 @@ export function proposeDailyPlan(input: DailyProposalInput): DailyProposalResult
       unplaced,
       finished,
       availableMinutes,
+      commitments,
     });
   retainPreservedTasks(tasks, input.draft, preserved);
   const sessions = [...preserved, ...state.sessions].sort((left, right) =>

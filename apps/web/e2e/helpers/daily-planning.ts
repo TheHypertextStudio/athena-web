@@ -222,6 +222,7 @@ export async function confirmPlanningTouchPlan(page: Page): Promise<void> {
 async function assertPlanningEvidenceStage(page: Page, stage: string): Promise<void> {
   const headings: Record<string, string> = {
     plan: 'Plan today',
+    'bounded-backlog': 'Plan today',
     review: 'Review plan',
     confirmation: 'Your plan is set',
     today: 'Today',

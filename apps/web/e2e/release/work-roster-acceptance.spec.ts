@@ -3,6 +3,7 @@ import type { Locator, Page } from '@playwright/test';
 
 import { signUpAndOnboard } from '../helpers/app';
 import { orgHref, TIMEOUTS } from '../helpers/constants';
+import { openPlan } from '../helpers/daily-planning';
 import { expect, test } from '../helpers/fixtures';
 import {
   expectInitiativeDensity,
@@ -272,6 +273,8 @@ async function exerciseGroupRecovery(page: Page, fixture: WorkRosterFixture): Pr
 test('shared work rosters pass the release geometry and interaction contract', async ({ page }) => {
   test.setTimeout(1_200_000);
   const { orgId: personalOrganizationId } = await signUpAndOnboard(page, 'RosterRelease');
+  // The roster fixture leaves the morning planner before exercising a full workday of other views.
+  await openPlan(page, new Date().toLocaleDateString('en-CA', { timeZone: 'UTC' }));
   const fixture = await seedWorkRosterFixture(page, personalOrganizationId);
   await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
   page.setDefaultTimeout(TIMEOUTS.ui);

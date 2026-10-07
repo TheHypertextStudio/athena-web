@@ -83,6 +83,8 @@ export function toCalendarEventOut(row: CalendarEventRow): z.input<typeof Calend
     externalCalendarId: row.externalCalendarId,
     externalEventId: row.externalEventId,
     status: row.status,
+    // Legacy rows have no provider snapshot, so retain Google's opaque default.
+    blocksTime: true,
     title: row.title,
     description: row.description,
     location: row.location,
@@ -293,6 +295,7 @@ function toLegacyCalendarEventOut(
     externalCalendarId: item.externalCalendarId,
     externalEventId: item.externalEventId,
     status: item.status,
+    blocksTime: item.blocksTime ?? true,
     title: item.title,
     description: item.description,
     location: item.location,

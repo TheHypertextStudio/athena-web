@@ -106,7 +106,7 @@ function externalCommitments(
   dayEnd: Date,
 ): Interval[] {
   return agenda.entries.flatMap((entry) =>
-    entry.kind === 'google_calendar_event'
+    entry.kind === 'google_calendar_event' && entry.event.blocksTime !== false
       ? [
           {
             start: entry.event.startsAt ? Date.parse(entry.event.startsAt) : dayStart.getTime(),

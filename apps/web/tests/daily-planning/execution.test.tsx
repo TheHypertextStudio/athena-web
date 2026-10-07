@@ -115,6 +115,111 @@ describe('daily planning execution screens', () => {
     expect(screen.getByRole('article', { name: 'Next event: Team check-in' })).toBeInTheDocument();
   });
 
+  it('does not promote a free provider event ahead of accepted work on Today', () => {
+    planningDay.data = {
+      accepted: { current: { snapshot: { sessions } } },
+      actual: [],
+      agenda: {
+        entries: [
+          {
+            kind: 'google_calendar_event',
+            event: {
+              title: 'Free calendar note',
+              blocksTime: false,
+              startsAt: '2026-10-06T09:35:00.000Z',
+              endsAt: '2026-10-06T10:00:00.000Z',
+            },
+          },
+        ],
+      },
+    };
+    render(
+      <DayPlan
+        date="2026-10-06"
+        plan={[]}
+        orgName={() => 'Workspace'}
+        loading={false}
+        displayTimezone="UTC"
+      />,
+    );
+    expect(
+      screen.queryByRole('article', { name: 'Next event: Free calendar note' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it.each([
+    ['UTC', '2026-10-06T09:40:00.000Z'],
+    ['America/Los_Angeles', '2026-10-07T06:40:00.000Z'],
+  ])('shows a busy all-day event within the accepted Hub day in %s', (timezone, now) => {
+    vi.setSystemTime(new Date(now));
+    planningDay.data = {
+      date: '2026-10-06',
+      timezone,
+      accepted: { current: { snapshot: { sessions } } },
+      actual: [],
+      agenda: {
+        entries: [
+          {
+            kind: 'google_calendar_event',
+            event: {
+              title: 'Unavailable day',
+              blocksTime: true,
+              allDay: true,
+              allDayStartDate: '2026-10-06',
+              allDayEndDate: '2026-10-07',
+              startsAt: null,
+              endsAt: null,
+            },
+          },
+          {
+            kind: 'google_calendar_event',
+            event: {
+              title: 'Home',
+              blocksTime: false,
+              allDay: true,
+              allDayStartDate: '2026-10-06',
+              allDayEndDate: '2026-10-07',
+            },
+          },
+        ],
+      },
+    };
+    render(
+      <DayPlan
+        date="2026-10-06"
+        plan={[]}
+        orgName={() => 'Workspace'}
+        loading={false}
+        displayTimezone={timezone}
+      />,
+    );
+    const event = screen.getByRole('article', { name: 'Next event: Unavailable day' });
+    expect(event).toHaveTextContent('Now');
+    expect(screen.queryByRole('article', { name: 'Next event: Home' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Start / })).not.toBeInTheDocument();
+  });
+
+  it('offers unfinished work while a free provider event is visible on the calendar', () => {
+    const plan = controller();
+    render(
+      <ConfirmedStage
+        plan={{
+          ...plan,
+          fixed: [
+            {
+              title: 'Free calendar note',
+              blocksTime: false,
+              startsAt: '2026-10-06T09:35:00.000Z',
+              endsAt: '2026-10-06T10:00:00.000Z',
+            },
+          ],
+        }}
+      />,
+    );
+    expect(screen.getByRole('button', { name: 'Start Unfinished' })).toBeInTheDocument();
+    expect(plan.timerControls.start).not.toHaveBeenCalled();
+  });
+
   it('offers the next unfinished allocation without starting tracking on confirmation', () => {
     const plan = controller();
     render(<ConfirmedStage plan={plan} />);

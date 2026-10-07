@@ -100,7 +100,7 @@ function AgendaHeading({ plan }: { readonly plan: ReadyPlanningController }): JS
             <p className="text-on-surface-variant text-body-small">
               {unplaced > 0
                 ? `${unplaced} ${unplaced === 1 ? 'task still needs' : 'tasks still need'} a block.`
-                : 'All selected work has a block.'}
+                : 'No unscheduled work.'}
             </p>
           ) : null}
         </div>
@@ -113,10 +113,7 @@ function AgendaHeading({ plan }: { readonly plan: ReadyPlanningController }): JS
             : 'space-y-2'
         }
       >
-        <WorkdayControls
-          key={`${plan.stage}:${Boolean(plan.proposalContext?.workScheduleMissing)}`}
-          plan={plan}
-        />
+        <WorkdayControls plan={plan} />
         <ScheduleControls plan={plan} />
       </div>
     </>

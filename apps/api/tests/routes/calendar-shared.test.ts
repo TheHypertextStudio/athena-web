@@ -241,7 +241,10 @@ describe('buildAgendaPayload', () => {
     ]);
   });
 
-  async function seedGoogleEvent(label: string) {
+  async function seedGoogleEvent(
+    label: string,
+    options: { providerRaw?: Record<string, unknown>; allDay?: boolean } = {},
+  ) {
     const schema = await getDb();
     const userId = await seedUserWithHub(schema.db, schema, label);
     await seedGoogleAccount(schema.db, schema, userId, `${label}-sub`);
@@ -281,12 +284,35 @@ describe('buildAgendaPayload', () => {
       externalEventId: `${label}-evt`,
       status: 'confirmed',
       title: `${label} event`,
-      startsAt: new Date('2026-07-01T16:00:00.000Z'),
-      endsAt: new Date('2026-07-01T17:00:00.000Z'),
+      startsAt: options.allDay ? null : new Date('2026-07-01T16:00:00.000Z'),
+      endsAt: options.allDay ? null : new Date('2026-07-01T17:00:00.000Z'),
+      allDayStartDate: options.allDay ? '2026-07-01' : null,
+      allDayEndDate: options.allDay ? '2026-07-02' : null,
+      providerRaw: options.providerRaw ?? null,
       syncState: 'clean',
     });
     return { schema, userId, connectionId: connection.id };
   }
+
+  it.each([
+    ['TransparentTimed', { transparency: 'transparent' }, false, false],
+    ['TransparentAllDay', { transparency: 'transparent' }, true, false],
+    ['WorkingLocation', { eventType: 'workingLocation' }, true, false],
+    ['OpaqueAllDay', { transparency: 'opaque' }, true, true],
+    ['OutOfOffice', { eventType: 'outOfOffice', transparency: 'opaque' }, false, true],
+  ] as const)(
+    'retains %s in the agenda with its availability fact',
+    async (label, providerRaw, allDay, blocksTime) => {
+      const { userId } = await seedGoogleEvent(label, { providerRaw, allDay });
+      const payload = await calendarShared.buildAgendaPayload(userId, { date: '2026-07-01' });
+      expect(payload.entries).toHaveLength(1);
+      const entry = payload.entries[0];
+      if (entry?.kind !== 'google_calendar_event') throw new Error('Missing calendar agenda entry');
+      expect(entry.event).toHaveProperty('blocksTime', blocksTime);
+      expect(entry.event.title).toBe(`${label} event`);
+      expect(entry.event).not.toHaveProperty('providerRaw');
+    },
+  );
 
   it('skips Google Calendar enrichment entirely when includeGoogleCalendar is false', async () => {
     const { userId } = await seedGoogleEvent('SkipGCal');

@@ -11,7 +11,7 @@ import {
   CollapsibleTrigger,
   Input,
 } from '@docket/ui/primitives';
-import type { JSX } from 'react';
+import { useState, type JSX } from 'react';
 import type { ReadyPlanningController } from './daily-planning-controller';
 import { clock, clockValue } from './daily-planning-agenda';
 
@@ -66,6 +66,9 @@ function WorkdayBuffer({ plan }: { readonly plan: ReadyPlanningController }): JS
 
 /** Edit the scheduling bounds and buffer used by the proposal service. */
 export function WorkdayControls({ plan }: { readonly plan: ReadyPlanningController }): JSX.Element {
+  const [chosenOpen, setChosenOpen] = useState<boolean | null>(null);
+  const open =
+    chosenOpen ?? (plan.stage === 'plan' && Boolean(plan.proposalContext?.workScheduleMissing));
   const changeTime = (value: string, field: 'start' | 'finish'): void => {
     if (!value) return;
     const [hours, minutes] = value.split(':').map(Number);
@@ -81,10 +84,7 @@ export function WorkdayControls({ plan }: { readonly plan: ReadyPlanningControll
     );
   };
   return (
-    <Collapsible
-      defaultOpen={plan.stage === 'plan' && Boolean(plan.proposalContext?.workScheduleMissing)}
-      className="space-y-2"
-    >
+    <Collapsible open={open} onOpenChange={setChosenOpen} className="space-y-2">
       <CollapsibleTrigger asChild>
         <Button
           size="sm"
@@ -100,6 +100,7 @@ export function WorkdayControls({ plan }: { readonly plan: ReadyPlanningControll
         </Button>
       </CollapsibleTrigger>
       <CollapsibleContent className="space-y-2">
+        <p className="text-body-small text-on-surface-variant">Timezone: {plan.timezone}</p>
         {plan.proposalContext?.workScheduleMissing ? (
           <p className="text-body-small text-on-surface-variant">
             No saved work schedule. Set the hours for this day.

@@ -111,7 +111,7 @@ describe('daily proposal', () => {
   });
   it('starts in the future and reserves a configurable buffer', () => {
     const result = proposeDailyPlan({
-      ...input([candidate('long', 600)]),
+      ...input([{ ...candidate('long', 600), selectionSource: 'explicit' }]),
       now: Date.parse(at(10, 40)),
       draft: { ...draft, settings: { startAt: at(9) } },
     });
@@ -161,8 +161,8 @@ describe('daily proposal', () => {
   it('never schedules a dependent whose unfinished blocker is absent or unplaced', () => {
     const result = proposeDailyPlan(
       input([
-        { ...candidate('a'), blockerIds: ['external'] },
-        { ...candidate('b'), blockerIds: ['a'] },
+        { ...candidate('a'), blockerIds: ['external'], selectionSource: 'explicit' },
+        { ...candidate('b'), blockerIds: ['a'], selectionSource: 'explicit' },
       ]),
     );
     expect(result.draft.sessions).toEqual([]);
@@ -183,7 +183,10 @@ describe('daily proposal', () => {
     );
   });
   it('reports no availability without creating overlapping time', () => {
-    const result = proposeDailyPlan({ ...input([candidate('a')]), windows: [] });
+    const result = proposeDailyPlan({
+      ...input([{ ...candidate('a'), selectionSource: 'explicit' }]),
+      windows: [],
+    });
     expect(result.draft.sessions).toEqual([]);
     expect(result.unplaced[0]?.reason).toBe('no_availability');
   });
@@ -383,8 +386,8 @@ describe('daily proposal', () => {
   it('reports cyclic work as blocked without placing either task', () => {
     const result = proposeDailyPlan(
       input([
-        { ...candidate('a'), blockerIds: ['b'] },
-        { ...candidate('b'), blockerIds: ['a'] },
+        { ...candidate('a'), blockerIds: ['b'], selectionSource: 'explicit' },
+        { ...candidate('b'), blockerIds: ['a'], selectionSource: 'explicit' },
       ]),
     );
     expect(result.draft.sessions).toEqual([]);
@@ -428,7 +431,10 @@ describe('daily proposal', () => {
 
   it('does not place a dependent before a manual blocker at the workday finish', () => {
     const result = proposeDailyPlan({
-      ...input([candidate('a', 15), { ...candidate('b', 15), blockerIds: ['a'] }]),
+      ...input([
+        candidate('a', 15),
+        { ...candidate('b', 15), blockerIds: ['a'], selectionSource: 'explicit' },
+      ]),
       draft: {
         ...draft,
         sessions: [

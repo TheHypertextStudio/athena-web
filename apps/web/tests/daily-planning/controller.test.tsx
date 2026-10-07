@@ -1,10 +1,18 @@
 import { act, cleanup, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { CalendarEventOut } from '@docket/planning/calendar-contract';
 import type { DailyPlanSnapshot } from '@docket/planning/daily-plan-flow';
 
 const state = vi.hoisted(() => ({
   params: new URLSearchParams(),
   timezone: 'Asia/Tokyo',
+  entries: [] as {
+    kind: 'google_calendar_event';
+    event: Pick<
+      CalendarEventOut,
+      'title' | 'startsAt' | 'endsAt' | 'allDayStartDate' | 'allDayEndDate' | 'blocksTime'
+    >;
+  }[],
   ready: false,
   draft: null as DailyPlanSnapshot | null,
   editing: vi.fn(),
@@ -55,7 +63,13 @@ vi.mock('../../src/components/daily-planning/daily-planning-queries', () => ({
   useDailyPlanningDay: (date: string, enabled: boolean) => {
     state.days(date, enabled);
     return {
-      data: { tasks: [], fixedIntervals: [], agenda: { entries: [] }, timezone: state.timezone },
+      data: {
+        date,
+        tasks: [],
+        fixedIntervals: [],
+        agenda: { entries: state.entries },
+        timezone: state.timezone,
+      },
     };
   },
   useDeferDailyTask: () => ({ mutateAsync: state.defer }),
@@ -68,6 +82,8 @@ import { useDailyPlanningController } from '../../src/components/daily-planning/
 
 beforeEach(() => {
   state.params = new URLSearchParams();
+  state.entries = [];
+  state.timezone = 'Asia/Tokyo';
   state.ready = false;
   state.draft = null;
   state.days.mockClear();
@@ -253,4 +269,68 @@ describe('planning entry context', () => {
     });
     expect(state.setStage).toHaveBeenCalledTimes(1);
   });
+});
+
+it('carries provider availability and all-day bounds using the canonical day timezone', () => {
+  state.timezone = 'UTC';
+  state.params = new URLSearchParams('date=2026-10-07');
+  state.entries = [
+    {
+      kind: 'google_calendar_event',
+      event: {
+        title: 'Free note',
+        startsAt: '2026-10-07T10:00:00.000Z',
+        endsAt: '2026-10-07T10:30:00.000Z',
+        allDayStartDate: null,
+        allDayEndDate: null,
+        blocksTime: false,
+      },
+    },
+    {
+      kind: 'google_calendar_event',
+      event: {
+        title: 'Home',
+        startsAt: null,
+        endsAt: null,
+        allDayStartDate: '2026-10-07',
+        allDayEndDate: '2026-10-08',
+        blocksTime: false,
+      },
+    },
+    {
+      kind: 'google_calendar_event',
+      event: {
+        title: 'Busy day',
+        startsAt: null,
+        endsAt: null,
+        allDayStartDate: '2026-10-07',
+        allDayEndDate: '2026-10-08',
+        blocksTime: true,
+      },
+    },
+  ];
+  const { result } = renderHook(() => useDailyPlanningController());
+  expect(result.current.timezone).toBe('UTC');
+  expect(result.current.fixed).toEqual([
+    {
+      title: 'Free note',
+      startsAt: '2026-10-07T10:00:00.000Z',
+      endsAt: '2026-10-07T10:30:00.000Z',
+      blocksTime: false,
+    },
+    {
+      title: 'Home',
+      startsAt: '2026-10-07T00:00:00.000Z',
+      endsAt: '2026-10-08T00:00:00.000Z',
+      allDay: true,
+      blocksTime: false,
+    },
+    {
+      title: 'Busy day',
+      startsAt: '2026-10-07T00:00:00.000Z',
+      endsAt: '2026-10-08T00:00:00.000Z',
+      allDay: true,
+      blocksTime: true,
+    },
+  ]);
 });

@@ -44,7 +44,38 @@ it('keeps review settings closed while allowing a keyboard edit of the finish ti
 
 it('shows editable bounds in planning when no work schedule has been saved', () => {
   render(<WorkdayControls plan={controller('plan')} />);
+  expect(screen.getByText('Timezone: UTC')).toBeVisible();
   expect(screen.getByLabelText('Start')).toHaveValue('09:00');
   expect(screen.getByLabelText('Finish')).toHaveValue('17:00');
   expect(screen.getByLabelText('Buffer %')).toHaveValue(15);
 });
+
+it('expands missing work hours when proposal context arrives after the first render', () => {
+  const plan = controller('plan');
+  const pending = { ...plan, proposalContext: null };
+  const view = render(<WorkdayControls plan={pending} />);
+  expect(screen.getByRole('button', { name: 'Workday settings' })).toHaveAttribute(
+    'aria-expanded',
+    'false',
+  );
+  view.rerender(<WorkdayControls plan={plan} />);
+  expect(screen.getByLabelText('Start')).toHaveValue('09:00');
+  expect(screen.getByRole('button', { name: 'Workday settings' })).toHaveAttribute(
+    'aria-expanded',
+    'true',
+  );
+});
+
+it.each([true, false])(
+  'preserves an explicit open choice of %s when proposal context arrives',
+  async (open) => {
+    const plan = controller('plan');
+    const view = render(<WorkdayControls plan={{ ...plan, proposalContext: null }} />);
+    const user = userEvent.setup();
+    const trigger = screen.getByRole('button', { name: 'Workday settings' });
+    await user.click(trigger);
+    if (!open) await user.click(trigger);
+    view.rerender(<WorkdayControls plan={plan} />);
+    expect(trigger).toHaveAttribute('aria-expanded', String(open));
+  },
+);

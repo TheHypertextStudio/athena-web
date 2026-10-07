@@ -56,7 +56,7 @@ function nextFocus(plan: ReadyPlanningController) {
     sessions: plan.draft.sessions,
     taskBudgets: plan.draft.tasks,
     now: Date.now(),
-    events: plan.fixed,
+    events: plan.fixed.filter((event) => event.blocksTime !== false),
     actionableTaskIds: actionable.map((task) => task.taskId),
     actual: plan.dayQ.data?.actual ?? [],
     activeTaskId: workingTaskId,

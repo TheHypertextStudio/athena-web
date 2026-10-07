@@ -2,7 +2,8 @@
 
 /** Compose one shared planning draft, task state, and execution controls. */
 import type { DailyPlanSnapshot } from '@docket/planning/daily-plan-flow';
-import { addDays } from '@docket/planning/zoned-time';
+import type { CalendarEventOut } from '@docket/planning/calendar-contract';
+import { addDays, instantAt } from '@docket/planning/zoned-time';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTimerControls, useTimerState } from '@/components/time-tracking/use-timer';
 import { useAppSearchParams } from '@/lib/app-location';
@@ -26,6 +27,25 @@ export type DayData = NonNullable<ReturnType<typeof useDailyPlanningDay>['data']
 /** A currently viewable task in a planning day. */
 export type Task = DayData['tasks'][number];
 
+function calendarEventForDay(event: CalendarEventOut, day: DayData): EventBlock | null {
+  const context = { title: event.title, blocksTime: event.blocksTime };
+  if (event.startsAt && event.endsAt)
+    return { ...context, startsAt: event.startsAt, endsAt: event.endsAt };
+  if (
+    !event.allDayStartDate ||
+    !event.allDayEndDate ||
+    event.allDayStartDate > day.date ||
+    event.allDayEndDate <= day.date
+  )
+    return null;
+  return {
+    ...context,
+    allDay: true,
+    startsAt: instantAt(day.date, 0, day.timezone).toISOString(),
+    endsAt: instantAt(addDays(day.date, 1), 0, day.timezone).toISOString(),
+  };
+}
+
 function eventsFor(day: DayData): EventBlock[] {
   return [
     ...day.fixedIntervals.map((value) => ({
@@ -33,11 +53,11 @@ function eventsFor(day: DayData): EventBlock[] {
       startsAt: value.startsAt,
       endsAt: value.endsAt,
     })),
-    ...day.agenda.entries.flatMap((entry) =>
-      entry.kind === 'google_calendar_event' && entry.event.startsAt && entry.event.endsAt
-        ? [{ title: entry.event.title, startsAt: entry.event.startsAt, endsAt: entry.event.endsAt }]
-        : [],
-    ),
+    ...day.agenda.entries.flatMap((entry) => {
+      if (entry.kind !== 'google_calendar_event') return [];
+      const event = calendarEventForDay(entry.event, day);
+      return event ? [event] : [];
+    }),
   ];
 }
 

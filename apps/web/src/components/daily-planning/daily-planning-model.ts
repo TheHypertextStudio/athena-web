@@ -9,6 +9,8 @@ import {
 export interface BusyInterval {
   readonly startsAt: string;
   readonly endsAt: string;
+  /** Explicitly free provider context remains visible without reserving time. */
+  readonly blocksTime?: boolean | undefined;
 }
 
 /** Recorded totals with optional bounds for reconciling work inside a reserved allocation. */
@@ -29,7 +31,9 @@ export function nextAvailableStart(
   const duration = minutes * 60_000;
   const finish = Date.parse(finishAt);
   let cursor = Math.ceil(Date.parse(startsAt) / (15 * 60_000)) * 15 * 60_000;
-  const occupied = [...busy].sort((a, b) => a.startsAt.localeCompare(b.startsAt));
+  const occupied = busy
+    .filter((interval) => interval.blocksTime !== false)
+    .sort((a, b) => a.startsAt.localeCompare(b.startsAt));
   for (const interval of occupied) {
     const left = Date.parse(interval.startsAt);
     const right = Date.parse(interval.endsAt);
@@ -131,6 +135,7 @@ export function setPlannedMinutes(
 /** Keep overlapping records from consuming the same reserved minute twice. */
 function occupiedMinutes(start: number, end: number, busy: readonly BusyInterval[]): number {
   const intervals = busy
+    .filter((item) => item.blocksTime !== false)
     .map(
       (item) =>
         [
@@ -174,7 +179,7 @@ export function placeSession(
   if (start < Date.parse(dayStartAt) || end > Date.parse(snapshot.finishAt))
     throw new Error('Choose a time within the workday.');
   if (
-    [...busy, ...others].some(
+    [...busy.filter((item) => item.blocksTime !== false), ...others].some(
       (item) => start < Date.parse(item.endsAt) && end > Date.parse(item.startsAt),
     )
   )

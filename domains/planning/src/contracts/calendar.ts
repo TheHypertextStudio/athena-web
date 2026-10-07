@@ -21,6 +21,8 @@ import {
 import { DateString } from '../date-time';
 import { TaskId } from '@docket/work/ids';
 import { TaskOut } from '@docket/work/task-model';
+import { CalendarBlocksTime, CalendarProviderEventType } from './calendar-provider-semantics';
+export { CalendarProviderEventType } from './calendar-provider-semantics';
 
 /** Calendar providers supported by the layered-calendar domain. */
 export const CalendarProvider = z.enum(['docket', 'google', 'microsoft']);
@@ -191,6 +193,7 @@ export const CalendarEventOut = z
     externalCalendarId: z.string().describe('Provider calendar id.'),
     externalEventId: z.string().describe('Provider event id.'),
     status: z.string().describe('Provider event status, e.g. confirmed/cancelled.'),
+    blocksTime: CalendarBlocksTime,
     title: z.string().describe('Event summary/title.'),
     description: z.string().nullable().describe('Event description/body, if present.'),
     location: z.string().nullable().describe('Event location, if present.'),
@@ -248,17 +251,6 @@ export const CalendarItemKind = z
   });
 /** Calendar-item-kind value. */
 export type CalendarItemKind = z.infer<typeof CalendarItemKind>;
-
-/** Provider-specific semantic event categories normalized for presentation decisions. */
-export const CalendarProviderEventType = z
-  .enum(['default', 'out_of_office', 'focus_time', 'working_location', 'birthday', 'from_gmail'])
-  .meta({
-    id: 'CalendarProviderEventType',
-    description:
-      'A recognized provider event category normalized independently of provider naming conventions.',
-  });
-/** Calendar provider-event-type value. */
-export type CalendarProviderEventType = z.infer<typeof CalendarProviderEventType>;
 
 /** A calendar item's display/scheduling status. */
 export const CalendarItemStatus = z
@@ -449,6 +441,7 @@ export const CalendarItemOut = z
     providerEventType: CalendarProviderEventType.nullable()
       .optional()
       .describe('Recognized provider event semantics; null or omitted when unavailable.'),
+    blocksTime: CalendarBlocksTime,
     externalCalendarId: z
       .string()
       .nullable()

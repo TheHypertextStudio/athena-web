@@ -349,4 +349,52 @@ describe('automatic daily planning', () => {
     expect(screen.queryByRole('dialog')).toBeNull();
     input.remove();
   });
+  it.each(['menu', 'listbox'])(
+    'waits for an open %s before announcing a fresh countdown',
+    async (role) => {
+      const overlay = document.createElement('div');
+      overlay.setAttribute('role', role);
+      overlay.setAttribute('data-state', 'open');
+      document.body.append(overlay);
+      try {
+        mount();
+        await advance(6000);
+        expect(screen.queryByText('It’s time to plan your day.')).toBeNull();
+        expect(state.push).not.toHaveBeenCalled();
+        overlay.setAttribute('data-state', 'closed');
+        await advance(1000);
+        expect(screen.getByText('Opening planner in 5 seconds.')).toBeVisible();
+        await advance(4999);
+        expect(state.push).not.toHaveBeenCalled();
+        await advance(1);
+        expect(state.push).toHaveBeenCalledTimes(1);
+      } finally {
+        overlay.remove();
+      }
+    },
+  );
+  it('cancels a running countdown when a menu takes input', async () => {
+    mount();
+    await advance(4000);
+    const menu = document.createElement('div');
+    menu.setAttribute('role', 'menu');
+    menu.setAttribute('data-state', 'open');
+    const item = document.createElement('button');
+    item.setAttribute('role', 'menuitem');
+    item.textContent = 'Release tasks';
+    menu.append(item);
+    document.body.append(menu);
+    try {
+      await act(async () => {
+        item.focus();
+      });
+      await advance(6000);
+      expect(state.push).not.toHaveBeenCalled();
+      expect(screen.queryByText('It’s time to plan your day.')).toBeNull();
+    } finally {
+      menu.remove();
+    }
+    await advance(1000);
+    expect(screen.getByText('Opening planner in 5 seconds.')).toBeVisible();
+  });
 });

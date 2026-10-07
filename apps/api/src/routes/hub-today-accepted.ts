@@ -49,8 +49,14 @@ export async function loadAcceptedToday(input: {
     loadRecordedDayWork(input.hubId, input.dayStart, input.dayEnd),
   ]);
   const events = agenda.entries.flatMap((entry) =>
-    entry.kind === 'google_calendar_event' && entry.event.startsAt && entry.event.endsAt
-      ? [{ title: entry.event.title, startsAt: entry.event.startsAt, endsAt: entry.event.endsAt }]
+    entry.kind === 'google_calendar_event' && entry.event.blocksTime !== false
+      ? [
+          {
+            title: entry.event.title,
+            startsAt: entry.event.startsAt ?? input.dayStart.toISOString(),
+            endsAt: entry.event.endsAt ?? input.dayEnd.toISOString(),
+          },
+        ]
       : [],
   );
   return { snapshot, allocations: dailyAllocations(snapshot.sessions), actual, events };

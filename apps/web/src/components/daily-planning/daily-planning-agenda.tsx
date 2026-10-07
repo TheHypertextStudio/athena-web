@@ -3,7 +3,7 @@
 /** Timed daily agenda and explicit block controls for keyboard and touch. */
 import type { DailyPlanSession, DailyPlanSnapshot } from '@docket/planning/daily-plan-flow';
 import { instantAt, localMinuteOfDay } from '@docket/planning/zoned-time';
-import { Button } from '@docket/ui/primitives';
+import { Button, Stack } from '@docket/ui/primitives';
 import type { JSX, ReactNode } from 'react';
 import { SchedulingCanvas, type ScheduleItem } from '@/components/scheduling';
 import { useDailyPlanDropTarget } from '@/components/dnd/use-daily-plan-drop-target';
@@ -13,6 +13,7 @@ import { type BusyInterval } from './daily-planning-model';
 /** One fixed calendar event. */
 export interface EventBlock extends BusyInterval {
   readonly title: string;
+  readonly allDay?: boolean | undefined;
 }
 
 /** Format a timed agenda label in the workday timezone. */
@@ -106,13 +107,15 @@ function AgendaGridTarget({
 
 function agendaItems(props: DailyAgendaProps): ScheduleItem[] {
   return [
-    ...props.events.map((event, index) => ({
-      ...event,
-      id: `fixed-${index}`,
-      editable: false,
-      openable: false,
-      appearance: 'event' as const,
-    })),
+    ...props.events
+      .filter((event) => !event.allDay)
+      .map((event, index) => ({
+        ...event,
+        id: `fixed-${index}`,
+        editable: false,
+        openable: false,
+        appearance: 'event' as const,
+      })),
     ...props.draft.sessions.map((session) => ({
       ...session,
       title: session.allocations.map((part) => props.names.get(part.taskId) ?? 'Task').join(' · '),
@@ -123,20 +126,45 @@ function agendaItems(props: DailyAgendaProps): ScheduleItem[] {
   ];
 }
 
+function AllDayContext({ events }: { readonly events: readonly EventBlock[] }): JSX.Element | null {
+  const allDay = events.filter((event) => event.allDay);
+  if (allDay.length === 0) return null;
+  return (
+    <Stack gap={1} role="group" aria-label="All-day calendar context">
+      <p className="text-label-small text-on-surface-variant">All day</p>
+      <ul className="text-body-small text-on-surface-variant flex flex-wrap gap-x-3 gap-y-1">
+        {allDay.map((event, index) => (
+          <li key={`${event.title}-${index}`}>
+            {event.title}
+            {event.blocksTime !== false ? ' (busy)' : ''}
+          </li>
+        ))}
+      </ul>
+    </Stack>
+  );
+}
+
+function changeAgendaSession(
+  props: DailyAgendaProps,
+  id: string,
+  startMinutes: number,
+  endMinutes: number,
+): void {
+  const session = props.draft.sessions.find((value) => value.id === id);
+  if (!session) return;
+  props.onChangeSession(
+    session,
+    instantAt(props.date, startMinutes, props.timezone).toISOString(),
+    instantAt(props.date, endMinutes, props.timezone).toISOString(),
+  );
+}
+
 /** Use the shared calendar geometry and move/resize gestures for the daily draft. */
 export function DailyAgenda(props: DailyAgendaProps): JSX.Element {
   const items = agendaItems(props);
-  const change = (id: string, startMinutes: number, endMinutes: number): void => {
-    const session = props.draft.sessions.find((value) => value.id === id);
-    if (!session) return;
-    props.onChangeSession(
-      session,
-      instantAt(props.date, startMinutes, props.timezone).toISOString(),
-      instantAt(props.date, endMinutes, props.timezone).toISOString(),
-    );
-  };
   return (
     <>
+      <AllDayContext events={props.events} />
       <SchedulingCanvas
         presentation="agenda"
         preserveTimedGeometry
@@ -154,10 +182,10 @@ export function DailyAgenda(props: DailyAgendaProps): JSX.Element {
           if (session) props.onEdit(session);
         }}
         onMoveItem={({ item, startMinutes, endMinutes }) => {
-          change(item.id, startMinutes, endMinutes);
+          changeAgendaSession(props, item.id, startMinutes, endMinutes);
         }}
         onResizeItem={({ item, startMinutes, endMinutes }) => {
-          change(item.id, startMinutes, endMinutes);
+          changeAgendaSession(props, item.id, startMinutes, endMinutes);
         }}
         renderTimedLaneContext={({ geometry }) => (
           <AgendaGridTarget

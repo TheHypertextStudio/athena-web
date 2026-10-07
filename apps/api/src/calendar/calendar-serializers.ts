@@ -25,7 +25,10 @@ import {
 import type { z } from 'zod';
 
 import { defaultItemPermissionsForKind } from './calendar-permissions';
-import { normalizeCalendarProviderEventType } from './calendar-provider-event-type';
+import {
+  calendarItemBlocksTime,
+  normalizeCalendarProviderEventType,
+} from './calendar-provider-event-type';
 
 type CalendarLayerRow = typeof calendarLayer.$inferSelect;
 type CalendarItemRow = typeof calendarItem.$inferSelect;
@@ -97,6 +100,7 @@ export function toCalendarItemOut(
     kind,
     provider: CalendarProvider.nullable().parse(row.provider),
     providerEventType: normalizeCalendarProviderEventType(row.providerRaw),
+    blocksTime: calendarItemBlocksTime(kind, row.providerRaw),
     externalCalendarId: row.externalCalendarId,
     externalEventId: row.externalEventId,
     eventIdentity:

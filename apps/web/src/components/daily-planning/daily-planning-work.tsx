@@ -142,20 +142,20 @@ function WorkRowContents({
 }): JSX.Element {
   const projectName = plan.allTasks.get(entry.taskId)?.projectName;
   return (
-    <span className="flex w-full min-w-0 flex-col gap-0.5">
-      <span className="min-w-0">
+    <span className="flex w-full min-w-0 flex-wrap items-center gap-1">
+      <span className="min-w-0 flex-1">
         <WorkRowTitle plan={plan} entry={entry} title={title} />
       </span>
-      <span className="flex min-w-0 items-center gap-1">
-        <span className="text-on-surface-variant text-body-small min-w-0 flex-1 truncate">
+      <PlannedTime plan={plan} entry={entry} title={title} />
+      <WorkRowMenu plan={plan} entry={entry} title={title} remaining={remaining} />
+      {projectName || entry.selectionSource === 'suggested' ? (
+        <span className="text-on-surface-variant text-body-small min-w-0 basis-full truncate">
           {projectName ?? ''}
           {entry.selectionSource === 'suggested'
             ? `${projectName ? ' · ' : ''}${plan.proposalContext?.tasks.find((value) => value.taskId === entry.taskId)?.reason ?? 'Suggested'}`
             : ''}
         </span>
-        <PlannedTime plan={plan} entry={entry} title={title} />
-        <WorkRowMenu plan={plan} entry={entry} title={title} remaining={remaining} />
-      </span>
+      ) : null}
       {plan.failedTitle?.taskId === entry.taskId ? (
         <Button
           size="sm"
@@ -187,7 +187,7 @@ function WorkRowTitle({
       }}
       canEdit
       ariaLabel={`Task title: ${title}`}
-      className="text-on-surface text-label-medium sm:text-label-large min-h-10 min-w-0 flex-1 sm:min-h-6"
+      className="text-on-surface text-label-medium sm:text-label-large min-h-10 min-w-0 flex-1 py-2.5 sm:min-h-8 sm:py-1.5"
     />
   );
 }

@@ -77,7 +77,64 @@ async function proposal(userId: string, body: object = {}): Promise<ProposalBody
   return response.json() as Promise<ProposalBody>;
 }
 
+function selectedDraft(work: { task: { id: string }; orgId: string }, plannedMinutes = 45) {
+  return {
+    date,
+    finishAt: at(17),
+    mainTaskId: work.task.id,
+    sessions: [],
+    tasks: [
+      {
+        taskId: work.task.id,
+        organizationId: work.orgId,
+        plannedMinutes,
+        sort: 0,
+        selectionSource: 'explicit',
+        durationSource: 'default',
+      },
+    ],
+  };
+}
+
+function allocatedTaskIds(draft: ProposalBody['draft']): string[] {
+  return draft.sessions.flatMap((session) =>
+    session.allocations.map((allocation) => allocation.taskId),
+  );
+}
+
 describe('daily proposal visible work and duration evidence', () => {
+  it('selects only work that fits from a large assigned backlog and none when the day is full', async () => {
+    const userId = await seedUserWithHub(schema.db, schema, 'ProposalLargeBacklog');
+    const work = await assignedWork(userId, 'First assigned task', 45);
+    await schema.db.insert(schema.task).values(
+      Array.from({ length: 229 }, (_, index) => ({
+        organizationId: work.orgId,
+        teamId: work.teamId,
+        assigneeId: work.task.assigneeId,
+        title: `Backlog ${index}`,
+        state: 'todo' as const,
+        statusId: work.statusId('task', 'todo'),
+        visibility: 'public' as const,
+        estimateMinutes: 45,
+        dueDate: new Date(at(17)),
+      })),
+    );
+    const emptyDraft = {
+      ...selectedDraft(work),
+      tasks: [],
+      mainTaskId: null,
+      settings: { startAt: at(9) },
+    };
+    const limited = await proposal(userId, { draft: { ...emptyDraft, finishAt: at(10) } });
+    expect(limited.draft.tasks).toHaveLength(1);
+    expect(limited.draft.sessions.flatMap((session) => session.allocations)).toHaveLength(1);
+    expect(limited.unplaced).toEqual([]);
+    const full = await proposal(userId, { draft: { ...emptyDraft, finishAt: at(9) } });
+    expect(full.draft.tasks).toEqual([]);
+    expect(full.draft.sessions).toEqual([]);
+    expect(full.unplaced).toEqual([]);
+  });
+
   it('selects assigned tasks across workspaces and never converts point estimates', async () => {
     const userId = await seedUserWithHub(schema.db, schema, 'ProposalCrossOrg');
     const first = await assignedWork(userId, 'Minute estimate', 90);
@@ -171,7 +228,7 @@ describe('daily proposal visible work and duration evidence', () => {
     },
   );
 
-  it('strands work blocked by an unfinished task outside the proposal', async () => {
+  it('skips blocked suggestions and retains selected blocked work with its concrete reason', async () => {
     const userId = await seedUserWithHub(schema.db, schema, 'ProposalBlocked');
     const work = await assignedWork(userId, 'Cannot start yet', 30);
     const [blocker] = await schema.db
@@ -190,7 +247,10 @@ describe('daily proposal visible work and duration evidence', () => {
       blockingTaskId: required(blocker).id,
       blockedTaskId: work.task.id,
     });
-    const result = await proposal(userId);
+    const suggested = await proposal(userId);
+    expect(suggested.draft.tasks).toEqual([]);
+    expect(suggested.unplaced).toEqual([]);
+    const result = await proposal(userId, { draft: selectedDraft(work) });
     expect(result.unplaced).toEqual([
       { taskId: work.task.id, remainingMinutes: 30, reason: 'blocked' },
     ]);
@@ -241,16 +301,26 @@ describe('daily proposal visible work and duration evidence', () => {
       closedAt: endedAt,
     });
     const result = await proposal(userId);
-    expect(result.draft.tasks[0]).toMatchObject({
+    if (scenario.future === 0) expect(result.draft.tasks).toEqual([]);
+    const selected = await proposal(userId, { draft: selectedDraft(work) });
+    expect(selected.draft.tasks[0]).toMatchObject({
       plannedMinutes: scenario.budget,
       durationSource: scenario.source,
     });
+    if (scenario.future > 0)
+      expect(result.draft.tasks[0]).toMatchObject({
+        plannedMinutes: scenario.budget,
+        durationSource: scenario.source,
+        selectionSource: 'suggested',
+      });
+    expect(selected.draft.sessions).toEqual(result.draft.sessions);
     const allocated = result.draft.sessions
       .flatMap((session) => session.allocations)
       .reduce((sum, allocation) => sum + allocation.plannedMinutes, 0);
     expect(allocated).toBe(scenario.future);
     const rebuilt = await proposal(userId, { draft: result.draft });
     expect(rebuilt.draft).toEqual(result.draft);
+    expect((await proposal(userId, { draft: selected.draft })).draft).toEqual(selected.draft);
   });
 
   it('keeps protected windows open and exposes them as calendar context', async () => {
@@ -278,7 +348,7 @@ describe('daily proposal visible work and duration evidence', () => {
   });
   it('splits remaining work across canonical segments and preserves an explicit day off', async () => {
     const userId = await seedUserWithHub(schema.db, schema, 'ProposalCanonical');
-    await assignedWork(userId, 'Two work segments', 90);
+    const work = await assignedWork(userId, 'Two work segments', 90);
     const [hub] = await schema.db.select().from(schema.hub).where(eq(schema.hub.userId, userId));
     const [plan] = await schema.db
       .insert(schema.workSchedulePlan)
@@ -299,11 +369,8 @@ describe('daily proposal visible work and duration evidence', () => {
       .returning();
     const result = await proposal(userId, {
       draft: {
-        date,
+        ...selectedDraft(work),
         finishAt: at(11),
-        mainTaskId: null,
-        tasks: [],
-        sessions: [],
         settings: { startAt: at(9), bufferPercent: 0 },
       },
     });
@@ -313,13 +380,24 @@ describe('daily proposal visible work and duration evidence', () => {
     expect(result.unplaced).toEqual([
       { taskId: result.draft.tasks[0]?.taskId, remainingMinutes: 30, reason: 'insufficient_time' },
     ]);
+    const suggestion = await proposal(userId, {
+      draft: { ...result.draft, tasks: [], mainTaskId: null, sessions: [] },
+    });
+    expect(suggestion.draft.tasks).toEqual([]);
+    expect(suggestion.draft.sessions).toEqual([]);
+    expect(suggestion.unplaced).toEqual([]);
     await schema.db
       .insert(schema.workScheduleException)
       .values({ hubId: required(hub).id, planVersionId: required(plan).id, date, segments: [] });
     const dayOff = await proposal(userId);
     expect(dayOff.workScheduleMissing).toBe(false);
+    expect(dayOff.draft.tasks).toEqual([]);
     expect(dayOff.draft.sessions).toEqual([]);
-    expect(dayOff.unplaced[0]?.reason).toBe('no_availability');
+    expect(dayOff.unplaced).toEqual([]);
+    const selectedDayOff = await proposal(userId, { draft: result.draft });
+    expect(selectedDayOff.unplaced).toEqual([
+      { taskId: work.task.id, remainingMinutes: 90, reason: 'no_availability' },
+    ]);
   });
 
   it('reserves active work without making another future block for that task', async () => {
@@ -356,18 +434,7 @@ describe('daily proposal visible work and duration evidence', () => {
       expect(result.draft.sessions[0]?.startsAt).toBe('2027-01-05T09:30:00.000Z');
       const selectedActive = await proposal(userId, {
         draft: {
-          date,
-          finishAt: at(17),
-          mainTaskId: active.task.id,
-          tasks: [
-            {
-              taskId: active.task.id,
-              organizationId: active.orgId,
-              plannedMinutes: 90,
-              sort: 0,
-              selectionSource: 'explicit',
-            },
-          ],
+          ...selectedDraft(active, 90),
           sessions: [
             {
               id: 'future-active',
@@ -383,11 +450,7 @@ describe('daily proposal visible work and duration evidence', () => {
       expect(selectedActive.draft.tasks).toContainEqual(
         expect.objectContaining({ taskId: active.task.id, plannedMinutes: 90 }),
       );
-      expect(
-        selectedActive.draft.sessions
-          .flatMap((session) => session.allocations)
-          .map((allocation) => allocation.taskId),
-      ).not.toContain(active.task.id);
+      expect(allocatedTaskIds(selectedActive.draft)).not.toContain(active.task.id);
 
       const app = appWithSession(router, fakeSession(userId));
       const tomorrow = '2027-01-06';
@@ -397,22 +460,16 @@ describe('daily proposal visible work and duration evidence', () => {
         body: JSON.stringify({}),
       });
       expect(future.status).toBe(200);
-      expect(
-        ((await future.json()) as ProposalBody).draft.sessions
-          .flatMap((session: { allocations: { taskId: string }[] }) => session.allocations)
-          .map((allocation: { taskId: string }) => allocation.taskId),
-      ).toContain(active.task.id);
+      const futureDraft = ((await future.json()) as ProposalBody).draft;
+      expect(allocatedTaskIds(futureDraft)).toContain(active.task.id);
       expect(
         ((await (await app.request(`/day/${tomorrow}`)).json()) as { actual: unknown[] }).actual,
       ).toEqual([]);
-      expect(
-        (
-          await schema.db
-            .select()
-            .from(schema.timeInterval)
-            .where(eq(schema.timeInterval.timeRecordId, required(record).id))
-        )[0]?.endedAt,
-      ).toBeNull();
+      const [unchanged] = await schema.db
+        .select()
+        .from(schema.timeInterval)
+        .where(eq(schema.timeInterval.timeRecordId, required(record).id));
+      expect(unchanged?.endedAt).toBeNull();
     } finally {
       clock.mockRestore();
     }

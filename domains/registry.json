@@ -176,6 +176,8 @@
         "./work-schedule",
         "./daily-capacity",
         "./daily-plan-flow",
+        "./daily-proposal",
+        "./daily-plan-execution",
         "./work-location-resolution",
         "./hub-preferences-contract",
         "./daily-plan-contract",

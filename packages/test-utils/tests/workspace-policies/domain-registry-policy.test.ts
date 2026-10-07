@@ -377,13 +377,11 @@ describe('domain registry policy', () => {
 
   it('declares Planning contracts and portable time rules', () => {
     const planning = readDomainRegistry().domains.find(({ id }) => id === 'planning');
-    expect(planning).toEqual(
-      expect.objectContaining({
-        id: 'planning',
-        packageName: '@docket/planning',
-        productOwner: 'Planning',
-      }),
-    );
+    expect(planning).toMatchObject({
+      id: 'planning',
+      packageName: '@docket/planning',
+      productOwner: 'Planning',
+    });
     expect(planning?.publicExports).toEqual([
       './date-time',
       './calendar-date',
@@ -397,6 +395,8 @@ describe('domain registry policy', () => {
       './work-schedule',
       './daily-capacity',
       './daily-plan-flow',
+      './daily-proposal',
+      './daily-plan-execution',
       './work-location-resolution',
       './hub-preferences-contract',
       './daily-plan-contract',

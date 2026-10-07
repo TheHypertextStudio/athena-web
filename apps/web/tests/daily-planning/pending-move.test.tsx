@@ -105,16 +105,13 @@ describe('confirmation during a pending move', () => {
     expect(plan.serverRevision.current).toBe(20);
     expect(plan.setStage).not.toHaveBeenCalled();
   });
-  it('disables confirmation and edit-plan navigation while moving a task', () => {
+  it('disables confirmation while moving a task', () => {
     const plan = controller(true);
     render(<PlanStage plan={plan} />);
-    for (const name of ['Confirm plan', 'Edit plan']) {
-      const button = screen.getByRole('button', { name });
-      expect(button).toBeDisabled();
-      fireEvent.click(button);
-    }
+    const button = screen.getByRole('button', { name: 'Confirm plan' });
+    expect(button).toBeDisabled();
+    fireEvent.click(button);
     expect(plan.persist).not.toHaveBeenCalled();
-    expect(plan.go).not.toHaveBeenCalled();
   });
   it('guards confirmation before React renders the pending disabled state', () => {
     const plan = { ...controller(false), isMovingTask: () => true };

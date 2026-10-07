@@ -139,7 +139,14 @@ describe('optional Athena planning review', () => {
     }));
     render(<DailyPlanningAssessment draft={draft} onTaskCreated={vi.fn()} />);
     await settle();
-    fireEvent.click(screen.getByRole('button', { name: 'Dismiss Athena assessment' }));
+    expect(
+      screen.queryByRole('button', { name: 'Dismiss Athena assessment' }),
+    ).not.toBeInTheDocument();
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'Athena assessment actions' }), {
+      button: 0,
+      ctrlKey: false,
+    });
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Dismiss assessment' }));
     expect(screen.queryByText('Keep the open afternoon.')).not.toBeInTheDocument();
     expect(screen.getByText(suggestion.title)).toBeVisible();
     fireEvent.click(screen.getByRole('button', { name: 'Dismiss Prepare release checklist' }));
@@ -172,12 +179,28 @@ describe('optional Athena planning review', () => {
     expect(state.assess).toHaveBeenCalledTimes(2);
     expect(screen.queryByText('Stale note')).not.toBeInTheDocument();
   });
-  it('shows no placeholder narrative while waiting or after model failure', async () => {
+  it('keeps retry inside a closed Athena disclosure after model failure', async () => {
     state.assess.mockRejectedValue(new Error('provider details'));
     render(<DailyPlanningAssessment draft={draft} onTaskCreated={vi.fn()} />);
-    expect(screen.queryByText('Athena')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Ask Athena' })).not.toBeInTheDocument();
     await settle();
     expect(screen.queryByText('provider details')).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Ask Athena' })).toBeEnabled();
+    const disclosure = screen.getByRole('button', { name: 'Athena' });
+    expect(disclosure).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByRole('button', { name: 'Ask Athena' })).not.toBeInTheDocument();
+    fireEvent.click(disclosure);
+    expect(disclosure).toHaveAttribute('aria-expanded', 'true');
+    fireEvent.click(screen.getByRole('button', { name: 'Ask Athena' }));
+    await settle();
+    expect(state.assess).toHaveBeenCalledTimes(2);
+  });
+  it('announces a pending assessment quietly without creating an empty summary or action', async () => {
+    state.assess.mockImplementation(() => new Promise(() => undefined));
+    render(<DailyPlanningAssessment draft={draft} onTaskCreated={vi.fn()} />);
+    await settle();
+    expect(screen.getByRole('status')).toHaveTextContent('Athena is reviewing this plan.');
+    expect(screen.queryByRole('button', { name: 'Ask Athena' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Athena' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Athena assessment' })).not.toBeInTheDocument();
   });
 });

@@ -1,6 +1,17 @@
 'use client';
 
-import { Button, Card, CardContent, CardHeader, CardTitle } from '@docket/ui/primitives';
+import { Ellipsis } from '@docket/ui/icons';
+import {
+  Button,
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@docket/ui/primitives';
 import type { JSX } from 'react';
 import type { DailyPlanTask } from '@docket/planning/daily-plan-flow';
 import type { ReadyPlanningController } from './daily-planning-controller';
@@ -57,6 +68,7 @@ function UnplacedTask({
         <Button
           size="sm"
           variant="secondary"
+          className="min-h-10"
           disabled={Boolean(plan.preview)}
           onClick={() => {
             plan.setEditing({ taskId: task.taskId });
@@ -64,26 +76,41 @@ function UnplacedTask({
         >
           Schedule
         </Button>
-        <Button
-          size="sm"
-          variant="ghost"
-          disabled={plan.deferPending || plan.confirming || Boolean(plan.preview)}
-          onClick={() => {
-            void plan.moveTaskToTomorrow(task.taskId, task.organizationId);
-          }}
-        >
-          Move to tomorrow
-        </Button>
-        <Button
-          size="sm"
-          variant="ghost"
-          disabled={Boolean(plan.preview)}
-          onClick={() => {
-            plan.removeTask(task.taskId);
-          }}
-        >
-          Remove
-        </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild disabled={Boolean(plan.preview)}>
+            <Button
+              size="sm"
+              variant="ghost"
+              iconOnly
+              className="min-h-10 min-w-10"
+              aria-label={`Actions for unscheduled ${plan.titleFor(task.taskId)}`}
+              disabled={Boolean(plan.preview)}
+            >
+              <Ellipsis aria-hidden="true" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" width="md">
+            <DropdownMenuItem
+              className="min-h-10"
+              disabled={plan.deferPending || plan.confirming || Boolean(plan.preview)}
+              onSelect={() => {
+                if (plan.isMovingTask() || plan.confirming || plan.preview) return;
+                void plan.moveTaskToTomorrow(task.taskId, task.organizationId);
+              }}
+            >
+              Move to tomorrow
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              className="min-h-10"
+              disabled={Boolean(plan.preview)}
+              onSelect={() => {
+                plan.removeTask(task.taskId);
+              }}
+            >
+              Remove
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
     </div>
   );

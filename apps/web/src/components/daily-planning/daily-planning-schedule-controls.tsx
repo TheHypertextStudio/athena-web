@@ -1,10 +1,68 @@
 'use client';
 
 import { instantAt } from '@docket/planning/zoned-time';
-import { Button, Card, CardContent, Input } from '@docket/ui/primitives';
+import { ChevronDown } from '@docket/ui/icons';
+import {
+  Button,
+  Card,
+  CardContent,
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+  Input,
+} from '@docket/ui/primitives';
 import type { JSX } from 'react';
 import type { ReadyPlanningController } from './daily-planning-controller';
 import { clock, clockValue } from './daily-planning-agenda';
+
+function WorkdayTimeInput({
+  label,
+  value,
+  onChange,
+}: {
+  readonly label: string;
+  readonly value: string;
+  readonly onChange: (value: string) => void;
+}): JSX.Element {
+  return (
+    <label className="text-body-small">
+      {label}
+      <Input
+        controlSize="sm"
+        className="w-28"
+        type="time"
+        value={value}
+        onChange={(event) => {
+          onChange(event.target.value);
+        }}
+      />
+    </label>
+  );
+}
+
+function WorkdayBuffer({ plan }: { readonly plan: ReadyPlanningController }): JSX.Element {
+  return (
+    <label className="text-body-small">
+      Buffer %
+      <Input
+        controlSize="sm"
+        className="w-16"
+        type="number"
+        min={0}
+        max={50}
+        value={plan.draft.settings?.bufferPercent ?? 15}
+        onChange={(event) => {
+          const value = Number(event.target.value);
+          if (value >= 0 && value <= 50)
+            plan.editDraft({
+              ...plan.draft,
+              settings: { ...plan.draft.settings, bufferPercent: value },
+            });
+        }}
+      />
+    </label>
+  );
+}
 
 /** Edit the scheduling bounds and buffer used by the proposal service. */
 export function WorkdayControls({ plan }: { readonly plan: ReadyPlanningController }): JSX.Element {
@@ -23,58 +81,49 @@ export function WorkdayControls({ plan }: { readonly plan: ReadyPlanningControll
     );
   };
   return (
-    <div className="space-y-2">
-      {plan.proposalContext?.workScheduleMissing ? (
-        <p className="text-body-small text-on-surface-variant">
-          No saved work schedule. Set the hours for this day.
-        </p>
-      ) : null}
-      <div className="flex flex-wrap items-end gap-3">
-        <label className="text-body-small">
-          Start
-          <Input
-            controlSize="sm"
-            className="w-28"
-            type="time"
+    <Collapsible
+      defaultOpen={plan.stage === 'plan' && Boolean(plan.proposalContext?.workScheduleMissing)}
+      className="space-y-2"
+    >
+      <CollapsibleTrigger asChild>
+        <Button
+          size="sm"
+          variant="ghost"
+          aria-label="Workday settings"
+          className="group max-w-full justify-start gap-2"
+        >
+          <span className="text-on-surface-variant">Work hours</span>
+          <span>
+            {clock(plan.startAt, plan.timezone)} – {clock(plan.draft.finishAt, plan.timezone)}
+          </span>
+          <ChevronDown aria-hidden="true" className="group-data-[state=open]:rotate-180" />
+        </Button>
+      </CollapsibleTrigger>
+      <CollapsibleContent className="space-y-2">
+        {plan.proposalContext?.workScheduleMissing ? (
+          <p className="text-body-small text-on-surface-variant">
+            No saved work schedule. Set the hours for this day.
+          </p>
+        ) : null}
+        <div className="flex flex-wrap items-end gap-3">
+          <WorkdayTimeInput
+            label="Start"
             value={clockValue(plan.startAt, plan.timezone)}
-            onChange={(event) => {
-              changeTime(event.target.value, 'start');
+            onChange={(value) => {
+              changeTime(value, 'start');
             }}
           />
-        </label>
-        <label className="text-body-small">
-          Finish
-          <Input
-            controlSize="sm"
-            className="w-28"
-            type="time"
+          <WorkdayTimeInput
+            label="Finish"
             value={clockValue(plan.draft.finishAt, plan.timezone)}
-            onChange={(event) => {
-              changeTime(event.target.value, 'finish');
+            onChange={(value) => {
+              changeTime(value, 'finish');
             }}
           />
-        </label>
-        <label className="text-body-small">
-          Buffer %
-          <Input
-            controlSize="sm"
-            className="w-16"
-            type="number"
-            min={0}
-            max={50}
-            value={plan.draft.settings?.bufferPercent ?? 15}
-            onChange={(event) => {
-              const value = Number(event.target.value);
-              if (value >= 0 && value <= 50)
-                plan.editDraft({
-                  ...plan.draft,
-                  settings: { ...plan.draft.settings, bufferPercent: value },
-                });
-            }}
-          />
-        </label>
-      </div>
-    </div>
+          <WorkdayBuffer plan={plan} />
+        </div>
+      </CollapsibleContent>
+    </Collapsible>
   );
 }
 
@@ -102,9 +151,11 @@ export function ScheduleControls({
             Undo schedule
           </Button>
         ) : null}
-        <span className="text-body-small text-on-surface-variant">
-          Drag work to a time or an existing block.
-        </span>
+        {plan.stage === 'plan' ? (
+          <span className="text-body-small text-on-surface-variant">
+            Drag work to a time or an existing block.
+          </span>
+        ) : null}
       </div>
       {plan.preview ? (
         <Card>

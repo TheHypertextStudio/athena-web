@@ -47,6 +47,9 @@ const PUBLIC_ROUTES = new Set(['GET /v1/config']);
  * optional, so the assertion is a subset check — a key not on this list fails.
  */
 const PUBLIC_CONFIG_KEYS = new Set([
+  // The operator console exposes this boolean to choose its sign-in buttons. It carries no
+  // credentials, user data, or organization policy.
+  'adminGoogleSso',
   'appMode',
   // The Apple Sign In client identifier, resolved on the line beside `googleServerClientId` in
   // `routes/config.ts`. A provider client id is public by construction — the browser hands it to
@@ -265,6 +268,8 @@ describe('route auth matrix', () => {
       unexpectedKeys,
       'GET /v1/config is the only unauthenticated 200; it may carry deployment config only.',
     ).toEqual([]);
+
+    expect(payload).toHaveProperty('adminGoogleSso', expect.any(Boolean));
 
     for (const marker of SECRET_MARKERS) {
       expect(marker.test(text), `public config body matched ${marker.source}`).toBe(false);

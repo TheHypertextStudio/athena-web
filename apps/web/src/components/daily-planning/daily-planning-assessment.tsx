@@ -4,7 +4,18 @@
 import type { DailyPlanSnapshot } from '@docket/planning/daily-plan-flow';
 import type { TaskOut } from '@docket/work/task-model';
 import { EntityList, EntityListRow } from '@docket/ui/components';
-import { Button, Surface } from '@docket/ui/primitives';
+import { ChevronDown, MoreHorizontal } from '@docket/ui/icons';
+import {
+  Button,
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  focusRing,
+} from '@docket/ui/primitives';
 import type { JSX, MouseEvent } from 'react';
 import { useCreateObject } from '@/components/create-object/create-object-provider';
 import {
@@ -57,6 +68,60 @@ function SuggestedTask({
   );
 }
 
+function AssessmentRequest({
+  pending,
+  requestAgain,
+}: {
+  readonly pending: boolean;
+  readonly requestAgain: () => void;
+}): JSX.Element {
+  if (pending)
+    return (
+      <span role="status" className="sr-only">
+        Athena is reviewing this plan.
+      </span>
+    );
+  return (
+    <Collapsible>
+      <CollapsibleTrigger
+        className={`text-on-surface-variant text-label-medium group flex min-h-10 items-center gap-1 ${focusRing}`}
+      >
+        Athena
+        <ChevronDown
+          aria-hidden="true"
+          className="size-4 transition-transform group-data-[state=open]:rotate-180 motion-reduce:transition-none"
+        />
+      </CollapsibleTrigger>
+      <CollapsibleContent>
+        <Button size="sm" variant="ghost" onClick={requestAgain}>
+          Ask Athena
+        </Button>
+      </CollapsibleContent>
+    </Collapsible>
+  );
+}
+
+function AssessmentActions({ dismissNote }: { readonly dismissNote: () => void }): JSX.Element {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          variant="ghost"
+          controlSize="sm"
+          iconOnly
+          aria-label="Athena assessment actions"
+          className="text-on-surface-variant"
+        >
+          <MoreHorizontal aria-hidden="true" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuItem onSelect={dismissNote}>Dismiss assessment</DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 /** Request Athena asynchronously and discard the note immediately after a material plan edit. */
 export function DailyPlanningAssessment({
   draft,
@@ -85,33 +150,13 @@ export function DailyPlanningAssessment({
       event.currentTarget,
     );
   };
-  if (!note && suggestions.length === 0) {
-    return (
-      <Button size="sm" variant="ghost" disabled={pending} onClick={requestAgain}>
-        Ask Athena
-      </Button>
-    );
-  }
+  if (!note && suggestions.length === 0)
+    return <AssessmentRequest pending={pending} requestAgain={requestAgain} />;
   return (
-    <Surface
-      tone="card"
-      pad="tight"
-      as="section"
-      aria-label="Athena assessment"
-      className="space-y-2"
-    >
+    <section aria-label="Athena assessment" className="space-y-2">
       <div className="flex items-start justify-between gap-2">
-        <strong className="text-label-large">Athena</strong>
-        {note ? (
-          <Button
-            size="sm"
-            variant="ghost"
-            aria-label="Dismiss Athena assessment"
-            onClick={dismissNote}
-          >
-            Dismiss
-          </Button>
-        ) : null}
+        <strong className="text-on-surface-variant text-label-medium">Athena</strong>
+        {note ? <AssessmentActions dismissNote={dismissNote} /> : null}
       </div>
       {note ? <p className="text-body-medium">{note}</p> : null}
       {suggestions.length > 0 ? (
@@ -130,6 +175,6 @@ export function DailyPlanningAssessment({
           ))}
         </EntityList>
       ) : null}
-    </Surface>
+    </section>
   );
 }

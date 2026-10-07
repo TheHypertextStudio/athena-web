@@ -136,9 +136,13 @@ export async function dragTo(page: Page, source: Locator, target: Locator): Prom
 
 /** Verify the measured hitbox of a control on the touch planning surface. */
 export async function assertPlanningTouchTarget(control: Locator): Promise<void> {
-  const bounds = await control.boundingBox();
-  expect(bounds?.width ?? 0).toBeGreaterThanOrEqual(40);
-  expect(bounds?.height ?? 0).toBeGreaterThanOrEqual(40);
+  // Menu entry transforms briefly shrink a valid hitbox during its opening frame.
+  await expect
+    .poll(async () => {
+      const bounds = await control.boundingBox();
+      return Math.min(bounds?.width ?? 0, bounds?.height ?? 0);
+    })
+    .toBeGreaterThanOrEqual(40);
 }
 
 /** Verify keyboard focus reaches a control and paints a visible indicator. */
@@ -183,18 +187,20 @@ export async function editPlanningTouchWork(
   title: string,
   minutes: string,
 ): Promise<void> {
-  const schedule = page.getByRole('button', { name: `Schedule ${title}`, exact: true });
+  const actions = page.getByRole('button', { name: `Actions for ${title}`, exact: true });
   for (const control of [
-    schedule,
+    actions,
     page.getByRole('button', { name: `Drag ${title} to reorder or schedule` }),
     page.getByRole('textbox', { name: `Task title: ${title}` }),
     page.getByRole('spinbutton', { name: `Planned time for ${title}` }),
-    page.getByRole('button', { name: `Actions for ${title}` }),
   ])
     await assertPlanningTouchTarget(control);
-  await assertPlanningKeyboardFocus(page, schedule);
-  await assertPlanningReducedMotion(schedule);
-  await schedule.tap();
+  await assertPlanningKeyboardFocus(page, actions);
+  await assertPlanningReducedMotion(actions);
+  await actions.tap();
+  const move = page.getByRole('menuitem', { name: 'Move block', exact: true });
+  await assertPlanningTouchTarget(move);
+  await move.tap();
   await expect(page.getByRole('dialog', { name: 'Edit block' })).toBeVisible();
   await page.getByRole('spinbutton', { name: `Duration for ${title}` }).fill(minutes);
   await assertPlanningReducedMotion(page.getByRole('dialog', { name: 'Edit block' }));
@@ -293,6 +299,22 @@ export async function captureDailyPlanningEvidence(
   }
 }
 
+/** Wait for the responsive Agenda host and dismiss the phone overlay before desktop evidence. */
+async function activeAgendaSurface(page: Page): Promise<Locator> {
+  const sheet = page.getByRole('dialog', { name: 'Agenda', exact: true });
+  if ((page.viewportSize()?.width ?? 0) >= 1280) {
+    if (await sheet.isVisible()) await page.keyboard.press('Escape');
+    await expect(sheet).toBeHidden();
+    const aside = page.locator('#shell-aside');
+    await expect(aside).toBeVisible();
+    return aside;
+  }
+  if (!(await sheet.isVisible()))
+    await page.getByRole('button', { name: 'Show Agenda', exact: true }).click();
+  await expect(sheet).toBeVisible();
+  return sheet;
+}
+
 /** Verify proportional geometry and capture it through the shared evidence matrix. */
 export async function captureShortBlockEvidence(
   page: Page,
@@ -302,19 +324,7 @@ export async function captureShortBlockEvidence(
   height: string,
 ): Promise<void> {
   const verifyFrame = async (): Promise<void> => {
-    if (stage === 'today') {
-      const close = page.getByRole('button', { name: 'Close Agenda', exact: true });
-      if ((page.viewportSize()?.width ?? 0) >= 1280 && (await close.isVisible()))
-        await close.click();
-      const show = page.getByRole('button', { name: 'Show Agenda', exact: true });
-      if (await show.isVisible()) await show.click();
-    }
-    const agenda =
-      stage === 'today'
-        ? (page.viewportSize()?.width ?? 0) >= 1280
-          ? page.locator('#shell-aside')
-          : page.getByRole('dialog', { name: 'Agenda', exact: true })
-        : page;
+    const agenda = stage === 'today' ? await activeAgendaSurface(page) : page;
     const block = agenda.locator(`[data-schedule-item="${itemId}"]`);
     await expect(block).toHaveCSS('height', height);
     await block.scrollIntoViewIfNeeded();

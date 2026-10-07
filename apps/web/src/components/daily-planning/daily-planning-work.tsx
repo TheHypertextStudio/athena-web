@@ -1,7 +1,7 @@
 'use client';
 
 /** Compact, directly editable work rows shared by planning and review. */
-import { Schedule, Ellipsis, GripVertical } from '@docket/ui/icons';
+import { Ellipsis, GripVertical } from '@docket/ui/icons';
 import { EntityList, EntityListRow } from '@docket/ui/components';
 import {
   Button,
@@ -23,6 +23,44 @@ import type { JSX } from 'react';
 import type { ReadyPlanningController } from './daily-planning-controller';
 import { movePlannedTask, unplacedMinutes, setPlannedMinutes } from './daily-planning-model';
 import { useWorkRowDropTarget } from '@/components/dnd';
+
+function WorkSchedulingActions({
+  plan,
+  entry,
+  remaining,
+}: {
+  readonly plan: ReadyPlanningController;
+  readonly entry: DailyPlanTask;
+  readonly remaining: number;
+}): JSX.Element {
+  const session = plan.draft.sessions.find((value) =>
+    value.allocations.some((part) => part.taskId === entry.taskId),
+  );
+  return (
+    <>
+      {session ? (
+        <DropdownMenuItem
+          className="coarse:min-h-10"
+          onSelect={() => {
+            plan.setEditing({ taskId: entry.taskId, sessionId: session.id });
+          }}
+        >
+          Move block
+        </DropdownMenuItem>
+      ) : null}
+      {remaining > 0 ? (
+        <DropdownMenuItem
+          className="coarse:min-h-10"
+          onSelect={() => {
+            plan.setEditing({ taskId: entry.taskId });
+          }}
+        >
+          {session ? 'Add session' : 'Schedule'}
+        </DropdownMenuItem>
+      ) : null}
+    </>
+  );
+}
 
 function WorkRowMenu({
   plan,
@@ -55,14 +93,7 @@ function WorkRowMenu({
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" width="md">
-        <DropdownMenuItem
-          disabled={remaining === 0}
-          onSelect={() => {
-            plan.setEditing({ taskId: entry.taskId });
-          }}
-        >
-          Schedule
-        </DropdownMenuItem>
+        <WorkSchedulingActions plan={plan} entry={entry} remaining={remaining} />
         {previous ? (
           <DropdownMenuItem
             onSelect={() => {
@@ -123,24 +154,6 @@ function WorkRowContents({
             : ''}
         </span>
         <PlannedTime plan={plan} entry={entry} title={title} />
-        <Button
-          variant="ghost"
-          size="sm"
-          iconOnly
-          className="min-h-10 min-w-10 sm:min-h-8 sm:min-w-8"
-          aria-label={`Schedule ${title}`}
-          onClick={() => {
-            const session = plan.draft.sessions.find((value) =>
-              value.allocations.some((part) => part.taskId === entry.taskId),
-            );
-            plan.setEditing({
-              taskId: entry.taskId,
-              ...(session ? { sessionId: session.id } : {}),
-            });
-          }}
-        >
-          <Schedule aria-hidden="true" />
-        </Button>
         <WorkRowMenu plan={plan} entry={entry} title={title} remaining={remaining} />
       </span>
       {plan.failedTitle?.taskId === entry.taskId ? (

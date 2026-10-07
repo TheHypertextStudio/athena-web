@@ -86,47 +86,91 @@ function agendaActions(plan: ReadyPlanningController) {
   };
 }
 
+function AgendaHeading({ plan }: { readonly plan: ReadyPlanningController }): JSX.Element {
+  const displayed = plan.preview?.draft ?? plan.draft;
+  const unplaced = displayed.tasks.filter(
+    (entry) => unplacedMinutes(displayed, entry.taskId, plan.dayQ.data?.actual ?? []) > 0,
+  ).length;
+  return (
+    <>
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div className="space-y-1">
+          <h2 className="text-title-large">Agenda</h2>
+          {plan.stage === 'review' ? (
+            <p className="text-on-surface-variant text-body-small">
+              {unplaced > 0
+                ? `${unplaced} ${unplaced === 1 ? 'task still needs' : 'tasks still need'} a block.`
+                : 'All selected work has a block.'}
+            </p>
+          ) : null}
+        </div>
+        {plan.stage === 'review' ? <ConfirmPlanButton plan={plan} /> : null}
+      </div>
+      <div
+        className={
+          plan.stage === 'review' && !plan.preview
+            ? 'flex flex-wrap items-start gap-2'
+            : 'space-y-2'
+        }
+      >
+        <WorkdayControls
+          key={`${plan.stage}:${Boolean(plan.proposalContext?.workScheduleMissing)}`}
+          plan={plan}
+        />
+        <ScheduleControls plan={plan} />
+      </div>
+    </>
+  );
+}
+
+function AgendaSessionEditor({
+  plan,
+}: {
+  readonly plan: ReadyPlanningController;
+}): JSX.Element | null {
+  if (!plan.editing) return null;
+  return (
+    <SessionEditor
+      key={`${plan.editing.taskId}:${plan.editing.sessionId ?? 'new'}`}
+      actual={plan.dayQ.data?.actual ?? []}
+      date={plan.date}
+      timezone={plan.timezone}
+      earliestAt={plan.startAt}
+      events={plan.fixed}
+      draft={plan.draft}
+      editing={plan.editing}
+      names={plan.names}
+      onCancel={() => {
+        plan.setEditing(null);
+      }}
+      onSave={(session) => {
+        if (plan.preview) {
+          plan.setError('Apply or keep the current schedule before editing a block.');
+          return;
+        }
+        plan.saveSession(session);
+      }}
+      onRemove={(id) => {
+        if (plan.preview) {
+          plan.setError('Apply or keep the current schedule before editing a block.');
+          return;
+        }
+        plan.editDraft({
+          ...plan.draft,
+          sessions: plan.draft.sessions.filter((session) => session.id !== id),
+        });
+        plan.setEditing(null);
+      }}
+    />
+  );
+}
+
 function AgendaColumn({ plan }: { readonly plan: ReadyPlanningController }): JSX.Element {
   const displayed = plan.preview?.draft ?? plan.draft;
   return (
-    <section className="min-w-0 space-y-4">
-      <h2 className="text-title-large">Agenda</h2>
-      <WorkdayControls plan={plan} />
-      <ScheduleControls plan={plan} />
-      {plan.editing ? (
-        <SessionEditor
-          key={`${plan.editing.taskId}:${plan.editing.sessionId ?? 'new'}`}
-          actual={plan.dayQ.data?.actual ?? []}
-          date={plan.date}
-          timezone={plan.timezone}
-          earliestAt={plan.startAt}
-          events={plan.fixed}
-          draft={plan.draft}
-          editing={plan.editing}
-          names={plan.names}
-          onCancel={() => {
-            plan.setEditing(null);
-          }}
-          onSave={(session) => {
-            if (plan.preview) {
-              plan.setError('Apply or keep the current schedule before editing a block.');
-              return;
-            }
-            plan.saveSession(session);
-          }}
-          onRemove={(id) => {
-            if (plan.preview) {
-              plan.setError('Apply or keep the current schedule before editing a block.');
-              return;
-            }
-            plan.editDraft({
-              ...plan.draft,
-              sessions: plan.draft.sessions.filter((session) => session.id !== id),
-            });
-            plan.setEditing(null);
-          }}
-        />
-      ) : null}
+    <section className="min-w-0 space-y-3" aria-label="Planned agenda">
+      <AgendaHeading plan={plan} />
+      <AgendaSessionEditor plan={plan} />
       <DailyAgenda
         date={plan.date}
         timezone={plan.timezone}
@@ -182,6 +226,19 @@ async function confirmPlan(plan: ReadyPlanningController): Promise<void> {
   }
 }
 
+function ConfirmPlanButton({ plan }: { readonly plan: ReadyPlanningController }): JSX.Element {
+  return (
+    <Button
+      disabled={confirmationDisabled(plan)}
+      onClick={() => {
+        void confirmPlan(plan);
+      }}
+    >
+      Confirm plan
+    </Button>
+  );
+}
+
 function PlanFooter({ plan }: { readonly plan: ReadyPlanningController }): JSX.Element {
   const hasYesterday =
     (plan.dayQ.data?.carryover.length ?? 0) +
@@ -191,17 +248,7 @@ function PlanFooter({ plan }: { readonly plan: ReadyPlanningController }): JSX.E
   return (
     <Card>
       <CardContent className="flex flex-wrap items-center justify-between gap-3 py-3">
-        {plan.stage === 'review' ? (
-          <Button
-            variant="ghost"
-            disabled={plan.deferPending}
-            onClick={() => {
-              void plan.go('plan');
-            }}
-          >
-            Edit plan
-          </Button>
-        ) : hasYesterday ? (
+        {hasYesterday ? (
           <Button
             variant="ghost"
             disabled={plan.deferPending}
@@ -214,25 +261,14 @@ function PlanFooter({ plan }: { readonly plan: ReadyPlanningController }): JSX.E
         ) : (
           <span />
         )}
-        {plan.stage === 'plan' ? (
-          <Button
-            disabled={plan.deferPending}
-            onClick={() => {
-              void plan.go('review');
-            }}
-          >
-            Review plan
-          </Button>
-        ) : (
-          <Button
-            disabled={confirmationDisabled(plan)}
-            onClick={() => {
-              void confirmPlan(plan);
-            }}
-          >
-            Confirm plan
-          </Button>
-        )}
+        <Button
+          disabled={plan.deferPending}
+          onClick={() => {
+            void plan.go('review');
+          }}
+        >
+          Review plan
+        </Button>
       </CardContent>
     </Card>
   );
@@ -245,19 +281,16 @@ function assessmentToken(plan: ReadyPlanningController): string {
   return `titles:${hash >>> 0}`;
 }
 
-/** Keep work and agenda in the same positions through editing and review. */
+/** Give the final agenda precedence while keeping its chosen work directly editable. */
 export function PlanStage({ plan }: { readonly plan: ReadyPlanningController }): JSX.Element {
-  const displayed = plan.preview?.draft ?? plan.draft;
-  const unplaced = displayed.tasks.filter(
-    (entry) => unplacedMinutes(displayed, entry.taskId, plan.dayQ.data?.actual ?? []) > 0,
-  ).length;
+  const reviewing = plan.stage === 'review';
   return (
     <fieldset
       disabled={plan.confirming}
       aria-busy={plan.confirming}
       className={`min-w-0 space-y-4 ${plan.confirming ? 'pointer-events-none' : ''}`}
     >
-      {plan.stage === 'review' ? (
+      {reviewing ? (
         <DailyPlanningAssessment
           proposalToken={assessmentToken(plan)}
           draft={plan.draft}
@@ -266,26 +299,13 @@ export function PlanStage({ plan }: { readonly plan: ReadyPlanningController }):
           }}
         />
       ) : null}
-      {plan.stage === 'review' ? (
-        <p className="text-on-surface-variant text-body-medium">
-          {unplaced > 0
-            ? `${unplaced} ${unplaced === 1 ? 'task still needs' : 'tasks still need'} a block.`
-            : 'All selected work has a block.'}
-        </p>
-      ) : null}
-      <div className="grid min-w-0 items-start gap-6 xl:grid-cols-[minmax(20rem,0.8fr)_minmax(0,1.2fr)]">
-        <div className={plan.stage === 'review' ? 'order-2 min-w-0 xl:order-1' : 'min-w-0'}>
-          <WorkColumn plan={plan} />
-        </div>
-        <div
-          className={
-            plan.stage === 'review' ? 'order-1 min-w-0 space-y-4 xl:order-2' : 'min-w-0 space-y-4'
-          }
-        >
-          <AgendaColumn plan={plan} />
-        </div>
+      <div
+        className={`grid min-w-0 items-start gap-6 ${reviewing ? 'xl:grid-cols-[minmax(0,1.5fr)_minmax(18rem,0.8fr)]' : 'xl:grid-cols-[minmax(20rem,0.8fr)_minmax(0,1.2fr)]'}`}
+      >
+        {reviewing ? <AgendaColumn plan={plan} /> : <WorkColumn plan={plan} />}
+        {reviewing ? <WorkColumn plan={plan} /> : <AgendaColumn plan={plan} />}
       </div>
-      <PlanFooter plan={plan} />
+      {!reviewing ? <PlanFooter plan={plan} /> : null}
     </fieldset>
   );
 }

@@ -53,12 +53,70 @@ function useTodayAttention(data: TodayPayload | null | undefined): TodayAttentio
   }, [data]);
 }
 
+/** Execution stays above the attention backlog once the caller has an active plan. */
+function TodayWork({
+  data,
+  loading,
+  orgName,
+  date,
+  displayTimezone,
+  attention,
+  actions,
+}: Pick<
+  ReturnType<typeof useTodayData>,
+  'data' | 'loading' | 'orgName' | 'date' | 'displayTimezone'
+> & {
+  readonly attention: TodayAttention;
+  readonly actions: ReturnType<typeof useTodayActions>;
+}): JSX.Element {
+  const plan = (
+    <DayPlan
+      plan={data?.plan ?? []}
+      now={data?.focus.now ?? null}
+      orgName={orgName}
+      loading={loading}
+      unplanned={data?.planState === 'unplanned'}
+      completing={actions.completing}
+      onComplete={actions.complete}
+      onDefer={actions.defer}
+      onPromote={actions.promote}
+      onTimebox={(item, startsAt, endsAt) => {
+        void actions.timebox(item, startsAt, endsAt);
+      }}
+      date={date}
+      displayTimezone={displayTimezone}
+    />
+  );
+  // Accepted execution must remain reachable above a long backlog. Approvals still appear below
+  // it, including approvals for planned tasks, because a plan row cannot request a signature.
+  const needsAttention = data ? (
+    <NeedsAttention
+      approvals={attention.approvals}
+      blocked={attention.blocked}
+      dueToday={attention.dueToday}
+      orgName={orgName}
+    />
+  ) : null;
+  return data?.planState === 'active' ? (
+    <>
+      {plan}
+      {needsAttention}
+    </>
+  ) : (
+    <>
+      {needsAttention}
+      {plan}
+    </>
+  );
+}
+
 /**
  * TodayPage — the daily operating surface, with a distinct planning entry.
  *
  * @remarks
  * **At rest** it offers Plan day or Resume planning, then shows the Athena field, work that needs a
- * decision, the accepted plan, and the Projects and Initiatives that work belongs to. Inline actions
+ * decision, and the Projects and Initiatives that work belongs to. An active plan opens directly
+ * on Now, with Athena available in the rail and the attention backlog below execution. Inline actions
  * cover quick execution; entity links defer detailed workflows to their canonical pages.
  *
  * **Engaged**, it keeps the plan visible and reveals Athena in the shared utility rail. The rail
@@ -101,12 +159,14 @@ export default function TodayPage(): JSX.Element {
 
       <DailyPlanningEntry date={date} />
 
-      <TodayPrompt
-        orgId={activeOrgId}
-        orgLabel={activeOrgId ? orgName(activeOrgId) : 'your workspace'}
-        onCaptured={refetch}
-        captureOnly={railVisible}
-      />
+      {data?.planState !== 'active' ? (
+        <TodayPrompt
+          orgId={activeOrgId}
+          orgLabel={activeOrgId ? orgName(activeOrgId) : 'your workspace'}
+          onCaptured={refetch}
+          captureOnly={railVisible}
+        />
+      ) : null}
 
       {error ? (
         <PartialLoadBanner title="Today did not load" onRetry={refetch}>
@@ -114,39 +174,14 @@ export default function TodayPage(): JSX.Element {
         </PartialLoadBanner>
       ) : null}
 
-      {/* Approvals outrank anything self-scheduled: an agent that paused for a signature is
-          blocked on this person, and so is a task waiting on a dependency. A deadline landing on a
-          task that never made it onto the plan is the third, and the only one the plan below
-          cannot show.
-
-          Blocked and due-today are filtered against the plan, because a plan row already carries
-          its own Blocked marker and its own due date. Approvals are not: nothing on a plan row says
-          an agent is holding for a signature, so filtering them left an approval on a planned task
-          with nowhere on the page to appear. */}
-      {data ? (
-        <NeedsAttention
-          approvals={attention.approvals}
-          blocked={attention.blocked}
-          dueToday={attention.dueToday}
-          orgName={orgName}
-        />
-      ) : null}
-
-      <DayPlan
-        plan={data?.plan ?? []}
-        now={data?.focus.now ?? null}
-        orgName={orgName}
+      <TodayWork
+        data={data}
         loading={loading}
-        unplanned={data?.planState === 'unplanned'}
-        completing={actions.completing}
-        onComplete={actions.complete}
-        onDefer={actions.defer}
-        onPromote={actions.promote}
-        onTimebox={(item, startsAt, endsAt) => {
-          void actions.timebox(item, startsAt, endsAt);
-        }}
+        orgName={orgName}
         date={date}
         displayTimezone={displayTimezone}
+        attention={attention}
+        actions={actions}
       />
 
       <ProjectStatus cards={data?.statusCards ?? []} orgName={orgName} />

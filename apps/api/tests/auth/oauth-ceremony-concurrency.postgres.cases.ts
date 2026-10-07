@@ -149,7 +149,7 @@ it('routes provider and Docket issuance writes through one PostgreSQL transactio
   }
 });
 
-it('serializes two rotations of the same refresh token and revokes a replayed family', async () => {
+it('serializes a duplicate refresh without revoking the successful rotation', async () => {
   const client = await registerPublicClient();
   const resource = `${origin}/v1`;
   const code = await authorizationCode(client, resource, 'parallel-refresh', true);
@@ -181,24 +181,24 @@ it('serializes two rotations of the same refresh token and revokes a replayed fa
     .select({ revokedAt: oauthResourceGrant.revokedAt })
     .from(oauthResourceGrant)
     .where(eq(oauthResourceGrant.id, grantId));
-  expect(grant?.revokedAt).toBeInstanceOf(Date);
+  expect(grant?.revokedAt).toBeNull();
   const refreshRows = await db
     .select({ token: oauthRefreshToken.token, revoked: oauthRefreshToken.revoked })
     .from(oauthRefreshToken)
     .where(eq(oauthRefreshToken.docketGrantId, grantId));
   expect(refreshRows).toHaveLength(2);
   const unrevokedRows = refreshRows.filter(({ revoked }) => revoked === null);
-  expect(unrevokedRows).toEqual([]);
+  expect(unrevokedRows).toHaveLength(1);
   const issuedDigest = createHash('sha256').update(issued.refreshToken).digest('base64url');
-  expect(refreshRows.find(({ token }) => token === issuedDigest)?.revoked).toBeInstanceOf(Date);
-  expect((await readOrganizations(initial.accessToken)).status).toBe(401);
-  expect((await readOrganizations(issued.accessToken)).status).toBe(401);
-  const descendantReplay = await refreshTokens(client, issued.refreshToken, resource);
-  expect(descendantReplay.response.status).toBe(400);
-  expect(await descendantReplay.response.json()).toMatchObject({ error: 'invalid_grant' });
+  expect(unrevokedRows).toEqual([{ token: issuedDigest, revoked: null }]);
+  expect((await readOrganizations(initial.accessToken)).status).toBe(200);
+  expect((await readOrganizations(issued.accessToken)).status).toBe(200);
+  const successor = await refreshTokens(client, issued.refreshToken, resource);
+  expect(successor.response.status, await successor.response.clone().text()).toBe(200);
+  expect(successor.tokens?.accessToken).toEqual(expect.any(String));
 });
 
-it('rolls back provider-wide replay revocation before invalidating one PostgreSQL grant family', async () => {
+it('preserves an immediate refresh retry and revokes only its family after a delayed replay', async () => {
   const client = await registerPublicClient();
   const resource = `${origin}/v1`;
   const firstCode = await authorizationCode(client, resource, 'pg-replay-first', true);
@@ -218,6 +218,21 @@ it('rolls back provider-wide replay revocation before invalidating one PostgreSQ
   const replayed = await refreshTokens(client, first.refreshToken, resource);
   expect(replayed.response.status, await replayed.response.clone().text()).toBe(400);
   expect(await replayed.response.json()).toMatchObject({ error: 'invalid_grant' });
+  const firstRotation = required(rotated.tokens, 'The refresh did not return a rotated token.');
+  expect(firstRotation.refreshToken).toEqual(expect.any(String));
+  expect((await readOrganizations(first.accessToken)).status).toBe(200);
+  const successor = await refreshTokens(client, firstRotation.refreshToken, resource);
+  expect(successor.response.status, await successor.response.clone().text()).toBe(200);
+
+  const originalDigest = createHash('sha256').update(first.refreshToken).digest('base64url');
+  await controlB`
+    update oauth_refresh_token
+    set revoked = current_timestamp - interval '60 seconds'
+    where token = ${originalDigest}
+  `;
+  const delayedReplay = await refreshTokens(client, first.refreshToken, resource);
+  expect(delayedReplay.response.status).toBe(400);
+  expect(await delayedReplay.response.json()).toMatchObject({ error: 'invalid_grant' });
 
   const grants = await controlB<{ id: string; revokedAt: Date | null }[]>`
       select id, revoked_at as "revokedAt"

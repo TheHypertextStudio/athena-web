@@ -7,6 +7,18 @@
 
 ## Active Tasks
 
+### [ATHENA-LATTICE-FOLLOWUPS-003] Finish relay deployment acceptance and land receipts
+
+- **Status**: BLOCKED
+- **Started**: 2026-10-07
+- **Priority**: P0
+- **Description**: User explicitly requested completion of every remaining follow-up after the six-item acceptance audit.
+- **Plan**: Inspect the deployed relay topology and existing authorized provider access; follow the relay runbook for persistence, competing-instance claims and restart survival, preserving owner work and grants. Review each operational slice. Reconcile final proof docs, validate affected documentation, integrate the reviewed receipt commits linearly with current main, make one delivery push, and verify its checks.
+- **Constraints**: Preserve unrelated dirty work in both primary repositories. Use existing authentication and workload identities. No repeated Google SDK sign-in, broader IAM grant, or synthetic approval. Production cutover requires the runbook’s drained-queue and rollback conditions.
+- **Relay provider access audit**: The existing Reasonable Tech Chrome profile redirects Cloud Console to passkey reauthentication; its existing CLI credential cannot refresh noninteractively. GitHub Actions run `37581732038` started zero jobs; its authenticated run page explicitly reports failed account payments or an insufficient spending limit. Actions are enabled, so this is not a disabled-workflow setting. No GCP MCP capability is configured. Preserve the live relay and grants; do not expand IAM, initiate another SDK exchange, or perform a blind cutover. Safe receipt: `/Users/williecubed/.codex/visualizations/2026/10/07/athena-followups/relay-access-audit.json`.
+
+- **Documentation delivery**: Four reviewed receipt commits rebased cleanly onto current main `8d5120c7d`; no source changes or merge commits. The rebased documentation passes `pnpm docs:check` (52 pages), Prettier and `git diff --check`. Independent review found no actionable findings. Integrate this coherent documentation delivery directly into remote main while preserving the primary checkout’s unrelated dirty files.
+
 ### [DAILY-PLAN-RELEASE-002] Finish automatic daily planning and execution
 
 - **Status**: REVIEW

@@ -10,6 +10,7 @@ vi.mock('../../src/components/daily-planning/daily-planning-assessment', () => (
   DailyPlanningAssessment: () => null,
 }));
 vi.mock('../../src/components/daily-planning/daily-planning-schedule-controls', () => ({
+  OrganizeDay: () => null,
   ScheduleControls: () => null,
   WorkdayControls: () => null,
 }));

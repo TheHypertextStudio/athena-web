@@ -43,7 +43,6 @@ import {
 import type { CalendarEventOut } from '@docket/planning/calendar-contract';
 import { addDays, instantAt } from '@docket/planning/zoned-time';
 import Link from '@/components/docket-link';
-import ActivityLink from 'next/link';
 import type { JSX } from 'react';
 import { useMemo } from 'react';
 
@@ -197,12 +196,13 @@ function PlanRowActions({
       {/* Promoting is only meaningful relative to a task already ahead of this one. */}
       {planningHref ? (
         <Button asChild type="button" variant="ghost">
-          <ActivityLink
+          <Link
+            navigation="activity"
             prefetch={false}
             href={`${planningHref}&task=${encodeURIComponent(item.id)}`}
           >
             Adjust plan
-          </ActivityLink>
+          </Link>
         </Button>
       ) : now && onPromote ? (
         <Button

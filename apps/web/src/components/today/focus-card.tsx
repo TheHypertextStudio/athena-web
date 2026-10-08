@@ -150,7 +150,9 @@ function FocusPlanningActions({
       {' '}
       {planningHref ? (
         <DropdownMenuItem asChild>
-          <Link href={`${planningHref}&task=${encodeURIComponent(item.id)}`}>Adjust plan</Link>
+          <Link navigation="activity" href={`${planningHref}&task=${encodeURIComponent(item.id)}`}>
+            Adjust plan
+          </Link>
         </DropdownMenuItem>
       ) : (
         <>

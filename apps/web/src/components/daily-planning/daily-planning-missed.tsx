@@ -2,7 +2,7 @@
 
 /** A missed timed block on Today with three concrete next actions. */
 import { Button, Card, CardContent } from '@docket/ui/primitives';
-import Link from 'next/link';
+import Link from '@/components/docket-link';
 import { useState, type JSX } from 'react';
 import { missedDailyAllocation } from '@docket/planning/daily-plan-execution';
 
@@ -58,12 +58,20 @@ export function MissedBlock({
               Done
             </Button>
             <Button asChild variant="secondary">
-              <Link prefetch={false} href={`${recoveryHref}&recovery=still_working`}>
+              <Link
+                navigation="activity"
+                prefetch={false}
+                href={`${recoveryHref}&recovery=still_working`}
+              >
                 Still working
               </Link>
             </Button>
             <Button asChild>
-              <Link prefetch={false} href={`${recoveryHref}&recovery=not_started`}>
+              <Link
+                navigation="activity"
+                prefetch={false}
+                href={`${recoveryHref}&recovery=not_started`}
+              >
                 Not started
               </Link>
             </Button>

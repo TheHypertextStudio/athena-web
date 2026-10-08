@@ -1,10 +1,11 @@
 /** Authenticated daily-planning fixtures and browser actions. */
-import { addDays, instantAt, localMinuteOfDay } from '@docket/planning/zoned-time';
+import { addDays, instantAt } from '@docket/planning/zoned-time';
 import type { DailyPlanSnapshot } from '@docket/planning/daily-plan-flow';
 import type { Locator, Page, TestInfo } from '@playwright/test';
 import { signUpAndOnboard } from './app';
 import { expect } from './fixtures';
 import { apiJson } from './net';
+import { planningTimezone } from './planning-timezone';
 
 /** Selected work and local dates returned by authenticated fixture setup. */
 export interface PlanningContext {
@@ -15,28 +16,8 @@ export interface PlanningContext {
   itemIds: string[];
 }
 
-const TEST_TIMEZONES = [
-  'Pacific/Auckland',
-  'Pacific/Honolulu',
-  'America/Los_Angeles',
-  'America/New_York',
-  'America/Sao_Paulo',
-  'Europe/London',
-  'Europe/Berlin',
-  'Asia/Dubai',
-  'Asia/Kolkata',
-  'Asia/Singapore',
-  'Asia/Tokyo',
-];
-/** Choose a timezone where the current clock falls inside the requested test window. */
-export function planningTimezone(fromMinute = 10 * 60, throughMinute = 13 * 60): string {
-  const zone = TEST_TIMEZONES.find((timezone) => {
-    const minute = localMinuteOfDay(new Date(), timezone);
-    return minute >= fromMinute && minute <= throughMinute;
-  });
-  if (!zone) throw new Error('No test timezone has a local time inside the requested window.');
-  return zone;
-}
+export { planningTimezone } from './planning-timezone';
+
 /** Saved planning state observed through the authenticated API. */
 export interface DayRead {
   revision: number;

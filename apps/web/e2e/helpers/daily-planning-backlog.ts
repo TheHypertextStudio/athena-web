@@ -47,6 +47,26 @@ export async function runAssignedBacklogPlanning(page: Page, testInfo: TestInfo)
   const start = page.getByRole('button', { name: /^Start Backlog work/ });
   await expect(start).toBeVisible();
   expect((await apiJson<{ record: unknown }>(page, '/v1/time/active')).record).toBeNull();
+  await page.getByRole('button', { name: 'Go to Today', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Today', exact: true })).toBeVisible();
+  const adjustment = page.getByRole('link', { name: 'Adjust plan', exact: true }).last();
+  const actions = page.getByRole('button', { name: 'More actions', exact: true }).first();
+  await expect(adjustment.or(actions).first()).toBeVisible();
+  if ((await adjustment.count()) > 0) {
+    await adjustment.press('Enter');
+  } else {
+    await actions.press('Enter');
+    await page.getByRole('menuitem', { name: 'Adjust plan', exact: true }).press('Enter');
+  }
+  await expect(page).toHaveURL(new RegExp(`/plan/day\\?date=${context.date}&task=`));
+  await expect(page.getByRole('complementary', { name: 'Navigation' })).toHaveCount(0);
+  const editor = page.getByRole('dialog', { name: 'Edit block', exact: true });
+  await expect(editor).toBeVisible();
+  await editor.getByRole('button', { name: 'Cancel', exact: true }).press('Enter');
+  await expect(editor).toBeHidden();
+  await reviewPlan(page);
+  await page.getByRole('button', { name: 'Confirm plan', exact: true }).click();
+  await expect(start).toBeVisible();
   await start.click();
   await expect(page).toHaveURL(/\/focus$/);
   const active = await apiJson<{ record: { taskId: string; status: string } }>(

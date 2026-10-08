@@ -5,19 +5,27 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import type { ComponentProps } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { navigateWithoutRouter, prefetchAuthenticatedRoute, responsiveRouter, serverReachable } =
-  vi.hoisted(() => ({
-    navigateWithoutRouter: vi.fn(),
-    prefetchAuthenticatedRoute: vi.fn().mockResolvedValue(true),
-    responsiveRouter: {
-      current: null as null | {
-        readonly requestedHref: string | null;
-        readonly push: ReturnType<typeof vi.fn>;
-        readonly replace: ReturnType<typeof vi.fn>;
-      },
+const {
+  navigateWithoutRouter,
+  prefetchAuthenticatedRoute,
+  responsiveRouter,
+  serverReachable,
+  offlineAvailability,
+} = vi.hoisted(() => ({
+  navigateWithoutRouter: vi.fn(),
+  prefetchAuthenticatedRoute: vi.fn().mockResolvedValue(true),
+  responsiveRouter: {
+    current: null as null | {
+      readonly requestedHref: string | null;
+      readonly push: ReturnType<typeof vi.fn>;
+      readonly replace: ReturnType<typeof vi.fn>;
     },
-    serverReachable: { value: true },
-  }));
+  },
+  serverReachable: { value: true },
+  offlineAvailability: vi.fn((href: string | null) =>
+    href?.startsWith('/plan/day') ? 'unavailable' : 'available',
+  ),
+}));
 
 vi.mock('next/link', () => ({
   default: ({
@@ -66,13 +74,14 @@ vi.mock('../../src/lib/authenticated-route', () => ({
   prefetchAuthenticatedRoute,
 }));
 vi.mock('../../src/lib/offline-availability', () => ({
-  useOfflineAvailability: () => 'available',
+  useOfflineAvailability: offlineAvailability,
 }));
 
 import DocketLink from '../../src/components/docket-link';
 
 beforeEach(() => {
   navigateWithoutRouter.mockReset();
+  offlineAvailability.mockClear();
   prefetchAuthenticatedRoute.mockClear();
   serverReachable.value = true;
   responsiveRouter.current = null;
@@ -85,6 +94,46 @@ afterEach(() => {
 });
 
 describe('DocketLink', () => {
+  it.each(['/plan/day?date=2026-10-07', '/today'])(
+    'hands the activity transition at %s to Next without warming a workspace page',
+    async (href) => {
+      vi.useFakeTimers();
+      responsiveRouter.current = {
+        requestedHref: null,
+        push: vi.fn().mockReturnValue(true),
+        replace: vi.fn().mockReturnValue(true),
+      };
+      render(
+        <DocketLink href={href} navigation="activity">
+          Planning
+        </DocketLink>,
+      );
+      const link = screen.getByRole('link', { name: 'Planning' });
+      fireEvent.focus(link);
+      fireEvent.mouseEnter(link);
+      await vi.advanceTimersByTimeAsync(75);
+      const event = new MouseEvent('click', { bubbles: true, cancelable: true });
+      fireEvent(link, event);
+      expect(event.defaultPrevented).toBe(false);
+      expect(responsiveRouter.current.push).not.toHaveBeenCalled();
+      expect(prefetchAuthenticatedRoute).not.toHaveBeenCalled();
+      expect(link).toHaveAttribute('data-prefetch', 'false');
+      expect(link).not.toHaveAttribute('navigation');
+    },
+  );
+
+  it('keeps an activity document reachable when it has no workspace route module', () => {
+    serverReachable.value = false;
+    render(
+      <DocketLink href="/plan/day" navigation="activity">
+        Plan day
+      </DocketLink>,
+    );
+    fireEvent.click(screen.getByRole('link', { name: 'Plan day' }));
+    expect(offlineAvailability).toHaveBeenCalledWith(null, true);
+    expect(navigateWithoutRouter).toHaveBeenCalledWith('/plan/day');
+  });
+
   it('keeps an immediate offline click inside the running document', () => {
     vi.spyOn(window.navigator, 'onLine', 'get').mockReturnValue(false);
     render(<DocketLink href="/tasks">Tasks</DocketLink>);

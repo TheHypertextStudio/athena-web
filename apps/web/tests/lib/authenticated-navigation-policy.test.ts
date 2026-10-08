@@ -4,7 +4,11 @@ import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
 
 const webRoot = join(import.meta.dirname, '../..');
-const roots = [join(webRoot, 'src/app/(app)'), join(webRoot, 'src/components')];
+const roots = [
+  join(webRoot, 'src/app/(app)'),
+  join(webRoot, 'src/app/(activity)'),
+  join(webRoot, 'src/components'),
+];
 
 function sourceFiles(directory: string): string[] {
   return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {

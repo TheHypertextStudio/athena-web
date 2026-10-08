@@ -5,7 +5,7 @@ import { ImmersiveShell, InlineBanner } from '@docket/ui/components';
 import { Skeleton, SkeletonText } from '@docket/ui/primitives';
 import { useEffect, useState, type JSX, type ReactNode } from 'react';
 import { Button } from '@docket/ui/primitives';
-import Link from 'next/link';
+import Link from '@/components/docket-link';
 import { useOptionalResolvedAccountId } from '@/components/resolved-account';
 import { dailyPlanningEntryKey, recordDailyPlanningEntry } from './automatic-daily-planning-model';
 
@@ -86,7 +86,9 @@ export function DailyPlanningSurface(): JSX.Element {
   }, [controller.stage]);
   const exit = (
     <Button variant="secondary" asChild>
-      <Link href="/today">Today</Link>
+      <Link navigation="activity" href="/today">
+        Today
+      </Link>
     </Button>
   );
   if (

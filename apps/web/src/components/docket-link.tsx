@@ -71,6 +71,8 @@ import { useOnlineStatus } from '@/lib/use-online-status';
  */
 export type DocketLinkProps = ComponentProps<typeof Link> & {
   readonly transition?: NavigationTransition;
+  /** Replace the activity layout instead of swapping a page inside the workspace. */
+  readonly navigation?: 'workspace' | 'activity';
 };
 
 const MODULE_PREFETCH_DELAY_MS = 75;
@@ -176,6 +178,7 @@ export default function DocketLink({
   onMouseLeave,
   prefetch,
   transition,
+  navigation = 'workspace',
   ...props
 }: DocketLinkProps): JSX.Element {
   const serverReachable = useServerReachable();
@@ -183,8 +186,9 @@ export default function DocketLink({
   const routerReachable = serverReachable && online;
   const responsiveRouter = useOptionalResponsiveRouter();
   const href = typeof props.href === 'string' ? props.href : null;
-  const localRoute = href?.startsWith('/') === true && routePathIsAuthenticated(href);
-  const availability = useOfflineAvailability(href, !routerReachable);
+  const activity = navigation === 'activity';
+  const localRoute = routePathIsAuthenticated(href, activity);
+  const availability = useOfflineAvailability(activity ? null : href, !routerReachable);
   const navigationPending = responsiveRouter?.requestedHref === href;
   const { handleIntent, cancelIntent } = useDestinationWarming(
     href,
@@ -205,7 +209,7 @@ export default function DocketLink({
     }
     cancelIntent();
     if (routerReachable) {
-      if (responsiveRouter === null) return;
+      if (responsiveRouter === null || activity) return;
       const options: ResponsiveNavigationOptions = { scroll: props.scroll, transition };
       if (requestNavigation(responsiveRouter, href, props.replace, options)) event.preventDefault();
       return;
@@ -214,30 +218,12 @@ export default function DocketLink({
     navigateWithoutRouter(href);
   };
 
-  if (availability === 'unavailable') {
-    // Only DOM-safe props are carried over. `next/link` accepts `prefetch`, `replace`, `scroll` and
-    // friends, and spreading those onto a `span` would put unknown attributes in the document and
-    // draw a React warning per row on a list surface.
-    const { children, className, id, style, title } = props;
-    return (
-      <span
-        id={id}
-        style={style}
-        aria-disabled="true"
-        // Says why, on hover and to assistive technology, rather than leaving a dimmed word that
-        // looks like a rendering bug.
-        title={title ?? 'Not available offline'}
-        className={cn(className, 'text-on-surface-variant cursor-default opacity-60')}
-      >
-        {children}
-      </span>
-    );
-  }
+  if (availability === 'unavailable') return <UnavailableLink {...props} />;
 
   return (
     <Link
       {...props}
-      {...(localRoute ? { prefetch: false } : prefetch === undefined ? {} : { prefetch })}
+      {...linkPrefetch(localRoute, activity, prefetch)}
       aria-current={navigationPending ? undefined : props['aria-current']}
       aria-busy={navigationPending || undefined}
       data-navigation-pending={navigationPending || undefined}
@@ -259,6 +245,21 @@ export default function DocketLink({
         if (!event.defaultPrevented) cancelIntent();
       }}
     />
+  );
+}
+
+/** Carry only DOM-safe props onto a destination that cannot render offline. */
+function UnavailableLink({ children, className, id, style, title }: DocketLinkProps): JSX.Element {
+  return (
+    <span
+      id={id}
+      style={style}
+      aria-disabled="true"
+      title={title ?? 'Not available offline'}
+      className={cn(className, 'text-on-surface-variant cursor-default opacity-60')}
+    >
+      {children}
+    </span>
   );
 }
 
@@ -299,8 +300,22 @@ function prefetchRouteData(href: string, prefetch: PrefetchApi): void {
   }
 }
 
-function routePathIsAuthenticated(href: string): boolean {
-  return parseAuthenticatedRoute(pathnameOf(href)).kind === 'matched';
+function routePathIsAuthenticated(href: string | null, activity: boolean): boolean {
+  return (
+    !activity &&
+    href?.startsWith('/') === true &&
+    parseAuthenticatedRoute(pathnameOf(href)).kind === 'matched'
+  );
+}
+
+/** Activity layouts and locally swapped pages cannot use background RSC prefetching. */
+function linkPrefetch(
+  localRoute: boolean,
+  activity: boolean,
+  prefetch: DocketLinkProps['prefetch'],
+): Pick<DocketLinkProps, 'prefetch'> {
+  if (localRoute || activity) return { prefetch: false };
+  return prefetch === undefined ? {} : { prefetch };
 }
 
 /**

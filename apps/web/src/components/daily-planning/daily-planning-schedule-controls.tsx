@@ -66,9 +66,7 @@ function WorkdayBuffer({ plan }: { readonly plan: ReadyPlanningController }): JS
 
 /** Edit the scheduling bounds and buffer used by the proposal service. */
 export function WorkdayControls({ plan }: { readonly plan: ReadyPlanningController }): JSX.Element {
-  const [chosenOpen, setChosenOpen] = useState<boolean | null>(null);
-  const open =
-    chosenOpen ?? (plan.stage === 'plan' && Boolean(plan.proposalContext?.workScheduleMissing));
+  const [open, setOpen] = useState(false);
   const changeTime = (value: string, field: 'start' | 'finish'): void => {
     if (!value) return;
     const [hours, minutes] = value.split(':').map(Number);
@@ -84,7 +82,7 @@ export function WorkdayControls({ plan }: { readonly plan: ReadyPlanningControll
     );
   };
   return (
-    <Collapsible open={open} onOpenChange={setChosenOpen} className="space-y-2">
+    <Collapsible open={open} onOpenChange={setOpen} className="space-y-2">
       <CollapsibleTrigger asChild>
         <Button
           size="sm"
@@ -128,36 +126,36 @@ export function WorkdayControls({ plan }: { readonly plan: ReadyPlanningControll
   );
 }
 
+/** Rebuild flexible work without replacing the current agenda until it is accepted. */
+export function OrganizeDay({ plan }: { readonly plan: ReadyPlanningController }): JSX.Element {
+  return (
+    <Button
+      size="sm"
+      variant="secondary"
+      disabled={plan.proposalPending}
+      onClick={() => {
+        void plan.rebuild();
+      }}
+    >
+      Organize day
+    </Button>
+  );
+}
+
 /** Keep a proposed revision separate until the person accepts the shown calendar. */
 export function ScheduleControls({
   plan,
 }: {
   readonly plan: ReadyPlanningController;
-}): JSX.Element {
+}): JSX.Element | null {
+  if (!plan.preview && !plan.canUndoSchedule) return null;
   return (
     <div className="space-y-2">
-      <div className="flex flex-wrap items-center gap-2">
-        <Button
-          size="sm"
-          variant="secondary"
-          disabled={plan.proposalPending}
-          onClick={() => {
-            void plan.rebuild();
-          }}
-        >
-          Organize day
+      {plan.canUndoSchedule && !plan.preview ? (
+        <Button size="sm" variant="ghost" onClick={plan.undoSchedule}>
+          Undo schedule
         </Button>
-        {plan.canUndoSchedule ? (
-          <Button size="sm" variant="ghost" onClick={plan.undoSchedule}>
-            Undo schedule
-          </Button>
-        ) : null}
-        {plan.stage === 'plan' ? (
-          <span className="text-body-small text-on-surface-variant">
-            Drag work to a time or an existing block.
-          </span>
-        ) : null}
-      </div>
+      ) : null}
       {plan.preview ? (
         <Card>
           <CardContent className="space-y-2 pt-3">

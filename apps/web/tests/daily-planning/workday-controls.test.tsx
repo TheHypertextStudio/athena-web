@@ -3,7 +3,10 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, expect, it, vi } from 'vitest';
 import type { ReadyPlanningController } from '../../src/components/daily-planning/daily-planning-controller';
-import { WorkdayControls } from '../../src/components/daily-planning/daily-planning-schedule-controls';
+import {
+  ScheduleControls,
+  WorkdayControls,
+} from '../../src/components/daily-planning/daily-planning-schedule-controls';
 
 afterEach(cleanup);
 
@@ -42,15 +45,17 @@ it('keeps review settings closed while allowing a keyboard edit of the finish ti
   });
 });
 
-it('shows editable bounds in planning when no work schedule has been saved', () => {
+it('opens editable bounds on demand when no work schedule has been saved', async () => {
   render(<WorkdayControls plan={controller('plan')} />);
+  expect(screen.queryByLabelText('Start')).not.toBeInTheDocument();
+  await userEvent.click(screen.getByRole('button', { name: 'Workday settings' }));
   expect(screen.getByText('Timezone: UTC')).toBeVisible();
   expect(screen.getByLabelText('Start')).toHaveValue('09:00');
   expect(screen.getByLabelText('Finish')).toHaveValue('17:00');
   expect(screen.getByLabelText('Buffer %')).toHaveValue(15);
 });
 
-it('expands missing work hours when proposal context arrives after the first render', () => {
+it('keeps settings closed when proposal context arrives after the first render', () => {
   const plan = controller('plan');
   const pending = { ...plan, proposalContext: null };
   const view = render(<WorkdayControls plan={pending} />);
@@ -59,10 +64,10 @@ it('expands missing work hours when proposal context arrives after the first ren
     'false',
   );
   view.rerender(<WorkdayControls plan={plan} />);
-  expect(screen.getByLabelText('Start')).toHaveValue('09:00');
+  expect(screen.queryByLabelText('Start')).not.toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Workday settings' })).toHaveAttribute(
     'aria-expanded',
-    'true',
+    'false',
   );
 });
 
@@ -79,3 +84,29 @@ it.each([true, false])(
     expect(trigger).toHaveAttribute('aria-expanded', String(open));
   },
 );
+
+it('shows revision actions only while a proposal or undoable change exists', async () => {
+  const plan = {
+    ...controller('plan'),
+    preview: null,
+    canUndoSchedule: false,
+    applyPreview: vi.fn(),
+    setPreview: vi.fn(),
+    undoSchedule: vi.fn(),
+  };
+  const view = render(<ScheduleControls plan={plan} />);
+  expect(screen.queryByRole('button')).not.toBeInTheDocument();
+  view.rerender(
+    <ScheduleControls
+      plan={{ ...plan, preview: { title: 'Updated schedule', draft: plan.draft } }}
+    />,
+  );
+  await userEvent.click(screen.getByRole('button', { name: 'Apply schedule' }));
+  expect(plan.applyPreview).toHaveBeenCalledOnce();
+  await userEvent.click(screen.getByRole('button', { name: 'Keep current' }));
+  expect(plan.setPreview).toHaveBeenCalledWith(null);
+  expect(screen.queryByRole('button', { name: 'Undo schedule' })).not.toBeInTheDocument();
+  view.rerender(<ScheduleControls plan={{ ...plan, canUndoSchedule: true }} />);
+  await userEvent.click(screen.getByRole('button', { name: 'Undo schedule' }));
+  expect(plan.undoSchedule).toHaveBeenCalledOnce();
+});

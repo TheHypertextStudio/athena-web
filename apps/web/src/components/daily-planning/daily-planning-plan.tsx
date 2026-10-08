@@ -11,7 +11,7 @@ import { ActivityPanels } from '@docket/ui/components';
 import { DailyAgenda } from './daily-planning-agenda';
 import { SessionEditor } from './daily-planning-session-editor';
 import { DailyPlanningAssessment } from './daily-planning-assessment';
-import { ScheduleControls, WorkdayControls } from './daily-planning-schedule-controls';
+import { OrganizeDay, ScheduleControls, WorkdayControls } from './daily-planning-schedule-controls';
 import type { ReadyPlanningController } from './daily-planning-controller';
 import {
   addTaskToSession,
@@ -89,34 +89,14 @@ function agendaActions(plan: ReadyPlanningController) {
 }
 
 function AgendaHeading({ plan }: { readonly plan: ReadyPlanningController }): JSX.Element {
-  const displayed = plan.preview?.draft ?? plan.draft;
-  const unplaced = displayed.tasks.filter(
-    (entry) => unplacedMinutes(displayed, entry.taskId, plan.dayQ.data?.actual ?? []) > 0,
-  ).length;
   return (
     <>
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <div className="space-y-1">
-          <h2 className="text-title-large">Agenda</h2>
-          {plan.stage === 'review' ? (
-            <p className="text-on-surface-variant text-body-small">
-              {unplaced > 0
-                ? `${unplaced} ${unplaced === 1 ? 'task still needs' : 'tasks still need'} a block.`
-                : 'No unscheduled work.'}
-            </p>
-          ) : null}
-        </div>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 className="text-title-large">Agenda</h2>
+        <OrganizeDay plan={plan} />
       </div>
-      <div
-        className={
-          plan.stage === 'review' && !plan.preview
-            ? 'flex flex-wrap items-start gap-2'
-            : 'space-y-2'
-        }
-      >
-        <WorkdayControls plan={plan} />
-        <ScheduleControls plan={plan} />
-      </div>
+      <WorkdayControls plan={plan} />
+      <ScheduleControls plan={plan} />
     </>
   );
 }

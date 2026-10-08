@@ -49,6 +49,15 @@ test('a late proposal preserves actual work, excludes completed tasks, and resum
   await expect(
     page.getByRole('spinbutton', { name: 'Planned time for Completed checklist' }),
   ).toHaveCount(0);
+  const hours = page.getByRole('button', { name: 'Workday settings', exact: true });
+  await expect(hours).toHaveAttribute('aria-expanded', 'false');
+  await hours.focus();
+  await page.keyboard.press('Enter');
+  await expect(page.getByLabel('Finish', { exact: true })).toBeVisible();
+  await page.keyboard.press('Shift+Tab');
+  await hours.focus();
+  await page.keyboard.press('Enter');
+  await expect(page.getByLabel('Finish', { exact: true })).toHaveCount(0);
   await captureDailyPlanningEvidence(page, testInfo, 'plan');
   await reviewPlan(page);
   await captureDailyPlanningEvidence(page, testInfo, 'review');

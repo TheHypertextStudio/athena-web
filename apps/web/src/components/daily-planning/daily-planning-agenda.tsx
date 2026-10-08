@@ -3,7 +3,8 @@
 /** Timed daily agenda and explicit block controls for keyboard and touch. */
 import type { DailyPlanSession, DailyPlanSnapshot } from '@docket/planning/daily-plan-flow';
 import { instantAt, localMinuteOfDay } from '@docket/planning/zoned-time';
-import { Button, Stack } from '@docket/ui/primitives';
+import { Button, Collapsible, CollapsibleContent, CollapsibleTrigger } from '@docket/ui/primitives';
+import { ChevronDown } from '@docket/ui/icons';
 import type { JSX, ReactNode } from 'react';
 import { SchedulingCanvas, type ScheduleItem } from '@/components/scheduling';
 import { useDailyPlanDropTarget } from '@/components/dnd/use-daily-plan-drop-target';
@@ -129,18 +130,36 @@ function agendaItems(props: DailyAgendaProps): ScheduleItem[] {
 function AllDayContext({ events }: { readonly events: readonly EventBlock[] }): JSX.Element | null {
   const allDay = events.filter((event) => event.allDay);
   if (allDay.length === 0) return null;
+  const busy = allDay.filter((event) => event.blocksTime !== false);
+  const label =
+    busy.length === 1
+      ? `${busy[0]?.title} · Busy all day`
+      : busy.length > 1
+        ? `${busy.length} busy all-day events`
+        : `${allDay.length} all-day ${allDay.length === 1 ? 'event' : 'events'}`;
   return (
-    <Stack gap={1} role="group" aria-label="All-day calendar context">
-      <p className="text-label-small text-on-surface-variant">All day</p>
-      <ul className="text-body-small text-on-surface-variant flex flex-wrap gap-x-3 gap-y-1">
-        {allDay.map((event, index) => (
-          <li key={`${event.title}-${index}`}>
-            {event.title}
-            {event.blocksTime !== false ? ' (busy)' : ''}
-          </li>
-        ))}
-      </ul>
-    </Stack>
+    <Collapsible role="group" aria-label="All-day calendar context" className="space-y-1">
+      <CollapsibleTrigger asChild>
+        <Button
+          size="sm"
+          variant="ghost"
+          className="group h-auto max-w-full justify-start gap-2 text-left"
+        >
+          <span className="text-body-small text-on-surface-variant min-w-0 text-wrap">{label}</span>
+          <ChevronDown aria-hidden="true" className="shrink-0 group-data-[state=open]:rotate-180" />
+        </Button>
+      </CollapsibleTrigger>
+      <CollapsibleContent>
+        <ul className="text-body-small text-on-surface-variant space-y-1 px-3">
+          {allDay.map((event, index) => (
+            <li key={`${event.title}-${index}`}>
+              {event.title}
+              {event.blocksTime !== false ? ' (busy)' : ''}
+            </li>
+          ))}
+        </ul>
+      </CollapsibleContent>
+    </Collapsible>
   );
 }
 

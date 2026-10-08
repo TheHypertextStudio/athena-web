@@ -17062,22 +17062,6 @@ resolveIdentityLabel(actorId, externalAccountId) ?? result.account` (Actor→use
 
 ## Active Tasks
 
-### [CODEX-MCP-AUTH-001] Keep Codex MCP refresh retries from forcing sign-in
-
-- **Status**: REVIEW
-- **State**: VALIDATING
-- **Started**: 2026-10-07
-- **Priority**: P1
-- **Description**: Prevent a concurrent Codex refresh retry from revoking a grant after another request has already rotated its refresh token.
-- **Subtasks**:
-  - [x] Verify production discovery, challenge scopes, and current issuer configuration.
-  - [x] Add a regression test for a duplicate refresh within the retry window and a delayed replay.
-  - [x] Preserve the rotated grant for 30 seconds while retaining delayed replay revocation.
-  - [x] Validate focused auth tests, package typecheck, lint, and formatting.
-  - [ ] Verify the actual Codex callback and refresh flow after release.
-- **Blockers**: Production callback and stored-grant behavior require a real Codex authorization. No production callback or refresh request was triggered during implementation.
-- **Notes**: Production metadata and current `origin/main` agree on `https://api.clearthedocket.com/api/auth` and advertise `offline_access`. The stale-refresh handler previously revoked the owning Docket grant for every replay, even when a successful concurrent refresh had just rotated it. The fix returns `invalid_grant` for retries within 30 seconds without invalidating the rotated grant. A replay after that window still revokes the exact grant. Focused auth revocation and token-endpoint tests pass: 27 tests. The auth package typecheck, focused ESLint, and Prettier checks pass. The first main CI run exposed two PostgreSQL acceptance assertions that encoded the old replay policy; those scenarios now cover grant preservation during immediate/concurrent retries and revocation after a delayed replay. The follow-up PR's REST shard exposed two checkout assumptions in its launch-history policy: the shallow checkout omitted `origin/main`, and full history included GitHub's synthetic PR merge commit. The test job now fetches full history at the PR source SHA, so it checks the branch's real history against main. The actual Codex callback and refresh path still need production release verification.
-
 ### [MCP-004] Streamable HTTP cancellation support
 
 - **Status**: REVIEW
@@ -17175,6 +17159,16 @@ Run `pnpm typecheck`, `pnpm lint`, `pnpm test`, and `pnpm build` after each batc
 ---
 
 ## Completed Tasks
+
+### [CODEX-MCP-AUTH-001] Keep Codex MCP refresh retries from forcing sign-in
+
+- **Completed**: 2026-10-08
+- **Summary**: Prevented a duplicate Codex refresh request from revoking the active Docket OAuth grant and verified automatic production refresh.
+- **Cause**: When two refresh requests redeemed the same token, the first request rotated it and the second stale replay revoked the entire grant family. Codex then had to ask for authorization again.
+- **Approach**: Return `invalid_grant` for a duplicate replay within 30 seconds while preserving the successful rotation. Keep revocation for a replay after that window.
+- **Validation**: 27 focused OAuth tests passed. The main CI run passed API and web tests, PostgreSQL acceptance, types, lint, image builds, and the release-ready gate. Production deployment passed health and auth-route checks.
+- **Production verification**: OAuth discovery advertises issuer `https://api.clearthedocket.com/api/auth` and `offline_access`; MCP resource metadata identifies `https://api.clearthedocket.com/mcp`. The previously stored refresh token was already rejected, so a fresh grant was established through the existing signed-in browser session. A read-only workspace listing succeeded, and another listing succeeded after the 15-minute access-token lifetime without another authorization.
+- **Learnings**: A refresh token revoked before this fix cannot be restored. The user needs one replacement authorization after that failure, then refresh remains automatic unless the grant is revoked.
 
 ### [MCP-UTIL-005] MCP Utilities + Session Isolation
 

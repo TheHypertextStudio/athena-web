@@ -11,7 +11,7 @@ describe('planning fixture timezone', () => {
         for (const [from, through] of [
           [600, 780],
           [900, 1200],
-        ]) {
+        ] as const) {
           const timezone = planningTimezone(from, through, now);
           const minute = localMinuteOfDay(now, timezone);
           expect(minute).toBeGreaterThanOrEqual(from);

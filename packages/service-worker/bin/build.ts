@@ -117,9 +117,6 @@ await build({
   define: {
     __SW_BUILD_ID__: JSON.stringify(buildId),
     __SW_MODE__: JSON.stringify(production ? 'production' : 'development'),
-    // The worker answers Athena's questions straight from a notification, which means it needs the
-    // API origin; a service worker cannot read `process.env` at runtime, so it is baked in here.
-    __SW_API_ORIGIN__: JSON.stringify(process.env['NEXT_PUBLIC_API_URL'] ?? ''),
     // Inlined rather than fetched at runtime: a manifest request would be one more thing that can
     // fail, and the list has to be part of the bytes the browser diffs when deciding an update
     // exists — otherwise a release that only changed which assets exist would not install.

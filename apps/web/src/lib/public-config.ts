@@ -10,8 +10,8 @@
  * a provider/connector is offered iff its credentials are actually configured. No component reads
  * `process.env` to decide what to show — they call {@link usePublicConfig} and the typed helpers
  * here — so the client can never drift from real setup (no `NEXT_PUBLIC_OAUTH_GOOGLE`-style flag
- * to forget). Required deployment URLs that must exist before any fetch (the auth base URL, the
- * passkey RP ID) are not feature config and stay in their dedicated resolvers.
+ * to forget). Optional stale-passkey pruning uses the returned RP ID; actual passkey ceremonies
+ * receive their options from the auth server without waiting for this query.
  */
 import type { PublicConfigOut } from '@docket/identity-access/public-config-contract';
 import type { UseQueryResult } from '@tanstack/react-query';

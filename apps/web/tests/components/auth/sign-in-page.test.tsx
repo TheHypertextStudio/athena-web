@@ -121,7 +121,13 @@ beforeEach(() => {
   // No provider credentials, so the identity-provider block renders nothing and these tests see
   // exactly the passkey-only screen they were written against. `OAuthSignIn` has its own suite.
   configGet.mockResolvedValue(
-    jsonResponse(200, { appMode: 'local', oauthProviders: [], connectors: [], mcpUrl: null }),
+    jsonResponse(200, {
+      appMode: 'local',
+      oauthProviders: [],
+      connectors: [],
+      mcpUrl: null,
+      passkeyRpId: 'docket.test',
+    }),
   );
   orgsGet.mockReset();
   push.mockReset();

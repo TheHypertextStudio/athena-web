@@ -51,7 +51,6 @@ beforeAll(async () => {
   Object.assign(globalThis, {
     __SW_BUILD_ID__: 'testbuild',
     __SW_MODE__: 'production',
-    __SW_API_ORIGIN__: 'https://api.docket.test',
     // Empty on purpose: `activate` fires warmBuildAssets, and an empty precache list makes it a
     // no-op so activation tests exercise eviction + claim and nothing else.
     __SW_PRECACHE__: [],

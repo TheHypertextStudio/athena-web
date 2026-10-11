@@ -13,8 +13,8 @@
  * Every export is pure feature detection: none throws, and all return `false` during SSR (no
  * `window` / `navigator`) so the first client paint hydrates to the real capability.
  *
- * The relying-party ID is a **parameter**, not a module-level read. Each app inlines its own
- * `NEXT_PUBLIC_PASSKEY_RP_ID` at build time, and a shared package cannot see either one.
+ * The relying-party ID is a **parameter**, not a module-level read. Each app supplies its
+ * deployment configuration; a shared package must not choose a relying party for its callers.
  */
 
 /**
@@ -67,7 +67,7 @@ export async function isConditionalMediationSupported(): Promise<boolean> {
  *
  * @param credentialId - The base64url credential ID the rejected ceremony used.
  * @param rpId - The relying-party ID to signal under; must match the server's
- * `BETTER_AUTH_PASSKEY_RP_ID`. Callers pass their own build-inlined value.
+ * `BETTER_AUTH_PASSKEY_RP_ID`. Callers supply their deployment's configured value.
  */
 export async function signalUnknownPasskey(credentialId: string, rpId: string): Promise<void> {
   if (!isWebAuthnSupported()) return;

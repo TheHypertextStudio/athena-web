@@ -4,12 +4,13 @@ import { useRedirectIfAuthenticated } from '@docket/ui/hooks';
 import { Button } from '@docket/ui/primitives';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { type JSX, useCallback, useEffect, useRef, useState } from 'react';
+import { type JSX, type RefObject, useCallback, useEffect, useRef, useState } from 'react';
 
 import { safeSameOriginPath } from '@/lib/auth-navigation';
 import { api } from '@/lib/api';
 import { authClient } from '@/lib/auth-client';
 import { fetchAllOrganizations } from '@/lib/org-collection-pages';
+import { usePublicConfig } from '@/lib/public-config';
 
 import { AuthError, Spinner } from '../_components/auth-feedback';
 import { AuthShell } from '../_components/auth-shell';
@@ -20,6 +21,22 @@ import {
   isWebAuthnSupported,
   signalUnknownPasskey,
 } from '../_lib/webauthn';
+
+/**
+ * Keep the fetched server RP available to optional cleanup after a long-lived ceremony.
+ *
+ * @remarks
+ * Updating this ref never delays or rearms authentication while public config loads.
+ * @returns The latest fetched RP ID, or null when unavailable.
+ */
+function usePasskeyPruningRpId(): RefObject<string | null> {
+  const { data: publicConfig } = usePublicConfig();
+  const rpIdRef = useRef<string | null>(publicConfig?.passkeyRpId ?? null);
+  useEffect(() => {
+    rpIdRef.current = publicConfig?.passkeyRpId ?? null;
+  }, [publicConfig?.passkeyRpId]);
+  return rpIdRef;
+}
 
 /** The Hub cockpit a returning user lands in once signed in. */
 const HOME_DESTINATION = '/today';
@@ -161,6 +178,7 @@ async function loadOrgsAfterSignIn(isMounted: () => boolean): Promise<OrgsRespon
  */
 export function SignInClient(): JSX.Element {
   const router = useRouter();
+  const passkeyRpIdRef = usePasskeyPruningRpId();
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [hydrated, setHydrated] = useState(false);
@@ -213,7 +231,6 @@ export function SignInClient(): JSX.Element {
         return;
       }
       setError('We could not load your workspaces. Please try signing in again.');
-      return;
     } catch {
       if (!isMounted()) return;
       setError('We could not load your workspaces. Please try signing in again.');
@@ -240,7 +257,7 @@ export function SignInClient(): JSX.Element {
           // platform authenticator to prune it via the WebAuthn Signal API — even on the silent
           // autofill path, so the stale passkey stops surfacing in the browser's own UI.
           if (isPasskeyUnknownToServer(passkeyError) && 'webauthn' in result) {
-            void signalUnknownPasskey(result.webauthn.response.id);
+            void signalUnknownPasskey(result.webauthn.response.id, passkeyRpIdRef.current);
           }
           // A user-cancelled or timed-out conditional prompt should not nag the user. For the
           // explicit button path a 5xx (e.g. the API/database is down) surfaces an outage-aware

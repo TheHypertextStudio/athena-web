@@ -7,6 +7,19 @@
 
 ## Active Tasks
 
+### [WEBSITE-STANDARDIZATION-009] Use deployment-local notification and passkey metadata
+
+- **Status**: REVIEW (source validated; runtime/provider acceptance open)
+- **Started**: 2026-10-11
+- **Priority**: P2
+- **Description**: Remove two unnecessary build-time inputs from the approved Workers isolation slice, preserving the existing sign-in and notification flows.
+- **Plan and source review**: Route the service-worker notification-answer POST through `self.location.origin` and the existing `/v1` gateway. Only the web app currently invokes the shared service-worker bundler; both web and admin already declare same-origin `/v1` rewrites. Remove the now-unused service-worker API-origin define and its existing fixture input. Pass the fetched `PublicConfigOut.passkeyRpId` from the existing shared query to optional unknown-passkey pruning, with an explicit nullable helper parameter. A ref retains the latest fetched RP for an already-running conditional ceremony; absent config skips cleanup and never delays or rearms authentication.
+- **Files changed**: Shared service-worker source/bundler and handshake fixture; web sign-in caller/helper and existing config fixture; public-config/shared WebAuthn comments; this work log.
+- **Boundary**: POST method, body, credentials, notification fallback, offline/private-cache strategies and actual server-options ceremonies are unchanged. No API schema, endpoint, auth factory, backend gateway, provider configuration, dependency or lock changes. The admin's separate auth helper is unchanged.
+- **Validation**: On Node 24.20.0/pnpm 11.9.0, direct Prettier check passed for all nine changed files and direct ESLint passed for the eight changed TypeScript files. The initial lint caught the existing sign-in function line limit; a private local query/ref hook and removal of a redundant terminal return preserve that limit without changing thresholds or control flow. `pnpm exec turbo run typecheck --filter=@docket/web --filter=@docket/service-worker --cache=local:rw` passed all three scheduled tasks (required API declaration/runtime build, both service-worker TypeScript programs, web typecheck); final web `tsc --noEmit` passed after the small lint correction. The existing service-worker production bundler (`tsx ../../packages/service-worker/bin/build.ts --app-root=. --production`, from apps/web) passed with retained BUILD_ID `tk5pLEnnX4rk6oZigT8PQ` and 340 precache assets (9.2 MB). This checks service-worker bundling, not a fresh Next/OpenNext shipping archive. `git diff --check` passed. No tests were added/run, no install or dependency/lock changes, dispatch or provider operation occurred during validation. pnpm reported existing installed-graph `minimumReleaseAgeExclude` metadata drift and an unset private-registry token placeholder; explicit warn mode prevented automatic installation, and these local checks do not replace native registry/frozen acceptance. Adapted fixtures are not new behavioral proof. Immutable shipping routing, isolated backend/MCP/host configuration and provider cutover remain open.
+- **Delivery**: Reviewed nine-path source checkpoint only; hold delivery push for the next coordinated routing slice. Preserve normal commit hooks, including the existing design-policy gate; its result is separate from the explicitly requested source checks.
+- **Learning**: The inlined RP was used only for optional authenticator cleanup after a rejected credential, not to construct actual ceremony options. The service worker's sole compiled API-origin consumer was notification answering; its fetch/cache routing remains unchanged.
+
 ### [WEBSITE-STANDARDIZATION-006] Update the production lock with maintained auth tooling
 
 - **Status**: COMPLETE

@@ -39,8 +39,6 @@ declare const self: ServiceWorkerGlobalScope;
 declare const __SW_BUILD_ID__: string;
 /** Replaced at build time: `'production'` or `'development'`. */
 declare const __SW_MODE__: string;
-/** Replaced at build time with `NEXT_PUBLIC_API_URL` — a worker cannot read the app's env. */
-declare const __SW_API_ORIGIN__: string;
 /** Replaced at build time with every `/_next/static` URL. Empty in development. */
 declare const __SW_PRECACHE__: readonly string[];
 
@@ -265,10 +263,10 @@ self.addEventListener('push', (event) => {
  * Answer from the banner, or land on the question in the context of its task.
  *
  * @remarks
- * The answer POST is cross-origin to the API but same-site, so the session cookie rides along with
- * `credentials: 'include'`. If it does not (a revoked session, an offline device), the worker falls
- * back to opening the question — the person still gets there, and nothing silently reports an
- * answer that was never recorded.
+ * The answer POST uses this deployment's same-origin `/v1` gateway, so the session cookie rides
+ * along with `credentials: 'include'`. If it does not (a revoked session, an offline device), the
+ * worker falls back to opening the question — the person still gets there, and nothing silently
+ * reports an answer that was never recorded.
  */
 self.addEventListener('notificationclick', (event) => {
   const notification = event.notification;
@@ -283,7 +281,7 @@ self.addEventListener('notificationclick', (event) => {
     (async () => {
       if (intent.kind === 'answer') {
         try {
-          const response = await fetch(answerEndpoint(__SW_API_ORIGIN__, intent.elicitationId), {
+          const response = await fetch(answerEndpoint(self.location.origin, intent.elicitationId), {
             method: 'POST',
             credentials: 'include',
             headers: { 'Content-Type': 'application/json' },

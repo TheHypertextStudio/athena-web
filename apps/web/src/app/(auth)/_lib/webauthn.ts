@@ -3,34 +3,24 @@
  *
  * @remarks
  * The detection logic lives in `@docket/ui/lib/webauthn`, shared with the admin console so both
- * passkey-only clients classify browser capability identically. This module exists only to bind
- * the one value a shared package cannot see: `NEXT_PUBLIC_PASSKEY_RP_ID`, which each app's build
- * inlines at compile time.
+ * passkey-only clients classify browser capability identically. Optional stale-credential pruning
+ * receives the current server's relying-party ID from the existing public-config query.
  */
 import { signalUnknownPasskey as signal } from '@docket/ui/lib/webauthn';
 
 export { isConditionalMediationSupported, isWebAuthnSupported } from '@docket/ui/lib/webauthn';
 
 /**
- * The WebAuthn relying-party ID this client signals credentials under.
- *
- * @remarks
- * Required configuration that must match the server's `BETTER_AUTH_PASSKEY_RP_ID`. Read from the
- * build-inlined `NEXT_PUBLIC_PASSKEY_RP_ID` via dot notation — there is no fallback, so a stale
- * passkey is only signalled when the RP ID is configured.
- *
- * @returns the relying-party ID string.
- */
-function resolvePasskeyRpId(): string {
-  return process.env.NEXT_PUBLIC_PASSKEY_RP_ID;
-}
-
-/**
  * Tell the platform authenticator to prune a credential the server no longer recognizes.
  *
  * @param credentialId - The base64url credential ID the rejected ceremony used.
+ * @param rpId - The fetched public-config relying-party ID, or null when unavailable.
  * @see {@link file://../../../../../../packages/ui/src/lib/webauthn.ts} for the behavior.
  */
-export async function signalUnknownPasskey(credentialId: string): Promise<void> {
-  await signal(credentialId, resolvePasskeyRpId());
+export async function signalUnknownPasskey(
+  credentialId: string,
+  rpId: string | null,
+): Promise<void> {
+  if (!rpId) return;
+  await signal(credentialId, rpId);
 }

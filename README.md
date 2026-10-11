@@ -70,7 +70,8 @@ Maintainers can explicitly dispatch the existing **Verify docs** workflow on
 It uses exact Node 24.20.0/pnpm 11.9.0 and the repository's short-lived GitHub token, disables install
 scripts, replays the frozen install, checks peers, and uploads only the proposed lock and its source/run
 provenance for seven days. It makes no documentation probes or deployments. Review the entire lock
-diff before adopting it; this job does not update source. The only new release-age exceptions are exact
+diff before adopting it; this job does not update source. A failed validation still retains the new
+lock with actual step outcomes and `accepted: false`; the workflow remains red. The only new release-age exceptions are exact
 `@thehypertextstudio/web-config@0.0.1` and `@thehypertextstudio/web-docs@0.0.1`, the two consumed packages
 from approved candidate `38116243716-1`. Other existing age policy and build approvals are preserved.
 

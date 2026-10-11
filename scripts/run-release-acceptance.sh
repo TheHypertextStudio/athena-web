@@ -201,14 +201,7 @@ main() {
   run_migrations "${DATABASE_URL}" "${ENV_FILE}"
   if [[ "${RELEASE_WEB_RUNTIME}" == workers ]]; then
     run_release_env env NODE_OPTIONS=--max-old-space-size=4096 \
-      pnpm turbo run build:worker:app --filter=@docket/web --concurrency=1
-    run_release_env pnpm exec tsx scripts/prepare-worker-acceptance.ts
-    (
-      cd "${repo_root}/apps/web/.artifact"
-      run_release_env env PATH="${repo_root}/apps/web/node_modules/.bin:${PATH}" \
-        opennextjs-cloudflare populateCache local \
-        --config wrangler.local.jsonc
-    )
+      pnpm turbo run build:worker --filter=@docket/web --concurrency=1
   else
     run_release_env env NODE_OPTIONS=--max-old-space-size=4096 \
       pnpm turbo run build --filter=@docket/api --filter=@docket/web --concurrency=1
@@ -226,11 +219,16 @@ main() {
 
   (
     if [[ "${RELEASE_WEB_RUNTIME}" == workers ]]; then
-      cd "${repo_root}/apps/web/.artifact"
-      run_release_env env PATH="${repo_root}/apps/web/node_modules/.bin:${PATH}" \
-        wrangler dev --config wrangler.local.jsonc --local \
+      cd "${repo_root}/apps/web"
+      # Native preview seeds local R2 and starts Wrangler; only this loopback run permits
+      # private-network fetches. Provider configurations keep their public-fetch restriction.
+      run_release_env pnpm run preview:worker --config wrangler.jsonc \
         --port "${web_port}" --ip 127.0.0.1 --env-file /dev/null \
-        --persist-to .wrangler/state
+        --compatibility-flags nodejs_compat \
+        --var "API_URL:${API_URL}" --var "WEB_URL:${APP_URL}" \
+        --var PUBLIC_BRIEF_HOST:briefs.docket.localhost \
+        --var BETTER_AUTH_PASSKEY_RP_ID:docket.localhost \
+        --var DOCKET_LOCAL_ACCEPTANCE:1 --var STUDIO_DEPLOYMENT_ENV:staging
     else
       cd "${standalone_root}"
       run_release_env env HOSTNAME=127.0.0.1 PORT="${web_port}" node server.js

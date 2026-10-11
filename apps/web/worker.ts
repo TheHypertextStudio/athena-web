@@ -1,6 +1,5 @@
 // Generated implementation; the source declaration keeps pre-build checks independent of output.
 import nativeHandler from './.open-next/worker.js';
-import { releaseIdentityResponse } from './release-identity';
 import {
   forwardWorkerApi,
   isWorkerApiRequest,
@@ -10,12 +9,9 @@ import {
 import { readWorkerRuntimeConfig } from './worker-runtime-config';
 
 export default {
-  /** Serve immutable release identity or preserve the native Next response and image policy. */
+  /** Preserve application routing, the native Next response and image policy. */
   async fetch(request: Request, env: Record<string, unknown>, context: unknown): Promise<Response> {
     const pathname = new URL(request.url).pathname;
-    if (pathname === '/__studio/release') {
-      return releaseIdentityResponse(env);
-    }
     let config;
     try {
       config = readWorkerRuntimeConfig(env);

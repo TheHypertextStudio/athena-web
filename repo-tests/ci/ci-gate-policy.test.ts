@@ -376,7 +376,6 @@ describe('the real workflows', () => {
       // it runs no tests or checks, so it is not a gate and holds nothing back.
       '.github/workflows/build-images.yml',
       // Shared website lifecycle callers remain inactive and do not alter the API release gate.
-      '.github/workflows/candidate.yml',
       '.github/workflows/ci.yml',
       '.github/workflows/deploy-main.yml',
       '.github/workflows/deploy.yml',
@@ -389,7 +388,6 @@ describe('the real workflows', () => {
       '.github/workflows/lattice-acceptance-audit.yml',
       '.github/workflows/lattice-staging-hygiene.yml',
       '.github/workflows/neon-branch.yml',
-      '.github/workflows/promote.yml',
       // Runs after the release, never before it: Vercel promotes the web build only once
       // deploy.yml's API check passes, so the documentation site it probes does not exist at
       // gate time. It carries no gating command token, so the ungated-check-job rule does not

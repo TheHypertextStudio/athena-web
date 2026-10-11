@@ -57,66 +57,31 @@ See [docs setup](apps/docs/README.md), [authoring](docs/engineering/docs-authori
 registry lock passed native frozen installation and strict peers in run `38120984041`; source/build,
 Workers runtime and exact-source provider acceptance remain required. Application/native/backend setup remains below.
 
-## Frontend standardization
+## Frontend setup and Workers
 
-The company frontend lifecycle is available through `./run setup`, `./run doctor`, `./run check`,
-`./run dev` and `./run build`. Its declaration and shared pins live in `apps/web`; the existing
-`./bootstrap` remains the owner of the full backend development stack and application data.
-See [Docket web setup](apps/web/README.md) and the [Workers compatibility checkpoint](docs/engineering/workers-compatibility.md).
-Vercel remains active while native Proxy compatibility, package registry and provider/auth gates
-are unresolved.
+Use the existing `./bootstrap` for the backend development stack and local application data.
+The web workspace uses Next.js, OpenNext and Wrangler directly, with pinned dependencies and the
+existing Turbo prerequisite graph:
 
-Maintainers can explicitly dispatch the existing **Verify docs** workflow on
-`codex/docket-workers-compat` with `refresh_dependency_lock=true` to update the checked-in registry lock.
-It uses exact Node 24.20.0/pnpm 11.9.0 and the repository's short-lived GitHub token, disables install
-scripts, replays the frozen install, checks peers, and uploads only the proposed lock and its source/run
-provenance for seven days. It makes no documentation probes or deployments. Review the entire lock
-diff before adopting it; this job does not update source. The receipt records both input and proposed
-lock digests. A failed resolution may retain the unchanged input lock; every failed validation records
-actual step outcomes and `accepted: false`, and the workflow remains red. The only new release-age exceptions are exact
-`@thehypertextstudio/web-config@0.0.1` and `@thehypertextstudio/web-docs@0.0.1`, the two consumed packages
-from approved candidate `38116243716-1`. Other existing age policy and build approvals are preserved.
+```sh
+pnpm exec turbo run build:worker --filter=@docket/web
+pnpm --dir apps/web preview:worker --env staging
+```
 
-The development-only Better Auth schema CLI is the official `auth@1.6.19`, matching the production
-runtime. It exposes both `auth` and `better-auth`; `pnpm --filter @docket/auth exec auth generate`
-retains Drizzle schema-generation support with an explicit scratch config/output. No schema or
-migration is generated during registry verification. Existing editor pins and transitive constraints
-are unchanged. The update starts from the production lock to preserve unrelated resolutions; review
-any remaining graph changes before adoption. Peer validation does not establish runtime acceptance.
+Supply reviewed public build inputs explicitly; the command does not load root `.env.local`.
+For disposable local API/database/browser acceptance, the existing `pnpm test:release` supports
+`RELEASE_WEB_RUNTIME=workers`. See [Docket web setup](apps/web/README.md) and
+[Workers compatibility](docs/engineering/workers-compatibility.md) for local isolation, native
+staging commands and the required production approval. Vercel remains the active production host.
+Ordinary CI and backend/native publication retain their existing triggers and mandatory checks;
+there are no custom candidate/promote workflows or temporary publication-hold flags.
 
-The existing **CI** pipeline also has a guarded manual `run_validation=true` entrypoint for
-`codex/docket-workers-compat`. It reuses the ordinary lint, types, secret scan, coverage, docs/build,
-and isolated PostgreSQL/browser jobs with exact Node 24.20.0 and native frozen installation. Manual
-runs use only local Turbo caching, omit Turbo and Codecov credentials/uploads, and use local build
-origins. Image publication, release-ready and downstream deployment require a push to `main`, so a
-manual validation cannot enter those paths. GitHub-hosted failure diagnostics remain available.
-The workflow file is already registered on the default branch, but its manual trigger is newly
-proposed here; dispatchability must be confirmed after source review. This is source acceptance,
-not Workers runtime, provider, passkey-origin or deployment acceptance.
-
-### Bounded source publication hold
-
-The reviewed source integration window can use the repository variable
-`STUDIO_FRONTEND_MIGRATION_HOLD=true`. A value comparing equal to `'true'` skips CI image publication and
-blocks the existing Deploy main entry and production job. All lint, types, secret, test, build
-and Core validation still runs; Release ready retains every dependency and skips when images
-skip. Held completions use the existing unique no-op concurrency group, preserving serialized,
-non-cancellable production releases. An absent variable or a value not comparing equal to `'true'` retains
-ordinary publication eligibility. Use lowercase `true` when setting the variable; GitHub expression
-[string comparisons are case-insensitive](https://docs.github.com/en/actions/reference/workflows-and-actions/expressions#operators).
-No extra workflow trigger or runner job is added.
-
-This source does not set the variable. Before enabling the bounded hold, record current serving
-revisions and queued/running publishers; a variable change does not cancel a job already admitted.
-After source integration and observed nonpublication, close the window promptly. Clearing the
-variable does not request a replay of the held CI; subsequent ordinary releases use the existing
-pipeline. Keep the accepted dependency graph and mandatory release gates intact.
-
-Vercel Git deployments, explicit redeploy/promote operations and Mintlify publishing are separate
-provider surfaces. This GitHub hold does not pause them. In particular, a proposed incoming
-`git.deploymentEnabled` main exclusion alone is not established proof of first-event containment.
-Review actual Vercel controls and recovery identities before source integration; retain the
-serving deployment while Workers staging/runtime/auth acceptance remains open.
+Private shared packages `0.0.1` remain in the genuine accepted registry lock. GitHub Actions installs
+with its ephemeral `github.token` and package-read grants, not a classic personal token. The
+maintained development-only Better Auth schema CLI is `auth@1.6.19`, matching the runtime;
+`pnpm --filter @docket/auth exec auth generate` remains available with an explicit scratch
+config/output. Native source checks do not establish Workers runtime, staging auth or provider
+acceptance.
 
 ## From clone to a working app
 

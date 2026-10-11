@@ -1,7 +1,14 @@
 /** Read-only evidence for the fixed Athena–Lattice canaries; no credential refresh or mutations. */
 import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
-import type postgres from 'postgres';
+import postgres from 'postgres';
+
+import {
+  acceptanceTargets,
+  credentialTiming,
+  requestLogMetadata,
+} from './lattice-acceptance-report';
+import { gcloud, runtime, boundSecret } from './lattice-runtime-inspection';
 
 type EvidenceRow = Record<string, string | boolean | number | Date | null>;
 interface CredentialRow {
@@ -15,7 +22,6 @@ async function readDelegations(
   sql: postgres.TransactionSql,
   target: string,
 ): Promise<EvidenceRow[]> {
-  const { acceptanceTargets } = await import('./lattice-acceptance-report');
   const { assignmentIds, workIds } = acceptanceTargets(target);
   return sql<EvidenceRow[]>`
     select d.id, d.owner_user_id, d.organization_id, d.assignment_id, d.session_id,
@@ -51,7 +57,6 @@ async function readConnections(
   sql: postgres.TransactionSql,
   target: string,
 ): Promise<EvidenceRow[]> {
-  const { acceptanceTargets } = await import('./lattice-acceptance-report');
   const { assignmentIds, workIds } = acceptanceTargets(target);
   return sql<EvidenceRow[]>`
     select distinct c.id, c.owner_user_id, c.status, c.enabled, c.device_id, c.device_name,
@@ -68,7 +73,6 @@ async function readCredentialTiming(
   sql: postgres.TransactionSql,
   target: string,
 ): Promise<unknown[]> {
-  const { acceptanceTargets, credentialTiming } = await import('./lattice-acceptance-report');
   const { assignmentIds, workIds } = acceptanceTargets(target);
   const rows = await sql<CredentialRow[]>`
     select distinct c.connection_id as "connectionId", c.owner_user_id as "ownerUserId",
@@ -88,9 +92,7 @@ async function readCredentialTiming(
   }));
 }
 
-async function historicalRequestLogs(): Promise<unknown> {
-  const { requestLogMetadata } = await import('./lattice-acceptance-report');
-  const { gcloud } = await import('./lattice-runtime-inspection');
+function historicalRequestLogs(): unknown {
   // Request logs only: exclude provider bodies, query strings, and authorization headers.
   const logs: unknown = JSON.parse(
     gcloud([
@@ -107,43 +109,25 @@ async function historicalRequestLogs(): Promise<unknown> {
   return requestLogMetadata(logs);
 }
 
-async function optionalHistoricalLogs(): Promise<unknown> {
+function optionalHistoricalLogs(): unknown {
   try {
-    return { status: 'read', records: await historicalRequestLogs() };
+    return { status: 'read', records: historicalRequestLogs() };
   } catch {
     // The existing deploy identity may not have logging.viewer; do not widen its authority.
     return { status: 'unavailable', records: [] };
   }
 }
 
-/** Persist only the selected report, never raw provider exceptions or response objects. */
-async function saveReport(output: string, report: unknown): Promise<void> {
-  await mkdir(dirname(output), { recursive: true });
-  await writeFile(output, `${JSON.stringify(report, null, 2)}\n`, { mode: 0o600 });
-}
-
 async function main(): Promise<void> {
   const [target = '', output = ''] = process.argv.slice(2);
-  if (!output) throw new Error('An output path is required');
-  const metadataOnly = process.env['AUDIT_METADATA_ONLY'] ?? 'false';
-  if (metadataOnly !== 'false' && metadataOnly !== 'true') throw new Error('Invalid audit mode');
-  if (metadataOnly === 'true') {
-    if (target !== 'staging') throw new Error('Metadata mode is staging-only');
-    const { stagingRuntimeMetadata } = await import('./lattice-runtime-inspection');
-    await saveReport(output, stagingRuntimeMetadata());
-    process.stdout.write('Staging runtime metadata saved; no secrets or fixtures read.\n');
-    return;
-  }
-  const { acceptanceTargets } = await import('./lattice-acceptance-report');
-  const { runtime, boundSecret } = await import('./lattice-runtime-inspection');
-  const { default: connect } = await import('postgres');
   acceptanceTargets(target);
+  if (!output) throw new Error('An output path is required');
   process.stdout.write('Resolving deployed runtime bindings.\n');
   const deployed = runtime(target);
   const databaseUrl = boundSecret(deployed, 'DATABASE_URL');
   process.env['CREDENTIALS_ENCRYPTION_KEY'] = boundSecret(deployed, 'CREDENTIALS_ENCRYPTION_KEY');
   process.env['SKIP_ENV_VALIDATION'] = '1';
-  const sql = connect(databaseUrl, { max: 1, connect_timeout: 15, idle_timeout: 5 });
+  const sql = postgres(databaseUrl, { max: 1, connect_timeout: 15, idle_timeout: 5 });
   try {
     process.stdout.write('Reading fixed canary records in a read-only transaction.\n');
     const evidence = await sql.begin('isolation level repeatable read read only', async (tx) => ({
@@ -156,9 +140,10 @@ async function main(): Promise<void> {
       target,
       runtime: deployed,
       ...evidence,
-      historicalRequestLogs: target === 'production' ? await optionalHistoricalLogs() : null,
+      historicalRequestLogs: target === 'production' ? optionalHistoricalLogs() : null,
     };
-    await saveReport(output, report);
+    await mkdir(dirname(output), { recursive: true });
+    await writeFile(output, `${JSON.stringify(report, null, 2)}\n`, { mode: 0o600 });
     process.stdout.write('Scoped read-only Lattice acceptance report saved.\n');
   } finally {
     await sql.end({ timeout: 5 });

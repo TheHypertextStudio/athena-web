@@ -4,11 +4,11 @@ import studio from '@thehypertextstudio/web-config/prettier';
 export default {
   ...studio,
   plugins: ['prettier-plugin-tailwindcss'],
-  // The artifact assembler and release binding snapshot use strict JSON for these files.
+  // Keep the Wrangler configuration readable as strict JSON.
   overrides: [
     ...(studio.overrides ?? []),
     {
-      files: ['wrangler.jsonc', 'wrangler.site.jsonc'],
+      files: ['wrangler.jsonc'],
       options: { parser: 'json', trailingComma: 'none' },
     },
   ],

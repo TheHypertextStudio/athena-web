@@ -80,14 +80,14 @@ describe('release acceptance runner', () => {
     expect(source).toContain('rm -rf -- "${TEMP_DIR}"');
   });
 
-  it('can select the retained local Worker without replacing the disposable release stack', () => {
+  it('can select native Worker preview without replacing the disposable release stack', () => {
     const source = readRunner();
     expect(source).toContain('RELEASE_WEB_RUNTIME:-node');
     expect(source).toContain('RELEASE_ENV_FILE:-');
-    expect(source).toContain('build:worker:app --filter=@docket/web');
-    expect(source).toContain('prepare-worker-acceptance.ts');
-    expect(source).toContain('populateCache local');
-    expect(source).toContain('wrangler dev --config wrangler.local.jsonc --local');
+    expect(source).toContain('build:worker --filter=@docket/web');
+    expect(source).toContain('pnpm run preview:worker --config wrangler.jsonc');
+    expect(source).toContain('--compatibility-flags nodejs_compat');
+    expect(source).toContain('--var DOCKET_LOCAL_ACCEPTANCE:1');
     expect(source).toContain('--env-file /dev/null');
     expect(source).toContain('RELEASE_LOG_DIRECTORY');
     expect(source).toContain('postgres:17-alpine');

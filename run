@@ -1,5 +1,0 @@
-#!/bin/sh
-# Frontend lifecycle facade. The existing ./bootstrap continues to own the full backend stack.
-set -eu
-root=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-exec "$root/apps/web/run" "$@"

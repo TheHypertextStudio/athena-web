@@ -22,7 +22,7 @@
       // @docket/service-worker's source into this app's `public/`.
       "outputs": [".next/**", "!.next/cache/**", "!.next/dev/**", "public/sw.js"]
     },
-    "build:worker:app": {
+    "build:worker": {
       "dependsOn": ["^build"],
       "env": [
         "DOCKET_WORKERS_BUILD",
@@ -31,14 +31,7 @@
         "BETTER_AUTH_PASSKEY_LEGACY_RP_ID",
         "STUDIO_DEPLOYMENT_ENV"
       ],
-      "outputs": [
-        ".next/**",
-        "!.next/cache/**",
-        "!.next/dev/**",
-        ".open-next/**",
-        ".artifact/**",
-        "public/sw.js"
-      ]
+      "outputs": [".next/**", "!.next/cache/**", "!.next/dev/**", ".open-next/**", "public/sw.js"]
     },
     "dev": {
       "dependsOn": ["^db:migrate", "@docket/api#build"],

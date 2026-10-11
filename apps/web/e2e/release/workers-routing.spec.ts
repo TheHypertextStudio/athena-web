@@ -1,16 +1,5 @@
-/** Retained Workers artifact parity through the existing disposable release stack. */
+/** Native Workers parity through the existing disposable release stack. */
 import { expect, test } from '../helpers/fixtures';
-
-test('rejects an unmarked local Worker as an accepted release', async ({ request }) => {
-  const response = await request.get('/__studio/release');
-  if (process.env['RELEASE_WEB_RUNTIME'] !== 'workers') {
-    expect(response.status()).toBe(404);
-    return;
-  }
-  expect(response.status()).toBe(503);
-  expect(response.headers()['cache-control']).toBe('no-store');
-  expect(await response.json()).toEqual({ status: 'unavailable' });
-});
 
 test('serves dynamic health and preserves security headers', async ({ request }) => {
   const response = await request.get('/healthz');

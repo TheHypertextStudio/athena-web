@@ -85,12 +85,58 @@ export function credentialTiming(value: unknown): CredentialTiming {
   };
 }
 
-// Keep metadata-only inspection independent from the fixed canary/credential module.
-export {
-  runtimeSecretBindings,
-  servingRevision,
-  type RuntimeSecretBindings,
-} from './lattice-runtime-inspection';
+/** Runtime references that can be recorded without revealing environment values. */
+export interface RuntimeSecretBindings {
+  revision: string | null;
+  url: string | null;
+  bindings: { environmentName: string; secretName: string; version: string }[];
+}
+
+function secretBinding(value: unknown): RuntimeSecretBindings['bindings'] {
+  const input = record(value);
+  const reference = record(record(input['valueFrom'])['secretKeyRef']);
+  if (
+    typeof input['name'] !== 'string' ||
+    typeof reference['name'] !== 'string' ||
+    typeof reference['key'] !== 'string'
+  )
+    return [];
+  return [
+    { environmentName: input['name'], secretName: reference['name'], version: reference['key'] },
+  ];
+}
+
+/** Extract deployed secret references while discarding all literal environment values. */
+export function runtimeSecretBindings(value: unknown): RuntimeSecretBindings {
+  const input = record(value);
+  const status = record(input['status']);
+  const containers = record(record(record(input['spec'])['template'])['spec'])['containers'];
+  const container = record(Array.isArray(containers) ? containers[0] : null);
+  const environment = Array.isArray(container['env']) ? container['env'] : [];
+  return {
+    revision: stringOrNull(status['latestReadyRevisionName']),
+    url: stringOrNull(status['url']),
+    bindings: environment.flatMap(secretBinding),
+  };
+}
+
+/**
+ * Select the revision actually receiving all traffic, including an explicit older pin.
+ * @throws When traffic is split or the serving revision cannot be identified.
+ */
+export function servingRevision(value: unknown): string {
+  const status = record(record(value)['status']);
+  const traffic = status['traffic'];
+  if (!Array.isArray(traffic)) throw new Error('Serving revision unavailable');
+  const receiving = traffic.map(record).filter((entry) => Number(entry['percent']) > 0);
+  const route = receiving[0];
+  if (receiving.length !== 1 || !route || Number(route['percent']) !== 100) {
+    throw new Error('Ambiguous serving revisions');
+  }
+  const revision = stringOrNull(route['revisionName']);
+  if (!revision) throw new Error('Serving revision unavailable');
+  return revision;
+}
 
 function requestPath(value: unknown): string | null {
   if (typeof value !== 'string') return null;

@@ -99,9 +99,6 @@ apps/web/public/sw.js
 # with almost every API commit. `/v1/openapi.json` from the running service is the copy to trust.
 apps/api/openapi.json
 
-# Native Workers candidate output and shared workflow checkouts.
+# Native OpenNext output.
 .open-next/
-.artifact/
 worker-configuration.d.ts
-.studio-engine/
-.studio-source/

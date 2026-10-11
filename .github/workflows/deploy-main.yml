@@ -8,10 +8,9 @@ on:
 # A production migration or rollout must never be cancelled halfway through. Only qualifying
 # success/push/main events share the production group: failed, cancelled, and PR completions still
 # create workflow_run events, but unique no-op groups keep them from evicting the one pending
-# production release GitHub concurrency retains. Held completions also use no-op groups.
-# The freshness job prevents queued stale releases; a hold does not cancel admitted jobs.
+# production release GitHub concurrency retains. The freshness job prevents queued stale releases.
 concurrency:
-  group: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' && github.event.workflow_run.head_branch == 'main' && vars.STUDIO_FRONTEND_MIGRATION_HOLD != 'true' && 'deploy-main' || format('deploy-main-noop-{0}', github.run_id) }}
+  group: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' && github.event.workflow_run.head_branch == 'main' && 'deploy-main' || format('deploy-main-noop-{0}', github.run_id) }}
   cancel-in-progress: false
 
 jobs:
@@ -20,8 +19,7 @@ jobs:
     if: >-
       github.event.workflow_run.conclusion == 'success' &&
       github.event.workflow_run.event == 'push' &&
-      github.event.workflow_run.head_branch == 'main' &&
-      vars.STUDIO_FRONTEND_MIGRATION_HOLD != 'true'
+      github.event.workflow_run.head_branch == 'main'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -45,7 +43,7 @@ jobs:
   deploy-production:
     name: Deploy production
     needs: still-latest
-    if: needs.still-latest.outputs.proceed == 'true' && vars.STUDIO_FRONTEND_MIGRATION_HOLD != 'true'
+    if: needs.still-latest.outputs.proceed == 'true'
     permissions:
       contents: read
       packages: read

@@ -1,8 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { imageConfigDefault } from 'next/dist/shared/lib/image-config';
 
-import { assertWorkerArtifactConfig } from '../../worker-artifact-config';
-
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 afterEach(() => {
@@ -11,29 +9,15 @@ afterEach(() => {
 });
 
 describe('Workers provider configuration', () => {
-  it('keeps a prebuilt deployment configuration available before the build', () => {
+  it('uses the source Worker and native OpenNext assets directly', () => {
     const source: unknown = JSON.parse(readFileSync('wrangler.jsonc', 'utf8'));
-    const prebuilt: unknown = JSON.parse(readFileSync('wrangler.site.jsonc', 'utf8'));
-    expect(() => {
-      assertWorkerArtifactConfig(source, prebuilt);
-    }).not.toThrow();
-    expect(() => {
-      assertWorkerArtifactConfig(source, { ...(prebuilt as object), images: undefined });
-    }).toThrow('Prebuilt Workers configuration drifted');
-    expect(() => {
-      assertWorkerArtifactConfig(null, prebuilt);
-    }).toThrow('Workers source configuration must be an object');
-    expect(prebuilt).toEqual({
-      ...(source as Record<string, unknown>),
-      main: 'worker.js',
-      no_bundle: true,
-      find_additional_modules: true,
-      base_dir: '.',
-      rules: [
-        { type: 'ESModule', globs: ['*.js', '*.mjs'], fallthrough: true },
-        { type: 'CompiledWasm', globs: ['*.wasm'], fallthrough: true },
-        { type: 'Data', globs: ['*.bin'], fallthrough: true },
-      ],
+    expect(source).toMatchObject({
+      main: 'worker.ts',
+      assets: { directory: '.open-next/assets', binding: 'ASSETS', run_worker_first: true },
+      compatibility_flags: expect.arrayContaining([
+        'nodejs_compat',
+        'global_fetch_strictly_public',
+      ]),
     });
   });
 

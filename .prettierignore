@@ -49,8 +49,4 @@ apps/docs/docs.json
 # format:check` at risk of disagreeing over the trailing newline.
 packages/brand/src/embedded-icons.generated.ts
 
-# Reusable workflow checkouts are tooling, outside the product source graph.
-.studio-engine/
-.studio-source/
 apps/web/.open-next/
-apps/web/.artifact/

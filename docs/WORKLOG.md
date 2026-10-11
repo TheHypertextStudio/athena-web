@@ -7,6 +7,17 @@
 
 ## Active Tasks
 
+### [WEBSITE-STANDARDIZATION-017] Use native OpenNext deployment commands
+
+- **Status**: REVIEW (static checks passed; native preview/provider acceptance pending)
+- **Started**: 2026-10-11
+- **Plan**: Remove the frontend Python lifecycle, custom candidate/promote callers, flat-artifact assembly, shipping wrapper and release-marker protocol. Use pinned OpenNext build/preview/deploy/upload commands with the existing monorepo prerequisite graph and service-worker build. Keep the application-owned routing/auth boundary and isolated release backend/database checks.
+- **Files**: Frontend scripts/configuration, existing CI/setup and release runner, their existing source-policy fixtures, current setup/compatibility docs, and this log. Retain shared company config/private packages and Mintlify configuration generation.
+- **Boundaries**: Restore ordinary CI/publication semantics by removing temporary hold flags, Vercel main exclusion and completed one-off lock/metadata/manual-branch CI plumbing. No dependency or lock change, provider operations, push, main integration, PR operations, new/manual tests or installation. Static checks and mandatory normal commit hooks only; provider/auth acceptance remains separate.
+- **Validation**: Verified Node 24.20.0 affected Prettier, root/web ESLint, root/web TypeScript, four existing workflows in actionlint, release-runner Bash syntax, existing static CI gate-policy CLI and diff checks passed. ESLint reported only the existing ignored OpenNext/Prettier configuration files. Canonical Wrangler bytes, dependency declarations and lock SHA256 `61493c19fdeec85f7205ba7a9c46afa53f6eefd7ded8f93386e241f0525ac510` remain unchanged. No native build or manual tests were run. Normal commit hooks use the previously approved pnpm warn mode for installed-graph metadata drift; no installer or policy bypass is added.
+- **Check scope and evidence**: Retire only custom release-marker unit/browser checks with their deleted endpoint and replace the duplicate-prebuilt-config case with the single native source-config contract; keep all auth/routing/security/Images/Mintlify/product checks and existing release-stack isolation assertions. Remove only the two deleted workflow paths from the exact inventory. Prior ignored assembler output is preserved at `.scratch/simplification-prior-artifact-633e2129`; old build receipts do not accept the new preview path. Context7 quota was already exhausted; installed pinned CLI source and previously fetched official docs informed this cleanup without a quota retry.
+- **Retrospective**: Direct pinned framework commands and the existing CI/backend lifecycle cover the required operations. Keep product-owned routing safeguards and shared documentation configuration, while removing duplicate packaging and temporary migration automation. Provider/runtime acceptance and any future production approval remain separate.
+
 ### [WEBSITE-STANDARDIZATION-016] Suppress automatic Vercel main builds for source integration
 
 - **Status**: REVIEW (source reviewed; provider containment/integration pending)

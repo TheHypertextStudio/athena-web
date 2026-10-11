@@ -11,10 +11,6 @@ name: Set up Node and pnpm
 description: Install pnpm and Node from .node-version, then install workspace dependencies.
 
 inputs:
-  node-version:
-    description: Exact Node override for bounded compatibility acceptance; empty uses .node-version.
-    required: false
-    default: ''
   filter:
     description: >-
       Extra pnpm filter arguments appended to `pnpm install --frozen-lockfile`, for a job that needs
@@ -29,7 +25,6 @@ runs:
 
     - uses: actions/setup-node@v7
       with:
-        node-version: ${{ inputs.node-version }}
         node-version-file: '.node-version'
         cache: pnpm
 

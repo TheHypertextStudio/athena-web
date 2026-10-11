@@ -25,10 +25,10 @@
     "test:e2e:release": "playwright test e2e/release e2e/work/daily-planning-flow.spec.ts e2e/work/daily-planning-activity.spec.ts e2e/work/daily-planning-day-review.spec.ts e2e/work/daily-planning-short-blocks.spec.ts --workers=1",
     "clean": "rm -rf .next .turbo *.tsbuildinfo",
     "test:e2e:evidence": "E2E_EVIDENCE=1 playwright test",
-    "build:worker": "NODE_ENV=production pnpm --dir ../.. exec turbo run build:worker:app --filter @docket/web",
-    "build:worker:shipping": "node build-worker-shipping.mjs",
-    "test:workers:source": "NODE_OPTIONS=--no-experimental-webstorage vitest run tests/config tests/auth/entry-gate.test.ts tests/auth/server-session.test.ts tests/lib/docs-origin.test.ts tests/lib/require-publishing-host.test.ts tests/lib/proxy-origin.test.ts",
-    "build:worker:app": "DOCKET_WORKERS_BUILD=1 NODE_OPTIONS=--max-old-space-size=4096 next build --webpack && tsx ../../packages/service-worker/bin/build.ts --app-root=. --production && opennextjs-cloudflare build --skipNextBuild && tsx ../../scripts/assemble-web-worker.ts"
+    "build:worker": "DOCKET_WORKERS_BUILD=1 NODE_OPTIONS=--max-old-space-size=4096 next build --webpack && tsx ../../packages/service-worker/bin/build.ts --app-root=. --production && opennextjs-cloudflare build --skipNextBuild",
+    "preview:worker": "opennextjs-cloudflare preview",
+    "deploy:worker": "opennextjs-cloudflare deploy",
+    "upload:worker": "opennextjs-cloudflare upload"
   },
   "dependencies": {
     "@better-auth/passkey": "catalog:",

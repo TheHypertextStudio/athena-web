@@ -22,11 +22,6 @@ name: Verify docs
 on:
   workflow_call:
   workflow_dispatch:
-    inputs:
-      refresh_dependency_lock:
-        description: Propose a registry lock without documentation probes or deployment
-        type: boolean
-        default: false
   schedule:
     # 14:00 UTC daily — mid-morning US Central, so a failure is seen the day it appears.
     - cron: '0 14 * * *'
@@ -34,13 +29,12 @@ on:
 # One at a time. A scheduled run overlapping a release-triggered run would probe the same origin
 # twice for no added signal, and cancelling the in-flight one could discard a real failure.
 concurrency:
-  group: ${{ github.event_name == 'workflow_dispatch' && inputs.refresh_dependency_lock == true && format('registry-lock-{0}', github.ref) || 'verify-docs' }}
+  group: verify-docs
   cancel-in-progress: false
 
 jobs:
   verify-docs:
     name: Verify documentation site
-    if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.refresh_dependency_lock == true) }}
     runs-on: ubuntu-latest
     # Backstop, not the expected duration: a healthy site settles on the first probe in seconds, and
     # the retry loop's own ceiling is four and a half minutes. This bounds the billed cost of a
@@ -62,122 +56,3 @@ jobs:
       # must turn this run red.
       - name: Verify the documentation site is live
         run: pnpm launch:verify-docs
-
-  dependency-lock:
-    name: Propose private registry lock
-    # Only an explicit dispatch of this reviewed same-repository compatibility branch.
-    # No provider/environment access or production probes run in this job.
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.refresh_dependency_lock == true && github.repository == 'TheHypertextStudio/athena-web' && github.ref == 'refs/heads/codex/docket-workers-compat' }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    permissions:
-      contents: read
-      packages: read
-    steps:
-      - name: Check out selected source
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ github.sha }}
-          persist-credentials: false
-      - name: Set up exact Node
-        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
-        with:
-          node-version: '24.20.0'
-          package-manager-cache: false
-      - name: Enable declared exact pnpm
-        shell: bash
-        run: |
-          package_manager=$(node --input-type=module -e 'import fs from "node:fs"; const value = JSON.parse(fs.readFileSync("package.json", "utf8")).packageManager; if (value !== "pnpm@11.9.0") throw new Error("Reviewed pnpm 11.9.0 required"); process.stdout.write(value);')
-          corepack enable
-          corepack prepare "$package_manager" --activate
-          test "$(node --version)" = 'v24.20.0'
-          test "$(pnpm --version)" = '11.9.0'
-      - name: Resolve proposed lock
-        id: resolve
-        shell: bash
-        env:
-          NODE_AUTH_TOKEN: ${{ github.token }}
-        run: |
-          # Update the checked-in lock so unrelated production resolutions are retained.
-          registry_config=$(mktemp "$RUNNER_TEMP/docket-registry.XXXXXX")
-          trap 'rm -f "$registry_config"' EXIT
-          chmod 600 "$registry_config"
-          # Keep the placeholder literal; pnpm expands it from trusted user config.
-          # shellcheck disable=SC2016
-          printf '%s\n' '//npm.pkg.github.com/:_authToken=${NODE_AUTH_TOKEN}' > "$registry_config"
-          export NPM_CONFIG_USERCONFIG="$registry_config"
-          pnpm install --lockfile-only --ignore-scripts --no-frozen-lockfile
-      - name: Replay frozen install with scripts disabled
-        id: frozen
-        shell: bash
-        env:
-          NODE_AUTH_TOKEN: ${{ github.token }}
-        run: |
-          registry_config=$(mktemp "$RUNNER_TEMP/docket-registry.XXXXXX")
-          trap 'rm -f "$registry_config"' EXIT
-          chmod 600 "$registry_config"
-          # shellcheck disable=SC2016
-          printf '%s\n' '//npm.pkg.github.com/:_authToken=${NODE_AUTH_TOKEN}' > "$registry_config"
-          export NPM_CONFIG_USERCONFIG="$registry_config"
-          pnpm install --frozen-lockfile --ignore-scripts
-      - name: Check proposed lock peers
-        id: peers
-        run: pnpm peers check
-      - name: Check other tracked source is unchanged
-        id: source
-        if: ${{ always() && !cancelled() && steps.resolve.outcome != 'skipped' }}
-        run: git diff --exit-code -- . ':!pnpm-lock.yaml'
-      - name: Record source and lock provenance
-        id: provenance
-        if: ${{ always() && !cancelled() && steps.resolve.outcome != 'skipped' }}
-        shell: bash
-        env:
-          RESOLVE_OUTCOME: ${{ steps.resolve.outcome }}
-          FROZEN_OUTCOME: ${{ steps.frozen.outcome }}
-          PEERS_OUTCOME: ${{ steps.peers.outcome }}
-          SOURCE_OUTCOME: ${{ steps.source.outcome }}
-        run: |
-          node --input-type=module <<'NODE'
-          import fs from 'node:fs';
-          import crypto from 'node:crypto';
-          import { execFileSync } from 'node:child_process';
-          if (!fs.existsSync('pnpm-lock.yaml')) {
-            fs.appendFileSync(process.env.GITHUB_OUTPUT, 'lock_exists=false\n');
-            process.exit(0);
-          }
-          const outcomes = {
-            resolution: process.env.RESOLVE_OUTCOME,
-            frozenInstall: process.env.FROZEN_OUTCOME,
-            peers: process.env.PEERS_OUTCOME,
-            sourceUnchanged: process.env.SOURCE_OUTCOME,
-          };
-          const result = {
-            repository: process.env.GITHUB_REPOSITORY,
-            sourceSha: process.env.GITHUB_SHA,
-            sourceRef: process.env.GITHUB_REF,
-            runId: process.env.GITHUB_RUN_ID,
-            runAttempt: process.env.GITHUB_RUN_ATTEMPT,
-            node: process.version,
-            pnpm: execFileSync('pnpm', ['--version'], { encoding: 'utf8' }).trim(),
-            resolutionMode: 'update-checked-in-lock',
-            inputLockSha256: crypto.createHash('sha256').update(execFileSync('git', ['show', `${process.env.GITHUB_SHA}:pnpm-lock.yaml`])).digest('hex'),
-            lockSha256: crypto.createHash('sha256').update(fs.readFileSync('pnpm-lock.yaml')).digest('hex'),
-            outcomes,
-            accepted: Object.values(outcomes).every(value => value === 'success'),
-          };
-          const artifactDirectory = `${process.env.RUNNER_TEMP}/docket-registry-lock`;
-          fs.mkdirSync(artifactDirectory, { recursive: true });
-          fs.copyFileSync('pnpm-lock.yaml', `${artifactDirectory}/pnpm-lock.yaml`);
-          fs.writeFileSync(`${artifactDirectory}/provenance.json`, JSON.stringify(result, null, 2) + '\n');
-          fs.appendFileSync(process.env.GITHUB_OUTPUT, 'lock_exists=true\n');
-          NODE
-      - name: Retain proposed lock for source review
-        if: ${{ always() && !cancelled() && steps.provenance.outputs.lock_exists == 'true' }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: dependency-lock-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
-          path: |
-            ${{ runner.temp }}/docket-registry-lock/pnpm-lock.yaml
-            ${{ runner.temp }}/docket-registry-lock/provenance.json
-          if-no-files-found: error
-          retention-days: 7

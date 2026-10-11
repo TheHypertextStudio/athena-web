@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 
-import { isWorkerApplicationHost, type WorkerRuntimeConfig } from '../worker-runtime-config';
+import { isWorkerApplicationHost, type WorkerRuntimeConfig } from './lib/worker-runtime-config';
 import { workerRequestConfig } from './lib/worker-request-context';
 
 /**

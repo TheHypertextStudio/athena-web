@@ -32,6 +32,19 @@ and `pnpm docs:check`.
 
 ## Workers migration checkpoint
 
+The lifecycle selects `pnpm --dir apps/web build:worker:shipping`. Its wrapper validates inputs
+before the existing Turbo graph and pins only the reviewed public compile identity:
+`NEXT_PUBLIC_APP_URL=https://clearthedocket.com`,
+`NEXT_PUBLIC_API_URL=https://api.clearthedocket.com`,
+`NEXT_PUBLIC_PASSKEY_RP_ID=clearthedocket.com` and
+`DOCS_MINTLIFY_ORIGIN=https://docket.mintlify.dev`. Conflicting values, other `NEXT_PUBLIC_*`
+inputs, validation bypasses, runtime routing/legacy-RP inputs and local assembly opt-ins are
+rejected by name without printing values. App-local `.env`, `.env.local`, `.env.production` and
+`.env.production.local` paths are rejected, including symlinks, without reading their contents.
+The web client schema requires no backend or fixture secret. Runtime staging destinations must
+be supplied separately to the same shipping bytes; these compile identities do not authorize
+provider resources, publication or staging backend access.
+
 From the repository root, `pnpm --dir apps/web build:worker` runs the existing Turbo dependency
 graph before native Next/OpenNext packaging. It no longer implicitly loads root `.env.local` or
 reads `STUDIO_ENV_FILE`. Supply reviewed build inputs explicitly through the calling environment;
@@ -76,8 +89,10 @@ hostname checks cannot establish DNS ownership or complete private-address isola
 
 Vercel remains the active publisher. The isolated compatibility branch uses exact Next 16.3.8 and
 OpenNext 1.20.10, retaining React 19.2.7 and the existing Node Proxy. Native Node middleware is
-experimental and is not officially maintained by OpenNext. Fresh explicit-local-input packaging
-and a Wrangler dry run passed; this is source/build evidence. Native request, streaming/cookie,
+experimental and is not officially maintained by OpenNext. Explicit-local compatibility packaging
+and the clean shipping entrypoint both passed native packaging and Wrangler dry run; the latter
+required no caller public/runtime inputs, fixture secret, app mode or validation bypass. These are
+source/build checks, not a signed lifecycle candidate or live runtime acceptance. Native request, streaming/cookie,
 authentication, private-cache, isolated backend/resource and provider acceptance remain open.
 
 `wrangler.jsonc` bundles the TypeScript entrypoint. Source-controlled `wrangler.site.jsonc` describes

@@ -26,6 +26,7 @@
     "clean": "rm -rf .next .turbo *.tsbuildinfo",
     "test:e2e:evidence": "E2E_EVIDENCE=1 playwright test",
     "build:worker": "NODE_ENV=production pnpm --dir ../.. exec turbo run build:worker:app --filter @docket/web",
+    "build:worker:shipping": "node build-worker-shipping.mjs",
     "test:workers:source": "NODE_OPTIONS=--no-experimental-webstorage vitest run tests/config tests/auth/entry-gate.test.ts tests/auth/server-session.test.ts tests/lib/docs-origin.test.ts tests/lib/require-publishing-host.test.ts tests/lib/proxy-origin.test.ts",
     "build:worker:app": "DOCKET_WORKERS_BUILD=1 NODE_OPTIONS=--max-old-space-size=4096 next build --webpack && tsx ../../packages/service-worker/bin/build.ts --app-root=. --production && opennextjs-cloudflare build --skipNextBuild && tsx ../../scripts/assemble-web-worker.ts"
   },

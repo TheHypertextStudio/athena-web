@@ -1,6 +1,6 @@
 import { getCloudflareContext } from '@opennextjs/cloudflare';
 
-import { readWorkerRuntimeConfig, type WorkerRuntimeConfig } from '../../worker-runtime-config';
+import { readWorkerRuntimeConfig, type WorkerRuntimeConfig } from './worker-runtime-config';
 
 /**
  * Read native request-local routing only in a compiled Workers build.

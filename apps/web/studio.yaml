@@ -20,7 +20,7 @@ components:
         argv: [pnpm, --dir, ../.., docs:check]
     dev: [pnpm, dev]
     build:
-      script: build:worker
+      script: build:worker:shipping
       output: .artifact
 # Candidate publication remains disabled until supported native Proxy/runtime acceptance,
 # registry installation, scoped shared workflow publication and provider gates are satisfied.

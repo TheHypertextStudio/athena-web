@@ -5,6 +5,12 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_dispatch:
+    inputs:
+      run_validation:
+        description: Validate the reviewed compatibility branch without deployment or remote uploads
+        type: boolean
+        default: false
 
 # Validation is safe to cancel because production release now runs in deploy-main.yml after a
 # successful CI run. A newer push replaces stale validation without interrupting an active deploy.
@@ -27,10 +33,13 @@ concurrency:
 # keeping both meant paying GitHub's cache I/O for a result the remote cache already had — the
 # Build job spent 39s restoring and 24s saving to serve a task that took 2s.
 env:
-  TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
-  TURBO_TEAM: ${{ vars.TURBO_TEAM }}
-  TURBO_API: ${{ vars.TURBO_API }}
-  TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY }}
+  # Manual compatibility acceptance is local-cache-only and receives no Turbo credentials.
+  # Ordinary push/PR runs retain their existing signed remote-cache configuration.
+  TURBO_TOKEN: ${{ github.event_name != 'workflow_dispatch' && secrets.TURBO_TOKEN || '' }}
+  TURBO_TEAM: ${{ github.event_name != 'workflow_dispatch' && vars.TURBO_TEAM || '' }}
+  TURBO_API: ${{ github.event_name != 'workflow_dispatch' && vars.TURBO_API || '' }}
+  TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ github.event_name != 'workflow_dispatch' && secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY || '' }}
+  TURBO_CACHE: ${{ github.event_name == 'workflow_dispatch' && 'local:rw' || 'local:rw,remote:rw' }}
 
 jobs:
   # Lint and typecheck were one job on the theory that they share an install. They also shared a
@@ -54,6 +63,7 @@ jobs:
   # 2.5GB one; web and admin ride together because both first build @docket/api (their lint script
   # does) and would otherwise duplicate that build across two runners.
   lint:
+    if: ${{ github.event_name != 'workflow_dispatch' || (inputs.run_validation == true && github.repository == 'TheHypertextStudio/athena-web' && github.ref == 'refs/heads/codex/docket-workers-compat') }}
     permissions:
       contents: read
       packages: read
@@ -74,8 +84,12 @@ jobs:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     steps:
       - uses: actions/checkout@v6
+        with:
+          persist-credentials: ${{ github.event_name != 'workflow_dispatch' }}
 
       - uses: ./.github/actions/setup
+        with:
+          node-version: ${{ github.event_name == 'workflow_dispatch' && '24.20.0' || '' }}
 
       # A cold apps shard must first build API and Admin dependencies before Web ESLint starts.
       # The old 180-second cap killed Web lint at startup whenever remote Turbo caching was down.
@@ -85,6 +99,7 @@ jobs:
   # whole program in memory per package, so each runner still typechecks one at a time. 26 packages
   # in series took 319s.
   typecheck:
+    if: ${{ github.event_name != 'workflow_dispatch' || (inputs.run_validation == true && github.repository == 'TheHypertextStudio/athena-web' && github.ref == 'refs/heads/codex/docket-workers-compat') }}
     permissions:
       contents: read
       packages: read
@@ -108,8 +123,12 @@ jobs:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     steps:
       - uses: actions/checkout@v6
+        with:
+          persist-credentials: ${{ github.event_name != 'workflow_dispatch' }}
 
       - uses: ./.github/actions/setup
+        with:
+          node-version: ${{ github.event_name == 'workflow_dispatch' && '24.20.0' || '' }}
 
       - run: pnpm turbo run typecheck ${{ matrix.filter }} --concurrency=1
 
@@ -136,6 +155,7 @@ jobs:
   # Scanning git *history* with the upstream binary remains a licensed follow-on; see
   # docs/engineering/ci-gating.md.
   secret-scan:
+    if: ${{ github.event_name != 'workflow_dispatch' || (inputs.run_validation == true && github.repository == 'TheHypertextStudio/athena-web' && github.ref == 'refs/heads/codex/docket-workers-compat') }}
     permissions:
       contents: read
       packages: read
@@ -146,11 +166,14 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
+          persist-credentials: ${{ github.event_name != 'workflow_dispatch' }}
           # Full history so the licensed `gitleaks dir`/`gitleaks git` second opinion can be run
           # on this same checkout without re-cloning.
           fetch-depth: 0
 
       - uses: ./.github/actions/setup
+        with:
+          node-version: ${{ github.event_name == 'workflow_dispatch' && '24.20.0' || '' }}
 
       - run: pnpm secret-scan
 
@@ -184,6 +207,7 @@ jobs:
   # The job id stays `test`, so `release-ready.needs` and scripts/ci-gate-policy.ts's
   # ungated-check-job check keep working unchanged — a matrix multiplies the runs, not the id.
   test:
+    if: ${{ github.event_name != 'workflow_dispatch' || (inputs.run_validation == true && github.repository == 'TheHypertextStudio/athena-web' && github.ref == 'refs/heads/codex/docket-workers-compat') }}
     permissions:
       contents: read
       packages: read
@@ -213,12 +237,15 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
+          persist-credentials: ${{ github.event_name != 'workflow_dispatch' }}
           # The launch-history policy test must inspect the PR branch, not GitHub's synthetic
           # merge commit. It also needs main's history to count merges from the correct base.
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
 
       - uses: ./.github/actions/setup
+        with:
+          node-version: ${{ github.event_name == 'workflow_dispatch' && '24.20.0' || '' }}
 
       - run: pnpm turbo run test:coverage ${{ matrix.filter }} --concurrency=1
 
@@ -262,12 +289,13 @@ jobs:
 
       # Upload only when a test task actually generated coverage files.
       - uses: codecov/codecov-action@v7
-        if: always() && steps.coverage.outputs.found == 'true'
+        if: always() && github.event_name != 'workflow_dispatch' && steps.coverage.outputs.found == 'true'
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: false
 
   build:
+    if: ${{ github.event_name != 'workflow_dispatch' || (inputs.run_validation == true && github.repository == 'TheHypertextStudio/athena-web' && github.ref == 'refs/heads/codex/docket-workers-compat') }}
     permissions:
       contents: read
       packages: read
@@ -277,17 +305,22 @@ jobs:
       # Production credentials are validated at deployment; CI verifies every build artifact
       # without exposing production secrets to pull-request runners.
       SKIP_ENV_VALIDATION: '1'
-      API_URL: ${{ vars.API_URL }}
-      NEXT_PUBLIC_API_URL: ${{ vars.API_URL }}
-      NEXT_PUBLIC_APP_URL: ${{ vars.WEB_URL }}
+      API_URL: ${{ github.event_name == 'workflow_dispatch' && 'http://api.docket.localhost:4000' || vars.API_URL }}
+      NEXT_PUBLIC_API_URL: ${{ github.event_name == 'workflow_dispatch' && 'http://api.docket.localhost:4000' || vars.API_URL }}
+      NEXT_PUBLIC_APP_URL: ${{ github.event_name == 'workflow_dispatch' && 'http://docket.localhost:3000' || vars.WEB_URL }}
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     steps:
       - uses: actions/checkout@v6
+        with:
+          persist-credentials: ${{ github.event_name != 'workflow_dispatch' }}
 
       - uses: ./.github/actions/setup
+        with:
+          node-version: ${{ github.event_name == 'workflow_dispatch' && '24.20.0' || '' }}
 
-      # Existing build job: no added triggers or runners. One pinned local docs check replaces
-      # global installation plus three native invocations; product coverage remains in the chain.
+      # Preserve the existing build/check commands for ordinary and manual validation.
+      # The pinned local docs check replaces global installation plus three native invocations;
+      # product coverage remains in the chain.
       # Budget: one Mintlify framework download on a cold runner, then build/links/a11y + source tests.
       - run: pnpm docs:check
 
@@ -300,6 +333,7 @@ jobs:
   # therefore cannot expose the production postgres-js text-decoding failure that blanked Project
   # details on 2026-08-24.
   core-screen-smoke:
+    if: ${{ github.event_name != 'workflow_dispatch' || (inputs.run_validation == true && github.repository == 'TheHypertextStudio/athena-web' && github.ref == 'refs/heads/codex/docket-workers-compat') }}
     permissions:
       contents: read
       packages: read
@@ -339,8 +373,12 @@ jobs:
           --health-retries 12
     steps:
       - uses: actions/checkout@v6
+        with:
+          persist-credentials: ${{ github.event_name != 'workflow_dispatch' }}
 
       - uses: ./.github/actions/setup
+        with:
+          node-version: ${{ github.event_name == 'workflow_dispatch' && '24.20.0' || '' }}
 
       - name: Verify OAuth persistence and concurrency on PostgreSQL
         env:

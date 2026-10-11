@@ -53,8 +53,9 @@ Docket’s content, appearance, vocabulary/OAuth/MCP coverage, and API-owned Sca
 
 See [docs setup](apps/docs/README.md), [authoring](docs/engineering/docs-authoring.md), and
 [configuration, publishing, and recovery](docs/engineering/docs-operations.md). Shared packages
-`0.0.1` are published privately and this repository has Actions Read access. A real product registry
-lock and exact-source provider acceptance remain required. Application/native/backend setup remains below.
+`0.0.1` are published privately and this repository has Actions Read access. The genuine retained
+registry lock passed native frozen installation and strict peers in run `38120984041`; source/build,
+Workers runtime and exact-source provider acceptance remain required. Application/native/backend setup remains below.
 
 ## Frontend standardization
 
@@ -82,6 +83,16 @@ retains Drizzle schema-generation support with an explicit scratch config/output
 migration is generated during registry verification. Existing editor pins and transitive constraints
 are unchanged. The update starts from the production lock to preserve unrelated resolutions; review
 any remaining graph changes before adoption. Peer validation does not establish runtime acceptance.
+
+The existing **CI** pipeline also has a guarded manual `run_validation=true` entrypoint for
+`codex/docket-workers-compat`. It reuses the ordinary lint, types, secret scan, coverage, docs/build,
+and isolated PostgreSQL/browser jobs with exact Node 24.20.0 and native frozen installation. Manual
+runs use only local Turbo caching, omit Turbo and Codecov credentials/uploads, and use local build
+origins. Image publication, release-ready and downstream deployment require a push to `main`, so a
+manual validation cannot enter those paths. GitHub-hosted failure diagnostics remain available.
+The workflow file is already registered on the default branch, but its manual trigger is newly
+proposed here; dispatchability must be confirmed after source review. This is source acceptance,
+not Workers runtime, provider, passkey-origin or deployment acceptance.
 
 ## From clone to a working app
 

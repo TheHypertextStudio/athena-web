@@ -7,6 +7,19 @@
 
 ## Active Tasks
 
+### [WEBSITE-STANDARDIZATION-006] Update the production lock with maintained auth tooling
+
+- **Status**: IN_PROGRESS
+- **Started**: 2026-10-11
+- **Priority**: P2
+- **Description**: Replace the obsolete schema development tool and update the retained production lock through native private-registry resolution, preserving unrelated production resolutions.
+- **Plan**: Replace the obsolete development-only `@better-auth/cli` with official maintained `auth` exactly 1.6.19, retaining both invocation binaries and Drizzle schema-generation support. Remove the hosted from-zero lock deletion: use native `pnpm install --lockfile-only --ignore-scripts --no-frozen-lockfile` with the checked-in production lock as input, then replay frozen installation and strict peers. Record the input lock digest, output digest and actual outcomes. Update the active CLI reference and leave historical schema-capture evidence intact. Add no speculative Tiptap overrides; inspect the complete next hosted lock and any remaining peer failure before further constraints or adoption.
+- **Research**: Official Better Auth 1.5 release notes identify the CLI rename, the exact v1.6.19 CLI README supports schema generation, and public npm version metadata confirms `auth@1.6.19` uses core/runtime/telemetry 1.6.19 and both `auth`/`better-auth` binaries. Core 1.6.19 requires the existing fetch 1.3.1 and better-call 1.3.6 and accepts the current Kysely 0.29 line. Context7's monthly quota remains exhausted. The old canonical lock already includes an incompatible legacy core 1.4.21 snapshot; do not mislabel that tooling issue as a new authentication runtime regression.
+- **Files to modify**: `pnpm-workspace.yaml`, `packages/auth/package.json`, `.github/workflows/verify-docs.yml`, `README.md`, `docs/engineering/specs/env-and-bootstrap.md`, and this work log.
+- **Boundary**: No runtime auth declarations, direct editor versions, peer ignores, build approvals, registry substitutions, trust settings or release-age exemptions change. Do not regenerate/apply a database schema, use provider credentials, or run tests/probes in this source slice.
+- **Hosted evidence**: The corrected diagnostic workflow retained run 38120402742 with resolution/frozen/source checks successful, peers failed, and `accepted: false`. Actual artifact ZIP SHA256 is `f068034d806866b45291760564ab71a2f7d6868b21b44bd6b1bafa87c0088b8e`; proposed lock SHA256 is `cbd05f8308ee22fcab22f7a9dfba8ef7b9c9cc6edf12b29763628e549cd78b39`. Both files and complete diff are retained outside tracked source.
+- **Gates**: The failed from-zero experiment moves unrelated versions within existing ranges, including React/ReactDOM 19.3.0, Hono, Zod, Drizzle and PGlite. The compatibility evidence used React 19.2.7; that broad proposal is not adopted. The next hosted attempt must retain the production lock as its input, resolve new private package entries from the real registry, and expose its complete diff. A failed resolution can retain the input lock, so its digest and failure outcomes must remain explicit. Keep canonical lock `f9bc57e269cfcf4cbd03e2d068a8d34b7543792e0000331209304bb390a78f79` unchanged until complete dependency review and affected acceptance.
+
 ### [INBOUND-NOTIFICATIONS-001] General personal inbound events and notification triage
 
 - **Status**: BLOCKED

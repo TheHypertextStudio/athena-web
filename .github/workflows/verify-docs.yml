@@ -98,8 +98,7 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ github.token }}
         run: |
-          # Remove the previous lock first, so any retained file is a new proposal.
-          rm -f pnpm-lock.yaml
+          # Update the checked-in lock so unrelated production resolutions are retained.
           registry_config=$(mktemp "$RUNNER_TEMP/docket-registry.XXXXXX")
           trap 'rm -f "$registry_config"' EXIT
           chmod 600 "$registry_config"
@@ -160,6 +159,8 @@ jobs:
             runAttempt: process.env.GITHUB_RUN_ATTEMPT,
             node: process.version,
             pnpm: execFileSync('pnpm', ['--version'], { encoding: 'utf8' }).trim(),
+            resolutionMode: 'update-checked-in-lock',
+            inputLockSha256: crypto.createHash('sha256').update(execFileSync('git', ['show', `${process.env.GITHUB_SHA}:pnpm-lock.yaml`])).digest('hex'),
             lockSha256: crypto.createHash('sha256').update(fs.readFileSync('pnpm-lock.yaml')).digest('hex'),
             outcomes,
             accepted: Object.values(outcomes).every(value => value === 'success'),

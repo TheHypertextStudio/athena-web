@@ -66,14 +66,22 @@ Vercel remains active while native Proxy compatibility, package registry and pro
 are unresolved.
 
 Maintainers can explicitly dispatch the existing **Verify docs** workflow on
-`codex/docket-workers-compat` with `refresh_dependency_lock=true` to propose a fresh registry lock.
+`codex/docket-workers-compat` with `refresh_dependency_lock=true` to update the checked-in registry lock.
 It uses exact Node 24.20.0/pnpm 11.9.0 and the repository's short-lived GitHub token, disables install
 scripts, replays the frozen install, checks peers, and uploads only the proposed lock and its source/run
 provenance for seven days. It makes no documentation probes or deployments. Review the entire lock
-diff before adopting it; this job does not update source. A failed validation still retains the new
-lock with actual step outcomes and `accepted: false`; the workflow remains red. The only new release-age exceptions are exact
+diff before adopting it; this job does not update source. The receipt records both input and proposed
+lock digests. A failed resolution may retain the unchanged input lock; every failed validation records
+actual step outcomes and `accepted: false`, and the workflow remains red. The only new release-age exceptions are exact
 `@thehypertextstudio/web-config@0.0.1` and `@thehypertextstudio/web-docs@0.0.1`, the two consumed packages
 from approved candidate `38116243716-1`. Other existing age policy and build approvals are preserved.
+
+The development-only Better Auth schema CLI is the official `auth@1.6.19`, matching the production
+runtime. It exposes both `auth` and `better-auth`; `pnpm --filter @docket/auth exec auth generate`
+retains Drizzle schema-generation support with an explicit scratch config/output. No schema or
+migration is generated during registry verification. Existing editor pins and transitive constraints
+are unchanged. The update starts from the production lock to preserve unrelated resolutions; review
+any remaining graph changes before adoption. Peer validation does not establish runtime acceptance.
 
 ## From clone to a working app
 

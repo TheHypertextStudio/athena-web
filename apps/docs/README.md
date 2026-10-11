@@ -15,10 +15,16 @@ pnpm install --filter @docket/root... --filter @docket/docs --frozen-lockfile
 pnpm docs:config:check
 ```
 
-This source preparation checkpoint uses the published exact shared 0.0.1 packages. It still
-requires registry-read CI access and regeneration of the real monorepo lock. The current local tarball acceptance
-is recorded in [the operating reference](../../docs/engineering/docs-operations.md); it does not
-satisfy a fresh registry install. Keep this checkpoint out of `main` until that gate passes.
+The exact shared 0.0.1 packages are published and the genuine registry lock is adopted.
+Repository GitHub Actions Read grants and the ephemeral `github.token` provide CI package access;
+no personal access token is required. Native run
+[38124448126](https://github.com/TheHypertextStudio/athena-web/actions/runs/38124448126)
+passed retained-lock resolution, script-disabled frozen installation and strict peer validation.
+CI [38126412295](https://github.com/TheHypertextStudio/athena-web/actions/runs/38126412295)
+then passed the native docs build, links, accessibility and product checks for all 52 MDX pages.
+See [the operating reference](../../docs/engineering/docs-operations.md) for exact source and lock
+identities. Integration into the publishing branch, source-bound Mintlify publication, canonical
+reconciliation and public delivery/recovery acceptance remain separate gates.
 
 | Root command             | Purpose                                                                                          |
 | ------------------------ | ------------------------------------------------------------------------------------------------ |

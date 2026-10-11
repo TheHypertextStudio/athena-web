@@ -7,6 +7,16 @@
 
 ## Active Tasks
 
+### [WEBSITE-STANDARDIZATION-014] Reconcile Mintlify setup and publishing records
+
+- **Status**: REVIEW
+- **Started**: 2026-10-11
+- **Plan**: Replace superseded package/grant/lock blockers with retained native GitHub-token registry and source CI evidence; keep provider publication, canonical reconciliation and recovery unaccepted.
+- **Files**: `apps/docs/README.md`, `docs/engineering/docs-operations.md`, `docs/engineering/docs-deployment.json`, and this log.
+- **Decisions**: Retain Mintlify, the existing main/apps/docs integration, active `.mintlify.dev` upstream, public `clearthedocket.com/docs` paths and separate Scalar reference. Date provider metadata separately from source acceptance; no provider setting is changed.
+- **Validation**: Reconciled existing native runs 38124448126 and 38126412295, genuine adopted lock/config digests and unchanged docs runtime inputs through 0819eede. Focused source diff is awaiting review; no tests, dependency installation or provider calls were performed.
+- **Retrospective**: Completed package access and source checks must not remain listed as blockers or imply hosted publication. The dated old provider update remains distinct from acceptance of this checkpoint.
+
 ### [WEBSITE-STANDARDIZATION-013] Prepare inactive isolated Workers staging and promotion wiring
 
 - **Status**: REVIEW (source/static validation passed; joint review and new native build/provider acceptance pending)

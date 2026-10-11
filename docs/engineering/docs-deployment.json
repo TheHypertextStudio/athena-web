@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
-  "observed_at": "2026-10-10",
-  "status": "source-preparation-provider-acceptance-pending",
+  "observed_at": "2026-10-11T05:03:52Z",
+  "status": "source-checks-accepted-provider-acceptance-pending",
   "owner": "Hypertext Studio",
   "provider": {
     "organization": "hypertextstudio",
@@ -30,24 +30,37 @@
     "displayed_at": "Oct 2, 2026, 5:05 PM"
   },
   "candidate": {
-    "reviewed_source_sha": null,
+    "reviewed_source_sha": "5bc5e81cdade1698d96e98751d3c289ee45de386",
     "shared_package_versions": {
-      "@thehypertextstudio/web-docs": "0.1.0",
-      "@thehypertextstudio/web-config": "0.1.0",
+      "@thehypertextstudio/web-docs": "0.0.1",
+      "@thehypertextstudio/web-config": "0.0.1",
       "mint": "4.2.854"
     },
-    "registry_lock_sha256": null,
+    "registry_lock_sha256": "61493c19fdeec85f7205ba7a9c46afa53f6eefd7ded8f93386e241f0525ac510",
     "generated_config_sha256": "5d4f4c777ed996542545b7f83e5e0e2e6a76e639f7d89639151a6d5b1fe83f8b",
     "provider_update_identity": null,
     "provider_source_sha": null,
-    "public_acceptance": "pending"
+    "public_acceptance": "pending",
+    "docs_runtime_inputs_unchanged_through": "0819eede775db6a74efa111cc9d9ec2c3cdeea2a",
+    "registry_acceptance": {
+      "run_id": "38124448126",
+      "source_sha": "c1bd43360609001ef866293a08f2fe890ff440cc",
+      "authentication": "native-ephemeral-github-token",
+      "resolution": "success",
+      "script_disabled_frozen_install": "success",
+      "strict_peers": "success"
+    },
+    "source_checks": {
+      "run_id": "38126412295",
+      "status": "success",
+      "native_docs_mdx_pages": 52
+    }
   },
   "remaining_gates": [
-    "Publish the reviewed immutable shared packages and grant scoped read-only registry access.",
-    "Generate the real registry lock and prove a clean frozen install plus affected CI.",
-    "Review preview and record source/config/lock identities.",
+    "Integrate reviewed source into the existing main publishing branch through authorized linear history.",
+    "Review local preview; hosted previews were unavailable in the retained provider observation.",
     "Reconcile provider Host-at primary canonical while retaining existing public paths and proven upstream.",
     "Verify exact-source Mintlify publication and public route/assets/search/canonical parity.",
-    "Record a complete known-working source and proxy configuration before integration."
+    "Capture complete known-working source/config/lock/proxy/provider identity and observe recovery; the old provider update is not certified rollback acceptance."
   ]
 }

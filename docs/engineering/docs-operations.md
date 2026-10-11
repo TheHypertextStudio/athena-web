@@ -30,16 +30,31 @@ download are disabled; keytar's native binding is allowed. Existing application 
 including `sharp: false`, remain in force. Do not suppress peers or change application catalog
 versions to repair a docs-only install.
 
-### Source preparation and registry gate
+### Accepted registry lock and source checks
 
-The exact 0.0.1 packages are published. Current local acceptance uses an ignored override to the
-reviewed package tarballs and a separate local validation lock; the committed monorepo lock is the
-pre-adoption registry lock. No `file:` resolution is committed and no registry acceptance is claimed.
-Before integrating this checkpoint into `main`, grant
-read-only access to this repository's CI, generate the real registry lock, and prove the scoped
-frozen install from a clean checkout. CI's existing setup action must receive the scoped registry
-and package-read authorization for all jobs that install the monorepo lock. Keep install credentials
-inside the install step and out of logs. Rerun affected checks against that lock.
+The exact 0.0.1 packages are published, this repository has GitHub Actions Read grants, and the
+committed monorepo lock contains genuine registry resolutions. Native run
+[38124448126](https://github.com/TheHypertextStudio/athena-web/actions/runs/38124448126) at
+`c1bd43360609001ef866293a08f2fe890ff440cc` updated the retained production lock and passed
+script-disabled frozen installation, strict peer validation and unchanged-source verification.
+The adopted lock SHA256 is
+`61493c19fdeec85f7205ba7a9c46afa53f6eefd7ded8f93386e241f0525ac510`; the private package
+integrities match the reviewed published shipping bytes. Earlier ignored local-tarball checks
+remain historical evidence, not the registry acceptance record.
+
+Existing CI setup uses only the ephemeral `github.token` with `packages: read` through trusted
+setup-node user configuration. Credentials are available only to installation and the temporary
+user configuration is removed afterward. Do not create classic personal access tokens, transfer
+browser/CLI credentials, or commit local package overrides.
+
+Full CI [38126412295](https://github.com/TheHypertextStudio/athena-web/actions/runs/38126412295)
+passed at `5bc5e81cdade1698d96e98751d3c289ee45de386`, including frozen installation and the
+Build job's native docs build, links, accessibility and product coverage for 52 MDX pages.
+The Mintlify config, MDX/assets, lock, workspace policy and `scripts/docs-check.ts` are unchanged
+from that accepted source through `0819eede775db6a74efa111cc9d9ec2c3cdeea2a`. Generated config
+SHA256 is `5d4f4c777ed996542545b7f83e5e0e2e6a76e639f7d89639151a6d5b1fe83f8b`.
+This source acceptance does not establish Mintlify publication, provider canonical settings,
+public delivery or observed recovery.
 
 ## Local preview and source checks
 
@@ -64,21 +79,22 @@ bounded retries and no new push multiplier.
 
 ## Provider and route contract
 
-Provider observations from 2026-10-10 are recorded in
-[docs-deployment.json](docs-deployment.json). They do not prove publication of this checkpoint.
+The retained authenticated provider observation at 2026-10-11 05:03 UTC is recorded in
+[docs-deployment.json](docs-deployment.json). It is a dated snapshot, not a fresh provider refresh
+or proof of publication of this checkpoint.
 
-| Setting                         | Recorded value                                                                        |
-| ------------------------------- | ------------------------------------------------------------------------------------- |
-| Mintlify organization/project   | `hypertextstudio` / `docket`                                                          |
-| Git integration                 | `TheHypertextStudio/athena-web`, branch `main`, directory `apps/docs`                 |
-| Public origin/prefix            | `https://clearthedocket.com/docs`                                                     |
-| Active source proxy origin      | `DOCS_MINTLIFY_ORIGIN=https://docket.mintlify.dev`                                    |
-| Dashboard upstream              | `https://docket.mintlify.site`; observation only, not a source replacement            |
-| Dashboard Host-at               | `https://docket.hypertext.studio/docs`; stale canonical configuration                 |
-| Last observed successful source | `0aadf2bd2669119ee8f99a1474e7fbac85273f57`, Oct 2, 2026, 5:05 PM dashboard display    |
-| Contributor access              | Existing company Git/Mintlify access; no new account, credential, or role provisioned |
-| Hosted previews                 | Unavailable after the Pro trial ended; use local preview                              |
-| API deployment access           | Pro/Enterprise documented; no admin key created or plan changed                       |
+| Setting                         | Recorded value                                                                          |
+| ------------------------------- | --------------------------------------------------------------------------------------- |
+| Mintlify organization/project   | `hypertextstudio` / `docket`                                                            |
+| Git integration                 | `TheHypertextStudio/athena-web`, branch `main`, directory `apps/docs`                   |
+| Public origin/prefix            | `https://clearthedocket.com/docs`                                                       |
+| Active source proxy origin      | `DOCS_MINTLIFY_ORIGIN=https://docket.mintlify.dev`                                      |
+| Dashboard upstream              | `https://docket.mintlify.site`; observation only, not a source replacement              |
+| Dashboard Host-at               | `https://docket.hypertext.studio/docs`; stale canonical configuration                   |
+| Last observed successful source | `0aadf2bd2669119ee8f99a1474e7fbac85273f57`, Oct 2, 2026, 5:05 PM dashboard display      |
+| Contributor access              | Existing company Git/Mintlify access; no new account, credential, or role provisioned   |
+| Hosted previews                 | Unavailable after the Pro trial ended; use local preview                                |
+| API deployment access           | Entitlement unverified; existing Git publishing remains selected; no key or plan change |
 
 Keep the current Vercel rewrite contract in `apps/web/next.config.ts`:
 
@@ -100,9 +116,9 @@ this slice does not proxy or migrate it.
 ### Canonical reconciliation
 
 The application redirects the Studio alias to `clearthedocket.com`, and product config/links already
-use the primary domain. Public docs currently render a canonical under the old Studio alias.
-Mintlify's Host-at site address still names that alias. The pinned schema has page-specific canonical
-frontmatter and arbitrary SEO meta tags; it has no global canonical-origin setting. Adding one
+use the primary domain. The retained public observation renders a canonical under the old Studio
+alias. The last observed Mintlify Host-at site address names that alias. The pinned schema has
+page-specific canonical frontmatter and arbitrary SEO meta tags; it has no global canonical-origin setting. Adding one
 fixed canonical tag to every page would conflate different pages, and scattering 52 overrides would
 leave provider-generated assets/sitemaps inconsistent. Retain content URLs and correct the provider
 Host-at address to `https://clearthedocket.com/docs` during the separately reviewed provider phase.

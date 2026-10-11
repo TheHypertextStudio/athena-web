@@ -375,9 +375,10 @@ describe('the real workflows', () => {
       // Builds the deploy images. ci.yml invokes it with no `needs` so it overlaps the gates;
       // it runs no tests or checks, so it is not a gate and holds nothing back.
       '.github/workflows/build-images.yml',
-      // Shared website lifecycle callers remain inactive and do not alter the API release gate.
+      // Ordinary CI and the backend release gate retain their existing ownership.
       '.github/workflows/ci.yml',
       '.github/workflows/deploy-main.yml',
+      '.github/workflows/deploy-workers-staging.yml',
       '.github/workflows/deploy.yml',
       // e2e is a check job that deliberately does not gate the deploy; see e2e.yml for why.
       // The ungated-check-job rule is unaffected — it only governs the workflow that owns

@@ -58,6 +58,57 @@ after explicit production approval, complete bindings and recovery review. Curre
 bindings are incomplete and intentionally fail closed. Source configuration is not provisioning
 or deployment acceptance; verify the actual Worker, Images, R2 and custom-domain ownership first.
 
+## Manual staging workflow
+
+`Deploy Workers staging` is an operator-only `workflow_dispatch` workflow with no inputs or
+production option. It admits only this repository's `main`, checks out the dispatched SHA,
+requires the latest ordinary push CI run for that exact SHA to have succeeded, runs the existing
+frozen install and native Turbo/Next/service-worker/OpenNext build, then checks the live main ref
+immediately before native `deploy:worker --env staging --env-file /dev/null`. It serializes staging deployments and
+never invokes the backend CI/release pipeline. Non-main dispatches skip the job.
+
+Public compile values come from `env.staging.vars` in the single `wrangler.jsonc`, including the
+existing Mintlify upstream. No missing input is replaced with production values. The deployment
+step alone maps `secrets.CLOUDFLARE_STAGING_API_TOKEN` to native `CLOUDFLARE_API_TOKEN` and receives
+the fixed Studio account ID; the token is checked
+for presence before OpenNext can attempt its login fallback. Native OpenNext 1.20.10's R2 helper
+uses the explicit account environment variable instead of the Wrangler source account field and
+can otherwise enumerate accounts. There is no `--keep-vars`: source owns nonsecret runtime vars,
+while provider-managed secrets remain separate. The final deploy forwards `--env-file /dev/null`
+to Wrangler so its default dotenv files cannot supply deployment values.
+
+Before dispatch, an operator must establish all of these prerequisites:
+
+- Integrate reviewed source only after the current production backend metadata baseline and
+  unrelated-work reconciliation are complete. The October 11 same-account Google metadata read
+  remains reauthentication-blocked; this local preparation authorizes no push or main integration.
+- Verify that this repository actually has a protected `staging` GitHub environment, restricted to
+  main and the intended environment-owned
+  `CLOUDFLARE_STAGING_API_TOKEN`. The generic repository `CLOUDFLARE_API_TOKEN` is never referenced. A YAML
+  environment name alone does not create protection; do not dispatch against an absent/unprotected
+  environment or silently rely on a broader repository credential. Verify native package-read
+  access and ordinary CI success for the intended main SHA.
+- Verify the existing `docket-web-staging` Worker, Studio account, custom domain, Images and isolated
+  `docket-web-staging-cache` R2 resource/authority and record their current version/configuration for
+  recovery. Native OpenNext deploy can create a missing bucket and write a temporary cache
+  population Worker; scope and resource existence must be reviewed beforehand. Production
+  Worker/DNS/Cloud Run resources must remain outside this operation.
+- Reconcile the existing isolated API's actual allowed origins/hosts, RP, cookie scope, OAuth and
+  Lattice metadata/callbacks with the configured frontend. The dated public API config still
+  advertises the Vercel-stage RP; no source value proves that transition complete. Review isolated
+  Publishing/data/secret inputs rather than inventing a brief host, copying production values or
+  treating an unavailable metadata read as acceptance.
+- Confirm intended staging compile identity and absence of app-local `.env*` input, retain the
+  previous staging version and backend configuration, and confirm the operation stays within the
+  reviewed staging authority.
+  Deployment success still needs actual staging journeys/auth/cache/Images/runtime acceptance;
+  the workflow adds no test probes or production cutover.
+
+The trigger multiplier is zero for push/PR and one runner per deliberate manual dispatch, bounded
+at 30 minutes. It reuses existing CI evidence instead of rerunning validation and builds only the
+web prerequisite graph with local Turbo caching. No workflow run, credential setup or provider
+acceptance is claimed by this source preparation.
+
 ## Application routing and auth
 
 `wrangler.jsonc` is the single provider configuration. It bundles `worker.ts`, delegates to the

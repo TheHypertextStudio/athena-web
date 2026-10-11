@@ -60,7 +60,8 @@
         "STUDIO_DEPLOYMENT_ENV": "staging",
         "WEB_URL": "https://docket-staging.hypertext.studio",
         "API_URL": "https://docket-api-staging-mdchlo736a-uc.a.run.app",
-        "BETTER_AUTH_PASSKEY_RP_ID": "docket-staging.hypertext.studio"
+        "BETTER_AUTH_PASSKEY_RP_ID": "docket-staging.hypertext.studio",
+        "DOCS_MINTLIFY_ORIGIN": "https://docket.mintlify.dev"
       }
     },
     "production": {

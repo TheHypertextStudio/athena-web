@@ -15,7 +15,9 @@ webpack, its existing service worker and OpenNext. Native preview populates loca
 Wrangler. Native `deploy:worker` and `upload:worker` accept `--env staging` or `--env production`;
 both write remote cache and provider state, and deploy serves the new version. Production requires
 explicit approval and complete configuration/recovery acceptance. No automatic provider deployment
-or custom candidate/promote workflow is enabled.
+or custom candidate/promote workflow is enabled. The conventional manual staging workflow described
+in the web README requires exact-main successful CI, a main-only staging environment restriction and a live main-ref
+freshness check; its provider/auth prerequisites must be established before dispatch.
 
 `wrangler.jsonc` directly bundles the application-owned Worker around `.open-next/worker.js` with
 native assets, Images and environment-specific R2 cache. It preserves the API/auth gateway,

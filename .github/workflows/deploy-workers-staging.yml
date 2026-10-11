@@ -1,0 +1,93 @@
+# Operator-only staging publication: one runner per deliberate dispatch, no push multiplier.
+# Uses existing main CI; it neither repeats that suite nor enters the backend release workflow.
+name: Deploy Workers staging
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+  packages: read
+
+concurrency:
+  group: docket-workers-staging
+  cancel-in-progress: false
+
+jobs:
+  deploy-staging:
+    if: ${{ github.repository == 'TheHypertextStudio/athena-web' && github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: staging
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Require successful ordinary CI for this main commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          validated="$(gh run list --repo "$GITHUB_REPOSITORY" --workflow ci.yml \
+            --branch main --commit "$GITHUB_SHA" --event push --limit 1 \
+            --json status,conclusion,headSha \
+            --jq '.[0] | select(.status == "completed" and .conclusion == "success") | .headSha')"
+          if [ "$validated" != "$GITHUB_SHA" ]; then
+            echo '::error::Ordinary main CI has not succeeded for this commit.'
+            exit 1
+          fi
+
+      - uses: ./.github/actions/setup
+
+      - name: Read public staging build inputs from Wrangler
+        run: |
+          node --input-type=module <<'NODE'
+          import { appendFileSync, readFileSync } from 'node:fs';
+          const { env: { staging: { vars } } } = JSON.parse(readFileSync('apps/web/wrangler.jsonc', 'utf8'));
+          if (vars.STUDIO_DEPLOYMENT_ENV !== 'staging') throw new Error('Expected staging configuration');
+          const inputs = {
+            NEXT_PUBLIC_APP_URL: vars.WEB_URL,
+            NEXT_PUBLIC_API_URL: vars.API_URL,
+            NEXT_PUBLIC_PASSKEY_RP_ID: vars.BETTER_AUTH_PASSKEY_RP_ID,
+            DOCS_MINTLIFY_ORIGIN: vars.DOCS_MINTLIFY_ORIGIN,
+            STUDIO_DEPLOYMENT_ENV: vars.STUDIO_DEPLOYMENT_ENV,
+          };
+          for (const [name, value] of Object.entries(inputs)) {
+            if (typeof value !== 'string' || !value || /[\r\n]/.test(value)) {
+              throw new Error(`Missing or invalid staging input: ${name}`);
+            }
+            appendFileSync(process.env.GITHUB_ENV, `${name}=${value}\n`);
+          }
+          NODE
+
+      - name: Build native Workers application and prerequisites
+        env:
+          NODE_ENV: production
+          TURBO_CACHE: local:rw
+        run: pnpm exec turbo run build:worker --filter=@docket/web --concurrency=1
+
+      - name: Require this commit to still be main
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          latest="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq '.object.sha')"
+          if [ "$latest" != "$GITHUB_SHA" ]; then
+            echo '::error::main moved after dispatch; refusing stale staging publication.'
+            exit 1
+          fi
+
+      - name: Deploy native OpenNext staging
+        env:
+          CLOUDFLARE_ACCOUNT_ID: '2500680a3b2b0fe6a011c1c25fed5008'
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_STAGING_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
+            echo '::error::A staging-scoped Cloudflare credential is required.'
+            exit 1
+          fi
+          pnpm --dir apps/web deploy:worker --env staging --env-file /dev/null

@@ -7,6 +7,17 @@
 
 ## Active Tasks
 
+### [WEBSITE-STANDARDIZATION-018] Prepare native manual Workers staging deployment
+
+- **Status**: COMPLETE (local source preparation; integration and dispatch remain held)
+- **Started**: 2026-10-11
+- **Plan**: Add one conventional staging-only manual GitHub job using the existing frozen pnpm setup, Turbo prerequisite graph, service-worker/OpenNext build and native OpenNext deploy. Require the owner repository, main branch, main-only protected staging environment, successful ordinary CI for the exact main SHA and a live main-ref check immediately before deployment.
+- **Files**: New staging workflow, its literal entry in the existing exact workflow inventory, one source Wrangler staging docs-origin value, current web setup docs and this log. Keep all backend/native publication workflows and the accepted lock unchanged.
+- **Boundaries**: Local source preparation only; no push, PR, main integration, provider/auth/backend operation, dependency installation or new/manual test. Google production baseline remains reauthentication-blocked. Provider environment protection, scoped credential and isolated backend/RP readiness must be verified before dispatch. No production option, custom release lifecycle, archive protocol, activation flag, test probe or keep-vars workaround.
+- **Validation**: Affected native Prettier, actionlint, existing static CI gate-policy CLI, fixture ESLint and diff checks passed. Static projection confirms that only the existing Mintlify upstream was added to staging vars; production settings, bindings, package/workspace/lock and backend CI/freshness/release/setup bytes are unchanged. Only the new literal workflow path and stale comment change in the existing exact inventory; no new cases/assertions or policy relaxation. No build or new/manual tests were run; normal commit hooks run at the local checkpoint. Pinned OpenNext CLI forwarding and Wrangler option source confirm that the final native deploy supports `--env-file /dev/null`; this suppresses default deployment dotenv files without changing the build input prerequisites.
+- **Authority and footprint**: Only `secrets.CLOUDFLARE_STAGING_API_TOKEN` maps to native `CLOUDFLARE_API_TOKEN` on the final step, with a missing-token guard and fixed Studio account ID. Pinned OpenNext 1.20.10 source confirms its native R2 helper otherwise enumerates accounts or falls back to login and can create a missing bucket; environment protection/resource/credential/isolation prerequisites must be accepted before dispatch. No push/PR trigger multiplier; one runner per deliberate manual dispatch, bounded at 30 minutes with local Turbo caching and reuse of ordinary CI evidence. Context7 quota was previously exhausted; installed pinned source and current official OpenNext/GitHub docs were inspected without retry.
+- **Retrospective**: Conventional Actions plus native deployment commands provide a reviewable staging operation without restoring the removed release framework. This source does not configure protection, create credentials/resources, reconcile backend auth or authorize production.
+
 ### [WEBSITE-STANDARDIZATION-017] Use native OpenNext deployment commands
 
 - **Status**: REVIEW (static checks passed; native preview/provider acceptance pending)

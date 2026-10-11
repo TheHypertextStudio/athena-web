@@ -107,9 +107,9 @@
     "wrangler": "4.148.0",
     "@docket/service-worker": "workspace:*",
     "@thehypertextstudio/web-config": "0.0.1",
-    "eslint": "10.9.1",
+    "eslint": "catalog:",
     "prettier": "3.9.6",
-    "typescript": "6.0.3"
+    "typescript": "catalog:"
   },
   "engines": {
     "node": ">=24 <25",

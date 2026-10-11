@@ -20,9 +20,9 @@
     "@playwright/test": "1.62.1",
     "@thehypertextstudio/web-config": "0.0.1",
     "@thehypertextstudio/web-docs": "0.0.1",
-    "eslint": "10.9.1",
+    "eslint": "catalog:",
     "mint": "4.2.854",
     "prettier": "3.9.6",
-    "typescript": "6.0.3"
+    "typescript": "catalog:"
   }
 }

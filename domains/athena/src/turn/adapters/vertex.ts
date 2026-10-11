@@ -52,7 +52,7 @@ export interface VertexTurnRequest {
       readonly functionDeclarations: readonly {
         readonly name: string;
         readonly description: string;
-        readonly parameters: Record<string, unknown>;
+        readonly parametersJsonSchema: Record<string, unknown>;
       }[];
     },
   ];
@@ -146,7 +146,8 @@ export function buildVertexTurnRequest(
               functionDeclarations: input.tools.map((tool) => ({
                 name: tool.name,
                 description: tool.description,
-                parameters: tool.inputSchema,
+                // Athena tools expose full JSON Schema, not Vertex's restricted Schema protobuf.
+                parametersJsonSchema: tool.inputSchema,
               })),
             },
           ] as const,

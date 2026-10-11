@@ -43,12 +43,39 @@ describe('Vertex turn adapter', () => {
             {
               name: 'review_result',
               description: 'Return the review decision.',
-              parameters: input.tools[0]?.inputSchema,
+              parametersJsonSchema: input.tools[0]?.inputSchema,
             },
           ],
         },
       ],
       generationConfig: { maxOutputTokens: 1_024, temperature: 0 },
+    });
+  });
+
+  it('sends referenced and discriminated tool schemas through the JSON Schema field', () => {
+    const schema = {
+      $schema: 'https://json-schema.org/draft/2020-12/schema',
+      type: 'object',
+      properties: { decision: { $ref: '#/$defs/decision' } },
+      $defs: {
+        decision: {
+          oneOf: [
+            { type: 'object', properties: { kind: { const: 'quiet' } } },
+            { type: 'object', properties: { kind: { const: 'actionable' } } },
+          ],
+        },
+      },
+      additionalProperties: false,
+      required: ['decision'],
+    };
+    const request = buildVertexTurnRequest({
+      ...input,
+      tools: [{ name: 'review_result', description: 'Return the decision.', inputSchema: schema }],
+    });
+    expect(request.tools?.[0].functionDeclarations[0]).toEqual({
+      name: 'review_result',
+      description: 'Return the decision.',
+      parametersJsonSchema: schema,
     });
   });
 

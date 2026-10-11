@@ -39,6 +39,18 @@
 - **Blockers for launch**: The same-account real-emulator listener → deployed ingress → durable triage → Lattice final-result correlation remains unverified. Existing listener acceptance and the successful production Lattice assessment are separate proofs. The retained `Medium_Phone_API_36.1` emulator installs the production-configured APK but fails to launch `studio.hypertext.docket.MainActivity` with “Activity class does not exist,” including after restart and cold boot. Package metadata lists that activity. Android Studio fallback also encountered a cached ASM transform failure during IDE sync and unavailable native window controls. Stopped the acceptance emulator without wiping its data; left unrelated emulators untouched. Android source remains clean, and earlier managed-emulator and physical-install evidence remains valid. Do not claim complete production readiness from the separate proofs. Vertex denial remains an independent limitation for accounts without Lattice; no billing, IAM, backend selection, or approval settings were changed.
 - **Retrospective**: Combining API receipts and pending references in the storage transaction makes a lost response recoverable. Review caught cross-family identity and resumed-context privacy failures that happy-path upload tests missed. Use isolated managed emulators for acceptance when a shared emulator is running other work; preserve the existing complexity ratchet through meaningful loop extractions. A persisted assistant turn alone was insufficient: the live Lattice response exposed malformed tool syntax and required a real relevance decision before acceptance. Stop environmental retries once restart and cold boot establish an emulator blocker; preserve passing source checks instead of restarting broad validation.
 
+### [WEBSITE-STANDARDIZATION-004] Prepare private package reads in existing CI
+
+- **Status**: REVIEW
+- **Started**: 2026-10-10
+- **Priority**: P2
+- **Description**: Authenticate existing pnpm 11 installs to the private Studio package registry with the owning repository's read-only GitHub Actions token.
+- **Plan**: Give only jobs that install the full consuming workspace package-read permission, including the existing production caller chain. Keep registry credentials in a temporary user configuration outside source, with a literal environment placeholder, restrictive file mode, and cleanup on exit. Preserve every existing provider permission and filtered nonconsumer job.
+- **Files to modify**: `.github/actions/setup/action.yml`; existing `ci.yml`, `e2e.yml`, `neon-branch.yml`, `deploy.yml`, and `deploy-main.yml` workflows; this work log.
+- **Validation**: Source review, actionlint on all five affected workflows, and `git diff --check` pass. No tests, installs, staging, or commits were run in this delegated slice. No triggers or jobs are added, so runner counts and existing cancellation behavior stay unchanged.
+- **Package access**: Authenticated Chrome Hypertext Studio readback confirms Actions Read for `TheHypertextStudio/athena-web` on all four private shared packages, while source `web-platform` Admin, private visibility, and inheritance remain unchanged. No credential was created or transferred.
+- **Gates**: Genuine product registry lock regeneration and hosted frozen install acceptance remain separate. No provider deployment or credential creation is authorized by this source change.
+
 ### [WEBSITE-STANDARDIZATION-003] Evaluate supported native Node Proxy compatibility
 
 - **Status**: IN_PROGRESS

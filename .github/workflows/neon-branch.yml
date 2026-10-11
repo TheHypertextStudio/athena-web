@@ -23,6 +23,9 @@ jobs:
         uses: tj-actions/branch-names@v9
 
   create_neon_branch:
+    permissions:
+      contents: read
+      packages: read
     name: Create Neon Branch
     outputs:
       db_url: ${{ steps.create_neon_branch.outputs.db_url }}

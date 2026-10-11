@@ -54,6 +54,9 @@ jobs:
   # 2.5GB one; web and admin ride together because both first build @docket/api (their lint script
   # does) and would otherwise duplicate that build across two runners.
   lint:
+    permissions:
+      contents: read
+      packages: read
     name: Lint (${{ matrix.group }})
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -82,6 +85,9 @@ jobs:
   # whole program in memory per package, so each runner still typechecks one at a time. 26 packages
   # in series took 319s.
   typecheck:
+    permissions:
+      contents: read
+      packages: read
     name: Types (${{ matrix.group }})
     runs-on: ubuntu-latest
     strategy:
@@ -130,6 +136,9 @@ jobs:
   # Scanning git *history* with the upstream binary remains a licensed follow-on; see
   # docs/engineering/ci-gating.md.
   secret-scan:
+    permissions:
+      contents: read
+      packages: read
     name: Secret scan
     runs-on: ubuntu-latest
     env:
@@ -175,6 +184,9 @@ jobs:
   # The job id stays `test`, so `release-ready.needs` and scripts/ci-gate-policy.ts's
   # ungated-check-job check keep working unchanged — a matrix multiplies the runs, not the id.
   test:
+    permissions:
+      contents: read
+      packages: read
     name: Test (${{ matrix.group }})
     runs-on: ubuntu-latest
     strategy:
@@ -256,6 +268,9 @@ jobs:
           fail_ci_if_error: false
 
   build:
+    permissions:
+      contents: read
+      packages: read
     name: Build
     runs-on: ubuntu-latest
     env:
@@ -285,6 +300,9 @@ jobs:
   # therefore cannot expose the production postgres-js text-decoding failure that blanked Project
   # details on 2026-08-24.
   core-screen-smoke:
+    permissions:
+      contents: read
+      packages: read
     name: Core screen acceptance
     needs: build
     runs-on: ubuntu-latest

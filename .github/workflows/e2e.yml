@@ -34,6 +34,9 @@ jobs:
   # of the four uploads were discarded. Building once and shipping the output as an artifact makes
   # the cost independent of the shard count.
   build:
+    permissions:
+      contents: read
+      packages: read
     name: Build the app
     runs-on: ubuntu-latest
     env:
@@ -80,6 +83,9 @@ jobs:
           retention-days: 1
 
   e2e:
+    permissions:
+      contents: read
+      packages: read
     name: E2E (${{ matrix.shard }}/${{ strategy.job-total }})
     needs: build
     runs-on: ubuntu-latest

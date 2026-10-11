@@ -31,4 +31,14 @@ runs:
     # `--frozen-lockfile` in every job, so CI can never resolve a dependency tree the lockfile
     # does not already describe.
     - shell: bash
-      run: pnpm install --frozen-lockfile ${{ inputs.filter }}
+      env:
+        NODE_AUTH_TOKEN: ${{ github.token }}
+      run: |
+        registry_config=$(mktemp "$RUNNER_TEMP/docket-registry.XXXXXX")
+        trap 'rm -f "$registry_config"' EXIT
+        chmod 600 "$registry_config"
+        # Keep the placeholder literal; pnpm expands it from trusted user config.
+        # shellcheck disable=SC2016
+        printf '%s\n' '//npm.pkg.github.com/:_authToken=${NODE_AUTH_TOKEN}' > "$registry_config"
+        export NPM_CONFIG_USERCONFIG="$registry_config"
+        pnpm install --frozen-lockfile ${{ inputs.filter }}

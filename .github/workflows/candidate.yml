@@ -1,0 +1,22 @@
+name: Build Docket website candidate
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  actions: read
+  packages: read
+  id-token: write
+
+jobs:
+  candidate:
+    # Activation deploys staging; isolated credentials/resources/auth must be reviewed first.
+    if: ${{ github.event_name == 'push' && github.repository == 'TheHypertextStudio/athena-web' && github.ref == 'refs/heads/main' && vars.STUDIO_WORKERS_CANDIDATES_ENABLED == 'true' }}
+    uses: TheHypertextStudio/release-engineering/.github/workflows/candidate.yml@878260def7229cd3df7f752b32e5581230c5db2d
+    with:
+      tooling_revision: 878260def7229cd3df7f752b32e5581230c5db2d
+      product_root: apps/web
+      runner: ubuntu-latest
+    secrets: inherit

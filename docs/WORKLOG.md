@@ -7,6 +7,19 @@
 
 ## Active Tasks
 
+### [WEBSITE-STANDARDIZATION-013] Prepare inactive isolated Workers staging and promotion wiring
+
+- **Status**: REVIEW (source/static validation passed; joint review and new native build/provider acceptance pending)
+- **Started**: 2026-10-11
+- **Priority**: P2
+- **Plan**: Use the exact published release-engineering v0.1.8 workflows and existing frontend-owned lifecycle. Add paired staging runtime bindings for proposed owned `https://docket-staging.hypertext.studio`, the observed existing staging API origin and matching new stage RP; retain no legacy RP/brief/local fallback. Declare retained modules/assets/cache, environment names and health URLs through the shared adapter. Keep candidate default-off and promotion literally false until a reviewed production bindings/protections/recovery change.
+- **Files**: `.github/workflows/candidate.yml`, `.github/workflows/promote.yml`, `apps/web/studio.yaml`, `apps/web/wrangler.jsonc`, `apps/web/wrangler.site.jsonc`, `apps/web/README.md`, the existing exact workflow-inventory fixture `repo-tests/ci/ci-gate-policy.test.ts`, and this log. Only the two new literal workflow paths were added to its existing sorted expectation; no cases or assertions were removed or added.
+- **Auth boundary**: Existing staging API availability is established by October 11 public config, but it advertises the Vercel RP. These proposed Worker vars do not mutate its server RP/origins/callbacks or data authority. Coordinate the synthetic-stage RP transition/recovery and disable competing Vercel-stage publication only after Cloudflare readiness. Browser auth already uses the actual browser origin and Proxy already reads request-local Worker host config; no client rewrite/backend DTO/new backend is part of this slice.
+- **Production boundary**: Production routes/backend/RP/brief values remain absent/unverified, failing503/no-store at runtime. The promotion job is guarded by literal false plus the ordinary owner/main/manual/activation conditions. Empty release channels are not a gate for static sites. No production default, secret value or managed credential reference is invented.
+- **Evidence gates**: Staging journeys, staging auth/data isolation, retained provider runtime/cache/Images/startup/CPU/streaming/private-cache acceptance, verified production configuration, complete prior deployment/routing recovery and intended public identity must accompany digest-bound promotion review. Local native shipping evidence and green ordinary CI do not establish a signed admitted artifact or provider acceptance.
+- **Authority**: Caller setup retains the native ephemeral GitHub token/private-registry userconfig and callee permissions, with existing `secrets: inherit` handling. Candidate activation is a real staging provider write; verify exact environment-scoped credentials, isolated R2 object access and domain/resource authority first. No credentials, variables, environments/protections, resources or provider settings are created here; metadata-only Google WIF inspection is a separate next slice.
+- **Validation**: Affected native Prettier passed; actionlint passed both new callers; the existing static CI gate-policy CLI passed without gate changes; the existing strict source/prebuilt configuration guard passed; the actual published v0.1.8 declaration loader accepted the frontend policy; native web `tsc --noEmit` passed; `git diff --check` passed. Installed binaries ran directly under verified Node 24.20.0, with no dependency installation. These are static checks, not provider/resource/schema or signed-candidate acceptance. No tests or new native build ran, and no install, lock/engine changes, provider dispatch, commit or push occurred. Stopped for joint review before the next native build.
+
 ### [WEBSITE-STANDARDIZATION-012] Bound shipping Worker compile inputs before Turbo
 
 - **Status**: REVIEW (shipping source/build checks passed; runtime/provider acceptance open)

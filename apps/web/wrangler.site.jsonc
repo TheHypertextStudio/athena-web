@@ -57,8 +57,17 @@
         }
       ],
       "vars": {
-        "STUDIO_DEPLOYMENT_ENV": "staging"
-      }
+        "STUDIO_DEPLOYMENT_ENV": "staging",
+        "WEB_URL": "https://docket-staging.hypertext.studio",
+        "API_URL": "https://docket-api-staging-mdchlo736a-uc.a.run.app",
+        "BETTER_AUTH_PASSKEY_RP_ID": "docket-staging.hypertext.studio"
+      },
+      "routes": [
+        {
+          "pattern": "docket-staging.hypertext.studio",
+          "custom_domain": true
+        }
+      ]
     },
     "production": {
       "name": "docket-web-production",
@@ -85,7 +94,8 @@
       ],
       "vars": {
         "STUDIO_DEPLOYMENT_ENV": "production"
-      }
+      },
+      "routes": []
     }
   },
   "no_bundle": true,

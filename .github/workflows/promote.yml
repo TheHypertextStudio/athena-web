@@ -1,0 +1,39 @@
+name: Promote reviewed Docket website candidate
+
+on:
+  workflow_dispatch:
+    inputs:
+      candidate_id:
+        description: Exact candidate run ID and attempt (run-id-attempt)
+        type: string
+        required: true
+      manifest_sha256:
+        description: Reviewed candidate.json SHA-256
+        type: string
+        required: true
+      evidence:
+        description: Digest-bound review JSON with your GitHub login and required evidence URLs
+        type: string
+        required: true
+
+permissions:
+  contents: write
+  actions: read
+  packages: write
+  id-token: write
+
+jobs:
+  promote:
+    # Remove false only with reviewed production bindings, protections and recovery evidence.
+    # The shared production job promotes static sites even when release.channels is empty.
+    if: ${{ false && github.event_name == 'workflow_dispatch' && github.repository == 'TheHypertextStudio/athena-web' && github.ref == 'refs/heads/main' && vars.STUDIO_WORKERS_PROMOTION_ENABLED == 'true' }}
+    uses: TheHypertextStudio/release-engineering/.github/workflows/promote.yml@878260def7229cd3df7f752b32e5581230c5db2d
+    with:
+      tooling_revision: 878260def7229cd3df7f752b32e5581230c5db2d
+      product_root: apps/web
+      runner: ubuntu-latest
+      release_action: promote
+      candidate_id: ${{ inputs.candidate_id }}
+      manifest_sha256: ${{ inputs.manifest_sha256 }}
+      evidence: ${{ inputs.evidence }}
+    secrets: inherit

@@ -375,6 +375,8 @@ describe('the real workflows', () => {
       // Builds the deploy images. ci.yml invokes it with no `needs` so it overlaps the gates;
       // it runs no tests or checks, so it is not a gate and holds nothing back.
       '.github/workflows/build-images.yml',
+      // Shared website lifecycle callers remain inactive and do not alter the API release gate.
+      '.github/workflows/candidate.yml',
       '.github/workflows/ci.yml',
       '.github/workflows/deploy-main.yml',
       '.github/workflows/deploy.yml',
@@ -387,6 +389,7 @@ describe('the real workflows', () => {
       '.github/workflows/lattice-acceptance-audit.yml',
       '.github/workflows/lattice-staging-hygiene.yml',
       '.github/workflows/neon-branch.yml',
+      '.github/workflows/promote.yml',
       // Runs after the release, never before it: Vercel promotes the web build only once
       // deploy.yml's API check passes, so the documentation site it probes does not exist at
       // gate time. It carries no gating command token, so the ungated-check-job rule does not
@@ -518,9 +521,7 @@ describe('the real workflows', () => {
     const test = ci?.jobs.find((job) => job.id === 'test');
     const commands = (test?.steps ?? []).flatMap((step) => (step.run ? [step.run] : []));
 
-    expect(commands.some((command) => command.startsWith('pnpm turbo run test:coverage'))).toBe(
-      true,
-    );
+    expect(commands.some((run) => run.startsWith('pnpm turbo run test:coverage'))).toBe(true);
     expect(commands.some((command) => /^pnpm turbo run test(?:\s|$)/.test(command))).toBe(false);
     expect(test?.steps.every((step) => !step.continueOnError)).toBe(true);
   });

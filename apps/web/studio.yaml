@@ -22,10 +22,31 @@ components:
     build:
       script: build:worker:shipping
       output: .artifact
-# Candidate publication remains disabled until supported native Proxy/runtime acceptance,
-# registry installation, scoped shared workflow publication and provider gates are satisfied.
+    deploy:
+      provider: workers
+      account_id: '2500680a3b2b0fe6a011c1c25fed5008'
+      config: wrangler.site.jsonc
+      entrypoint: worker.js
+      assets: .open-next/assets
+      opennext_cache:
+        directory: .open-next/cache
+      environments:
+        staging: staging
+        production: production
+      health_urls:
+        staging: https://docket-staging.hypertext.studio/__studio/release
+        production: https://clearthedocket.com/__studio/release
+# Proposed resources are not provisioned. Candidate activation remains default-off;
+# promotion has a literal false guard until production bindings and recovery are reviewed.
+# Empty channels do not disable static-site provider operations in the shared engine.
 release:
   channels: []
   next_version: 0.1.0
   required_checks: [Frontend typecheck and lint, Frontend compatibility, Mintlify source]
-  required_evidence: []
+  required_evidence:
+    - staging-journeys
+    - staging-auth-isolation
+    - workers-runtime
+    - production-configuration
+    - production-recovery
+    - public-identity

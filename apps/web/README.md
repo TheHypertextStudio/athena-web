@@ -99,9 +99,9 @@ authentication, private-cache, isolated backend/resource and provider acceptance
 the retained flat modules and is available before build for binding snapshots. Both are strict JSON,
 enforced by the scoped formatter; assembly rejects provider/configuration drift and copies the
 prebuilt source bytes unchanged. Shared v0.1.8 owns eventual provider deployment and cache seeding.
-Publication channels, deployment declarations and callers remain inactive. The declared account ID
-and Wrangler 4.148.0 pin record verified ownership/tooling, not resource existence or deployment
-readiness. No frontend secret binding is introduced by this runtime metadata contract.
+The deployment declaration and callers are prepared but inactive as described below. The declared
+account ID and Wrangler 4.148.0 pin record verified ownership/tooling, not resource existence or
+deployment readiness. No frontend secret binding is introduced by this runtime metadata contract.
 
 Shared packages 0.0.1 are published. The canonical lock was adopted from the independently
 reviewed native registry/frozen/strict-peer run 38124448126; current source/build checks retain
@@ -111,3 +111,90 @@ until all acceptance and observation gates pass.
 
 See [Workers compatibility and recovery](../../docs/engineering/workers-compatibility.md) for the
 observed native rejection, remaining dependency choices and provider acceptance gates.
+
+## Inactive Workers staging and promotion wiring
+
+`studio.yaml` uses the published shared Workers adapter, scoped to `apps/web`, with prebuilt
+`wrangler.site.jsonc`, `worker.js`, `.open-next/assets` and retained `.open-next/cache`. It retains
+release-engineering v0.1.8 at `878260def7229cd3df7f752b32e5581230c5db2d`; the caller pins,
+`studio.lock.json`, framework/dependency locks and shipping compile identity stay aligned.
+
+The paired source/prebuilt configs propose the isolated `docket-web-staging` Worker,
+`docket-web-staging-cache` R2 bucket and custom domain `docket-staging.hypertext.studio`. They do
+not provision those resources. Its explicit nonsecret runtime bindings are:
+
+| Binding                     | Proposed staging value                               |
+| --------------------------- | ---------------------------------------------------- |
+| `STUDIO_DEPLOYMENT_ENV`     | `staging`                                            |
+| `WEB_URL`                   | `https://docket-staging.hypertext.studio`            |
+| `API_URL`                   | `https://docket-api-staging-mdchlo736a-uc.a.run.app` |
+| `BETTER_AUTH_PASSKEY_RP_ID` | `docket-staging.hypertext.studio`                    |
+
+Staging declares no legacy RP, default brief host or local acceptance opt-in. The existing isolated
+API returned public configuration with `APP_MODE=staging` on October 11; it still advertises RP
+`docket-staging-gilt.vercel.app`. These frontend bindings do not change server auth options or
+allowlists. Before activation, review the existing staging API's nonsecret `WEB_URL`, trusted
+origins, allowed hosts, RP, cookie scope, enabled OAuth callback registrations and URL-bound
+Lattice client identity. Preserve its isolated data/secret references. Reconcile the observed API
+alias with its canonical API callback origin; do not point staging at production. The client already
+uses the browser origin for auth and request-local Worker config for host classification, so no
+new client auth factory or staging build is needed.
+
+Coordinate the synthetic-stage RP transition from the Vercel hostname; preserve existing accounts
+and prior configuration, prepare recovery, and disable competing Vercel-stage publication/reuse
+only after the Cloudflare frontend is ready. Do not assume old Vercel-stage passkeys work under the
+new RP. Lattice metadata moves to `https://docket-staging.hypertext.studio/.well-known/lattice-client.json`
+while its callback remains the existing canonical staging API's
+`/internal/integrations/lattice/callback`. Same-origin auth preserves native cookies; inspect any
+existing cookie Domain instead of widening cookie scope across company/Cloud Run/Vercel domains.
+
+Root `.github/workflows/candidate.yml` accepts only owner-repository pushes to `main` and requires
+`STUDIO_WORKERS_CANDIDATES_ENABLED` to equal `true`; absent/false skips it. Activation performs
+real staging cache writes, upload and health probes, not only a build. No activation variable,
+credential, environment protection or provider resource is created here. Before enabling it,
+verify the shared `staging` GitHub environment, branch restrictions, native package-read grants,
+actual isolated resources/domain, API/auth reconciliation and credential scope. Existing Vercel
+staging environment names and empty variables do not configure this shared environment.
+
+Both callers use v0.1.8's supported `secrets: inherit` interface. Its jobs use the native ephemeral
+`github.token` as `NODE_AUTH_TOKEN` and prepare the trusted GitHub Packages userconfig; do not add a
+classic PAT, plaintext credential or another installer. Candidate permissions are contents write,
+actions read, packages read and ID token write; promotion uses the callee's required packages write
+permission. Google WIF, when declared, federates Google access, not Cloudflare deployment auth.
+Before activation verify environment-scoped credential selection; the shared existing repository
+`CLOUDFLARE_API_TOKEN` fallback must not silently grant staging production authority. No managed
+secret reference is invented. Worker upload, isolated R2 object put/get, resource creation and zone
+custom-domain attachment require separately reviewed authority.
+
+Root `.github/workflows/promote.yml` retains a literal `false &&` before the normal manual-event,
+owner-repository, `main` and `STUDIO_WORKERS_PROMOTION_ENABLED` guard. Remove the literal false only
+in a reviewed source change supplying verified production bindings, environment protections and
+complete recovery evidence. Production currently has no backend/RP/brief-host runtime bindings or
+routes; ordinary requests fail503/no-store. Its canonical health URL is a future declaration, not
+an assertion that current Vercel serves the release marker. **Empty `release.channels` does not
+disable static-site deployment or promotion** in this engine; it is not a security gate. Do not
+activate an incomplete production configuration or add a guessed brief host.
+
+A later admitted candidate must retain exact source, policy, config, ZIP and artifact digests;
+staging and promotion consume the same modules/assets/BUILD_ID without rebuilding. Changes to
+these signed config inputs require a new admitted candidate, not a patched old archive. Inspect
+`candidate.json` and attach digest-bound review URLs for every declared promotion gate:
+
+- `staging-journeys`: existing critical authenticated/public/docs/MCP/Publishing journeys on the
+  actual staging host, with synthetic accounts and preserved assertions.
+- `staging-auth-isolation`: actual API/data/secret authority, server RP/options, forwarded host,
+  session/cookie, OAuth/Lattice callback and recovery acceptance for this frontend.
+- `workers-runtime`: retained cache byte/BUILD_ID readback, real Images, upload/startup/CPU,
+  streaming/abort and private-viewer/logout cache acceptance on the provider plan.
+- `production-configuration`: reviewed production API/RP/brief-host, resource/domain identities,
+  environment protections and credential scopes; no inherited staging destinations.
+- `production-recovery`: complete current Vercel deployment/aliases and applicable Worker
+  archive/config/version/routes/domains, coordinated publisher order and reviewed restoration.
+- `public-identity`: unchanged intended canonical/brand/docs/association identity in these bytes.
+
+Promotion dispatch binds the exact candidate run/attempt, `candidate.json` SHA-256, reviewer login
+and required evidence URLs. The shared workflow validates provenance and deploys the reviewed
+archive without rebuilding. Retain previous staging API/frontend configuration for a failed RP
+transition and the previous production deployment for eventual cutover recovery. Default-branch
+integration, activation, provider acceptance and production cutover remain separate actions;
+ordinary Node/Vercel, backend/native publishers and Mintlify setup are unchanged by these callers.

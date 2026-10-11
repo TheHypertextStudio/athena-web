@@ -32,7 +32,12 @@ import { SETTINGS_NODES } from '@/components/settings/settings-capabilities';
 import { useCanManageOrg } from '@/components/settings/use-can-manage-org';
 import { apiQueryOptions, queryKeys, useApiQuery } from '@/lib/query';
 
-import { DefaultAddressRow, DomainRow } from './address-rows';
+import { DomainRow } from './address-rows';
+import {
+  PublishingDefaultAddress,
+  useWorkersPublishingMetadata,
+  type PublishingRuntimeMetadata,
+} from './publishing-runtime-metadata';
 import {
   useAddDomainMutation,
   usePublicationsQuery,
@@ -45,13 +50,17 @@ export interface PublishingSettingsProps {
   readonly orgId: string;
 }
 
+interface PublishingBodyProps extends PublishingSettingsProps {
+  readonly metadata: PublishingRuntimeMetadata;
+}
+
 /**
  * The publishing settings section.
  *
  * @param props - The {@link PublishingSettingsProps}.
  * @returns The rendered section.
  */
-export function PublishingSettings({ orgId }: PublishingSettingsProps): JSX.Element {
+function PublishingSettingsBody({ orgId, metadata }: PublishingBodyProps): JSX.Element {
   const { canManage, loading: permissionLoading } = useCanManageOrg(orgId);
   const orgQ = useApiQuery(
     apiQueryOptions(
@@ -95,8 +104,7 @@ export function PublishingSettings({ orgId }: PublishingSettingsProps): JSX.Elem
   // `Primary` answers "which of these?", so it appears only where there is more than one address to
   // choose between. A deployment with no shared brief host has no default address at all, so the
   // default row cannot hold the mark even when it is the only row.
-  const defaultReachable =
-    env.NEXT_PUBLIC_BRIEF_HOST !== undefined && orgQ.data?.slug !== undefined;
+  const defaultReachable = metadata.briefHost !== undefined && orgQ.data?.slug !== undefined;
   const marksPrimary = domains.length > 0;
 
   const submitDomain = (event: SyntheticEvent<HTMLFormElement>): void => {
@@ -160,10 +168,10 @@ export function PublishingSettings({ orgId }: PublishingSettingsProps): JSX.Elem
         ) : null}
 
         <ul className="flex flex-col gap-2">
-          <DefaultAddressRow
+          <PublishingDefaultAddress
             orgId={orgId}
             slug={orgQ.data?.slug}
-            briefHost={env.NEXT_PUBLIC_BRIEF_HOST}
+            metadata={metadata}
             primary={marksPrimary && defaultReachable && primaryDomain === undefined}
             canManage={canManage}
           />
@@ -229,5 +237,20 @@ export function PublishingSettings({ orgId }: PublishingSettingsProps): JSX.Elem
         )}
       </SettingsSubsection>
     </SettingsSectionPage>
+  );
+}
+
+/** Subscribe to runtime metadata only in the Workers mounting path. */
+function WorkerPublishingSettings(props: PublishingSettingsProps): JSX.Element {
+  const metadata = useWorkersPublishingMetadata();
+  return <PublishingSettingsBody {...props} metadata={metadata} />;
+}
+
+/** Render publishing settings while preserving the legacy Node configuration boundary. */
+export function PublishingSettings(props: PublishingSettingsProps): JSX.Element {
+  return process.env.DOCKET_RUNTIME_TARGET === 'workers' ? (
+    <WorkerPublishingSettings {...props} />
+  ) : (
+    <PublishingSettingsBody {...props} metadata={{ briefHost: env.NEXT_PUBLIC_BRIEF_HOST }} />
   );
 }

@@ -91,10 +91,65 @@ export interface DefaultAddressRowProps {
   readonly slug: string | undefined;
   /** The shared host published pages answer on, when this deployment has one. */
   readonly briefHost: string | undefined;
+  /** Unknown runtime metadata is distinct from a confirmed missing default host. */
+  readonly availability?: 'loading' | 'error' | undefined;
   /** Whether visitors currently land here (i.e. no custom domain has taken over). */
   readonly primary: boolean;
   /** Whether the caller may rename it. */
   readonly canManage: boolean;
+}
+
+/** Render only read-only address state; the row keeps ownership of rename controls. */
+function DefaultAddressLabel({
+  address,
+  url,
+  briefHost,
+  availability,
+}: Pick<DefaultAddressRowProps, 'briefHost' | 'availability'> & {
+  readonly address: string | undefined;
+  readonly url: string | undefined;
+}): JSX.Element {
+  if (availability !== undefined) {
+    return (
+      <span className="min-w-0 flex-1 truncate">
+        <Text as="span" token="body-medium" tone="muted" truncate>
+          {availability === 'loading' ? 'Loading default address…' : 'Default address unavailable.'}
+        </Text>
+      </span>
+    );
+  }
+  return (
+    <span className="min-w-0 flex-1 truncate">
+      {url !== undefined ? (
+        <Text as="span" token="body-medium" truncate>
+          <a href={url} target="_blank" rel="noreferrer" className="underline underline-offset-2">
+            {address}
+          </a>
+        </Text>
+      ) : briefHost === undefined ? (
+        // No shared host at all — the identity slug alone (e.g. `lvbt`) is an internal key,
+        // not a URL, so it never stands in for one here even inertly. Application-owned
+        // copy only: no mention of "deployment", env vars, or any other internal detail.
+        <Text as="span" token="body-medium" tone="muted" truncate>
+          No default address available yet
+        </Text>
+      ) : (
+        <Text as="span" token="body-medium" truncate>
+          {address ?? ''}
+        </Text>
+      )}
+    </span>
+  );
+}
+
+/** Unknown metadata must not claim the address was checked and is unreachable. */
+function defaultAddressBadge(
+  url: string | undefined,
+  availability: DefaultAddressRowProps['availability'],
+): string {
+  if (availability === 'loading') return 'Loading';
+  if (availability === 'error') return 'Unavailable';
+  return url === undefined ? 'Not reachable' : 'Default';
 }
 
 /**
@@ -113,6 +168,7 @@ export function DefaultAddressRow({
   orgId,
   slug,
   briefHost,
+  availability,
   primary,
   canManage,
 }: DefaultAddressRowProps): JSX.Element {
@@ -161,35 +217,16 @@ export function DefaultAddressRow({
             />
           </div>
         ) : (
-          <span className="min-w-0 flex-1 truncate">
-            {url !== undefined ? (
-              <Text as="span" token="body-medium" truncate>
-                <a
-                  href={url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="underline underline-offset-2"
-                >
-                  {address}
-                </a>
-              </Text>
-            ) : briefHost === undefined ? (
-              // No shared host at all — the identity slug alone (e.g. `lvbt`) is an internal key,
-              // not a URL, so it never stands in for one here even inertly. Application-owned
-              // copy only: no mention of "deployment", env vars, or any other internal detail.
-              <Text as="span" token="body-medium" tone="muted" truncate>
-                No default address available yet
-              </Text>
-            ) : (
-              <Text as="span" token="body-medium" truncate>
-                {address ?? ''}
-              </Text>
-            )}
-          </span>
+          <DefaultAddressLabel
+            address={address}
+            url={url}
+            briefHost={briefHost}
+            availability={availability}
+          />
         )}
 
         <Badge variant="secondary" className="shrink-0">
-          {url === undefined ? 'Not reachable' : 'Default'}
+          {defaultAddressBadge(url, availability)}
         </Badge>
         {primary ? <PrimaryBadge /> : null}
 

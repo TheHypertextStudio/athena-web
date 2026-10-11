@@ -48,6 +48,12 @@ import { userErrorMessage } from '@/lib/problem';
 import { apiQueryOptions, queryKeys, useApiQuery } from '@/lib/query';
 
 import {
+  publishingAddressPrefix,
+  useWorkersPublishingMetadata,
+  type PublishingRuntimeMetadata,
+} from './publishing-runtime-metadata';
+
+import {
   usePublicationState,
   usePublishMutation,
   useWithdrawMutation,
@@ -127,14 +133,15 @@ export function publicationDialogDescription(
  * @param props - The {@link PublishActionProps}.
  * @returns The control, or `null` when the caller cannot publish.
  */
-export function PublishAction({
+function PublishActionContent({
   orgId,
   subjectKind,
   subjectId,
   title,
   noun,
   canPublish,
-}: PublishActionProps): JSX.Element | null {
+  metadata,
+}: PublishActionProps & { readonly metadata: PublishingRuntimeMetadata }): JSX.Element | null {
   const [open, setOpen] = useState(false);
   const [dialogGeneration, setDialogGeneration] = useState(0);
   const initializedGeneration = useRef<number | null>(null);
@@ -192,12 +199,7 @@ export function PublishAction({
   // The full prefix a record's own slug sits under: the shared brief host plus the workspace's
   // own identity slug. `undefined` only when this deployment has no shared brief host configured
   // at all — never a fabricated domain.
-  const briefHost = env.NEXT_PUBLIC_BRIEF_HOST;
-  const workspaceSlug = orgQ.data?.slug;
-  const prefix =
-    briefHost !== undefined && workspaceSlug !== undefined
-      ? `${briefHost}/${workspaceSlug}/`
-      : undefined;
+  const prefix = publishingAddressPrefix(metadata.briefHost, orgQ.data?.slug);
 
   return (
     <>
@@ -259,6 +261,7 @@ export function PublishAction({
                   setSlug(event.target.value);
                 }}
               />
+              {metadata.notice}
             </Field>
 
             {dialogState === 'loading' || dialogState === 'error' ? null : live ? (
@@ -355,5 +358,20 @@ export function PublishAction({
         </DialogContent>
       </Dialog>
     </>
+  );
+}
+
+/** Subscribe to default-host metadata without changing the Node hook/mounting contract. */
+function WorkerPublishAction(props: PublishActionProps): JSX.Element {
+  const metadata = useWorkersPublishingMetadata();
+  return <PublishActionContent {...props} metadata={metadata} />;
+}
+
+/** Render the publish control with environment-local default-host metadata. */
+export function PublishAction(props: PublishActionProps): JSX.Element {
+  return process.env.DOCKET_RUNTIME_TARGET === 'workers' ? (
+    <WorkerPublishAction {...props} />
+  ) : (
+    <PublishActionContent {...props} metadata={{ briefHost: env.NEXT_PUBLIC_BRIEF_HOST }} />
   );
 }

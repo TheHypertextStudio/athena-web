@@ -1,9 +1,13 @@
 'use client';
 
-import type { JSX } from 'react';
+import { useSyncExternalStore, type JSX } from 'react';
+import { Button, Surface, Text } from '@docket/ui/primitives';
 import type { McpAppPresentation } from '@docket/integrations/mcp-apps-contract';
 import type { McpAppResource } from '@docket/integrations/mcp-apps';
 
+import { usePublicConfig } from '@/lib/public-config';
+
+import { workerSandboxOrigin } from './mcp-app-sandbox-origin';
 import { McpAppView } from '@/components/athena/mcp-app-view';
 import { callMcpAppViewTool, postWidgetModelContext } from '@/lib/athena/mcp-app-defs';
 
@@ -54,13 +58,16 @@ function snapshotResource(presentation: McpAppPresentation): McpAppResource {
  * work-log and the chat thread) so the snapshot→view translation and the brokered `onCallTool`
  * wiring exist exactly once.
  */
-export function McpAppPresentationCard({
+function PresentationCardContent({
   presentation,
   activityId,
   onMessage,
-}: McpAppPresentationCardProps): JSX.Element {
+  sandboxOrigin,
+}: McpAppPresentationCardProps & { readonly sandboxOrigin?: string }): JSX.Element {
   return (
     <McpAppView
+      key={sandboxOrigin}
+      {...(sandboxOrigin === undefined ? {} : { sandboxOrigin })}
       instanceId={`${presentation.connectionId}:${activityId}`}
       resource={snapshotResource(presentation)}
       tool={{ name: presentation.tool, arguments: presentation.arguments }}
@@ -83,5 +90,67 @@ export function McpAppPresentationCard({
       }
       {...(onMessage ? { onMessage } : {})}
     />
+  );
+}
+
+/** This origin cannot change within a mounted document; hydration must first match SSR. */
+function subscribeBrowserOrigin(): () => void {
+  return () => undefined;
+}
+function browserOriginSnapshot(): string {
+  return window.location.origin;
+}
+function serverOriginSnapshot(): undefined {
+  return undefined;
+}
+
+/** Keep query and browser-only metadata outside the legacy pure mounting path. */
+function WorkerPresentationCard(props: McpAppPresentationCardProps): JSX.Element {
+  const config = usePublicConfig();
+  const browserOrigin = useSyncExternalStore(
+    subscribeBrowserOrigin,
+    browserOriginSnapshot,
+    serverOriginSnapshot,
+  );
+  const origin =
+    browserOrigin === undefined
+      ? undefined
+      : workerSandboxOrigin(config.data?.sandboxOrigin, browserOrigin);
+  if (config.isPending || browserOrigin === undefined) {
+    return (
+      <Surface tone="canvas" shape="medium" pad="roomy">
+        <Text token="body-small" tone="muted">
+          Loading interactive view…
+        </Text>
+      </Surface>
+    );
+  }
+  if (config.isError || origin === undefined) {
+    return (
+      <Surface tone="canvas" shape="medium" pad="roomy">
+        <Text token="body-small" tone="muted">
+          Interactive view unavailable.
+        </Text>
+        <Button
+          type="button"
+          variant="ghost"
+          onClick={() => {
+            void config.refetch();
+          }}
+        >
+          Try again
+        </Button>
+      </Surface>
+    );
+  }
+  return <PresentationCardContent key={origin} {...props} sandboxOrigin={origin} />;
+}
+
+/** Render a persisted MCP card using its deployment's sandbox boundary. */
+export function McpAppPresentationCard(props: McpAppPresentationCardProps): JSX.Element {
+  return process.env.DOCKET_RUNTIME_TARGET === 'workers' ? (
+    <WorkerPresentationCard {...props} />
+  ) : (
+    <PresentationCardContent {...props} />
   );
 }

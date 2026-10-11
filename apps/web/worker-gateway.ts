@@ -1,4 +1,6 @@
 import { cspHeader, securityHeaders } from './src/lib/response-security';
+import { overlayWorkerPublicConfig, stripConfigPreconditions } from './worker-public-config';
+import { transportHeaders } from './worker-transport';
 import { isWorkerApplicationHost, type WorkerRuntimeConfig } from './worker-runtime-config';
 
 /** Existing canonicalization runs before API forwarding; AASA retains its legacy-host exception. */
@@ -53,26 +55,6 @@ export function trustedWorkerRequest(request: Request, config: WorkerRuntimeConf
   return new Request(request, { headers });
 }
 
-/** Strip hop-by-hop transport headers without flattening repeated cookies or buffering a body. */
-function transportHeaders(source: Headers): Headers {
-  const headers = new Headers(source);
-  const connection = headers.get('connection');
-  for (const name of connection?.split(',') ?? []) headers.delete(name.trim());
-  for (const name of [
-    'connection',
-    'keep-alive',
-    'proxy-authenticate',
-    'proxy-authorization',
-    'te',
-    'trailer',
-    'transfer-encoding',
-    'upgrade',
-  ]) {
-    headers.delete(name);
-  }
-  return headers;
-}
-
 /** Preserve Next's existing frontend security policy without buffering the API body or cookies. */
 function frontendResponse(response: Response, pathname: string): Response {
   const headers = transportHeaders(response.headers);
@@ -101,6 +83,11 @@ export async function forwardWorkerApi(
   upstream.search = publicUrl.search;
   const headers = transportHeaders(request.headers);
   headers.set('host', upstream.host);
+  const overlayConfig =
+    request.method === 'GET' &&
+    publicUrl.pathname === '/v1/config' &&
+    isWorkerApplicationHost(publicUrl.hostname, config);
+  if (overlayConfig) stripConfigPreconditions(headers);
   const forwarded = new Request(upstream, {
     method: request.method,
     headers,
@@ -108,5 +95,9 @@ export async function forwardWorkerApi(
     signal: request.signal,
     redirect: 'manual',
   });
-  return frontendResponse(await fetch(forwarded), publicUrl.pathname);
+  const response = await fetch(forwarded);
+  return frontendResponse(
+    overlayConfig ? await overlayWorkerPublicConfig(response, config) : response,
+    publicUrl.pathname,
+  );
 }

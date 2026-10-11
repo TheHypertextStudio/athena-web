@@ -45,9 +45,25 @@ bindings: `API_URL`, `WEB_URL`, `BETTER_AUTH_PASSKEY_RP_ID`, `STUDIO_DEPLOYMENT_
 `PUBLIC_BRIEF_HOST` / `BETTER_AUTH_PASSKEY_LEGACY_RP_ID` metadata. Production requires the brief
 host. These are validated per request and read through native OpenNext request context in Proxy
 and brief SSR; missing or invalid Worker routing returns unavailable instead of falling back to
-production. Do not guess provider hosts or resources. Runtime routing does not change the remaining
-compiled `NEXT_PUBLIC_*` client/brand/Publishing/MCP inputs; their isolation is the next source
-slice, so the current local artifact is not an approved immutable shipping candidate.
+production. Do not guess provider hosts or resources. Public build identity still controls static
+brand/SEO construction; runtime bindings do not rewrite compiled values or approve a shipping
+candidate. Worker client request metadata uses the existing public-config boundary below.
+
+For recognized application hosts, only exact `GET /v1/config` adds the validated runtime
+`apiOrigin`, `sandboxOrigin` (the API origin hosting `/mcp/apps/sandbox`) and nullable `briefHost` to
+a real backend config. The app-local schema retains backend fields, capabilities and RP metadata.
+The frozen Workers query requires all three additions; Node/Vercel keeps the raw backend RPC
+fetcher and existing consumer behavior, with no backend DTO or Node endpoint change. The existing
+query key and `STALE.static` in-memory policy are unchanged; HTTP no-store controls the wire/cache
+contract.
+
+This exact GET requests an unconditional full response and permits only a body-bearing 200 JSON
+config, capped at 16 KiB decoded input and serialized UTF-8 output. Invalid/unexpected success or
+304 returns safe 502/no-store; backend errors and supported redirects retain their bodies.
+Transformed responses remove body validators, encoded/range metadata and CDN cache overrides,
+then set no-store. Ordinary API methods/paths retain streaming and conditional caching; native
+cookies, manual redirects, query strings, cancellation and existing security remain preserved by
+the gateway. Source validation and retained runtime/provider acceptance are separate gates.
 
 The existing `scripts/prepare-worker-acceptance.ts` generates a separate local-only config from
 explicit `docket.localhost` and `api.docket.localhost` origins and requires the exact local brief
@@ -68,7 +84,9 @@ authentication, private-cache, isolated backend/resource and provider acceptance
 the retained flat modules and is available before build for binding snapshots. Both are strict JSON,
 enforced by the scoped formatter; assembly rejects provider/configuration drift and copies the
 prebuilt source bytes unchanged. Shared v0.1.8 owns eventual provider deployment and cache seeding.
-Publication channels, deployment declarations and callers remain inactive.
+Publication channels, deployment declarations and callers remain inactive. The declared account ID
+and Wrangler 4.148.0 pin record verified ownership/tooling, not resource existence or deployment
+readiness. No frontend secret binding is introduced by this runtime metadata contract.
 
 Shared packages 0.0.1 are published. The canonical lock was adopted from the independently
 reviewed native registry/frozen/strict-peer run 38124448126; current source/build checks retain

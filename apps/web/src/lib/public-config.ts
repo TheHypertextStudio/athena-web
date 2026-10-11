@@ -18,7 +18,32 @@ import type { UseQueryResult } from '@tanstack/react-query';
 
 import { socialProviderForConnector } from '@/lib/connector-identity';
 import { api } from '@/lib/api';
-import { STALE, apiQueryOptions, queryKeys, useApiQuery } from '@/lib/query';
+import {
+  WorkersPublicConfigOut,
+  type ClientPublicConfig,
+} from '@/lib/client-public-config-contract';
+import {
+  STALE,
+  apiQueryOptions,
+  queryKeys,
+  rpcErrorResponse,
+  useApiQuery,
+  type RpcResponse,
+} from '@/lib/query';
+
+export type { ClientPublicConfig } from '@/lib/client-public-config-contract';
+
+/** Keep successful Workers schema decoding inside the existing RPC/query error boundary. */
+async function fetchWorkerPublicConfig(): Promise<RpcResponse<ClientPublicConfig>> {
+  const response = await api.v1.config.$get();
+  if (!response.ok) return rpcErrorResponse<ClientPublicConfig>(response);
+  return {
+    ok: response.ok,
+    status: response.status,
+    url: response.url,
+    json: async () => WorkersPublicConfigOut.parse(await response.json()),
+  };
+}
 
 /**
  * Fetch the deployment's public configuration (`GET /v1/config`).
@@ -28,13 +53,15 @@ import { STALE, apiQueryOptions, queryKeys, useApiQuery } from '@/lib/query';
  * needs to know what is configured — OAuth buttons, connector cards, the MCP setup guide —
  * reads from this single query rather than the environment.
  *
- * @returns the TanStack Query result whose `data` is the {@link PublicConfigOut}.
+ * @returns the TanStack Query result whose `data` is the {@link ClientPublicConfig}.
  */
-export function usePublicConfig(): UseQueryResult<PublicConfigOut> {
+export function usePublicConfig(): UseQueryResult<ClientPublicConfig> {
   return useApiQuery(
     apiQueryOptions(
       queryKeys.publicConfig(),
-      () => api.v1.config.$get(),
+      process.env.DOCKET_RUNTIME_TARGET === 'workers'
+        ? fetchWorkerPublicConfig
+        : () => api.v1.config.$get(),
       'Could not load configuration.',
       {
         staleTime: STALE.static,

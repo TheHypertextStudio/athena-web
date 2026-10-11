@@ -6,6 +6,7 @@ toolchain:
   python: '>=3.11'
   node: '24.20.0'
   pnpm: '11.9.0'
+  wrangler: '4.148.0'
 components:
   - id: website
     kind: static-site

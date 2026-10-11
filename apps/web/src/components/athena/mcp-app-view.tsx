@@ -30,6 +30,8 @@ import {
   Text,
 } from '@docket/ui/primitives';
 
+import { sandboxProxyUrl, sandboxViewFailure } from './mcp-app-sandbox-origin';
+
 /**
  * The MCP Apps host surface: a third-party widget rendered inside the Athena conversation.
  *
@@ -76,7 +78,7 @@ export interface McpAppViewProps {
   readonly onUpdateModelContext?: (
     params: McpUiUpdateModelContextParams,
   ) => Promise<boolean> | boolean;
-  /** Overrides the API origin the sandbox proxy is served from. Tests only. */
+  /** Explicit API origin for the sandbox; required by the Workers runtime. */
   readonly sandboxOrigin?: string;
 }
 
@@ -139,19 +141,6 @@ const DOCKET_VARIABLE_MAP: Readonly<Record<string, string>> = {
   '--state-completed': '--color-state-completed',
   '--state-canceled': '--color-state-canceled',
 };
-
-/**
- * The API origin the sandbox proxy is served from.
- *
- * @remarks
- * Deliberately NOT the same-origin `/v1` proxy the rest of the app uses. The whole security
- * argument for the proxy is that it does not share an origin with the host page, so this must be
- * the real API origin even though every other request in the app is relative.
- */
-function sandboxProxyUrl(override?: string): string {
-  const origin = override ?? process.env['NEXT_PUBLIC_API_URL'] ?? '';
-  return `${origin.replace(/\/$/, '')}/mcp/apps/sandbox`;
-}
 
 /** Read the colour scheme the app is currently rendering under. */
 function currentTheme(): McpUiTheme {
@@ -656,11 +645,12 @@ export function McpAppView(props: McpAppViewProps): JSX.Element | null {
 
   if (!visible) return null;
 
-  if (failure) {
+  const failureText = sandboxViewFailure(proxyOrigin, failure);
+  if (failureText) {
     return (
       <Surface tone="canvas" shape="medium" pad="roomy" data-testid="mcp-app-view-failure">
         <Text token="body-small" tone="muted">
-          {failure}
+          {failureText}
         </Text>
       </Surface>
     );

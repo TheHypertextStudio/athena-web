@@ -7,6 +7,28 @@
 
 ## Active Tasks
 
+### [INBOUND-NOTIFICATIONS-001] General personal inbound events and notification triage
+
+- **Status**: REVIEW
+- **Started**: 2026-10-10
+- **Priority**: P1
+- **Description**: Implement the approved general inbound endpoint, migrate Android notification uploads, and start durable personal Athena triage under existing approval policy.
+- **Approach**: Versioned typed events reuse notification storage; notification acceptance, content-free event receipts, and eligible pending references commit atomically. Leased scheduled dispatch binds at most 100 references to one stable private Athena session per person.
+- **Subtasks**:
+  - [x] Contract, general ingress, legacy adapter, ordered receipts and source/account isolation.
+  - [x] Server consent, durable triage state, scheduled dispatch and lifecycle recovery.
+  - [x] Android migration, disclosure/settings, account and process recovery, worker continuation and persisted Retry-After.
+  - [x] Local checks, independent review and managed-emulator listener/upload proof.
+  - [ ] Linear delivery and correlated deployed acceptance.
+- **Rulings**: Provider webhooks remain independent. Notification sources register the first event family. Server-owned `observation` job linkage permits private context evaluation without inventing a task; actual actions still use existing tracked-work, workspace authority, backend selection and approval gates. Production dispatch is controlled by `NOTIFICATION_TRIAGE_DISPATCH`, forwarded by deployment with a paused default. Personal consent starts off independently.
+- **Files changed**: Athena inbound contracts/domain registry; API ingress and compatibility adapter; notification triage queue/settings/dispatch/context; agent loop/provider collection/identity resolution; notification export; database schemas and migrations 0149/0150; environment/deployment configuration; API/domain behavior tests; README and engineering contracts. Android changes live in docket-android and are documented in its notification-sync contract.
+- **Validation**: 58 focused ingress/triage/Athena loop and generation-recovery tests; 13 dispatch/lifecycle/export tests; 13 legacy/dispatch tests; three domain contract tests; 169 environment tests; 17 domain registry policy tests; 37 CI/workflow policy tests. API, Athena, DB and environment typechecks pass; changed-file lint, formatting and complexity ratchet pass. Android `./run check` passes. The managed API-35 emulator passes 16 affected listener/settings/navigation cases and the authenticated listener-to-server lost-response acceptance case.
+- **Review corrections**: Durable hub-wide receipts close cross-type replay gaps. Per-entry context budgets preserve every assigned notification ID. Deterministic transcript comparison and execution-time checks cancel runs whose context was revoked, deleted or expired, including direct approval execution. Explicit cancellation avoids stranding an active review. A fresh independent final review found no blocking findings.
+- **Local acceptance**: Android posted through the actual notification service and listener, uploaded to `/v1/me/inbound`, retained its queue after a deliberately lost successful response, and settled on retry. Capture `01M4MCM7ZKGABGTYRVDM5K5D4F` reached the running authenticated API. The existing cron dispatcher reported claimed=1/dispatched=1/failed=0 and produced private approval-gated session `01M4MCPPPW7BP9821G3DZC3QCP` using the local deterministic model. This proves local plumbing and approval gating, not model/provider or production readiness.
+- **Restart acceptance**: A second managed-emulator upload deliberately lost its successful response and recovered on retry. Authenticated account export showed receipt and unassigned pending event for capture `01M4MD0F8SCRF5MMDCD461J9P9`. After stopping and restarting the documented stack, the existing cron sweep dispatched that retained event into personal session `01M4MD3Y188VP3PHE174Q7T17C`; a second authenticated export confirmed the exact event-to-session link, and the personal overview showed `awaiting_approval`, no workspace, and no executed mutation. Final Android checks cover 249 passing JVM tests, lint/style/build, 16 affected managed-device cases and the separate correlated acceptance case. Final API handler checks pass and the production API build succeeds.
+- **Blockers for launch**: The production test account has not been selected; asked the user which account to use. Keep production dispatch paused until an authenticated deployed round trip can be correlated. No physical device was touched. The shared emulator disconnected during the broad suite; repository-managed emulator acceptance succeeded instead. Context7 documentation quota was exhausted and reported; implementation follows the existing repository contracts and execution infrastructure.
+- **Retrospective**: Combining API receipts and pending references in the storage transaction makes a lost response recoverable. Review caught cross-family identity and resumed-context privacy failures that happy-path upload tests missed. Use isolated managed emulators for acceptance when a shared emulator is running other work; preserve the existing complexity ratchet through meaningful loop extractions.
+
 ### [DAILY-PLAN-RELEASE-002] Finish automatic daily planning and execution
 
 - **Status**: IN_PROGRESS

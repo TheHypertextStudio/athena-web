@@ -1,3 +1,5 @@
+import { meNotificationTriage } from './routes/me-notification-triage';
+import { meInbound } from './routes/me-inbound';
 /**
  * `@docket/api` — the chained route compositions that define the RPC contracts.
  *
@@ -136,6 +138,14 @@ app.use(
   }),
 );
 
+app.use(
+  '/me/inbound',
+  bodyLimit({
+    maxSize: MAX_DEVICE_NOTIFICATION_BATCH_BYTES,
+    onError: () => rejectOversizedBody(MAX_DEVICE_NOTIFICATION_BATCH_BYTES),
+  }),
+);
+
 // Every `/v1` body is one person's view of one workspace, and now carries an `ETag`. Saying so
 // — `private, no-cache` plus a `Vary` naming the credentials — is what stops a cache from
 // applying a heuristic lifetime to a validator-bearing response and reusing it for someone else.
@@ -265,6 +275,8 @@ const routes = app
   .route('/me/drafts', meDrafts)
   .route('/me/device-notification-sources', meDeviceNotificationSources)
   .route('/me/device-notifications', meDeviceNotifications)
+  .route('/me/inbound', meInbound)
+  .route('/me/device-notifications/triage-settings', meNotificationTriage)
   .route('/me/athena', personalAthena)
   .route('/me/athena', lattice)
   // Athena's own inbox. Mounted at the same `/me/athena` prefix as the two routers above (Hono

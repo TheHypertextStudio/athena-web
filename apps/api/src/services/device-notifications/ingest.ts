@@ -1,3 +1,4 @@
+import { enqueueNotificationTriage } from './triage-queue';
 /**
  * `@docket/api` — storing one upload batch from a person's phone.
  *
@@ -277,6 +278,12 @@ export async function ingestBatch(
     };
     const notifications = await storeNotifications(context, batch.notifications);
     const removals = await storeRemovals(tx, hubId, batch.removals);
+    await enqueueNotificationTriage(
+      tx,
+      hubId,
+      notifications.filter((item) => item.status === 'stored').map((item) => item.id),
+      now,
+    );
     return { notifications, removals };
   });
 }

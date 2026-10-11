@@ -1,3 +1,6 @@
+import { collectProviderTurn } from './provider-turn';
+import { loadSessionAgent } from './session-agent';
+import { notificationTriageBrief } from '../services/device-notifications/triage-context';
 /**
  * `@docket/api` — the Athena agentic loop.
  *
@@ -28,7 +31,7 @@ import {
   task,
 } from '@docket/db';
 import type { SessionActivityBody } from '@docket/db';
-import type { AgentTurnRuntime, TurnUsage } from '@docket/athena/turn';
+import type { AgentTurnRuntime } from '@docket/athena/turn';
 import type { TurnContentBlock, TurnMessage } from '@docket/athena/turn-protocol';
 import { HubPreferences } from '@docket/planning/hub-preferences-contract';
 import type { AthenaApprovalMode } from '@docket/planning/hub-preferences-contract';
@@ -361,6 +364,39 @@ async function reconcileToolUse(sessionId: string, use: ToolUse): Promise<Reconc
   return { kind: 'await_approval' };
 }
 
+/** Initialize the durable conversation once, behind the generation fence. */
+async function loadOrStartTranscript(
+  session: SessionRow,
+  triageBrief: string | undefined,
+  execution: { lease: RunGenerationLease; deps: LoopDeps },
+): Promise<TurnMessage[]> {
+  const messages = await loadTranscript(db, session.id);
+  if (messages.length > 0) return messages;
+  const organizationId =
+    session.executorKind === 'athena' ? session.contextOrganizationId : session.organizationId;
+  const initial: TurnMessage[] = [
+    {
+      role: 'user',
+      content: [
+        {
+          type: 'text',
+          text: triageBrief ?? (await deriveBrief(organizationId, session.taskId, session.id)),
+        },
+      ],
+    },
+  ];
+  await persistGenerationEffect(execution.lease, execution.deps, 'initial-transcript', async (tx) =>
+    saveTranscript(
+      tx,
+      session.id,
+      generalActivityOrganizationId(session),
+      initial,
+      session.ownerUserId,
+    ),
+  );
+  return initial;
+}
+
 /** Admission policy for one durable loop entry point. */
 interface DriveAdmission {
   readonly runnableStatuses: readonly SessionRow['status'][];
@@ -407,30 +443,7 @@ async function driveSessionWithAdmission(
     throw new ConflictError('Session is not in a runnable state');
   }
   const executor = toolboxExecutor(session);
-  const agentRow =
-    session.executorKind === 'registered_agent'
-      ? (
-          await db
-            .select({
-              approvalPolicy: agent.approvalPolicy,
-              guidance: agent.guidance,
-              displayName: actor.displayName,
-              actorId: actor.id,
-            })
-            .from(agent)
-            .innerJoin(actor, eq(agent.actorId, actor.id))
-            .where(
-              and(eq(agent.id, requireRegisteredAgentId(session)), eq(agent.organizationId, orgId)),
-            )
-            .limit(1)
-        )[0]
-      : {
-          approvalPolicy: 'autonomous' as const,
-          guidance: null,
-          displayName: 'Athena',
-          actorId: null,
-        };
-  if (!agentRow) throw new NotFoundError('Agent not found');
+  const agentRow = await loadSessionAgent(session, orgId);
 
   const contextOrganizationId =
     session.executorKind === 'athena' ? session.contextOrganizationId : session.organizationId;
@@ -469,11 +482,6 @@ async function driveSessionWithAdmission(
 
   let toolbox: Awaited<ReturnType<typeof openToolbox>> | null = null;
   try {
-    // Resolve after entering the generation's settlement scope. An expired personal grant can
-    // refuse before the first model call; that must release the claimed run instead of leaving it
-    // in "running" until the lease expires. Resolution never falls back to a cloud model.
-    const turnRuntime = deps.turnRuntime ?? (await resolveOwnerTurnRuntime(session.ownerUserId));
-    const openedToolbox = (toolbox = await openToolbox(executor, sessionId));
     const settleOwned = async (
       status: 'awaiting_input' | 'awaiting_approval' | 'completed' | 'failed' | 'canceled',
       lastError?: string,
@@ -494,29 +502,15 @@ async function driveSessionWithAdmission(
       );
     };
 
-    let messages = await loadTranscript(db, sessionId);
-    if (messages.length === 0) {
-      messages = [
-        {
-          role: 'user',
-          content: [
-            {
-              type: 'text',
-              text: await deriveBrief(contextOrganizationId, session.taskId, sessionId),
-            },
-          ],
-        },
-      ];
-      await persistGenerationEffect(lease, deps, 'initial-transcript', async (tx) =>
-        saveTranscript(
-          tx,
-          sessionId,
-          generalActivityOrganizationId(session),
-          messages,
-          session.ownerUserId,
-        ),
-      );
-    }
+    // Resolve after entering the generation's settlement scope. An expired personal grant can
+    // refuse before the first model call; that must release the claimed run instead of leaving it
+    // in "running" until the lease expires. Resolution never falls back to a cloud model.
+    const triageBrief = await notificationTriageBrief(session);
+    if (triageBrief === null) return await settleOwned('canceled');
+    const turnRuntime = deps.turnRuntime ?? (await resolveOwnerTurnRuntime(session.ownerUserId));
+    const openedToolbox = (toolbox = await openToolbox(executor, sessionId));
+
+    let messages = await loadOrStartTranscript(session, triageBrief, { lease, deps });
 
     const context = await promptContext(sessionId, session.taskId);
     const system = buildSystemPrompt({
@@ -531,9 +525,10 @@ async function driveSessionWithAdmission(
     });
 
     for (;;) {
+      if ((await notificationTriageBrief(session)) === null) return await settleOwned('canceled');
       const execution = await executeApprovedActions(orgId, sessionId, lease, deps);
-      if (execution === 'needs_attention') {
-        return await settleOwned('awaiting_approval');
+      if (execution !== 'settled') {
+        return await settleOwned(execution === 'canceled' ? 'canceled' : 'awaiting_approval');
       }
 
       // ── Reconcile: answer the trailing assistant message's tool_uses from DB state.
@@ -607,40 +602,28 @@ async function driveSessionWithAdmission(
 
       // ── One provider turn.
       await heartbeat.assertActive();
-      let assistantMessage: TurnMessage | undefined;
-      let stopReason = 'end_turn';
-      let turnUsage: TurnUsage | undefined;
-      for await (const event of turnRuntime.streamTurn({
-        system,
-        messages,
-        tools: openedToolbox.tools,
-        subjectTask: context.subjectTask,
-      })) {
-        if (event.type === 'thinking') {
-          await persistGenerationEffect(lease, deps, 'thought-activity', async (tx) => {
-            await insertActivity(tx, generalActivityOrganizationId(session), sessionId, 'thought', {
-              text: event.text,
-            });
-          });
-        } else if (event.type === 'text') {
-          await persistGenerationEffect(lease, deps, 'response-activity', async (tx) => {
-            await insertActivity(
-              tx,
-              generalActivityOrganizationId(session),
-              sessionId,
-              'response',
-              { text: event.text },
-            );
-          });
-        } else if (event.type === 'turn_end') {
-          assistantMessage = event.message;
-          stopReason = event.stopReason;
-          turnUsage = event.usage;
-        }
-      }
+      const {
+        message: assistantMessage,
+        stopReason,
+        usage: turnUsage,
+      } = await collectProviderTurn(
+        turnRuntime,
+        { system, messages, tools: openedToolbox.tools, subjectTask: context.subjectTask },
+        async (type, text) => {
+          await persistGenerationEffect(
+            lease,
+            deps,
+            type === 'thought' ? 'thought-activity' : 'response-activity',
+            async (tx) => {
+              await insertActivity(tx, generalActivityOrganizationId(session), sessionId, type, {
+                text,
+              });
+            },
+          );
+        },
+      );
+      if ((await notificationTriageBrief(session)) === null) return await settleOwned('canceled');
       generationTurns += 1;
-      /* v8 ignore next -- @preserve defensive: every turn ends with turn_end */
-      if (!assistantMessage) throw new Error('turn ended without a terminal message');
 
       if (stopReason === 'refusal') {
         return await settleOwned(
@@ -855,7 +838,7 @@ export async function executeApprovedActions(
   sessionId: string,
   lease: RunGenerationLease,
   deps: Pick<LoopDeps, 'beforeGenerationEffect'> = {},
-): Promise<'settled' | 'needs_attention'> {
+): Promise<'settled' | 'needs_attention' | 'canceled'> {
   const sessionRows = await db
     .select()
     .from(agentSession)
@@ -867,6 +850,7 @@ export async function executeApprovedActions(
     throw new NotFoundError('Session not found');
   }
   assertHostedExecutionSurface(session);
+  if ((await notificationTriageBrief(session)) === null) return 'canceled';
   const executor = toolboxExecutor(session);
 
   const approved = await db
@@ -1038,8 +1022,9 @@ async function executeApprovedGeneration(
   try {
     const outcome = await executeApprovedActions(orgId, session.id, lease, deps);
     heartbeat.stop();
-    if (outcome === 'needs_attention') {
-      const settled = await settleRunGeneration(lease, 'awaiting_approval');
+    if (outcome !== 'settled') {
+      const status = outcome === 'canceled' ? 'canceled' : 'awaiting_approval';
+      const settled = await settleRunGeneration(lease, status);
       generationSettled = true;
       return settled;
     }

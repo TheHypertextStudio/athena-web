@@ -28,7 +28,7 @@ import { NotFoundError } from '../error';
 import { ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
 import { zJson, zParam, zQuery } from '../lib/validate';
-import { ingestBatch } from '../services/device-notifications/ingest';
+import { ingestLegacyNotifications } from '../services/inbound/ingest';
 import {
   deleteNotifications,
   findSource,
@@ -94,7 +94,11 @@ export const meDeviceNotifications = new Hono<AppEnv>()
       const hubId = await callerHub(c);
       const now = new Date();
       await consumeUploadBatch(hubId, now);
-      return ok(c, DeviceNotificationBatchOut, await ingestBatch(hubId, c.req.valid('json'), now));
+      return ok(
+        c,
+        DeviceNotificationBatchOut,
+        await ingestLegacyNotifications(hubId, c.req.valid('json'), now),
+      );
     },
   )
   .get(

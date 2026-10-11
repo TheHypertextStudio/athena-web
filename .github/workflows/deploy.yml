@@ -147,6 +147,8 @@ jobs:
           GOOGLE_CLOUD_LOCATION: global
           ATHENA_MODEL: gemini-2.5-flash
           ATHENA_ASYNC_RUNNER_ENABLED: "false"
+          # Operator kill switch; personal consent remains separately disabled by default.
+          NOTIFICATION_TRIAGE_DISPATCH: "${{ vars.NOTIFICATION_TRIAGE_DISPATCH || 'paused' }}"
           LATTICE_ACCOUNTS_ISSUER: "${{ vars.LATTICE_ACCOUNTS_ISSUER }}"
           LATTICE_GATEWAY_URL: "${{ vars.LATTICE_GATEWAY_URL }}"
           LATTICE_RESOURCE_URL: "${{ vars.LATTICE_RESOURCE_URL }}"

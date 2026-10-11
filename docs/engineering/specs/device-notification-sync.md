@@ -3,12 +3,12 @@
 > **Reader**: an engineer changing how the server stores what a person's phone syncs, or building
 > the Athena tools that read it. After reading, you should know where each rule lives, what every
 > upload answer means, how deletions and expiry travel, and which decisions were made on purpose.
-> **Status**: server half shipped 2026-09-23 (`DEVICE-NOTIFICATIONS-001`). The Android client's
+> **Status**: general ingress and optional personal triage added 2026-10-10 (`INBOUND-NOTIFICATIONS-001`). The Android client's
 > copy of the contract is `docs/reference/notification-sync.md` in docket-android.
 
 The Android app indexes the notifications a person receives so Athena can use them as context.
-Sync copies what the phone indexed to Docket's servers, so Athena can read it from anywhere (the
-next milestone) and so a notification can wake Athena (the one after). The phone is the only
+Sync copies selected newly captured notifications to Docket's servers. A separate opt-in allows
+new eligible captures to wake personal Athena through durable scheduled dispatch. The phone is the only
 writer: the server keeps a mirror of what each device uploads, plus the deletions the person makes.
 It is context for Athena, not a notification history product.
 
@@ -52,7 +52,7 @@ configuration, because notification text arrives in any language. Nothing reads 
 
 ## Endpoints
 
-All six are session-only `/v1/me` routes. The hub is resolved from the session, never from the
+All are session-only `/v1/me` routes. The hub is resolved from the session, never from the
 request. Times on the wire are Unix milliseconds.
 
 - `PUT /v1/me/device-notification-sources/{deviceId}` registers the install or updates its label,
@@ -60,7 +60,9 @@ request. Times on the wire are Unix milliseconds.
   `label`, `retentionDays`, `syncConsentedAt`, `lastSeenAt`, `createdAt`, `updatedAt`).
 - `GET /v1/me/device-notification-sources/{deviceId}` reads a registered source back, or `404`.
   Not part of the Android contract; it exists so the registration has a reader.
-- `POST /v1/me/device-notifications/batches` uploads at most 100 notifications and 200 removals.
+- `POST /v1/me/inbound` accepts typed, versioned events; see [personal inbound events](personal-inbound.md).
+- `POST /v1/me/device-notifications/batches` remains a compatibility adapter for the same ingestion service.
+- `GET`/`PUT /v1/me/device-notifications/triage-settings` reads or sets the separate triage opt-in.
 - `GET /v1/me/device-notifications/deletions` returns `{ deletedBefore, apps[] }`.
 - `DELETE /v1/me/device-notifications[?appId=][&before=]` deletes everything, or one app's
   entries, captured at or before the deletion time, from every device, records that time, and

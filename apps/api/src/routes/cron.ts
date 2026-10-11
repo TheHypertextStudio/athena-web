@@ -1,3 +1,4 @@
+import { sweepNotificationTriage } from '../services/device-notifications/triage-dispatch';
 /**
  * `@docket/api` — the lifecycle-sweep cron handler (mounted OUTSIDE the RPC `AppType`).
  *
@@ -308,6 +309,7 @@ const cron = new Hono()
   .post('/athena-triggers', async (c) => {
     if (!authorized(c)) return c.json({ error: 'unauthorized' }, 401);
     const now = new Date();
+    const notificationTriage = await sweepNotificationTriage(now);
     const triggers = await sweepAthenaAssignmentTriggers(now);
     const delegations = await sweepLatticeDelegations(
       // Triggered assignments prepare their delegation after the cutoff above was captured.
@@ -316,7 +318,7 @@ const cron = new Hono()
       latticeDelegationDependencies,
       await readLatticeServiceControls(),
     );
-    return c.json({ swept: true, ...triggers, delegations });
+    return c.json({ swept: true, ...triggers, delegations, notificationTriage });
   })
   // Expired-session sweep: deletes every `session` row past its `expiresAt` — Better Auth itself
   // only prunes a row lazily (when that exact expired cookie comes back), so an abandoned browser

@@ -62,7 +62,7 @@ export type ExecutionRequestDirection = 'cloudflare_to_docket' | 'docket_to_clou
  * column default purely so adding the constraint could not reject existing production rows;
  * no dispatcher path writes it, and {@link agentSession}'s own tests assert that.
  */
-export type AgentSessionWorkLinkage = 'task' | 'conversation' | 'unclassified';
+export type AgentSessionWorkLinkage = 'task' | 'conversation' | 'observation' | 'unclassified';
 
 /**
  * The dispatcher admission path that created one run.
@@ -209,7 +209,7 @@ export const agentSession = pgTable(
     check(
       'agent_session_work_linkage_check',
       sql`(${t.workLinkage} = 'task' AND ${t.taskId} IS NOT NULL)
-        OR (${t.workLinkage} = 'conversation' AND ${t.kind} = 'chat')
+        OR (${t.workLinkage} = 'conversation' AND ${t.kind} = 'chat') OR (${t.workLinkage} = 'observation' AND ${t.kind} = 'job' AND ${t.externalRunRef} LIKE 'notification-triage:%')
         OR ${t.workLinkage} = 'unclassified'`,
     ),
     check(

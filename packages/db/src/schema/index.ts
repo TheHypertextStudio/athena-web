@@ -41,3 +41,7 @@ export * from './source-person';
 
 export * from './actor-alias';
 export * from './device-notification';
+
+export * from './notification-triage';
+
+export * from './personal-inbound';

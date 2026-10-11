@@ -34,6 +34,7 @@
         "./athena-contract",
         "./athena-mail-contract",
         "./device-notification-contract",
+        "./inbound-contract",
         "./email-suggestion-contract"
       ],
       "allowedRuntimeDependencies": [

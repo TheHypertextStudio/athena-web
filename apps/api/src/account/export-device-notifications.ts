@@ -8,6 +8,9 @@
  * `personal.deviceNotifications`.
  */
 import {
+  personalInboundReceipt,
+  notificationTriageSettings,
+  notificationTriageEvent,
   deviceNotification,
   deviceNotificationDeletion,
   deviceNotificationMessage,
@@ -23,6 +26,9 @@ type RemovalRow = typeof deviceNotificationRemoval.$inferSelect;
 
 /** The exported section. */
 export interface DeviceNotificationExport {
+  readonly inboundReceipts: (typeof personalInboundReceipt.$inferSelect)[];
+  readonly triageSettings: (typeof notificationTriageSettings.$inferSelect)[];
+  readonly triageEvents: (typeof notificationTriageEvent.$inferSelect)[];
   readonly sources: (typeof deviceNotificationSource.$inferSelect)[];
   readonly notifications: (NotificationRow & {
     readonly messages: MessageRow[];
@@ -33,6 +39,9 @@ export interface DeviceNotificationExport {
 
 /** An empty section, for an account with no hub. */
 export const EMPTY_DEVICE_NOTIFICATION_EXPORT: DeviceNotificationExport = {
+  inboundReceipts: [],
+  triageSettings: [],
+  triageEvents: [],
   sources: [],
   notifications: [],
   deletions: [],
@@ -49,7 +58,16 @@ export async function collectDeviceNotificationExport(
   hubId: string | undefined,
 ): Promise<DeviceNotificationExport> {
   if (!hubId) return EMPTY_DEVICE_NOTIFICATION_EXPORT;
-  const [sources, notifications, messages, removals, deletions] = await Promise.all([
+  const [
+    sources,
+    notifications,
+    messages,
+    removals,
+    deletions,
+    triageSettings,
+    triageEvents,
+    inboundReceipts,
+  ] = await Promise.all([
     db
       .select()
       .from(deviceNotificationSource)
@@ -67,6 +85,9 @@ export async function collectDeviceNotificationExport(
       .orderBy(asc(deviceNotificationMessage.sentAt), asc(deviceNotificationMessage.id)),
     db.select().from(deviceNotificationRemoval).where(eq(deviceNotificationRemoval.hubId, hubId)),
     db.select().from(deviceNotificationDeletion).where(eq(deviceNotificationDeletion.hubId, hubId)),
+    db.select().from(notificationTriageSettings).where(eq(notificationTriageSettings.hubId, hubId)),
+    db.select().from(notificationTriageEvent).where(eq(notificationTriageEvent.hubId, hubId)),
+    db.select().from(personalInboundReceipt).where(eq(personalInboundReceipt.hubId, hubId)),
   ]);
   const messagesByNotification = new Map<string, MessageRow[]>();
   for (const message of messages) {
@@ -76,6 +97,9 @@ export async function collectDeviceNotificationExport(
   }
   const removalByNotification = new Map(removals.map((row) => [row.notificationId, row]));
   return {
+    inboundReceipts,
+    triageSettings,
+    triageEvents,
     sources,
     notifications: notifications.map((row) => ({
       ...row,

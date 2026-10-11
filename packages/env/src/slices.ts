@@ -296,6 +296,8 @@ export const agentServer = {
   ATHENA_MAX_CONCURRENT_RUNS: z.coerce.number().int().min(1).max(64).optional(),
   /** Route personal Athena generations through the durable Cloudflare execution bridge. */
   ATHENA_ASYNC_RUNNER_ENABLED: boolFromString(),
+  /** Explicit deployment admission control; absence pauses new notification triage. */
+  NOTIFICATION_TRIAGE_DISPATCH: z.enum(['enabled', 'paused']).optional(),
   /** HTTPS origin of the Cloudflare runner Worker when asynchronous execution is enabled. */
   CLOUDFLARE_ATHENA_RUNNER_URL: z.url().optional(),
   /** HMAC secret authenticating Cloudflare callbacks to Docket. */

@@ -39,6 +39,11 @@ Catalog errors require `work:read` and return shared catalogs instead of repeati
 each item. Plan confirmation preserves applied template properties and explicit overrides.
 See [template use over MCP](apps/docs/developers/mcp-tools-and-resources.mdx#create-work-from-a-template-body).
 
+Android devices send selected notification captures and removals to the authenticated
+`POST /v1/me/inbound` endpoint. Optional personal Athena review has its own server-recorded consent
+and durable scheduled dispatch. See [personal inbound events](docs/engineering/specs/personal-inbound.md)
+for schemas, settlement, lifecycle rules, and the dispatch kill switch.
+
 ## From clone to a working app
 
 On macOS or Linux, the supported entrypoint is:

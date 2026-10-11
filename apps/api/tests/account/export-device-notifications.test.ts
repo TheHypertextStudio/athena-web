@@ -84,6 +84,13 @@ describe('personal.deviceNotifications in the account export', () => {
     const { document } = await collectAccountExport(db, userId);
     expect(
       (document.personal as { deviceNotifications: ExportedSection }).deviceNotifications,
-    ).toEqual({ sources: [], notifications: [], deletions: [] });
+    ).toEqual({
+      sources: [],
+      notifications: [],
+      deletions: [],
+      inboundReceipts: [],
+      triageSettings: [],
+      triageEvents: [],
+    });
   });
 });

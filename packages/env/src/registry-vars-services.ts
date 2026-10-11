@@ -271,6 +271,16 @@ export const SERVICE_VARS: readonly VarSpec[] = [
     where: 'Per-user Athena run limit (default 8, maximum 64)',
   },
   {
+    name: 'NOTIFICATION_TRIAGE_DISPATCH',
+    slice: 'agent',
+    scope: 'server',
+    targets: ['api'],
+    required: false,
+    zod: agentServer.NOTIFICATION_TRIAGE_DISPATCH,
+    where:
+      'enabled|paused — absent pauses notification triage dispatch while retaining eligible pending captures',
+  },
+  {
     name: 'ATHENA_ASYNC_RUNNER_ENABLED',
     slice: 'agent',
     scope: 'server',

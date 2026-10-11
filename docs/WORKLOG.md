@@ -7,6 +7,16 @@
 
 ## Active Tasks
 
+### [WEBSITE-STANDARDIZATION-015] Prepare a bounded frontend source publication hold
+
+- **Status**: REVIEW
+- **Started**: 2026-10-11
+- **Plan**: Add only an explicit repository-variable exclusion to existing image and production publication entries, keeping the reviewed frontend graph together during a bounded source integration window. Preserve all mandatory validation, release dependencies, exact-SHA freshness and serialized non-cancellable production behavior.
+- **Files**: `.github/workflows/ci.yml`, `.github/workflows/deploy-main.yml`, `README.md`, and this log.
+- **Decisions**: The expression `STUDIO_FRONTEND_MIGRATION_HOLD == 'true'` holds publication; absent/false retains the ordinary pipeline. GitHub string comparison is case-insensitive; use lowercase `true` operationally. No classifier, parallel graph, new trigger or credentials. No variable is set here. Existing admitted jobs are not cancelled by a variable change; inspect and reconcile queues before the separately reviewed window. Vercel Git/manual publishers and first-event containment remain separate.
+- **Validation**: Verified Node 24.20.0 native Prettier passed all four affected paths; installed actionlint passed both workflows; `git diff --check` passed. Existing validation jobs and release-ready dependencies, source-policy fixtures/assertions and accepted lock SHA256 `61493c19fdeec85f7205ba7a9c46afa53f6eefd7ded8f93386e241f0525ac510` are unchanged. No manual tests, install, provider/repository setting changes or main integration. Context7 quota was already exhausted in this migration; no retry or training-data fallback was used for the accepted source design. Root independent four-path source review is clear; normal-hook commit and one compatibility-branch delivery are authorized. Actual hold activation, Vercel containment and provider acceptance remain open.
+- **Runner footprint**: No new event or job; validation frequency and footprint remain unchanged. Exact true skips existing image builds and downstream production work during the bounded window.
+
 ### [WEBSITE-STANDARDIZATION-014] Reconcile Mintlify setup and publishing records
 
 - **Status**: REVIEW

@@ -94,6 +94,30 @@ The workflow file is already registered on the default branch, but its manual tr
 proposed here; dispatchability must be confirmed after source review. This is source acceptance,
 not Workers runtime, provider, passkey-origin or deployment acceptance.
 
+### Bounded source publication hold
+
+The reviewed source integration window can use the repository variable
+`STUDIO_FRONTEND_MIGRATION_HOLD=true`. A value comparing equal to `'true'` skips CI image publication and
+blocks the existing Deploy main entry and production job. All lint, types, secret, test, build
+and Core validation still runs; Release ready retains every dependency and skips when images
+skip. Held completions use the existing unique no-op concurrency group, preserving serialized,
+non-cancellable production releases. An absent variable or a value not comparing equal to `'true'` retains
+ordinary publication eligibility. Use lowercase `true` when setting the variable; GitHub expression
+[string comparisons are case-insensitive](https://docs.github.com/en/actions/reference/workflows-and-actions/expressions#operators).
+No extra workflow trigger or runner job is added.
+
+This source does not set the variable. Before enabling the bounded hold, record current serving
+revisions and queued/running publishers; a variable change does not cancel a job already admitted.
+After source integration and observed nonpublication, close the window promptly. Clearing the
+variable does not request a replay of the held CI; subsequent ordinary releases use the existing
+pipeline. Keep the accepted dependency graph and mandatory release gates intact.
+
+Vercel Git deployments, explicit redeploy/promote operations and Mintlify publishing are separate
+provider surfaces. This GitHub hold does not pause them. In particular, a proposed incoming
+`git.deploymentEnabled` main exclusion alone is not established proof of first-event containment.
+Review actual Vercel controls and recovery identities before source integration; retain the
+serving deployment while Workers staging/runtime/auth acceptance remains open.
+
 ## From clone to a working app
 
 On macOS or Linux, the supported entrypoint is:

@@ -466,9 +466,10 @@ jobs:
   # `scripts/ci-gate-policy.ts` sees a job with no gating command and correctly does not classify
   # it as a check job, so it isn't required to appear in release-ready.needs on that basis —
   # it's listed there anyway, for the image-consumption ordering, not to satisfy that rule.
+  # Explicit true holds publication during a reviewed source window; validation still runs.
   build-images:
     name: Build deploy images
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.STUDIO_FRONTEND_MIGRATION_HOLD != 'true'
     permissions:
       contents: read
       id-token: write

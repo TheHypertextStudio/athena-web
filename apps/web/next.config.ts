@@ -14,7 +14,10 @@ if (!apiUrl) {
 }
 const API_ORIGIN = validatedApiOrigin(apiUrl, process.env['NEXT_PUBLIC_APP_URL']);
 
-assertPublishingHostConfigured(process.env['VERCEL_ENV'], process.env['NEXT_PUBLIC_BRIEF_HOST']);
+assertPublishingHostConfigured(
+  process.env['STUDIO_DEPLOYMENT_ENV'] ?? process.env['VERCEL_ENV'],
+  process.env['NEXT_PUBLIC_BRIEF_HOST'],
+);
 
 /**
  * Retired product-domain alias that must never become a second browser origin.

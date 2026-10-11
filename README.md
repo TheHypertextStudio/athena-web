@@ -56,6 +56,15 @@ See [docs setup](apps/docs/README.md), [authoring](docs/engineering/docs-authori
 preparation checkpoint still requires shared registry publication, a real registry lock, and
 exact-source provider acceptance before integration. Application/native/backend setup remains below.
 
+## Frontend standardization
+
+The company frontend lifecycle is available through `./run setup`, `./run doctor`, `./run check`,
+`./run dev` and `./run build`. Its declaration and shared pins live in `apps/web`; the existing
+`./bootstrap` remains the owner of the full backend development stack and application data.
+See [Docket web setup](apps/web/README.md) and the [Workers compatibility checkpoint](docs/engineering/workers-compatibility.md).
+Vercel remains active while native Proxy compatibility, package registry and provider/auth gates
+are unresolved.
+
 ## From clone to a working app
 
 On macOS or Linux, the supported entrypoint is:

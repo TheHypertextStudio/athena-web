@@ -227,7 +227,6 @@ export async function hasVisibleKeyboardFocus(page: Page, locator: Locator): Pro
 export async function waitForSheetCompositorStability(page: Page, sheet: Locator): Promise<void> {
   await sheet.waitFor({ state: 'visible' });
   const handle = await sheet.elementHandle();
-  if (!handle) throw new Error('Visible sheet has no element handle.');
   try {
     await page.waitForFunction(
       (element) =>

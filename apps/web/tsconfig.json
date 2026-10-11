@@ -1,5 +1,8 @@
 {
-  "extends": "@docket/tsconfig/nextjs.json",
+  "extends": [
+    "@thehypertextstudio/web-config/tsconfig/browser.json",
+    "@docket/tsconfig/nextjs.json"
+  ],
   "compilerOptions": {
     "paths": {
       "@/*": ["./src/*"]

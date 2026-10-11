@@ -369,7 +369,6 @@ test('shared work rosters pass the release geometry and interaction contract', a
   const childLink = page.getByRole('link', { name: ROSTER_LONG_TITLES.child }).first();
   await revealAtVirtualStart(compactInitiativeGrid, childLink);
   const mountedGrid = await compactInitiativeGrid.elementHandle();
-  if (mountedGrid === null) throw new Error('The mounted Initiative treegrid is missing.');
   const detailPage = await page.context().newPage();
   await detailPage.goto(orgHref(fixture.organizationId, `initiatives/${fixture.onlyChildId}`), {
     waitUntil: 'domcontentloaded',
@@ -399,7 +398,6 @@ test('shared work rosters pass the release geometry and interaction contract', a
     page.getByRole('link', { name: renamed }).first(),
   );
   const currentGrid = await compactInitiativeGrid.elementHandle();
-  if (currentGrid === null) throw new Error('The Initiative treegrid unmounted during rename.');
   expect(
     await mountedGrid.evaluate((original, current) => original === current, currentGrid),
     'rename must retain the original treegrid DOM node',

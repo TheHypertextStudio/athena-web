@@ -1,0 +1,93 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "docket-web-candidate",
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2026-10-10",
+  "compatibility_flags": [
+    "nodejs_compat",
+    "global_fetch_strictly_public"
+  ],
+  "workers_dev": false,
+  "preview_urls": false,
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS",
+    "run_worker_first": true
+  },
+  "images": {
+    "binding": "IMAGES"
+  },
+  "services": [
+    {
+      "binding": "WORKER_SELF_REFERENCE",
+      "service": "docket-web-candidate"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "NEXT_INC_CACHE_R2_BUCKET",
+      "bucket_name": "docket-web-candidate-cache",
+      "remote": false
+    }
+  ],
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1
+  },
+  "env": {
+    "staging": {
+      "name": "docket-web-staging",
+      "assets": {
+        "directory": ".open-next/assets",
+        "binding": "ASSETS",
+        "run_worker_first": true
+      },
+      "images": {
+        "binding": "IMAGES"
+      },
+      "services": [
+        {
+          "binding": "WORKER_SELF_REFERENCE",
+          "service": "docket-web-staging"
+        }
+      ],
+      "r2_buckets": [
+        {
+          "binding": "NEXT_INC_CACHE_R2_BUCKET",
+          "bucket_name": "docket-web-staging-cache",
+          "remote": false
+        }
+      ],
+      "vars": {
+        "STUDIO_DEPLOYMENT_ENV": "staging"
+      }
+    },
+    "production": {
+      "name": "docket-web-production",
+      "assets": {
+        "directory": ".open-next/assets",
+        "binding": "ASSETS",
+        "run_worker_first": true
+      },
+      "images": {
+        "binding": "IMAGES"
+      },
+      "services": [
+        {
+          "binding": "WORKER_SELF_REFERENCE",
+          "service": "docket-web-production"
+        }
+      ],
+      "r2_buckets": [
+        {
+          "binding": "NEXT_INC_CACHE_R2_BUCKET",
+          "bucket_name": "docket-web-production-cache",
+          "remote": false
+        }
+      ],
+      "vars": {
+        "STUDIO_DEPLOYMENT_ENV": "production"
+      }
+    }
+  }
+}

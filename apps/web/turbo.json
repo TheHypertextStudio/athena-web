@@ -7,7 +7,12 @@
     "build": {
       // These values decide whether `next.config.ts` emits host-specific redirects and rewrites,
       // so they change build output and belong in the cache key rather than `passThroughEnv`.
-      "env": ["NEXT_PUBLIC_*", "DOCS_MINTLIFY_ORIGIN", "BETTER_AUTH_PASSKEY_LEGACY_RP_ID"],
+      "env": [
+        "NEXT_PUBLIC_*",
+        "DOCS_MINTLIFY_ORIGIN",
+        "BETTER_AUTH_PASSKEY_LEGACY_RP_ID",
+        "STUDIO_DEPLOYMENT_ENV"
+      ],
       // Set on the Vercel project and read only at runtime by the server routes. Passed through
       // rather than declared in `env` so rotating the blob token does not bust the build cache.
       "passThroughEnv": ["BLOB_READ_WRITE_TOKEN"],
@@ -16,6 +21,16 @@
       // Both are this app's build products — the worker is bundled from
       // @docket/service-worker's source into this app's `public/`.
       "outputs": [".next/**", "!.next/cache/**", "!.next/dev/**", "public/sw.js"]
+    },
+    "build:worker:app": {
+      "dependsOn": ["^build"],
+      "env": [
+        "NEXT_PUBLIC_*",
+        "DOCS_MINTLIFY_ORIGIN",
+        "BETTER_AUTH_PASSKEY_LEGACY_RP_ID",
+        "STUDIO_DEPLOYMENT_ENV"
+      ],
+      "outputs": [".next/**", "!.next/cache/**", "!.next/dev/**", ".open-next/**", "public/sw.js"]
     },
     "dev": {
       "dependsOn": ["^db:migrate", "@docket/api#build"],

@@ -16,10 +16,33 @@ import { realEnvValue } from '@docket/env';
  * `realEnvValue`, not a truthiness check: a placeholder left in a project's settings would
  * otherwise point a rewrite at someone else's site under Docket's domain.
  *
- * @returns The configured origin, or `undefined`.
+ * @returns The normalized configured origin, or `undefined`.
+ * @throws When the configured upstream is not an HTTP origin or points back to this app.
  */
 export function docsSiteOrigin(): string | undefined {
-  return realEnvValue(process.env['DOCS_MINTLIFY_ORIGIN']);
+  const configured = realEnvValue(process.env['DOCS_MINTLIFY_ORIGIN']);
+  if (configured === undefined) return undefined;
+  let origin: URL;
+  try {
+    origin = new URL(configured);
+  } catch {
+    throw new Error('DOCS_MINTLIFY_ORIGIN must be an absolute HTTP origin');
+  }
+  const app = realEnvValue(process.env['NEXT_PUBLIC_APP_URL']);
+  if (
+    !['http:', 'https:'].includes(origin.protocol) ||
+    origin.username ||
+    origin.password ||
+    origin.pathname !== '/' ||
+    origin.search ||
+    origin.hash ||
+    (app !== undefined && origin.origin === new URL(app).origin)
+  ) {
+    throw new Error(
+      'DOCS_MINTLIFY_ORIGIN must be a separate HTTP origin without a path or credentials',
+    );
+  }
+  return origin.origin;
 }
 
 /**

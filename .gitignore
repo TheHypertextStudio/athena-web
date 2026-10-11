@@ -98,3 +98,10 @@ apps/web/public/sw.js
 # diffing the surface. Deliberately not committed: it is 4.7 MB of generated JSON that changes
 # with almost every API commit. `/v1/openapi.json` from the running service is the copy to trust.
 apps/api/openapi.json
+
+# Native Workers candidate output and shared workflow checkouts.
+.open-next/
+.artifact/
+worker-configuration.d.ts
+.studio-engine/
+.studio-source/

@@ -1,0 +1,30 @@
+schema: 1
+product: docket-website
+repository: TheHypertextStudio/athena-web
+owner_repository: TheHypertextStudio/athena-web
+toolchain:
+  python: '>=3.11'
+  node: '24.20.0'
+  pnpm: '11.9.0'
+components:
+  - id: website
+    kind: static-site
+    path: .
+    checks:
+      - name: Frontend typecheck and lint
+        argv: [pnpm, --dir, ../.., exec, turbo, run, typecheck, lint, --filter, '@docket/web']
+      - name: Frontend compatibility
+        argv: [pnpm, test:workers:source]
+      - name: Mintlify source
+        argv: [pnpm, --dir, ../.., docs:check]
+    dev: [pnpm, dev]
+    build:
+      script: build:worker
+      output: .open-next
+# Candidate publication remains disabled until supported native Proxy/runtime acceptance,
+# registry installation, scoped shared workflow publication and provider gates are satisfied.
+release:
+  channels: []
+  next_version: 0.1.0
+  required_checks: [Frontend typecheck and lint, Frontend compatibility, Mintlify source]
+  required_evidence: []

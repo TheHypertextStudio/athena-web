@@ -1,0 +1,205 @@
+{
+  "theme": "maple",
+  "name": "Docket",
+  "colors": {
+    "primary": "#4e4d4a",
+    "light": "#dddcd9",
+    "dark": "#777570"
+  },
+  "appearance": {
+    "default": "system"
+  },
+  "fonts": {
+    "heading": {
+      "family": "Fraunces"
+    },
+    "body": {
+      "family": "IBM Plex Sans"
+    }
+  },
+  "logo": {
+    "light": "/logo/light.svg",
+    "dark": "/logo/dark.svg",
+    "href": "/"
+  },
+  "favicon": "/logo/favicon.svg",
+  "styling": {
+    "codeblocks": "dark"
+  },
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Guides",
+        "groups": [
+          {
+            "group": "Getting started",
+            "pages": [
+              "guides/what-docket-is",
+              "guides/create-your-workspace",
+              "guides/your-first-week",
+              "guides/connect-calendar-and-mail"
+            ]
+          },
+          {
+            "group": "Plan and do work",
+            "pages": [
+              "guides/daily/home-today",
+              "guides/daily/tasks",
+              "guides/daily/triage",
+              "guides/daily/calendar-and-scheduling",
+              "guides/daily/time"
+            ]
+          },
+          {
+            "group": "Find and follow work",
+            "pages": [
+              "guides/daily/inbox",
+              "guides/daily/stream",
+              "guides/daily/portfolio",
+              "guides/daily/search",
+              "guides/daily/views",
+              "guides/daily/library",
+              "guides/daily/graph"
+            ]
+          },
+          {
+            "group": "Organize work",
+            "pages": [
+              "guides/concepts/terminology",
+              "guides/concepts/workspaces",
+              "guides/concepts/teams",
+              "guides/concepts/tasks",
+              "guides/concepts/projects",
+              "guides/concepts/programs",
+              "guides/concepts/initiatives",
+              "guides/concepts/cycles",
+              "guides/concepts/milestones",
+              "guides/concepts/updates-and-health",
+              "guides/concepts/labels-and-statuses"
+            ]
+          },
+          {
+            "group": "Manage Docket",
+            "pages": [
+              "guides/manage/workspaces-and-access",
+              "guides/manage/workflow-configuration",
+              "guides/manage/connections",
+              "guides/manage/imports",
+              "guides/manage/templates",
+              "guides/manage/automations",
+              "guides/manage/publishing",
+              "guides/manage/account-settings"
+            ]
+          },
+          {
+            "group": "Athena",
+            "pages": [
+              "guides/athena/what-athena-is",
+              "guides/athena/talking-to-athena",
+              "guides/athena/proposals-and-approvals",
+              "guides/athena/athena-and-your-mail",
+              "guides/athena/bring-your-own-model"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Developers",
+        "pages": [
+          "developers/overview",
+          "developers/make-your-first-request",
+          "developers/authentication",
+          "developers/rest-api",
+          "developers/api-versions",
+          "developers/api-release-notes",
+          "developers/connect-an-agent-mcp",
+          "developers/mcp-tools-and-resources",
+          "developers/track-time",
+          "developers/errors",
+          "developers/platform-status"
+        ]
+      },
+      {
+        "tab": "Changelog",
+        "pages": ["changelog"]
+      }
+    ]
+  },
+  "redirects": [
+    {
+      "source": "/guides/daily/tasks-and-triage",
+      "destination": "/guides/daily/tasks"
+    },
+    {
+      "source": "/guides/daily/search-and-views",
+      "destination": "/guides/daily/search"
+    },
+    {
+      "source": "/guides/concepts/cycles-and-milestones",
+      "destination": "/guides/concepts/cycles"
+    },
+    {
+      "source": "/guides/concepts/initiatives-and-programs",
+      "destination": "/guides/concepts/initiatives"
+    },
+    {
+      "source": "/guides/manage/connections-and-imports",
+      "destination": "/guides/manage/connections"
+    },
+    {
+      "source": "/guides/manage/templates-automations-and-publishing",
+      "destination": "/guides/manage/templates"
+    }
+  ],
+  "navbar": {
+    "links": [
+      {
+        "label": "Pricing",
+        "href": "https://clearthedocket.com/pricing"
+      }
+    ],
+    "primary": {
+      "type": "button",
+      "label": "Open Docket",
+      "href": "https://clearthedocket.com"
+    }
+  },
+  "footer": {
+    "links": [
+      {
+        "header": "Product",
+        "items": [
+          {
+            "label": "Docket",
+            "href": "https://clearthedocket.com"
+          },
+          {
+            "label": "Pricing",
+            "href": "https://clearthedocket.com/pricing"
+          },
+          {
+            "label": "API reference",
+            "href": "https://api.clearthedocket.com/v1/docs"
+          }
+        ]
+      },
+      {
+        "header": "Company",
+        "items": [
+          {
+            "label": "About",
+            "href": "https://clearthedocket.com/about"
+          },
+          {
+            "label": "Privacy",
+            "href": "https://clearthedocket.com/privacy"
+          },
+          {
+            "label": "Terms",
+            "href": "https://clearthedocket.com/terms"
+          }
+        ]
+      }
+    ]
+  }
+}

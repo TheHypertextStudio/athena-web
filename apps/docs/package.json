@@ -2,5 +2,27 @@
   "name": "@docket/docs",
   "version": "0.0.0",
   "private": true,
-  "description": "Docket's public documentation site — MDX content rendered by Mintlify."
+  "description": "Docket's public documentation site — MDX content rendered by Mintlify.",
+  "type": "module",
+  "engines": {
+    "node": ">=24 <25"
+  },
+  "scripts": {
+    "docs:config": "studio-docs config --directory .",
+    "docs:config:check": "studio-docs config --directory . --check",
+    "docs:dev": "DO_NOT_TRACK=1 studio-docs dev --directory .",
+    "docs:check": "DO_NOT_TRACK=1 studio-docs check --directory .",
+    "test": "node --test tests/config.test.mjs",
+    "format:check": "prettier --check package.json prettier.config.mjs eslint.config.mjs tests/config.test.mjs",
+    "lint": "eslint tests/config.test.mjs prettier.config.mjs eslint.config.mjs --max-warnings=0"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.62.1",
+    "@thehypertextstudio/web-config": "0.1.0",
+    "@thehypertextstudio/web-docs": "0.1.0",
+    "eslint": "10.9.1",
+    "mint": "4.2.854",
+    "prettier": "3.9.6",
+    "typescript": "6.0.3"
+  }
 }

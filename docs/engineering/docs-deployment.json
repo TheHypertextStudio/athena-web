@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "observed_at": "2026-10-10",
+  "status": "source-preparation-provider-acceptance-pending",
+  "owner": "Hypertext Studio",
+  "provider": {
+    "organization": "hypertextstudio",
+    "project": "docket",
+    "repository": "TheHypertextStudio/athena-web",
+    "branch": "main",
+    "source_directory": "apps/docs",
+    "dashboard_upstream": "https://docket.mintlify.site",
+    "active_source_upstream": "https://docket.mintlify.dev",
+    "host_at_observed": "https://docket.hypertext.studio/docs",
+    "dashboard_url": "https://app.mintlify.com/hypertextstudio/docket/activity",
+    "hosted_preview": "unavailable-trial-ended"
+  },
+  "public": {
+    "origin": "https://clearthedocket.com",
+    "prefix": "/docs",
+    "observed_page": "https://clearthedocket.com/docs/guides/what-docket-is",
+    "observed_canonical": "https://docket.hypertext.studio/docs/guides/what-docket-is",
+    "expected_canonical": "https://clearthedocket.com/docs/guides/what-docket-is",
+    "api_reference": "https://api.clearthedocket.com/v1/docs"
+  },
+  "last_observed_update": {
+    "status": "success",
+    "source_sha": "0aadf2bd2669119ee8f99a1474e7fbac85273f57",
+    "source_ref": "refs/heads/main",
+    "displayed_at": "Oct 2, 2026, 5:05 PM"
+  },
+  "candidate": {
+    "reviewed_source_sha": null,
+    "shared_package_versions": {
+      "@thehypertextstudio/web-docs": "0.1.0",
+      "@thehypertextstudio/web-config": "0.1.0",
+      "mint": "4.2.854"
+    },
+    "registry_lock_sha256": null,
+    "generated_config_sha256": "5d4f4c777ed996542545b7f83e5e0e2e6a76e639f7d89639151a6d5b1fe83f8b",
+    "provider_update_identity": null,
+    "provider_source_sha": null,
+    "public_acceptance": "pending"
+  },
+  "remaining_gates": [
+    "Publish the reviewed immutable shared packages and grant scoped read-only registry access.",
+    "Generate the real registry lock and prove a clean frozen install plus affected CI.",
+    "Review preview and record source/config/lock identities.",
+    "Reconcile provider Host-at primary canonical while retaining existing public paths and proven upstream.",
+    "Verify exact-source Mintlify publication and public route/assets/search/canonical parity.",
+    "Record a complete known-working source and proxy configuration before integration."
+  ]
+}

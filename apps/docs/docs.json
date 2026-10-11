@@ -1,36 +1,82 @@
 {
   "$schema": "https://mintlify.com/docs.json",
-  "theme": "maple",
-  "name": "Docket",
-  "colors": {
-    "primary": "#4e4d4a",
-    "light": "#dddcd9",
-    "dark": "#777570"
-  },
   "appearance": {
     "default": "system"
   },
-  "fonts": {
-    "heading": {
-      "family": "Fraunces"
-    },
-    "body": {
-      "family": "IBM Plex Sans"
-    }
-  },
-  "logo": {
-    "light": "/logo/light.svg",
-    "dark": "/logo/dark.svg",
-    "href": "/"
+  "colors": {
+    "dark": "#777570",
+    "light": "#dddcd9",
+    "primary": "#4e4d4a"
   },
   "favicon": "/logo/favicon.svg",
-  "styling": {
-    "codeblocks": "dark"
+  "fonts": {
+    "body": {
+      "family": "IBM Plex Sans"
+    },
+    "heading": {
+      "family": "Fraunces"
+    }
+  },
+  "footer": {
+    "links": [
+      {
+        "header": "Product",
+        "items": [
+          {
+            "href": "https://clearthedocket.com",
+            "label": "Docket"
+          },
+          {
+            "href": "https://clearthedocket.com/pricing",
+            "label": "Pricing"
+          },
+          {
+            "href": "https://api.clearthedocket.com/v1/docs",
+            "label": "API reference"
+          }
+        ]
+      },
+      {
+        "header": "Company",
+        "items": [
+          {
+            "href": "https://clearthedocket.com/about",
+            "label": "About"
+          },
+          {
+            "href": "https://clearthedocket.com/privacy",
+            "label": "Privacy"
+          },
+          {
+            "href": "https://clearthedocket.com/terms",
+            "label": "Terms"
+          }
+        ]
+      }
+    ]
+  },
+  "logo": {
+    "dark": "/logo/dark.svg",
+    "href": "/",
+    "light": "/logo/light.svg"
+  },
+  "name": "Docket",
+  "navbar": {
+    "links": [
+      {
+        "href": "https://clearthedocket.com/pricing",
+        "label": "Pricing"
+      }
+    ],
+    "primary": {
+      "href": "https://clearthedocket.com",
+      "label": "Open Docket",
+      "type": "button"
+    }
   },
   "navigation": {
     "tabs": [
       {
-        "tab": "Guides",
         "groups": [
           {
             "group": "Getting started",
@@ -102,10 +148,10 @@
               "guides/athena/bring-your-own-model"
             ]
           }
-        ]
+        ],
+        "tab": "Guides"
       },
       {
-        "tab": "Developers",
         "pages": [
           "developers/overview",
           "developers/make-your-first-request",
@@ -118,71 +164,45 @@
           "developers/track-time",
           "developers/errors",
           "developers/platform-status"
-        ]
+        ],
+        "tab": "Developers"
       },
       {
-        "tab": "Changelog",
-        "pages": ["changelog"]
+        "pages": [
+          "changelog"
+        ],
+        "tab": "Changelog"
       }
     ]
   },
   "redirects": [
     {
-      "source": "/guides/daily/tasks-and-triage",
-      "destination": "/guides/daily/tasks"
+      "destination": "/guides/daily/tasks",
+      "source": "/guides/daily/tasks-and-triage"
     },
     {
-      "source": "/guides/daily/search-and-views",
-      "destination": "/guides/daily/search"
+      "destination": "/guides/daily/search",
+      "source": "/guides/daily/search-and-views"
     },
     {
-      "source": "/guides/concepts/cycles-and-milestones",
-      "destination": "/guides/concepts/cycles"
+      "destination": "/guides/concepts/cycles",
+      "source": "/guides/concepts/cycles-and-milestones"
     },
     {
-      "source": "/guides/concepts/initiatives-and-programs",
-      "destination": "/guides/concepts/initiatives"
+      "destination": "/guides/concepts/initiatives",
+      "source": "/guides/concepts/initiatives-and-programs"
     },
     {
-      "source": "/guides/manage/connections-and-imports",
-      "destination": "/guides/manage/connections"
+      "destination": "/guides/manage/connections",
+      "source": "/guides/manage/connections-and-imports"
     },
     {
-      "source": "/guides/manage/templates-automations-and-publishing",
-      "destination": "/guides/manage/templates"
+      "destination": "/guides/manage/templates",
+      "source": "/guides/manage/templates-automations-and-publishing"
     }
   ],
-  "navbar": {
-    "links": [
-      {
-        "label": "Pricing",
-        "href": "https://clearthedocket.com/pricing"
-      }
-    ],
-    "primary": {
-      "type": "button",
-      "label": "Open Docket",
-      "href": "https://clearthedocket.com"
-    }
+  "styling": {
+    "codeblocks": "dark"
   },
-  "footer": {
-    "links": [
-      {
-        "header": "Product",
-        "items": [
-          { "label": "Docket", "href": "https://clearthedocket.com" },
-          { "label": "Pricing", "href": "https://clearthedocket.com/pricing" },
-          { "label": "API reference", "href": "https://api.clearthedocket.com/v1/docs" }
-        ]
-      },
-      {
-        "header": "Company",
-        "items": [
-          { "label": "About", "href": "https://clearthedocket.com/about" },
-          { "label": "Privacy", "href": "https://clearthedocket.com/privacy" },
-          { "label": "Terms", "href": "https://clearthedocket.com/terms" }
-        ]
-      }
-    ]
-  }
+  "theme": "maple"
 }

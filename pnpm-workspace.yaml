@@ -142,6 +142,10 @@ catalog:
 # in transitively by tsx/vitest/vite. Approve only this known-good build (pnpm 11
 # `allowBuilds` map — replaces the deprecated onlyBuiltDependencies list).
 allowBuilds:
+  # Pinned Mintlify CLI: disable telemetry/browser downloads; allow its keychain binding.
+  '@scarf/scarf': false
+  keytar: true
+  puppeteer: false
   esbuild: true
   # Transitive-only native builds that Docket does not use at runtime (pulled in by
   # tooling/optional deps). Their install scripts stay BLOCKED — Docket's DB layer is
@@ -159,3 +163,9 @@ allowBuilds:
 
 patchedDependencies:
   '@better-auth/oauth-provider@1.6.19': patches/@better-auth__oauth-provider.patch
+
+# Mintlify CLI pins React 19.2.3 but omits its matching ReactDOM peer.
+packageExtensions:
+  '@mintlify/cli@4.0.1457':
+    dependencies:
+      react-dom: 19.2.3

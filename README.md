@@ -44,6 +44,18 @@ Android devices send selected notification captures and removals to the authenti
 and durable scheduled dispatch. See [personal inbound events](docs/engineering/specs/personal-inbound.md)
 for schemas, settlement, lifecycle rules, and the dispatch kill switch.
 
+## Public documentation
+
+Mintlify publishes `apps/docs` at [clearthedocket.com/docs](https://clearthedocket.com/docs).
+The common root commands are `pnpm docs:config`, `pnpm docs:config:check`, `pnpm docs:dev`, and
+`pnpm docs:check`. They use the pinned local CLI and shared company configuration while retaining
+Docket’s content, appearance, vocabulary/OAuth/MCP coverage, and API-owned Scalar reference.
+
+See [docs setup](apps/docs/README.md), [authoring](docs/engineering/docs-authoring.md), and
+[configuration, publishing, and recovery](docs/engineering/docs-operations.md). The source
+preparation checkpoint still requires shared registry publication, a real registry lock, and
+exact-source provider acceptance before integration. Application/native/backend setup remains below.
+
 ## From clone to a working app
 
 On macOS or Linux, the supported entrypoint is:

@@ -54,7 +54,7 @@
     "linear-agent:sandbox-check": "tsx scripts/linear-agent-sandbox-check.ts",
     "env:check": "tsx scripts/env-check.ts",
     "domain:check": "tsx scripts/domain-check.ts",
-    "docs:check": "tsx scripts/docs-check.ts",
+    "docs:check": "pnpm --filter @docket/docs docs:check && pnpm docs:source:check",
     "workspaces:provision": "tsx scripts/provision-workspaces.ts",
     "sunsama:import": "tsx scripts/import-sunsama.ts",
     "check:context-strategy": "tsx scripts/context-strategy-check.ts",
@@ -76,7 +76,11 @@
     "search:repair": "dotenv -e .env.local -- tsx scripts/search-backfill.ts --repair",
     "search:process": "dotenv -e .env.local -- tsx scripts/search-process-jobs.ts",
     "prepare": "if [ -f scripts/install-git-guardrails.sh ]; then sh scripts/install-git-guardrails.sh; fi && (git update-index --skip-worktree .env.local 2>/dev/null || true)",
-    "dev:doctor": "bash scripts/dev-stack.sh doctor"
+    "dev:doctor": "bash scripts/dev-stack.sh doctor",
+    "docs:config": "pnpm --filter @docket/docs docs:config",
+    "docs:config:check": "pnpm --filter @docket/docs docs:config:check",
+    "docs:dev": "pnpm --filter @docket/docs docs:dev",
+    "docs:source:check": "tsx scripts/docs-check.ts && pnpm --filter @docket/docs test && pnpm --filter @docket/test-utils exec vitest run tests/docs-policies/docs-site-coverage.test.ts"
   },
   "devDependencies": {
     "@clack/prompts": "^1.7.0",

@@ -1,27 +1,45 @@
-# `@docket/docs` — the public documentation site
+# Docket public documentation
 
-Mintlify renders this MDX and serves it at
-[`clearthedocket.com/docs`](https://clearthedocket.com/docs). Mintlify deploys the
-directory after a push to `main`.
+Mintlify renders this directory at [clearthedocket.com/docs](https://clearthedocket.com/docs).
+The existing `docket` project publishes `apps/docs` from `TheHypertextStudio/athena-web`, branch
+`main`. The web application currently serves the docs through its Vercel rewrite. The running
+API owns the separate [Scalar reference](https://api.clearthedocket.com/v1/docs).
 
-## Working on the site
+## Setup and commands
 
-Install Mintlify's `mint` CLI, then run `mint dev` from this directory. Before you commit, run
-`pnpm docs:check` from the repository root. CI also runs `mint validate`, the full internal link
-check, and `mint a11y`.
+Use Node 24 (validated with 24.20.0), pnpm 11.9.0, and company-managed read-only GitHub Packages
+access. From the repository root, install only the docs/tooling dependency graph:
 
-## What keeps these pages honest
+```sh
+pnpm install --filter @docket/root... --filter @docket/docs --frozen-lockfile
+pnpm docs:config:check
+```
 
-`pnpm docs:check` fails on missing navigation pages, orphan pages, weak frontmatter, broken local
-links and anchors, the wrong primary domain, or demo fixture copy. The docs policy suite also fails
-when the product adds a vocabulary key, MCP tool, or OAuth scope without updating its public
-coverage.
+This source preparation checkpoint depends on publication of the exact shared 0.1.0 packages,
+registry-read CI access, and regeneration of the monorepo lock. The current local tarball acceptance
+is recorded in [the operating reference](../../docs/engineering/docs-operations.md); it does not
+satisfy a fresh registry install. Keep this checkpoint out of `main` until that gate passes.
 
-## What lives here, and what does not
+| Root command             | Purpose                                                                                          |
+| ------------------------ | ------------------------------------------------------------------------------------------------ |
+| `pnpm docs:config`       | Generate committed `docs.json` from product-owned `docs.site.json`.                              |
+| `pnpm docs:config:check` | Fail on generated-file drift without writing.                                                    |
+| `pnpm docs:dev`          | Start the pinned local Mintlify preview at `http://localhost:3000`.                              |
+| `pnpm docs:check`        | Check drift, native build, links/anchors/redirects/snippets, accessibility, and Docket coverage. |
 
-This site is the **higher-level** reference. The endpoint-by-endpoint REST reference stays at
-`/v1/docs`, generated from the running API by Scalar, and `developers/rest-api.mdx` links into it
-rather than restating it. Nothing here is generated from the OpenAPI document.
+The local CLI is exactly `mint@4.2.854`, called through `@thehypertextstudio/web-docs@0.1.0`.
+Use these commands without a global Mintlify installation. Docs setup and preview do not require
+an application account, database, Stripe, or cloud provisioning. The full application keeps its
+existing `./bootstrap` setup; this docs slice does not replace it.
 
-`docs/` at the repository root contains internal engineering material. Mintlify does not publish
-it.
+## Authoring and configuration
+
+Edit MDX, images, and `docs.site.json`; regenerate and commit `docs.json` with its source.
+Keep the Maple theme, Fraunces headings, IBM Plex Sans body, approved palette, logos, navigation,
+redirects, public URLs, and heading anchors. Shared formatting comes from
+`@thehypertextstudio/web-config@0.1.0` in `prettier.config.mjs` and is scoped to this workspace.
+
+See [authoring](../../docs/engineering/docs-authoring.md) for content review and
+[operations](../../docs/engineering/docs-operations.md) for environment, publishing, canonical
+reconciliation, troubleshooting, and recovery. Internal engineering material under root `docs/`
+is outside the published navigation.

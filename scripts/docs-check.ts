@@ -1,4 +1,4 @@
-/** Validate the public Mintlify source without requiring Mintlify's 800-package local CLI. */
+/** Validate Docket's product-specific source invariants after the shared native Mintlify checks. */
 import { readdirSync, readFileSync } from 'node:fs';
 import { relative, resolve, sep } from 'node:path';
 import process from 'node:process';

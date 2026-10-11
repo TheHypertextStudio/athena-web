@@ -271,28 +271,10 @@ jobs:
 
       - uses: ./.github/actions/setup
 
+      # Existing build job: no added triggers or runners. One pinned local docs check replaces
+      # global installation plus three native invocations; product coverage remains in the chain.
+      # Budget: one Mintlify framework download on a cold runner, then build/links/a11y + source tests.
       - run: pnpm docs:check
-
-      - name: Install Mintlify CLI
-        run: npm install --global mint@4.2.854
-
-      - name: Validate Mintlify build
-        working-directory: apps/docs
-        env:
-          DO_NOT_TRACK: '1'
-        run: mint validate
-
-      - name: Check Mintlify links
-        working-directory: apps/docs
-        env:
-          DO_NOT_TRACK: '1'
-        run: mint broken-links --check-anchors --check-redirects --check-snippets
-
-      - name: Check Mintlify accessibility
-        working-directory: apps/docs
-        env:
-          DO_NOT_TRACK: '1'
-        run: mint a11y
 
       - run: pnpm turbo run build --concurrency=1
 

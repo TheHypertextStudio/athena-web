@@ -52,9 +52,9 @@ The common root commands are `pnpm docs:config`, `pnpm docs:config:check`, `pnpm
 Docket’s content, appearance, vocabulary/OAuth/MCP coverage, and API-owned Scalar reference.
 
 See [docs setup](apps/docs/README.md), [authoring](docs/engineering/docs-authoring.md), and
-[configuration, publishing, and recovery](docs/engineering/docs-operations.md). The source
-preparation checkpoint still requires shared registry publication, a real registry lock, and
-exact-source provider acceptance before integration. Application/native/backend setup remains below.
+[configuration, publishing, and recovery](docs/engineering/docs-operations.md). Shared packages
+`0.0.1` are published privately and this repository has Actions Read access. A real product registry
+lock and exact-source provider acceptance remain required. Application/native/backend setup remains below.
 
 ## Frontend standardization
 
@@ -64,6 +64,15 @@ The company frontend lifecycle is available through `./run setup`, `./run doctor
 See [Docket web setup](apps/web/README.md) and the [Workers compatibility checkpoint](docs/engineering/workers-compatibility.md).
 Vercel remains active while native Proxy compatibility, package registry and provider/auth gates
 are unresolved.
+
+Maintainers can explicitly dispatch the existing **Verify docs** workflow on
+`codex/docket-workers-compat` with `refresh_dependency_lock=true` to propose a fresh registry lock.
+It uses exact Node 24.20.0/pnpm 11.9.0 and the repository's short-lived GitHub token, disables install
+scripts, replays the frozen install, checks peers, and uploads only the proposed lock and its source/run
+provenance for seven days. It makes no documentation probes or deployments. Review the entire lock
+diff before adopting it; this job does not update source. The only new release-age exceptions are exact
+`@thehypertextstudio/web-config@0.0.1` and `@thehypertextstudio/web-docs@0.0.1`, the two consumed packages
+from approved candidate `38116243716-1`. Other existing age policy and build approvals are preserved.
 
 ## From clone to a working app
 

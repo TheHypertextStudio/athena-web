@@ -47,6 +47,17 @@
 - **Files changed**: `apps/docs/package.json`, `apps/web/package.json`, `pnpm-lock.yaml`, `.github/workflows/ci.yml`, `apps/web/tests/calendar/calendar-agenda-live-clock.test.tsx`, and this work log.
 - **Boundary and next acceptance**: Preserve existing assertions and run no added or standalone local tests. Formatting, actionlint and native hooks cover the focused source checkpoint; one coordinated full manual CI run will check the actual combined source. No provider deployment, main merge, credential creation or production writes. Workers runtime, isolated backend/auth/passkey-origin and cutover gates remain separate and open.
 
+### [WEBSITE-STANDARDIZATION-009] Include existing docs configuration tests in CI coverage
+
+- **Status**: IN_PROGRESS
+- **Started**: 2026-10-11
+- **Priority**: P2
+- **Observed failure**: Manual CI [38124725953](https://github.com/TheHypertextStudio/athena-web/actions/runs/38124725953), source `2dbea15c8968a4b4e71d9b962d5e414de0595193`, passed rest package coverage, then the unchanged package-script-integrity tooling assertion identified `apps/docs/package.json` as the sole package with tests but no `test:coverage` command. Web coverage and Core screen acceptance passed; API acceptance was still running when this repair was prepared.
+- **Plan and files**: Add only the missing native Node coverage command in `apps/docs/package.json`, running the same two existing configuration tests with every assertion intact. Explicitly include the imported shared docs `dist` modules because Node excludes dependencies and test files from coverage by default. Record the change here. No dependencies, lock, tests, thresholds, or workflow guards change.
+- **Research and boundary**: Exact Node 24.20.0 help and embedded coverage implementation support the coverage flag and explicit dependency inclusion; [official Node documentation](https://nodejs.org/docs/latest-v24.x/api/test.html#collecting-code-coverage) confirms those defaults. The existing import resolves to the actual `@thehypertextstudio/web-docs/dist/index.js` entry, which imports `config.js` and `mintlify.js`. The exact native coverage matcher matches all three real resolved paths with the explicit relative `.pnpm` pattern; a generic glob would not traverse that hidden directory. This measures loaded shared-generator integration exercised by the two tests, not Mintlify rendering or complete shared-library coverage. Context7's monthly quota remains exhausted.
+- **Validation and next acceptance**: Source inspection, formatting and normal hooks cover this checkpoint. No standalone tests or new tests are run. The next coordinated hosted rest coverage task must execute both docs tests and show a nonempty report containing real shared implementation paths; script presence alone is not acceptance. Wait for all current CI outcomes before any further dispatch. Provider, Workers runtime and cutover gates remain open.
+- **Learning**: A new workspace test package must implement the exact task CI invokes; a plain `test` script does not make Turbo's `test:coverage` gate run its tests.
+
 ### [INBOUND-NOTIFICATIONS-001] General personal inbound events and notification triage
 
 - **Status**: BLOCKED

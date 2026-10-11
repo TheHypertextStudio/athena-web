@@ -13,6 +13,7 @@
     "docs:dev": "DO_NOT_TRACK=1 studio-docs dev --directory .",
     "docs:check": "DO_NOT_TRACK=1 studio-docs check --directory .",
     "test": "node --test tests/config.test.mjs",
+    "test:coverage": "node --test --experimental-test-coverage --test-coverage-include='../../node_modules/.pnpm/*/node_modules/@thehypertextstudio/web-docs/dist/**' tests/config.test.mjs",
     "format:check": "prettier --check package.json prettier.config.mjs eslint.config.mjs tests/config.test.mjs",
     "lint": "eslint tests/config.test.mjs prettier.config.mjs eslint.config.mjs --max-warnings=0"
   },

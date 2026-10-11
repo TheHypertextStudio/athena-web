@@ -8,16 +8,23 @@ on:
         type: choice
         options: [production, staging]
         required: true
+      metadata_only:
+        description: Read only staging service metadata; no secret payloads or canary records
+        type: boolean
+        default: false
+        required: false
 
 permissions:
   contents: read
   id-token: write
+  packages: read
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   audit:
+    if: ${{ inputs.metadata_only != true }}
     name: Read recorded Lattice acceptance state
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -34,6 +41,7 @@ jobs:
       - name: Read scoped evidence
         env:
           AUDIT_TARGET: ${{ inputs.target }}
+          AUDIT_METADATA_ONLY: 'false'
           APP_MODE: production
           BILLING_ENABLED: 'false'
           SKIP_ENV_VALIDATION: '1'
@@ -42,4 +50,42 @@ jobs:
         with:
           name: lattice-acceptance-${{ inputs.target }}
           path: ${{ runner.temp }}/lattice-audit/report.json
+          retention-days: 7
+
+  staging-metadata:
+    if: ${{ inputs.metadata_only == true }}
+    name: Read staging runtime metadata only
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # Existing repository WIF variables; no environment is created or selected here.
+    steps:
+      - name: Require the fixed staging target before authentication
+        env:
+          AUDIT_TARGET: ${{ inputs.target }}
+        run: test "$AUDIT_TARGET" = staging
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+      - name: Set up the WIF-compatible Cloud SDK
+        uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3.0.1
+        with:
+          version: '>= 363.0.0'
+          project_id: athena-services
+      - uses: ./.github/actions/setup
+        with:
+          filter: '--filter @docket/root'
+      - name: Read only allowlisted service and revision metadata
+        env:
+          AUDIT_TARGET: staging
+          AUDIT_METADATA_ONLY: 'true'
+        run: pnpm exec tsx scripts/lattice-acceptance-audit.ts "$AUDIT_TARGET" "$RUNNER_TEMP/lattice-audit/metadata.json"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: lattice-runtime-metadata-staging
+          path: ${{ runner.temp }}/lattice-audit/metadata.json
+          if-no-files-found: error
           retention-days: 7

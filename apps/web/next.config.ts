@@ -4,20 +4,27 @@ import type { NextConfig } from 'next';
 import { docsSiteOrigin } from './src/lib/docs-site';
 import { validatedApiOrigin } from './src/lib/proxy-origin';
 import { assertPublishingHostConfigured } from './src/lib/require-publishing-host';
+import { cspHeader, securityHeaders } from './src/lib/response-security';
+
+const WORKERS_BUILD = process.env['DOCKET_WORKERS_BUILD'] === '1';
 
 /** The API origin the browser is rewritten to (same-origin so Better Auth cookies flow). */
 const apiUrl = process.env['API_URL'];
-if (!apiUrl) {
+if (!WORKERS_BUILD && !apiUrl) {
   throw new Error(
     'API_URL is required (the origin the web app proxies /v1 + /api/auth to) — see .env.example.',
   );
 }
-const API_ORIGIN = validatedApiOrigin(apiUrl, process.env['NEXT_PUBLIC_APP_URL']);
+const API_ORIGIN = WORKERS_BUILD
+  ? undefined
+  : validatedApiOrigin(apiUrl ?? '', process.env['NEXT_PUBLIC_APP_URL']);
 
-assertPublishingHostConfigured(
-  process.env['STUDIO_DEPLOYMENT_ENV'] ?? process.env['VERCEL_ENV'],
-  process.env['NEXT_PUBLIC_BRIEF_HOST'],
-);
+if (!WORKERS_BUILD) {
+  assertPublishingHostConfigured(
+    process.env['STUDIO_DEPLOYMENT_ENV'] ?? process.env['VERCEL_ENV'],
+    process.env['NEXT_PUBLIC_BRIEF_HOST'],
+  );
+}
 
 /**
  * Retired product-domain alias that must never become a second browser origin.
@@ -123,13 +130,6 @@ function authAllowedDevOrigins(): string[] {
  * is fine for all five — Docket's values are at least as strict, and `X-Frame-Options: DENY` is
  * wanted there. The CSP is the exception and is split into {@link cspHeader}; see it for why.
  */
-const securityHeaders = [
-  { key: 'X-Frame-Options', value: 'DENY' },
-  { key: 'X-Content-Type-Options', value: 'nosniff' },
-  { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
-  { key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains' },
-  { key: 'Permissions-Policy', value: 'camera=(), microphone=(self), geolocation=(self)' },
-];
 
 /**
  * The app's own CSP, applied everywhere except the documentation subpath.
@@ -151,7 +151,6 @@ const securityHeaders = [
  * The lookahead is anchored so `/documentation` keeps the CSP;
  * `tests/config/security-headers.test.ts` compiles this `source` and asserts both directions.
  */
-const cspHeader = [{ key: 'Content-Security-Policy', value: "frame-ancestors 'none'" }];
 
 /** Every route except the documentation subpath, as a header `source` pattern. */
 const NON_DOCS_ROUTES = '/:path((?!docs$|docs/).*)';
@@ -170,6 +169,7 @@ const NON_DOCS_ROUTES = '/:path((?!docs$|docs/).*)';
  */
 const nextConfig: NextConfig = {
   reactStrictMode: true,
+  env: { DOCKET_RUNTIME_TARGET: WORKERS_BUILD ? 'workers' : 'node' },
   // The dev-mode route indicator (bottom-left) is dev-only chrome that never ships to
   // production, but it overlaps real page content in narrow-viewport design-review captures
   // taken against `next dev` and reads as a product bug until you check the build mode.
@@ -201,7 +201,7 @@ const nextConfig: NextConfig = {
     ];
   },
   async redirects() {
-    const legacyPasskeyHost = legacyPasskeyHostMatcher();
+    const legacyPasskeyHost = WORKERS_BUILD ? undefined : legacyPasskeyHostMatcher();
     return [
       ...(legacyPasskeyHost
         ? [
@@ -271,16 +271,20 @@ const nextConfig: NextConfig = {
   },
   async rewrites() {
     return [
-      {
-        source: '/.well-known/lattice-client.json',
-        destination: `${API_ORIGIN}/.well-known/lattice-client.json`,
-      },
-      { source: '/v1/:path*', destination: `${API_ORIGIN}/v1/:path*` },
-      { source: '/api/auth/:path*', destination: `${API_ORIGIN}/api/auth/:path*` },
-      {
-        source: '/internal/integrations/github/:path*',
-        destination: `${API_ORIGIN}/internal/integrations/github/:path*`,
-      },
+      ...(API_ORIGIN
+        ? [
+            {
+              source: '/.well-known/lattice-client.json',
+              destination: `${API_ORIGIN}/.well-known/lattice-client.json`,
+            },
+            { source: '/v1/:path*', destination: `${API_ORIGIN}/v1/:path*` },
+            { source: '/api/auth/:path*', destination: `${API_ORIGIN}/api/auth/:path*` },
+            {
+              source: '/internal/integrations/github/:path*',
+              destination: `${API_ORIGIN}/internal/integrations/github/:path*`,
+            },
+          ]
+        : []),
       ...docsRewrites(),
     ];
   },

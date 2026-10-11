@@ -15,10 +15,12 @@
 declare global {
   namespace NodeJS {
     interface ProcessEnv {
+      /** Frozen platform target; never selects a staging-specific build. */
+      readonly DOCKET_RUNTIME_TARGET?: 'workers' | 'node';
       /**
-       * The WebAuthn relying-party ID, mirroring the server's required
-       * `BETTER_AUTH_PASSKEY_RP_ID`. Required (not a feature flag): the passkey Signal-API
-       * cleanup reads it with no fallback, so it must be set for every deployment.
+       * The remaining public build RP metadata, mirroring the server's
+       * `BETTER_AUTH_PASSKEY_RP_ID`. Optional stale-passkey cleanup uses the existing
+       * runtime public-config query; actual ceremonies use server-provided options.
        *
        * @remarks
        * Provider/connector availability is NOT declared here: it is no longer a build-time flag.

@@ -13,6 +13,8 @@ import { env } from '@docket/env/web';
 import type { Metadata } from 'next';
 import { headers } from 'next/headers';
 
+import { workerRequestConfig } from '@/lib/worker-request-context';
+
 /**
  * The host the visitor's browser actually asked on.
  *
@@ -44,7 +46,7 @@ export async function visitorHost(): Promise<string | undefined> {
  * @returns The brief document, or `null`.
  */
 export async function readBriefAt(apiPath: string): Promise<PublicBriefOut | null> {
-  const apiOrigin = env.NEXT_PUBLIC_API_URL;
+  const apiOrigin = workerRequestConfig()?.apiOrigin ?? env.NEXT_PUBLIC_API_URL;
   const host = await visitorHost();
   const url = new URL(apiPath, apiOrigin);
   if (host !== undefined) url.searchParams.set('host', host);

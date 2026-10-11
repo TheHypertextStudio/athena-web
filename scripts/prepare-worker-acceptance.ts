@@ -3,8 +3,15 @@ import { readFile, writeFile } from 'node:fs/promises';
 // Reuse the existing release runner's disposable backend, database and local passkey RP.
 const appUrl = new URL(process.env['APP_URL'] ?? '');
 const apiUrl = new URL(process.env['API_URL'] ?? '');
-if (appUrl.hostname !== 'docket.localhost' || apiUrl.hostname !== 'api.docket.localhost') {
-  throw new Error('Workers release acceptance requires the isolated docket.localhost origins');
+const briefHost = process.env['PUBLIC_BRIEF_HOST'];
+if (
+  appUrl.hostname !== 'docket.localhost' ||
+  apiUrl.hostname !== 'api.docket.localhost' ||
+  briefHost !== 'briefs.docket.localhost'
+) {
+  throw new Error(
+    'Workers release acceptance requires isolated docket.localhost origins and briefs',
+  );
 }
 const path = 'apps/web/.artifact/wrangler.site.jsonc';
 const raw: unknown = JSON.parse(await readFile(path, 'utf8'));
@@ -26,6 +33,10 @@ config['r2_buckets'] = [
 ];
 config['vars'] = {
   API_URL: apiUrl.origin,
+  WEB_URL: appUrl.origin,
+  PUBLIC_BRIEF_HOST: briefHost,
+  BETTER_AUTH_PASSKEY_RP_ID: appUrl.hostname,
+  DOCKET_LOCAL_ACCEPTANCE: '1',
   NEXT_PUBLIC_API_URL: apiUrl.origin,
   NEXT_PUBLIC_APP_URL: appUrl.origin,
   NEXT_PUBLIC_PASSKEY_RP_ID: appUrl.hostname,

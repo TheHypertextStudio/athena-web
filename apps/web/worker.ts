@@ -1,6 +1,13 @@
 // Generated implementation; the source declaration keeps pre-build checks independent of output.
 import nativeHandler from './.open-next/worker.js';
 import { releaseIdentityResponse } from './release-identity';
+import {
+  forwardWorkerApi,
+  isWorkerApiRequest,
+  trustedWorkerRequest,
+  workerHostRedirect,
+} from './worker-gateway';
+import { readWorkerRuntimeConfig } from './worker-runtime-config';
 
 export default {
   /** Serve immutable release identity or preserve the native Next response and image policy. */
@@ -9,6 +16,20 @@ export default {
     if (pathname === '/__studio/release') {
       return releaseIdentityResponse(env);
     }
+    let config;
+    try {
+      config = readWorkerRuntimeConfig(env);
+    } catch {
+      return new Response('Service unavailable', {
+        status: 503,
+        headers: { 'Cache-Control': 'no-store' },
+      });
+    }
+    request = trustedWorkerRequest(request, config);
+    const url = new URL(request.url);
+    const redirect = workerHostRedirect(url, config);
+    if (redirect) return redirect;
+    if (isWorkerApiRequest(url, config)) return forwardWorkerApi(request, config);
     const response: unknown = await nativeHandler.fetch(request, env, context);
     if (!(response instanceof Response)) {
       throw new TypeError('Native OpenNext handler did not return a Response');

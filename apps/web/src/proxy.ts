@@ -1,5 +1,8 @@
 import { NextResponse, type NextRequest } from 'next/server';
 
+import { isWorkerApplicationHost, type WorkerRuntimeConfig } from '../worker-runtime-config';
+import { workerRequestConfig } from './lib/worker-request-context';
+
 /**
  * Authenticated route-group top-level segments — the surfaces that require a session.
  *
@@ -109,7 +112,8 @@ function signInUrl(request: NextRequest, returnPath: string): URL {
  *
  * @returns The bare hostname, or `undefined` when unset or unparsable.
  */
-function ownHostname(): string | undefined {
+function ownHostname(config?: WorkerRuntimeConfig): string | undefined {
+  if (config) return config.appHostname;
   const appUrl = process.env['NEXT_PUBLIC_APP_URL'];
   if (appUrl === undefined) return undefined;
   try {
@@ -125,7 +129,8 @@ function ownHostname(): string | undefined {
  *
  * @returns The bare hostname, or `undefined` when unset.
  */
-function briefHostname(): string | undefined {
+function briefHostname(config?: WorkerRuntimeConfig): string | undefined {
+  if (config) return config.briefHostname;
   return process.env['NEXT_PUBLIC_BRIEF_HOST'];
 }
 
@@ -144,7 +149,8 @@ function briefHostname(): string | undefined {
  *
  * @returns The temporary legacy application hostname, or `undefined` outside an RP migration.
  */
-function transitionalPasskeyRecoveryHostname(): string | undefined {
+function transitionalPasskeyRecoveryHostname(config?: WorkerRuntimeConfig): string | undefined {
+  if (config) return config.recoveryHostname;
   const rpId = process.env.NEXT_PUBLIC_PASSKEY_RP_ID;
   const canonicalHost = ownHostname();
   if (!rpId || canonicalHost === undefined || rpId === canonicalHost) return undefined;
@@ -176,10 +182,15 @@ function isPortlessAppHost(host: string): boolean {
  * @param canonicalHost - The configured canonical application hostname.
  * @returns `true` for canonical, local, and temporary passkey-recovery application hosts.
  */
-function isApplicationHost(host: string, canonicalHost: string): boolean {
+function isApplicationHost(
+  host: string,
+  canonicalHost: string,
+  config?: WorkerRuntimeConfig,
+): boolean {
+  if (config) return isWorkerApplicationHost(host, config);
   return (
     host === canonicalHost ||
-    host === transitionalPasskeyRecoveryHostname() ||
+    host === transitionalPasskeyRecoveryHostname(config) ||
     isPortlessAppHost(host)
   );
 }
@@ -250,7 +261,7 @@ function entryRedirect(request: NextRequest): NextResponse | null {
  * only routes those hosts to this deployment at all when a brief needs serving. During a passkey
  * RP migration, the old `docket.<rp-id>` host remains an application host until recovery codes can
  * move the account to the new RP. Public brief hosts are rewritten to two internal shapes:
- * - **shared brief host** (`host === briefHostname()`): many workspaces coexist there, so the
+ * - **shared brief host** (`host === briefHostname(runtime)`): many workspaces coexist there, so the
  *   short address still needs a workspace segment — `<briefHost>/<workspace>/<slug>` rewrites to
  *   `/briefs/<workspace>/<slug>` (`app/(public)/briefs/[workspace]/[slug]/page.tsx`).
  * - **anything else** (a verified custom domain): the host itself already identifies exactly one
@@ -266,15 +277,17 @@ function entryRedirect(request: NextRequest): NextResponse | null {
  *   request headers.
  */
 export function proxy(request: NextRequest): NextResponse {
-  const own = ownHostname();
+  const runtime = workerRequestConfig();
+  const own = ownHostname(runtime);
   const host = requestHost(request).split(':')[0];
-  if (own !== undefined && host !== undefined && !isApplicationHost(host, own)) {
+  if (own !== undefined && host !== undefined && !isApplicationHost(host, own, runtime)) {
     const briefUrl = request.nextUrl.clone();
     // Bare root (`/`) must not become a trailing-slash target (`/briefs/`): Next's own
     // trailing-slash redirect never resolves for a path that arrived via `rewrite()` rather than a
     // real navigation, so the request hangs indefinitely instead of reaching a 404.
     const suffix = briefUrl.pathname === '/' ? '' : briefUrl.pathname;
-    briefUrl.pathname = host === briefHostname() ? `/briefs${suffix}` : `/briefs/domain${suffix}`;
+    briefUrl.pathname =
+      host === briefHostname(runtime) ? `/briefs${suffix}` : `/briefs/domain${suffix}`;
     return NextResponse.rewrite(briefUrl);
   }
 

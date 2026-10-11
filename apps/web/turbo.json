@@ -25,6 +25,7 @@
     "build:worker:app": {
       "dependsOn": ["^build"],
       "env": [
+        "DOCKET_WORKERS_BUILD",
         "NEXT_PUBLIC_*",
         "DOCS_MINTLIFY_ORIGIN",
         "BETTER_AUTH_PASSKEY_LEGACY_RP_ID",

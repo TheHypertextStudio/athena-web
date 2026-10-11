@@ -32,11 +32,37 @@ and `pnpm docs:check`.
 
 ## Workers migration checkpoint
 
-`pnpm build:worker` loads the existing root `.env.local` with the native dotenv CLI, then runs the existing Turbo dependency graph before native Next/OpenNext packaging. Explicit environment values retain precedence; isolated acceptance sets `STUDIO_ENV_FILE=/dev/null`.
-Vercel remains the active publisher. The isolated compatibility branch uses exact Next 16.3.8 and OpenNext 1.20.10, retaining React
-19.2.7 and the existing Node Proxy. Native Node middleware is experimental and is not officially
-maintained by OpenNext. The retained local Worker runs through the existing disposable release
-runner; provider, complete authentication and the full release gate remain separate requirements.
+From the repository root, `pnpm --dir apps/web build:worker` runs the existing Turbo dependency
+graph before native Next/OpenNext packaging. It no longer implicitly loads root `.env.local` or
+reads `STUDIO_ENV_FILE`. Supply reviewed build inputs explicitly through the calling environment;
+never load production secrets for local compatibility acceptance. Next can still load app-local
+`.env*` files, so isolated acceptance must establish that those are absent. The native worker build
+sets `DOCKET_WORKERS_BUILD=1`, freezing `DOCKET_RUNTIME_TARGET=workers`; the ordinary Node/Vercel
+build retains its existing API rewrites and environment behavior.
+
+The Workers target omits baked backend rewrites. Actual requests require explicit native runtime
+bindings: `API_URL`, `WEB_URL`, `BETTER_AUTH_PASSKEY_RP_ID`, `STUDIO_DEPLOYMENT_ENV`, and optional
+`PUBLIC_BRIEF_HOST` / `BETTER_AUTH_PASSKEY_LEGACY_RP_ID` metadata. Production requires the brief
+host. These are validated per request and read through native OpenNext request context in Proxy
+and brief SSR; missing or invalid Worker routing returns unavailable instead of falling back to
+production. Do not guess provider hosts or resources. Runtime routing does not change the remaining
+compiled `NEXT_PUBLIC_*` client/brand/Publishing/MCP inputs; their isolation is the next source
+slice, so the current local artifact is not an approved immutable shipping candidate.
+
+The existing `scripts/prepare-worker-acceptance.ts` generates a separate local-only config from
+explicit `docket.localhost` and `api.docket.localhost` origins and requires the exact local brief
+host `briefs.docket.localhost`. The release runner explicitly overrides both runtime/public brief
+vars only for Workers, preventing dotenv from importing the tracked example’s production brief
+host; its Node branch is unchanged. The helper sets `DOCKET_LOCAL_ACCEPTANCE=1`
+and removes public-network restrictions only from that disposable config. Provider source configs
+retain `global_fetch_strictly_public`, and artifact assembly rejects the local opt-in. Static
+hostname checks cannot establish DNS ownership or complete private-address isolation.
+
+Vercel remains the active publisher. The isolated compatibility branch uses exact Next 16.3.8 and
+OpenNext 1.20.10, retaining React 19.2.7 and the existing Node Proxy. Native Node middleware is
+experimental and is not officially maintained by OpenNext. Fresh explicit-local-input packaging
+and a Wrangler dry run passed; this is source/build evidence. Native request, streaming/cookie,
+authentication, private-cache, isolated backend/resource and provider acceptance remain open.
 
 `wrangler.jsonc` bundles the TypeScript entrypoint. Source-controlled `wrangler.site.jsonc` describes
 the retained flat modules and is available before build for binding snapshots. Both are strict JSON,
@@ -44,9 +70,11 @@ enforced by the scoped formatter; assembly rejects provider/configuration drift 
 prebuilt source bytes unchanged. Shared v0.1.8 owns eventual provider deployment and cache seeding.
 Publication channels, deployment declarations and callers remain inactive.
 
-Shared packages 0.0.1 are published. This product still needs approved registry access, its actual
-registry lock and fresh frozen consumer acceptance; local shipping-tarball validation does not
-satisfy that gate. Vercel stays active until all acceptance and observation gates pass.
+Shared packages 0.0.1 are published. The canonical lock was adopted from the independently
+reviewed native registry/frozen/strict-peer run 38124448126; current source/build checks retain
+separate evidence and limitations in `docs/WORKLOG.md`. Local installed-graph warnings and local
+artifacts do not replace hosted source checks or runtime/provider acceptance. Vercel stays active
+until all acceptance and observation gates pass.
 
 See [Workers compatibility and recovery](../../docs/engineering/workers-compatibility.md) for the
 observed native rejection, remaining dependency choices and provider acceptance gates.

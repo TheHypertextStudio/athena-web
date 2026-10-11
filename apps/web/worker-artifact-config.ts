@@ -1,5 +1,7 @@
 import { isDeepStrictEqual } from 'node:util';
 
+import { assertProviderRuntimeConfig } from './worker-runtime-config';
+
 /**
  * Keep the configuration frozen before build identical to the retained artifact configuration.
  * @param source The checked-in TypeScript bundling configuration.
@@ -10,6 +12,7 @@ export function assertWorkerArtifactConfig(source: unknown, prebuilt: unknown): 
   if (source === null || typeof source !== 'object' || Array.isArray(source)) {
     throw new Error('Workers source configuration must be an object');
   }
+  assertProviderRuntimeConfig(source);
   const expected = {
     ...source,
     main: 'worker.js',

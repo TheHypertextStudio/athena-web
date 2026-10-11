@@ -24,6 +24,10 @@ cleanup() {
     docker rm -f "${CONTAINER_NAME}" >/dev/null 2>&1 || true
   fi
   if [[ -n "${TEMP_DIR}" ]] && [[ -d "${TEMP_DIR}" ]]; then
+    if [[ -n "${RELEASE_LOG_DIRECTORY:-}" ]]; then
+      mkdir -p "${RELEASE_LOG_DIRECTORY}"
+      cp "${TEMP_DIR}"/*.log "${RELEASE_LOG_DIRECTORY}/" 2>/dev/null || true
+    fi
     rm -rf -- "${TEMP_DIR}"
   fi
 
@@ -146,7 +150,12 @@ main() {
   CONTAINER_NAME="docket-release-${RUN_ID}"
   DATABASE_NAME="docket_release_${RUN_ID//-/_}"
   TEMP_DIR=$(mktemp -d "${TMPDIR:-/tmp}/docket-release-${RUN_ID}.XXXXXX")
-  ENV_FILE="${repo_root}/.env.local"
+  RELEASE_WEB_RUNTIME="${RELEASE_WEB_RUNTIME:-node}"
+  case "${RELEASE_WEB_RUNTIME}" in
+    node|workers) ;;
+    *) echo 'RELEASE_WEB_RUNTIME must be node or workers.' >&2; return 1 ;;
+  esac
+  ENV_FILE="${RELEASE_ENV_FILE:-${repo_root}/.env.local}"
   api_log="${TEMP_DIR}/api.log"
   web_log="${TEMP_DIR}/web.log"
 
@@ -186,13 +195,24 @@ main() {
   API_URL="http://api.docket.localhost:${api_port}"
 
   run_migrations "${DATABASE_URL}" "${ENV_FILE}"
-  run_release_env env NODE_OPTIONS=--max-old-space-size=4096 \
-    pnpm turbo run build --filter=@docket/api --filter=@docket/web --concurrency=1
-
-  standalone_root="${repo_root}/apps/web/.next/standalone/apps/web"
-  mkdir -p "${standalone_root}/.next"
-  cp -R "${repo_root}/apps/web/.next/static" "${standalone_root}/.next/static"
-  cp -R "${repo_root}/apps/web/public" "${standalone_root}/public"
+  if [[ "${RELEASE_WEB_RUNTIME}" == workers ]]; then
+    run_release_env env NODE_OPTIONS=--max-old-space-size=4096 \
+      pnpm turbo run build:worker:app --filter=@docket/web --concurrency=1
+    run_release_env pnpm exec tsx scripts/prepare-worker-acceptance.ts
+    (
+      cd "${repo_root}/apps/web/.artifact"
+      run_release_env env PATH="${repo_root}/apps/web/node_modules/.bin:${PATH}" \
+        opennextjs-cloudflare populateCache local \
+        --config wrangler.local.jsonc
+    )
+  else
+    run_release_env env NODE_OPTIONS=--max-old-space-size=4096 \
+      pnpm turbo run build --filter=@docket/api --filter=@docket/web --concurrency=1
+    standalone_root="${repo_root}/apps/web/.next/standalone/apps/web"
+    mkdir -p "${standalone_root}/.next"
+    cp -R "${repo_root}/apps/web/.next/static" "${standalone_root}/.next/static"
+    cp -R "${repo_root}/apps/web/public" "${standalone_root}/public"
+  fi
 
   (
     cd "${repo_root}"
@@ -201,8 +221,16 @@ main() {
   API_PID=$!
 
   (
-    cd "${standalone_root}"
-    run_release_env env HOSTNAME=127.0.0.1 PORT="${web_port}" node server.js
+    if [[ "${RELEASE_WEB_RUNTIME}" == workers ]]; then
+      cd "${repo_root}/apps/web/.artifact"
+      run_release_env env PATH="${repo_root}/apps/web/node_modules/.bin:${PATH}" \
+        wrangler dev --config wrangler.local.jsonc --local \
+        --port "${web_port}" --ip 127.0.0.1 --env-file /dev/null \
+        --persist-to .wrangler/state
+    else
+      cd "${standalone_root}"
+      run_release_env env HOSTNAME=127.0.0.1 PORT="${web_port}" node server.js
+    fi
   ) >"${web_log}" 2>&1 &
   WEB_PID=$!
 

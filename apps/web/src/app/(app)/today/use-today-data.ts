@@ -5,7 +5,7 @@ import { useContextState } from '@docket/ui/components';
 import { useMemo } from 'react';
 
 import { useActiveOrg } from '@/components/active-org';
-import { dateKeyForInstant, resolveScheduleTimezone } from '@/components/scheduling';
+import { dateKeyForInstant, useHydratedScheduleTimezone } from '@/components/scheduling';
 import { api } from '@/lib/api';
 import { apiQueryOptions, queryKeys, useApiQuery } from '@/lib/query';
 import { todayISODate } from '@/lib/today';
@@ -40,7 +40,7 @@ export function useTodayData(): TodayPageData {
       'Could not load your calendar preferences.',
     ),
   );
-  const displayTimezone = resolveScheduleTimezone(preferencesQ.data?.timezone);
+  const displayTimezone = useHydratedScheduleTimezone(preferencesQ.data?.timezone);
   const date = dateKeyForInstant(new Date().toISOString(), displayTimezone) ?? todayISODate();
   const todayQ = useApiQuery(
     apiQueryOptions(

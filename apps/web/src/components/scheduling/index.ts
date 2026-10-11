@@ -95,3 +95,5 @@ export type {
   ScheduleTimedLaneContextRenderContext,
   ScheduleTimedLaneRenderContext,
 } from './scheduling-types';
+
+export { useHydratedScheduleTimezone } from './use-hydrated-schedule-timezone';

@@ -25,7 +25,7 @@ import {
   useWorkLocationCalendarComposition,
 } from '@/components/work-location/use-work-location-calendar-composition';
 import {
-  resolveScheduleTimezone,
+  useHydratedScheduleTimezone,
   scheduleDateRange,
   useScheduleDisplayDate,
 } from '@/components/scheduling';
@@ -163,7 +163,7 @@ export function AgendaProvider({ initialDate, children }: AgendaProviderProps): 
       { staleTime: STALE.standard },
     ),
   );
-  const displayTimezone = resolveScheduleTimezone(preferencesQuery.data?.timezone);
+  const displayTimezone = useHydratedScheduleTimezone(preferencesQuery.data?.timezone);
   const [pixelsPerHour, setPixelsPerHour] = useState(RAIL_PIXELS_PER_HOUR);
   useEffect(() => {
     const stored = readRailScale();

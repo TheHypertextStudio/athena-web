@@ -12,8 +12,8 @@ Hypertext Studio; source lives in `TheHypertextStudio/athena-web`, `apps/docs`.
 | Product config           | `apps/docs/docs.site.json`                                   |
 | Generated config         | `apps/docs/docs.json`; commit it with its source             |
 | Content, assets, styling | Existing MDX, `logo/`, `style.css`                           |
-| Shared config            | `@thehypertextstudio/web-config@0.1.0`; docs-only formatting |
-| Shared docs              | `@thehypertextstudio/web-docs@0.1.0`                         |
+| Shared config            | `@thehypertextstudio/web-config@0.0.1`; docs-only formatting |
+| Shared docs              | `@thehypertextstudio/web-docs@0.0.1`                         |
 | Native CLI               | `mint@4.2.854`                                               |
 | Runtime                  | Node 24; local acceptance uses 24.20.0; pnpm 11.9.0          |
 | Application setup        | Existing root `./bootstrap`; unchanged by the docs slice     |
@@ -32,10 +32,10 @@ versions to repair a docs-only install.
 
 ### Source preparation and registry gate
 
-The exact 0.1.0 packages are not yet published. Local acceptance uses an ignored override to the
+The exact 0.0.1 packages are published. Current local acceptance uses an ignored override to the
 reviewed package tarballs and a separate local validation lock; the committed monorepo lock is the
 pre-adoption registry lock. No `file:` resolution is committed and no registry acceptance is claimed.
-Before integrating this checkpoint into `main`, publish the reviewed immutable packages, grant
+Before integrating this checkpoint into `main`, grant
 read-only access to this repository's CI, generate the real registry lock, and prove the scoped
 frozen install from a clean checkout. CI's existing setup action must receive the scoped registry
 and package-read authorization for all jobs that install the monorepo lock. Keep install credentials

@@ -39,7 +39,7 @@ import {
   useCalendarItemSelection,
 } from '@/components/calendar/item-peek/use-calendar-item-selection';
 import CreateBlockForm from '@/components/calendar/create-block-form';
-import { resolveScheduleTimezone, useScheduleDisplayDate } from '@/components/scheduling';
+import { useHydratedScheduleTimezone, useScheduleDisplayDate } from '@/components/scheduling';
 import { workLocationPlacesDef } from '@/components/work-location/work-location-data';
 import { useWorkLocationCalendarComposition } from '@/components/work-location/use-work-location-calendar-composition';
 import { api } from '@/lib/api';
@@ -83,18 +83,6 @@ const ZOOM_GESTURE_COMMIT_MS = 300;
 interface CalendarClientProps {
   readonly initialNow?: string;
   readonly initialTimezone?: HubPreferences['timezone'];
-}
-
-/** Keep the first server and browser date in the same zone until hydration finishes. */
-function useHydratedCalendarTimezone(
-  timezone: HubPreferences['timezone'] | undefined,
-  initialTimezone: HubPreferences['timezone'] | undefined,
-): string {
-  const [hydrated, setHydrated] = useState(false);
-  useEffect(() => {
-    setHydrated(true);
-  }, []);
-  return resolveScheduleTimezone(timezone ?? initialTimezone ?? (hydrated ? undefined : 'UTC'));
 }
 
 /** Dismiss only anchored peeks when a date or comparison change replaces their source lanes. */
@@ -174,7 +162,7 @@ export function CalendarClientWithInitialData({
   const workPlacesQuery = useApiListQuery(workLocationPlacesDef());
   const hubPreferences = preferencesQuery.data;
   const preferences = hubPreferences?.calendar;
-  const displayTimezone = useHydratedCalendarTimezone(hubPreferences?.timezone, initialTimezone);
+  const displayTimezone = useHydratedScheduleTimezone(hubPreferences?.timezone, initialTimezone);
   const {
     date: anchorDate,
     today,

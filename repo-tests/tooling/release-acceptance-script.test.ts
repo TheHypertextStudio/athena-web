@@ -80,6 +80,21 @@ describe('release acceptance runner', () => {
     expect(source).toContain('rm -rf -- "${TEMP_DIR}"');
   });
 
+  it('can select the retained local Worker without replacing the disposable release stack', () => {
+    const source = readRunner();
+    expect(source).toContain('RELEASE_WEB_RUNTIME:-node');
+    expect(source).toContain('RELEASE_ENV_FILE:-');
+    expect(source).toContain('build:worker:app --filter=@docket/web');
+    expect(source).toContain('prepare-worker-acceptance.ts');
+    expect(source).toContain('populateCache local');
+    expect(source).toContain('wrangler dev --config wrangler.local.jsonc --local');
+    expect(source).toContain('--env-file /dev/null');
+    expect(source).toContain('RELEASE_LOG_DIRECTORY');
+    expect(source).toContain('postgres:17-alpine');
+    expect(source).toContain('run_migrations "${DATABASE_URL}" "${ENV_FILE}"');
+    expect(source).not.toContain('next dev');
+  });
+
   it('forces the generated database URL through a hostile dotenv file', () => {
     const source = readRunner();
     if (source.length === 0) return;

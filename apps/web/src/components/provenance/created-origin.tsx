@@ -25,6 +25,7 @@ import {
 } from '@/components/views/entity-detail-layout';
 import type { ObjectRef } from '@/lib/actions/object';
 import { formatCalendarDate } from '@/lib/format-date';
+import { useHydratedScheduleTimezone } from '@/components/scheduling/use-hydrated-schedule-timezone';
 import type { ProvenanceSubject } from '@/lib/provenance/defs';
 
 import { OriginHoverCard } from './origin-card';
@@ -78,6 +79,7 @@ function WithOriginCard({ subject, children }: WithOriginCardProps): JSX.Element
  */
 export function CreatedOriginDate({ subject, createdAt }: CreatedOriginProps): JSX.Element {
   const resolved = useCreatedSubject(subject);
+  const timeZone = useHydratedScheduleTimezone(undefined);
   return (
     <WithOriginCard subject={resolved}>
       <button
@@ -85,7 +87,12 @@ export function CreatedOriginDate({ subject, createdAt }: CreatedOriginProps): J
         data-created-origin=""
         className="hover:text-on-surface focus-visible:ring-ring rounded-md text-left focus-visible:ring-1 focus-visible:outline-none"
       >
-        {formatCalendarDate(createdAt) ?? '—'}
+        {formatCalendarDate(createdAt, {
+          month: 'short',
+          day: 'numeric',
+          year: 'numeric',
+          timeZone,
+        }) ?? '—'}
       </button>
     </WithOriginCard>
   );
@@ -99,6 +106,7 @@ export function CreatedOriginDate({ subject, createdAt }: CreatedOriginProps): J
  */
 export function CreatedOriginChip({ subject, createdAt }: CreatedOriginProps): JSX.Element {
   const resolved = useCreatedSubject(subject);
+  const timeZone = useHydratedScheduleTimezone(undefined);
   return (
     <EntityMetadataItem priority={7} overflowOnly>
       <WithOriginCard subject={resolved}>
@@ -109,7 +117,15 @@ export function CreatedOriginChip({ subject, createdAt }: CreatedOriginProps): J
           className={cn(ENTITY_METADATA_CHIP_CLASS, 'text-on-surface text-body-medium')}
         >
           <Schedule aria-hidden className="size-4" />
-          <span className="truncate">Created {formatCalendarDate(createdAt) ?? '—'}</span>
+          <span className="truncate">
+            Created{' '}
+            {formatCalendarDate(createdAt, {
+              month: 'short',
+              day: 'numeric',
+              year: 'numeric',
+              timeZone,
+            }) ?? '—'}
+          </span>
         </Button>
       </WithOriginCard>
     </EntityMetadataItem>

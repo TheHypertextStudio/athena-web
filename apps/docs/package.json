@@ -18,8 +18,8 @@
   },
   "devDependencies": {
     "@playwright/test": "1.62.1",
-    "@thehypertextstudio/web-config": "0.1.0",
-    "@thehypertextstudio/web-docs": "0.1.0",
+    "@thehypertextstudio/web-config": "0.0.1",
+    "@thehypertextstudio/web-docs": "0.0.1",
     "eslint": "10.9.1",
     "mint": "4.2.854",
     "prettier": "3.9.6",

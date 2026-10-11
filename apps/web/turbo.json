@@ -30,7 +30,14 @@
         "BETTER_AUTH_PASSKEY_LEGACY_RP_ID",
         "STUDIO_DEPLOYMENT_ENV"
       ],
-      "outputs": [".next/**", "!.next/cache/**", "!.next/dev/**", ".open-next/**", "public/sw.js"]
+      "outputs": [
+        ".next/**",
+        "!.next/cache/**",
+        "!.next/dev/**",
+        ".open-next/**",
+        ".artifact/**",
+        "public/sw.js"
+      ]
     },
     "dev": {
       "dependsOn": ["^db:migrate", "@docket/api#build"],

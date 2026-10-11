@@ -2,8 +2,8 @@
 # Generated from TheHypertextStudio/release-engineering. Update through its renderer.
 set -eu
 root=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-version='v0.1.7'
-expected='016e239daa6c30d48198648d97d36f52ad5d28fb3c04cc4cd67a1700d30fa6ad'
+version='v0.1.8'
+expected='61f746429fc0ffc7826df2bde61ee4d41323fb5fa0c9f8661255040e7838afd4'
 repo='TheHypertextStudio/release-engineering'
 fail() { printf '%s\n' "studio: $*" >&2; exit 1; }
 command -v python3 >/dev/null 2>&1 || fail 'Python 3.11 or newer is required.'

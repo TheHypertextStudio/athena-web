@@ -20,7 +20,7 @@ components:
     dev: [pnpm, dev]
     build:
       script: build:worker
-      output: .open-next
+      output: .artifact
 # Candidate publication remains disabled until supported native Proxy/runtime acceptance,
 # registry installation, scoped shared workflow publication and provider gates are satisfied.
 release:

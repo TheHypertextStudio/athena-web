@@ -27,7 +27,7 @@
     "test:e2e:evidence": "E2E_EVIDENCE=1 playwright test",
     "build:worker": "pnpm --dir ../.. exec dotenv -e ${STUDIO_ENV_FILE:-.env.local} -- env NODE_ENV=production turbo run build:worker:app --filter @docket/web",
     "test:workers:source": "NODE_OPTIONS=--no-experimental-webstorage vitest run tests/config tests/auth/entry-gate.test.ts tests/auth/server-session.test.ts tests/lib/docs-origin.test.ts tests/lib/require-publishing-host.test.ts tests/lib/proxy-origin.test.ts",
-    "build:worker:app": "NODE_OPTIONS=--max-old-space-size=4096 next build --webpack && tsx ../../packages/service-worker/bin/build.ts --app-root=. --production && opennextjs-cloudflare build --skipNextBuild"
+    "build:worker:app": "NODE_OPTIONS=--max-old-space-size=4096 next build --webpack && tsx ../../packages/service-worker/bin/build.ts --app-root=. --production && opennextjs-cloudflare build --skipNextBuild && tsx ../../scripts/assemble-web-worker.ts"
   },
   "dependencies": {
     "@better-auth/passkey": "catalog:",
@@ -74,7 +74,7 @@
     "lowlight": "^3.3.0",
     "maplibre-gl": "^6.3.0",
     "marked": "17.0.6",
-    "next": "catalog:",
+    "next": "16.3.8",
     "react": "catalog:",
     "react-dom": "catalog:",
     "zod": "catalog:"
@@ -85,7 +85,7 @@
     "@docket/test-utils": "workspace:*",
     "@docket/tsconfig": "workspace:*",
     "@modelcontextprotocol/sdk": "catalog:",
-    "@opennextjs/cloudflare": "1.19.0",
+    "@opennextjs/cloudflare": "1.20.10",
     "@playwright/test": "1.62.1",
     "@tailwindcss/postcss": "^4.3.2",
     "@testing-library/dom": "^10.4.1",
@@ -106,7 +106,7 @@
     "vitest": "catalog:",
     "wrangler": "4.148.0",
     "@docket/service-worker": "workspace:*",
-    "@thehypertextstudio/web-config": "0.1.0",
+    "@thehypertextstudio/web-config": "0.0.1",
     "eslint": "10.9.1",
     "prettier": "3.9.6",
     "typescript": "6.0.3"

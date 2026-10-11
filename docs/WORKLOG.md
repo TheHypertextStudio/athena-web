@@ -7,6 +7,15 @@
 
 ## Active Tasks
 
+### [WEBSITE-STANDARDIZATION-016] Suppress automatic Vercel main builds for source integration
+
+- **Status**: REVIEW (source reviewed; provider containment/integration pending)
+- **Started**: 2026-10-11
+- **Plan and files**: Add only `git.deploymentEnabled.main=false` to `apps/web/vercel.json`, preserving its existing schema and pinned ignore command; record this slice in this log. Unspecified preview branches retain their existing default. Root independently reviewed the focused source diff as clear.
+- **Validation**: Native Node 24.20.0 Prettier, strict JSON projection preserving all pre-existing fields and `git diff --check` passed. No tests were added/manually run; no dependency/lock, main, PR or provider changes. Normal hooks and one compatibility-branch push are authorized.
+- **Boundaries**: Incoming configuration alone is not first-event containment proof. Before source integration, separately establish the reviewed provider automatic-domain-assignment hold and GitHub publication hold, current serving/queue identities and recovery. Backend service metadata read failed reauthentication before returning identities; no current backend acceptance is claimed. Before restoring automatic domain assignment, require no active/queued builds and no newly READY staged production build relative to the retained baseline; otherwise retain the hold until reviewed.
+- **Runner footprint and learning**: No workflow or extra runner invocation. The main Git exclusion reduces automatic provider builds; it does not disable explicit promotion or prove Workers runtime/auth acceptance.
+
 ### [WEBSITE-STANDARDIZATION-015] Prepare a bounded frontend source publication hold
 
 - **Status**: REVIEW

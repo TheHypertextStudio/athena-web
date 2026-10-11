@@ -181,6 +181,8 @@ one:
 2. Two blocks is prose — picking one would be a guess.
 3. Malformed JSON is never repaired, and a call to a tool that was not offered this turn is prose.
 
+A reply ending in unsupported `<tool_call>…</tool_call>` syntax receives one model correction request. No tool runs from that XML, and the adapter does not infer arguments. The correction must use the same fenced JSON protocol or give an ordinary final answer. Repeated XML fails the turn instead of silently completing it. The normal tool registry, input validation, authority checks, and approval policy still govern a corrected call.
+
 Tool-use ids are deterministic (`toolu_lat_0000`, continuing the transcript's count) because the id
 is the join key between a `tool_use` block and its `tool_result`, and both are persisted — a
 conversation resumed after a restart must pair them exactly as it did the first time.

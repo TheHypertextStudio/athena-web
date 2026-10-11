@@ -137,6 +137,34 @@ export function buildLatticeTurnMessages(input: TurnInput): readonly LatticeChat
   ];
 }
 
+/** Request one bounded correction for unsupported XML calls, without guessing tool arguments. */
+async function requestLatticeTurn(
+  chat: LatticeChatPort,
+  request: LatticeChatPortRequest,
+): Promise<LatticeChatPortResult> {
+  const result = await chat.runChat(request);
+  if (!/<tool_call>[\s\S]*<\/tool_call>\s*$/i.test(result.text)) return result;
+  const corrected = await chat.runChat({
+    ...request,
+    messages: [
+      ...request.messages,
+      { role: 'assistant', content: result.text },
+      {
+        role: 'developer',
+        content:
+          'No tool has run. Your previous reply used unsupported tool-call syntax. ' +
+          'To call an offered tool, reply with ONLY a fenced JSON block containing ' +
+          '{"tool":"<offered tool name>","input":{<schema-valid arguments>}}. ' +
+          'Do not use XML. Otherwise give your final answer in ordinary prose with no tool-call markers.',
+      },
+    ],
+  });
+  if (/<tool_call>[\s\S]*<\/tool_call>\s*$/i.test(corrected.text)) {
+    throw new Error('Lattice returned unsupported tool-call syntax after one correction.');
+  }
+  return corrected;
+}
+
 /** Provider-neutral turn runtime whose model computation stays on the person's paired device. */
 export class LatticeAgentTurnRuntime implements AgentTurnRuntime {
   private readonly config: LatticeTurnRuntimeConfig;
@@ -153,7 +181,7 @@ export class LatticeAgentTurnRuntime implements AgentTurnRuntime {
    * person made by selecting their own device.
    */
   async *streamTurn(input: TurnInput): AsyncIterable<TurnEvent> {
-    const result = await this.config.chat.runChat({
+    const result = await requestLatticeTurn(this.config.chat, {
       messages: buildLatticeTurnMessages(input),
       maxTokens: this.config.maxTokens ?? DEFAULT_LATTICE_MAX_TOKENS,
       ...(this.config.temperature === undefined ? {} : { temperature: this.config.temperature }),

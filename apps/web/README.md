@@ -152,15 +152,18 @@ runtime acceptance; previous assembler/dry-run receipts do not prove it.
 
 The staging configuration names `docket-web-staging` and `docket-web-staging-cache` with:
 
-| Binding                     | Staging value                                        |
-| --------------------------- | ---------------------------------------------------- |
-| `STUDIO_DEPLOYMENT_ENV`     | `staging`                                            |
-| `WEB_URL`                   | `https://docket-staging.hypertext.studio`            |
-| `API_URL`                   | `https://docket-api-staging-mdchlo736a-uc.a.run.app` |
-| `BETTER_AUTH_PASSKEY_RP_ID` | `docket-staging.hypertext.studio`                    |
+| Binding                     | Staging value                                                 |
+| --------------------------- | ------------------------------------------------------------- |
+| `STUDIO_DEPLOYMENT_ENV`     | `staging`                                                     |
+| `WEB_URL`                   | `https://docket-staging.hypertext.studio`                     |
+| `API_URL`                   | `https://docket-api-staging-770668668034.us-central1.run.app` |
+| `BETTER_AUTH_PASSKEY_RP_ID` | `docket-staging.hypertext.studio`                             |
 
-These are intended frontend bindings, not proof that server auth has transitioned. The October 11
-public staging API config still advertised RP `docket-staging-gilt.vercel.app`. Coordinate its
+These are intended frontend bindings, not proof that server auth has transitioned. Authenticated
+Google Console inspection on October 11 confirmed revision `docket-api-staging-00008-4qv` at 100%
+traffic and the API URL above. Its web URL, trusted origin and RP still name
+`docket-staging-gilt.vercel.app`, and its allowed hosts contain that frontend and the native API.
+Coordinate its
 `WEB_URL`, trusted origins, allowed hosts, RP, cookie domain, enabled OAuth callbacks and Lattice
 metadata/callback identity before browser acceptance; retain isolated data and secret references.
 Keep the prior frontend/API configuration for recovery. Old-stage passkeys need not work under a

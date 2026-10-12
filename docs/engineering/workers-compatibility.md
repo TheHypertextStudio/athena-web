@@ -60,8 +60,10 @@ retired with its endpoint. The default Node acceptance branch remains the refere
 ## Staging and production acceptance
 
 The intended staging frontend is `https://docket-staging.hypertext.studio` against the existing
-isolated API `https://docket-api-staging-mdchlo736a-uc.a.run.app`. Source binds that frontend RP, but
-October 11 public backend config still advertised `docket-staging-gilt.vercel.app`. Reconcile actual
+isolated API `https://docket-api-staging-770668668034.us-central1.run.app`. Authenticated Google
+Console inspection on October 11 confirmed revision `docket-api-staging-00008-4qv` serving all
+traffic at that API URL. Source binds the intended Workers frontend RP, but the backend's web URL,
+trusted origin and RP still name `docket-staging-gilt.vercel.app`. Reconcile actual
 server trusted origins/hosts/RP/cookies, OAuth and Lattice registrations before synthetic browser
 auth acceptance; no new backend is required. See the web README for exact runtime bindings and
 compile inputs. Do not infer provisioning or auth readiness from checked-in values.

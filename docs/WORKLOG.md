@@ -7,6 +7,16 @@
 
 ## Active Tasks
 
+### [WEBSITE-STANDARDIZATION-019] Reconcile staging API identity before approved integration
+
+- **Status**: COMPLETE (local source correction; provider auth acceptance remains open)
+- **Started**: 2026-10-11
+- **Plan**: Use the current native Cloud Run staging API URL in the source Wrangler configuration and product setup docs. Review the final delivery and build through the existing native Turbo/OpenNext graph before one linear main integration.
+- **Provider evidence**: Authenticated Google Console shows staging revision `docket-api-staging-00008-4qv` serving 100% traffic at `https://docket-api-staging-770668668034.us-central1.run.app`. Its web URL, trusted origin and passkey RP still name the old Vercel staging host. This source correction does not change backend authentication or establish staging acceptance.
+- **Publication decision**: The user explicitly approved keeping automatic production deployment and the backend rollout with this integration, including the existing migration step. Preserve the ordinary CI, image-build and deploy-main gates; do not introduce a publication hold or manual replacement. Production API/admin revision and image baselines are recorded in the migration's operational notes.
+- **Files**: Source Wrangler staging API URL, web README, compatibility guide and this log. No dependency, lockfile, production runtime input or backend source changes are needed for this correction.
+- **Validation**: Independent final delivery review found no actionable source issues. A fresh Node 24.20.0 native Turbo `build:worker --filter=@docket/web --concurrency=1` completed with two successful tasks, Next compilation and TypeScript, all 97 static pages, service-worker bundling and OpenNext packaging; build ID `nwwBRrtTrDMQpZDoyMn9B`. Inputs explicitly select the intended staging frontend, current API and RP; no provider operation or credential was used. Existing installed-graph `minimumReleaseAgeExclude` drift and the unset registry placeholder remain warnings, so frozen-install ordinary CI still owns full release acceptance. Formatting and diff checks passed. No new/manual tests were run; existing mandatory hooks and ordinary CI remain in place.
+
 ### [WEBSITE-STANDARDIZATION-018] Prepare native manual Workers staging deployment
 
 - **Status**: COMPLETE (local source preparation; integration and dispatch remain held)

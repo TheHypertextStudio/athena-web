@@ -7,6 +7,14 @@
 
 ## Active Tasks
 
+### [WEBSITE-STANDARDIZATION-021] Restore private package reads for scheduler setup
+
+- **Status**: REVIEW (source checks passed; hosted rollout pending)
+- **Plan**: Add `packages: read` to existing setup jobs missing private registry metadata access. Preserve frozen installs, package filters, short-lived GitHub tokens, Google WIF and provider implementations. Deliver with the reviewed native staging cache correction through the ordinary linear main workflow.
+- **Evidence**: Approved production run `38210851511` completed database migrations, API deployment and admin deployment successfully. Production API health reports database healthy; anonymous auth-session and admin endpoints return HTTP 200. Scheduler setup failed before executing its script because pnpm's lock policy metadata request for private `web-config` returned 403. That job declares contents read and OIDC write, omitting package read; its reusable-workflow caller and the successful API job already permit package read. This is a job token permission mismatch, not a Google credential failure.
+- **Files**: Existing scheduler and conditional runner jobs, docs verification caller/callee, billing audit and two Lattice audit/hygiene permission maps, plus this log. Independent review found the same setup failure mechanism in these jobs: filtered installs still validate metadata from the whole frozen lock. Neon and ordinary CI/setup callers already declare package read. No new token, workflow, script, package grant, Google permission or runtime setting is introduced.
+- **Validation**: Formatting, actionlint and diff checks passed. Independent review confirmed the failure diagnosis and inspected all 17 local setup callers; the remaining missing grants are corrected at both reusable docs boundaries and each affected job. No setup implementation, trigger, provider authority or release gate is changed. Do not rerun the old failed job: its immutable workflow cannot acquire the corrected permission. Ordinary exact-main CI and the existing automatic rollout will validate the delivered fix. No new/manual tests were added or run; normal mandatory commit hooks remain enabled.
+
 ### [WEBSITE-STANDARDIZATION-020] Limit native staging cache credentials to one bucket
 
 - **Status**: REVIEW (source checks passed; provider acceptance pending)

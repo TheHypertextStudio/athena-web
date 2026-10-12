@@ -64,4 +64,5 @@ jobs:
     needs: deploy-production
     permissions:
       contents: read
+      packages: read
     uses: ./.github/workflows/verify-docs.yml

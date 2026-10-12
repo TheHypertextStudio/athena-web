@@ -42,6 +42,7 @@ jobs:
     timeout-minutes: 10
     permissions:
       contents: read
+      packages: read
     steps:
       - uses: actions/checkout@v6
 

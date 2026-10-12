@@ -47,8 +47,8 @@ Never use production secrets for local acceptance.
 After source/runtime review and explicit provider authority, the native staging operations are:
 
 ```sh
-pnpm --dir apps/web upload:worker --env staging
-pnpm --dir apps/web deploy:worker --env staging
+pnpm --dir apps/web upload:worker --env staging --rclone --no-x-provision --env-file /dev/null
+pnpm --dir apps/web deploy:worker --env staging --rclone --no-x-provision --env-file /dev/null
 ```
 
 Both populate the selected remote cache and write to Cloudflare. Upload creates a version without
@@ -64,34 +64,44 @@ or deployment acceptance; verify the actual Worker, Images, R2 and custom-domain
 production option. It admits only this repository's `main`, checks out the dispatched SHA,
 requires the latest ordinary push CI run for that exact SHA to have succeeded, runs the existing
 frozen install and native Turbo/Next/service-worker/OpenNext build, then checks the live main ref
-immediately before native `deploy:worker --env staging --env-file /dev/null`. It serializes staging deployments and
+immediately before native `deploy:worker --env staging --rclone --no-x-provision --env-file /dev/null`. It serializes staging deployments and
 never invokes the backend CI/release pipeline. Non-main dispatches skip the job.
 
 Public compile values come from `env.staging.vars` in the single `wrangler.jsonc`, including the
 existing Mintlify upstream. No missing input is replaced with production values. The deployment
-step alone maps `secrets.CLOUDFLARE_STAGING_API_TOKEN` to native `CLOUDFLARE_API_TOKEN` and receives
-the fixed Studio account ID; the token is checked
-for presence before OpenNext can attempt its login fallback. Native OpenNext 1.20.10's R2 helper
-uses the explicit account environment variable instead of the Wrangler source account field and
-can otherwise enumerate accounts. There is no `--keep-vars`: source owns nonsecret runtime vars,
-while provider-managed secrets remain separate. The final deploy forwards `--env-file /dev/null`
-to Wrangler so its default dotenv files cannot supply deployment values.
+step alone maps `CLOUDFLARE_STAGING_API_TOKEN` to native `CLOUDFLARE_API_TOKEN`, and
+`CLOUDFLARE_STAGING_R2_ACCESS_KEY_ID` / `CLOUDFLARE_STAGING_R2_SECRET_ACCESS_KEY` to
+`R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY`. All three must be present. Fixed
+`CLOUDFLARE_ACCOUNT_ID` and `CF_ACCOUNT_ID` select the Studio account. The Worker token needs
+Editor access only to `docket-web-staging`; the separate S3 credential needs Object Read & Write
+only on `docket-web-staging-cache`. Supply `RCLONE_S3_NO_CHECK_BUCKET=true` for object-only access.
+OpenNext's supported `--rclone` path avoids its default bucket metadata lookup and temporary cache
+Worker; `--no-x-provision` disables Wrangler resource provisioning. Provision resources separately.
+
+There is no `--keep-vars`: source owns nonsecret runtime vars, while provider-managed secrets
+remain separate. `--env-file /dev/null` suppresses final Wrangler dotenv input only. OpenNext
+separately reads `.dev.vars*` and Next-style `.env*`; use a clean checkout without those deployment
+files. Never put cache credentials in Wrangler vars or build inputs. The pinned optional peer
+`rclone.js@0.6.6` downloads the current official rclone executable during installation; the npm
+lock does not pin or checksum that executable. Cache population precedes Worker upload, so a later
+upload failure can leave new cache objects. Actual bucket-scoped upload and deployment still need
+provider acceptance.
 
 Before dispatch, an operator must establish all of these prerequisites:
 
-- Integrate reviewed source only after the current production backend metadata baseline and
-  unrelated-work reconciliation are complete. The October 11 same-account Google metadata read
-  remains reauthentication-blocked; this local preparation authorizes no push or main integration.
+- The current production backend baseline was read through authenticated Google Console on
+  October 11. Reviewed source was integrated at `2a5ab95f`; the user approved the existing
+  automatic backend rollout with that integration. Frontend production cutover remains separate.
 - Verify that this repository actually has a protected `staging` GitHub environment, restricted to
   main and the intended environment-owned
-  `CLOUDFLARE_STAGING_API_TOKEN`. The generic repository `CLOUDFLARE_API_TOKEN` is never referenced. A YAML
+  three staging secrets listed above. The generic repository `CLOUDFLARE_API_TOKEN` is never referenced. A YAML
   environment name alone does not create protection; do not dispatch against an absent/unprotected
   environment or silently rely on a broader repository credential. Verify native package-read
   access and ordinary CI success for the intended main SHA.
 - Verify the existing `docket-web-staging` Worker, Studio account, custom domain, Images and isolated
   `docket-web-staging-cache` R2 resource/authority and record their current version/configuration for
-  recovery. Native OpenNext deploy can create a missing bucket and write a temporary cache
-  population Worker; scope and resource existence must be reviewed beforehand. Production
+  recovery. The selected native flags require existing resources and bucket-scoped cache access;
+  they do not create a temporary cache Worker. Production
   Worker/DNS/Cloud Run resources must remain outside this operation.
 - Reconcile the existing isolated API's actual allowed origins/hosts, RP, cookie scope, OAuth and
   Lattice metadata/callbacks with the configured frontend. The dated public API config still

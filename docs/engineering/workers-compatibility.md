@@ -29,7 +29,15 @@ Shared company config, genuine private package lock and Mintlify configuration g
 Ordinary Node/Vercel behavior, backend/native publisher triggers, mandatory CI checks and existing
 source policies remain. Completed one-off lock generation, metadata-only audit and branch-specific
 manual CI plumbing have been removed. Temporary source publication holds and the proposed Vercel
-main-build exclusion have also been removed; this branch has not been integrated into main.
+main-build exclusion have also been removed. Source was integrated at `2a5ab95f` after the
+authenticated production backend baseline and explicit approval of the existing automatic
+backend rollout. Frontend production traffic approval remains separate.
+
+Staging uses native OpenNext `--rclone` with S3 credentials restricted to its existing cache bucket,
+`RCLONE_S3_NO_CHECK_BUCKET=true` and Wrangler `--no-x-provision`. The Worker token needs only its
+staging Worker. See the web README for exact secret names, clean-checkout requirements and the
+optional peer's executable-download limitation. This changes deployment authentication, not the
+OpenNext cache adapters or application cache format; live upload/deployment remains pending.
 
 ## Compatibility evidence and limits
 

@@ -145,6 +145,8 @@ allowBuilds:
   keytar: true
   puppeteer: false
   esbuild: true
+  # OpenNext's native --rclone mode; this installer downloads the current official binary.
+  rclone.js: true
   # Transitive-only native builds that Docket does not use at runtime (pulled in by
   # tooling/optional deps). Their install scripts stay BLOCKED — Docket's DB layer is
   # Postgres (Neon / node-postgres / PGlite), never Prisma or better-sqlite3, and no

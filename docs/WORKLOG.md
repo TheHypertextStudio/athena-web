@@ -7,6 +7,15 @@
 
 ## Active Tasks
 
+### [WEBSITE-STANDARDIZATION-020] Limit native staging cache credentials to one bucket
+
+- **Status**: REVIEW (source checks passed; provider acceptance pending)
+- **Plan**: Use OpenNext's supported `--rclone` mode and pre-existing staging resources. Add the exact optional peer and its native lock resolution, update only the final deploy environment and product instructions, then review the resulting source. Keep the existing cache adapters and all backend release gates.
+- **Authority**: The deployment token targets only `docket-web-staging`; separate S3 Object Read & Write credentials target only `docket-web-staging-cache`. No account-wide R2 metadata access or temporary cache Worker is required by this path. Credential creation and entry remain with the user.
+- **Implementation**: Supply `CF_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` and `RCLONE_S3_NO_CHECK_BUCKET=true` only to the final deployment step; require credentials before invoking OpenNext and forward native `--no-x-provision`. Use a clean checkout without `.dev.vars*` or app-local `.env*`, which OpenNext reads independently of Wrangler's final `--env-file /dev/null`.
+- **Risks**: `rclone.js@0.6.6` downloads the current executable from the official rclone distribution during installation; the npm lock does not pin or checksum that executable. This matches LogDate's existing native setup. Cache population precedes Worker upload and is not transactional with it. Real narrow-credential upload/deployment remains unproven.
+- **Validation**: Native pnpm lock resolution under Node 24.20.0 passed with scripts disabled. An initial offline attempt lacked cached auth metadata; normal registry resolution succeeded without importing browser credentials. The lock diff contains only rclone, its two dependencies and the OpenNext optional peer. Prettier, actionlint, diff checks and independent source review passed. No new/manual tests or provider operations were run. Preserve the in-flight approved main integration and automatic backend rollout before delivering a follow-up.
+
 ### [WEBSITE-STANDARDIZATION-019] Reconcile staging API identity before approved integration
 
 - **Status**: COMPLETE (local source correction; provider auth acceptance remains open)

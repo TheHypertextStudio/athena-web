@@ -73,7 +73,7 @@ jobs:
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7.0.1
 
       - uses: ./.github/actions/setup
 
@@ -107,7 +107,7 @@ jobs:
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7.0.1
 
       - uses: ./.github/actions/setup
 
@@ -144,7 +144,7 @@ jobs:
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7.0.1
         with:
           # Full history so the licensed `gitleaks dir`/`gitleaks git` second opinion can be run
           # on this same checkout without re-cloning.
@@ -211,7 +211,7 @@ jobs:
       SKIP_ENV_VALIDATION: '1'
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7.0.1
         with:
           # The launch-history policy test must inspect the PR branch, not GitHub's synthetic
           # merge commit. It also needs main's history to count merges from the correct base.
@@ -261,7 +261,7 @@ jobs:
           fi
 
       # Upload only when a test task actually generated coverage files.
-      - uses: codecov/codecov-action@v7
+      - uses: codecov/codecov-action@v7.1.1
         if: always() && steps.coverage.outputs.found == 'true'
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
@@ -282,7 +282,7 @@ jobs:
       NEXT_PUBLIC_APP_URL: ${{ vars.WEB_URL }}
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7.0.1
 
       - uses: ./.github/actions/setup
 
@@ -336,7 +336,7 @@ jobs:
           --health-timeout 5s
           --health-retries 12
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7.0.1
 
       - uses: ./.github/actions/setup
 
@@ -371,7 +371,7 @@ jobs:
       - name: Map test hosts to loopback
         run: echo "127.0.0.1 docket.localhost api.docket.localhost" | sudo tee -a /etc/hosts
 
-      - uses: actions/cache@v5
+      - uses: actions/cache@v6.1.0
         id: playwright-cache
         with:
           path: ~/.cache/ms-playwright
@@ -404,7 +404,7 @@ jobs:
         if: always()
         run: tail -n 100 -- /tmp/web.log /tmp/api.log || true
 
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v7.0.2
         if: failure()
         with:
           name: core-screen-acceptance

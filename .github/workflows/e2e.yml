@@ -52,7 +52,7 @@ jobs:
       SKIP_ENV_VALIDATION: '1'
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7.0.1
 
       - uses: ./.github/actions/setup
 
@@ -76,7 +76,7 @@ jobs:
       # Next's traced pnpm tree contains symlinks. Uploading the directory directly replaces those
       # links with inert files, so the shards receive one tar archive that preserves them.
       # `retention-days: 1` because this artifact is an intra-run handoff, not a record.
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v7.0.2
         with:
           name: web-standalone
           path: web-standalone.tar.gz
@@ -122,7 +122,7 @@ jobs:
       ADMIN_GOOGLE_SSO_ENABLED: 'false'
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7.0.1
 
       - uses: ./.github/actions/setup
 
@@ -131,7 +131,7 @@ jobs:
 
       # Built once by the `build` job above. The tar archive preserves the pnpm links in the traced
       # module graph. Without them Next cannot resolve @swc/helpers and the server never starts.
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@v8.0.2
         with:
           name: web-standalone
           path: .
@@ -169,7 +169,7 @@ jobs:
           cd apps/web/.next/standalone/apps/web
           PORT=3000 HOSTNAME=127.0.0.1 node server.js > /tmp/web.log 2>&1 &
 
-      - uses: actions/cache@v5
+      - uses: actions/cache@v6.1.0
         id: playwright-cache
         with:
           path: ~/.cache/ms-playwright
@@ -207,7 +207,7 @@ jobs:
         if: always()
         run: tail -n 100 -- /tmp/web.log /tmp/api.log || true
 
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v7.0.2
         if: always()
         with:
           name: playwright-artifacts-${{ matrix.shard }}

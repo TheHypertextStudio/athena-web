@@ -44,7 +44,7 @@ jobs:
       contents: read
       packages: read
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7.0.1
 
       # The verifier reads only node builtins and `fetch`, so the root workspace carries
       # everything it needs — `tsx` to run it and nothing else.

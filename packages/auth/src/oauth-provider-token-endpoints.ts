@@ -7,7 +7,6 @@ import {
 } from '@better-auth/core/context';
 import type { DBAdapter, DBTransactionAdapter } from '@better-auth/core/db/adapter';
 import { createAuthEndpoint } from 'better-auth/api';
-import { z } from 'zod';
 
 import { rejectRepeatedFields } from './oauth-provider-authorization-state';
 import {
@@ -18,6 +17,7 @@ import {
   materializeCodeGrant,
   prepareAuthorizationCode,
   prepareRefresh,
+  parseTokenResponse,
 } from './oauth-provider-issuance';
 import {
   clientIdFromRequest,
@@ -41,7 +41,6 @@ import {
   type RevokeBody,
   type TokenBody,
   type TokenPreparation,
-  type TokenResponse,
   codeIssuanceReachedState,
   committedTokenErrorMarker,
   delegateTokenToProvider,
@@ -56,18 +55,7 @@ import {
   singletonTokenFields,
 } from './oauth-provider-types';
 import { hashOAuthToken } from './oauth-resource-contract';
-
-function parseTokenResponse(value: unknown): TokenResponse {
-  const parsed = z
-    .looseObject({
-      access_token: z.string().min(1),
-      refresh_token: z.string().min(1).optional(),
-      scope: z.string(),
-    })
-    .safeParse(value);
-  if (!parsed.success) oauthServerError();
-  return parsed.data;
-}
+import { rememberRefreshResponse, replayRefreshResponse } from './oauth-refresh-retry';
 
 async function invokeCodeProviderInSavepoint(
   ctx: AuthEndpointContext,
@@ -234,8 +222,9 @@ async function finishTokenRequest(
   adapter: DBTransactionAdapter,
   body: TokenBody,
   prepared: TokenPreparation,
-  raw: ProviderEndpoint,
+  dependencies: TokenEndpointDependencies,
 ): Promise<TokenTransactionResult> {
+  const { raw, resources } = dependencies;
   if (prepared.kind === 'delegate-authorization-code') {
     const invocation = await invokeCodeProviderInSavepoint(ctx, raw, adapter, prepared);
     return committedTokenErrorMarker in invocation
@@ -244,7 +233,11 @@ async function finishTokenRequest(
   }
   if (prepared.kind === 'stale-refresh') {
     const clientOwnsRefresh = clientIdFromRequest(ctx, body) === prepared.refresh.clientId;
-    if (clientOwnsRefresh) await revokeStaleRefresh(adapter, prepared.refresh);
+    if (clientOwnsRefresh) {
+      const response = await replayRefreshResponse(ctx, adapter, body, prepared.refresh, resources);
+      if (response) return { kind: 'issued', response };
+      await revokeStaleRefresh(adapter, prepared.refresh);
+    }
     return { kind: 'stale' };
   }
   await issuanceState.set(prepared.state);
@@ -257,6 +250,7 @@ async function finishTokenRequest(
   const refresh = await bindReturnedRefresh(adapter, parsedResponse, prepared.state);
   const claims = assertReturnedAccess(parsedResponse, prepared.state);
   await extendGrantDeadline(adapter, prepared.state, claims, refresh);
+  await rememberRefreshResponse(ctx, adapter, body, invocation.response);
   return { kind: 'issued', response: invocation.response };
 }
 
@@ -273,7 +267,7 @@ async function runTokenTransaction(
     if (error !== delegateTokenToProvider) throw error;
     return delegateTokenRequest(ctx, adapter, body, dependencies.raw);
   }
-  return finishTokenRequest(ctx, adapter, body, prepared, dependencies.raw);
+  return finishTokenRequest(ctx, adapter, body, prepared, dependencies);
 }
 
 /** Wrap token issuance with Docket's resource grant and refresh-family transaction. */

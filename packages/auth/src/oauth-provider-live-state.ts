@@ -29,8 +29,7 @@ import {
   oauthServerError,
 } from './oauth-provider-types';
 
-// Concurrent clients may retry the old token before they persist the rotated one.
-const REFRESH_RETRY_GRACE_MS = 30_000;
+import { REFRESH_RETRY_GRACE_MS } from './oauth-refresh-retry';
 
 /** Decode an issued JWT payload for post-provider invariant checks without verifying it again. */
 export function decodeJwtPayload(token: string): Record<string, unknown> {

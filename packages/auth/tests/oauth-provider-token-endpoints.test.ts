@@ -2,6 +2,7 @@ import { runWithRequestState } from '@better-auth/core/context';
 import type * as BetterAuthContextModule from '@better-auth/core/context';
 import type { DBTransactionAdapter } from '@better-auth/core/db/adapter';
 import type * as BetterAuthApiModule from 'better-auth/api';
+import type * as OAuthIssuanceModule from '../src/oauth-provider-issuance';
 import { describe, expect, it, beforeEach, vi } from 'vitest';
 
 const core = vi.hoisted(() => ({ adapter: undefined as DBTransactionAdapter | undefined }));
@@ -67,7 +68,10 @@ vi.mock('../src/oauth-provider-authorization-state', async (importOriginal) => (
   rejectRepeatedFields: vi.fn(async () => undefined),
 }));
 
-vi.mock('../src/oauth-provider-issuance', () => issuance);
+vi.mock('../src/oauth-provider-issuance', async (importOriginal) => ({
+  ...(await importOriginal<typeof OAuthIssuanceModule>()),
+  ...issuance,
+}));
 
 vi.mock('../src/oauth-provider-live-state', () => ({
   clientIdFromRequest: () => live.clientId,
@@ -336,6 +340,7 @@ describe('OAuth token endpoint wrapper', () => {
           clientId: 'client_1',
           docketGrantId: grantId,
           revoked: new Date(Date.now() - 31_000),
+          expiresAt: new Date(Date.now() + 3_600_000),
         },
       };
     });

@@ -101,6 +101,8 @@ Add to `~/.codeium/windsurf/mcp_config.json` (note `serverUrl`, not `url`):
 
 Point any MCP-compatible client at the MCP URL. Clients that implement the MCP authorization spec handle registration, consent, and token refresh automatically via the discovery documents above.
 
+Refresh rotates the refresh token. For 30 seconds, an identical retry can recover the exact committed token response, including across API instances, so concurrent refreshes or a lost response do not force a reconnect. Recovery requires the same authenticated client, resource and scopes, current grant authority, and an unrevoked successor. The short-lived response is encrypted in verification storage and expires without extending the retry window. Reusing the old token after that window revokes its grant; clients must persist the returned replacement token.
+
 ## Let Athena use another MCP server
 
 Athena can also be an MCP **client** for a workspace. Go to **Settings → Connections → MCP

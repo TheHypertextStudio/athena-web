@@ -2,6 +2,7 @@
 import { randomUUID } from 'node:crypto';
 
 import type { DBTransactionAdapter } from '@better-auth/core/db/adapter';
+import { z } from 'zod';
 
 import {
   currentConsent,
@@ -315,4 +316,17 @@ export async function prepareRefresh(
       grantId: grant.id,
     },
   };
+}
+
+/** Validate the credential fields required to bind a provider token response to its grant. */
+export function parseTokenResponse(value: unknown): TokenResponse {
+  const parsed = z
+    .looseObject({
+      access_token: z.string().min(1),
+      refresh_token: z.string().min(1).optional(),
+      scope: z.string(),
+    })
+    .safeParse(value);
+  if (!parsed.success) oauthServerError();
+  return parsed.data;
 }

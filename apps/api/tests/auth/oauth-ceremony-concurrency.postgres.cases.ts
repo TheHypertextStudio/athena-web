@@ -162,17 +162,9 @@ it('serializes a duplicate refresh without revoking the successful rotation', as
   if (!first || !second) {
     throw new Error('Both concurrent refresh attempts must return a response.');
   }
-  const results = [first, second].sort(
-    (left, right) => left.response.status - right.response.status,
-  );
-  expect(results.map((result) => result.response.status)).toEqual([200, 400]);
-  const failed = required(results[1], 'The refresh race did not return a failed request.');
-  expect(await failed.response.json()).toMatchObject({ error: 'invalid_grant' });
-  const issued = required(
-    results[0],
-    'The refresh race did not return a successful request.',
-  ).tokens;
-  if (!issued) throw new Error('The successful refresh attempt must return credentials.');
+  expect([first.response.status, second.response.status]).toEqual([200, 200]);
+  expect(first.tokens).toEqual(second.tokens);
+  const issued = required(first.tokens, 'The refresh must return credentials.');
 
   const { db, oauthRefreshToken, oauthResourceGrant } = await import('@docket/db');
   const { eq } = await import('drizzle-orm');
@@ -216,8 +208,8 @@ it('preserves an immediate refresh retry and revokes only its family after a del
   const rotated = await refreshTokens(client, first.refreshToken, resource);
   expect(rotated.response.status, await rotated.response.clone().text()).toBe(200);
   const replayed = await refreshTokens(client, first.refreshToken, resource);
-  expect(replayed.response.status, await replayed.response.clone().text()).toBe(400);
-  expect(await replayed.response.json()).toMatchObject({ error: 'invalid_grant' });
+  expect(replayed.response.status, await replayed.response.clone().text()).toBe(200);
+  expect(replayed.tokens).toEqual(rotated.tokens);
   const firstRotation = required(rotated.tokens, 'The refresh did not return a rotated token.');
   expect(firstRotation.refreshToken).toEqual(expect.any(String));
   expect((await readOrganizations(first.accessToken)).status).toBe(200);

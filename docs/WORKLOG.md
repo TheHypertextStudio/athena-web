@@ -7,6 +7,18 @@
 
 ## Active Tasks
 
+### [LEGAL-POLICIES-006] Prepare a native web release artifact
+
+- **Status**: REVIEW
+- **Started**: 2026-10-14
+- **Priority**: P1
+- **Description**: Prepare the reviewed legal source as a native Linux Vercel artifact using the repository's existing package access, without deploying it.
+- **Plan**: Use an opt-in build workflow, public production settings, and the native adapter's unchanged output and exact traced dependency paths.
+- **Acceptance**: Mandatory package policies remain enabled; the artifact excludes credentials, rejects incompatible native binaries, preserves source identity, and leaves existing production gates intact.
+- **Validation**: Require artifact-packaging regression tests, workflow validation, normal commit checks, and a successful Linux artifact run before calling the artifact deployable.
+- **Files changed**: The artifact workflow, typed packager, packaging and CI-policy tests, and web setup README.
+- **Decisions**: Artifact preparation preserves the existing source, backend, and provider release gates.
+
 ### [LEGAL-POLICIES-005] Explain legal bases for processing
 
 - **Status**: REVIEW
@@ -23,8 +35,8 @@
 - **Started**: 2026-10-14
 - **Priority**: P1
 - **Description**: Explain the verified production database recovery window separately from account recovery, including the limits of deletion when independent database copies exist.
-- **Plan**: Update the draft retention disclosure from authenticated provider evidence; keep copy-retention and erasure verification as a release gate; preserve archived policy text.
-- **Acceptance**: The draft states the six-hour database history window, distinguishes the account-deletion recovery period, and makes no automatic branch-purge promise.
+- **Plan**: Update the draft retention disclosure from authenticated provider evidence; keep matching-copy erasure coverage as a release gate; preserve archived policy text.
+- **Acceptance**: The draft states the six-hour database history window, distinguishes the account-deletion recovery period, states that independent copies have no automatic expiry, and requires manual matching review and removal for deletion requests.
 - **Files changed**: The current privacy policy's retention section.
 - **Validation**: Require policy-route tests, web lint/typecheck, the production build, and the complexity check; confirm prior policy documents remain unchanged.
 - **Retrospective**: Production history and independent database copies need separate retention disclosures.

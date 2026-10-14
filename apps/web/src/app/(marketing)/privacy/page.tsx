@@ -157,9 +157,11 @@ const sections: readonly LegalPolicySection[] = [
         <p>
           Our production database currently keeps six hours of history for point-in-time recovery.
           This window is separate from the 14-day account-deletion recovery period. Database
-          branches used for development or previews can retain independent copies beyond that
-          window. Deleting data from production does not itself delete those copies, and a fixed
-          retention or erasure period for them is not currently confirmed.
+          branches used for development or previews retain independent copies beyond that window.
+          These copies currently have no automatic expiry and are retained until manually removed.
+          Deleting data from production does not itself delete those copies. Handling deletion
+          requests for these copies requires a manual review to identify matching information and
+          carry out any required removal, subject to lawful retention obligations.
         </p>
         <p>
           Security, legal, billing, and backup records may remain where needed for their purpose or

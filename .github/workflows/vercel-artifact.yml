@@ -1,0 +1,113 @@
+# ci-gate-policy: advisory
+name: Build Vercel web artifact
+
+# An opt-in preparation job, separate from CI and Deploy main. One feature-branch push or
+# manual dispatch consumes one Ubuntu runner for at most 20 minutes; main pushes add no runs.
+# This produces an artifact for review and does not establish production release acceptance.
+on:
+  push:
+    branches: [codex/studio-legal-policies-20261014]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vercel-web-artifact-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  artifact:
+    if: github.repository == 'TheHypertextStudio/athena-web' && github.ref == 'refs/heads/codex/studio-legal-policies-20261014'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: read
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+      VERCEL_TELEMETRY_DISABLED: '1'
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+      VERCEL_ENV: production
+      STUDIO_DEPLOYMENT_ENV: production
+      VERCEL_GIT_COMMIT_SHA: ${{ github.sha }}
+      VERCEL_GIT_COMMIT_REF: ${{ github.ref_name }}
+      NEXT_PUBLIC_APP_URL: https://clearthedocket.com
+      NEXT_PUBLIC_API_URL: https://api.clearthedocket.com
+      API_URL: https://api.clearthedocket.com
+      NEXT_PUBLIC_PASSKEY_RP_ID: clearthedocket.com
+      NEXT_PUBLIC_BRIEF_HOST: briefs.clearthedocket.com
+      BETTER_AUTH_PASSKEY_LEGACY_RP_ID: docket.hypertext.studio
+      DOCS_MINTLIFY_ORIGIN: https://docket.mintlify.dev
+
+    steps:
+      - name: Check out exact source without persisted authentication
+        uses: actions/checkout@v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Install the existing dependency graph and evaluate its policies
+        uses: ./.github/actions/setup
+
+      - name: Verify native artifact packaging
+        run: pnpm exec vitest run repo-tests/tooling/vercel-artifact.test.ts
+
+      - name: Verify legal routes and host boundaries
+        run: |
+          pnpm --filter @docket/env test
+          pnpm --filter @docket/web test tests/marketing/legal-billing-policy.test.tsx
+
+      - name: Build the API type and runtime prerequisites
+        run: pnpm turbo run build --filter=@docket/api --concurrency=1
+
+      - name: Prepare reviewed public Vercel project settings
+        run: |
+          node --input-type=module <<'JS'
+          import { mkdir, writeFile } from 'node:fs/promises';
+          const project = {
+            projectId: 'prj_u16kLe9qHJSXFO1OoudnuNzYOfcY',
+            orgId: 'team_RWZBBZRnQkbAXuekAC7mJN6Q',
+            projectName: 'docket',
+            settings: {
+              createdAt: 1768452649385,
+              framework: 'nextjs',
+              devCommand: null,
+              installCommand: null,
+              buildCommand: null,
+              outputDirectory: null,
+              rootDirectory: 'apps/web',
+              directoryListing: false,
+              nodeVersion: '24.x',
+            },
+          };
+          await mkdir('.vercel', { recursive: true });
+          await writeFile('.vercel/project.json', JSON.stringify(project));
+          JS
+
+      - name: Build native Linux Vercel output using existing package access
+        env:
+          NODE_AUTH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          registry_config=$(mktemp "$RUNNER_TEMP/docket-registry.XXXXXX")
+          trap 'rm -f "$registry_config"' EXIT
+          chmod 600 "$registry_config"
+          # This is the same temporary registry binding as the existing setup action.
+          # shellcheck disable=SC2016
+          printf '%s\n' '//npm.pkg.github.com/:_authToken=${NODE_AUTH_TOKEN}' > "$registry_config"
+          export NPM_CONFIG_USERCONFIG="$registry_config"
+          npm exec --yes --package=vercel@50.19.1 -- vercel build --prod
+
+      - name: Package unchanged native output and its exact traced dependencies
+        env:
+          ARTIFACT_JOB_TOKEN: ${{ github.token }}
+        run: pnpm exec tsx scripts/package-vercel-artifact.ts vercel-web-artifact.tar.gz
+
+      - name: Upload the artifact for review
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: vercel-web-artifact-${{ github.sha }}
+          path: vercel-web-artifact.tar.gz
+          if-no-files-found: error
+          retention-days: 3

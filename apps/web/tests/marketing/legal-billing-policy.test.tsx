@@ -64,6 +64,14 @@ describe('Studio legal policy navigation and contacts', () => {
   });
 });
 
+it('distinguishes production history from copies requiring manual erasure review', () => {
+  render(<PrivacyPage />);
+  const retention = screen.getByText(/six hours of history for point-in-time recovery/);
+  expect(retention).toHaveTextContent(/no automatic expiry/);
+  expect(retention).toHaveTextContent(/retained until manually removed/);
+  expect(retention).toHaveTextContent(/manual review to identify matching information/);
+});
+
 describe('prior policy versions', () => {
   it('links to complete dated archives from the stable history page', () => {
     render(<LegalHistoryPage />);

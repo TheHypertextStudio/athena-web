@@ -19,6 +19,20 @@ repository root. Common Mintlify commands remain `pnpm docs:config`, `pnpm docs:
 remain installed through the genuine workspace lock. Actions uses its ephemeral GitHub token and
 package-read access; local setup requires an approved package-read identity.
 
+## Native Vercel artifact preparation
+
+[Build Vercel web artifact](../../.github/workflows/vercel-artifact.yml) prepares the legal review
+branch on a Linux runner using the existing automatic GitHub package permission and mandatory
+frozen-lockfile policies. Review its public production URLs and project settings before running it.
+The workflow packages native Vercel output and only the adapter's exact traced dependencies,
+preserving file maps and source identity while checking native architecture and credential paths.
+One opt-in branch push or manual dispatch uses one runner, bounded at 20 minutes.
+
+The artifact supports the existing `vercel deploy --prebuilt` command after source, backend and
+provider release gates are satisfied. The preparation workflow performs no deployment. A branch
+push can also trigger the project's usual Vercel Git preview. Keep production authorization and
+actual route, authentication and provider acceptance separate from artifact preparation.
+
 ## Native Workers commands
 
 The application pins Next 16.3.8, OpenNext 1.20.10 and Wrangler 4.148.0. React remains 19.2.7.

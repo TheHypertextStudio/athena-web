@@ -7,6 +7,27 @@
 
 ## Active Tasks
 
+### [WORK-RECOVERY-001] Recover useful unfinished work and deliver work templates
+
+- **Status**: IN_PROGRESS
+- **Started**: 2026-10-14
+- **Priority**: P1
+- **Description**: Preserve unfinished work, recover missing product behavior, and deliver the
+  approved work-template system without losing existing work or scheduler history.
+- **Plan**: `docs/superpowers/plans/2026-10-14-athena-work-recovery.md`.
+- **Acceptance**: Every candidate has a recoverable disposition; guided template setup works;
+  work retains template identity; composed children and schedules preserve manual edits;
+  Athena proposals support review and undo; affected checks and runtime acceptance pass.
+- **Decisions**: Personal templates become author-only unpublished drafts. Blueprint creation is
+  limited to 500 items. Existing scheduler and supported REST/MCP clients remain compatible.
+- **Subtasks**:
+  - [ ] Preserve and reconcile checkout state.
+  - [ ] Recover and accept template and repeating-work UI.
+  - [ ] Recover remaining product slices and reconcile maintenance.
+  - [ ] Complete identity, blueprints, Program schedules, and Athena/gallery layers.
+  - [ ] Verify operational acceptance and retire eligible checkouts.
+- **Blockers**: Provider and device acceptance require current evidence.
+
 ### [LEGAL-POLICIES-002] Keep policy versions easy to navigate
 
 - **Status**: REVIEW

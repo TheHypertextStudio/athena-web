@@ -70,6 +70,7 @@ describe('Dialog presentations', () => {
     // `content` caps a maximum rather than setting a height, so it is the one case that still
     // needs the phone layout's height released.
     expect(dialog).toHaveClass('sm:h-auto', 'sm:max-h-[min(85dvh,48rem)]');
+    expect(dialog).toHaveClass('sm:right-auto', 'sm:bottom-auto');
   });
 
   it('returns focus to a controlled dialog opener after Escape closes it', async () => {

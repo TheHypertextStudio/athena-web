@@ -17,19 +17,19 @@ completion rules follow the four delivery layers. Use linear history and one pus
 
 ## Task 1: Preserve and reconcile checkout state
 
-- [ ] Preserve refs, detached heads, staged/unstaged binary patches, untracked files, and captures.
-- [ ] Verify reconstructed tracked trees, archive file hashes, and complete Git bundles.
+- [x] Preserve refs, detached heads, staged/unstaged binary patches, untracked files, and captures.
+- [x] Verify reconstructed tracked trees, archive file hashes, and complete Git bundles.
 - [ ] Give every checkout and candidate branch a recoverable disposition.
 - [ ] Quarantine broad dirty deletion snapshots until every unique change has been classified.
 - [ ] Retire only clean, unused checkouts with landed, superseded, or recoverably archived work.
 
 ## Task 2: Recover existing template and repeating-work UI
 
-- [ ] Replay guided setup and its two layout corrections onto current main.
-- [ ] Preserve Basics/Work/Review, direct editing, repeat setup, and shared series management.
-- [ ] Verify four kinds, vocabulary, sharing, dirty dismissal, failure retention, save/reopen,
+- [x] Replay guided setup and its two layout corrections onto current main.
+- [x] Preserve Basics/Work/Review, direct editing, repeat setup, and shared series management.
+- [x] Verify four kinds, vocabulary, sharing, dirty dismissal, failure retention, save/reopen,
       recurrence revisions, pause/resume, history, focus, and ordinary composers.
-- [ ] Capture populated authenticated desktop/phone/short-phone layouts in both themes and check
+- [x] Capture populated authenticated desktop/phone/short-phone layouts in both themes and check
       keyboard interaction and 320px overflow using existing repository tools.
 - [ ] Review, document, commit, and integrate the accepted slice.
 

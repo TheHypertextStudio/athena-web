@@ -192,8 +192,9 @@ function dialogPresentationClass(presentation: DialogPresentation): string {
     return 'inset-0 h-[100dvh] w-[100vw] rounded-none border-0';
   if (presentation.kind === 'bottom-sheet')
     return `inset-x-0 bottom-0 ${height} w-full rounded-t-xl border-x-0 border-b-0`;
+  // Content height must come from the body rather than the phone layout's bottom inset.
   if (presentation.kind === 'responsive-fullscreen')
-    return `inset-0 h-[100dvh] w-[100vw] rounded-none border-0 sm:top-1/2 sm:left-1/2 sm:w-[calc(100%-1.5rem)] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-xl ${size} ${DIALOG_HEIGHT_SM[presentation.height ?? 'content']}`;
+    return `inset-0 h-[100dvh] w-[100vw] rounded-none border-0 sm:right-auto sm:bottom-auto sm:top-1/2 sm:left-1/2 sm:w-[calc(100%-1.5rem)] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-xl ${size} ${DIALOG_HEIGHT_SM[presentation.height ?? 'content']}`;
   if (presentation.kind === 'top')
     return `top-3 left-1/2 w-[calc(100%-1.5rem)] -translate-x-1/2 ${size} ${height}`;
   if (presentation.kind === 'hosted') return `${size} ${height}`;

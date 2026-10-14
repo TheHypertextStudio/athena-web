@@ -1,9 +1,16 @@
+import '@testing-library/jest-dom/vitest';
+
 /** Repeating-work management keeps lifecycle, missed dates, and future edits on one surface. */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const calls = vi.hoisted(() => ({ detail: vi.fn(), lifecycle: vi.fn(), edit: vi.fn() }));
+const calls = vi.hoisted(() => ({
+  detail: vi.fn(),
+  lifecycle: vi.fn(),
+  edit: vi.fn(),
+  context: vi.fn(),
+}));
 
 vi.mock('../../src/lib/app-location', () => ({
   useTypedRoute: () => ({
@@ -20,6 +27,8 @@ vi.mock('../../src/lib/api', () => ({
       orgs: {
         ':orgId': {
           'recurrence-series': {
+            'for-task': { ':taskId': { $get: calls.context } },
+            'for-project': { ':projectId': { $get: calls.context } },
             ':id': {
               $get: calls.detail,
               lifecycle: { $post: calls.lifecycle },
@@ -32,6 +41,10 @@ vi.mock('../../src/lib/api', () => ({
   },
 }));
 
+import {
+  TaskRepeatingWorkBacklink,
+  ProjectRepeatingWorkBacklink,
+} from '../../src/components/recurrence/repeating-work-backlink';
 import RecurrenceSeriesPage from '../../src/app/(app)/orgs/[orgId]/recurrence-series/[seriesId]/page';
 
 /**
@@ -59,6 +72,7 @@ afterEach(() => {
   calls.detail.mockReset();
   calls.lifecycle.mockReset();
   calls.edit.mockReset();
+  calls.context.mockReset();
 });
 
 function response(value: unknown): Response {
@@ -226,5 +240,201 @@ describe('RecurrenceSeriesPage', () => {
         },
       });
     });
+  });
+});
+
+/** Mount the ordinary-work provenance entry, keeping the surrounding task on screen. */
+function renderBacklink(project = false): QueryClient {
+  calls.context.mockResolvedValue(
+    response({ seriesId: DETAIL.id, seriesName: DETAIL.name, scheduledFor: '2026-08-14' }),
+  );
+  calls.detail.mockImplementation(() => Promise.resolve(response(DETAIL)));
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+  });
+  const Backlink = project ? ProjectRepeatingWorkBacklink : TaskRepeatingWorkBacklink;
+  render(
+    <QueryClientProvider client={client}>
+      <h1>Ordinary work</h1>
+      <Backlink orgId={DETAIL.organizationId} entityId="01BX5ZZKBKACTAV9WEVGEMMVRI" />
+    </QueryClientProvider>,
+  );
+  return client;
+}
+
+/** Change the real schedule control and then leave its popover. */
+async function changeInterval(): Promise<void> {
+  fireEvent.click(screen.getByRole('button', { name: /Repeat — Every week/ }));
+  const interval = await screen.findByRole('spinbutton', { name: 'Repeat interval' });
+  fireEvent.change(interval, { target: { value: '2' } });
+  fireEvent.keyDown(interval, { key: 'Escape', code: 'Escape' });
+  await waitFor(() => {
+    expect(screen.queryByRole('spinbutton', { name: 'Repeat interval' })).toBeNull();
+  });
+}
+
+describe('Generated-work management overlay', () => {
+  it('retains a rejected occurrence move and retries the selected date', async () => {
+    const client = renderBacklink();
+    calls.edit.mockRejectedValueOnce(new Error('Private provider failure'));
+    fireEvent.click(await screen.findByRole('button', { name: 'Manage repeating work' }));
+    await screen.findByRole('heading', { name: DETAIL.name });
+    fireEvent.click(screen.getByRole('button', { name: 'Move' }));
+    fireEvent.click(screen.getByRole('button', { name: /New date for 2026-08-10/ }));
+    fireEvent.click(await screen.findByRole('button', { name: '2026-08-20' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save date' }));
+    await waitFor(() => {
+      expect(calls.edit).toHaveBeenCalledTimes(1);
+      expect(client.isMutating()).toBe(0);
+      expect(screen.getByRole('button', { name: 'Close repeating work' })).toBeEnabled();
+    });
+    expect(screen.queryByText('Private provider failure')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Move' }));
+    expect(screen.getByRole('button', { name: /New date for 2026-08-10/ })).toHaveTextContent(
+      'Aug 20, 2026',
+    );
+    const moved = {
+      ...DETAIL,
+      occurrences: DETAIL.occurrences.map((item) =>
+        item.scheduledFor === '2026-08-10'
+          ? { ...item, scheduledFor: '2026-08-20', status: 'materialized' }
+          : item,
+      ),
+    };
+    calls.detail.mockImplementation(() => Promise.resolve(response(moved)));
+    calls.edit.mockResolvedValueOnce(response(moved));
+    fireEvent.click(screen.getByRole('button', { name: 'Save date' }));
+    await waitFor(() => {
+      expect(calls.edit).toHaveBeenLastCalledWith({
+        param: { orgId: DETAIL.organizationId, id: DETAIL.id },
+        json: {
+          scope: 'occurrence',
+          scheduledFor: '2026-08-10',
+          resolution: { kind: 'reschedule', scheduledFor: '2026-08-20' },
+        },
+      });
+    });
+    await waitFor(() => {
+      expect(client.isMutating()).toBe(0);
+    });
+    expect(await screen.findByText('Aug 20, 2026', { exact: true })).toBeVisible();
+    expect(screen.queryByRole('button', { name: 'Save date' })).toBeNull();
+  });
+
+  it.each([false, true])(
+    'opens from generated work and restores the opener after clean dismissal (project %s)',
+    async (project) => {
+      renderBacklink(project);
+      const opener = await screen.findByRole('button', { name: 'Manage repeating work' });
+      opener.focus();
+      fireEvent.click(opener);
+      const dialog = await screen.findByRole('dialog', { name: 'Manage repeating work' });
+      expect(await within(dialog).findByRole('heading', { name: DETAIL.name })).toBeInTheDocument();
+      expect(within(dialog).getByRole('heading', { name: 'Schedule history' })).toBeInTheDocument();
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Close repeating work' }));
+      await waitFor(() => {
+        expect(screen.queryByRole('dialog')).toBeNull();
+        expect(opener).toHaveFocus();
+      });
+      expect(screen.getByRole('heading', { name: 'Ordinary work' })).toBeInTheDocument();
+    },
+  );
+
+  it('guards changed schedules on close and Escape, keeps the draft, and discards only explicitly', async () => {
+    const client = renderBacklink();
+    fireEvent.click(await screen.findByRole('button', { name: 'Manage repeating work' }));
+    await screen.findByRole('heading', { name: DETAIL.name });
+    await changeInterval();
+    await client.invalidateQueries();
+    expect(screen.getByRole('button', { name: /Repeat — Every 2 weeks/ })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Close repeating work' }));
+    expect(screen.getByText('Discard your unsaved schedule changes?')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Keep editing' }));
+    expect(screen.getByRole('button', { name: /Repeat — Every 2 weeks/ })).toBeInTheDocument();
+    fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape', code: 'Escape' });
+    await screen.findByRole('button', { name: 'Discard changes' });
+    fireEvent.click(screen.getByRole('button', { name: 'Discard changes' }));
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog')).toBeNull();
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Manage repeating work' }));
+    expect(await screen.findByRole('button', { name: /Repeat — Every week/ })).toBeInTheDocument();
+    expect(calls.edit).not.toHaveBeenCalled();
+  });
+
+  it('saves a future revision with the existing trigger semantics and permits clean dismissal after saving', async () => {
+    renderBacklink();
+    const saved = {
+      ...DETAIL,
+      trigger: { ...DETAIL.trigger, schedule: { ...DETAIL.trigger.schedule, interval: 2 } },
+    };
+    calls.edit.mockImplementation(() => {
+      calls.detail.mockResolvedValue(response(saved));
+      return Promise.resolve(response(saved));
+    });
+    fireEvent.click(await screen.findByRole('button', { name: 'Manage repeating work' }));
+    await screen.findByRole('heading', { name: DETAIL.name });
+    await changeInterval();
+    fireEvent.click(screen.getByRole('button', { name: 'Save future schedule' }));
+    await waitFor(() => {
+      expect(calls.edit).toHaveBeenCalledWith({
+        param: { orgId: DETAIL.organizationId, id: DETAIL.id },
+        json: { scope: 'future', effectiveFrom: '2026-08-13', trigger: saved.trigger },
+      });
+    });
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Close repeating work' })).toBeEnabled();
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Close repeating work' }));
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog')).toBeNull();
+    });
+  });
+
+  it('holds dismissal while saving and retains a rejected schedule for retry', async () => {
+    renderBacklink();
+    let rejectSave: ((error: Error) => void) | undefined;
+    calls.edit.mockImplementation(
+      () =>
+        new Promise<Response>((_resolve, reject) => {
+          rejectSave = reject;
+        }),
+    );
+    fireEvent.click(await screen.findByRole('button', { name: 'Manage repeating work' }));
+    await screen.findByRole('heading', { name: DETAIL.name });
+    await changeInterval();
+    fireEvent.click(screen.getByRole('button', { name: 'Save future schedule' }));
+    await screen.findByRole('button', { name: 'Saving schedule…' });
+    expect(screen.getByRole('button', { name: 'Close repeating work' })).toBeDisabled();
+    fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape', code: 'Escape' });
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Discard changes' })).toBeNull();
+    rejectSave?.(new Error('Provider error must never appear in the product'));
+    await screen.findByRole('button', { name: 'Save future schedule' });
+    expect(screen.getByRole('button', { name: /Repeat — Every 2 weeks/ })).toBeInTheDocument();
+    expect(screen.queryByText('Provider error must never appear in the product')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Close repeating work' }));
+    expect(await screen.findByRole('button', { name: 'Discard changes' })).toBeInTheDocument();
+  });
+
+  it('asks before dismissing a changed schedule through the backdrop', async () => {
+    renderBacklink();
+    fireEvent.click(await screen.findByRole('button', { name: 'Manage repeating work' }));
+    await screen.findByRole('heading', { name: DETAIL.name });
+    await changeInterval();
+    const backdrop = document.querySelector('[data-overlay-scrim]');
+    expect(backdrop).not.toBeNull();
+    if (!backdrop) throw new Error('The shared dialog must provide a backdrop.');
+    fireEvent(
+      backdrop,
+      new MouseEvent('pointerdown', { bubbles: true, button: 0, ctrlKey: false }),
+    );
+    fireEvent.click(backdrop);
+    expect(await screen.findByRole('button', { name: 'Discard changes' })).toBeInTheDocument();
+    fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape', code: 'Escape' });
+    await waitFor(() => {
+      expect(screen.queryByRole('button', { name: 'Discard changes' })).toBeNull();
+    });
+    expect(screen.getByRole('button', { name: /Repeat — Every 2 weeks/ })).toBeInTheDocument();
   });
 });

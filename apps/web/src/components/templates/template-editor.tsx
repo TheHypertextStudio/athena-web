@@ -1,19 +1,8 @@
 'use client';
 
 /**
- * The template editor: the create composer, pointed at a template instead of an entity.
- *
- * @remarks
- * Authoring a template looks exactly like creating the thing it makes, because it *is* the same
- * shell and the same picker components. Only three things differ, and they all live above the
- * entity fields: the template's own name, its one-line description, and who it is shared with.
- *
- * That equivalence is the whole answer to "it is unclear how to create or edit templates". There
- * is nothing new to learn — fill in the dialog you already fill in, and the result is reusable.
- *
- * A template stores no reference to an actor, team, project, milestone, cycle or date. The picker
- * components take those axes as optional props for exactly this reason: the editor mounts them
- * without, so no control appears whose value would be silently dropped on save.
+ * Author reusable work through Basics, Work, and Review without changing ordinary composers.
+ * Metadata stays separate from the work defaults stored by the existing template API.
  */
 import type { Health, Visibility } from '@docket/work/capability-contract';
 import type {
@@ -29,34 +18,31 @@ import type {
   TemplateTargetType,
 } from '@docket/work/template-contract';
 import type { Priority } from '@docket/work/task-contract';
-import { EnumPicker } from '@docket/ui/components';
+import { LabelsPicker } from '@docket/ui/components';
 import { useVocabulary } from '@docket/ui/hooks';
-import { Input } from '@docket/ui/primitives';
 import { type JSX, type ReactNode, useCallback, useId, useState } from 'react';
 
-import { ComposerShell } from '@/components/composer/composer-shell';
+import { TemplateWorkflowShell } from './template-workflow-shell';
+import { TemplateBasicsFields } from './template-basics-fields';
 import { withComposerReset } from '@/components/composer/reset-on-open';
 import { useComposerDraft } from '@/components/composer/use-composer-draft';
 import { useDefaultedStatus } from '@/components/entity-display/use-work-status';
 import { InitiativeComposerPickers } from '@/components/initiatives/initiative-form-pickers';
 import { ProgramComposerPickers } from '@/components/programs/program-form-pickers';
 import { ProjectComposerPickers } from '@/components/projects/project-form-pickers';
+import { useComposerOptions } from '@/components/pickers/use-composer-options';
+import { EntityMetadataItem } from '@/components/views/entity-detail-layout';
 import { TaskTemplatePickers } from '@/components/tasks/task-template-pickers';
 import { userErrorMessage } from '@/lib/problem';
 
 import { useCreateTemplate, useUpdateTemplate } from './queries';
-
-/** The sharing scopes a template may take, in widening order. */
-const SCOPE_OPTIONS = [
-  { value: 'personal', label: 'Only you' },
-  { value: 'organization', label: 'Everyone in this workspace' },
-] as const;
 
 /** Fields a task template holds. */
 interface TaskTemplateFields {
   title: string;
   description: string;
   priority: Priority;
+  labelIds: NonNullable<Extract<TemplateDraft, { targetType: 'task' }>['labelIds']>;
 }
 
 /** Fields a project template holds. */
@@ -107,7 +93,9 @@ interface ProgramTemplateFields {
  */
 function present<T extends object>(fields: T): { [K in keyof T]?: Exclude<T[K], null> } {
   return Object.fromEntries(
-    Object.entries(fields).filter(([, value]) => value !== null && value !== ''),
+    Object.entries(fields).filter(
+      ([, value]) => value !== null && value !== '' && (!Array.isArray(value) || value.length > 0),
+    ),
   ) as { [K in keyof T]?: Exclude<T[K], null> };
 }
 
@@ -166,6 +154,7 @@ export const TemplateEditorDialog = withComposerReset(function TemplateEditor({
           description: description.trim(),
           scope,
           payload,
+          ...(scope === 'team' && template?.teamId ? { teamId: template.teamId } : {}),
         };
         if (template) {
           await update.mutateAsync({ id: template.id, ...shared });
@@ -193,72 +182,43 @@ export const TemplateEditorDialog = withComposerReset(function TemplateEditor({
   );
 
   const leadingFields = (
-    <>
-      <div className="flex flex-col gap-1.5">
-        <label htmlFor={nameFieldId} className="text-on-surface text-label-large">
-          Template name
-        </label>
-        <Input
-          id={nameFieldId}
-          value={name}
-          disabled={saving}
-          placeholder="Bug report"
-          onChange={(event) => {
-            setName(event.target.value);
-          }}
-        />
-      </div>
-      <div className="flex flex-col gap-1.5">
-        <label htmlFor={descriptionFieldId} className="text-on-surface text-label-large">
-          When to use it
-        </label>
-        <Input
-          id={descriptionFieldId}
-          value={description}
-          disabled={saving}
-          placeholder="Shown under the name in the picker"
-          onChange={(event) => {
-            setDescription(event.target.value);
-          }}
-        />
-      </div>
-      <EnumPicker
-        options={SCOPE_OPTIONS}
-        value={scope}
-        onChange={(next) => {
-          if (next) setScope(next);
-        }}
-        placeholder="Shared with"
-        ariaLabel="Shared with"
-        disabled={saving}
-      />
-    </>
+    <TemplateBasicsFields
+      name={name}
+      description={description}
+      scope={scope}
+      saving={saving}
+      nameFieldId={nameFieldId}
+      descriptionFieldId={descriptionFieldId}
+      onNameChange={setName}
+      onDescriptionChange={setDescription}
+      onScopeChange={setScope}
+      teamScoped={template?.scope === 'team'}
+    />
   );
 
   const shared = {
     open,
     onOpenChange,
     mentionOrgId: orgId,
-    heading: template ? `Edit ${template.name}` : `New ${noun.toLowerCase()} template`,
+    heading: template ? template.name : `New ${noun.toLowerCase()} template`,
+    workNoun: noun,
     leadingFields,
+    templateName: name,
+    templateDescription: description,
+    templateScope: scope,
+    targetType,
+    editing: template !== null,
+    metadataDirty: metadataChanged(template, name, description, scope),
+    originalPayload: template?.payload,
+    templateTeamId: template?.teamId ?? null,
     error,
     creating: saving,
     canSubmit: name.trim().length > 0,
-    submitLabel: template ? 'Save template' : 'Create template',
+    submitLabel: template ? 'Save changes' : 'Create template',
   };
 
-  switch (targetType) {
-    case 'task':
-      return <TaskTemplateBody shared={shared} template={template} noun={noun} onSave={save} />;
-    case 'project':
-      return <ProjectTemplateBody shared={shared} template={template} noun={noun} onSave={save} />;
-    case 'initiative':
-      return (
-        <InitiativeTemplateBody shared={shared} template={template} noun={noun} onSave={save} />
-      );
-    case 'program':
-      return <ProgramTemplateBody shared={shared} template={template} noun={noun} onSave={save} />;
-  }
+  const Body = TEMPLATE_BODIES[targetType];
+  return <Body shared={shared} template={template} noun={noun} onSave={save} />;
 });
 
 /** The shell props every per-kind body forwards unchanged. */
@@ -267,11 +227,20 @@ interface SharedBodyProps {
   onOpenChange: (open: boolean) => void;
   mentionOrgId: string;
   heading: string;
+  workNoun: string;
   leadingFields: ReactNode;
   error: string | null;
   creating: boolean;
   canSubmit: boolean;
   submitLabel: string;
+  templateName: string;
+  templateDescription: string;
+  templateScope: TemplateOut['scope'];
+  targetType: TemplateTargetType;
+  editing: boolean;
+  metadataDirty: boolean;
+  originalPayload: TemplateDraft | undefined;
+  templateTeamId: string | null;
 }
 
 /** Props every per-kind editor body takes. */
@@ -288,21 +257,24 @@ function TaskTemplateBody({ shared, template, noun, onSave }: KindBodyProps): JS
     title: stored?.title ?? '',
     description: stored?.description ?? '',
     priority: stored?.priority ?? 'none',
+    labelIds: stored?.labelIds ?? [],
   });
+  const options = useComposerOptions(shared.mentionOrgId, ['labels'], shared.open);
 
   return (
-    <ComposerShell
+    <TemplateWorkflowShell
       {...shared}
+      payload={{ targetType: 'task', ...present(draft) }}
       title={draft.title}
       onTitleChange={(next) => {
         setField('title', next);
       }}
-      titlePlaceholder={`${noun} title this template starts from`}
+      titlePlaceholder={`${noun} title (optional)`}
       body={draft.description}
       onBodyChange={(next) => {
         setField('description', next);
       }}
-      bodyPlaceholder="The outline this template fills in…"
+      bodyPlaceholder="Description…"
       onSubmit={() => {
         onSave({ targetType: 'task', ...present(draft) });
       }}
@@ -314,7 +286,26 @@ function TaskTemplateBody({ shared, template, noun, onSave }: KindBodyProps): JS
         }}
         disabled={shared.creating}
       />
-    </ComposerShell>
+      <EntityMetadataItem priority={1}>
+        <LabelsPicker
+          options={options.labelOptions}
+          value={draft.labelIds}
+          disabled={shared.creating}
+          placeholder="No labels"
+          ariaLabel="Labels"
+          onToggle={(id) => {
+            const chosen = options.labels.find((label) => label.id === id);
+            if (!chosen) return;
+            setField(
+              'labelIds',
+              draft.labelIds.includes(chosen.id)
+                ? draft.labelIds.filter((value) => value !== chosen.id)
+                : [...draft.labelIds, chosen.id],
+            );
+          }}
+        />
+      </EntityMetadataItem>
+    </TemplateWorkflowShell>
   );
 }
 
@@ -335,24 +326,25 @@ function ProjectTemplateBody({ shared, template, noun, onSave }: KindBodyProps):
   });
 
   return (
-    <ComposerShell
+    <TemplateWorkflowShell
       {...shared}
+      payload={{ targetType: 'project', ...present(draft) }}
       title={draft.name}
       onTitleChange={(next) => {
         setField('name', next);
       }}
-      titlePlaceholder={`${noun} name this template starts from`}
+      titlePlaceholder={`${noun} name (optional)`}
       summary={draft.summary}
       onSummaryChange={(next) => {
         setField('summary', next);
       }}
-      summaryPlaceholder="One-sentence summary"
+      summaryPlaceholder="Short description (optional)"
       summaryMaxLength={280}
       body={draft.description}
       onBodyChange={(next) => {
         setField('description', next);
       }}
-      bodyPlaceholder="The outline this template fills in…"
+      bodyPlaceholder="Description…"
       onSubmit={() => {
         onSave({ targetType: 'project', ...present(draft) });
       }}
@@ -368,7 +360,7 @@ function ProjectTemplateBody({ shared, template, noun, onSave }: KindBodyProps):
         }}
         disabled={shared.creating}
       />
-    </ComposerShell>
+    </TemplateWorkflowShell>
   );
 }
 
@@ -389,24 +381,25 @@ function InitiativeTemplateBody({ shared, template, noun, onSave }: KindBodyProp
   });
 
   return (
-    <ComposerShell
+    <TemplateWorkflowShell
       {...shared}
+      payload={{ targetType: 'initiative', ...present(draft) }}
       title={draft.name}
       onTitleChange={(next) => {
         setField('name', next);
       }}
-      titlePlaceholder={`${noun} name this template starts from`}
+      titlePlaceholder={`${noun} name (optional)`}
       summary={draft.summary}
       onSummaryChange={(next) => {
         setField('summary', next);
       }}
-      summaryPlaceholder="One-sentence summary"
+      summaryPlaceholder="Short description (optional)"
       summaryMaxLength={280}
       body={draft.description}
       onBodyChange={(next) => {
         setField('description', next);
       }}
-      bodyPlaceholder="The outline this template fills in…"
+      bodyPlaceholder="Description…"
       onSubmit={() => {
         onSave({ targetType: 'initiative', ...present(draft) });
       }}
@@ -431,7 +424,7 @@ function InitiativeTemplateBody({ shared, template, noun, onSave }: KindBodyProp
         }}
         disabled={shared.creating}
       />
-    </ComposerShell>
+    </TemplateWorkflowShell>
   );
 }
 
@@ -451,24 +444,25 @@ function ProgramTemplateBody({ shared, template, noun, onSave }: KindBodyProps):
   });
 
   return (
-    <ComposerShell
+    <TemplateWorkflowShell
       {...shared}
+      payload={{ targetType: 'program', ...present(draft) }}
       title={draft.name}
       onTitleChange={(next) => {
         setField('name', next);
       }}
-      titlePlaceholder={`${noun} name this template starts from`}
+      titlePlaceholder={`${noun} name (optional)`}
       summary={draft.summary}
       onSummaryChange={(next) => {
         setField('summary', next);
       }}
-      summaryPlaceholder="One-sentence summary"
+      summaryPlaceholder="Short description (optional)"
       summaryMaxLength={280}
       body={draft.description}
       onBodyChange={(next) => {
         setField('description', next);
       }}
-      bodyPlaceholder="The outline this template fills in…"
+      bodyPlaceholder="Description…"
       onSubmit={() => {
         onSave({ targetType: 'program', ...present(draft) });
       }}
@@ -489,6 +483,26 @@ function ProgramTemplateBody({ shared, template, noun, onSave }: KindBodyProps):
         }}
         disabled={shared.creating}
       />
-    </ComposerShell>
+    </TemplateWorkflowShell>
   );
 }
+
+function metadataChanged(
+  template: TemplateOut | null,
+  name: string,
+  description: string,
+  scope: TemplateOut['scope'],
+): boolean {
+  return (
+    name !== (template?.name ?? '') ||
+    description !== (template?.description ?? '') ||
+    scope !== (template?.scope ?? 'organization')
+  );
+}
+
+const TEMPLATE_BODIES = {
+  task: TaskTemplateBody,
+  project: ProjectTemplateBody,
+  initiative: InitiativeTemplateBody,
+  program: ProgramTemplateBody,
+};

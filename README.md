@@ -39,6 +39,12 @@ Catalog errors require `work:read` and return shared catalogs instead of repeati
 each item. Plan confirmation preserves applied template properties and explicit overrides.
 See [template use over MCP](apps/docs/developers/mcp-tools-and-resources.mdx#create-work-from-a-template-body).
 
+Template setup separates metadata, work defaults, and review in a dialog that fits its content on
+desktop and fills phones. Existing templates open their work fields directly. Project repetition
+shows its cadence controls in the setup step. Generated work opens its schedule and occurrence
+history in a management overlay.
+See [template and repeating-work setup](docs/core/work-template-ui.md) for the saved behavior and
+draft boundaries.
 For Codex connections that repeatedly request sign-in with several chats open, see
 [refresh coordination troubleshooting](apps/docs/developers/connect-an-agent-mcp.mdx#codex-asks-you-to-reconnect-when-several-chats-are-open).
 

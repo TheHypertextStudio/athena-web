@@ -67,6 +67,9 @@ interface CliArgs {
   frameLimit: number | undefined;
   records: string | undefined;
   clickButton: string | undefined;
+  clickMenuItem: string | undefined;
+  clickTab: string | undefined;
+  clickAfter: readonly string[];
 }
 
 /** The mobile remediation matrix: four viewports × two color schemes. */
@@ -108,6 +111,9 @@ function parseArgs(argv: string[]): CliArgs {
       : undefined,
     records: flags.has('records') ? resolve(flags.get('records') ?? '') : undefined,
     clickButton: flags.get('click-button'),
+    clickMenuItem: flags.get('click-menu-item'),
+    clickTab: flags.get('click-tab'),
+    clickAfter: flags.get('click-after')?.split('|') ?? [],
   };
 }
 
@@ -256,6 +262,11 @@ async function captureCleanFrame(
   for (let attempt = 1; attempt <= 4; attempt += 1) {
     const page = await context.newPage();
     await page.setViewportSize(viewport);
+    const device = await context.newCDPSession(page);
+    await device.send('Emulation.setTouchEmulationEnabled', {
+      enabled: viewport.width < 640,
+      maxTouchPoints: 1,
+    });
     await page.emulateMedia({ colorScheme });
     await openReviewRoute(page, url, allowSignIn);
     if (setup) await setup(page);
@@ -322,6 +333,9 @@ function captureCases({
   limit,
   routes,
   clickButton,
+  clickMenuItem,
+  clickTab,
+  clickAfter,
 }: CliArgs): readonly MobileLayoutRouteCase[] {
   if (audit)
     return MOBILE_LAYOUT_ROUTE_CASES.slice(start, limit === undefined ? undefined : start + limit);
@@ -331,6 +345,11 @@ function captureCases({
     setup: clickButton
       ? async (page: Page): Promise<void> => {
           await page.getByRole('button', { name: clickButton, exact: true }).click();
+          if (clickMenuItem)
+            await page.getByRole('menuitem', { name: clickMenuItem, exact: true }).click();
+          if (clickTab) await page.getByRole('tab', { name: clickTab, exact: true }).click();
+          for (const name of clickAfter)
+            await page.getByRole('button', { name, exact: true }).click();
           await waitForSettledPage(page);
         }
       : undefined,

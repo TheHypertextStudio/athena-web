@@ -17,9 +17,6 @@
   "apps/web/src/app/(app)/orgs/[orgId]/programs/[programId]/program-detail-client.tsx": {
     "raw-type-utility": 2
   },
-  "apps/web/src/app/(app)/orgs/[orgId]/recurrence-series/[seriesId]/page.tsx": {
-    "ad-hoc-border": 2
-  },
   "apps/web/src/app/(app)/orgs/[orgId]/sessions/[sessionId]/page.tsx": {
     "raw-radius-utility": 1,
     "raw-type-utility": 3
@@ -341,12 +338,6 @@
     "raw-type-utility": 1
   },
   "apps/web/src/components/recurrence/plan-work-for-event-form.tsx": {
-    "ad-hoc-border": 4
-  },
-  "apps/web/src/components/recurrence/repeat-project-dialog.tsx": {
-    "ad-hoc-border": 12
-  },
-  "apps/web/src/components/recurrence/repeat-task-control.tsx": {
     "ad-hoc-border": 4
   },
   "apps/web/src/components/scheduling/scheduling-all-day-edit-controls.tsx": {

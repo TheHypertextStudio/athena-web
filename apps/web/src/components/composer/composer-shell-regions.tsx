@@ -1,6 +1,14 @@
 'use client';
 
-import { Button, ControlGroup, DialogBody, DialogHeader, Tabs } from '@docket/ui/primitives';
+import {
+  Button,
+  ControlGroup,
+  DialogBody,
+  DialogHeader,
+  Field,
+  Input,
+  Tabs,
+} from '@docket/ui/primitives';
 import { cn } from '@docket/ui/lib/utils';
 import { type JSX, type ReactNode, type RefObject } from 'react';
 
@@ -15,6 +23,10 @@ import type { ComposerDraftControls } from './use-composer-draft-persistence';
 
 /** Props for the identity fields and optional section switcher above a composer body. */
 interface ComposerIdentityHeaderProps {
+  /** Render identity fields inside the host's scrolling body instead of a dialog header. */
+  readonly embedded?: boolean | undefined;
+  /** Use labeled shared form fields when the host edits starting values rather than a document title. */
+  readonly fieldPresentation?: 'document' | 'form' | undefined;
   readonly contextRow?: ReactNode | undefined;
   readonly icon?: ReactNode | undefined;
   readonly context?: ReactNode | undefined;
@@ -128,6 +140,8 @@ function ComposerLeadingFields({
 
 /** Render the composer's destination, identity fields, and compact body-section switcher. */
 export function ComposerIdentityHeader({
+  embedded = false,
+  fieldPresentation = 'document',
   contextRow,
   icon,
   context,
@@ -149,12 +163,11 @@ export function ComposerIdentityHeader({
   supplementalSections,
   sectionValue,
 }: ComposerIdentityHeaderProps): JSX.Element {
+  const Region = embedded ? 'div' : DialogHeader;
+  const IdentityFields =
+    fieldPresentation === 'form' ? ComposerIdentityFields : ComposerDocumentIdentityFields;
   return (
-    <DialogHeader
-      inset="responsive"
-      controls={bodyPlaceholder !== undefined ? 'responsive-two' : 'one'}
-      className="min-w-0"
-    >
+    <Region {...identityRegionProps(embedded, bodyPlaceholder)} className="min-w-0">
       <ComposerContext
         contextRow={contextRow}
         icon={icon}
@@ -170,33 +183,17 @@ export function ComposerIdentityHeader({
       >
         <ComposerLeadingFields disabled={editDisabled}>{leadingFields}</ComposerLeadingFields>
 
-        <div className="flex flex-col gap-1">
-          <input
-            aria-label={titlePlaceholder}
-            placeholder={titlePlaceholder}
-            value={title}
-            ref={titleInputRef}
-            disabled={editDisabled}
-            autoFocus
-            onChange={(event) => {
-              onTitleChange(event.target.value);
-            }}
-            className="placeholder:text-on-surface-variant text-on-surface text-headline-small w-full bg-transparent outline-none disabled:opacity-50"
-          />
-          {onSummaryChange ? (
-            <input
-              aria-label={summaryPlaceholder ?? 'Summary'}
-              placeholder={summaryPlaceholder}
-              maxLength={summaryMaxLength}
-              value={summary ?? ''}
-              disabled={editDisabled}
-              onChange={(event) => {
-                onSummaryChange(event.target.value);
-              }}
-              className="placeholder:text-on-surface-variant text-on-surface-variant text-body-large w-full bg-transparent outline-none disabled:opacity-50"
-            />
-          ) : null}
-        </div>
+        <IdentityFields
+          title={title}
+          onTitleChange={onTitleChange}
+          titleInputRef={titleInputRef}
+          titlePlaceholder={titlePlaceholder}
+          summary={summary}
+          onSummaryChange={onSummaryChange}
+          summaryPlaceholder={summaryPlaceholder}
+          summaryMaxLength={summaryMaxLength}
+          editDisabled={editDisabled}
+        />
         <ComposerSectionTabs
           hasSectionSwitcher={hasSectionSwitcher}
           activeSectionValue={activeSectionValue}
@@ -205,7 +202,103 @@ export function ComposerIdentityHeader({
           sectionValue={sectionValue}
         />
       </div>
-    </DialogHeader>
+    </Region>
+  );
+}
+
+/** The identity values both composer presentations edit. */
+type IdentityFieldsProps = Pick<
+  ComposerIdentityHeaderProps,
+  | 'title'
+  | 'onTitleChange'
+  | 'titleInputRef'
+  | 'titlePlaceholder'
+  | 'summary'
+  | 'onSummaryChange'
+  | 'summaryPlaceholder'
+  | 'summaryMaxLength'
+  | 'editDisabled'
+>;
+
+function ComposerDocumentIdentityFields({
+  title,
+  onTitleChange,
+  titleInputRef,
+  titlePlaceholder,
+  summary,
+  onSummaryChange,
+  summaryPlaceholder,
+  summaryMaxLength,
+  editDisabled,
+}: IdentityFieldsProps): JSX.Element {
+  return (
+    <div className="flex flex-col gap-1">
+      <input
+        aria-label={titlePlaceholder}
+        placeholder={titlePlaceholder}
+        value={title}
+        ref={titleInputRef}
+        disabled={editDisabled}
+        autoFocus
+        onChange={(event) => {
+          onTitleChange(event.target.value);
+        }}
+        className="placeholder:text-on-surface-variant text-on-surface text-headline-small w-full bg-transparent outline-none disabled:opacity-50"
+      />
+      {onSummaryChange ? (
+        <input
+          aria-label={summaryPlaceholder ?? 'Summary'}
+          placeholder={summaryPlaceholder}
+          maxLength={summaryMaxLength}
+          value={summary ?? ''}
+          disabled={editDisabled}
+          onChange={(event) => {
+            onSummaryChange(event.target.value);
+          }}
+          className="placeholder:text-on-surface-variant text-on-surface-variant text-body-large w-full bg-transparent outline-none disabled:opacity-50"
+        />
+      ) : null}
+    </div>
+  );
+}
+
+function ComposerIdentityFields({
+  title,
+  onTitleChange,
+  titleInputRef,
+  titlePlaceholder,
+  summary,
+  onSummaryChange,
+  summaryPlaceholder,
+  summaryMaxLength,
+  editDisabled,
+}: IdentityFieldsProps): JSX.Element {
+  return (
+    <div className={cn('grid min-w-0 gap-4', onSummaryChange && 'sm:grid-cols-2')}>
+      <Field label={titlePlaceholder}>
+        <Input
+          value={title}
+          ref={titleInputRef}
+          disabled={editDisabled}
+          autoFocus
+          onChange={(event) => {
+            onTitleChange(event.target.value);
+          }}
+        />
+      </Field>
+      {onSummaryChange ? (
+        <Field label={summaryPlaceholder ?? 'Summary'}>
+          <Input
+            value={summary ?? ''}
+            disabled={editDisabled}
+            maxLength={summaryMaxLength}
+            onChange={(event) => {
+              onSummaryChange(event.target.value);
+            }}
+          />
+        </Field>
+      ) : null}
+    </div>
   );
 }
 
@@ -401,14 +494,29 @@ function closePromptAnswers(
   };
 }
 
-/** Render the measured row of compact property pills. */
+/** Render compact work properties inline or as a column without overflow hiding. */
 export function PropertyStrip({
   ariaLabel,
   children,
+  layout = 'inline',
 }: {
   readonly ariaLabel: string;
   readonly children: ReactNode;
+  /** Stack every property in an editor aside instead of measuring an inline overflow row. */
+  readonly layout?: 'inline' | 'stacked' | undefined;
 }): JSX.Element {
+  if (layout === 'stacked') {
+    return (
+      <ControlGroup
+        role="group"
+        aria-label={ariaLabel}
+        controlSize="sm"
+        className="flex-col items-start"
+      >
+        {children}
+      </ControlGroup>
+    );
+  }
   return (
     <EntityMetadataRow
       ariaLabel={ariaLabel}
@@ -417,4 +525,13 @@ export function PropertyStrip({
       {children}
     </EntityMetadataRow>
   );
+}
+
+function identityRegionProps(
+  embedded: boolean,
+  bodyPlaceholder: string | undefined,
+): { inset?: 'responsive'; controls?: 'responsive-two' | 'one' } {
+  return embedded
+    ? {}
+    : { inset: 'responsive', controls: bodyPlaceholder !== undefined ? 'responsive-two' : 'one' };
 }

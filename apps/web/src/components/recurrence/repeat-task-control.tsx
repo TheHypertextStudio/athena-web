@@ -20,6 +20,7 @@ import {
   PopoverHeader,
   PopoverTrigger,
   Select,
+  Surface,
 } from '@docket/ui/primitives';
 import { type JSX, useState } from 'react';
 
@@ -58,6 +59,10 @@ export interface RepeatTaskControlProps {
   readonly today: string;
   readonly timezone: string;
   readonly disabled?: boolean;
+  /** Show fields directly in a setup step instead of behind a property popover. */
+  readonly presentation?: 'popover' | 'inline';
+  /** Workspace vocabulary for the work being repeated. */
+  readonly workNoun?: string;
 }
 
 const WEEKDAYS: readonly { value: RecurrenceWeekday; short: string; label: string }[] = [
@@ -175,25 +180,17 @@ function withInterval(
   return { ...schedule, interval };
 }
 
-/** Compact inline property with progressive disclosure for uncommon recurrence behavior. */
-export function RepeatTaskControl({
-  value,
-  onChange,
-  today,
-  timezone,
-  disabled = false,
-}: RepeatTaskControlProps): JSX.Element {
+function calendarIntervalUnit(schedule: CalendarRecurrenceSchedule): string {
+  const unit = { daily: 'day', weekly: 'week', monthly: 'month', yearly: 'year' }[schedule.kind];
+  return schedule.interval === 1 ? unit : `${unit}s`;
+}
+
+/** Edit repeat settings directly in setup flows or through the ordinary property popover. */
+export function RepeatTaskControl(props: RepeatTaskControlProps): JSX.Element {
   const [open, setOpen] = useState(false);
-  const [showOptions, setShowOptions] = useState(false);
+  const { value, disabled = false, workNoun = 'task', presentation = 'popover' } = props;
+  if (presentation === 'inline') return <RepeatFields {...props} />;
   const summary = taskRepeatSummary(value);
-  const cadence = value.kind === 'calendar' ? value.schedule.kind : value.kind;
-
-  /** Update only calendar-backed fields. */
-  const updateCalendar = (next: CalendarRecurrenceSchedule): void => {
-    if (value.kind !== 'calendar') return;
-    onChange({ ...value, schedule: next });
-  };
-
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild disabled={disabled}>
@@ -207,271 +204,16 @@ export function RepeatTaskControl({
         />
       </PopoverTrigger>
       <PopoverContent presentation="panel" width="xl" align="start">
-        <PopoverHeader className="border-outline-variant border-b">
-          <h2 className="text-title-small text-on-surface">Repeat task</h2>
+        <PopoverHeader>
+          <h2 className="text-title-small text-on-surface">Repeat {workNoun.toLowerCase()}</h2>
           <p className="text-body-small text-on-surface-variant mt-0.5">
-            Docket creates ordinary tasks ahead of time so they appear in planning.
+            Choose a calendar schedule or repeat after completion.
           </p>
         </PopoverHeader>
-
-        <PopoverBody className="flex flex-col gap-4">
-          <label className="text-label-medium text-on-surface flex flex-col gap-1.5">
-            Repeats
-            <Select
-              aria-label="Repeat cadence"
-              value={cadence}
-              onChange={(event) => {
-                const next = event.target.value;
-                onChange(
-                  next === 'none'
-                    ? { kind: 'none' }
-                    : createDefaultTaskRepeat(next as TaskRepeatCadence, today, timezone),
-                );
-              }}
-            >
-              <option value="none">Does not repeat</option>
-              <option value="daily">Daily</option>
-              <option value="weekly">Weekly</option>
-              <option value="monthly">Monthly</option>
-              <option value="yearly">Yearly</option>
-              <option value="after_completion">After completion</option>
-            </Select>
-          </label>
-
-          {value.kind === 'calendar' ? (
-            <>
-              <div className="grid grid-cols-[minmax(0,1fr)_6rem] gap-3">
-                <div className="flex flex-col gap-1.5">
-                  <span className="text-label-medium text-on-surface">Starts</span>
-                  <DatePicker
-                    value={value.schedule.startDate}
-                    onChange={(next) => {
-                      if (next) updateCalendar({ ...value.schedule, startDate: next });
-                    }}
-                    placeholder="Choose a start date"
-                    ariaLabel="Repeat start date"
-                    triggerVariant="secondary"
-                    triggerClassName="w-full justify-between"
-                  />
-                </div>
-                <label className="text-label-medium text-on-surface flex flex-col gap-1.5">
-                  Every
-                  <Input
-                    type="number"
-                    aria-label="Repeat interval"
-                    min={1}
-                    value={value.schedule.interval}
-                    onChange={(event) => {
-                      updateCalendar(
-                        withInterval(value.schedule, Math.max(1, Number(event.target.value))),
-                      );
-                    }}
-                  />
-                </label>
-              </div>
-
-              {value.schedule.kind === 'weekly' ? (
-                <fieldset className="flex flex-col gap-1.5">
-                  <legend className="text-label-medium text-on-surface">On</legend>
-                  <div className="flex justify-between gap-1">
-                    {WEEKDAYS.map((day) => {
-                      const selected =
-                        value.schedule.kind === 'weekly' &&
-                        value.schedule.weekdays.includes(day.value);
-                      return (
-                        <Button
-                          key={day.value}
-                          type="button"
-                          variant={selected ? 'secondary' : 'ghost'}
-                          size="sm"
-                          aria-label={day.label}
-                          aria-pressed={selected}
-                          className="size-9 px-0"
-                          onClick={() => {
-                            if (value.schedule.kind !== 'weekly') return;
-                            const exists = value.schedule.weekdays.includes(day.value);
-                            if (exists && value.schedule.weekdays.length === 1) return;
-                            const weekdays = exists
-                              ? value.schedule.weekdays.filter((item) => item !== day.value)
-                              : WEEKDAYS.filter(
-                                  (candidate) =>
-                                    value.schedule.kind === 'weekly' &&
-                                    [...value.schedule.weekdays, day.value].includes(
-                                      candidate.value,
-                                    ),
-                                ).map((candidate) => candidate.value);
-                            updateCalendar({ ...value.schedule, weekdays });
-                          }}
-                        >
-                          {day.short}
-                        </Button>
-                      );
-                    })}
-                  </div>
-                </fieldset>
-              ) : null}
-
-              <div className="grid grid-cols-2 gap-3">
-                <label className="text-label-medium text-on-surface flex flex-col gap-1.5">
-                  Ends
-                  <Select
-                    aria-label="Repeat ends"
-                    value={value.schedule.end.kind}
-                    onChange={(event) => {
-                      const kind = event.target.value;
-                      const end: RecurrenceEnd =
-                        kind === 'on_date'
-                          ? { kind: 'on_date', date: value.schedule.startDate }
-                          : kind === 'after_count'
-                            ? { kind: 'after_count', count: 10 }
-                            : { kind: 'never' };
-                      updateCalendar(withEnd(value.schedule, end));
-                    }}
-                  >
-                    <option value="never">Never</option>
-                    <option value="on_date">On date</option>
-                    <option value="after_count">After occurrences</option>
-                  </Select>
-                </label>
-                {value.schedule.end.kind === 'on_date' ? (
-                  <div className="flex flex-col gap-1.5">
-                    <span className="text-label-medium text-on-surface">End date</span>
-                    <DatePicker
-                      min={value.schedule.startDate}
-                      value={value.schedule.end.date}
-                      onChange={(next) => {
-                        if (next) {
-                          updateCalendar(withEnd(value.schedule, { kind: 'on_date', date: next }));
-                        }
-                      }}
-                      placeholder="Choose an end date"
-                      ariaLabel="Repeat end date"
-                      triggerVariant="secondary"
-                      triggerClassName="w-full justify-between"
-                    />
-                  </div>
-                ) : null}
-                {value.schedule.end.kind === 'after_count' ? (
-                  <label className="text-label-medium text-on-surface flex flex-col gap-1.5">
-                    Occurrences
-                    <Input
-                      type="number"
-                      aria-label="Number of occurrences"
-                      min={1}
-                      value={value.schedule.end.count}
-                      onChange={(event) => {
-                        updateCalendar(
-                          withEnd(value.schedule, {
-                            kind: 'after_count',
-                            count: Math.max(1, Number(event.target.value)),
-                          }),
-                        );
-                      }}
-                    />
-                  </label>
-                ) : null}
-              </div>
-
-              {showOptions ? (
-                <div className="bg-surface-container-low flex flex-col gap-3 rounded-xl p-3">
-                  <label className="text-label-medium text-on-surface flex flex-col gap-1.5">
-                    When an occurrence is missed
-                    <Select
-                      aria-label="When an occurrence is missed"
-                      value={value.missedPolicy}
-                      onChange={(event) => {
-                        onChange({
-                          ...value,
-                          missedPolicy: event.target.value as MissedOccurrencePolicy,
-                        });
-                      }}
-                    >
-                      <option value="skip">Mark it skipped</option>
-                      <option value="carry">Keep it overdue</option>
-                      <option value="resolve">Ask what to do</option>
-                    </Select>
-                  </label>
-                  <label className="text-label-medium text-on-surface flex flex-col gap-1.5">
-                    Schedule ahead
-                    <Select
-                      aria-label="Schedule ahead"
-                      value={value.materialization.horizonDays}
-                      onChange={(event) => {
-                        onChange({
-                          ...value,
-                          materialization: {
-                            ...value.materialization,
-                            horizonDays: Number(event.target.value),
-                          },
-                        });
-                      }}
-                    >
-                      <option value={14}>2 weeks</option>
-                      <option value={28}>4 weeks</option>
-                      <option value={56}>8 weeks</option>
-                    </Select>
-                  </label>
-                </div>
-              ) : null}
-            </>
-          ) : null}
-
-          {value.kind === 'after_completion' ? (
-            <div className="grid grid-cols-[6rem_minmax(0,1fr)] gap-3">
-              <label className="text-label-medium text-on-surface flex flex-col gap-1.5">
-                Wait
-                <Input
-                  type="number"
-                  aria-label="Wait after completion"
-                  min={1}
-                  value={value.schedule.interval}
-                  onChange={(event) => {
-                    onChange({
-                      kind: 'after_completion',
-                      schedule: {
-                        ...value.schedule,
-                        interval: Math.max(1, Number(event.target.value)),
-                      },
-                    });
-                  }}
-                />
-              </label>
-              <label className="text-label-medium text-on-surface flex flex-col gap-1.5">
-                Unit
-                <Select
-                  aria-label="Completion interval unit"
-                  value={value.schedule.unit}
-                  onChange={(event) => {
-                    onChange({
-                      kind: 'after_completion',
-                      schedule: {
-                        ...value.schedule,
-                        unit: event.target.value as AfterCompletionSchedule['unit'],
-                      },
-                    });
-                  }}
-                >
-                  <option value="day">Days</option>
-                  <option value="week">Weeks</option>
-                  <option value="month">Months</option>
-                </Select>
-              </label>
-            </div>
-          ) : null}
+        <PopoverBody>
+          <RepeatFields {...props} />
         </PopoverBody>
-
-        <PopoverFooter className="border-outline-variant justify-between border-t">
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={() => {
-              setShowOptions((current) => !current);
-            }}
-            disabled={value.kind !== 'calendar'}
-          >
-            {showOptions ? 'Fewer options' : 'More options'}
-          </Button>
+        <PopoverFooter>
           <Button
             type="button"
             variant="secondary"
@@ -485,5 +227,317 @@ export function RepeatTaskControl({
         </PopoverFooter>
       </PopoverContent>
     </Popover>
+  );
+}
+
+function RepeatFields({
+  value,
+  onChange,
+  today,
+  timezone,
+  disabled = false,
+}: RepeatTaskControlProps): JSX.Element {
+  const [showOptions, setShowOptions] = useState(false);
+  const cadence = value.kind === 'calendar' ? value.schedule.kind : value.kind;
+  const updateCalendar = (next: CalendarRecurrenceSchedule): void => {
+    if (value.kind === 'calendar') onChange({ ...value, schedule: next });
+  };
+  return (
+    <fieldset disabled={disabled} className="flex min-w-0 flex-col gap-4">
+      <label className="text-label-medium text-on-surface flex flex-col gap-1.5">
+        Repeats
+        <Select
+          aria-label="Repeat cadence"
+          value={cadence}
+          onChange={(event) => {
+            const next = event.target.value;
+            onChange(
+              next === 'none'
+                ? { kind: 'none' }
+                : createDefaultTaskRepeat(next as TaskRepeatCadence, today, timezone),
+            );
+          }}
+        >
+          <option value="none">Does not repeat</option>
+          <option value="daily">Daily</option>
+          <option value="weekly">Weekly</option>
+          <option value="monthly">Monthly</option>
+          <option value="yearly">Yearly</option>
+          <option value="after_completion">After completion</option>
+        </Select>
+      </label>
+
+      {value.kind === 'calendar' ? (
+        <>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_8rem]">
+            <div className="flex flex-col gap-1.5">
+              <span className="text-label-medium text-on-surface">Starts</span>
+              <DatePicker
+                value={value.schedule.startDate}
+                onChange={(next) => {
+                  if (next) updateCalendar({ ...value.schedule, startDate: next });
+                }}
+                placeholder="Choose a start date"
+                ariaLabel="Repeat start date"
+                disabled={disabled}
+                triggerVariant="secondary"
+                triggerClassName="w-full justify-between"
+              />
+            </div>
+            <label className="text-label-medium text-on-surface flex flex-col gap-1.5">
+              Every
+              <span className="flex items-center gap-2">
+                <Input
+                  className="w-16"
+                  type="number"
+                  aria-label="Repeat interval"
+                  min={1}
+                  value={value.schedule.interval}
+                  onChange={(event) => {
+                    updateCalendar(
+                      withInterval(value.schedule, Math.max(1, Number(event.target.value))),
+                    );
+                  }}
+                />
+                <span className="text-body-medium">{calendarIntervalUnit(value.schedule)}</span>
+              </span>
+            </label>
+          </div>
+
+          {value.schedule.kind === 'weekly' ? (
+            <RepeatWeekdays
+              value={{ ...value, schedule: value.schedule }}
+              updateCalendar={updateCalendar}
+            />
+          ) : null}
+
+          <RepeatEnd value={value} updateCalendar={updateCalendar} disabled={disabled} />
+
+          {showOptions ? <RepeatOptions value={value} onChange={onChange} /> : null}
+        </>
+      ) : null}
+
+      {value.kind === 'after_completion' ? (
+        <div className="grid grid-cols-[6rem_minmax(0,1fr)] gap-3">
+          <label className="text-label-medium text-on-surface flex flex-col gap-1.5">
+            Wait
+            <Input
+              type="number"
+              aria-label="Wait after completion"
+              min={1}
+              value={value.schedule.interval}
+              onChange={(event) => {
+                onChange({
+                  kind: 'after_completion',
+                  schedule: {
+                    ...value.schedule,
+                    interval: Math.max(1, Number(event.target.value)),
+                  },
+                });
+              }}
+            />
+          </label>
+          <label className="text-label-medium text-on-surface flex flex-col gap-1.5">
+            Unit
+            <Select
+              aria-label="Completion interval unit"
+              value={value.schedule.unit}
+              onChange={(event) => {
+                onChange({
+                  kind: 'after_completion',
+                  schedule: {
+                    ...value.schedule,
+                    unit: event.target.value as AfterCompletionSchedule['unit'],
+                  },
+                });
+              }}
+            >
+              <option value="day">Days</option>
+              <option value="week">Weeks</option>
+              <option value="month">Months</option>
+            </Select>
+          </label>
+        </div>
+      ) : null}
+
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        className="self-start"
+        onClick={() => {
+          setShowOptions((current) => !current);
+        }}
+        disabled={disabled || value.kind !== 'calendar'}
+      >
+        {showOptions ? 'Fewer options' : 'More options'}
+      </Button>
+    </fieldset>
+  );
+}
+
+interface CalendarFieldsProps {
+  readonly value: CalendarTaskRepeatDraft;
+  readonly updateCalendar: (next: CalendarRecurrenceSchedule) => void;
+  readonly disabled?: boolean;
+}
+
+function RepeatWeekdays({
+  value,
+  updateCalendar,
+}: {
+  readonly value: CalendarTaskRepeatDraft & {
+    readonly schedule: Extract<CalendarRecurrenceSchedule, { kind: 'weekly' }>;
+  };
+  readonly updateCalendar: (next: CalendarRecurrenceSchedule) => void;
+}): JSX.Element {
+  return (
+    <fieldset className="flex flex-col gap-1.5">
+      <legend className="text-label-medium text-on-surface">On</legend>
+      <div className="flex justify-between gap-1">
+        {WEEKDAYS.map((day) => {
+          const selected = value.schedule.weekdays.includes(day.value);
+          return (
+            <Button
+              key={day.value}
+              type="button"
+              variant={selected ? 'secondary' : 'ghost'}
+              size="sm"
+              aria-label={day.label}
+              aria-pressed={selected}
+              className="size-9 px-0"
+              onClick={() => {
+                const exists = value.schedule.weekdays.includes(day.value);
+                if (exists && value.schedule.weekdays.length === 1) return;
+                const weekdays = exists
+                  ? value.schedule.weekdays.filter((item) => item !== day.value)
+                  : WEEKDAYS.filter((candidate) =>
+                      [...value.schedule.weekdays, day.value].includes(candidate.value),
+                    ).map((candidate) => candidate.value);
+                updateCalendar({ ...value.schedule, weekdays });
+              }}
+            >
+              {day.short}
+            </Button>
+          );
+        })}
+      </div>
+    </fieldset>
+  );
+}
+
+function RepeatEnd({ value, updateCalendar, disabled }: CalendarFieldsProps): JSX.Element {
+  return (
+    <div className="grid grid-cols-2 gap-3">
+      <label className="text-label-medium text-on-surface flex flex-col gap-1.5">
+        Ends
+        <Select
+          aria-label="Repeat ends"
+          value={value.schedule.end.kind}
+          onChange={(event) => {
+            const kind = event.target.value;
+            const end: RecurrenceEnd =
+              kind === 'on_date'
+                ? { kind: 'on_date', date: value.schedule.startDate }
+                : kind === 'after_count'
+                  ? { kind: 'after_count', count: 10 }
+                  : { kind: 'never' };
+            updateCalendar(withEnd(value.schedule, end));
+          }}
+        >
+          <option value="never">Never</option>
+          <option value="on_date">On date</option>
+          <option value="after_count">After occurrences</option>
+        </Select>
+      </label>
+      {value.schedule.end.kind === 'on_date' ? (
+        <div className="flex flex-col gap-1.5">
+          <span className="text-label-medium text-on-surface">End date</span>
+          <DatePicker
+            min={value.schedule.startDate}
+            value={value.schedule.end.date}
+            onChange={(next) => {
+              if (next) {
+                updateCalendar(withEnd(value.schedule, { kind: 'on_date', date: next }));
+              }
+            }}
+            placeholder="Choose an end date"
+            ariaLabel="Repeat end date"
+            disabled={disabled}
+            triggerVariant="secondary"
+            triggerClassName="w-full justify-between"
+          />
+        </div>
+      ) : null}
+      {value.schedule.end.kind === 'after_count' ? (
+        <label className="text-label-medium text-on-surface flex flex-col gap-1.5">
+          Occurrences
+          <Input
+            type="number"
+            aria-label="Number of occurrences"
+            min={1}
+            value={value.schedule.end.count}
+            onChange={(event) => {
+              updateCalendar(
+                withEnd(value.schedule, {
+                  kind: 'after_count',
+                  count: Math.max(1, Number(event.target.value)),
+                }),
+              );
+            }}
+          />
+        </label>
+      ) : null}
+    </div>
+  );
+}
+
+function RepeatOptions({
+  value,
+  onChange,
+}: {
+  readonly value: CalendarTaskRepeatDraft;
+  readonly onChange: (next: TaskRepeatDraft) => void;
+}): JSX.Element {
+  return (
+    <Surface tone="card" shape="medium" pad="comfortable" className="flex flex-col gap-3">
+      <label className="text-label-medium text-on-surface flex flex-col gap-1.5">
+        When an occurrence is missed
+        <Select
+          aria-label="When an occurrence is missed"
+          value={value.missedPolicy}
+          onChange={(event) => {
+            onChange({
+              ...value,
+              missedPolicy: event.target.value as MissedOccurrencePolicy,
+            });
+          }}
+        >
+          <option value="skip">Mark it skipped</option>
+          <option value="carry">Keep it overdue</option>
+          <option value="resolve">Ask what to do</option>
+        </Select>
+      </label>
+      <label className="text-label-medium text-on-surface flex flex-col gap-1.5">
+        Schedule ahead
+        <Select
+          aria-label="Schedule ahead"
+          value={value.materialization.horizonDays}
+          onChange={(event) => {
+            onChange({
+              ...value,
+              materialization: {
+                ...value.materialization,
+                horizonDays: Number(event.target.value),
+              },
+            });
+          }}
+        >
+          <option value={14}>2 weeks</option>
+          <option value={28}>4 weeks</option>
+          <option value={56}>8 weeks</option>
+        </Select>
+      </label>
+    </Surface>
   );
 }

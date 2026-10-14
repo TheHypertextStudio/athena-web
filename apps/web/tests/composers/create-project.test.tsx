@@ -416,7 +416,7 @@ describe('CreateProjectDialog — robust composer', () => {
   it('states empty project properties as current values', () => {
     renderComposer();
 
-    expect(screen.getByText('No health')).toBeVisible();
+    expect(screen.getByText('Health')).toBeVisible();
     expect(screen.getByText('No lead')).toBeVisible();
     expect(screen.getByText('No program')).toBeVisible();
     expect(screen.getByText('No start')).toBeVisible();

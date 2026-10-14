@@ -10,6 +10,72 @@ import {
 afterEach(cleanup);
 
 describe('RepeatTaskControl', () => {
+  it.each(['none', 'daily', 'weekly', 'monthly', 'yearly', 'after_completion'])(
+    'authors %s directly in inline setup without a second editor',
+    (cadence) => {
+      const onChange = vi.fn();
+      render(
+        <RepeatTaskControl
+          presentation="inline"
+          value={createDefaultTaskRepeat('monthly', '2026-08-11', 'America/Los_Angeles')}
+          onChange={onChange}
+          today="2026-08-11"
+          timezone="America/Los_Angeles"
+        />,
+      );
+      expect(screen.getByLabelText('Repeat cadence')).toHaveValue('monthly');
+      expect(screen.getByLabelText('Repeat interval')).toHaveValue(1);
+      expect(screen.getByLabelText('Repeat ends')).toHaveValue('never');
+      expect(screen.queryByRole('button', { name: 'Done' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('heading', { name: 'Repeat task' })).not.toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: 'More options' }));
+      expect(screen.getByLabelText('Schedule ahead')).toHaveValue('28');
+      fireEvent.change(screen.getByLabelText('Repeat cadence'), { target: { value: cadence } });
+      expect(onChange).toHaveBeenLastCalledWith(
+        cadence === 'none'
+          ? { kind: 'none' }
+          : createDefaultTaskRepeat(
+              cadence as Parameters<typeof createDefaultTaskRepeat>[0],
+              '2026-08-11',
+              'America/Los_Angeles',
+            ),
+      );
+    },
+  );
+
+  it('locks every inline setting while the host saves', () => {
+    render(
+      <RepeatTaskControl
+        presentation="inline"
+        disabled
+        value={createDefaultTaskRepeat('monthly', '2026-08-11', 'America/Los_Angeles')}
+        onChange={vi.fn()}
+        today="2026-08-11"
+        timezone="America/Los_Angeles"
+      />,
+    );
+    expect(screen.getByLabelText('Repeat cadence')).toBeDisabled();
+    expect(screen.getByLabelText('Repeat interval')).toBeDisabled();
+    expect(screen.getByLabelText('Repeat ends')).toBeDisabled();
+    expect(screen.getByRole('button', { name: /Repeat start date/ })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'More options' })).toBeDisabled();
+  });
+
+  it('uses the workspace noun when repeating other work', () => {
+    render(
+      <RepeatTaskControl
+        value={{ kind: 'none' }}
+        onChange={vi.fn()}
+        today="2026-10-02"
+        timezone="America/Los_Angeles"
+        workNoun="Campaign"
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Repeat — Does not repeat' }));
+    expect(screen.getByRole('heading', { name: 'Repeat campaign' })).toBeTruthy();
+    expect(screen.queryByRole('heading', { name: 'Repeat task' })).toBeNull();
+  });
+
   it('starts as an ordinary property and reveals a focused editor', () => {
     const onChange = vi.fn();
     render(
@@ -21,7 +87,9 @@ describe('RepeatTaskControl', () => {
       />,
     );
 
+    expect(screen.queryByLabelText('Repeat cadence')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Repeat — Does not repeat' }));
+    expect(screen.getByRole('button', { name: 'Done' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Repeat task' })).toBeTruthy();
     expect(screen.getByLabelText('Repeat cadence')).toBeTruthy();
   });

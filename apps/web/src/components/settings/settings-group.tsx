@@ -81,6 +81,7 @@ const HEADING_CLASS = cn('flex items-center gap-2', CONTROL_RADIUS, focusRing);
 export function SettingsGroup({
   title,
   capability,
+  discoverable: _discoverable,
   icon,
   description,
   action,

@@ -274,7 +274,7 @@ describe('CreateProgramDialog — visibility picker', () => {
     renderGlobalProgram();
 
     expect(screen.getByText('No owner')).toBeVisible();
-    expect(screen.getByText('No health')).toBeVisible();
+    expect(screen.getByText('Health')).toBeVisible();
   });
 
   it('renders Workspace, Owner, then Start from template above the title without a duplicate Owner', async () => {

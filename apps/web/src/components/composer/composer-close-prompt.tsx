@@ -34,8 +34,10 @@ export function ComposerClosePrompt({
 
   if (onSave) {
     return (
-      <div className="flex w-full flex-row items-center gap-2">
-        <span className="text-on-surface-variant text-body-medium mr-auto">Save this draft?</span>
+      <div className="flex w-full flex-wrap items-center gap-2">
+        <span className="text-on-surface-variant text-body-medium mr-auto w-full sm:w-auto">
+          Save this draft?
+        </span>
         <Button type="button" variant="destructive" onClick={onDiscard}>
           Discard
         </Button>
@@ -50,8 +52,10 @@ export function ComposerClosePrompt({
   }
 
   return (
-    <div className="flex w-full flex-row items-center gap-2">
-      <span className="text-on-surface-variant text-body-medium mr-auto">Discard this draft?</span>
+    <div className="flex w-full flex-wrap items-center gap-2">
+      <span className="text-on-surface-variant text-body-medium mr-auto w-full sm:w-auto">
+        Discard this draft?
+      </span>
       <Button ref={safeAnswerRef} type="button" variant="ghost" onClick={onKeepEditing}>
         Keep editing
       </Button>

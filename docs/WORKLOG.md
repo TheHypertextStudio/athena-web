@@ -22,11 +22,24 @@
   limited to 500 items. Existing scheduler and supported REST/MCP clients remain compatible.
 - **Subtasks**:
   - [ ] Preserve and reconcile checkout state.
-  - [ ] Recover and accept template and repeating-work UI.
+  - [x] Recover and accept template and repeating-work UI locally.
   - [ ] Recover remaining product slices and reconcile maintenance.
   - [ ] Complete identity, blueprints, Program schedules, and Athena/gallery layers.
   - [ ] Verify operational acceptance and retire eligible checkouts.
 - **Blockers**: Provider and device acceptance require current evidence.
+
+#### Template recovery validation
+
+Recovered guided setup and the corrected responsive layout with existing REST/MCP contracts.
+All seven authenticated browser journeys pass, including four-kind save/reopen, sharing, repeating
+project creation, future revisions/history, discard, focus, long-document scrolling, touch targets,
+and contrast. Forty fresh captures cover five states at four sizes in both themes. The affected
+24-task type graph, 5,031 web tests, 77 affected API tests, changed-file lint, shared dialog tests,
+and complexity gate pass; the native
+production build passes. Independent review's occurrence-date retention finding has a regression
+covering rejection, reopening, and successful retry. Private recovery archives preserve checkout
+state; eligible clean merged checkouts have been retired. Remaining recovery and typed-work layers
+stay open.
 
 ### [LEGAL-POLICIES-002] Keep policy versions easy to navigate
 

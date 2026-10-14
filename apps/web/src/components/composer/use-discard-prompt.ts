@@ -1,4 +1,4 @@
-import { type RefObject, useRef, useState } from 'react';
+import { type RefObject, type FocusEvent, useRef, useState } from 'react';
 
 /** What the discard prompt needs to know about the composer it guards. */
 export interface DiscardPromptOptions {
@@ -26,6 +26,10 @@ export interface DiscardPrompt {
   readonly submittable: boolean;
   /** The ref to bind to the title input, so "Keep editing" can hand focus back to it. */
   readonly titleRef: RefObject<HTMLInputElement | null>;
+  /** The focus region to search when the previous step's control no longer exists. */
+  readonly focusRegionRef: RefObject<HTMLDivElement | null>;
+  /** Remember the authored control that held focus before a close prompt replaced actions. */
+  readonly onDraftFocusCapture: (event: FocusEvent<HTMLElement>) => void;
   /** Gate every dismiss path (Escape, backdrop, X): prompt when dirty, close when not. */
   readonly requestClose: () => void;
   /** Confirm discarding the draft and close. */
@@ -58,6 +62,11 @@ export function useDiscardPrompt({
   const [confirming, setConfirming] = useState(false);
   const fallbackTitleRef = useRef<HTMLInputElement>(null);
   const titleRef = titleInputRef ?? fallbackTitleRef;
+  const focusRegionRef = useRef<HTMLDivElement>(null);
+  const draftFocusRef = useRef<HTMLElement>(null);
+  const onDraftFocusCapture = (event: FocusEvent<HTMLElement>): void => {
+    if (event.target instanceof HTMLElement) draftFocusRef.current = event.target;
+  };
   const editDisabled = creating || contentDisabled || confirming;
   const submittable = canSubmit && !creating && !confirming;
 
@@ -77,9 +86,15 @@ export function useDiscardPrompt({
 
   const keepEditing = (): void => {
     setConfirming(false);
-    // The title is disabled until the prompt's state change commits; focus it on the next frame.
+    // Draft controls remain disabled until the prompt state change commits.
     requestAnimationFrame(() => {
-      titleRef.current?.focus();
+      const previous = draftFocusRef.current;
+      const fallback =
+        titleRef.current ??
+        focusRegionRef.current?.querySelector<HTMLElement>(
+          '[role="tab"][aria-selected="true"], input:not(:disabled), textarea:not(:disabled), button:not(:disabled), [contenteditable="true"]',
+        );
+      (previous?.isConnected ? previous : fallback)?.focus({ preventScroll: true });
     });
   };
 
@@ -102,6 +117,8 @@ export function useDiscardPrompt({
     editDisabled,
     submittable,
     titleRef,
+    focusRegionRef,
+    onDraftFocusCapture,
     requestClose,
     discard,
     keepEditing,

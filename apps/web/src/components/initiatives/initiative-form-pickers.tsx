@@ -166,9 +166,9 @@ export function InitiativeComposerPickers({
           options={HEALTH_OPTIONS}
           value={health}
           onChange={onHealthChange}
-          placeholder="No health"
+          placeholder="Health"
           triggerIcon={<Activity className="text-on-surface-variant size-4" />}
-          clearLabel="No health"
+          clearLabel="Clear health"
           ariaLabel="Health"
           disabled={disabled}
         />

@@ -247,7 +247,7 @@ describe('GlobalInitiativeComposer', () => {
 
     expect(screen.getByText('No owner')).toBeVisible();
     expect(screen.getByText('No target')).toBeVisible();
-    expect(screen.getByText('No health')).toBeVisible();
+    expect(screen.getByText('Health')).toBeVisible();
   });
 
   it('renders Workspace, Owner, then Start from template above the title with no duplicate Owner', async () => {

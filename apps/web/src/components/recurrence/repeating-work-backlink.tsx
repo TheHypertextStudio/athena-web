@@ -3,9 +3,9 @@
 /** Backlink from ordinary generated work to the series that created it. */
 import type { GeneratedWorkRecurrenceOut } from '../../lib/contracts/recurrence';
 import { RefreshCw } from '@docket/ui/icons';
-import { Button } from '@docket/ui/primitives';
-import Link from '@/components/docket-link';
-import type { JSX } from 'react';
+import { Button, Surface } from '@docket/ui/primitives';
+import { type JSX, useState } from 'react';
+import { SeriesManagementDialog } from './series-management-dialog';
 
 import { api } from '@/lib/api';
 import { apiQueryOptions, queryKeys, useApiQuery } from '@/lib/query';
@@ -24,6 +24,7 @@ function Backlink({
   readonly orgId: string;
   readonly context: GeneratedWorkRecurrenceOut | null | undefined;
 }): JSX.Element | null {
+  const [open, setOpen] = useState(false);
   if (!context) return null;
   const date = new Intl.DateTimeFormat('en', {
     month: 'short',
@@ -32,22 +33,38 @@ function Backlink({
     timeZone: 'UTC',
   }).format(new Date(`${context.scheduledFor}T12:00:00.000Z`));
   return (
-    <aside className="bg-secondary-container text-on-secondary-container flex flex-wrap items-center justify-between gap-3 rounded-xl px-4 py-3">
-      <div className="flex min-w-0 items-center gap-3">
-        <RefreshCw className="size-5 shrink-0" />
-        <div className="min-w-0">
-          <p className="text-body-medium truncate">Part of {context.seriesName}</p>
-          <p className="text-body-small opacity-80">
-            This work was created for the {date} occurrence.
-          </p>
+    <>
+      <Surface
+        as="aside"
+        tone="card"
+        className="flex flex-wrap items-center justify-between gap-3 px-4 py-3"
+      >
+        <div className="flex min-w-0 items-center gap-3">
+          <RefreshCw className="size-5 shrink-0" />
+          <div className="min-w-0">
+            <p className="text-body-medium truncate">Part of {context.seriesName}</p>
+            <p className="text-body-small opacity-80">
+              This work was created for the {date} occurrence.
+            </p>
+          </div>
         </div>
-      </div>
-      <Button asChild variant="ghost" size="sm">
-        <Link href={`/orgs/${orgId}/recurrence-series/${context.seriesId}`}>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => {
+            setOpen(true);
+          }}
+        >
           Manage repeating work
-        </Link>
-      </Button>
-    </aside>
+        </Button>
+      </Surface>
+      <SeriesManagementDialog
+        orgId={orgId}
+        seriesId={context.seriesId}
+        open={open}
+        onOpenChange={setOpen}
+      />
+    </>
   );
 }
 

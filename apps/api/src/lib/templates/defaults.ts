@@ -11,11 +11,9 @@
  * Three per kind is the whole opinion. A picker with twelve entries for one kind is a filing
  * cabinet; a picker with three is a suggestion. Users add their own beyond that without limit.
  *
- * Seeding is lazy — {@link seedDefaultTemplates} runs on the first list read rather than at org
- * bootstrap or in a migration, which is how `seedDefaultAutomationRules` is already wired
- * (`routes/integrations.ts`, `lib/email-to-task/sweep.ts`). One consequence is worth stating:
- * because the guard is "does this org have any template row at all", a workspace that deletes
- * every shipped default keeps it deleted. That is the intended reading of "editable".
+ * {@link seedDefaultTemplates} installs defaults on the first list read of an empty workspace.
+ * An existing template prevents reseeding, so updates to this catalog do not overwrite workspace
+ * templates. Removing every template makes the workspace empty and seeds defaults on its next read.
  */
 import { db, template } from '@docket/db';
 import type { TemplateDraft, TemplateTargetType } from '@docket/work/template-contract';
@@ -37,237 +35,172 @@ export interface DefaultTemplate {
  * The shipped default template set — DATA, not code.
  *
  * @remarks
- * Every body is a heading outline rather than prose. A template that supplies sentences invites
- * the author to edit around them; a template that supplies questions makes the blank page the
- * author's own. The outlines are deliberately short — four or five headings — because an outline
- * long enough to scroll is a form, and nobody fills in a form voluntarily.
+ * Short editable outlines cover individual, client, team, business, and nonprofit work. These
+ * examples do not define product types or restrict what a workspace may create. Examples do not
+ * preassign urgency or a health rating.
  */
 export const DEFAULT_TEMPLATES: readonly DefaultTemplate[] = [
-  // — Tasks ————————————————————————————————————————————————————————————————
   {
     targetType: 'task',
-    name: 'Bug report',
-    description: 'Something is broken and someone needs to reproduce it before fixing it.',
+    name: 'Fix a problem',
+    description: 'Describe what is wrong and what needs to change.',
     payload: {
       targetType: 'task',
-      description: [
-        '## Steps to reproduce',
-        '',
-        '1. ',
-        '',
-        '## What should happen',
-        '',
-        '## What happens instead',
-        '',
-        '## Who this affects',
-      ].join('\n'),
-      priority: 'high',
+      description: ['## Problem', '', '## How to check it', '', '## Done when'].join('\n'),
+      priority: 'none',
     },
   },
   {
     targetType: 'task',
-    name: 'Research spike',
-    description: 'A timeboxed investigation that ends in a decision, not in code.',
+    name: 'Make a decision',
+    description: 'Compare your options and choose what to do next.',
     payload: {
       targetType: 'task',
-      description: ['## Question', '', '## Timebox', '', '## What we will decide at the end'].join(
-        '\n',
-      ),
-      priority: 'medium',
+      description: ['## Question', '', '## Options', '', '## Decision'].join('\n'),
+      priority: 'none',
     },
   },
   {
     targetType: 'task',
     name: 'Meeting follow-up',
-    description: 'Capture what a meeting decided while it is still fresh.',
+    description: 'Keep track of decisions and what needs doing after a meeting.',
     payload: {
       targetType: 'task',
-      description: ['## Decisions', '', '## Owners', '', '## Deadlines'].join('\n'),
+      description: ['## What we decided', '', '## Next steps'].join('\n'),
       priority: 'none',
     },
   },
-
-  // — Projects —————————————————————————————————————————————————————————————
   {
     targetType: 'project',
-    name: 'Product launch',
-    description: 'Ship something to customers on a date, with a go/no-go before it goes.',
+    name: 'Side project',
+    description: 'Plan something you want to make or try.',
     payload: {
       targetType: 'project',
-      description: [
-        '## Goal',
-        '',
-        '## In scope',
-        '',
-        '## Explicitly not in scope',
-        '',
-        '## Launch checklist',
-        '',
-        '## Risks',
-        '',
-        '## Go / no-go criteria',
-      ].join('\n'),
-      status: 'planned',
-      health: 'on_track',
-    },
-  },
-  {
-    targetType: 'project',
-    name: 'Research spike',
-    description: 'A larger investigation with a method and a named decision-maker.',
-    payload: {
-      targetType: 'project',
-      description: [
-        '## Question',
-        '',
-        '## Method',
-        '',
-        '## Timebox',
-        '',
-        '## Who decides, and on what',
-      ].join('\n'),
+      description: ['## Idea', '', '## Next steps', '', '## Finished when'].join('\n'),
       status: 'planned',
     },
   },
   {
     targetType: 'project',
-    name: 'Process rollout',
-    description: 'Change how a group works, and know afterwards whether it took.',
+    name: 'Client project',
+    description: 'Agree on the work, deadline, and deliverables.',
+    payload: {
+      targetType: 'project',
+      description: ['## Brief', '', '## Deliverables', '', '## Schedule', '', '## Budget'].join(
+        '\n',
+      ),
+      status: 'planned',
+    },
+  },
+  {
+    targetType: 'project',
+    name: 'Launch',
+    description: 'Prepare something for release and keep track of what remains.',
     payload: {
       targetType: 'project',
       description: [
-        '## What changes',
+        '## What we are launching',
         '',
-        '## Who is affected',
+        '## Before launch',
         '',
-        '## Rollout stages',
+        '## Launch day',
         '',
-        '## How we measure adoption',
+        '## Follow-up',
       ].join('\n'),
       status: 'planned',
     },
   },
-
-  // — Initiatives ——————————————————————————————————————————————————————————
   {
     targetType: 'initiative',
-    name: 'Strategic initiative',
-    description: 'A theme with a direction, a rationale, and a way to tell if it worked.',
+    name: 'Long-term goal',
+    description: 'Organize the projects and progress toward a goal.',
     payload: {
       targetType: 'initiative',
-      description: [
-        '## Overview',
-        '',
-        '## Motivation and purpose',
-        '',
-        '## Desired outcome',
-        '',
-        '## Approach',
-        '',
-        '## How we will measure it',
-      ].join('\n'),
-      status: 'active',
-      priority: 'medium',
+      description: ['## Goal', '', '## Why it matters', '', '## Projects', '', '## Progress'].join(
+        '\n',
+      ),
+      status: 'proposed',
+      priority: 'none',
       updateCadence: 'monthly',
     },
   },
   {
     targetType: 'initiative',
-    name: 'Objective',
-    description: 'A measurable target with key results and a tight review cadence.',
+    name: 'Fundraising campaign',
+    description: 'Plan who to reach, what to raise, and how to follow up.',
     payload: {
       targetType: 'initiative',
       description: [
-        '## Objective',
+        '## Goal',
         '',
-        '## Key results',
+        '## People to contact',
         '',
-        '1. ',
-        '2. ',
-        '3. ',
+        '## Projects',
         '',
-        '## Who owns it, and when we review',
-        '',
-        '## Explicitly out of scope',
+        '## Progress',
       ].join('\n'),
-      status: 'active',
-      priority: 'high',
-      updateCadence: 'weekly',
+      status: 'proposed',
+      priority: 'none',
+      updateCadence: 'monthly',
     },
   },
   {
     targetType: 'initiative',
-    name: 'Bet',
-    description: 'A falsifiable wager with a decision date and a stated cost of being wrong.',
+    name: 'Try an idea',
+    description: 'Test an idea before committing more time or money.',
     payload: {
       targetType: 'initiative',
       description: [
-        '## Hypothesis',
+        '## Idea',
         '',
-        '## What we believe, and why',
+        '## What to try',
         '',
-        '## What would prove us wrong',
+        '## What we learned',
         '',
-        '## Time and money at risk',
-        '',
-        '## Decision date',
+        '## Decision',
       ].join('\n'),
       status: 'proposed',
-      priority: 'medium',
-      updateCadence: 'biweekly',
+      priority: 'none',
+      updateCadence: 'monthly',
     },
   },
-
-  // — Programs —————————————————————————————————————————————————————————————
   {
     targetType: 'program',
-    name: 'Operating cadence',
-    description: 'A standing rhythm of rituals with named owners and review points.',
+    name: 'Running a business',
+    description: 'Keep the ongoing work of a business in one place.',
     payload: {
       targetType: 'program',
       description: [
-        '## Purpose',
+        '## Responsibilities',
         '',
-        '## Rituals, and who runs each',
+        '## Regular work',
         '',
-        '## Review points',
+        '## Current projects',
         '',
-        '## What good looks like',
+        '## People',
       ].join('\n'),
       status: 'active',
     },
   },
   {
     targetType: 'program',
-    name: 'Support function',
-    description: 'Ongoing work that answers requests rather than finishing a scope.',
+    name: 'Community group',
+    description: 'Organize the ongoing work of a group or nonprofit.',
     payload: {
       targetType: 'program',
-      description: [
-        '## What this function covers',
-        '',
-        '## How work arrives, and how it is triaged',
-        '',
-        '## What people can expect from us',
-        '',
-        '## Escalation',
-      ].join('\n'),
+      description: ['## Purpose', '', '## Regular work', '', '## Projects', '', '## People'].join(
+        '\n',
+      ),
       status: 'active',
     },
   },
   {
     targetType: 'program',
-    name: 'Ongoing platform work',
-    description: 'The maintenance that never completes, made visible instead of invisible.',
+    name: 'Personal routines',
+    description: 'Keep your routines, responsibilities, and related projects together.',
     payload: {
       targetType: 'program',
-      description: [
-        '## What we maintain',
-        '',
-        '## Recurring commitments',
-        '',
-        '## Health signals we watch',
-      ].join('\n'),
+      description: ['## Routines', '', '## Responsibilities', '', '## Projects'].join('\n'),
       status: 'active',
     },
   },

@@ -3,15 +3,18 @@
 /** Dedicated Initiative relationship tabs composed from first-class object rows. */
 import type {
   InitiativeConnectedWork,
-  InitiativeHealthDistribution,
   InitiativeHierarchyReference,
 } from '@docket/work/initiative-contract';
 import { Plus } from '@docket/ui/icons';
 import { Button } from '@docket/ui/primitives';
+import Link from '@/components/docket-link';
 import type { JSX } from 'react';
 
 import { useWorkStatusResolver } from '@/components/entity-display/use-work-status';
-import { DistributionBar } from '@/components/initiatives/distribution-bar';
+import {
+  type ConnectedWorkActions,
+  InitiativeConnectedWorkPanel,
+} from '@/components/initiatives/initiative-connected-work';
 import { ObjectListRow } from '@/components/objects/object-list-row';
 
 /** Relationship tabs this component owns. Other tabs render nothing here. */
@@ -22,36 +25,73 @@ export interface InitiativeRelationshipPanelsProps {
   readonly tab: string;
   /** Workspace whose detail route projects the relationship rows. */
   readonly routeOrganizationId: string;
+  /** The Initiative these sections belong to. */
+  readonly initiativeId: string;
   readonly children: readonly InitiativeHierarchyReference[];
   readonly connectedWork: readonly InitiativeConnectedWork[];
-  /**
-   * How the connected work is spread across the health buckets.
-   *
-   * @remarks
-   * Summarised beside the rows it summarises. This used to be a card on the Overview tab, where it
-   * counted work the reader could not see and told them to come here.
-   */
-  readonly distribution: InitiativeHealthDistribution;
   /** True while the selected relationship section is loading. */
   readonly loading?: boolean;
   readonly initiativeNoun: string;
+  /** The plural Initiative noun, for the truncation notice's own links. */
+  readonly initiativePlural: string;
   readonly programNoun: string;
   readonly projectNoun: string;
+  /** Whether the server capped the relationship scan, so these sections are incomplete. */
+  readonly truncated: boolean;
   readonly onAddSubinitiative: () => void;
+  /** The create/link/unlink writes the Connected work panel reports up to the page. */
+  readonly connectedWorkActions: ConnectedWorkActions;
+}
+
+/** Props for the private {@link TruncationNotice}. */
+interface TruncationNoticeProps {
+  readonly organizationId: string;
+  readonly initiativePlural: string;
+  readonly programNoun: string;
+  readonly projectNoun: string;
+}
+
+/** Say that the server capped the scan, and where the complete lists live. */
+function TruncationNotice({
+  organizationId,
+  initiativePlural,
+  programNoun,
+  projectNoun,
+}: TruncationNoticeProps): JSX.Element {
+  return (
+    <p className="text-on-surface-variant text-sm">
+      Some relationships are not shown. Browse all{' '}
+      <Link href={`/orgs/${organizationId}/initiatives`} className="underline">
+        {initiativePlural.toLowerCase()}
+      </Link>
+      ,{' '}
+      <Link href={`/orgs/${organizationId}/projects`} className="underline">
+        {projectNoun.toLowerCase()}s
+      </Link>
+      , or{' '}
+      <Link href={`/orgs/${organizationId}/programs`} className="underline">
+        {programNoun.toLowerCase()}s
+      </Link>
+      .
+    </p>
+  );
 }
 
 /** Render the active relationship collection as standard interactive objects. */
 export function InitiativeRelationshipPanels({
   tab,
   routeOrganizationId,
+  initiativeId,
   children,
   connectedWork,
-  distribution,
   loading = false,
   initiativeNoun,
+  initiativePlural,
   programNoun,
   projectNoun,
+  truncated,
   onAddSubinitiative,
+  connectedWorkActions,
 }: InitiativeRelationshipPanelsProps): JSX.Element | null {
   const statusOf = useWorkStatusResolver('initiative');
 
@@ -63,6 +103,14 @@ export function InitiativeRelationshipPanels({
         aria-labelledby="tab-subinitiatives"
         className="no-print flex min-w-0 flex-col gap-3"
       >
+        {truncated ? (
+          <TruncationNotice
+            organizationId={routeOrganizationId}
+            initiativePlural={initiativePlural}
+            programNoun={programNoun}
+            projectNoun={projectNoun}
+          />
+        ) : null}
         <div className="flex justify-end">
           <Button variant="secondary" className="min-h-10 gap-2" onClick={onAddSubinitiative}>
             <Plus aria-hidden className="size-5" />
@@ -114,47 +162,24 @@ export function InitiativeRelationshipPanels({
         aria-labelledby="tab-work"
         className="no-print flex min-w-0 flex-col gap-2"
       >
-        {/* Only alongside rows. With nothing linked the panel's own empty sentence is the whole
-            answer, and a bar of one neutral run would be chrome drawn over an absence. */}
-        {!loading && connectedWork.length ? (
-          <div className="pb-1">
-            <DistributionBar
-              distribution={distribution}
-              childNounPlural={`${projectNoun.toLowerCase()}s and ${programNoun.toLowerCase()}s`}
-            />
-          </div>
+        {truncated ? (
+          <TruncationNotice
+            organizationId={routeOrganizationId}
+            initiativePlural={initiativePlural}
+            programNoun={programNoun}
+            projectNoun={projectNoun}
+          />
         ) : null}
-        {loading ? (
-          <p className="text-on-surface-variant text-body-small rounded-xl px-4 py-8 text-center">
-            Loading connected work…
-          </p>
-        ) : connectedWork.length ? (
-          connectedWork.map((item) => {
-            const noun = item.kind === 'program' ? programNoun : projectNoun;
-            const crossWorkspace = item.organizationId !== routeOrganizationId;
-            return (
-              <ObjectListRow
-                key={`${item.kind}-${item.id}`}
-                object={{
-                  kind: item.kind,
-                  id: item.id,
-                  organizationId: item.organizationId,
-                  title: item.name,
-                }}
-                href={`/orgs/${item.organizationId}/${item.kind === 'program' ? 'programs' : 'projects'}/${item.id}`}
-                description={`${noun}${item.direct ? '' : ' · inherited'}`}
-                trailing={item.status.replaceAll('_', ' ')}
-                dragDisabled={crossWorkspace}
-                actionScope={crossWorkspace ? 'reference' : 'all'}
-                surfaceId="initiative-connected-work"
-              />
-            );
-          })
-        ) : (
-          <p className="bg-surface-container-low text-on-surface-variant rounded-xl px-4 py-8 text-center text-sm">
-            No projects or programs are linked to this {initiativeNoun.toLowerCase()} yet.
-          </p>
-        )}
+        <InitiativeConnectedWorkPanel
+          routeOrganizationId={routeOrganizationId}
+          initiativeId={initiativeId}
+          connectedWork={connectedWork}
+          loading={loading}
+          initiativeNoun={initiativeNoun}
+          programNoun={programNoun}
+          projectNoun={projectNoun}
+          actions={connectedWorkActions}
+        />
       </div>
     );
   }

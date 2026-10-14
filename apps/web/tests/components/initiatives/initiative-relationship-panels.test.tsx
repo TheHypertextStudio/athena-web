@@ -1,13 +1,14 @@
 import '@testing-library/jest-dom/vitest';
 
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import type { JSX } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { InitiativeHierarchyLinkId, InitiativeId } from '@docket/work/ids';
 import { OrganizationId } from '@docket/identity-access/ids';
 
-import { HEALTH_LABEL } from '../../../src/components/entity-display/health';
+import type { ConnectedWorkActions } from '../../../src/components/initiatives/initiative-connected-work';
 import { InitiativeRelationshipPanels } from '../../../src/components/initiatives/initiative-relationship-panels';
 import { InteractionProvider } from '../../../src/lib/actions/interaction-provider';
 import { createActionRegistry, defineActionDomain } from '../../../src/lib/actions/registry';
@@ -30,35 +31,59 @@ const child = {
   parentLinkId,
 };
 
-const distribution = { onTrack: 2, atRisk: 1, offTrack: 0, unknown: 1 };
-
 const project = {
   kind: 'project' as const,
   id: 'project-1',
   organizationId,
   name: 'Urbanist tech program startup',
+  summary: 'Stand the program up end to end.',
   status: 'active',
   health: 'on_track' as const,
   direct: false,
   inheritedThroughInitiativeId: childId,
+  programId: null,
 };
+
+/** A read-only viewer: every create, link, and unlink control stays off these panels. */
+const readOnlyActions: ConnectedWorkActions = {
+  canEdit: false,
+  busy: false,
+  projectOptions: [],
+  projectProgramIds: new Map(),
+  programOptions: [],
+  optionsLoading: false,
+  onLinkProject: () => undefined,
+  onLinkProgram: () => undefined,
+  onUnlink: () => undefined,
+  onCreateProject: () => undefined,
+  onQuickAddProject: async () => undefined,
+};
+
+/** Render under a query client, which the Connected work panel's icon lookup needs. */
+function renderPanels(ui: Parameters<typeof render>[0]): ReturnType<typeof render> {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>);
+}
 
 afterEach(cleanup);
 
 describe('InitiativeRelationshipPanels', () => {
   it('renders sub-initiatives as complete Initiative objects with an explicit add path', async () => {
     const onAddSubinitiative = vi.fn();
-    render(
+    renderPanels(
       <InitiativeRelationshipPanels
         tab="subinitiatives"
         routeOrganizationId={organizationId}
+        initiativeId={childId}
         children={[child]}
         connectedWork={[project]}
-        distribution={distribution}
         initiativeNoun="Initiative"
         programNoun="Program"
         projectNoun="Project"
         onAddSubinitiative={onAddSubinitiative}
+        connectedWorkActions={readOnlyActions}
+        initiativePlural="Initiatives"
+        truncated={false}
       />,
     );
 
@@ -79,17 +104,20 @@ describe('InitiativeRelationshipPanels', () => {
   });
 
   it('renders connected work as the Project or Program object it actually is', () => {
-    render(
+    renderPanels(
       <InitiativeRelationshipPanels
         tab="work"
         routeOrganizationId={organizationId}
+        initiativeId={childId}
         children={[child]}
         connectedWork={[project]}
-        distribution={distribution}
         initiativeNoun="Initiative"
         programNoun="Program"
         projectNoun="Project"
         onAddSubinitiative={vi.fn()}
+        connectedWorkActions={readOnlyActions}
+        initiativePlural="Initiatives"
+        truncated={false}
       />,
     );
 
@@ -99,33 +127,11 @@ describe('InitiativeRelationshipPanels', () => {
       'href',
       `/orgs/${organizationId}/projects/project-1`,
     );
-    expect(screen.getByText('Project · inherited')).toBeVisible();
+    // The icon says it is a Project; the line under the name is the summary someone wrote, with
+    // the one fact the row cannot show otherwise — that this link came from a sub-initiative.
+    expect(screen.getByText('Inherited · Stand the program up end to end.')).toBeVisible();
+    expect(screen.queryByText('Project · inherited')).toBeNull();
     expect(screen.queryByText('Membership portal')).not.toBeInTheDocument();
-  });
-
-  it('summarises connected-work health beside the rows, and draws nothing over an absence', () => {
-    const panel = (connectedWork: readonly (typeof project)[]): JSX.Element => (
-      <InitiativeRelationshipPanels
-        tab="work"
-        routeOrganizationId={organizationId}
-        children={[]}
-        connectedWork={connectedWork}
-        distribution={distribution}
-        initiativeNoun="Initiative"
-        programNoun="Program"
-        projectNoun="Project"
-        onAddSubinitiative={vi.fn()}
-      />
-    );
-
-    render(panel([project]));
-    // `onTrack` is the one bucket with a count of its own, so the number identifies the segment.
-    expect(screen.getByText(HEALTH_LABEL.on_track)).toBeVisible();
-    expect(screen.getByText(String(distribution.onTrack))).toBeVisible();
-
-    cleanup();
-    render(panel([]));
-    expect(screen.queryByText(HEALTH_LABEL.on_track)).toBeNull();
   });
 
   it('keeps a foreign hierarchy row owner-scoped and reference-only through the context-menu provider', async () => {
@@ -158,11 +164,12 @@ describe('InitiativeRelationshipPanels', () => {
     );
     const foreignOrganizationId = OrganizationId.parse('01ARZ3NDEKTSV4RRFFQ69G5FAZ');
 
-    render(
+    renderPanels(
       <InteractionProvider registry={registry}>
         <InitiativeRelationshipPanels
           tab="subinitiatives"
           routeOrganizationId={organizationId}
+          initiativeId={childId}
           children={[
             {
               ...child,
@@ -172,11 +179,13 @@ describe('InitiativeRelationshipPanels', () => {
             },
           ]}
           connectedWork={[]}
-          distribution={distribution}
           initiativeNoun="Initiative"
           programNoun="Program"
           projectNoun="Project"
           onAddSubinitiative={vi.fn()}
+          connectedWorkActions={readOnlyActions}
+          initiativePlural="Initiatives"
+          truncated={false}
         />
       </InteractionProvider>,
     );
@@ -229,18 +238,21 @@ describe('InitiativeRelationshipPanels', () => {
     );
     const foreignOrganizationId = OrganizationId.parse('01ARZ3NDEKTSV4RRFFQ69G5FAZ');
 
-    render(
+    renderPanels(
       <InteractionProvider registry={registry}>
         <InitiativeRelationshipPanels
           tab="work"
           routeOrganizationId={organizationId}
+          initiativeId={childId}
           children={[]}
           connectedWork={[{ ...project, organizationId: foreignOrganizationId }]}
-          distribution={distribution}
           initiativeNoun="Initiative"
           programNoun="Program"
           projectNoun="Project"
           onAddSubinitiative={vi.fn()}
+          connectedWorkActions={readOnlyActions}
+          initiativePlural="Initiatives"
+          truncated={false}
         />
       </InteractionProvider>,
     );

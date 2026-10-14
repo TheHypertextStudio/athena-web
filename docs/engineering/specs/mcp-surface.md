@@ -446,8 +446,10 @@ Placements are fields on the item, set or cleared with `update` across a whole s
 | milestone → project                             | fixed when `milestones` creates it                                     |
 
 A cycle belongs to one team, so a task on another team is skipped with `cycle_out_of_team`, as the
-task routes refuse it. `set.initiatives` needs `contribute` on every initiative it names and records
-each edge it adds or removes as a `contributes_to` link, so `undo` restores the exact set.
+task routes refuse it. `set.initiatives` needs `contribute` on every current and resulting initiative
+for a row. Its columns, labels, and membership edges share one transaction, so a denied initiative
+skips the whole row as `not_permitted` and exposes no initiative names. Each added or removed edge
+is recorded as a `contributes_to` link, so `undo` restores the exact set.
 
 ### 3.3 Where the definitions actually live
 

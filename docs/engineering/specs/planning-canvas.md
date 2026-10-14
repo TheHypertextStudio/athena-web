@@ -58,7 +58,9 @@ its prose, so `ops.1.parentRef: invalid_option (allowed values: init)` is the ac
 A plan rooted on an existing initiative shows the work already under it. When the plan is created,
 and again whenever it is reopened, `existing-work.ts` adds a confirmed node for every live project
 linked to the root and for the open top-level tasks in those projects, up to 150 records, projects
-first. Draft tasks may sit under those projects and draft nodes may depend on them, and a commit
+first. Only work the owner can currently view is imported. Every read and reopen applies current
+resource grants to confirmed nodes. Unavailable records become placeholders and have no live
+snapshot; the saved document and authored draft children remain intact. Draft tasks may sit under those projects and draft nodes may depend on them, and a commit
 resolves them to their real ids like any other confirmed node. They stay read-only in the
 document; the real records change through `update` and `link`.
 
@@ -107,7 +109,9 @@ the `undo` tool understands is recorded. Each edge is checked against the worksp
 graph before it is written, because an edge into existing work can close a cycle through
 dependencies the document never saw; such an edge refuses the whole commit with
 `dependency_cycle`. The route resolves the owner's actor and requires
-`contribute` in the plan's workspace at the moment of the write.
+`contribute` in the plan's workspace at the moment of the write. The transaction also checks
+contribution on existing placement parents, initiative memberships, and both ends of dependency
+edges. A view-only imported record is useful planning context, but does not grant write access.
 
 Container status fields (`status` on an initiative or project node) are carried in the document
 but not applied at commit; the created object starts at the workspace's default status. Task

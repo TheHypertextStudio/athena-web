@@ -45,6 +45,11 @@ Initiative-rooted plans show visible existing work, reject dependency cycles, an
 for undo. See the [MCP contract](docs/engineering/specs/mcp-surface.md) and
 [planning canvas](docs/engineering/specs/planning-canvas.md).
 
+An Initiative's Connected work tab groups projects inside their Programs, expands project details
+on demand, and creates or links work without leaving the page. Quick-add keeps focus for the next
+name and retains failed entries for retry. A Program's existing-project suggestions preserve that
+Program's placement; the object's Move action handles placement changes.
+
 Template setup separates metadata, work defaults, and review in a dialog that fits its content on
 desktop and fills phones. Existing templates open their work fields directly. Project repetition
 shows its cadence controls in the setup step. Generated work opens its schedule and occurrence

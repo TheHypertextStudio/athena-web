@@ -76,11 +76,14 @@ async function verifyHeader(page: Page, orgId: string, fixture: DetailFixture): 
       scrollWidth: element.scrollWidth,
       documentWidth: document.documentElement.scrollWidth,
       viewportWidth: innerWidth,
+      scrollable: getComputedStyle(element).overflowX === 'auto',
       selectedVisible: Array.from(
         element.querySelectorAll<HTMLElement>('[role="tab"][aria-selected="true"]'),
       ).some((tab) => tab.offsetParent !== null),
     }));
-    expect(layout.scrollWidth).toBeLessThanOrEqual(layout.clientWidth);
+    // A lane that scrolls is allowed to be wider than its box — that is the point of it. A lane
+    // that does not scroll must fit, because anything past its edge is simply unreachable.
+    if (!layout.scrollable) expect(layout.scrollWidth).toBeLessThanOrEqual(layout.clientWidth);
     expect(layout.documentWidth).toBeLessThanOrEqual(layout.viewportWidth);
     expect(layout.selectedVisible).toBe(true);
 

@@ -829,6 +829,30 @@ describe('CreateProjectDialog — robust composer', () => {
     });
   });
 
+  it('seeds the initiative a contextual request names and sends it on create', async () => {
+    projectPost.mockResolvedValue(jsonResponse(true, { id: 'proj_seeded', name: 'Scoped' }));
+    renderGlobalProject({ request: { defaultInitiativeIds: [Q3_ID] } });
+
+    await waitFor(() => {
+      expect(initiativesGet).toHaveBeenCalled();
+    });
+    // The seeded link is visible in the picker, not just in the body the composer will post.
+    expect(
+      await screen.findByRole('button', { name: /Initiatives — Q3 Reliability/ }),
+    ).toBeVisible();
+
+    fireEvent.change(screen.getByLabelText('Project name'), { target: { value: 'Scoped' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Create Project' }));
+
+    await waitFor(() => {
+      expect(projectPost).toHaveBeenCalledTimes(1);
+    });
+    expect(firstJson(projectPost.mock.calls)).toMatchObject({
+      name: 'Scoped',
+      initiativeIds: [Q3_ID],
+    });
+  });
+
   it('continues with relationships retained while clearing only project copy', async () => {
     projectPost.mockResolvedValue(jsonResponse(true, { id: 'proj_more', name: 'First' }));
     const onCreated = vi.fn(() => {

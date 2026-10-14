@@ -3,6 +3,7 @@
 import type { AttachmentOut } from '@docket/work/attachment-contract';
 import type { Health } from '@docket/work/capability-contract';
 import type { UpdateOut } from '@docket/work/update-contract';
+import type { InitiativeConnectedWork } from '@docket/work/initiative-contract';
 import { InitiativeSubjectRef } from '@docket/work/subject-ref-contract';
 import { useVocabulary } from '@docket/ui/hooks';
 import { CornerDownLeft, Ellipsis, Trash2 } from '@docket/ui/icons';
@@ -27,7 +28,6 @@ import { PlanWithAthenaAction } from '@/components/initiatives/plan-with-athena-
 import { EditableSubtitle } from '@/components/editor/editable-subtitle';
 import { EditableTitle } from '@/components/editor/editable-title';
 import { DetailUnavailable } from '@/components/entity-detail/detail-unavailable';
-import { HeaderLoadFailureBanner } from '@/components/entity-detail/header-load-failure';
 import { ResourcesTab } from '@/components/entity-detail/resources-tab';
 import { useEntityMentions } from '@/lib/use-entity-mentions';
 import { UpdatesPanel } from '@/components/entity-detail/updates-panel';
@@ -35,26 +35,19 @@ import { EntityIconPicker } from '@/components/entity-display/entity-icon-picker
 import { useEntityDisplay } from '@/components/entity-display/use-entity-display';
 import { LatestUpdateSummary } from '@/components/entity-detail/latest-update-summary';
 import { useWorkStatus } from '@/components/entity-display/use-work-status';
+import { InitiativeWorkSummary } from '@/components/initiatives/initiative-work-summary';
 import { InitiativeRelationshipPanels } from '@/components/initiatives/initiative-relationship-panels';
-import { INITIATIVE_PRIORITY_LABEL } from '@/components/initiatives/priority';
-import {
-  INITIATIVE_CADENCE_LABEL,
-  InitiativePropertiesPanel,
-} from '@/components/initiatives/properties-panel';
+import { useConnectedWorkActions } from '@/lib/use-connected-work-actions';
+import { initiativePrintProperties } from '@/components/initiatives/initiative-print-properties';
+import { InitiativeMastheadMetadata } from '@/components/initiatives/initiative-masthead-metadata';
 
 import { memberActorOptions } from '@/components/pickers/options';
 import { usePickerOverlay } from '@/components/pickers/picker-overlay';
-import { CreatedOriginChip } from '@/components/provenance/created-origin';
 import { PublishAction } from '@/components/publishing/publish-action';
 import { ContainerDetailLoading } from '@/components/views/entity-snapshot-metadata';
 import { DetailPrintSummary } from '@/components/views/detail-print-summary';
 import { useDetailTab } from '@/components/views/use-detail-tab';
-import {
-  ENTITY_METADATA_CHIP_CLASS,
-  EntityDetailLayout,
-  EntityMetadataItem,
-  EntityMetadataRow,
-} from '@/components/views/entity-detail-layout';
+import { EntityDetailLayout } from '@/components/views/entity-detail-layout';
 import { api } from '@/lib/api';
 import { useInitiativePageIdentity } from './use-initiative-page-identity';
 import {
@@ -73,7 +66,6 @@ import {
 } from '@/lib/query';
 import { labelsDef, useCreateLabel } from '@/components/labels/queries';
 import { useInitiativeMutations } from '@/lib/use-initiative-mutations';
-import { formatPlanningTimeframe, toPlanningTimeframe } from '@/lib/planning-timeframe';
 import { useFiscalYearStartMonth } from '@/lib/use-fiscal-year-start-month';
 import { useNavigationSnapshot } from '@/lib/use-navigation-snapshot';
 import { useAppRouter } from '@/lib/interactions/navigation';
@@ -86,6 +78,32 @@ import * as orgPages from '@/lib/org-collection-pages';
 
 type TabId = 'overview' | 'subinitiatives' | 'work' | 'updates' | 'resources';
 const INITIATIVE_TABS = ['overview', 'subinitiatives', 'work', 'updates', 'resources'] as const;
+
+/** The tabs that read the deferred relationship sections. */
+const RELATIONSHIP_TABS: readonly TabId[] = ['overview', 'subinitiatives', 'work'];
+
+/** A stable empty list, so the connected-work memos do not rebuild on every render. */
+const NO_CONNECTED_WORK: readonly InitiativeConnectedWork[] = [];
+
+/** How this page names the person behind an update. */
+interface ResolvedActor {
+  readonly name: string;
+  readonly kind: 'human';
+}
+
+/** One actor named by the roster, falling back to the Initiative's owner and then to Unknown. */
+function resolveInitiativeActor(
+  members: readonly { readonly actorId: string; readonly displayName: string }[],
+  owner: { readonly actorId: string; readonly displayName: string } | null,
+  actorId: string | null | undefined,
+): ResolvedActor {
+  const member = members.find((item) => item.actorId === actorId);
+  if (member) return { name: member.displayName, kind: 'human' };
+  if (owner !== null && owner.actorId === actorId) {
+    return { name: owner.displayName, kind: 'human' };
+  }
+  return { name: 'Unknown', kind: 'human' };
+}
 
 /** Printable, document-first Initiative detail composed from the shared entity-detail shell. */
 export default function InitiativeDetailPage(): JSX.Element {
@@ -130,11 +148,16 @@ export default function InitiativeDetailPage(): JSX.Element {
     aggregateQ.isPending,
     aggregateQ.isError,
   );
+  // Overview joins the two relationship tabs here so the projects section can name the work rather
+  // than count it. The read stays deferred — the masthead and document come from the aggregate —
+  // and it is the same request either relationship tab already fires.
   const relationshipsQ = useApiQuery({
     ...initiativeRelationshipSectionsDef(orgId, initiativeId),
-    enabled: aggregate !== null && (tab === 'subinitiatives' || tab === 'work'),
+    enabled: aggregate !== null && RELATIONSHIP_TABS.includes(tab),
   });
   const relationships = relationshipsQ.data ?? null;
+  const connectedWork = relationships?.connectedWork ?? NO_CONNECTED_WORK;
+  const isRelationshipTab = tab === 'subinitiatives' || tab === 'work';
   const entityMentions = useEntityMentions(
     orgId,
     subject,
@@ -162,6 +185,7 @@ export default function InitiativeDetailPage(): JSX.Element {
     ),
   );
   const updatesKey = [...aggregateKey, 'updates'] as const;
+  const updatesEnabled = aggregate !== null && (tab === 'overview' || tab === 'updates');
   const updatesQ = useApiQuery(
     apiQueryOptions(
       updatesKey,
@@ -171,10 +195,14 @@ export default function InitiativeDetailPage(): JSX.Element {
           query: subject,
         }),
       'Could not load updates.',
-      { enabled: aggregate !== null && (tab === 'overview' || tab === 'updates') },
+      { enabled: updatesEnabled },
     ),
   );
   const updates = updatesQ.data?.items ?? [];
+  // A disabled query reports `isPending` forever, and the Overview panel stays mounted behind
+  // `hidden` on every other tab — so without this its update skeleton pulses for the life of the
+  // page, invisible to a reader and indistinguishable from a real load to anything watching.
+  const updatesLoading = updatesQ.isPending && updatesEnabled;
   const canEdit = aggregate?.capabilities.contribute ?? false;
   const canManage = aggregate?.capabilities.manage ?? false;
   const currentActorId = aggregate?.viewer.actorId ?? null;
@@ -219,6 +247,15 @@ export default function InitiativeDetailPage(): JSX.Element {
     programNoun.toLowerCase(),
     projectNoun.toLowerCase(),
   );
+  const connectedWorkActions = useConnectedWorkActions({
+    orgId,
+    initiativeId,
+    canEdit,
+    enabled: RELATIONSHIP_TABS.includes(tab),
+    connectedWork,
+    projectNoun,
+    mutations,
+  });
   const createLabel = useCreateLabel(orgId);
   const postUpdate = useApiMutation<UpdateOut, { body: string; health?: Health }>({
     mutationFn: (input) =>
@@ -305,16 +342,8 @@ export default function InitiativeDetailPage(): JSX.Element {
     return <QueryLoadFailure title={`This ${initiativeNoun.toLowerCase()}`} query={aggregateQ} />;
   if (!detail) return <p className="mx-auto max-w-7xl p-6">Initiative not found.</p>;
 
-  const resolveActor = (actorId: string | null | undefined) => {
-    const member = members.find((item) => item.actorId === actorId);
-    const owner = aggregate?.references.owner;
-    return {
-      name:
-        member?.displayName ??
-        (owner?.actorId === actorId ? (owner?.displayName ?? 'Unknown') : 'Unknown'),
-      kind: 'human' as const,
-    };
-  };
+  const resolveActor = (actorId: string | null | undefined): ResolvedActor =>
+    resolveInitiativeActor(members, initiativeOwner, actorId);
   const ownerName = aggregate?.references.owner?.displayName ?? '—';
   const initiativeObject = {
     kind: 'initiative' as const,
@@ -336,38 +365,11 @@ export default function InitiativeDetailPage(): JSX.Element {
           title={detail.name}
           summary={detail.summary}
           description={detail.description}
-          properties={[
-            { label: 'Status', value: status.name },
-            {
-              label: 'Initiative health',
-              value: detail.health ? detail.health.replace('_', ' ') : '—',
-            },
-            {
-              label: 'Connected-work health',
-              value: detail.rolledUpHealth ? detail.rolledUpHealth.replace('_', ' ') : '—',
-            },
-            { label: 'Priority', value: INITIATIVE_PRIORITY_LABEL[detail.priority] },
-            { label: 'Owner', value: ownerName },
-            {
-              label: 'Target',
-              value:
-                formatPlanningTimeframe(
-                  toPlanningTimeframe(
-                    detail.targetDate,
-                    detail.targetDateResolution,
-                    detail.targetDateFiscalYearStartMonth,
-                  ),
-                ) ?? '—',
-            },
-            { label: 'Update cadence', value: INITIATIVE_CADENCE_LABEL[detail.updateCadence] },
-            {
-              label: 'Labels',
-              value: assignedLabels
-                .map((label) => label.name)
-                .join(', ')
-                .padEnd(1, '—'),
-            },
-          ]}
+          properties={initiativePrintProperties(detail, {
+            statusName: status.name,
+            ownerName,
+            labels: assignedLabels,
+          })}
         />
       }
       eyebrow={
@@ -425,119 +427,66 @@ export default function InitiativeDetailPage(): JSX.Element {
         />
       }
       metadata={
-        <div className="no-print flex flex-col gap-2">
-          <EntityMetadataRow ariaLabel={`${initiativeNoun} properties`}>
-            <InitiativePropertiesPanel
-              status={detail.status}
-              health={detail.health ?? null}
-              targetDate={detail.targetDate ?? null}
-              targetDateResolution={detail.targetDateResolution}
-              targetDateFiscalYearStartMonth={detail.targetDateFiscalYearStartMonth}
-              fiscalYearStartMonth={planningCalendar.fiscalYearStartMonth}
-              planningCalendarLoading={planningCalendar.loading}
-              ownerId={detail.ownerId ?? null}
-              priority={detail.priority}
-              updateCadence={detail.updateCadence}
-              memberOptions={memberOptions}
-              ownerLoading={ownerPickerOpen && membersQ.isPending}
-              onOwnerPickerOpenChange={setOwnerPickerOpen}
-              labels={assignedLabels}
-              availableLabels={availableLabels}
-              labelsLoading={
-                labelsPickerOpen &&
-                !selectedLabelsQ.isError &&
-                !labelsQ.isError &&
-                (selectedLabelsQ.data === undefined || labelsQ.data === undefined)
-              }
-              onLabelsPickerOpenChange={setLabelsPickerOpen}
-              onTargetPickerOpenChange={setTargetPickerOpen}
-              canEdit={canEdit}
-              onStatusChange={(status) => {
-                mutations.patchInitiative({ status });
-              }}
-              onHealthChange={(health) => {
-                mutations.patchInitiative({ health });
-              }}
-              onTargetChange={(target) => {
-                mutations.patchInitiative({
-                  targetDate: target?.date ?? null,
-                  targetDateResolution: target?.resolution ?? null,
-                });
-              }}
-              onOwnerChange={(ownerId) => {
-                mutations.patchInitiative({ ownerId });
-              }}
-              onPriorityChange={(priority) => {
-                mutations.patchInitiative({ priority });
-              }}
-              onCadenceChange={(updateCadence) => {
-                mutations.patchInitiative({ updateCadence });
-              }}
-              onLabelsChange={(labelIds) => {
-                if (selectedLabelsQ.data === undefined) return;
-                mutations.patchInitiative({ labelIds: [...labelIds] });
-              }}
-              {...(selectedLabelsQ.data === undefined
-                ? {}
-                : {
-                    onCreateLabel: (name: string) => {
-                      createLabel.mutate(
-                        { name },
-                        {
-                          onSuccess: (created) => {
-                            mutations.patchInitiative({
-                              labelIds: [...assignedLabels.map((label) => label.id), created.id],
-                            });
-                          },
-                        },
-                      );
-                    },
-                  })}
-            />
-            <EntityMetadataItem priority={7} overflowOnly>
-              <Button
-                variant="ghost"
-                className={ENTITY_METADATA_CHIP_CLASS}
-                onClick={(event) => {
-                  pickerOverlay.open({
-                    kind: 'initiative-hierarchy',
-                    mode: 'parent',
-                    organizationId: orgId,
-                    subject: initiativeObject,
-                    anchor: event.currentTarget,
-                  });
-                }}
-              >
-                <CornerDownLeft aria-hidden className="size-5" />
-                Manage hierarchy
-              </Button>
-            </EntityMetadataItem>
-            <CreatedOriginChip createdAt={detail.createdAt} />
-          </EntityMetadataRow>
-          <HeaderLoadFailureBanner
-            failures={[
-              {
-                failed: targetPickerOpen && planningCalendar.error !== null,
-                title: 'Could not load planning calendar settings',
-                onRetry: planningCalendar.retry,
-              },
-              {
-                failed: ownerPickerOpen && membersQ.isError,
-                title: 'Could not load members',
-                onRetry: () => void membersQ.refetch(),
-              },
-              {
-                failed: labelsPickerOpen && (selectedLabelsQ.isError || labelsQ.isError),
-                title: 'Could not load labels',
-                onRetry: () => {
-                  void selectedLabelsQ.refetch();
-                  void labelsQ.refetch();
+        <InitiativeMastheadMetadata
+          initiativeNoun={initiativeNoun}
+          detail={detail}
+          canEdit={canEdit}
+          patch={mutations.patchInitiative}
+          planningCalendar={planningCalendar}
+          owner={{
+            options: memberOptions,
+            pickerOpen: ownerPickerOpen,
+            onPickerOpenChange: setOwnerPickerOpen,
+            loading: ownerPickerOpen && membersQ.isPending,
+            failed: ownerPickerOpen && membersQ.isError,
+            onRetry: () => void membersQ.refetch(),
+          }}
+          labels={{
+            assigned: assignedLabels,
+            available: availableLabels,
+            pickerOpen: labelsPickerOpen,
+            onPickerOpenChange: setLabelsPickerOpen,
+            loading:
+              labelsPickerOpen &&
+              !selectedLabelsQ.isError &&
+              !labelsQ.isError &&
+              (selectedLabelsQ.data === undefined || labelsQ.data === undefined),
+            failed: labelsPickerOpen && (selectedLabelsQ.isError || labelsQ.isError),
+            onRetry: () => {
+              void selectedLabelsQ.refetch();
+              void labelsQ.refetch();
+            },
+            canCreate: selectedLabelsQ.data !== undefined,
+            onCreate: (name) => {
+              createLabel.mutate(
+                { name },
+                {
+                  onSuccess: (created) => {
+                    mutations.patchInitiative({
+                      labelIds: [...assignedLabels.map((label) => label.id), created.id],
+                    });
+                  },
                 },
-              },
-              { failed: entityDisplay.error !== null, title: 'Could not load display settings' },
-            ]}
-          />
-        </div>
+              );
+            },
+            onChange: (labelIds) => {
+              if (selectedLabelsQ.data === undefined) return;
+              mutations.patchInitiative({ labelIds: [...labelIds] });
+            },
+          }}
+          targetPickerOpen={targetPickerOpen}
+          onTargetPickerOpenChange={setTargetPickerOpen}
+          displayFailed={entityDisplay.error !== null}
+          onManageHierarchy={(anchor) => {
+            pickerOverlay.open({
+              kind: 'initiative-hierarchy',
+              mode: 'parent',
+              organizationId: orgId,
+              subject: initiativeObject,
+              anchor,
+            });
+          }}
+        />
       }
       actions={
         // One ControlGroup at the row level, and no control inside it declares a height. That is
@@ -578,13 +527,16 @@ export default function InitiativeDetailPage(): JSX.Element {
       tabs={
         <Tabs
           variant="underline"
-          className="no-print"
+          // Scroll rather than demote. Five section names do not fit a phone, and the two answers
+          // to that are a More menu that hides where you can go, or a lane you push sideways. The
+          // second is what a person already expects from a row of tabs on a phone, and it needs no
+          // measurement pass to decide what it is allowed to say.
+          className="no-print max-w-full [scrollbar-width:none] overflow-x-auto [&::-webkit-scrollbar]:hidden"
           value={tab}
           onValueChange={(value) => {
             setTab(value as TabId);
           }}
           label={`${initiativeNoun} sections`}
-          overflow={{ menuLabel: `More ${initiativeNoun} sections` }}
           items={[
             { value: 'overview', label: 'Overview', priority: 0 },
             { value: 'subinitiatives', label: 'Sub-initiatives', priority: 1 },
@@ -628,7 +580,7 @@ export default function InitiativeDetailPage(): JSX.Element {
         >
           <UpdatesPanel
             updates={updates}
-            loading={updatesQ.isPending}
+            loading={updatesLoading}
             loadFailure={updatesQ.isError ? updatesQ : null}
             resolveActor={resolveActor}
             posting={postUpdate.isPending}
@@ -664,7 +616,7 @@ export default function InitiativeDetailPage(): JSX.Element {
         </div>
       ) : null}
 
-      {(tab === 'subinitiatives' || tab === 'work') && relationshipsQ.isError ? (
+      {isRelationshipTab && relationshipsQ.isError ? (
         <PartialLoadBanner
           title={`${initiativeNoun} relationships could not load`}
           onRetry={() => void relationshipsQ.refetch()}
@@ -672,44 +624,28 @@ export default function InitiativeDetailPage(): JSX.Element {
           The rest of this {initiativeNoun.toLowerCase()} still works.
         </PartialLoadBanner>
       ) : (
-        <>
-          {relationships?.truncated ? (
-            <p className="text-on-surface-variant text-sm">
-              Some relationships are not shown. Browse all{' '}
-              <Link href={`/orgs/${orgId}/initiatives`} className="underline">
-                {initiativePlural.toLowerCase()}
-              </Link>
-              ,{' '}
-              <Link href={`/orgs/${orgId}/projects`} className="underline">
-                {projectNoun.toLowerCase()}s
-              </Link>
-              , or{' '}
-              <Link href={`/orgs/${orgId}/programs`} className="underline">
-                {programNoun.toLowerCase()}s
-              </Link>
-              .
-            </p>
-          ) : null}
-          <InitiativeRelationshipPanels
-            tab={tab}
-            routeOrganizationId={orgId}
-            children={relationships?.children ?? []}
-            connectedWork={relationships?.connectedWork ?? []}
-            distribution={detail.distribution}
-            loading={relationshipsQ.isPending}
-            initiativeNoun={initiativeNoun}
-            programNoun={programNoun}
-            projectNoun={projectNoun}
-            onAddSubinitiative={() => {
-              pickerOverlay.open({
-                kind: 'initiative-hierarchy',
-                mode: 'child',
-                organizationId: orgId,
-                subject: initiativeObject,
-              });
-            }}
-          />
-        </>
+        <InitiativeRelationshipPanels
+          tab={tab}
+          routeOrganizationId={orgId}
+          initiativeId={initiativeId}
+          children={relationships?.children ?? []}
+          connectedWork={connectedWork}
+          connectedWorkActions={connectedWorkActions}
+          loading={relationshipsQ.isPending}
+          initiativeNoun={initiativeNoun}
+          initiativePlural={initiativePlural}
+          programNoun={programNoun}
+          projectNoun={projectNoun}
+          truncated={relationships?.truncated ?? false}
+          onAddSubinitiative={() => {
+            pickerOverlay.open({
+              kind: 'initiative-hierarchy',
+              mode: 'child',
+              organizationId: orgId,
+              subject: initiativeObject,
+            });
+          }}
+        />
       )}
 
       <div
@@ -729,16 +665,26 @@ export default function InitiativeDetailPage(): JSX.Element {
           }}
           placeholder="Describe this initiative…"
         />
+        {/* A summary, not the list again: the tab beside this one holds the rows and every
+            control that changes them. What it cannot show at a glance is the health spread. */}
+        {relationshipsQ.isError ? null : (
+          <InitiativeWorkSummary
+            connectedWork={connectedWork}
+            distribution={detail.distribution}
+            loading={relationshipsQ.isPending}
+            canEdit={canEdit}
+            initiativeNoun={initiativeNoun}
+            programNoun={programNoun}
+            projectNoun={projectNoun}
+            onCreateProject={() => {
+              connectedWorkActions.onCreateProject(null);
+            }}
+          />
+        )}
         <LatestUpdateSummary
           updates={updates}
-          loading={updatesQ.isPending}
-          resolveActor={(actorId) => ({
-            name:
-              initiativeOwner !== null && initiativeOwner.actorId === actorId
-                ? initiativeOwner.displayName
-                : 'Unknown',
-            kind: 'human',
-          })}
+          loading={updatesLoading}
+          resolveActor={(actorId) => resolveInitiativeActor([], initiativeOwner, actorId)}
         />
       </div>
     </EntityDetailLayout>

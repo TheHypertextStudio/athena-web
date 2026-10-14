@@ -82,6 +82,8 @@ export interface CreateProjectRequest extends CreateObjectRequestBase {
   readonly onCreated?: (project: ProjectOut) => void;
   /** Preselect a program in the new project draft. */
   readonly defaultProgramId?: string | null;
+  /** Preselect initiatives the new project advances (e.g. opened from an Initiative's own page). */
+  readonly defaultInitiativeIds?: readonly string[] | null;
   /** Apply this project template when the composer opens. */
   readonly defaultTemplateId?: string | null;
 }

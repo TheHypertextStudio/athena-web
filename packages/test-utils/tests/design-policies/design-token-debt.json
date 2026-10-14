@@ -228,10 +228,6 @@
     "raw-radius-utility": 1,
     "raw-type-utility": 6
   },
-  "apps/web/src/components/initiatives/associations-panel.tsx": {
-    "ad-hoc-border": 4,
-    "raw-type-utility": 5
-  },
   "apps/web/src/components/initiatives/distribution-bar.tsx": {
     "raw-type-utility": 2
   },

@@ -27,7 +27,7 @@ import { and, eq, inArray } from 'drizzle-orm';
 import type { PgTable } from 'drizzle-orm/pg-core';
 import { z } from 'zod';
 
-import { ApiError, ValidationError } from '../error';
+import { ApiError, CapabilityError, ValidationError } from '../error';
 import { clearableMarkdownPatch } from '../lib/clearable-text';
 import { originFor } from '../lib/provenance/context';
 import { assertPlanningDateRange, planningDatePatch } from '../lib/planning-timeframe';
@@ -45,26 +45,22 @@ import type { McpContext } from './auth';
 import type { McpRegistrar } from './catalog';
 import type { FieldDiff } from './catalog-rows';
 import { diff, titleOf } from './update-display';
+import type { RowContext, RowOutcome, RowReport, RowSkip } from './update-row-contract';
 import {
   recordChangeSet,
   trackedFields,
   type ChangeRecord,
   type RecordedChange,
+  type Tx,
 } from './change-set';
 import { recordUpdatedRowActivity } from './tool-activity';
 import {
   applyLabelEdit,
   labelsFitRow,
   resolveLabelEdit,
-  type LabelEdit,
   type RowLabelResult,
 } from './update-labels';
-import {
-  applyInitiativeEdit,
-  cycleFitsRow,
-  type CycleTarget,
-  type InitiativeEdit,
-} from './update-relations';
+import { applyInitiativeEdit, cycleFitsRow } from './update-relations';
 import {
   referencePatch,
   resolveReferences,
@@ -76,7 +72,7 @@ import { updateReportResult } from './apps/change-render';
 import { authorize, runTool, scopedActor } from './result';
 import { resolveStateTransition } from './tools-shared';
 import { entityHref, entityListHref } from './entity-href';
-import { taskMilestoneDecisions, type MilestoneDecision } from './task-milestone';
+import { taskMilestoneDecisions } from './task-milestone';
 import { updateSetFields, updateToolDefinition } from './update-tool-contract';
 
 export { updateSetFields } from './update-tool-contract';
@@ -299,43 +295,6 @@ async function buildPatch(
   return patch;
 }
 
-/** Everything a row write needs that is the same for every row in the call. */
-interface RowContext {
-  readonly actorCtx: Awaited<ReturnType<typeof scopedActor>>;
-  readonly entity: WorkEntity;
-  readonly orgId: string;
-  readonly set: UpdateSet;
-  readonly refs: ResolvedRefs;
-  readonly fiscalYearStartMonth: number;
-  readonly containerStatus: { statusId: string; status: string } | undefined;
-  readonly labelEdit: LabelEdit | undefined;
-  readonly cycle: CycleTarget | undefined;
-  readonly initiativeEdit: InitiativeEdit | undefined;
-  /** Each row's milestone patch, decided before any row is written. */
-  readonly milestoneFor: (id: string) => MilestoneDecision;
-}
-
-/** One written row as the report card shows it. */
-interface RowReport {
-  readonly id: string;
-  readonly title: string;
-  readonly href: string;
-  readonly fields: FieldDiff[];
-}
-
-/** One row left alone, and why. */
-interface RowSkip {
-  readonly id: string;
-  readonly title: string;
-  readonly reason: string;
-}
-
-/** What happened to one row: skipped, written, or null when it vanished mid-call. */
-type RowOutcome =
-  | { readonly skipped: RowSkip }
-  | { readonly report: RowReport; readonly changes: RecordedChange[] }
-  | null;
-
 /**
  * Whether the caller may write this row.
  *
@@ -400,6 +359,7 @@ async function writeColumns(
   rc: RowContext,
   row: Record<string, unknown>,
   patch: Record<string, unknown>,
+  database: Tx | typeof db = db,
 ): Promise<Record<string, unknown> | null> {
   const id = String(row['id']);
   if (rc.entity === 'task' && rc.set.state !== undefined) return writeTaskState(rc, id, patch);
@@ -409,7 +369,7 @@ async function writeColumns(
     id: typeof task.id;
     organizationId: typeof task.organizationId;
   };
-  const [updated] = await db
+  const [updated] = await database
     .update(table)
     .set(patch)
     .where(and(eq(table.id, id), eq(table.organizationId, rc.orgId)))
@@ -443,23 +403,56 @@ async function applyEdgeEdits(
   rc: RowContext,
   id: string,
   report: { fields: FieldDiff[]; changes: RecordedChange[] },
+  database?: Tx,
 ): Promise<RowLabelResult | null> {
   const { entity, orgId } = rc;
-  const labels = rc.labelEdit ? await applyLabelEdit(entity, orgId, id, rc.labelEdit) : null;
+  const labels = rc.labelEdit
+    ? await applyLabelEdit(entity, orgId, id, rc.labelEdit, database)
+    : null;
   if (labels) {
     report.fields.push(labels.field);
     report.changes.push(labels.change);
   }
   const member = entity === 'project' || entity === 'program' ? entity : null;
   const initiatives =
-    member && rc.initiativeEdit
-      ? await applyInitiativeEdit(member, orgId, id, rc.initiativeEdit)
+    member && rc.initiativeEdit && database
+      ? await applyInitiativeEdit(
+          { member, orgId, subjectId: id, edit: rc.initiativeEdit, actorId: rc.actorCtx.actorId },
+          database,
+        )
       : null;
   if (initiatives) {
     report.fields.push(initiatives.field);
     report.changes.push(...initiatives.changes);
   }
   return labels;
+}
+
+/** Write columns and edges together when initiative permissions can refuse the row. */
+async function writeRowChanges(
+  rc: RowContext,
+  row: Record<string, unknown>,
+  patch: Record<string, unknown>,
+  database?: Tx,
+) {
+  const before = trackedFields(rc.entity, row);
+  const next = await writeColumns(rc, row, patch, database);
+  if (!next) return null;
+  const fields = diff(before, trackedFields(rc.entity, next));
+  const changes: RecordedChange[] =
+    fields.length > 0
+      ? [
+          {
+            kind: rc.entity,
+            id: String(row['id']),
+            op: 'update',
+            before,
+            after: trackedFields(rc.entity, next),
+          },
+        ]
+      : [];
+  const labels = await applyEdgeEdits(rc, String(row['id']), { fields, changes }, database);
+  return { next, fields, changes, labels };
 }
 
 /** Apply the whole patch to one row: its columns, then its labels and initiatives. */
@@ -483,15 +476,18 @@ async function updateRow(rc: RowContext, row: Record<string, unknown>): Promise<
     )),
     ...milestonePatch,
   };
-  const before = trackedFields(entity, row);
-  const next = await writeColumns(rc, row, patch);
-  /* v8 ignore next -- @preserve defensive: the row was just read in this call */
-  if (!next) return null;
-  const after = trackedFields(entity, next);
-  const fields = diff(before, after);
-  const changes: RecordedChange[] =
-    fields.length > 0 ? [{ kind: entity, id, op: 'update', before, after }] : [];
-  const labels = await applyEdgeEdits(rc, id, { fields, changes });
+  let written: Awaited<ReturnType<typeof writeRowChanges>>;
+  try {
+    written = rc.initiativeEdit
+      ? await db.transaction((tx) => writeRowChanges(rc, row, patch, tx))
+      : await writeRowChanges(rc, row, patch);
+  } catch (error) {
+    if (error instanceof CapabilityError)
+      return { skipped: { id, title, reason: 'not_permitted' } };
+    throw error;
+  }
+  if (!written) return null;
+  const { next, fields, changes, labels } = written;
   await recordUpdatedRowActivity(rc, row, next, labels);
   if (changes.length > 0) await enqueueSearchUpsert(orgId, entity, id);
   const href = entityHref(orgId, entity, id);

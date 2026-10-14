@@ -11,14 +11,15 @@
  * and is edited like labels — add, remove, or replace — and every edge that moves is recorded as a
  * `contributes_to` link, so `undo` puts back exactly the set the item had.
  */
+import { canActorBatch } from '@docket/authz';
 import { cycle, db, initiative, initiativeProgram, initiativeProject } from '@docket/db';
 import { and, eq, inArray } from 'drizzle-orm';
 import { z } from 'zod';
 
-import { ValidationError } from '../error';
+import { CapabilityError, ValidationError } from '../error';
 import { edgeChanges } from '../routes/container-change-sets';
 import type { FieldDiff } from './catalog-rows';
-import type { LinkRecord } from './change-set';
+import type { LinkRecord, Tx } from './change-set';
 import { DESCRIPTOR_HINT, resolveDescriptor, resolveOptional } from './descriptors';
 
 /** The `set.cycle` wire field. */
@@ -160,9 +161,9 @@ function nextInitiatives(edit: InitiativeEdit, current: readonly string[]): stri
 }
 
 /** Initiative names as one diff value, alphabetical so the two sides line up. */
-async function names(orgId: string, ids: readonly string[]): Promise<string> {
+async function names(orgId: string, ids: readonly string[], database: Tx): Promise<string> {
   if (ids.length === 0) return 'none';
-  const rows = await db
+  const rows = await database
     .select({ name: initiative.name })
     .from(initiative)
     .where(and(eq(initiative.organizationId, orgId), inArray(initiative.id, [...ids])));
@@ -178,56 +179,64 @@ export interface RowInitiativeResult {
   readonly changes: LinkRecord[];
 }
 
+/** An initiative edit with the actor whose grants must permit every affected membership. */
+export interface InitiativeEditInput {
+  readonly member: InitiativeMember;
+  readonly orgId: string;
+  readonly subjectId: string;
+  readonly edit: InitiativeEdit;
+  readonly actorId: string;
+}
+
 /**
- * Apply the edit to one row's initiative membership.
+ * Apply initiative membership and its report inside the caller's row transaction.
  *
- * @param member - Whether the row is a project or a program.
- * @param orgId - The organization.
- * @param subjectId - The row's id.
- * @param edit - The resolved edit.
- * @returns the diff line and recorded edges, or null when the set did not move.
+ * @param input - The membership edit and acting principal.
+ * @param tx - The transaction that also owns the row's columns and labels.
+ * @returns The diff and recorded edges, or null when unchanged.
+ * @throws {CapabilityError} When any current or resulting initiative is not writable.
  */
 export async function applyInitiativeEdit(
-  member: InitiativeMember,
-  orgId: string,
-  subjectId: string,
-  edit: InitiativeEdit,
+  input: InitiativeEditInput,
+  tx: Tx,
 ): Promise<RowInitiativeResult | null> {
+  const { member, orgId, subjectId, edit, actorId } = input;
   const m = MEMBERSHIP[member];
   const scope = and(eq(m.org, orgId), eq(m.subject, subjectId));
-  const moved = await db.transaction(async (tx) => {
-    const rows = await tx.select({ id: m.initiative }).from(m.table).where(scope).for('update');
-    const current = rows.map((row) => row.id);
-    const next = nextInitiatives(edit, current);
-    const changes = edgeChanges(m.kind, subjectId, current, next);
-    if (changes.length === 0) return null;
-    const removed = changes.filter((change) => !change.linked).map((change) => change.to);
-    const added = changes.filter((change) => change.linked).map((change) => change.to);
-    if (removed.length > 0) {
-      await tx.delete(m.table).where(and(scope, inArray(m.initiative, removed)));
-    }
-    if (added.length > 0 && member === 'project') {
-      await tx.insert(initiativeProject).values(
-        added.map((initiativeId) => ({
-          organizationId: orgId,
-          projectId: subjectId,
-          initiativeId,
-        })),
-      );
-    } else if (added.length > 0) {
-      await tx.insert(initiativeProgram).values(
-        added.map((initiativeId) => ({
-          organizationId: orgId,
-          programId: subjectId,
-          initiativeId,
-        })),
-      );
-    }
-    return { current, next, changes };
-  });
-  if (!moved) return null;
-  // Names are read after commit: a read on the pool while the transaction holds its connection
-  // stalls on a single-connection database.
-  const [from, to] = await Promise.all([names(orgId, moved.current), names(orgId, moved.next)]);
-  return { field: { field: 'initiatives', from, to }, changes: moved.changes };
+  const rows = await tx.select({ id: m.initiative }).from(m.table).where(scope).for('update');
+  const current = rows.map((row) => row.id);
+  const next = nextInitiatives(edit, current);
+  const ids = [...new Set([...current, ...next])];
+  const decisions = await canActorBatch(
+    actorId,
+    'contribute',
+    ids.map((id) => ({ kind: 'initiative', orgId, id })),
+    tx,
+  );
+  if (decisions.some((decision) => !decision.allow)) throw new CapabilityError();
+  const changes = edgeChanges(m.kind, subjectId, current, next);
+  if (changes.length === 0) return null;
+  const removed = changes.filter((change) => !change.linked).map((change) => change.to);
+  const added = changes.filter((change) => change.linked).map((change) => change.to);
+  if (removed.length > 0)
+    await tx.delete(m.table).where(and(scope, inArray(m.initiative, removed)));
+  if (added.length > 0 && member === 'project') {
+    await tx.insert(initiativeProject).values(
+      added.map((initiativeId) => ({
+        organizationId: orgId,
+        projectId: subjectId,
+        initiativeId,
+      })),
+    );
+  } else if (added.length > 0) {
+    await tx.insert(initiativeProgram).values(
+      added.map((initiativeId) => ({
+        organizationId: orgId,
+        programId: subjectId,
+        initiativeId,
+      })),
+    );
+  }
+  const [from, to] = await Promise.all([names(orgId, current, tx), names(orgId, next, tx)]);
+  return { field: { field: 'initiatives', from, to }, changes };
 }

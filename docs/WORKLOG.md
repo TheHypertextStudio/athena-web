@@ -1,7 +1,7 @@
 # Project Athena Work Log
 
 > **Purpose**: Comprehensive tracking of all work - past, present, and future.
-> **Last Updated**: 2026-10-10
+> **Last Updated**: 2026-10-14
 
 ---
 
@@ -18,8 +18,9 @@
 - **Acceptance**: Every candidate has a recoverable disposition; guided template setup works;
   work retains template identity; composed children and schedules preserve manual edits;
   Athena proposals support review and undo; affected checks and runtime acceptance pass.
-- **Decisions**: Personal templates become author-only unpublished drafts. Blueprint creation is
-  limited to 500 items. Existing scheduler and supported REST/MCP clients remain compatible.
+- **Decisions**: Personal templates become author-only unpublished drafts. Existing team-only
+  templates remain team-visible unpublished drafts until explicitly published. Blueprint creation
+  is limited to 500 items. Existing scheduler and supported REST/MCP clients remain compatible.
 - **Subtasks**:
   - [ ] Preserve and reconcile checkout state.
   - [x] Recover and accept template and repeating-work UI locally.
@@ -49,6 +50,20 @@ hierarchy cycle after unrelated moves. Recovery uses current authorization and t
 transactional placement, dependency, and change-set infrastructure. The recovered domain suite and
 focused relation suites pass. The broader MCP/API regression passes 822 cases across 78 files;
 affected API/web/domain typechecks, API runtime build, changed-file lint, and complexity checks pass.
+
+#### Initiative connected-work recovery
+
+Recovered in-place project creation/linking, Program grouping, project expansion, and object-owned
+unlink actions. Current shared fields, surfaces, and Popover/Listbox components replace the branch's
+manual UI styling; API adapters remain in the typed data layer. Independent review found permission
+and interaction defects in the retained code. Regressions now cover denied initiative replacement
+with rollback, write checks on imported planning resources, revoked live data, destination-aware
+suggestions, IME composition, and the pre-existing subtask-parent authorization omission. The final
+MCP/API regression passes 891 tests across 86 files; affected types, lint, and complexity pass.
+The full web suite passes 5,047 tests. Final authenticated acceptance proves creation, linking,
+persisted Program placement, removal, and phone disclosure targets. Sixteen final captures cover
+Program grouping and expanded project details at four sizes in both themes. Source types, lint,
+complexity, and the production build pass; provider acceptance remains separate.
 
 ### [LEGAL-POLICIES-002] Keep policy versions easy to navigate
 

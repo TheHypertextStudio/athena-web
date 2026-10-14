@@ -12,6 +12,7 @@
  * Every tool resolves the caller as a user principal. A registered agent has no personal plans,
  * so it is told the plan does not exist rather than being refused.
  */
+import { visiblePlanDocument } from '../lib/plan-draft/visibility';
 import type { PlanDraftRow } from '../lib/plan-draft/store';
 import {
   PlanCommitCounts,
@@ -174,7 +175,7 @@ function registerPlanStart(server: McpRegistrar, ctx: McpContext, sessionId: str
         const roster = await listPlanRoster(row);
         return jsonResult({
           ...planSummary(row),
-          document: row.document,
+          document: await visiblePlanDocument(row),
           templates: await listPlanTemplates(row),
           ...roster,
         });
@@ -219,7 +220,7 @@ function registerPlanRead(server: McpRegistrar, ctx: McpContext): void {
         const row = await loadOwnedPlan(ownerOf(ctx), input.planId);
         return jsonResult({
           ...planSummary(row),
-          document: row.document,
+          document: await visiblePlanDocument(row),
           templates: await listPlanTemplates(row),
           ...(await listPlanRoster(row)),
         });

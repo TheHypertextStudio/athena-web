@@ -15,7 +15,7 @@ import {
   errorText,
   seedSecondTeam,
 } from './mcp-catalog-harness';
-import { seedInitiative, seedProgram } from './mcp-link-fixtures';
+import { seedInitiative, seedProgram, seedRestrictedMember } from './mcp-link-fixtures';
 import {
   seedMcpUpdateOrg,
   seedMcpUpdateTask,
@@ -157,6 +157,54 @@ describe('update set.cycle', () => {
 });
 
 describe('update set.initiatives', () => {
+  it('refuses replacing memberships without permission on existing initiatives and leaves other fields alone', async () => {
+    const { seed } = await setup();
+    const q3 = await seedInitiative({ schema, db }, seed, 'Restricted strategy');
+    await db
+      .insert(schema.initiativeProject)
+      .values({ organizationId: seed.orgId, initiativeId: q3, projectId: seed.projectId });
+    const restricted = await seedRestrictedMember({ schema, db }, seed, ['view']);
+    const member = await db
+      .select()
+      .from(schema.actor)
+      .where(
+        eq(
+          schema.actor.userId,
+          restricted.principal.kind === 'user' ? restricted.principal.userId : '',
+        ),
+      );
+    await db.insert(schema.grant).values({
+      organizationId: seed.orgId,
+      subjectKind: 'actor',
+      subjectId: assertDefined(member[0]).id,
+      resourceKind: 'project',
+      resourceId: seed.projectId,
+      capabilities: ['contribute'],
+      effect: 'allow',
+    });
+    const client = await connectCatalog(registerTools, restricted);
+    const result = body<UpdateResult>(
+      await client.callTool({
+        name: 'update',
+        arguments: {
+          orgId: seed.orgId,
+          entity: 'project',
+          scope: { ids: [seed.projectId] },
+          set: { title: 'Should not change', initiatives: { replace: [] } },
+        },
+      }),
+    );
+    expect(result.changed).toBe(0);
+    expect(result.skipped).toEqual([expect.objectContaining({ reason: 'not_permitted' })]);
+    expect(await projectInitiatives(seed.projectId)).toEqual([q3]);
+    const [project] = await db
+      .select()
+      .from(schema.project)
+      .where(eq(schema.project.id, seed.projectId));
+    expect(project?.name).toBe('Platform Migration');
+    expect(JSON.stringify(result)).not.toContain('Restricted strategy');
+  });
+
   it('adds a project to an initiative by name, and undo detaches it', async () => {
     const { seed, update, undo } = await setup();
     const q3 = await seedInitiative({ schema, db }, seed, 'Q3 Platform');

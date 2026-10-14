@@ -47,6 +47,7 @@ import { z } from 'zod';
 
 import { NotFoundError, PreconditionFailedError, ValidationError } from '../../error';
 import { seedDefaultTemplates } from '../templates/defaults';
+import { visiblePlan, visiblePlanDocument } from './visibility';
 import { refreshExistingWork, withExistingWork } from './existing-work';
 import { visibleTemplateWhere } from '../templates/visibility';
 
@@ -219,7 +220,8 @@ export async function activePlanForSession(sessionId: string): Promise<PlanDraft
     .where(and(eq(planDraft.sessionId, sessionId), eq(planDraft.status, 'active')))
     .orderBy(desc(planDraft.updatedAt))
     .limit(1);
-  return rows[0] ?? null;
+  const row = rows[0];
+  return row ? { ...row, document: await visiblePlanDocument(row) } : null;
 }
 
 /** Attach the hosting Athena session to a plan that has none yet. */
@@ -494,7 +496,8 @@ const HREF_SEGMENT: Readonly<Record<PlanNodeKind, string>> = {
 
 /** The plan as the API returns it, with every confirmed node hydrated from its real record. */
 export async function presentPlan(row: PlanDraftRow): Promise<PlanDraftOut> {
-  const confirmed = row.document.nodes.filter((node) => node.objectId !== null);
+  const projection = await visiblePlan(row);
+  const confirmed = projection.confirmed;
   const byKind = new Map<PlanNodeKind, string[]>();
   for (const node of confirmed) {
     const list = byKind.get(node.kind) ?? [];
@@ -538,7 +541,7 @@ export async function presentPlan(row: PlanDraftRow): Promise<PlanDraftOut> {
     title: row.title,
     status: row.status,
     revision: row.revision,
-    document: row.document,
+    document: projection.document,
     objects,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),

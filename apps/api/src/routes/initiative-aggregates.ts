@@ -39,6 +39,7 @@ import {
   type ResourceAccessRef,
   viewableResourceKeys,
 } from '../permissions/resource-access';
+import { aggregateConnectedWork } from './initiative-aggregate-connected-work';
 import { rankInitiativeAttention } from './initiative-attention';
 import {
   accessibleInitiativeHierarchyProjection,
@@ -438,10 +439,12 @@ async function loadRelationshipSections(
         id: item.row.id,
         organizationId: item.row.organizationId,
         name: item.row.name,
+        summary: item.row.summary,
         status: item.row.status,
         health: item.row.health,
         direct,
         inheritedThroughInitiativeId: inheritedThroughInitiativeId(item.initiativeId),
+        programId: null,
       });
       if (connectedByKey.size > MAX_CONNECTED_WORK) break;
     }
@@ -506,10 +509,12 @@ async function loadRelationshipSections(
         id: item.row.id,
         organizationId: item.row.organizationId,
         name: item.row.name,
+        summary: item.row.summary,
         status: item.row.status,
         health: item.row.health,
         direct,
         inheritedThroughInitiativeId: inheritedThroughInitiativeId(item.initiativeId),
+        programId: item.row.programId,
       });
       if (connectedByKey.size > MAX_CONNECTED_WORK) break;
     }
@@ -987,10 +992,6 @@ const initiativeAggregates = new Hono<AppEnv>()
         projectLinks,
       );
       const orgNameById = new Map(orgRows.map((row) => [row.id, row.name]));
-      const connectedByKey = new Map<
-        string,
-        z.input<typeof InitiativeAggregateDetail>['connectedWork'][number]
-      >();
       /**
        * The first hop below `id` an indirect (non-direct) connected-work link inherited through,
        * or `null` for a direct link.
@@ -1006,59 +1007,13 @@ const initiativeAggregates = new Hono<AppEnv>()
         /* v8 ignore next -- @preserve defensive: see the function's own remarks */
         return inheritedThrough.get(initiativeId) ?? null;
       }
-      for (const item of programLinks) {
-        if (
-          !accessibleWorkKeys.has(
-            resourceAccessKey({
-              organizationId: item.row.organizationId,
-              kind: 'program',
-              id: item.row.id,
-            }),
-          )
-        )
-          continue;
-        const key = `program:${item.row.id}`;
-        const direct = item.initiativeId === id;
-        const existing = connectedByKey.get(key);
-        if (existing?.direct || (existing && !direct)) continue;
-        connectedByKey.set(key, {
-          kind: 'program',
-          id: item.row.id,
-          organizationId: item.row.organizationId,
-          name: item.row.name,
-          status: item.row.status,
-          health: item.row.health,
-          direct,
-          inheritedThroughInitiativeId: inheritedThroughInitiativeId(item.initiativeId),
-        });
-      }
-      for (const item of projectLinks) {
-        if (
-          !accessibleWorkKeys.has(
-            resourceAccessKey({
-              organizationId: item.row.organizationId,
-              kind: 'project',
-              id: item.row.id,
-            }),
-          )
-        )
-          continue;
-        const key = `project:${item.row.id}`;
-        const direct = item.initiativeId === id;
-        const existing = connectedByKey.get(key);
-        if (existing?.direct || (existing && !direct)) continue;
-        connectedByKey.set(key, {
-          kind: 'project',
-          id: item.row.id,
-          organizationId: item.row.organizationId,
-          name: item.row.name,
-          status: item.row.status,
-          health: item.row.health,
-          direct,
-          inheritedThroughInitiativeId: inheritedThroughInitiativeId(item.initiativeId),
-        });
-      }
-      const connectedWork = [...connectedByKey.values()];
+      const connectedWork = aggregateConnectedWork({
+        id,
+        accessibleWorkKeys,
+        inheritedThroughInitiativeId,
+        programLinks,
+        projectLinks,
+      });
       const programs = connectedWork
         .filter((row) => row.kind === 'program')
         .map((row) => ({ health: row.health }));

@@ -68,6 +68,33 @@ const HEALTH_TEXT_CLASS: Record<Health, string> = {
   off_track: 'text-error',
 };
 
+/**
+ * Health as a coloured dot alone, named for assistive tech.
+ *
+ * @remarks
+ * For a dense row, where {@link HealthLabel}'s text would cost more width than the name it sits
+ * beside. A surface using this shows the dot only when health is worth acting on, so the absence
+ * of a dot is itself the common case rather than a missing value.
+ *
+ * @param props - The {@link HealthDotProps}.
+ * @returns the dot.
+ */
+export function HealthDot({ health }: HealthDotProps): JSX.Element {
+  return (
+    <span
+      role="img"
+      aria-label={HEALTH_LABEL[health]}
+      className={cn(HEALTH_FILL_CLASS[health], 'size-1.5 shrink-0 rounded-full')}
+    />
+  );
+}
+
+/** Props for {@link HealthDot}. */
+export interface HealthDotProps {
+  /** The health value, which a caller has already decided is worth showing. */
+  readonly health: Health;
+}
+
 /** Props for {@link HealthLabel}. */
 export interface HealthLabelProps {
   /** The health value, or `null` when nobody has set one. */

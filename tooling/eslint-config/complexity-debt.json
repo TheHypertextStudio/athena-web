@@ -4265,12 +4265,6 @@
       "excess": 14
     }
   },
-  "apps/web/src/components/initiatives/associations-panel.tsx": {
-    "max-lines-per-function": {
-      "max": 88,
-      "excess": 8
-    }
-  },
   "apps/web/src/components/initiatives/create-initiative.tsx": {
     "complexity": {
       "max": 20,

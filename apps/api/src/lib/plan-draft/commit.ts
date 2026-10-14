@@ -55,6 +55,7 @@ import { wouldCreateCycle as wouldCreateTaskCycle } from '../../routes/task-help
 import { enqueueSearchUpsert } from '../../search/write-through';
 import { loadOwnedPlan, ownerActorInOrg, type PlanDraftRow } from './store';
 import { preparePlanTemplate } from './template-defaults';
+import { authorizePlanCommit } from './commit-authorization';
 
 /** What a commit produced. */
 export interface CommitPlanResult {
@@ -399,6 +400,7 @@ export async function commitPlanNodes(input: CommitPlanInput): Promise<CommitPla
   let outcome: { readonly row: PlanDraftRow; readonly changeSetId: string | null } | undefined;
 
   const cascades = await serializableTx(async (tx) => {
+    await authorizePlanCommit({ document: row.document, closure, orgId, actorId }, tx);
     await placePrepared(
       tx,
       { orgId, actorId, landingTeamId: landing.teamId },

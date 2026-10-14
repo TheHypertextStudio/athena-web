@@ -2,8 +2,6 @@
 
 /** Baseline navigation actions for core objects whose richer domain actions remain additive. */
 import { ArrowRight, Flag, Layers, Tag, User, Users, Workflow } from '@docket/ui/icons';
-import { ProgramUpdate } from '@docket/work/program-contract';
-import { ProjectUpdate } from '../../lib/contracts/project';
 import type { RelationEndpoint } from '@docket/work/relation-contract';
 import { type QueryClient, useQueryClient } from '@tanstack/react-query';
 import { useAppRouter as useRouter } from '@/lib/interactions/navigation';
@@ -11,17 +9,13 @@ import { useMemo } from 'react';
 
 import { copyObjectAction } from '@/components/actions/copy-object-action';
 import { objectReferenceActions } from '@/components/actions/object-reference-actions';
+import { createRelationPorts } from '@/lib/entity-relation-ports';
+import { unfileFromInitiativeAction } from '@/lib/unfile-from-initiative-action';
 import { settleRelationExecution } from '@/components/actions/settle-relation-execution';
 import { useCopyOutcome } from '@/components/clipboard';
 import { usePickerOverlay } from '@/components/pickers/picker-overlay';
-import {
-  createProjectRelationCommandPort,
-  type ProjectRelationId,
-} from '@/components/projects/project-relation-port';
-import {
-  createProgramRelationCommandPort,
-  type ProgramRelationId,
-} from '@/components/programs/program-relation-port';
+import type { ProjectRelationId } from '@/components/projects/project-relation-port';
+import type { ProgramRelationId } from '@/components/programs/program-relation-port';
 import {
   type ActionContext,
   defineActionDomain,
@@ -29,9 +23,6 @@ import {
   objectHref,
   useRegisterActionDomain,
 } from '@/lib/actions';
-import { api } from '@/lib/api';
-import { UserFacingError } from '@/lib/problem';
-import { unwrap } from '@/lib/query';
 import { invalidateWorkTargetQueries } from '@/lib/work-target-invalidation';
 
 const PROJECT_RELATION_RESPONSIVENESS = {
@@ -79,96 +70,7 @@ export function useRegisterEntityNavigationActions(): void {
   const pickerOverlay = usePickerOverlay();
   const reportOutcome = useCopyOutcome();
   const domains = useMemo(() => {
-    const duplicateAsNoOp = async (
-      write: () => Promise<unknown>,
-    ): Promise<'applied' | 'unchanged'> => {
-      try {
-        await write();
-        return 'applied';
-      } catch (error) {
-        if (error instanceof UserFacingError && error.status === 409) return 'unchanged';
-        throw error;
-      }
-    };
-    const projectPort = createProjectRelationCommandPort({
-      patchProject: async (organizationId, projectId, patch) => {
-        await unwrap(
-          () =>
-            api.v1.orgs[':orgId'].projects[':id'].$patch({
-              param: { orgId: organizationId, id: projectId },
-              json: ProjectUpdate.parse(patch),
-            }),
-          'Could not change the project relationship.',
-        );
-      },
-      linkInitiative: (organizationId, projectId, initiativeId) =>
-        duplicateAsNoOp(() =>
-          unwrap(
-            () =>
-              api.v1.orgs[':orgId'].initiatives[':id'].projects.$post({
-                param: { orgId: organizationId, id: initiativeId },
-                json: { projectId },
-              }),
-            'Could not link the project to the initiative.',
-          ),
-        ),
-      addLabel: async (organizationId, projectId, labelId) => {
-        await unwrap(
-          () =>
-            api.v1.orgs[':orgId'].projects[':id'].labels.$post({
-              param: { orgId: organizationId, id: projectId },
-              json: { labelId },
-            }),
-          'Could not add the project label.',
-        );
-        return 'applied';
-      },
-      addDependency: (organizationId, blockingProjectId, blockedProjectId) =>
-        duplicateAsNoOp(() =>
-          unwrap(
-            () =>
-              api.v1.orgs[':orgId'].projects[':id'].dependencies.$post({
-                param: { orgId: organizationId, id: blockingProjectId },
-                json: { blockedProjectId },
-              }),
-            'Could not create the project dependency.',
-          ),
-        ),
-    });
-    const programPort = createProgramRelationCommandPort({
-      setOwner: async (organizationId, programId, ownerId) => {
-        await unwrap(
-          () =>
-            api.v1.orgs[':orgId'].programs[':id'].$patch({
-              param: { orgId: organizationId, id: programId },
-              json: ProgramUpdate.parse({ ownerId }),
-            }),
-          'Could not set the program owner.',
-        );
-      },
-      linkInitiative: (organizationId, programId, initiativeId) =>
-        duplicateAsNoOp(() =>
-          unwrap(
-            () =>
-              api.v1.orgs[':orgId'].initiatives[':id'].programs.$post({
-                param: { orgId: organizationId, id: initiativeId },
-                json: { programId },
-              }),
-            'Could not link the program to the initiative.',
-          ),
-        ),
-      addLabel: (organizationId, programId, labelId) =>
-        duplicateAsNoOp(() =>
-          unwrap(
-            () =>
-              api.v1.orgs[':orgId'].programs[':id'].labels.$post({
-                param: { orgId: organizationId, id: programId },
-                json: { labelId },
-              }),
-            'Could not add the program label.',
-          ),
-        ),
-    });
+    const { projectPort, programPort } = createRelationPorts();
     const subjects = <TKind extends 'project' | 'program'>(
       context: ActionContext,
       kind: TKind,
@@ -306,6 +208,7 @@ export function useRegisterEntityNavigationActions(): void {
     };
     return {
       project: defineActionDomain('project', [
+        unfileFromInitiativeAction('project', queryClient, PROJECT_RELATION_RESPONSIVENESS),
         {
           id: 'project.open',
           label: 'Open project',
@@ -385,6 +288,7 @@ export function useRegisterEntityNavigationActions(): void {
         ...objectReferenceActions('project', reportOutcome, router),
       ]),
       program: defineActionDomain('program', [
+        unfileFromInitiativeAction('program', queryClient, PROGRAM_RELATION_RESPONSIVENESS),
         {
           id: 'program.open',
           label: 'Open program',

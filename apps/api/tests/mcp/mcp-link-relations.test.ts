@@ -408,6 +408,30 @@ describe('link nested_under', () => {
 });
 
 describe('link subtask_of removal', () => {
+  it('requires contribution on the parent as well as the child', async () => {
+    const s = await seedLinkOrg(handle);
+    const parent = await seedTask(handle, s, { title: 'Restricted parent' });
+    const child = await seedTask(handle, s, { title: 'Writable child' });
+    const ctx = await seedRestrictedMember(handle, s, ['view']);
+    const { db, schema } = handle;
+    const userId = ctx.principal.kind === 'user' ? ctx.principal.userId : '';
+    const [member] = await db.select().from(schema.actor).where(eq(schema.actor.userId, userId));
+    await db.insert(schema.grant).values({
+      organizationId: s.orgId,
+      subjectKind: 'actor',
+      subjectId: member?.id ?? '',
+      resourceKind: 'task',
+      resourceId: child,
+      capabilities: ['contribute'],
+      effect: 'allow',
+    });
+    const client = await harness.connect(ctx);
+    const result = await link(client, s, { relation: 'subtask_of', from: child, to: parent });
+    expect(result.isError).toBe(true);
+    const [row] = await db.select().from(schema.task).where(eq(schema.task.id, child));
+    expect(row?.parentTaskId).toBeNull();
+  });
+
   it('leaves a task alone when it sits under a different parent than the one named', async () => {
     const s = await seedLinkOrg(handle);
     const parent = await seedTask(handle, s, { title: 'Parent' });

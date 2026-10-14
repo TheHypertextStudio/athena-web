@@ -18,6 +18,10 @@ const detailPath = join(
   root,
   'apps/web/src/app/(app)/orgs/[orgId]/initiatives/[initiativeId]/initiative-detail-client.tsx',
 );
+const mastheadPath = join(
+  root,
+  'apps/web/src/components/initiatives/initiative-masthead-metadata.tsx',
+);
 const typographyPath = join(root, 'packages/ui/src/styles/globals.css');
 const buttonPath = join(root, 'packages/ui/src/primitives/button.tsx');
 const dialogPath = join(root, 'packages/ui/src/primitives/dialog.tsx');
@@ -61,17 +65,18 @@ describe('Initiative visual contract', () => {
     const typography = source(typographyPath);
     const detail = source(detailPath);
     const layout = source(entityDetailLayoutPath);
+    const masthead = source(mastheadPath);
     // The detail title adopts the shared shell, whose canonical token is headline-medium; the page
     // composes the shell and never restates the token or diverges to headline-large.
     expect(typography).toContain('--text-headline-medium: 1.75rem;');
     expect(layout).toContain('text-headline-medium');
     expect(detail).toContain('<EntityDetailLayout');
-    expect(detail).toContain('<EntityMetadataRow');
+    expect(masthead).toContain('<EntityMetadataRow');
     expect(detail).not.toContain('text-headline-large');
     // Status is no longer duplicated as an eyebrow/chip above the title; it lives once in the rail
     // through the properties panel that fills the metadata slot.
-    expect(detail).toContain('<InitiativePropertiesPanel');
-    expect(detail).toContain('status={detail.status}');
+    expect(masthead).toContain('<InitiativePropertiesPanel');
+    expect(masthead).toContain('status={detail.status}');
     expect(detail).not.toContain('variant="secondary"');
   });
 
@@ -88,16 +93,6 @@ describe('Initiative visual contract', () => {
     // you to go to that tab. The counts are the rows on that tab, and the health spread now sits
     // beside them.
     expect(detail).not.toContain('<InitiativeOverviewSummary');
-  });
-
-  it('summarises connected-work health beside the work it summarises', () => {
-    const panels = source(
-      join(root, 'apps/web/src/components/initiatives/initiative-relationship-panels.tsx'),
-    );
-    expect(panels).toContain('<DistributionBar');
-    expect(panels).toContain('distribution={distribution}');
-    // Only alongside rows — a distribution over nothing is chrome drawn on an absence.
-    expect(panels).toMatch(/!loading && connectedWork\.length \? \(/);
   });
 
   it('gives the Initiative overview a restrained canonical MD3 headline scale', () => {

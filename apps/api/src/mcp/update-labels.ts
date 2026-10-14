@@ -26,7 +26,7 @@ import {
   type ScopedResolvedLabel,
 } from '../lib/labels';
 import type { FieldDiff } from './catalog-rows';
-import type { StoredChange } from './change-set';
+import type { StoredChange, Tx } from './change-set';
 import { labelSetChange, sameIds, type LabelSetSubject } from './change-set-labels';
 import { DESCRIPTOR_HINT, resolveDescriptor } from './descriptors';
 
@@ -148,8 +148,9 @@ export async function applyLabelEdit(
   orgId: string,
   subjectId: string,
   edit: LabelEdit,
+  database?: Tx,
 ): Promise<RowLabelResult | null> {
-  return db.transaction(async (tx) => {
+  const apply = async (tx: Tx): Promise<RowLabelResult | null> => {
     const attachedIds = (await labelsForSubject(subject, orgId, subjectId, tx)).map((l) => l.id);
     const current = await resolveAttachedLabels(orgId, attachedIds, tx);
     const next = nextSet(edit, current);
@@ -161,5 +162,6 @@ export async function applyLabelEdit(
       field: { field: 'labels', from: names(current), to: names(next) },
       change: labelSetChange(subject, subjectId, beforeIds, afterIds),
     };
-  });
+  };
+  return database ? apply(database) : db.transaction(apply);
 }

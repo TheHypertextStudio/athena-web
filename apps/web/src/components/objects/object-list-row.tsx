@@ -24,6 +24,16 @@ export interface ObjectListRowProps {
   readonly href: string;
   /** Optional display icon; falls back to the object's kind glyph. */
   readonly icon?: ReactNode;
+  /**
+   * How much room the row takes.
+   *
+   * @remarks
+   * `comfortable` is the standalone row: a 40px identity tile and a 64px minimum, which is right
+   * when a handful of rows are the page. `compact` is for a nested list, where that tile pushes
+   * the name past half the column on a phone and the rows are read as a group rather than as
+   * cards. Compact drops the tile to a bare glyph and the row to its content height.
+   */
+  readonly density?: 'comfortable' | 'compact';
   /** Useful secondary context, never a decorative count. */
   readonly description?: ReactNode;
   /** Optional trailing state or relationship label. */
@@ -50,6 +60,7 @@ export function ObjectListRow({
   icon,
   description,
   trailing,
+  density = 'comfortable',
   dragDisabled = false,
   actionScope = 'all',
   surfaceId,
@@ -67,17 +78,24 @@ export function ObjectListRow({
     >
       <div
         data-testid="object-list-row"
+        data-density={density}
         className={cn(
-          'bg-surface-container-low hover:bg-surface-container-high flex min-h-16 items-center gap-3 rounded-xl px-3 py-2 transition-colors',
+          'bg-surface-container-low hover:bg-surface-container-high flex items-center transition-colors',
+          density === 'compact'
+            ? 'min-h-0 gap-2 rounded-lg px-2 py-1.5'
+            : 'min-h-16 gap-3 rounded-xl px-3 py-2',
           className,
         )}
       >
         <div
           data-testid="object-identity-target"
-          aria-hidden="true"
-          className="bg-surface-container-high text-on-surface-variant flex size-10 shrink-0 items-center justify-center rounded-lg"
+          aria-hidden={icon === undefined ? 'true' : undefined}
+          className={cn(
+            'text-on-surface-variant flex shrink-0 items-center justify-center',
+            density === 'compact' ? '' : 'bg-surface-container-high size-10 rounded-lg',
+          )}
         >
-          {icon ?? <DescriptorIcon className="size-5" />}
+          {icon ?? <DescriptorIcon className={density === 'compact' ? 'size-4' : 'size-5'} />}
         </div>
 
         <div className="min-w-0 flex-1">
@@ -91,7 +109,12 @@ export function ObjectListRow({
             {object.title}
           </Link>
           {description ? (
-            <div className="text-on-surface-variant text-body-small mt-0.5 truncate">
+            <div
+              className={cn(
+                'text-on-surface-variant text-body-small truncate',
+                density === 'compact' ? '' : 'mt-0.5',
+              )}
+            >
               {description}
             </div>
           ) : null}

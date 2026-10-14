@@ -24,13 +24,8 @@ import { usesInitialWorkspace } from '@/components/composer/uses-initial-workspa
  * @see {@link useActiveOrg} for the `teams` + `defaultTeamId` the {@link TeamPicker} is driven from.
  * @see {@link useComposerOptions} for the lead + program + initiative option sources.
  */
-import { ActorId, TeamId } from '@docket/identity-access/ids';
-import { type Health } from '@docket/work/capability-contract';
-import { InitiativeId, ProgramId } from '@docket/work/ids';
-import type { MilestoneCreate } from '@docket/work/milestone-contract';
-import { type ProjectOut, type ProjectStatus } from '../../lib/contracts/project';
+import { type ProjectOut } from '../../lib/contracts/project';
 import { type TeamOut } from '../../lib/contracts/team';
-import type { PlanningTimeframe } from '@docket/work/planning-timeframe';
 import { EntityPicker } from '@docket/ui/components';
 import { VocabularyProvider, useVocabulary } from '@docket/ui/hooks';
 import { ChevronRight, Layers } from '@docket/ui/icons';
@@ -67,110 +62,18 @@ import { useFiscalYearStartMonth } from '@/lib/use-fiscal-year-start-month';
 import { invalidateWorkTargetQueries } from '@/lib/work-target-invalidation';
 
 import { ProjectComposerPickers } from './project-form-pickers';
+import { projectMilestonesSection } from '@/components/projects/project-milestones-field';
 import {
-  type DraftMilestone,
-  projectMilestonesSection,
-} from '@/components/projects/project-milestones-field';
+  type ProjectDraft,
+  projectCreateBody,
+  seededInitiativeIds,
+} from '@/components/projects/project-create-body';
 import { useProjectDraftPersistence } from './use-project-draft-persistence';
+
+export { type ProjectDraft } from '@/components/projects/project-create-body';
 
 /** The lists this composer's pickers draw from. */
 const COMPOSER_INCLUDE = ['actors', 'programs', 'initiatives'] as const;
-
-/** Every field the project composer holds, as one value. */
-export interface ProjectDraft {
-  name: string;
-  summary: string;
-  description: string;
-  /** The team chosen in the picker, or null to follow the org default. */
-  teamOverride: string | null;
-  leadId: string | null;
-  programId: string | null;
-  status: ProjectStatus;
-  health: Health | null;
-  startTimeframe: PlanningTimeframe | null;
-  targetTimeframe: PlanningTimeframe | null;
-  initiativeIds: readonly string[];
-  /**
-   * Checkpoints to create alongside the Project, in the order they will be created.
-   *
-   * @remarks
-   * Drafts until the Project exists: they have no id and nothing is persisted until submit, which
-   * sends them in the create body. Their position in this list becomes their `sort`.
-   */
-  milestones: readonly DraftMilestone[];
-}
-
-/**
- * The drafted checkpoints as create entries, in display order.
- *
- * @remarks
- * A row emptied after it was added is dropped rather than sent: the name is the whole of a
- * milestone and the contract requires one. Position is left out — the server reads the array order
- * as the `sort`, so there is nothing to number here.
- *
- * @param drafts - The composer's milestone rows.
- * @returns the entries for the create body's `milestones`.
- */
-function draftMilestoneBodies(drafts: readonly DraftMilestone[]): MilestoneCreate[] {
-  return drafts.flatMap((draft) => {
-    const name = draft.name.trim();
-    if (name.length === 0) return [];
-    const note = draft.description.trim();
-    return [
-      {
-        name,
-        ...(note.length > 0 ? { description: note } : {}),
-        ...(draft.targetDate === null ? {} : { targetDate: draft.targetDate }),
-      },
-    ];
-  });
-}
-
-/**
- * Build the Project create body from the draft.
- *
- * @remarks
- * Every optional field is omitted rather than sent empty, which is a conditional spread each — so
- * this lives outside `submit` and keeps that function about the write itself.
- *
- * @param draft - The composer's current values.
- * @param name - The trimmed project name.
- * @param teamId - The resolved destination team, or `null` to follow the org default.
- * @returns the request body.
- */
-function projectCreateBody(draft: ProjectDraft, name: string, teamId: string | null) {
-  const summary = draft.summary.trim();
-  const description = draft.description.trim();
-  const milestones = draftMilestoneBodies(draft.milestones);
-  return {
-    name,
-    ...(summary.length > 0 ? { summary } : {}),
-    ...(description.length > 0 ? { description } : {}),
-    ...(teamId ? { teamId: TeamId.parse(teamId) } : {}),
-    ...(draft.leadId ? { leadId: ActorId.parse(draft.leadId) } : {}),
-    ...(draft.programId ? { programId: ProgramId.parse(draft.programId) } : {}),
-    status: draft.status,
-    ...(draft.health ? { health: draft.health } : {}),
-    ...(draft.startTimeframe
-      ? {
-          startDate: draft.startTimeframe.date,
-          startDateResolution: draft.startTimeframe.resolution,
-        }
-      : {}),
-    ...(draft.targetTimeframe
-      ? {
-          targetDate: draft.targetTimeframe.date,
-          targetDateResolution: draft.targetTimeframe.resolution,
-        }
-      : {}),
-    ...(draft.initiativeIds.length > 0
-      ? { initiativeIds: draft.initiativeIds.map((id) => InitiativeId.parse(id)) }
-      : {}),
-    // Written in the Project's own transaction, so there is no window where the Project exists and
-    // its checkpoints do not — and nothing for this composer to recover from.
-    ...(milestones.length > 0 ? { milestones } : {}),
-  };
-}
 
 /** Workspace references carried with a successful Project create for related invalidations. */
 export interface ProjectCreationReferences {
@@ -217,6 +120,9 @@ export interface CreateProjectDialogProps {
   /** The program id the new project is pre-filed under, or `null` for none (e.g. opened from a
    * Program's own Projects tab). The picker remains editable — this only seeds the draft. */
   defaultProgramId?: string | null | undefined;
+  /** Initiatives the new project is pre-linked to (e.g. opened from an Initiative's own page).
+   * The picker remains editable — this only seeds the draft. */
+  defaultInitiativeIds?: readonly string[] | null | undefined;
   /** Whether the dialog is open (the host page owns this state). */
   open: boolean;
   /** Notify the parent that the open state changed (Esc, backdrop, X, Cancel, or success). */
@@ -246,6 +152,7 @@ export const CreateProjectDialog = withComposerReset(function CreateProjectCompo
   defaultTeamId,
   teamsLoading,
   defaultProgramId,
+  defaultInitiativeIds,
   open,
   onOpenChange,
   onCreated,
@@ -273,7 +180,7 @@ export const CreateProjectDialog = withComposerReset(function CreateProjectCompo
     health: null,
     startTimeframe: null,
     targetTimeframe: null,
-    initiativeIds: [],
+    initiativeIds: seededInitiativeIds(contextualRequestDefaultsApply, defaultInitiativeIds),
     milestones: [],
   });
 
@@ -626,6 +533,7 @@ function GlobalProjectComposerBody({
       defaultTeamId={creation.defaultTeamId}
       teamsLoading={creation.loading || creation.permissions.loading}
       defaultProgramId={targetIsOriginalWorkspace ? request.defaultProgramId : null}
+      defaultInitiativeIds={targetIsOriginalWorkspace ? request.defaultInitiativeIds : null}
       defaultTemplateId={targetIsOriginalWorkspace ? request.defaultTemplateId : null}
       resumeDraftId={resume.draftId}
       onDraftIdChange={setActiveDraftId}

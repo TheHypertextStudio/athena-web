@@ -10,7 +10,8 @@ composed blueprints, Program schedules, and reviewed Athena proposals.
 Preserve refs, staged/unstaged changes, untracked files, and needed ignored captures privately
 before integration or retirement. Recover missing behavior rather than replaying superseded work.
 Keep typed queries, shared UI, tenant authorization, supported REST/MCP clients, and the existing
-scheduler. Personal templates become author-only unpublished drafts. Published versions are
+scheduler. Personal templates become author-only unpublished drafts. Existing team-only templates
+remain team-visible unpublished drafts until explicitly published. Published versions are
 immutable. One transactional blueprint creation produces at most 500 items. Product copy says
 Work templates or template; code may use work_type. Per-template properties, status sets, and
 completion rules follow the four delivery layers. Use linear history and one push per delivery.

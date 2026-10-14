@@ -101,6 +101,7 @@ export async function applySubtaskOf(request: RelationRequest): Promise<Relation
   const ends = await taskEnds(request);
   const { from, to } = ends;
   await request.guard('task', from);
+  await request.guard('task', to);
   const result = await serializableTx(async (tx) => {
     // Lock both endpoints in stable id order. Reciprocal links otherwise lock A then B and B
     // then A, which turns the cycle race into a database deadlock before SERIALIZABLE can retry.

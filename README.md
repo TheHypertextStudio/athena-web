@@ -39,6 +39,9 @@ Catalog errors require `work:read` and return shared catalogs instead of repeati
 each item. Plan confirmation preserves applied template properties and explicit overrides.
 See [template use over MCP](apps/docs/developers/mcp-tools-and-resources.mdx#create-work-from-a-template-body).
 
+For Codex connections that repeatedly request sign-in with several chats open, see
+[refresh coordination troubleshooting](apps/docs/developers/connect-an-agent-mcp.mdx#codex-asks-you-to-reconnect-when-several-chats-are-open).
+
 Android devices send selected notification captures and removals to the authenticated
 `POST /v1/me/inbound` endpoint. Optional personal Athena review has its own server-recorded consent
 and durable scheduled dispatch. See [personal inbound events](docs/engineering/specs/personal-inbound.md)

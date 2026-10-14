@@ -81,6 +81,15 @@ Then authorize:
 codex mcp login docket
 ```
 
+If several running Codex chats repeatedly lose the connection, check `codex features list` for
+`mcp_oauth_refresh_coordination`. Builds exposing this experimental setting can enable it with
+`codex features enable mcp_oauth_refresh_coordination`. Reload the MCP connections or restart Codex
+once afterward: refresh mode is selected when each connection starts. Apply this on every computer
+running Codex. An already-revoked grant needs one replacement authorization after coordination is
+enabled. See the [public troubleshooting guide](../../apps/docs/developers/connect-an-agent-mcp.mdx#codex-asks-you-to-reconnect-when-several-chats-are-open)
+for the tested build and upstream report. Extending token lifetimes or disabling replay revocation
+does not correct stale credentials held by the client.
+
 ### Cursor
 
 Use the install deep link from **Settings → Connected apps** in Docket, or add to `~/.cursor/mcp.json`:

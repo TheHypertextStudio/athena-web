@@ -1,6 +1,6 @@
 ---
-title: 'Connect an AI agent'
-description: 'Connect an MCP-capable client to Docket’s Streamable HTTP resource.'
+title: "Connect an AI agent"
+description: "Connect an MCP-capable client to Docket’s Streamable HTTP resource."
 ---
 
 Connect an MCP-capable client to:
@@ -30,6 +30,28 @@ The client registers or supplies a supported client identity, opens the person�
 consent, and uses PKCE `S256`. Docket grants only `authorization_code` and `refresh_token` flows.
 Read [Authentication](/developers/authentication) for the issuer, scope descriptions, and immediate
 revocation behavior.
+
+### Codex asks you to reconnect when several chats are open
+
+Some Codex builds keep an older refresh token in each running chat. After another chat rotates
+that token, using the older token can revoke the Docket connection. Signing in again restores
+access but does not correct how those chats share refreshed credentials.
+
+If your build lists `mcp_oauth_refresh_coordination` in `codex features list`, enable it:
+
+```sh
+codex features enable mcp_oauth_refresh_coordination
+```
+
+Reload Codex's MCP connections or restart Codex once so existing connections use the new setting.
+Apply the setting on each computer running Codex. If the connection was already revoked, authorize
+Docket once after enabling coordination. Do not repeatedly sign in while older connections keep
+using the previous refresh path.
+
+This is an experimental Codex setting, verified with `0.162.0-alpha.17.2`; check your installed
+build before using it. The [upstream Codex report](https://github.com/openai/codex/issues/46028)
+describes the stale-token failure and the coordination setting. Docket's token lifetimes,
+permission checks, and replay protection remain unchanged.
 
 ## Transport behavior
 

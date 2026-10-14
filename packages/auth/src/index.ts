@@ -14,6 +14,7 @@ import { verifyAccessToken } from 'better-auth/oauth2';
 
 import { buildAuthOptions } from './auth-builder';
 import { createGoogleDirectory } from './google-directory';
+import { withOAuthRateLimitResponse } from './oauth-rate-limit-response';
 
 export {
   generateRecoveryCodes,
@@ -135,14 +136,19 @@ const devEchoSignupCode = env.APP_MODE === 'local' || env.APP_MODE === 'test';
  */
 const googleDirectory = env.ADMIN_GOOGLE_SSO_ENABLED ? createGoogleDirectory() : undefined;
 
-/** The configured Better Auth instance (handler, server API, plugins). */
-export const auth = betterAuth(
+const configuredAuth = betterAuth(
   buildAuthOptions(env, {
     mailer,
     ...(devEchoSignupCode ? { devEchoSignupCode: true } : {}),
     ...(googleDirectory ? { googleDirectory } : {}),
   }),
 );
+
+/** The configured auth instance, including OAuth-compatible token throttle responses. */
+export const auth = {
+  ...configuredAuth,
+  handler: withOAuthRateLimitResponse(configuredAuth.handler),
+};
 
 /** The inferred type of the configured Better Auth instance. */
 export type Auth = typeof auth;

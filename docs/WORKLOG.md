@@ -7,6 +7,22 @@
 
 ## Active Tasks
 
+### [MCP-AUTH-REFRESH-003] Diagnose recurring production refresh failures
+
+- **Status**: REVIEW (response correction validated; desktop recovery pending)
+- **Started**: 2026-10-14
+- **Priority**: P1
+- **Description**: Keep concurrent Codex MCP connections authenticated through normal token expiry and temporary token-endpoint failures, while preserving client authentication, scope boundaries, rotation and revocation.
+- **Plan**: Correlate desktop failures with production token responses; trace the actual server and client paths; reproduce the cause with focused coverage; implement the smallest complete correction; validate affected packages and prove the deployed behavior through the failing scenario.
+- **Files to investigate**: Auth builder and provider endpoints, API auth routing, existing OAuth acceptance tests, and the installed Codex refresh implementation.
+- **Risks**: A passing single connection or one expiry cycle does not establish recovery during many simultaneous chat startups. Do not mask rejected grants by extending token lifetimes or disabling protection.
+- **Validation**: Reproduce the observed response failure and recovery, verify authority remains bounded, run affected tests/typechecks/lint, and correlate actual runtime calls with production response metadata.
+- **Findings**: Restored the existing Studio Google login and correlated production token-request status with desktop errors. Throttled responses match the client's parse failures; multiple grants also rotated successfully before being revoked, so ordinary refresh-token expiry is not the explanation. The desktop main process predates the coordination setting change. An isolated native-client reproduction shows an existing legacy connection continues reusing tokens after the configuration reports coordination enabled.
+- **Implementation**: Normalize only token-endpoint HTTP 429 responses to OAuth `temporarily_unavailable`, preserve the rejection and retry delay, add standard `Retry-After` and no-store headers, and leave all token policy and other responses unchanged. Correct the guides to require a full restart and explain remaining refresh fan-out.
+- **Validation**: A production-style native fixture with 40 coordinated chats produced 40 refreshes for one expired access token. With the existing 30-request ceiling, 30 succeeded and 10 failed with the production parse error. The original 429 regression failed against the installed library; all 571 auth tests pass after the response correction, including retry after cooldown and preservation of genuine credential errors. All 47 affected API tests, auth/API typechecks and lint, the API runtime build, formatting, diff checks, and native documentation build/link/accessibility checks passed. Self-review confirmed that only HTTP 429 at the mounted token endpoint is rewritten; genuine credential failures and limiter enforcement remain unchanged.
+- **Blockers**: Complete recovery still requires replacing every preexisting desktop connection and verifying the actual desktop workload after restart. The response correction improves protocol behavior but does not coalesce client refreshes or revive revoked grants. Private operational evidence is retained outside repository history.
+- **Learnings**: Test actual concurrent chat counts and the process that owns the desktop connections. A feature flag on disk and a fresh-process acceptance test do not establish migration of existing connections. Separate temporary rate limiting from revoked grants when diagnosing reconnect prompts.
+
 ### [WEBSITE-STANDARDIZATION-021] Restore private package reads for scheduler setup
 
 - **Status**: REVIEW (source checks passed; hosted rollout pending)
@@ -12188,7 +12204,7 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
 ### [MCP-AUTH-REFRESH-002] Restore persistent Codex MCP authentication
 
 - **Completed**: 2026-10-13
-- **Summary**: Restored coordinated Docket OAuth refresh for concurrent Codex chats on both Macs and verified production access through real token expiry, without changing backend authorization or token policy.
+- **Summary**: A bounded native-process test passed through one expiry on both Macs. Production recurrence reopened acceptance under MCP-AUTH-REFRESH-003; this test did not establish that every desktop connection had adopted coordination or cover simultaneous refreshes above the token-endpoint limit.
 - **Started**: 2026-10-13
 - **Priority**: P1
 - **Description**: Docket repeatedly requests authorization with multiple Codex chats running, despite the October refresh-retry corrections. The owner reports that this worked in September and explicitly authorizes Google reauthentication, production diagnostics, a fix, and real multi-chat expiry verification.

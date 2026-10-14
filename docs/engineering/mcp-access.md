@@ -83,12 +83,20 @@ codex mcp login docket
 
 If several running Codex chats repeatedly lose the connection, check `codex features list` for
 `mcp_oauth_refresh_coordination`. Builds exposing this experimental setting can enable it with
-`codex features enable mcp_oauth_refresh_coordination`. Reload the MCP connections or restart Codex
-once afterward: refresh mode is selected when each connection starts. Apply this on every computer
+`codex features enable mcp_oauth_refresh_coordination`. Fully quit and reopen Codex
+afterward: refresh mode is selected when each connection starts, and the configuration's current
+value does not establish the mode of an existing connection. Apply this on every computer
 running Codex. An already-revoked grant needs one replacement authorization after coordination is
 enabled. See the [public troubleshooting guide](../../apps/docs/developers/connect-an-agent-mcp.mdx#codex-asks-you-to-reconnect-when-several-chats-are-open)
 for the tested build and upstream report. Extending token lifetimes or disabling replay revocation
 does not correct stale credentials held by the client.
+
+Coordination does not coalesce every expired-access-token response in the tested client: multiple
+chats can rotate the same grant in succession. The token endpoint retains its rate limit. A `429`
+response uses OAuth `temporarily_unavailable`, JSON content type, no-store headers, and the
+limiter's delay in standard `Retry-After`; this temporary failure does not revoke a grant. The
+client must retain its credentials and retry after the delay. A `400 invalid_grant` remains a
+separate credential failure and is not rewritten.
 
 ### Cursor
 

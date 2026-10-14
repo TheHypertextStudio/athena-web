@@ -1,6 +1,6 @@
 ---
-title: 'MCP tools and resources'
-description: 'Registered MCP tool names, read resources, prompts, and authority limits.'
+title: "MCP tools and resources"
+description: "Registered MCP tool names, read resources, prompts, and authority limits."
 ---
 
 Docket returns only the tools that the caller's current scopes and grants allow. Tool availability
@@ -10,7 +10,7 @@ can change after consent or grant changes, so handle `notifications/tools/list_c
 
 The work and planning tools are `workspaces`, `find`, `list_work`, `brief`, `capture`, `organize`,
 `update`, `milestones`, `comment`, `report_status`, `link`, `archive`, `plan_day`, `undo`,
-`retrospect`, `define_process`, `schedule_process`, `repeat_task`, `define_labels`,
+`retrospect`, `view_workload`, `define_process`, `schedule_process`, `repeat_task`, `define_labels`,
 `define_template`, `list_templates`, `plan_start`, `plan_read`, `plan_draft`, `plan_commit`, and `track`.
 
 The agent, session, connector, and directive tools are `run_agent`, `manage_session`,
@@ -24,6 +24,17 @@ entity type: `get_tasks`, `get_projects`, `get_programs`, `get_initiatives`, `ge
 
 `review_work_destination` reviews a proposed work destination before writing. It does not create
 or move work on its own.
+
+### Daily workload
+
+`view_workload` reads your visible plans and tracked time in one workspace. Supply `orgId`, a
+local `date` in `YYYY-MM-DD` form, and an IANA `timezone`, such as `America/Los_Angeles`.
+The optional `availableHours` sets this view’s full-day budget from 0 to 24 hours and defaults to 8.
+
+Overlapping tracked time counts once, and the result identifies work with unknown estimates.
+Headroom compares the workload with that daily budget; it does not measure free calendar time.
+The view excludes meetings and other workspaces. Reading it does not change plans or your saved
+availability.
 
 ### Writing
 

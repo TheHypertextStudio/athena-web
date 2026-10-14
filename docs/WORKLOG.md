@@ -7,6 +7,18 @@
 
 ## Active Tasks
 
+### [WEBSITE-MCP-DOCS] Keep workload reference complete
+
+- **Status**: REVIEW
+- **Started**: 2026-10-14
+- **Priority**: P1
+- **Description**: Document the registered `view_workload` tool in the public MCP reference so
+  clients understand its personal workspace scope, required day/timezone inputs, and daily-budget
+  limits.
+- **Subtasks**:
+  - [x] Describe read-only workload, overlapping time, unknown estimates, and budget headroom.
+  - [x] Validate the existing documentation coverage policy and Mintlify source.
+
 ### [WORK-RECOVERY-001] Recover useful unfinished work and deliver work templates
 
 - **Status**: IN_PROGRESS

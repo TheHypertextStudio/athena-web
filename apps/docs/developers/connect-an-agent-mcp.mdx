@@ -45,16 +45,21 @@ codex features enable mcp_oauth_refresh_coordination
 
 Fully quit and reopen Codex so all existing connections use the new setting. A setting shown as
 enabled does not prove that an already-open connection adopted it.
-Apply the setting on each computer running Codex. If the connection was already revoked, authorize
-Docket once after enabling coordination. Do not repeatedly sign in while older connections keep
-using the previous refresh path.
+Apply the setting on each computer running Codex. If the connection still fails, authorize Docket
+once after the full restart. Do not repeatedly sign in while older connections keep using the
+previous refresh path.
+
+Restarting reuses the stored credentials. If the server rotated a refresh token but the client
+exited before saving its replacement, the old access token can still work until the next renewal.
+That renewal can fail even with coordination enabled. Docket recovers identical rotation retries
+for 30 seconds; a restart does not extend that window or repair a stale credential pair.
 
 This is an experimental Codex setting, verified with `0.162.0-alpha.17.2`; check your installed
 build before using it. The [upstream Codex report](https://github.com/openai/codex/issues/46028)
 describes the stale-token failure and the coordination setting. Docket's token lifetimes,
 permission checks, and replay protection remain unchanged.
 
-Coordination prevents clients from reusing the same rotated credential, but that build can still
+Coordination serializes refresh and credential persistence, but that build can still
 refresh separately for each chat receiving an expired-token response. Many simultaneous chats can
 therefore reach the token endpoint's limit. HTTP `429` with `temporarily_unavailable` and
 `Retry-After` means to wait and retry; it does not mean the grant was revoked. Report repeated

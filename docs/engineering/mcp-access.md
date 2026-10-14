@@ -86,8 +86,11 @@ If several running Codex chats repeatedly lose the connection, check `codex feat
 `codex features enable mcp_oauth_refresh_coordination`. Fully quit and reopen Codex
 afterward: refresh mode is selected when each connection starts, and the configuration's current
 value does not establish the mode of an existing connection. Apply this on every computer
-running Codex. An already-revoked grant needs one replacement authorization after coordination is
-enabled. See the [public troubleshooting guide](../../apps/docs/developers/connect-an-agent-mcp.mdx#codex-asks-you-to-reconnect-when-several-chats-are-open)
+running Codex. Replace a failing authorization after the full restart. A restart reloads stored
+credentials; it cannot repair a rotation that committed on the server before the client exited
+without persisting the response. The previous access token may continue working until renewal,
+so a successful initial read does not establish recovery. The 30-second replay window still
+applies, and a later stale-token retry can revoke the grant. See the [public troubleshooting guide](../../apps/docs/developers/connect-an-agent-mcp.mdx#codex-asks-you-to-reconnect-when-several-chats-are-open)
 for the tested build and upstream report. Extending token lifetimes or disabling replay revocation
 does not correct stale credentials held by the client.
 

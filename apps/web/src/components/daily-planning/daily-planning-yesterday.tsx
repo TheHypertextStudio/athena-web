@@ -32,8 +32,8 @@ function ReviewRow({
   const choice = reviewChoice(plan, task.taskId);
   return (
     <Card className="bg-surface-container-low">
-      <CardContent className="flex flex-wrap items-center justify-between gap-2 p-3">
-        <span className="min-w-0 basis-full sm:flex-1 sm:basis-0">
+      <CardContent className="grid grid-cols-1 items-center gap-x-2 gap-y-1 px-0 py-2 sm:grid-cols-[minmax(0,1fr)_9rem]">
+        <span className="text-body-medium min-w-0 break-words">
           {task.title}
           {task.plannedDate && task.plannedDate !== plan.previousDate ? (
             <span className="text-on-surface-variant text-label-small ml-2">
@@ -41,7 +41,7 @@ function ReviewRow({
             </span>
           ) : null}
         </span>
-        <div className="w-36 shrink-0">
+        <div className="w-32 min-w-0 sm:w-full">
           <Select
             aria-label={`Decision for ${task.title}`}
             value={choice}
@@ -59,16 +59,18 @@ function ReviewRow({
           </Select>
         </div>
         {choice === 'another' ? (
-          <DatePicker
-            ariaLabel={`New date for ${task.title}`}
-            placeholder="Choose a date"
-            triggerVariant="secondary"
-            min={addDays(plan.date, 1)}
-            value={plan.reviewDates[task.taskId] ?? null}
-            onChange={(value) => {
-              plan.setReviewDates((current) => ({ ...current, [task.taskId]: value ?? '' }));
-            }}
-          />
+          <div className="sm:col-span-2">
+            <DatePicker
+              ariaLabel={`New date for ${task.title}`}
+              placeholder="Choose a date"
+              triggerVariant="secondary"
+              min={addDays(plan.date, 1)}
+              value={plan.reviewDates[task.taskId] ?? null}
+              onChange={(value) => {
+                plan.setReviewDates((current) => ({ ...current, [task.taskId]: value ?? '' }));
+              }}
+            />
+          </div>
         ) : null}
       </CardContent>
     </Card>
@@ -212,7 +214,7 @@ export function YesterdayStage({ plan }: { readonly plan: ReadyPlanningControlle
   const today = new Date().toLocaleDateString('en-CA', { timeZone: plan.timezone });
   const targetLabel = plan.date === addDays(today, 1) ? 'Tomorrow' : 'Today';
   return (
-    <section className="max-w-3xl space-y-5">
+    <section className="max-w-3xl space-y-4">
       <p className="text-on-surface-variant">
         {formatDay(plan.previousDate, {
           weekday: 'long',
@@ -221,12 +223,12 @@ export function YesterdayStage({ plan }: { readonly plan: ReadyPlanningControlle
         })}
       </p>
       <Card>
-        <CardHeader>
+        <CardHeader className="pb-2">
           <CardTitle>
             {plan.reviewLabel === 'Review today' ? 'Work from today' : 'Work from yesterday'}
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-3">
+        <CardContent className="space-y-2">
           <p>{recorded ? `${recorded} minutes recorded` : 'No time recorded.'}</p>
           {completed.map((task) => (
             <p key={task.taskId}>✓ {task.title}</p>

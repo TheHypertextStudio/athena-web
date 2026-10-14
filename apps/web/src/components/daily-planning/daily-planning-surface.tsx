@@ -137,7 +137,7 @@ export function DailyPlanningSurface(): JSX.Element {
         />
       }
     >
-      <div className="px-3 pb-4 sm:px-6 sm:pb-6">
+      <div className="px-4 pb-4 sm:px-6 sm:pb-6">
         <StageView plan={plan} panels={panels} />
       </div>
     </ImmersiveShell>

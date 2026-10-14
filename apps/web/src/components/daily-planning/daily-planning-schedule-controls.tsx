@@ -88,7 +88,7 @@ export function WorkdayControls({ plan }: { readonly plan: ReadyPlanningControll
           size="sm"
           variant="ghost"
           aria-label="Workday settings"
-          className="group max-w-full justify-start gap-2"
+          className="group max-w-full justify-start gap-2 px-0"
         >
           <span className="text-on-surface-variant">Work hours</span>
           <span>
@@ -152,7 +152,7 @@ export function ScheduleControls({
   return (
     <div className="space-y-2">
       {plan.canUndoSchedule && !plan.preview ? (
-        <Button size="sm" variant="ghost" onClick={plan.undoSchedule}>
+        <Button size="sm" variant="ghost" className="px-0" onClick={plan.undoSchedule}>
           Undo schedule
         </Button>
       ) : null}

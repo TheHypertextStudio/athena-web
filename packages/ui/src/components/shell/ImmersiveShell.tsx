@@ -62,7 +62,7 @@ export function ImmersiveShell({
             {children}
           </main>
           {footer ? (
-            <footer className="shrink-0 px-3 pt-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-6">
+            <footer className="shrink-0 px-4 pt-2 pb-[max(1rem,env(safe-area-inset-bottom))] sm:px-6">
               {footer}
             </footer>
           ) : null}

@@ -3,6 +3,7 @@
 /** Date, stage and save state above the focused flow. */
 import { InlineBanner } from '@docket/ui/components';
 import { Button } from '@docket/ui/primitives';
+import { ChevronLeft } from '@docket/ui/icons';
 import { addDays } from '@docket/planning/zoned-time';
 import { formatDay } from '@/components/date-picker';
 import { PageHeader, PageHeading, PageTitle } from '@/components/views/page-layout';
@@ -29,29 +30,53 @@ function PlanningSteps({
       (plan.previousQ.data?.tasks.length ?? 0) +
       (plan.previousQ.data?.actual.length ?? 0) >
       0;
+  const compactLabels = {
+    yesterday: plan.reviewLabel === 'Review today' ? 'Today' : 'Yesterday',
+    plan: 'Plan',
+    review: 'Review',
+  };
   return (
-    <nav aria-label="Planning steps" className="flex flex-wrap items-center gap-2">
-      {(
-        [
-          ...(hasYesterday ? ([['yesterday', plan.reviewLabel]] as const) : []),
-          ['plan', planLabel],
-          ['review', 'Review plan'],
-        ] as const
-      ).map(([step, label]) => (
-        <Button
-          disabled={plan.confirming || plan.deferPending}
-          key={step}
-          size="sm"
-          variant={plan.stage === step ? 'default' : 'secondary'}
-          className="min-h-10 min-w-10 rounded-lg px-3 sm:min-h-8"
-          aria-current={plan.stage === step ? 'step' : undefined}
-          onClick={() => {
-            void plan.go(step);
-          }}
-        >
-          {label}
-        </Button>
-      ))}
+    <nav aria-label="Planning steps">
+      <ol className="flex flex-wrap items-center gap-x-4 gap-y-1">
+        {(
+          [
+            ...(hasYesterday ? ([['yesterday', plan.reviewLabel]] as const) : []),
+            ['plan', planLabel],
+            ['review', 'Review plan'],
+          ] as const
+        ).map(([step, label], index) => (
+          <li key={step}>
+            <Button
+              disabled={plan.confirming || plan.deferPending}
+              size="sm"
+              variant="link"
+              className={`min-h-10 min-w-10 px-1 sm:min-h-8 ${plan.stage === step ? 'text-on-surface' : 'text-on-surface-variant'}`}
+              aria-label={label}
+              aria-current={plan.stage === step ? 'step' : undefined}
+              onClick={() => {
+                void plan.go(step);
+              }}
+            >
+              <span
+                aria-hidden="true"
+                className="text-on-surface-variant text-label-small tabular-nums"
+              >
+                {index + 1}.
+              </span>
+              <span
+                className={
+                  plan.stage === step
+                    ? 'decoration-primary underline decoration-2 underline-offset-8'
+                    : ''
+                }
+              >
+                <span className="hidden sm:inline">{label}</span>
+                <span className="sm:hidden">{compactLabels[step]}</span>
+              </span>
+            </Button>
+          </li>
+        ))}
+      </ol>
     </nav>
   );
 }
@@ -142,7 +167,7 @@ export function DailyPlanningHeader({
           <PageTitle>{heading}</PageTitle>
         </PageHeading>
         <Button
-          variant="secondary"
+          variant="ghost"
           disabled={plan.confirming || plan.deferPending}
           onClick={() => {
             if (plan.isMovingTask()) return;
@@ -158,6 +183,7 @@ export function DailyPlanningHeader({
             })();
           }}
         >
+          <ChevronLeft aria-hidden="true" />
           Today
         </Button>
       </PageHeader>

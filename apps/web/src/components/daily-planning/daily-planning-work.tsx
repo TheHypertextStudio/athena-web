@@ -143,19 +143,21 @@ function WorkRowContents({
   const projectName = plan.allTasks.get(entry.taskId)?.projectName;
   return (
     <span className="flex w-full min-w-0 flex-wrap items-center gap-1">
-      <span className="min-w-0 flex-1">
+      <span className="min-w-0 basis-full @sm/row:flex-1 @sm/row:basis-0">
         <WorkRowTitle plan={plan} entry={entry} title={title} />
+        {projectName || entry.selectionSource === 'suggested' ? (
+          <span className="text-on-surface-variant text-body-small block min-w-0 truncate">
+            {projectName ?? ''}
+            {entry.selectionSource === 'suggested'
+              ? `${projectName ? ' · ' : ''}${plan.proposalContext?.tasks.find((value) => value.taskId === entry.taskId)?.reason ?? 'Suggested'}`
+              : ''}
+          </span>
+        ) : null}
       </span>
       <PlannedTime plan={plan} entry={entry} title={title} />
-      <WorkRowMenu plan={plan} entry={entry} title={title} remaining={remaining} />
-      {projectName || entry.selectionSource === 'suggested' ? (
-        <span className="text-on-surface-variant text-body-small min-w-0 basis-full truncate">
-          {projectName ?? ''}
-          {entry.selectionSource === 'suggested'
-            ? `${projectName ? ' · ' : ''}${plan.proposalContext?.tasks.find((value) => value.taskId === entry.taskId)?.reason ?? 'Suggested'}`
-            : ''}
-        </span>
-      ) : null}
+      <span className="ml-auto shrink-0">
+        <WorkRowMenu plan={plan} entry={entry} title={title} remaining={remaining} />
+      </span>
       {plan.failedTitle?.taskId === entry.taskId ? (
         <Button
           size="sm"
@@ -187,7 +189,7 @@ function WorkRowTitle({
       }}
       canEdit
       ariaLabel={`Task title: ${title}`}
-      className="text-on-surface text-label-medium sm:text-label-large min-h-10 min-w-0 flex-1 py-2.5 sm:min-h-8 sm:py-1.5"
+      className="text-on-surface text-label-large min-h-10 min-w-0 flex-1 py-2.5 sm:min-h-8 sm:py-1.5"
     />
   );
 }
@@ -286,7 +288,7 @@ function WorkRow({
     >
       <EntityListRow
         interactive={false}
-        className="min-w-0 gap-1 px-2 py-1"
+        className="min-w-0 items-start gap-1 px-2 py-1"
         leading={
           <Button
             ref={drag.ref}

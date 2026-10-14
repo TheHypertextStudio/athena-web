@@ -3,7 +3,13 @@
 /** Timed daily agenda and explicit block controls for keyboard and touch. */
 import type { DailyPlanSession, DailyPlanSnapshot } from '@docket/planning/daily-plan-flow';
 import { instantAt, localMinuteOfDay } from '@docket/planning/zoned-time';
-import { Button, Collapsible, CollapsibleContent, CollapsibleTrigger } from '@docket/ui/primitives';
+import {
+  Button,
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+  Surface,
+} from '@docket/ui/primitives';
 import { ChevronDown } from '@docket/ui/icons';
 import type { JSX, ReactNode } from 'react';
 import { SchedulingCanvas, type ScheduleItem } from '@/components/scheduling';
@@ -143,7 +149,7 @@ function AllDayContext({ events }: { readonly events: readonly EventBlock[] }): 
         <Button
           size="sm"
           variant="ghost"
-          className="group h-auto max-w-full justify-start gap-2 text-left"
+          className="group h-auto max-w-full justify-start gap-2 px-0 text-left"
         >
           <span className="text-body-small text-on-surface-variant min-w-0 text-wrap">{label}</span>
           <ChevronDown aria-hidden="true" className="shrink-0 group-data-[state=open]:rotate-180" />
@@ -184,46 +190,48 @@ export function DailyAgenda(props: DailyAgendaProps): JSX.Element {
   return (
     <>
       <AllDayContext events={props.events} />
-      <SchedulingCanvas
-        presentation="agenda"
-        preserveTimedGeometry
-        displayTimezone={props.timezone}
-        lanes={[{ id: props.date, date: props.date, label: 'Agenda', items }]}
-        pixelsPerHour={84}
-        viewportHeight={560}
-        minimumLaneWidth={180}
-        initialScrollMinutes={Math.max(
-          0,
-          localMinuteOfDay(new Date(props.startAt), props.timezone) - 15,
-        )}
-        onOpenItem={({ item }) => {
-          const session = props.draft.sessions.find((value) => value.id === item.id);
-          if (session) props.onEdit(session);
-        }}
-        onMoveItem={({ item, startMinutes, endMinutes }) => {
-          changeAgendaSession(props, item.id, startMinutes, endMinutes);
-        }}
-        onResizeItem={({ item, startMinutes, endMinutes }) => {
-          changeAgendaSession(props, item.id, startMinutes, endMinutes);
-        }}
-        renderTimedLaneContext={({ geometry }) => (
-          <AgendaGridTarget
-            pixelsPerHour={geometry.pixelsPerHour}
-            onDropTask={props.onDropTask}
-            date={props.date}
-            timezone={props.timezone}
-          />
-        )}
-        renderItem={({ item }) =>
-          item.appearance === 'timebox' ? (
-            <AgendaTaskTarget item={item} onDrop={props.onAddToBlock}>
-              {item.title}
-            </AgendaTaskTarget>
-          ) : (
-            item.title
-          )
-        }
-      />
+      <Surface tone="page" shape="medium" className="overflow-hidden">
+        <SchedulingCanvas
+          presentation="agenda"
+          preserveTimedGeometry
+          displayTimezone={props.timezone}
+          lanes={[{ id: props.date, date: props.date, label: 'Agenda', items }]}
+          pixelsPerHour={84}
+          viewportHeight={560}
+          minimumLaneWidth={180}
+          initialScrollMinutes={Math.max(
+            0,
+            localMinuteOfDay(new Date(props.startAt), props.timezone) - 15,
+          )}
+          onOpenItem={({ item }) => {
+            const session = props.draft.sessions.find((value) => value.id === item.id);
+            if (session) props.onEdit(session);
+          }}
+          onMoveItem={({ item, startMinutes, endMinutes }) => {
+            changeAgendaSession(props, item.id, startMinutes, endMinutes);
+          }}
+          onResizeItem={({ item, startMinutes, endMinutes }) => {
+            changeAgendaSession(props, item.id, startMinutes, endMinutes);
+          }}
+          renderTimedLaneContext={({ geometry }) => (
+            <AgendaGridTarget
+              pixelsPerHour={geometry.pixelsPerHour}
+              onDropTask={props.onDropTask}
+              date={props.date}
+              timezone={props.timezone}
+            />
+          )}
+          renderItem={({ item }) =>
+            item.appearance === 'timebox' ? (
+              <AgendaTaskTarget item={item} onDrop={props.onAddToBlock}>
+                {item.title}
+              </AgendaTaskTarget>
+            ) : (
+              item.title
+            )
+          }
+        />
+      </Surface>
       <div className="space-y-1">
         {props.draft.sessions
           .filter(

@@ -282,6 +282,11 @@ export function SchedulingCanvasHeader({
   readonly onGestureAnnouncementChange: (announcement: string) => void;
   readonly onSelectAllDayRegion?: SchedulingCanvasProps['onSelectAllDayRegion'] | undefined;
 }): JSX.Element {
+  const hasAllDayContent =
+    lanes.some((lane) => lane.items.some((item) => item.allDay)) ||
+    Boolean(renderAllDayLaneContext) ||
+    Boolean(gutterSlot) ||
+    Boolean(onSelectAllDayRegion);
   return (
     // No rule under the header at all: the tonal step from `surface-container-low` onto the grid's
     // `surface` is the separation, which is how every other region on this surface is separated.
@@ -289,7 +294,8 @@ export function SchedulingCanvasHeader({
     // "there are just so many fucking borders everywhere" complaint could still point at.
     <header
       ref={headerRef}
-      className="bg-surface-container-low sticky top-0 z-[60] flex"
+      hidden={presentation === 'agenda' && !hasAllDayContent}
+      className={`bg-surface-container-low sticky top-0 z-[60] ${presentation === 'agenda' && !hasAllDayContent ? 'hidden' : 'flex'}`}
       data-schedule-all-day-header=""
     >
       <div

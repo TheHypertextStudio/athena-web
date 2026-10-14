@@ -26,7 +26,7 @@ export function PlanningPanelControls({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="secondary" size="sm" className="min-h-10 sm:min-h-8">
+        <Button variant="ghost" size="sm" className="min-h-10 sm:min-h-8">
           Panels
         </Button>
       </DropdownMenuTrigger>

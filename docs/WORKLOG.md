@@ -65,6 +65,33 @@ persisted Program placement, removal, and phone disclosure targets. Sixteen fina
 Program grouping and expanded project details at four sizes in both themes. Source types, lint,
 complexity, and the production build pass; provider acceptance remains separate.
 
+#### Daily planning recovery plan
+
+Recover the retained distinction between stage navigation and forward actions, aligned activity
+gutters, readable phone task titles, and conditional all-day agenda headings. Compare the branch
+against current behavior before replaying its source; keep historical captures privately. Validate
+agenda context restoration, planning transitions, title editing, short-phone layouts, both themes,
+and horizontal overflow. Existing findings about phone agenda hierarchy and completed-work search
+remain acceptance questions until reproduced against the current runtime.
+
+#### Daily planning recovery validation
+
+The recovered agenda tests initially failed two visibility cases and now pass. All 463 planning
+and scheduling tests, affected types, lint, complexity, and the production build pass. Fourteen
+fresh authenticated journeys pass; thirty-two responsive captures cover four states in both themes.
+Independent source review found no issues. The new audit retains the confirmed phone-review
+hierarchy defect and other full-flow findings. Keeping a correction's acceptance separate from the
+full journey prevents historical screenshots from silently becoming a launch verdict.
+
+#### Daily workload recovery plan
+
+Recover the read-only personal-workload MCP App using the existing embedded-app runtime and live
+resource permissions. Verify day boundaries, overlapping timers, unknown estimates, fixed daily
+capacity assumptions, filtered breakdowns, authorization, and JSON fallback. Keep the old captures
+and test transcripts in private recovery storage. Exercise the current resource and protocol in the
+existing isolated embedded-app verifier before accepting the slice; local protocol evidence does
+not establish installation in a production host.
+
 ### [LEGAL-POLICIES-002] Keep policy versions easy to navigate
 
 - **Status**: REVIEW

@@ -157,6 +157,12 @@ function GoToTodayAction({ plan }: { readonly plan: ReadyPlanningController }): 
   );
 }
 
+function upcomingKind(kind: string): JSX.Element | undefined {
+  return kind === 'Event' ? (
+    <span className="text-on-surface-variant text-label-small">{kind}</span>
+  ) : undefined;
+}
+
 /** Offer an explicit start while leaving confirmation itself timer-free. */
 export function ConfirmedStage({ plan }: { readonly plan: ReadyPlanningController }): JSX.Element {
   const next = nextFocus(plan);
@@ -180,10 +186,10 @@ export function ConfirmedStage({ plan }: { readonly plan: ReadyPlanningControlle
     .sort((a, b) => a.startsAt.localeCompare(b.startsAt))
     .slice(0, 4);
   return (
-    <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,0.8fr)]">
+    <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,0.8fr)]">
       <Card className="bg-primary-container min-w-0">
-        <CardContent className="space-y-6 py-8">
-          <span className="text-primary text-display-small" aria-hidden="true">
+        <CardContent className="space-y-4 p-4 sm:p-5">
+          <span className="text-primary text-display-small block" aria-hidden="true">
             ✳
           </span>
           <div className="space-y-2">
@@ -216,15 +222,17 @@ export function ConfirmedStage({ plan }: { readonly plan: ReadyPlanningControlle
               <EntityListRow
                 key={item.id}
                 interactive={false}
-                title={item.title}
+                title={
+                  <span className="text-label-large block break-words whitespace-normal">
+                    {item.title}
+                  </span>
+                }
                 leading={
-                  <span className="text-on-surface-variant text-label-small w-16 tabular-nums">
+                  <span className="text-on-surface-variant text-label-small w-14 tabular-nums">
                     {clock(item.startsAt, plan.timezone)}
                   </span>
                 }
-                trailing={
-                  <span className="text-on-surface-variant text-label-small">{item.kind}</span>
-                }
+                trailing={upcomingKind(item.kind)}
               />
             ))}
           </EntityList>

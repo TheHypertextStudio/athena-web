@@ -1,7 +1,11 @@
 import type { Metadata } from 'next';
-import type { JSX, ReactNode } from 'react';
+import type { JSX } from 'react';
 
-import { SUPPORT_EMAIL } from '@/lib/support-contact';
+import {
+  LegalPolicyContact,
+  LegalPolicyDocument,
+  type LegalPolicySection,
+} from '@/components/marketing/legal-policy-document';
 
 /** Terms-of-service metadata. */
 export const metadata: Metadata = {
@@ -9,72 +13,99 @@ export const metadata: Metadata = {
   description: 'The terms governing use of Docket and its connected services.',
 };
 
-/** One terms section in the public legal-page register. */
-function TermsSection({ title, children }: { title: string; children: ReactNode }): JSX.Element {
-  return (
-    <section className="border-outline-variant flex flex-col gap-3 border-t pt-7">
-      <h2 className="font-display text-ink text-2xl tracking-tight">{title}</h2>
-      <div className="text-ink-muted flex flex-col gap-3 leading-relaxed">{children}</div>
-    </section>
-  );
-}
-
-/** Public terms of service for Docket. */
-export default function TermsPage(): JSX.Element {
-  return (
-    <article className="mx-auto flex w-full max-w-3xl flex-col gap-10 px-6 pt-20 pb-24">
-      <header>
-        <p className="text-ink-muted text-sm font-medium">Legal</p>
-        <h1 className="font-display text-display-large-small text-ink mt-4 tracking-tight">
-          Terms of service
-        </h1>
-        <p className="text-ink-muted mt-4">Effective August 28, 2026</p>
-      </header>
-
-      <TermsSection title="Agreement and eligibility">
-        <p>
-          These terms are an agreement between you and The Hypertext Studio for use of Docket. By
-          creating an account or using Docket, you accept them. You must be able to form a binding
-          contract and must use the service in compliance with applicable law.
-        </p>
-      </TermsSection>
-
-      <TermsSection title="Accounts and connected services">
-        <p>
-          You are responsible for the activity under your account, protecting your passkeys and
-          recovery codes, and maintaining accurate contact information. Only connect accounts and
-          organizations you are authorized to access. Third-party services such as Google remain
-          governed by their own terms, and you can disconnect them at any time.
-        </p>
-      </TermsSection>
-
-      <TermsSection title="Your content">
-        <p>
-          You retain ownership of content you submit or synchronize. You grant Docket a limited
-          license to host, process, reproduce, and transmit that content only as needed to operate,
-          secure, support, and improve the service. You represent that you have the rights needed to
-          provide the content and authorize requested connector actions.
-        </p>
-      </TermsSection>
-
-      <TermsSection title="Docket and Docket Pro">
+const sections: readonly LegalPolicySection[] = [
+  {
+    title: 'Operator and scope',
+    body: (
+      <p>
+        These terms are an agreement between you and Hypertext Studio for Docket, including Docket
+        Pro, Athena, and connected services we provide. By creating an account or using Docket, you
+        accept the terms that apply to you. If you act for an organization, you must have authority
+        to bind it.
+      </p>
+    ),
+  },
+  {
+    title: 'Eligibility',
+    body: (
+      <p>
+        You must be at least 16 to create a hosted Docket account. If you are below the age of
+        adulthood where you live, a parent or legal guardian must agree to these terms when required
+        for a valid agreement. Purchases must be made by an adult or someone authorized to buy for
+        an organization. You must use Docket in compliance with applicable law.
+      </p>
+    ),
+  },
+  {
+    title: 'Accounts',
+    body: (
+      <p>
+        You are responsible for activity under your account, protecting your passkeys and recovery
+        codes, and maintaining accurate contact information. Only connect accounts and organizations
+        you are authorized to access. Third-party services remain governed by their own terms.
+        Connection settings let you disconnect services; linked sign-in identities may require you
+        to disconnect dependent workspace connections and preserve a way to sign in first.
+      </p>
+    ),
+  },
+  {
+    title: 'Your content',
+    body: (
+      <p>
+        You retain ownership of content you submit or synchronize. You grant Hypertext Studio a
+        limited license to host, process, reproduce, and transmit that content only as needed to
+        operate, secure, support, and deliver the features you request. This license does not give
+        us a general right to use your content to improve products or train models. You must have
+        the rights needed to provide the content and authorize requested connector actions.
+      </p>
+    ),
+  },
+  {
+    title: 'Product features',
+    body: (
+      <>
         <p>
           Docket is available without charge for a personal workspace with planning, scheduling, and
-          time tracking. Docket Pro costs USD $8 per organization each month, plus tax where
-          required. Docket Pro adds shared work, integrations, MCP, and current Athena
-          functionality.
+          time tracking. Docket Pro adds shared work, integrations, MCP, and current Athena
+          functionality. Available features and connection requirements are described in the
+          product.
+        </p>
+        <p>
+          Athena uses model providers or a Lattice instance you connect to process the requests and
+          context needed for a feature. Generated suggestions may be incomplete or wrong. Review
+          suggestions and consequential actions before relying on them, and configure permissions
+          and approvals to suit the work you delegate.
+        </p>
+        <p>
+          Workspace permissions determine who can see or manage shared work. Work you place in an
+          organization may remain there after you leave. Personal Athena conversations are separate
+          from workspace agent sessions and shared records. The Privacy Policy describes these
+          distinctions and connected-service processing.
+        </p>
+      </>
+    ),
+  },
+  {
+    title: 'Billing and refunds',
+    body: (
+      <>
+        <p>
+          Docket Pro costs USD $8 per organization each month, plus tax where required. The price,
+          billing interval, and first charge date are shown during Checkout. Only an authorized
+          workspace administrator may purchase or manage the subscription.
         </p>
         <p>
           An eligible organization may receive one 14-day trial that requires a payment method.
-          Unless an authorized workspace administrator cancels before the trial ends, Docket Pro
-          begins monthly billing on the first charge date shown during Checkout. The subscription
-          renews monthly until an authorized workspace administrator cancels it.
+          Starting checkout again does not add another trial. Unless an authorized workspace
+          administrator cancels before the trial ends, Docket Pro begins monthly billing on the
+          first charge date shown during Checkout. The subscription renews monthly until an
+          authorized workspace administrator cancels it.
         </p>
         <p>
           Pro features remain available through the paid period end shown in Billing settings. After
-          that date, shared work becomes read-only. You can export or reactivate at any time. Docket
-          does not delete workspace data when Pro ends. Confirmed account deletion through the
-          Danger Zone in Settings is a separate action.
+          that date, shared work becomes read-only. You can export or reactivate while the workspace
+          remains available. Docket does not delete workspace data when Pro ends. Confirmed account
+          deletion through the Danger Zone in Settings is a separate action.
         </p>
         <p>
           If payment fails, Pro remains available through the seven-day recovery deadline shown in
@@ -86,28 +117,53 @@ export default function TermsPage(): JSX.Element {
           stack, and they may end on their stated review or expiration date. Docket shows the
           effective discount before the next charge.
         </p>
-      </TermsSection>
-
-      <TermsSection title="Acceptable use">
         <p>
-          Do not use Docket to break the law, infringe rights, access accounts without permission,
-          distribute malware, evade security controls, interfere with the service, scrape it at
-          unreasonable volume, or expose another person&apos;s confidential information without
-          authorization.
+          Direct purchases are non-refundable, including unused subscription time, except to correct
+          billing errors or where applicable law requires a refund, withdrawal right, or other
+          remedy. Canceling stops future renewals; it does not itself refund a charge. Contact
+          product support about a billing error. Nothing in these terms limits mandatory consumer
+          rights.
         </p>
-      </TermsSection>
-
-      <TermsSection title="Service changes and termination">
+      </>
+    ),
+  },
+  {
+    title: 'Acceptable use',
+    body: (
+      <p>
+        Do not use Docket to break the law, infringe rights, access accounts without permission,
+        distribute malware, evade security controls, interfere with the service, scrape it at
+        unreasonable volume, or expose another person&apos;s confidential information without
+        authorization.
+      </p>
+    ),
+  },
+  {
+    title: 'Changes and termination',
+    body: (
+      <>
         <p>
           We may change, suspend, or discontinue features and will use reasonable efforts to give
-          notice of material changes. You may stop using Docket and request deletion at any time. We
-          may suspend access to address security risks, legal requirements, nonpayment, or material
+          notice of material changes. You may stop using Docket and request account deletion. We may
+          suspend access to address security risks, legal requirements, nonpayment, or material
           violations of these terms. Available export and recovery periods are described in the
           product and Privacy Policy.
         </p>
-      </TermsSection>
-
-      <TermsSection title="Disclaimers and liability">
+        <p>
+          These terms are published October 14, 2026. They apply to new users when they create an
+          account and to existing users on November 13, 2026, after 30 days&apos; notice. Until
+          then, the prior terms continue to govern existing users. Changes apply prospectively and
+          do not remove rights or remedies for earlier events. We will give advance notice of future
+          material changes, and any notice or consent required by applicable law. Prior versions
+          remain available through the history link above.
+        </p>
+      </>
+    ),
+  },
+  {
+    title: 'Warranties and liability',
+    body: (
+      <>
         <p>
           Docket is provided on an &ldquo;as is&rdquo; and &ldquo;as available&rdquo; basis to the
           extent permitted by law. We do not guarantee uninterrupted operation or that synchronized
@@ -115,22 +171,47 @@ export default function TermsPage(): JSX.Element {
           and backups for critical work.
         </p>
         <p>
-          To the maximum extent permitted by law, The Hypertext Studio is not liable for indirect,
+          To the maximum extent permitted by law, Hypertext Studio is not liable for indirect,
           incidental, special, consequential, or punitive damages, or for lost profits, revenues,
           data, or goodwill arising from use of Docket.
         </p>
-      </TermsSection>
-
-      <TermsSection title="Contact and changes">
         <p>
-          We may revise these terms and will post the effective date above. Material changes apply
-          prospectively after reasonable notice. Questions can be sent to{' '}
-          <a className="text-ink underline" href={`mailto:${SUPPORT_EMAIL}`}>
-            {SUPPORT_EMAIL}
-          </a>
-          .
+          These provisions apply only where lawful. They do not limit liability or statutory
+          warranties, remedies, or consumer protections that cannot lawfully be limited or excluded.
         </p>
-      </TermsSection>
-    </article>
+      </>
+    ),
+  },
+  {
+    title: 'Governing law',
+    body: (
+      <p>
+        Nevada law governs these terms, subject to mandatory protections under the law of your place
+        of residence. Disputes may be brought in the state or federal courts located in Clark
+        County, Nevada, unless applicable law gives you a right to bring a claim in your home forum
+        or requires another court. Nothing here removes those mandatory protections or home-forum
+        rights.
+      </p>
+    ),
+  },
+  { title: 'Contact', body: <LegalPolicyContact /> },
+];
+
+/** Public Docket terms with prospective dates for existing users. */
+export default function TermsPage(): JSX.Element {
+  return (
+    <LegalPolicyDocument
+      title="Terms of service"
+      dates={
+        <>
+          <p>Published October 14, 2026.</p>
+          <p>
+            Effective for existing users November 13, 2026; for new users when they create an
+            account.
+          </p>
+        </>
+      }
+      sections={sections}
+    />
   );
 }

@@ -110,3 +110,18 @@ describe('deliverWebNotification', () => {
     expect(row.body).toMatchObject({ url: 'https://app.example.com/tasks/1' });
   });
 });
+
+it('persists the policy destination carried by a staff announcement body', async () => {
+  const userId = await seedUser(db, schema, 'PolicyNoticeDestination');
+  const { intentId, deliveryId } = await seedIntentAndDelivery(userId);
+  const row = await deliverWebNotification(db, {
+    intentId,
+    deliveryId,
+    userId,
+    organizationId: null,
+    category: 'service_announcement',
+    subject: 'Policy update',
+    body: { text: 'Read the updated policy.', webUrl: '/terms' },
+  });
+  expect(row.body).toMatchObject({ title: 'Policy update', url: '/terms' });
+});

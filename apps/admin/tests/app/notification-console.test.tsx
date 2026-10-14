@@ -7,6 +7,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({ push: vi.fn() }));
 
+vi.mock('@docket/env/admin', () => ({
+  env: { NEXT_PUBLIC_APP_URL: 'https://clearthedocket.com' },
+}));
+
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: mocks.push, replace: vi.fn() }),
 }));
@@ -160,6 +164,32 @@ describe('NotificationAnnouncementConsole', () => {
       (button) => button.textContent.trim() === name,
     );
   }
+
+  it('loads a prospective policy notice without creating or sending it', async () => {
+    const resolved = await render();
+    const button = buttonNamed('Use October 2026 policy notice');
+    expect(button).toBeDefined();
+    await act(async () => {
+      button?.click();
+    });
+    expect(resolved.onDraftChange).toHaveBeenCalledWith('audienceType', 'all_users');
+    expect(resolved.onDraftChange).toHaveBeenCalledWith('channels', ['web', 'email']);
+    expect(resolved.onDraftChange).toHaveBeenCalledWith('webUrl', '/terms');
+    expect(resolved.onDraftChange).toHaveBeenCalledWith(
+      'bodyText',
+      expect.stringContaining('November 13, 2026'),
+    );
+    expect(resolved.onDraftChange).toHaveBeenCalledWith(
+      'bodyText',
+      expect.stringContaining('https://clearthedocket.com/legal/history'),
+    );
+    expect(resolved.onDraftChange).toHaveBeenCalledWith(
+      'bodyText',
+      expect.stringContaining('legal@hypertext.studio'),
+    );
+    expect(resolved.onCreateDraft).not.toHaveBeenCalled();
+    expect(resolved.onSendNow).not.toHaveBeenCalled();
+  });
 
   it('opens on the compose stage with the announcement fields', async () => {
     await render();

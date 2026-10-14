@@ -1,3 +1,4 @@
+import { NotificationContent } from '../../src/schemas/content';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -115,5 +116,16 @@ describe('notification service DTOs', () => {
       push: { title: 'Scheduled maintenance', body: 'Maintenance tonight.' },
     });
     expect(preview.sms?.text).toContain('Docket');
+  });
+});
+
+describe('notification content destination', () => {
+  it.each([
+    'https://outside.example',
+    '//outside.example',
+    '/\\outside.example',
+    'javascript:alert(1)',
+  ])('rejects an unsafe inbox destination %s', (webUrl) => {
+    expect(NotificationContent.safeParse({ text: 'Policy update', webUrl }).success).toBe(false);
   });
 });

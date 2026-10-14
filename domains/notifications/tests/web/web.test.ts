@@ -75,3 +75,27 @@ describe('notificationDeliveryHintsFromBody', () => {
     ).toEqual([]);
   });
 });
+
+describe('persisted announcement destination', () => {
+  it('opens the internal policy destination saved in notification content', () => {
+    const projection = renderNotificationWebProjection({
+      category: 'service_announcement',
+      subject: 'Policy update',
+      body: { text: 'Read the policy', webUrl: '/terms' },
+    });
+    expect(projection.body.url).toBe('/terms');
+  });
+  it.each([
+    'https://outside.example/terms',
+    '//outside.example',
+    '/\\outside.example',
+    'javascript:alert(1)',
+  ])('does not project an unsafe persisted destination %s', (webUrl) => {
+    const projection = renderNotificationWebProjection({
+      category: 'service_announcement',
+      subject: 'Policy update',
+      body: { text: 'Read the policy', webUrl },
+    });
+    expect(projection.body.url).toBeUndefined();
+  });
+});

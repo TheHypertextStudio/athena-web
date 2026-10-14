@@ -85,3 +85,11 @@ describe('notificationDraftToCreateInput scheduling', () => {
     expect(input.body).toEqual({ text: 'Back shortly.' });
   });
 });
+
+it('preserves the visible internal inbox destination when creating a draft', () => {
+  const input = notificationDraftToCreateInput(draft({ webUrl: '/terms' }));
+  expect(input.body).toEqual({
+    text: 'Docket will be briefly unavailable tonight.',
+    webUrl: '/terms',
+  });
+});

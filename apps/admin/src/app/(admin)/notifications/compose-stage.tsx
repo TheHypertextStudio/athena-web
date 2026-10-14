@@ -12,6 +12,9 @@ import {
 } from '@docket/ui/primitives';
 import { type JSX, type SyntheticEvent } from 'react';
 
+import { env } from '@docket/env/admin';
+
+import { legalPolicyAnnouncementDraft } from './legal-policy-notice';
 import { AudiencePicker, BroadcastWarning } from './audience-picker';
 import {
   notificationAudienceSegments,
@@ -77,16 +80,9 @@ export function ComposeStage({
 
   return (
     <form className="flex flex-col gap-5" onSubmit={submit}>
-      <Field label="Title" htmlFor="announcement-subject">
-        <Input
-          id="announcement-subject"
-          value={draft.subject}
-          onChange={(event) => {
-            onDraftChange('subject', event.target.value);
-          }}
-          placeholder="Scheduled maintenance tonight"
-        />
-      </Field>
+      <LegalPolicyNoticePreset pending={pending} onDraftChange={onDraftChange} />
+      <AnnouncementTitle draft={draft} onDraftChange={onDraftChange} />
+      <AnnouncementDestination draft={draft} onDraftChange={onDraftChange} />
 
       <Field label="Message" htmlFor="announcement-body">
         <Textarea
@@ -322,4 +318,72 @@ function toggleChannel(
 ): NotificationAnnouncementDraft['channels'] {
   if (selected.includes(channel)) return selected.filter((item) => item !== channel);
   return [...selected, channel];
+}
+
+/** Load notice copy without creating an intent or sending a message. */
+function LegalPolicyNoticePreset({
+  pending,
+  onDraftChange,
+}: Pick<ComposeStageProps, 'pending' | 'onDraftChange'>): JSX.Element {
+  function loadNotice(): void {
+    const notice = legalPolicyAnnouncementDraft(env.NEXT_PUBLIC_APP_URL);
+    onDraftChange('subject', notice.subject);
+    onDraftChange('bodyText', notice.bodyText);
+    onDraftChange('webUrl', notice.webUrl ?? '');
+    onDraftChange('audienceType', notice.audienceType);
+    onDraftChange('audienceValue', notice.audienceValue);
+    onDraftChange('channels', notice.channels);
+    onDraftChange('priority', notice.priority);
+    onDraftChange('replyPolicy', notice.replyPolicy);
+    onDraftChange('scheduledAt', notice.scheduledAt);
+  }
+  return (
+    <div className="flex flex-col items-start gap-2">
+      <Button type="button" variant="secondary" disabled={pending} onClick={loadNotice}>
+        Use October 2026 policy notice
+      </Button>
+      <Text as="p" token="body-small" tone="muted">
+        Publish the linked policies before sending. Existing users need 30 days of notice before the
+        updated terms apply.
+      </Text>
+    </div>
+  );
+}
+
+/** The subject shared by the announcement's delivery channels. */
+function AnnouncementTitle({
+  draft,
+  onDraftChange,
+}: Pick<ComposeStageProps, 'draft' | 'onDraftChange'>): JSX.Element {
+  return (
+    <Field label="Title" htmlFor="announcement-subject">
+      <Input
+        id="announcement-subject"
+        value={draft.subject}
+        onChange={(event) => {
+          onDraftChange('subject', event.target.value);
+        }}
+        placeholder="Scheduled maintenance tonight"
+      />
+    </Field>
+  );
+}
+
+/** Keep the inbox destination visible and editable before an announcement is created. */
+function AnnouncementDestination({
+  draft,
+  onDraftChange,
+}: Pick<ComposeStageProps, 'draft' | 'onDraftChange'>): JSX.Element {
+  return (
+    <Field label="Inbox destination (optional internal route)" htmlFor="announcement-destination">
+      <Input
+        id="announcement-destination"
+        value={draft.webUrl ?? ''}
+        placeholder="/terms"
+        onChange={(event) => {
+          onDraftChange('webUrl', event.target.value);
+        }}
+      />
+    </Field>
+  );
 }

@@ -1,17 +1,19 @@
 import type { NotificationCategory } from '../schemas';
-import { NotificationDeliveryHint } from '../schemas';
+import { NotificationDeliveryHint, NotificationWebUrl } from '../schemas';
 import type { NotificationWebProjection, NotificationWebProjectionInput } from './types';
 
 /** Renders a notification intent into the existing Hub inbox row shape. */
 export function renderNotificationWebProjection(
   input: NotificationWebProjectionInput,
 ): NotificationWebProjection {
+  const persistedUrl = NotificationWebUrl.safeParse(input.body.webUrl);
+  const url = input.url ?? (persistedUrl.success ? persistedUrl.data : undefined);
   return {
     type: notificationWebTypeForCategory(input.category),
     body: {
       title: input.subject,
       ...(input.body.text ? { summary: input.body.text } : {}),
-      ...(input.url ? { url: input.url } : {}),
+      ...(url ? { url } : {}),
       category: input.category,
     },
   };

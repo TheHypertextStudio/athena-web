@@ -7,6 +7,19 @@
 
 ## Active Tasks
 
+### [LEGAL-POLICIES-001] Make Docket policies clear and consistent
+
+- **Status**: REVIEW
+- **Started**: 2026-10-14
+- **Priority**: P1
+- **Description**: Publish consistent Studio operator, contact, eligibility, purchase, and privacy terms while preserving Docket's actual product behavior and existing users' rights.
+- **Plan**: Preserve prior policies at stable history routes; verify source claims; update the public pages and legal contacts; prepare a notice in the existing service-announcement workflow; validate affected routes, notice behavior, and rendered layouts.
+- **Acceptance**: Prior policies remain readable; legal contacts are separate from product support; existing users receive prospective notice; policy claims match source behavior; focused tests and affected package checks pass.
+- **Files changed**: Public terms/privacy and dated history routes; shared legal layout/contact constants; the existing service-announcement composer, validated inbox destinations, and focused tests.
+- **Validation**: Full web and admin test suites, package lint/typechecks, affected production builds, and the complexity and design-token gates passed. Anonymous desktop/mobile route captures passed overflow checks; current page titles were adjusted after visual review.
+- **Learnings**: Sign-in identity unlinking differs from workspace connector disconnection. Personal Athena conversations differ from organization work and registered-agent sessions.
+- **Blockers**: Verify the official mailbox, publish the routes, and deliver the prepared notice through the existing announcement workflow before the existing-user effective date. Provider-contract and operational retention facts require separate confirmation.
+
 ### [MCP-AUTH-REFRESH-003] Diagnose recurring production refresh failures
 
 - **Status**: REVIEW (fresh post-restart renewal passed; interrupted persistence remains reproducible)

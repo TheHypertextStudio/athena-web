@@ -4,6 +4,8 @@ export interface NotificationAnnouncementDraft {
   readonly subject: string;
   /** Plain-text body used by web, email, SMS, and push previews. */
   readonly bodyText: string;
+  /** Optional internal route opened from the inbox announcement. */
+  readonly webUrl?: string;
   /** Audience selector currently chosen by staff. */
   readonly audienceType: 'user' | 'users' | 'all_users' | 'segment';
   /** User id, comma-separated user ids, or segment key depending on {@link audienceType}. */
@@ -37,7 +39,7 @@ export interface NotificationIntentCreateBody {
   /** Shared notification title. */
   readonly subject: string;
   /** Shared plain-text notification body. */
-  readonly body: { readonly text: string };
+  readonly body: { readonly text: string; readonly webUrl?: string };
   /** Reply routing behavior. */
   readonly replyPolicy: NotificationAnnouncementDraft['replyPolicy'];
   /** Optional scheduled send time. */
@@ -48,6 +50,7 @@ export interface NotificationIntentCreateBody {
 export function notificationDraftToCreateInput(
   draft: NotificationAnnouncementDraft,
 ): NotificationIntentCreateBody {
+  const webUrl = draft.webUrl?.trim();
   return {
     senderType: 'staff',
     category: 'service_announcement',
@@ -55,7 +58,7 @@ export function notificationDraftToCreateInput(
     audience: audienceFromDraft(draft),
     channels: [...draft.channels],
     subject: draft.subject.trim(),
-    body: { text: draft.bodyText.trim() },
+    body: { text: draft.bodyText.trim(), ...(webUrl ? { webUrl } : {}) },
     replyPolicy: draft.replyPolicy,
     ...(draft.scheduledAt.trim()
       ? { scheduledAt: datetimeLocalAsUtcIso(draft.scheduledAt.trim()) }

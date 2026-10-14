@@ -1,12 +1,13 @@
 /**
- * Repo policy: no legacy `hypertext.studio` hostname may appear in production source.
+ * Repo policy: legacy product hosts are forbidden; the approved official legal mailbox is allowed.
  *
  * @remarks
- * Production must leave no user-facing Docket or Athena URL under `hypertext.studio`,
- * with exactly one exception — the interim Athena inbound-mail host, which must be a
- * *configuration value* so the final domain replaces it without a code change.
+ * Production must leave no user-facing Docket or Athena URL under `hypertext.studio`.
+ * The official Studio legal mailbox is a separate operator contact, not a product host.
+ * Only that exact mailbox may appear as plain text or a mailto address. The interim Athena
+ * inbound-mail host must remain a configuration value so it can change without a code edit.
  *
- * A hostname in source is what makes that impossible to honour. It survives every environment
+ * An unapproved hostname in source is what makes that impossible to honour. It survives every environment
  * change, it is invisible in a `gh variable list`, and the only thing that finds it is someone
  * grepping at the wrong moment. The compliance baseline found five such literals across the API
  * error module, the MCP server, and the marketing legal pages; each one would have kept a
@@ -15,10 +16,9 @@
  * This test is the enforcement. It reads the working tree — not `git ls-files` — so a literal
  * fails before it is ever staged.
  *
- * **The literal appears here and nowhere else in the repo's own code.** A ban has to be able
- * to name what it bans, and a test file is not production source. The corresponding *runtime*
- * check is deliberately structural instead: every host comes from its own variable, so every
- * user-facing host to sit under the configured apex, which catches a half-applied cutover to
+ * A ban has to be able to name what it bans, and a test file is not production source.
+ * The runtime check is structural: every host comes from its own variable, so every user-facing
+ * host sits under the configured apex. This catches a half-applied cutover to
  * any domain rather than only the one somebody remembered to write down.
  */
 import { readdirSync, readFileSync, statSync } from 'node:fs';
@@ -123,13 +123,65 @@ function shippedSourceFiles(): string[] {
 function legacyHits(file: string): string[] {
   const contents = readFileSync(file, 'utf8');
   if (!contents.includes(LEGACY_APEX)) return [];
-  return contents
-    .split('\n')
-    .map((line, index) =>
-      line.includes(LEGACY_APEX) ? `${relative(REPO_ROOT, file)}:${index + 1}` : '',
-    )
-    .filter((hit) => hit.length > 0);
+  return legacyReferenceLines(contents).map((line) => `${relative(REPO_ROOT, file)}:${line}`);
 }
+
+/** Match only the approved mailbox, excluding other local parts, domain suffixes, and URL users. */
+const OFFICIAL_MAILBOX_REFERENCE = new RegExp(
+  String.raw`(?<![\p{L}\p{N}]')(?<![\p{L}\p{N}_!#$%&*+/=?^\x60{|}~:@.-])(?:mailto:)?legal@${LEGACY_APEX.replaceAll('.', '\\.')}(?![\p{L}\p{N}_@-]|\.[\p{L}\p{N}_-]|[/\\])`,
+  'gu',
+);
+
+/** One-based lines containing an unapproved reference to the former product apex. */
+function legacyReferenceLines(contents: string): number[] {
+  return contents.split('\n').flatMap((line, index) => {
+    const withoutOfficialMailbox = line.replaceAll(OFFICIAL_MAILBOX_REFERENCE, '');
+    return withoutOfficialMailbox.includes(LEGACY_APEX) ? [index + 1] : [];
+  });
+}
+
+// The operator's official legal mailbox is intentionally independent of the product host.
+const OFFICIAL_LEGAL_MAILBOX = `legal@${LEGACY_APEX}`;
+
+describe('official legal mailbox boundary', () => {
+  it.each([
+    `const email = '${OFFICIAL_LEGAL_MAILBOX}';`,
+    `For legal notices: ${OFFICIAL_LEGAL_MAILBOX}. Hypertext Studio.`,
+    `<a href="mailto:${OFFICIAL_LEGAL_MAILBOX}">Legal</a>`,
+    `${OFFICIAL_LEGAL_MAILBOX} and mailto:${OFFICIAL_LEGAL_MAILBOX}`,
+  ])('allows the exact official mailbox: %s', (source) => {
+    expect(legacyReferenceLines(source)).toEqual([]);
+  });
+
+  it.each([
+    `https://${LEGACY_APEX}/terms`,
+    `https://athena.${LEGACY_APEX}/privacy`,
+    `support@${LEGACY_APEX}`,
+    `contact@${LEGACY_APEX}`,
+    `privacy@${LEGACY_APEX}`,
+    `notlegal@${LEGACY_APEX}`,
+    `other!legal@${LEGACY_APEX}`,
+    `other'legal@${LEGACY_APEX}`,
+    `legal+test@${LEGACY_APEX}`,
+    `legal@sub.${LEGACY_APEX}`,
+    `${OFFICIAL_LEGAL_MAILBOX}.evil.test`,
+    `mailto:${OFFICIAL_LEGAL_MAILBOX}.evil.test`,
+    `https://${OFFICIAL_LEGAL_MAILBOX}/terms`,
+    `https://${OFFICIAL_LEGAL_MAILBOX}`,
+    `${OFFICIAL_LEGAL_MAILBOX}/privacy`,
+    `mailto:support@${LEGACY_APEX}`,
+  ])('rejects other addresses and legacy URLs: %s', (source) => {
+    expect(legacyReferenceLines(source)).toEqual([1]);
+  });
+
+  it('retains the offending line when an allowed mailbox shares it with a legacy URL', () => {
+    expect(
+      legacyReferenceLines(
+        `Allowed: ${OFFICIAL_LEGAL_MAILBOX}\n${OFFICIAL_LEGAL_MAILBOX} https://${LEGACY_APEX}`,
+      ),
+    ).toEqual([2]);
+  });
+});
 
 describe('legacy-host policy', () => {
   const files = shippedSourceFiles();
@@ -140,7 +192,7 @@ describe('legacy-host policy', () => {
     expect(files.some((f) => f.endsWith(join('packages', 'env', 'src', 'api.ts')))).toBe(true);
   });
 
-  it('contains no legacy hostname anywhere in production source', () => {
+  it('contains no legacy product hosts or unapproved Studio addresses', () => {
     const hits = files.flatMap(legacyHits);
     expect(
       hits,

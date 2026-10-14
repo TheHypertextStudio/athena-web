@@ -7,6 +7,40 @@
 
 ## Active Tasks
 
+### [LEGAL-POLICIES-005] Explain legal bases for processing
+
+- **Status**: REVIEW
+- **Started**: 2026-10-14
+- **Priority**: P1
+- **Description**: Explain the legal bases that apply where data-protection law requires them, without treating every activity as consent-based.
+- **Plan**: Describe contract performance, balanced legitimate interests, required records, and consent for optional or sensitive processing where required.
+- **Acceptance**: Consent-required processing remains disabled until valid consent is obtained; withdrawal does not change the lawfulness of earlier processing; archived policy text remains unchanged.
+- **Validation**: Require current-policy rendering and navigation checks, affected lint/typechecks, and the native production build.
+
+### [LEGAL-POLICIES-004] Explain database recovery and independent copies
+
+- **Status**: REVIEW
+- **Started**: 2026-10-14
+- **Priority**: P1
+- **Description**: Explain the verified production database recovery window separately from account recovery, including the limits of deletion when independent database copies exist.
+- **Plan**: Update the draft retention disclosure from authenticated provider evidence; keep copy-retention and erasure verification as a release gate; preserve archived policy text.
+- **Acceptance**: The draft states the six-hour database history window, distinguishes the account-deletion recovery period, and makes no automatic branch-purge promise.
+- **Files changed**: The current privacy policy's retention section.
+- **Validation**: Require policy-route tests, web lint/typecheck, the production build, and the complexity check; confirm prior policy documents remain unchanged.
+- **Retrospective**: Production history and independent database copies need separate retention disclosures.
+
+### [LEGAL-POLICIES-003] Preserve the official legal mailbox in host checks
+
+- **Status**: REVIEW
+- **Started**: 2026-10-14
+- **Priority**: P1
+- **Description**: Keep the approved Studio legal mailbox available while enforcing the ban on legacy Docket hosts and unapproved Studio contact addresses.
+- **Plan**: Add exact-mailbox regression cases, narrow the reference scan, and verify the gate with the isolated dependency graph and normal commit checks.
+- **Acceptance**: Plain and mailto forms of the official legal mailbox pass; legacy product URLs, other addresses, and misleading address variants fail.
+- **Files changed**: The existing host-policy scan and its regression cases.
+- **Validation**: Require regression coverage for the exact mailbox boundary, the complete environment suite, focused policy tests, and affected package lint/typechecks.
+- **Retrospective**: Operator contact addresses and product hosts have different purposes; allowing an exact legal mailbox must not permit legacy product URLs.
+
 ### [WORK-RECOVERY-001] Recover useful unfinished work and deliver work templates
 
 - **Status**: IN_PROGRESS

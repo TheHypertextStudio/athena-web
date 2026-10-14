@@ -39,6 +39,15 @@ const sections: readonly LegalPolicySection[] = [
           keys or full payment-card details; Stripe processes payment information.
         </p>
         <p>
+          Where data-protection law requires a legal basis, we rely on performing our agreement for
+          necessary account, purchase, and requested feature processing; legitimate interests in
+          security, preventing abuse, and providing support where those interests are not overridden
+          by your rights; and legal obligations for required accounting and legal records. We rely
+          on consent where required for optional or sensitive processing. Processing that requires
+          consent must remain disabled until valid consent is obtained. You can withdraw consent
+          without changing the lawfulness of earlier processing.
+        </p>
+        <p>
           When you authorize a connector, we process its account identifier, granted permissions,
           encrypted access and refresh tokens, synchronization state, and relevant provider data.
           Google Calendar access supports event display and requested editing; Tasks supports
@@ -144,6 +153,13 @@ const sections: readonly LegalPolicySection[] = [
           period, the deletion process removes your account and associated personal records and
           solely occupied workspaces. Shared organization records may remain for other members and
           their work history. Export the data available to you before deletion.
+        </p>
+        <p>
+          Our production database currently keeps six hours of history for point-in-time recovery.
+          This window is separate from the 14-day account-deletion recovery period. Database
+          branches used for development or previews can retain independent copies beyond that
+          window. Deleting data from production does not itself delete those copies, and a fixed
+          retention or erasure period for them is not currently confirmed.
         </p>
         <p>
           Security, legal, billing, and backup records may remain where needed for their purpose or

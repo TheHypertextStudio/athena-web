@@ -7,6 +7,18 @@
 
 ## Active Tasks
 
+### [LEGAL-POLICIES-002] Keep policy versions easy to navigate
+
+- **Status**: REVIEW
+- **Started**: 2026-10-14
+- **Priority**: P1
+- **Description**: Make archived Docket policies clearly identifiable and keep a nearby route to policy history and the current document, without changing archived policy text.
+- **Plan**: Review current and archived layouts at desktop/mobile sizes; add bounded archive navigation where needed; verify policy text and date preservation; inspect the established release path and deployed source identity read-only.
+- **Acceptance**: Each archive has clear version navigation, dates remain unambiguous, and release preflight distinguishes local source from the actual deployed hosts.
+- **Files changed**: Shared archive navigation, the two archived policy wrappers, focused policy tests, and the README.
+- **Validation**: Focused route tests, web lint/typecheck/build, and desktop/mobile captures passed. Archived article text and dates are unchanged. Read-only preflight confirmed the established production gate and identified deployed web/admin health-route drift for release verification.
+- **Retrospective**: Archive navigation belongs outside the preserved document so readers can identify a prior version and return to the current policy.
+
 ### [LEGAL-POLICIES-001] Make Docket policies clear and consistent
 
 - **Status**: REVIEW

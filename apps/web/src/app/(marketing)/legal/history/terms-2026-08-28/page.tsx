@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import type { JSX, ReactNode } from 'react';
 
+import { LegalPolicyArchive } from '@/components/marketing/legal-policy-document';
 import { SUPPORT_EMAIL } from '@/lib/support-contact';
 
 /** Terms-of-service metadata. */
@@ -21,7 +22,7 @@ function TermsSection({ title, children }: { title: string; children: ReactNode 
 
 /** Public terms of service for Docket. */
 const historicalDocument = (
-  <article className="mx-auto flex w-full max-w-3xl flex-col gap-10 px-6 pt-20 pb-24">
+  <article className="mx-auto flex w-full max-w-3xl flex-col gap-10 px-6 pt-8 pb-24">
     <header>
       <p className="text-ink-muted text-label-large">Legal</p>
       <h1 className="font-display text-display-small text-ink mt-4">Terms of service</h1>
@@ -132,5 +133,5 @@ const historicalDocument = (
 
 /** Render the unchanged prior policy document. */
 export default function HistoricalPolicyPage(): JSX.Element {
-  return historicalDocument;
+  return <LegalPolicyArchive policy="terms">{historicalDocument}</LegalPolicyArchive>;
 }

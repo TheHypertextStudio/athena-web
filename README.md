@@ -50,7 +50,7 @@ for schemas, settlement, lifecycle rules, and the dispatch kill switch.
 ## Public documentation
 
 Public legal policies are served at `/terms` and `/privacy`; `/legal/history` links to complete
-prior versions. Official legal and privacy contacts stay separate from configured product support.
+prior versions with navigation back to history and current policies. Official legal and privacy contacts stay separate from configured product support.
 For a policy change, publish the linked documents first, then use the staff service-announcement
 composer to prepare, review, and explicitly send the notice. Loading the October 2026 policy preset
 only fills the composer, including its visible internal inbox destination; it does not create or

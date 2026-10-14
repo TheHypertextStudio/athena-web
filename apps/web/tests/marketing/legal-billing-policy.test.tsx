@@ -79,12 +79,26 @@ describe('prior policy versions', () => {
   it('retains the prior terms and their original effective date', () => {
     render(<HistoricalTermsPage />);
     expect(screen.getByText('Effective August 28, 2026')).toBeInTheDocument();
+    expect(screen.getByRole('navigation', { name: 'Policy versions' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Policy history' })).toHaveAttribute(
+      'href',
+      '/legal/history',
+    );
+    expect(screen.getByRole('link', { name: 'Current terms' })).toHaveAttribute('href', '/terms');
     expect(screen.getByText(/secure, support, and improve the service/)).toBeInTheDocument();
   });
 
   it('retains the prior privacy policy and its original effective date', () => {
     render(<HistoricalPrivacyPage />);
     expect(screen.getByText('Effective September 8, 2026')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Policy history' })).toHaveAttribute(
+      'href',
+      '/legal/history',
+    );
+    expect(screen.getByRole('link', { name: 'Current privacy policy' })).toHaveAttribute(
+      'href',
+      '/privacy',
+    );
     expect(screen.getByRole('heading', { name: 'Google user data' })).toBeInTheDocument();
   });
 });

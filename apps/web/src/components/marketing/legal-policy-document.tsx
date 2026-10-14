@@ -72,3 +72,34 @@ export function LegalPolicyContact(): JSX.Element {
     </>
   );
 }
+
+/** Identify an archived policy and keep its version-navigation outside the preserved document. */
+export function LegalPolicyArchive({
+  children,
+  policy,
+}: {
+  readonly children: ReactNode;
+  readonly policy: 'terms' | 'privacy';
+}): JSX.Element {
+  const href = policy === 'terms' ? '/terms' : '/privacy';
+  const label = policy === 'terms' ? 'Current terms' : 'Current privacy policy';
+  return (
+    <>
+      <aside aria-label="Archived policy" className="mx-auto w-full max-w-3xl px-6 pt-8">
+        <p className="text-ink-muted text-label-large">Archived policy</p>
+        <nav
+          aria-label="Policy versions"
+          className="text-ink text-body-medium mt-3 flex flex-wrap gap-6"
+        >
+          <a className="underline" href={LEGAL_HISTORY_PATH}>
+            Policy history
+          </a>
+          <a className="underline" href={href}>
+            {label}
+          </a>
+        </nav>
+      </aside>
+      {children}
+    </>
+  );
+}

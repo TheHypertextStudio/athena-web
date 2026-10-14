@@ -134,6 +134,7 @@ describe('ui:// widget resources', () => {
       'ui://docket/updates',
       'ui://docket/views',
       'ui://docket/work-list',
+      'ui://docket/workload',
     ]);
     // The mimeType is how a host tells an app document from an ordinary HTML resource.
     for (const widget of widgets) expect(widget.mimeType).toBe(UI_MIME_TYPE);

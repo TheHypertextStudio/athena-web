@@ -114,7 +114,9 @@ export function buildServer(
   // three lists; only the tool list actually fires one, when a grant change alters what the
   // caller may call.
   const server = new McpServer(serverInfo(), {
-    instructions: TEMPLATE_GUIDANCE,
+    instructions: `${TEMPLATE_GUIDANCE}
+
+Proactively use view_workload during scheduling, daily planning, adding work, and feasibility discussions. Use the human caller’s local date, timezone, and explicit day-hours budget. Explain missing estimates and workspace scope. Viewing capacity never authorizes scheduling or rescheduling.`,
     capabilities: {
       tools: { listChanged: true },
       resources: { subscribe: true, listChanged: true },

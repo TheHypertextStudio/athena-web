@@ -37,8 +37,8 @@ completion rules follow the four delivery layers. Use linear history and one pus
 ## Task 3: Recover remaining product slices
 
 - [x] Recover missing relation-tool, placement, initiative-planning, and undo behavior.
-- [ ] Reconcile initiative connected-work creation/hierarchy and daily planning corrections.
-- [ ] Recover the daily-workload MCP App as a separate validated capability.
+- [x] Reconcile initiative connected-work creation/hierarchy and daily planning corrections.
+- [x] Recover the daily-workload MCP App as a separate validated capability.
 - [ ] Reconcile calendar/time/agenda, editor/navigation, people/team placement, ingestion, and
       API coverage candidates against current behavior; explain every superseded candidate.
 

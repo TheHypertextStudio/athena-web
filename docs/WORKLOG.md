@@ -92,6 +92,18 @@ and test transcripts in private recovery storage. Exercise the current resource 
 existing isolated embedded-app verifier before accepting the slice; local protocol evidence does
 not establish installation in a production host.
 
+#### Daily workload recovery validation
+
+Recovered the read-only workload tool and embedded resource. Fresh review reproduced calendar-date
+and accepted-allocation defects; regressions now pass with date-only comparisons and canonical
+split/shared allocations, including private-work filtering. Rapid navigation follows requested
+rather than rendered dates. Runtime verification also corrected the old app-document signature,
+used host canvas tokens for contrast, and waited for settled frame sizing. Ten viewport/theme
+combinations pass accessibility and overflow checks; touch targets, enlarged text, filters, retry,
+and stale responses pass. Broad MCP regression found only the toolbox prompt-budget failure, which
+now passes after shortening guidance. Affected types, build, lint, and complexity pass. Real-host
+and production availability remain separate operational acceptance work.
+
 ### [LEGAL-POLICIES-002] Keep policy versions easy to navigate
 
 - **Status**: REVIEW

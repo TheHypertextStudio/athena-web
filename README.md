@@ -178,3 +178,9 @@ assigning work or writing an @mention, including in personal workspaces. Creatio
 Managers can link external identities and combine duplicate person records while preserving historical
 references. The [People specification](docs/engineering/specs/people.md) defines these interactions and
 their authorization and sync rules.
+
+## Daily workload in MCP
+
+`view_workload` opens a read-only daily workload App in an MCP Apps-capable host, with plans,
+tracked utilization, capacity assumptions, and project/task/priority breakdowns. Its text and JSON
+results also work in hosts without embedded Apps. See [calculation rules and local verification](docs/engineering/specs/daily-workload.md).

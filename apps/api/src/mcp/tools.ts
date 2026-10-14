@@ -34,6 +34,8 @@ import { registerRepeatingWorkTools } from './repeating-work-tools';
 import { registerSessionTools } from './session-tools';
 import { registerTemplateTools } from './template-tools';
 import { registerTemplateDiscoveryTool } from './template-discovery-tool';
+
+import { registerWorkloadTool } from './workload-tool';
 import { registerTimeTools } from './time-tools';
 import { registerUpdateTool } from './update-tool';
 import { registerViewPlanTools } from './view-plan-tools';
@@ -88,5 +90,6 @@ export function registerTools(
   registerWorkspacesTool(server, ctx);
   registerAthenaAssignmentTools(server, ctx);
   registerTimeTools(server, ctx);
+  registerWorkloadTool(server, ctx);
   registerWorkDestinationReviewTool(server, ctx);
 }

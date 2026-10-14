@@ -23,6 +23,7 @@ import { MCP_UI_META_KEY, type McpUiResourceMeta } from '@docket/integrations/mc
 import type { McpRegistrar } from '../catalog';
 import { CHANGE_REPORT_HTML } from './change-report';
 import { entityDocument, ENTITY_HTML } from './entity';
+import { WORKLOAD_HTML } from './workload';
 import { PLAN_HTML } from './plan';
 import { UI_EXTENSION, UI_MIME_TYPE } from './runtime';
 import { WORK_LIST_HTML } from './work-list';
@@ -47,6 +48,7 @@ export const WIDGET = {
   views: 'ui://docket/views',
   organizations: 'ui://docket/organizations',
   plan: 'ui://docket/plan',
+  workload: 'ui://docket/workload',
 } as const;
 
 /**
@@ -148,6 +150,12 @@ const DOCUMENTS: Readonly<Record<string, { title: string; description: string; h
     title: 'Organizations',
     description: 'Organization summary and counts.',
     html: entityDocument('org'),
+  },
+  [WIDGET.workload]: {
+    title: 'Daily workload',
+    description:
+      'Read-only plans, tracked utilization, unknown estimates, and capacity for planning and scheduling.',
+    html: WORKLOAD_HTML,
   },
   [WIDGET.plan]: {
     title: 'Day plan',

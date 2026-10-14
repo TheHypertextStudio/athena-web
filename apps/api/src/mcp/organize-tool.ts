@@ -41,7 +41,7 @@ import {
 import { enqueueSearchUpsert } from '../search/write-through';
 import type { McpContext } from './auth';
 import type { McpRegistrar } from './catalog';
-import { type ChangeRecord } from './change-set';
+import { type ChangeRecord, type LinkRecord } from './change-set';
 import { recordToolChangeSet } from './tool-activity';
 import { WIDGET, widgetMeta } from './apps';
 import { placedOutputSchema, placedWithContainers } from './organize-containers';
@@ -53,10 +53,13 @@ import { orgIdParam } from './tools-shared';
  *
  * @param created - How many items were new.
  * @param changed - How many rows were written, counting matched tasks attached to a milestone.
+ *   Zero means the call only added initiative links.
  * @param firstTitle - The first item's title, for a single-item plan.
  */
 function summaryOf(created: number, changed: number, firstTitle: string | undefined): string {
   if (created === 1 && changed === 1 && firstTitle !== undefined) return `Created "${firstTitle}"`;
+  // A re-run that only joined existing work to an initiative created and attached nothing.
+  if (changed === 0) return 'Linked existing work to initiatives';
   const attached = changed - created;
   if (attached === 0) return `Created ${created} items`;
   return `Created ${created} items and attached ${attached} to milestones`;
@@ -132,6 +135,7 @@ export function registerOrganizeTool(server: McpRegistrar, ctx: McpContext): voi
         const placed: Placed[] = [];
         const byRef = new Map<string, Placed>();
         const changes: ChangeRecord[] = [];
+        const links: LinkRecord[] = [];
 
         const cascades = await serializableTx(async (tx) => {
           const parentTaskIds: (string | null)[] = [];
@@ -160,6 +164,7 @@ export function registerOrganizeTool(server: McpRegistrar, ctx: McpContext): voi
             });
             byRef.set(item.ref, result.placed);
             if (result.change) changes.push(result.change);
+            if (result.link) links.push(result.link);
             if (result.placed.kind === 'task' && result.placed.created) {
               parentTaskIds.push(at.parentTaskId);
             }
@@ -182,7 +187,7 @@ export function registerOrganizeTool(server: McpRegistrar, ctx: McpContext): voi
           actorId: actorCtx.actorId,
           origin: originFor('organize'),
           summary: summaryOf(created, changes.length, ordered[0]?.title),
-          changes,
+          changes: [...changes, ...links],
         });
 
         return jsonResult({

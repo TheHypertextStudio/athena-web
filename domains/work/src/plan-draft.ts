@@ -21,46 +21,26 @@ import type {
   PlanPlaced,
 } from './contracts/plan-draft';
 import type { TemplateDraft } from './contracts/template';
+import {
+  PlanOpError,
+  assertInitiativeRefs,
+  assertParent,
+  assertTaskDepth,
+  planNode,
+  reaches,
+  subtreeRefs,
+} from './plan-draft-rules';
+
+export { PlanOpError, planNode } from './plan-draft-rules';
 
 /** A plan with nothing in it yet. */
 export const EMPTY_PLAN_DOCUMENT: PlanDocument = { nodes: [], edges: [] };
-
-/** A rejected op: which one, which path inside it, and why in plain words. */
-export class PlanOpError extends Error {
-  constructor(
-    readonly index: number,
-    readonly path: string,
-    readonly reason: string,
-  ) {
-    super(`${path}: ${reason}`);
-    this.name = 'PlanOpError';
-  }
-}
 
 /** What the reducer needs from outside: the payload behind a template id. */
 export interface PlanOpEnvironment {
   /** The template's draft, or undefined when no such template is visible. */
   templatePayload(templateId: string): TemplateDraft | undefined;
 }
-
-/** Which parent kinds each kind may sit under. */
-const ALLOWED_PARENTS: Readonly<Record<PlanNodeKind, readonly PlanNodeKind[]>> = {
-  initiative: [],
-  program: ['initiative'],
-  project: ['program', 'initiative'],
-  task: ['project', 'task'],
-};
-
-/**
- * How deep a task may sit inside other tasks.
- *
- * @remarks
- * One: a feature task carries its engineering subtasks, and a subtask carries none of its own.
- * The real task record nests without limit, so the ceiling is a planning rule rather than a
- * storage one — a canvas row that can hide work three levels down stops being readable, and the
- * shape the person asked for is exactly two levels.
- */
-const MAX_TASK_DEPTH = 1;
 
 /** Which fields each kind carries. */
 const FIELDS_BY_KIND: Readonly<Record<PlanNodeKind, ReadonlySet<keyof PlanNodeFields>>> = {
@@ -122,11 +102,6 @@ const TEMPLATE_FIELD_KEYS: Readonly<Record<PlanNodeKind, readonly (keyof PlanNod
   task: ['description', 'priority', 'labelIds'],
 };
 
-/** Find a node by ref. */
-export function planNode(document: PlanDocument, ref: string): PlanNode | undefined {
-  return document.nodes.find((node) => node.ref === ref);
-}
-
 function assertFieldsForKind(
   index: number,
   kind: PlanNodeKind,
@@ -142,81 +117,6 @@ function assertFieldsForKind(
 /** A partial patch with every `undefined` entry dropped, so it cannot erase a required field. */
 function definedEntries(patch: Readonly<Record<string, unknown>>): Record<string, unknown> {
   return Object.fromEntries(Object.entries(patch).filter(([, value]) => value !== undefined));
-}
-
-/** Reject a parent the kind cannot sit under, an unknown parent, or a cycle. */
-function assertParent(
-  index: number,
-  document: PlanDocument,
-  kind: PlanNodeKind,
-  parentRef: string | null,
-  selfRef: string,
-): void {
-  const path = `ops.${index}.parentRef`;
-  if (parentRef === null) {
-    if (kind !== 'initiative') throw new PlanOpError(index, path, `A ${kind} needs a parent.`);
-    return;
-  }
-  if (parentRef === selfRef) throw new PlanOpError(index, path, 'A node cannot be its own parent.');
-  const parent = planNode(document, parentRef);
-  if (!parent) throw new PlanOpError(index, path, `No node has ref "${parentRef}".`);
-  if (!ALLOWED_PARENTS[kind].includes(parent.kind)) {
-    throw new PlanOpError(index, path, `A ${kind} cannot sit under a ${parent.kind}.`);
-  }
-  let cursor: PlanNode | undefined = parent;
-  while (cursor) {
-    if (cursor.ref === selfRef) throw new PlanOpError(index, path, 'That would make a cycle.');
-    cursor = cursor.parentRef === null ? undefined : planNode(document, cursor.parentRef);
-  }
-}
-
-/** How many tasks sit above a node on its way to the root. */
-function taskAncestorCount(document: PlanDocument, node: PlanNode): number {
-  let count = 0;
-  let cursor = node.parentRef === null ? undefined : planNode(document, node.parentRef);
-  while (cursor) {
-    if (cursor.kind === 'task') count += 1;
-    cursor = cursor.parentRef === null ? undefined : planNode(document, cursor.parentRef);
-  }
-  return count;
-}
-
-/**
- * Reject a task nested deeper than one level, for a node and everything under it.
- *
- * @remarks
- * The whole subtree is checked, not just the node itself, because moving a feature task that
- * already carries subtasks under another task would push those subtasks past the ceiling without
- * any op ever naming them.
- */
-function assertTaskDepth(index: number, document: PlanDocument, ref: string): void {
-  for (const member of subtreeRefs(document, ref)) {
-    const node = planNode(document, member);
-    if (node?.kind !== 'task') continue;
-    if (taskAncestorCount(document, node) > MAX_TASK_DEPTH) {
-      throw new PlanOpError(
-        index,
-        `ops.${index}.parentRef`,
-        'A subtask carries no subtasks of its own.',
-      );
-    }
-  }
-}
-
-/** The ref and every descendant ref. */
-function subtreeRefs(document: PlanDocument, ref: string): Set<string> {
-  const out = new Set([ref]);
-  let grew = true;
-  while (grew) {
-    grew = false;
-    for (const node of document.nodes) {
-      if (node.parentRef !== null && out.has(node.parentRef) && !out.has(node.ref)) {
-        out.add(node.ref);
-        grew = true;
-      }
-    }
-  }
-  return out;
 }
 
 function requireNode(index: number, document: PlanDocument, ref: string, path: string): PlanNode {
@@ -269,6 +169,31 @@ function assertUpsertAllowed(
     throw new PlanOpError(index, `ops.${index}.node.fields.title`, 'A new node needs a title.');
   }
   assertFieldsForKind(index, op.node.kind, op.node.fields);
+  if (op.node.kind === 'project') return;
+  for (const key of ['initiativeRefs', 'initiativeIds'] as const) {
+    if ((op.node[key] ?? []).length > 0) {
+      throw new PlanOpError(index, `ops.${index}.node.${key}`, `Only a project joins initiatives.`);
+    }
+  }
+}
+
+/**
+ * Give a project that names initiatives but no parent the first of them as its parent.
+ *
+ * @remarks
+ * A project always sits under one node, and `initiativeRefs` names any further initiatives it also
+ * belongs to. "This project belongs to the Spring initiative" is a complete placement, so it is
+ * read as one rather than refused for want of a separate parent.
+ */
+function settleParent(node: PlanNode): PlanNode {
+  if (node.kind !== 'project' || node.parentRef !== null) return node;
+  return { ...node, parentRef: node.initiativeRefs[0] ?? null };
+}
+
+/** A project's extra initiatives without the parent it already sits under, so it links once. */
+function withoutRepeatedParent(node: PlanNode): PlanNode {
+  if (!node.initiativeRefs.includes(node.parentRef ?? '')) return node;
+  return { ...node, initiativeRefs: node.initiativeRefs.filter((ref) => ref !== node.parentRef) };
 }
 
 /**
@@ -321,7 +246,7 @@ function applyUpsert(
 ): PlanDocument {
   const existing = planNode(document, op.node.ref);
   assertUpsertAllowed(existing, op, index);
-  const next = mergeUpsert(existing, op.node);
+  const next = settleParent(mergeUpsert(existing, op.node));
   const nodes = existing
     ? document.nodes.map((node) => (node.ref === next.ref ? next : node))
     : [...document.nodes, next];
@@ -364,6 +289,9 @@ function applyAddEdge(
   }
   if (document.edges.some((edge) => edge.fromRef === op.fromRef && edge.toRef === op.toRef)) {
     return document;
+  }
+  if (reaches(document, op.toRef, op.fromRef)) {
+    throw new PlanOpError(index, path, 'That dependency would make a cycle.');
   }
   return {
     ...document,
@@ -497,10 +425,11 @@ export function applyPlanOps(
   for (const node of next.nodes) {
     const index = placedBy.get(node.ref);
     if (index === undefined) continue;
+    assertInitiativeRefs(index, next, node);
     assertParent(index, next, node.kind, node.parentRef, node.ref);
     assertTaskDepth(index, next, node.ref);
   }
-  return { ...next, nodes: parentsFirst(next.nodes) };
+  return { ...next, nodes: parentsFirst(next.nodes.map(withoutRepeatedParent)) };
 }
 
 /**

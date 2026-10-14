@@ -4,7 +4,8 @@
  * @remarks
  * `change-set.ts` reverses work items and relations itself. Label-set snapshots and catalog rows
  * (labels, label groups, templates) have their own rules for reversal, and they live in
- * `change-set-labels.ts` and `change-set-catalog.ts`. This module is the one place that decides
+ * `change-set-labels.ts` and `change-set-catalog.ts`; an Initiative's place in its workspace
+ * hierarchy is a snapshot reversed by `change-set-hierarchy.ts`. This module is the one place that decides
  * which module an entry belongs to, so both undo paths dispatch the same way. `change-set.ts` is
  * pinned at its size in the complexity ledger, which is why the dispatch is not inline there.
  */
@@ -12,6 +13,7 @@ import { db, type changeSetEntry } from '@docket/db';
 
 import type { Tx, UndoOutcome } from './change-set';
 import { isCatalogKind, revertCatalogEntry } from './change-set-catalog';
+import { isInitiativeParentKind, revertInitiativeParent } from './change-set-hierarchy';
 import { isLabelSetKind, revertLabelSet } from './change-set-labels';
 
 /** A stored change-set entry, as undo reads it back; `op` is widened to match `revertEntry`. */
@@ -35,7 +37,7 @@ export interface RevertResult {
 
 /** Whether another module reverses this entry kind. */
 export function isCompanionKind(kind: string): boolean {
-  return isLabelSetKind(kind) || isCatalogKind(kind);
+  return isLabelSetKind(kind) || isCatalogKind(kind) || isInitiativeParentKind(kind);
 }
 
 /**
@@ -48,9 +50,10 @@ export function revertCompanionIn(
   orgId: string,
   tx: Tx,
 ): Promise<RevertResult> {
-  return isCatalogKind(entry.entityKind)
-    ? revertCatalogEntry(entry.entityKind, entry, orgId, tx)
-    : revertLabelSet(entry, orgId, tx);
+  if (isCatalogKind(entry.entityKind))
+    return revertCatalogEntry(entry.entityKind, entry, orgId, tx);
+  if (isInitiativeParentKind(entry.entityKind)) return revertInitiativeParent(entry, orgId, tx);
+  return revertLabelSet(entry, orgId, tx);
 }
 
 /**

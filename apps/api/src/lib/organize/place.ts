@@ -23,7 +23,7 @@ import { and, eq, isNull, sql } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { ValidationError } from '../../error';
-import { trackedFields, type ChangeRecord } from '../../mcp/change-set';
+import { trackedFields, type ChangeRecord, type LinkRecord } from '../../mcp/change-set';
 import { resolveOptional } from '../../mcp/descriptors';
 import { entityHref } from '../../mcp/entity-href';
 import type { serializableTx } from '../serializable-tx';
@@ -277,6 +277,40 @@ export type Tx = Parameters<Parameters<typeof serializableTx>[0]>[0];
 export interface PlaceResult {
   readonly placed: Placed;
   readonly change?: ChangeRecord;
+  /** The initiative link the placement added, so undo can take it back. */
+  readonly link?: LinkRecord;
+}
+
+/**
+ * Link a placed project or program to its initiative, and say whether the link is new.
+ *
+ * @remarks
+ * Written whether or not the item itself was new, so re-running a plan that adds an initiative over
+ * existing work attaches it rather than doing nothing. Only a link this call added is recorded: one
+ * that already stood is not this call's to take back.
+ */
+async function linkToInitiative(
+  tx: Tx,
+  kind: 'project' | 'program',
+  orgId: string,
+  initiativeId: string | null,
+  id: string,
+): Promise<{ link?: LinkRecord }> {
+  if (initiativeId === null) return {};
+  const inserted =
+    kind === 'project'
+      ? await tx
+          .insert(initiativeProject)
+          .values({ organizationId: orgId, initiativeId, projectId: id })
+          .onConflictDoNothing()
+          .returning({ id: initiativeProject.projectId })
+      : await tx
+          .insert(initiativeProgram)
+          .values({ organizationId: orgId, initiativeId, programId: id })
+          .onConflictDoNothing()
+          .returning({ id: initiativeProgram.programId });
+  if (inserted.length === 0) return {};
+  return { link: { kind: `${kind}_contributes_to`, from: id, to: initiativeId, linked: true } };
 }
 
 /** The status columns a new container row starts with. */
@@ -383,16 +417,10 @@ async function placeProgram(tx: Tx, input: PlaceInput): Promise<PlaceResult> {
   const id = existing[0]?.id ?? inserted[0]?.id;
   /* v8 ignore next -- @preserve defensive: insert always returns a row */
   if (!id) throw new Error('program insert returned no row');
-  // The link is written whether or not the program was new, so re-running a plan that adds an
-  // initiative over existing programs attaches them rather than doing nothing.
-  if (at.initiativeId) {
-    await tx
-      .insert(initiativeProgram)
-      .values({ organizationId: orgId, initiativeId: at.initiativeId, programId: id })
-      .onConflictDoNothing();
-  }
+  const linked = await linkToInitiative(tx, 'program', orgId, at.initiativeId, id);
   const row = inserted[0];
   return {
+    ...linked,
     placed: {
       ...identityOf(item, entityHref(orgId, 'program', id)),
       kind: 'program',
@@ -444,14 +472,10 @@ async function placeProject(tx: Tx, input: PlaceInput): Promise<PlaceResult> {
   const id = existing[0]?.id ?? inserted[0]?.id;
   /* v8 ignore next -- @preserve defensive: insert always returns a row */
   if (!id) throw new Error('project insert returned no row');
-  if (at.initiativeId) {
-    await tx
-      .insert(initiativeProject)
-      .values({ organizationId: orgId, initiativeId: at.initiativeId, projectId: id })
-      .onConflictDoNothing();
-  }
+  const linked = await linkToInitiative(tx, 'project', orgId, at.initiativeId, id);
   const row = inserted[0];
   return {
+    ...linked,
     placed: {
       ...identityOf(item, entityHref(orgId, 'project', id)),
       kind: 'project',

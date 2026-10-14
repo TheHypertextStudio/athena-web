@@ -33,7 +33,7 @@ import type {
 import { planCommitCounts, planCounts, planNodeClosure } from '@docket/work/plan-draft';
 import { and, eq, inArray } from 'drizzle-orm';
 
-import { CapabilityError, NotFoundError, ValidationError } from '../../error';
+import { CapabilityError, CycleError, NotFoundError, ValidationError } from '../../error';
 import { recordChangeSetInTx, type RecordedChange } from '../../mcp/change-set';
 import {
   assertPriorities,
@@ -50,6 +50,8 @@ import { resolveLandingTarget } from '../task-landing';
 import { serializableTx } from '../serializable-tx';
 import { applySubtaskCompletionPolicyForParents, finishTaskStateTransition } from '../task-state';
 import { resolveStateTransition } from '../../mcp/tools-shared';
+import { wouldCreateProjectCycle } from '../../routes/project-dependency-routes';
+import { wouldCreateCycle as wouldCreateTaskCycle } from '../../routes/task-helpers';
 import { enqueueSearchUpsert } from '../../search/write-through';
 import { loadOwnedPlan, ownerActorInOrg, type PlanDraftRow } from './store';
 import { preparePlanTemplate } from './template-defaults';
@@ -241,30 +243,50 @@ async function linkInitiatives(context: CommitContext): Promise<void> {
   }
 }
 
-/** Write every dependency edge whose two ends are real after this commit. */
+/** Write one project edge, refusing one that closes a cycle with the workspace's graph. */
+async function linkProjects(context: CommitContext, from: string, to: string): Promise<void> {
+  const { tx, orgId, changes } = context;
+  if (await wouldCreateProjectCycle(tx, orgId, from, to)) throw new CycleError();
+  const inserted = await tx
+    .insert(projectDependency)
+    .values({ organizationId: orgId, blockingProjectId: from, blockedProjectId: to })
+    .onConflictDoNothing()
+    .returning({ id: projectDependency.blockedProjectId });
+  if (inserted.length > 0) changes.push({ kind: 'project_blocks', from, to, linked: true });
+}
+
+/** Write one task edge, refusing one that closes a cycle with the workspace's graph. */
+async function linkTasks(context: CommitContext, from: string, to: string): Promise<void> {
+  const { tx, orgId, changes } = context;
+  if (await wouldCreateTaskCycle(tx, orgId, from, to)) throw new CycleError();
+  const inserted = await tx
+    .insert(taskDependency)
+    .values({ organizationId: orgId, blockingTaskId: from, blockedTaskId: to })
+    .onConflictDoNothing()
+    .returning({ id: taskDependency.blockedTaskId });
+  if (inserted.length > 0) changes.push({ kind: 'blocks', from, to, linked: true });
+}
+
+/**
+ * Write every dependency edge whose two ends are real after this commit.
+ *
+ * @remarks
+ * The document refuses a cycle among its own edges, but an edge into existing work can close one
+ * through dependencies the document never saw. Each edge is checked against the workspace graph
+ * inside the commit's SERIALIZABLE transaction, and a cycle refuses the whole commit.
+ *
+ * @throws {CycleError} When an edge would close a dependency cycle.
+ */
 async function linkDependencies(context: CommitContext): Promise<void> {
-  const { tx, orgId, document, byRef, placedByRef, changes } = context;
+  const { document, byRef, placedByRef } = context;
   for (const edge of document.edges) {
     if (!placedByRef.has(edge.fromRef) && !placedByRef.has(edge.toRef)) continue;
     const from = realId(edge.fromRef, byRef, placedByRef);
     const to = realId(edge.toRef, byRef, placedByRef);
     const kind = byRef.get(edge.fromRef)?.kind;
     if (from === null || to === null || from === to) continue;
-    if (kind === 'project') {
-      const inserted = await tx
-        .insert(projectDependency)
-        .values({ organizationId: orgId, blockingProjectId: from, blockedProjectId: to })
-        .onConflictDoNothing()
-        .returning({ id: projectDependency.blockedProjectId });
-      if (inserted.length > 0) changes.push({ kind: 'project_blocks', from, to, linked: true });
-    } else if (kind === 'task') {
-      const inserted = await tx
-        .insert(taskDependency)
-        .values({ organizationId: orgId, blockingTaskId: from, blockedTaskId: to })
-        .onConflictDoNothing()
-        .returning({ id: taskDependency.blockedTaskId });
-      if (inserted.length > 0) changes.push({ kind: 'blocks', from, to, linked: true });
-    }
+    if (kind === 'project') await linkProjects(context, from, to);
+    else if (kind === 'task') await linkTasks(context, from, to);
   }
 }
 
@@ -329,6 +351,7 @@ async function placePrepared(
     ledger.placedByRef.set(entry.item.ref, result.placed);
     if (result.placed.kind === 'task') ledger.projectByRef.set(entry.item.ref, at.projectId);
     if (result.change) ledger.changes.push(result.change);
+    if (result.link) ledger.changes.push(result.link);
     if (result.placed.kind === 'task' && result.placed.created) {
       ledger.parentTaskIds.push(at.parentTaskId);
     }

@@ -41,6 +41,15 @@ covering rejection, reopening, and successful retry. Private recovery archives p
 state; eligible clean merged checkouts have been retired. Remaining recovery and typed-work layers
 stay open.
 
+#### Relation and initiative planning recovery
+
+Recovered relation coverage, bulk placement, and planning beside existing initiative work. New
+regressions prevent private-work disclosure during hydration and prevent undo from restoring a
+hierarchy cycle after unrelated moves. Recovery uses current authorization and the existing
+transactional placement, dependency, and change-set infrastructure. The recovered domain suite and
+focused relation suites pass. The broader MCP/API regression passes 822 cases across 78 files;
+affected API/web/domain typechecks, API runtime build, changed-file lint, and complexity checks pass.
+
 ### [LEGAL-POLICIES-002] Keep policy versions easy to navigate
 
 - **Status**: REVIEW

@@ -404,6 +404,51 @@ The marker is honoured only on Docket's own catalog. The toolbox reads it from t
 `tools/list` and never from a connected server, so a remote tool claiming it is still a gated
 write. A host other than Athena ignores the key, as it ignores the widget key above.
 
+### 3.2.3 Relations
+
+Every relation the work domain stores can be created, changed, and removed over MCP. Edges — a
+relation that holds between two items, possibly many of them — belong to `link`, which takes a
+`relation`, a `from`, a `to`, and `remove: true` to take one back. Placements — a single-valued
+field naming where an item sits — belong to `update`. `organize` and `plan_commit` create
+relations along with new work, and never remove one; each initiative link they add, including one
+to a project or program they matched rather than created, is recorded so `undo` takes it back.
+
+| Relation         | Ends                                 | Stored in                                  | Create / change / remove                                                                         |
+| ---------------- | ------------------------------------ | ------------------------------------------ | ------------------------------------------------------------------------------------------------ |
+| `blocks`         | task → task                          | `task_dependency`                          | `link`; `plan_draft` edge                                                                        |
+| `blocks`         | project → project                    | `project_dependency`                       | `link`; `plan_draft` edge                                                                        |
+| `relates_to`     | task ↔ task                          | `task_related_task` (canonical order)      | `link`                                                                                           |
+| `subtask_of`     | task → task (one parent)             | `task.parent_task_id`                      | `link` (linking to a new parent moves it); `organize` and `plan_draft` parent                    |
+| `contributes_to` | project or program → initiative      | `initiative_project`, `initiative_program` | `link`; `update` `set.initiatives` (add, remove, replace); `organize` and `plan_draft` placement |
+| `nested_under`   | initiative → initiative (one parent) | `initiative_hierarchy_link`                | `link` (nesting under a new parent moves it)                                                     |
+
+`link` works out which graph a `blocks` call writes from its endpoints: two task ids write the task
+graph, two projects (by id or name) the project graph. A pair a relation does not join — a task and
+a project, or an initiative asked to block — is refused with the kinds it accepts as the field's
+allowed values (`to: invalid_option (allowed values: project)`), because the MCP error contract
+carries issue codes and options rather than prose. An id that names nothing is `not_found`.
+
+Every edge write authorizes `contribute` on both ends, refuses a cycle inside the same SERIALIZABLE
+transaction that writes the edge (`dependency_cycle`), and is recorded for `undo`. Removing a
+single-valued relation only detaches the item from the parent named: removing `subtask_of` or
+`nested_under` toward a parent the item does not sit under changes nothing. `nested_under` goes
+through the hierarchy routes' validator for depth, cycles, and visibility, with visibility decided
+by the actor's own grants, and undo restores a move to the previous parent as one entry
+(`initiative_parent`, reversed by `change-set-hierarchy.ts`).
+
+Placements are fields on the item, set or cleared with `update` across a whole scope:
+
+| Placement                                       | Field                                                                  |
+| ----------------------------------------------- | ---------------------------------------------------------------------- |
+| task → project, milestone, cycle, program, team | `set.project`, `set.milestone`, `set.cycle`, `set.program`, `set.team` |
+| project → program, team                         | `set.program`, `set.team`                                              |
+| project or program → initiatives (many)         | `set.initiatives` (`add`, `remove`, or `replace`)                      |
+| milestone → project                             | fixed when `milestones` creates it                                     |
+
+A cycle belongs to one team, so a task on another team is skipped with `cycle_out_of_team`, as the
+task routes refuse it. `set.initiatives` needs `contribute` on every initiative it names and records
+each edge it adds or removes as a `contributes_to` link, so `undo` restores the exact set.
+
 ### 3.3 Where the definitions actually live
 
 This section used to carry the retired contract package fragment sketch and then ~350 lines of per-tool

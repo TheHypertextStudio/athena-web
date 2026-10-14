@@ -234,13 +234,31 @@ export function initiativeHierarchyDepth(
   return maximum;
 }
 
+/**
+ * Decide which Initiative nodes the caller may see while a hierarchy change is validated.
+ *
+ * @remarks
+ * A browser session reaches Initiatives across every workspace its user belongs to, so routes
+ * resolve access through {@link sessionInitiativeAccess}. An MCP actor belongs to one workspace,
+ * so the `link` tool resolves it through that actor's own grants instead.
+ */
+export type InitiativeAccess = (
+  nodes: readonly AccessibleInitiativeHierarchyNode[],
+  database: HierarchyDatabase,
+) => Promise<Set<string>>;
+
+/** Resolve hierarchy access through a signed-in session's resource grants. */
+export function sessionInitiativeAccess(session: AuthSession): InitiativeAccess {
+  return (nodes, database) => accessibleInitiativeNodeIds(session, nodes, database);
+}
+
 /** Validate a hierarchy create or move and return the current context edges. */
 export async function validateInitiativeHierarchyChange(
   input: {
     readonly contextOrganizationId: string;
     readonly parentInitiativeId: string;
     readonly childInitiativeId: string;
-    readonly session: AuthSession;
+    readonly access: InitiativeAccess;
     readonly excludeLinkId?: string;
   },
   database: HierarchyDatabase = db,
@@ -274,7 +292,7 @@ export async function validateInitiativeHierarchyChange(
     .select({ id: initiative.id, organizationId: initiative.organizationId })
     .from(initiative)
     .where(inArray(initiative.id, graphNodeIds));
-  const accessibleNodeIds = await accessibleInitiativeNodeIds(input.session, nodeRows, database);
+  const accessibleNodeIds = await input.access(nodeRows, database);
   const nodesById = new Map(nodeRows.map((node) => [node.id, node]));
   const parent = nodesById.get(input.parentInitiativeId);
   const child = nodesById.get(input.childInitiativeId);

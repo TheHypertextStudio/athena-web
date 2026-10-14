@@ -82,7 +82,10 @@ export const PlanNode = z
       ),
     initiativeRefs: z
       .array(z.string())
-      .describe('Additional initiative nodes in this document a project also belongs to.'),
+      .describe(
+        'Further initiative nodes in this document a project also belongs to. A project with no ' +
+          'parentRef sits under the first of them.',
+      ),
     initiativeIds: z
       .array(InitiativeId)
       .describe('Existing initiatives, by real id, a project also belongs to.'),
@@ -101,7 +104,7 @@ export const PlanNode = z
 /** Plan node value. */
 export type PlanNode = z.infer<typeof PlanNode>;
 
-/** A dependency between two nodes of the same kind. */
+/** A dependency between two nodes of the same kind; the edges never form a cycle. */
 export const PlanEdge = z
   .object({
     fromRef: z.string().describe('The blocking node.'),
@@ -135,8 +138,16 @@ export const PlanUpsertNode = z.object({
   ref: z.string().min(1).max(64),
   kind: PlanNodeKind,
   parentRef: z.string().nullable().optional(),
-  initiativeRefs: z.array(z.string()).optional(),
-  initiativeIds: z.array(InitiativeId).optional(),
+  initiativeRefs: z
+    .array(z.string())
+    .optional()
+    .describe(
+      'Projects only: initiative nodes in this document the project belongs to. With no parentRef, the first one becomes its parent.',
+    ),
+  initiativeIds: z
+    .array(InitiativeId)
+    .optional()
+    .describe('Projects only: existing initiatives, by id, the project also contributes to.'),
   fields: PlanNodeFieldsPatch,
   templateId: TemplateId.nullable()
     .optional()

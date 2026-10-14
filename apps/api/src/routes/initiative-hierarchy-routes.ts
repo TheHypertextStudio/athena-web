@@ -22,6 +22,7 @@ import {
   accessibleInitiativeHierarchyProjection,
   accessibleInitiativeNodeIds,
   activeInitiativeOrganizationIds,
+  sessionInitiativeAccess,
   validateInitiativeHierarchyChange,
 } from './initiative-hierarchy';
 import { hierarchyLinkParam } from './initiative-helpers';
@@ -147,7 +148,7 @@ const initiativeHierarchyRoutes = new Hono<AppEnv>()
             contextOrganizationId: orgId,
             parentInitiativeId: body.parentInitiativeId,
             childInitiativeId: body.childInitiativeId,
-            session: c.get('session'),
+            access: sessionInitiativeAccess(c.get('session')),
           },
           tx,
         );
@@ -208,7 +209,7 @@ const initiativeHierarchyRoutes = new Hono<AppEnv>()
             contextOrganizationId: orgId,
             parentInitiativeId: body.parentInitiativeId,
             childInitiativeId: link.childInitiativeId,
-            session: c.get('session'),
+            access: sessionInitiativeAccess(c.get('session')),
             excludeLinkId: link.id,
           },
           tx,

@@ -7,6 +7,7 @@ import { DESCRIPTOR_HINT } from './descriptors';
 import { listWorkFilters, WORK_ENTITIES } from './list-work';
 import { orgIdParam } from './tools-shared';
 import { labelsSetField } from './update-labels';
+import { cycleSetField, initiativesSetField } from './update-relations';
 
 /** Every field `update` can set, uniform across entities. */
 export const updateSetFields = {
@@ -52,6 +53,7 @@ export const updateSetFields = {
     .optional()
     .describe(`The project to file the task under, or null to unfile it. ${DESCRIPTOR_HINT}`),
   milestone: z.string().nullable().optional().describe("The task's milestone, or null to clear."),
+  cycle: cycleSetField,
   program: z
     .string()
     .nullable()
@@ -80,13 +82,14 @@ export const updateSetFields = {
     .optional()
     .describe('The broad target resolution; send it with targetDate.'),
   labels: labelsSetField,
+  initiatives: initiativesSetField,
 };
 
 /** The MCP declaration for the bulk update operation. */
 export const updateToolDefinition = {
   title: 'Update work',
   description:
-    'Change work by describing which work, not by listing ids. One call changes up to 100 items: the scope takes the same filters as list_work, so "everything Sarah has open in the migration project" is one call, and `scope.ids` takes as many ids as you have. Never call this once per item — put every id in one call, or the person watching gets a separate card for each one. Every row you may not write is reported back with a reason rather than skipped quietly, and the whole call is reversible with `undo`.',
+    'Change work by describing which work, not by listing ids. One call changes up to 100 items: the scope takes the same filters as list_work, so "everything Sarah has open in the migration project" is one call, and `scope.ids` takes as many ids as you have. Never call this once per item — put every id in one call, or the person watching gets a separate card for each one. Every row you may not write is reported back with a reason rather than skipped quietly, and the whole call is reversible with `undo`. `update` sets where work sits — a task’s project, milestone, cycle, program, or team, a project’s program, and which initiatives projects and programs contribute to. A relation between two particular items (blocks, relates_to, subtask_of, nested_under) is `link`’s.',
   inputSchema: {
     orgId: orgIdParam,
     entity: z.enum(WORK_ENTITIES).describe('What kind of work to update.'),
@@ -131,7 +134,7 @@ export const updateToolDefinition = {
     skipped: z
       .array(z.object({ id: z.string(), title: z.string(), reason: z.string() }))
       .describe(
-        'Items left alone, and why — `not_permitted` means the caller cannot write that one, and `label_out_of_scope` means a label is limited to a team the item is not in.',
+        'Items left alone, and why — `not_permitted` means the caller cannot write that one, `label_out_of_scope` means a label is limited to a team the item is not in, and `cycle_out_of_team` means the cycle belongs to another team.',
       ),
     changeSetId: z
       .string()

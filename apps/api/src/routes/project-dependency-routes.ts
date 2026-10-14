@@ -51,7 +51,13 @@ function toRef(row: ProjectRow): z.input<typeof ProjectRef> {
   };
 }
 
-async function wouldCreateCycle(
+/**
+ * Whether adding `blocking → blocked` would close a cycle in the Project dependency graph.
+ *
+ * @param tx - The SERIALIZABLE transaction the reachability read and the insert share.
+ * @returns true when `blocked` already reaches `blocking` along existing edges.
+ */
+export async function wouldCreateProjectCycle(
   tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
   orgId: string,
   blockingProjectId: string,
@@ -165,7 +171,7 @@ export const projectDependencyRoutes = new Hono<AppEnv>()
           )
           .limit(1);
         if (existing[0]) throw new ConflictError('Dependency edge already exists');
-        if (await wouldCreateCycle(tx, orgId, blockingProjectId, blockedProjectId)) {
+        if (await wouldCreateProjectCycle(tx, orgId, blockingProjectId, blockedProjectId)) {
           throw new CycleError();
         }
         await tx.insert(projectDependency).values({

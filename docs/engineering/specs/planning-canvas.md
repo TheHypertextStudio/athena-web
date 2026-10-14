@@ -41,6 +41,27 @@ initiatives a project belongs to as `initiativeRefs` (nodes in this document) an
 `confirmed`, and the real `objectId` once confirmed. An edge is a `blocks` dependency between two
 nodes of the same kind.
 
+Only a project carries `initiativeRefs` and `initiativeIds`. A project given `initiativeRefs` but no
+`parentRef` sits under the first of them, because "this project belongs to the Spring initiative"
+is a whole placement; a parent repeated among the extra initiatives is dropped so the commit links
+it once. Every `initiativeRefs` entry must name an initiative node. Edges never form a cycle: an
+`add_edge` whose blocked node already reaches the blocking one is refused.
+
+A rejection carries the refs that would have fitted (`PlanOpError.options`) — the nodes a parent
+may be, or the initiatives a project may join — and the store sends them as the field's allowed
+values. The MCP error contract shows an agent an error's path, code, and allowed values but never
+its prose, so `ops.1.parentRef: invalid_option (allowed values: init)` is the actionable form of
+"a project needs a parent".
+
+### Existing work
+
+A plan rooted on an existing initiative shows the work already under it. When the plan is created,
+and again whenever it is reopened, `existing-work.ts` adds a confirmed node for every live project
+linked to the root and for the open top-level tasks in those projects, up to 150 records, projects
+first. Draft tasks may sit under those projects and draft nodes may depend on them, and a commit
+resolves them to their real ids like any other confirmed node. They stay read-only in the
+document; the real records change through `update` and `link`.
+
 `applyPlanOps(document, ops, env)` is the only way the document changes. It enforces which fields a
 kind carries, which parent a kind may sit under, that a confirmed node is read-only except for an
 edge to a draft neighbour, that a batch applies whole or not at all, and that a tree may arrive in
@@ -82,7 +103,10 @@ the session into the system prompt so Athena reads it before editing.
 the organize item shape, and runs the organize tool's reconciling placement parents-first in one
 serializable transaction. Inside it the document is rewritten with real ids, projects are linked to
 every initiative they declare, dependency edges whose ends both exist are written, and a change set
-the `undo` tool understands is recorded. The route resolves the owner's actor and requires
+the `undo` tool understands is recorded. Each edge is checked against the workspace's dependency
+graph before it is written, because an edge into existing work can close a cycle through
+dependencies the document never saw; such an edge refuses the whole commit with
+`dependency_cycle`. The route resolves the owner's actor and requires
 `contribute` in the plan's workspace at the moment of the write.
 
 Container status fields (`status` on an initiative or project node) are carried in the document

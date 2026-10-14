@@ -1,6 +1,6 @@
 import type { actor } from '@docket/db';
 import { db, initiative, program, project, task } from '@docket/db';
-import { and, eq, isNull, lt, or, sql, type SQL } from 'drizzle-orm';
+import { and, eq, isNull, lt, or, type SQL } from 'drizzle-orm';
 import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 import { z } from 'zod';
 
@@ -8,7 +8,6 @@ import { OrganizationId } from '@docket/identity-access/ids';
 
 import { NotFoundError, ValidationError } from '../error';
 import { resolveTaskStatus, type TaskStatusTransition } from '../lib/work-status';
-import { rawResultRowCount } from '../lib/raw-result';
 import { createCursorCodec } from './cursors';
 
 /** The subject table whose `health` an update of each subject type also writes to. */
@@ -87,31 +86,6 @@ export async function assertRefInOrg(
     .where(and(eq(table.id, refId), eq(table.organizationId, orgId)))
     .limit(1);
   if (!rows[0]) throw new NotFoundError(message);
-}
-
-/**
- * Whether adding `blocking → blocked` would create a dependency cycle.
- *
- * @remarks
- * The edge closes a cycle when `blocked` can already reach `blocking` along existing
- * `blocks` edges. Org-scoped.
- */
-export async function wouldCreateCycle(
-  orgId: string,
-  blockingTaskId: string,
-  blockedTaskId: string,
-): Promise<boolean> {
-  const reach = await db.execute(sql`
-    WITH RECURSIVE reach AS (
-      SELECT blocked_task_id AS n FROM task_dependency
-        WHERE blocking_task_id = ${blockedTaskId} AND organization_id = ${orgId}
-      UNION
-      SELECT d.blocked_task_id FROM task_dependency d
-        JOIN reach r ON d.blocking_task_id = r.n WHERE d.organization_id = ${orgId}
-    )
-    SELECT 1 AS hit FROM reach WHERE n = ${blockingTaskId} LIMIT 1
-  `);
-  return rawResultRowCount(reach) > 0;
 }
 
 /** A position in the `(createdAt DESC, id DESC)` keyset `list_work` pages on. */

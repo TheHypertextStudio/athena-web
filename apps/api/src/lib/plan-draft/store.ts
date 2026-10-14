@@ -43,9 +43,11 @@ import {
 } from '@docket/work/plan-draft';
 import type { TemplateDraft } from '@docket/work/template-contract';
 import { and, asc, desc, eq, inArray, isNull } from 'drizzle-orm';
+import { z } from 'zod';
 
 import { NotFoundError, PreconditionFailedError, ValidationError } from '../../error';
 import { seedDefaultTemplates } from '../templates/defaults';
+import { refreshExistingWork, withExistingWork } from './existing-work';
 import { visibleTemplateWhere } from '../templates/visibility';
 
 /** A stored plan. */
@@ -121,12 +123,16 @@ export async function createOrReopenPlan(
   const root = input.initiativeId === undefined ? null : await loadRootInitiative(input);
   if (root) {
     const existing = await activePlanForRoot(ownerUserId, root.id);
-    if (existing) return existing;
+    if (existing) return refreshExistingWork(existing);
   }
 
+  const values = newPlanValues(ownerUserId, input, root);
+  const document = root
+    ? await withExistingWork(ownerUserId, input.organizationId, root.id, rootedDocument(root))
+    : EMPTY_PLAN_DOCUMENT;
   const inserted = await db
     .insert(planDraft)
-    .values(newPlanValues(ownerUserId, input, root))
+    .values({ ...values, document })
     .returning();
   const row = inserted[0];
   /* v8 ignore next -- @preserve defensive: insert always returns a row */
@@ -139,14 +145,13 @@ function newPlanValues(
   ownerUserId: string,
   input: CreatePlanInput,
   root: { id: string; name: string } | null,
-): typeof planDraft.$inferInsert {
+): Omit<typeof planDraft.$inferInsert, 'document'> {
   return {
     ownerUserId,
     organizationId: input.organizationId,
     sessionId: input.sessionId ?? null,
     rootInitiativeId: root?.id ?? null,
     title: input.title ?? root?.name ?? 'New plan',
-    document: root ? rootedDocument(root) : EMPTY_PLAN_DOCUMENT,
   };
 }
 
@@ -328,9 +333,27 @@ export async function listPlanRoster(
   } as PlanRoster;
 }
 
-/** Translate a reducer rejection into the API's field-error shape. */
+/**
+ * Translate a reducer rejection into the API's field-error shape.
+ *
+ * @remarks
+ * A rejection that names what would fit — the nodes a parent may be, the initiatives a project
+ * may join — travels as the field's allowed values, which is the part of an error an agent sees.
+ */
 function rejectionToValidation(error: PlanOpError): ValidationError {
-  return new ValidationError([{ message: error.reason, path: error.path.split('.') }]);
+  const path = error.path.split('.');
+  if (error.options.length === 0) return new ValidationError([{ message: error.reason, path }]);
+  return new ValidationError(
+    new z.ZodError([
+      {
+        code: 'invalid_value',
+        values: [...error.options],
+        path,
+        message: error.reason,
+        input: null,
+      },
+    ]),
+  );
 }
 
 /**

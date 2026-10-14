@@ -31,11 +31,11 @@ completion rules follow the four delivery layers. Use linear history and one pus
       recurrence revisions, pause/resume, history, focus, and ordinary composers.
 - [x] Capture populated authenticated desktop/phone/short-phone layouts in both themes and check
       keyboard interaction and 320px overflow using existing repository tools.
-- [ ] Review, document, commit, and integrate the accepted slice.
+- [x] Review, document, commit, and integrate the accepted slice.
 
 ## Task 3: Recover remaining product slices
 
-- [ ] Recover missing relation-tool, placement, initiative-planning, and undo behavior.
+- [x] Recover missing relation-tool, placement, initiative-planning, and undo behavior.
 - [ ] Reconcile initiative connected-work creation/hierarchy and daily planning corrections.
 - [ ] Recover the daily-workload MCP App as a separate validated capability.
 - [ ] Reconcile calendar/time/agenda, editor/navigation, people/team placement, ingestion, and

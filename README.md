@@ -39,6 +39,12 @@ Catalog errors require `work:read` and return shared catalogs instead of repeati
 each item. Plan confirmation preserves applied template properties and explicit overrides.
 See [template use over MCP](apps/docs/developers/mcp-tools-and-resources.mdx#create-work-from-a-template-body).
 
+MCP clients can link project dependencies, related tasks, subtasks, initiative contributions, and
+initiative hierarchy. Bulk updates can move tasks between cycles and change initiative membership.
+Initiative-rooted plans show visible existing work, reject dependency cycles, and record added links
+for undo. See the [MCP contract](docs/engineering/specs/mcp-surface.md) and
+[planning canvas](docs/engineering/specs/planning-canvas.md).
+
 Template setup separates metadata, work defaults, and review in a dialog that fits its content on
 desktop and fills phones. Existing templates open their work fields directly. Project repetition
 shows its cadence controls in the setup step. Generated work opens its schedule and occurrence

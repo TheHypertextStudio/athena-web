@@ -43,16 +43,34 @@ import { buildTaskViewFilter } from '../routes/task-helpers';
 import { enqueueSearchUpsert } from '../search/write-through';
 import type { McpContext } from './auth';
 import type { McpRegistrar } from './catalog';
-import { fieldDiffs, type FieldDiff } from './catalog-rows';
+import type { FieldDiff } from './catalog-rows';
+import { diff, titleOf } from './update-display';
 import {
   recordChangeSet,
   trackedFields,
   type ChangeRecord,
   type RecordedChange,
 } from './change-set';
-import { resolveOptional } from './descriptors';
 import { recordUpdatedRowActivity } from './tool-activity';
-import { applyLabelEdit, labelsFitRow, resolveLabelEdit, type LabelEdit } from './update-labels';
+import {
+  applyLabelEdit,
+  labelsFitRow,
+  resolveLabelEdit,
+  type LabelEdit,
+  type RowLabelResult,
+} from './update-labels';
+import {
+  applyInitiativeEdit,
+  cycleFitsRow,
+  type CycleTarget,
+  type InitiativeEdit,
+} from './update-relations';
+import {
+  referencePatch,
+  resolveReferences,
+  resolveRelations,
+  type ResolvedRefs,
+} from './update-refs';
 import { isTaskRowVisible, listWork, listWorkFilters, type WorkEntity } from './list-work';
 import { updateReportResult } from './apps/change-render';
 import { authorize, runTool, scopedActor } from './result';
@@ -99,6 +117,7 @@ const SETTABLE: Record<WorkEntity, readonly SetName[]> = {
     'delegate',
     'project',
     'milestone',
+    'cycle',
     'program',
     'team',
     'dueDate',
@@ -117,8 +136,9 @@ const SETTABLE: Record<WorkEntity, readonly SetName[]> = {
     'targetDate',
     'targetDateResolution',
     'labels',
+    'initiatives',
   ],
-  program: ['title', 'description', 'status', 'health', 'owner', 'labels'],
+  program: ['title', 'description', 'status', 'health', 'owner', 'labels', 'initiatives'],
   initiative: [
     'title',
     'description',
@@ -181,47 +201,6 @@ const NARROWING = (Object.keys(listWorkFilters) as (keyof typeof listWorkFilters
   (name) => name !== 'archived',
 );
 
-/**
- * The descriptor-valued fields of a patch, resolved to ids.
- *
- * @remarks
- * Each is `undefined` when the caller did not mention the field, and `null` when they asked to
- * clear it — the same three-state distinction the wire schema makes.
- */
-interface ResolvedRefs {
-  readonly assignee: string | null | undefined;
-  readonly delegate: string | null | undefined;
-  readonly lead: string | null | undefined;
-  readonly owner: string | null | undefined;
-  readonly projectId: string | null | undefined;
-  readonly programId: string | null | undefined;
-  readonly teamId: string | null | undefined;
-}
-
-/**
- * Resolve the descriptor-valued fields of a patch once, for every row.
- *
- * @remarks
- * These are the same for every target, so they resolve before the loop rather than per row —
- * a 100-row reassignment would otherwise pay 100 identical lookups for one name.
- *
- * @param orgId - The organization being updated within.
- * @param set - The caller's patch.
- * @returns the resolved ids.
- */
-async function resolveReferences(orgId: string, set: UpdateSet): Promise<ResolvedRefs> {
-  const [assignee, delegate, lead, owner, projectId, programId, teamId] = await Promise.all([
-    resolveOptional(orgId, 'actor', set.assignee, 'set.assignee'),
-    resolveOptional(orgId, 'actor', set.delegate, 'set.delegate'),
-    resolveOptional(orgId, 'actor', set.lead, 'set.lead'),
-    resolveOptional(orgId, 'actor', set.owner, 'set.owner'),
-    resolveOptional(orgId, 'project', set.project, 'set.project'),
-    resolveOptional(orgId, 'program', set.program, 'set.program'),
-    resolveOptional(orgId, 'team', set.team, 'set.team'),
-  ]);
-  return { assignee, delegate, lead, owner, projectId, programId, teamId };
-}
-
 /** Turn a `YYYY-MM-DD` (or an explicit null) into what Drizzle wants. */
 function datePatch(key: string, value: string | null | undefined): Record<string, Date | null> {
   if (value === undefined) return {};
@@ -262,13 +241,7 @@ async function buildPatch(
       : { status: containerStatus.status, statusId: containerStatus.statusId }),
     ...(set.priority !== undefined ? { priority: set.priority } : {}),
     ...(set.health !== undefined ? { health: set.health } : {}),
-    ...(refs.assignee !== undefined ? { assigneeId: refs.assignee } : {}),
-    ...(refs.delegate !== undefined ? { delegateId: refs.delegate } : {}),
-    ...(refs.lead !== undefined ? { leadId: refs.lead } : {}),
-    ...(refs.owner !== undefined ? { ownerId: refs.owner } : {}),
-    ...(refs.projectId !== undefined ? { projectId: refs.projectId } : {}),
-    ...(refs.programId !== undefined ? { programId: refs.programId } : {}),
-    ...(refs.teamId !== undefined ? { teamId: refs.teamId } : {}),
+    ...referencePatch(refs),
     ...datePatch('dueDate', set.dueDate),
   };
   if (entity === 'project') {
@@ -326,51 +299,6 @@ async function buildPatch(
   return patch;
 }
 
-/**
- * Render one value for comparison, so a report card reads without a type switch.
- *
- * @remarks
- * Lossless on purpose — this is what decides whether a field moved. {@link fieldDiffs} shortens it
- * only for display.
- */
-function display(value: unknown): string {
-  if (value === null || value === undefined) {
-    return 'none';
-  }
-  if (typeof value === 'string') {
-    return value;
-  }
-  // Dates are the only tracked non-primitive, and only their day matters in a diff line.
-  if (value instanceof Date) {
-    return value.toISOString().slice(0, 10);
-  }
-  if (typeof value === 'number' || typeof value === 'boolean') {
-    return String(value);
-  }
-  return JSON.stringify(value);
-}
-
-/**
- * What to call a row in a report line.
- *
- * @remarks
- * Tasks carry `title` and containers carry `name`; the report speaks one word for both, the same
- * way {@link updateSetFields} accepts one word for both.
- *
- * @param row - The row.
- * @param fallback - Used when neither column holds text, so a line never renders blank.
- * @returns the display name.
- */
-function titleOf(row: Record<string, unknown>, fallback: string): string {
-  const named = row['title'] ?? row['name'];
-  return typeof named === 'string' && named.length > 0 ? named : fallback;
-}
-
-/** The fields that actually moved, as `from → to` pairs a person can check. */
-function diff(before: Record<string, unknown>, after: Record<string, unknown>): FieldDiff[] {
-  return fieldDiffs(before, after, (_field, value) => display(value));
-}
-
 /** Everything a row write needs that is the same for every row in the call. */
 interface RowContext {
   readonly actorCtx: Awaited<ReturnType<typeof scopedActor>>;
@@ -381,6 +309,8 @@ interface RowContext {
   readonly fiscalYearStartMonth: number;
   readonly containerStatus: { statusId: string; status: string } | undefined;
   readonly labelEdit: LabelEdit | undefined;
+  readonly cycle: CycleTarget | undefined;
+  readonly initiativeEdit: InitiativeEdit | undefined;
   /** Each row's milestone patch, decided before any row is written. */
   readonly milestoneFor: (id: string) => MilestoneDecision;
 }
@@ -494,19 +424,50 @@ function teamAfter(rc: RowContext, row: Record<string, unknown>): string | null 
 }
 
 /**
- * Apply the whole patch to one row: its columns, then its labels.
+ * Why a row must be left alone before anything is written, or null when it may be written.
  *
  * @remarks
- * The label scope check runs before anything is written, so a row whose team cannot take a label
- * is skipped whole rather than half-updated.
+ * Every check runs before any write, so a row that cannot take part of the patch is skipped whole
+ * rather than half-updated.
  */
+async function skipReason(rc: RowContext, row: Record<string, unknown>): Promise<string | null> {
+  if (!(await permitted(rc, String(row['id'])))) return 'not_permitted';
+  const team = teamAfter(rc, row);
+  if (rc.labelEdit && !labelsFitRow(rc.labelEdit, team)) return 'label_out_of_scope';
+  if (!cycleFitsRow(rc.cycle, team)) return 'cycle_out_of_team';
+  return null;
+}
+
+/** Edit a row's label set and initiative membership, adding each diff line and recorded change. */
+async function applyEdgeEdits(
+  rc: RowContext,
+  id: string,
+  report: { fields: FieldDiff[]; changes: RecordedChange[] },
+): Promise<RowLabelResult | null> {
+  const { entity, orgId } = rc;
+  const labels = rc.labelEdit ? await applyLabelEdit(entity, orgId, id, rc.labelEdit) : null;
+  if (labels) {
+    report.fields.push(labels.field);
+    report.changes.push(labels.change);
+  }
+  const member = entity === 'project' || entity === 'program' ? entity : null;
+  const initiatives =
+    member && rc.initiativeEdit
+      ? await applyInitiativeEdit(member, orgId, id, rc.initiativeEdit)
+      : null;
+  if (initiatives) {
+    report.fields.push(initiatives.field);
+    report.changes.push(...initiatives.changes);
+  }
+  return labels;
+}
+
+/** Apply the whole patch to one row: its columns, then its labels and initiatives. */
 async function updateRow(rc: RowContext, row: Record<string, unknown>): Promise<RowOutcome> {
   const id = String(row['id']);
   const title = titleOf(row, id);
-  if (!(await permitted(rc, id))) return { skipped: { id, title, reason: 'not_permitted' } };
-  if (rc.labelEdit && !labelsFitRow(rc.labelEdit, teamAfter(rc, row))) {
-    return { skipped: { id, title, reason: 'label_out_of_scope' } };
-  }
+  const reason = await skipReason(rc, row);
+  if (reason !== null) return { skipped: { id, title, reason } };
   const milestonePatch = rc.milestoneFor(id);
   if (typeof milestonePatch === 'string') return { skipped: { id, title, reason: milestonePatch } };
   const { entity, orgId } = rc;
@@ -530,11 +491,7 @@ async function updateRow(rc: RowContext, row: Record<string, unknown>): Promise<
   const fields = diff(before, after);
   const changes: RecordedChange[] =
     fields.length > 0 ? [{ kind: entity, id, op: 'update', before, after }] : [];
-  const labels = rc.labelEdit ? await applyLabelEdit(entity, orgId, id, rc.labelEdit) : null;
-  if (labels) {
-    fields.push(labels.field);
-    changes.push(labels.change);
-  }
+  const labels = await applyEdgeEdits(rc, id, { fields, changes });
   await recordUpdatedRowActivity(rc, row, next, labels);
   if (changes.length > 0) await enqueueSearchUpsert(orgId, entity, id);
   const href = entityHref(orgId, entity, id);
@@ -613,8 +570,9 @@ export function registerUpdateTool(server: McpRegistrar, ctx: McpContext): void 
         ? rows.filter((row) => isTaskRowVisible(row, canViewTask))
         : rows;
 
+      const relations = await resolveRelations(actorCtx, input.orgId, set);
       const [refs, [workspaceSettings], labelEdit] = await Promise.all([
-        resolveReferences(input.orgId, set),
+        resolveReferences(input.orgId, set, relations.cycle),
         db
           .select({ fiscalYearStartMonth: organization.fiscalYearStartMonth })
           .from(organization)
@@ -633,6 +591,8 @@ export function registerUpdateTool(server: McpRegistrar, ctx: McpContext): void 
         fiscalYearStartMonth: workspaceSettings.fiscalYearStartMonth,
         containerStatus,
         labelEdit,
+        cycle: relations.cycle,
+        initiativeEdit: relations.initiatives,
         milestoneFor: await taskMilestoneDecisions(input.orgId, set, refs, visibleRows),
       };
       const changes: RecordedChange[] = [];

@@ -7,6 +7,5 @@ export {
   decodeWorkCursor,
   pageWorkRows,
   subjectTable,
-  wouldCreateCycle,
 } from './tools-shared-queries';
 export { cancelSession, replyToElicitation, resolveSessionAction } from './tools-shared-session';

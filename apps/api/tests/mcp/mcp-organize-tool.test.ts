@@ -363,7 +363,13 @@ describe('organize', () => {
         arguments: { orgId: s.orgId, changeSetId: out.changeSetId },
       })) as CallToolResult,
     );
-    expect(undone).toMatchObject({ reverted: 4, skipped: [] });
+    // Four created rows and the project's link to the initiative created beside it.
+    expect(undone).toMatchObject({ reverted: 5, skipped: [] });
+    const links = await db
+      .select()
+      .from(schema.initiativeProject)
+      .where(eq(schema.initiativeProject.organizationId, s.orgId));
+    expect(links).toEqual([]);
 
     // Undoing a create archives rather than deletes, so every node the plan added is now archived.
     const tasks = await db

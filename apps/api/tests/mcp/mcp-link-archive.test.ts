@@ -1,194 +1,49 @@
-import { Client } from '@modelcontextprotocol/sdk/client/index.js';
-import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { and, eq } from 'drizzle-orm';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 
 import type * as DbModule from '@docket/db';
 
-import type { McpContext } from '../../src/mcp/auth';
-import type { registerTools as RegisterTools } from '../../src/mcp/tools';
 import { resetAuthMocks } from '../support/auth-mock';
 import { getMigratedDb } from '../support/db';
-import { seedStatuses, type StatusIdLookup } from '../support/routes-harness';
-import { assertDefined } from '@docket/test-utils';
+import {
+  LinkHarness,
+  payload,
+  seedLinkOrg,
+  seedTask as seedTaskIn,
+  type LinkSeed,
+} from './mcp-link-fixtures';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
-let registerTools!: typeof RegisterTools;
+let harness!: LinkHarness;
 
 beforeAll(async () => {
   schema = await getMigratedDb();
   db = schema.db;
-  registerTools = (await import('../../src/mcp/tools')).registerTools;
+  harness = new LinkHarness((await import('../../src/mcp/tools')).registerTools);
 });
 
-interface Seed {
-  orgId: string;
-  teamId: string;
-  actorId: string;
-  projectId: string;
-  programId: string;
-  initiativeId: string;
-  statusId: StatusIdLookup;
-  ctx: McpContext;
-}
-
 /** Seed an org that can contribute org-wide, with one of each container. */
-async function seedOrg(): Promise<Seed> {
-  const slug = `lk-${Math.random().toString(36).slice(2, 10)}`;
-  const [org] = await db
-    .insert(schema.organization)
-    .values({ name: slug, slug, lifecycleState: 'active' })
-    .returning({ id: schema.organization.id });
-  const orgId = assertDefined(org).id;
-  const statusId = await seedStatuses(db, schema, orgId);
-
-  const [role] = await db
-    .insert(schema.role)
-    .values({ organizationId: orgId, key: 'seeded', name: 'Seeded', capabilities: ['contribute'] })
-    .returning({ id: schema.role.id });
-
-  const email = `${slug}@e.com`;
-  const [user] = await db
-    .insert(schema.user)
-    .values({ name: 'Ada', email })
-    .returning({ id: schema.user.id });
-
-  const [human] = await db
-    .insert(schema.actor)
-    .values({
-      organizationId: orgId,
-      kind: 'human',
-      displayName: 'Ada',
-      userId: assertDefined(user).id,
-      roleId: assertDefined(role).id,
-    })
-    .returning({ id: schema.actor.id });
-  const actorId = assertDefined(human).id;
-
-  await db.insert(schema.grant).values({
-    organizationId: orgId,
-    subjectKind: 'role',
-    subjectId: assertDefined(role).id,
-    resourceKind: 'organization',
-    resourceId: orgId,
-    capabilities: ['contribute'],
-    effect: 'allow',
-  });
-
-  const [team] = await db
-    .insert(schema.team)
-    .values({
-      organizationId: orgId,
-      name: 'Core',
-      key: `C${Math.random().toString(36).slice(2, 6)}`,
-    })
-    .returning({ id: schema.team.id });
-
-  const [project] = await db
-    .insert(schema.project)
-    .values({
-      organizationId: orgId,
-      name: 'Auth Rewrite',
-      teamId: assertDefined(team).id,
-      createdBy: actorId,
-      status: 'planned',
-      statusId: statusId('project', 'planned'),
-    })
-    .returning({ id: schema.project.id });
-
-  const [program] = await db
-    .insert(schema.program)
-    .values({
-      organizationId: orgId,
-      name: 'Reliability',
-      createdBy: actorId,
-      status: 'active',
-      statusId: statusId('program', 'active'),
-    })
-    .returning({ id: schema.program.id });
-
-  const [initiative] = await db
-    .insert(schema.initiative)
-    .values({
-      organizationId: orgId,
-      name: 'Q3 Platform',
-      createdBy: actorId,
-      status: 'active',
-      statusId: statusId('initiative', 'active'),
-    })
-    .returning({ id: schema.initiative.id });
-
-  return {
-    orgId,
-    teamId: assertDefined(team).id,
-    actorId,
-    projectId: assertDefined(project).id,
-    programId: assertDefined(program).id,
-    initiativeId: assertDefined(initiative).id,
-    statusId,
-    ctx: {
-      principal: {
-        kind: 'user',
-        userId: assertDefined(user).id,
-        userName: 'Ada',
-        userEmail: email,
-      },
-      scopes: ['work:read', 'work:write', 'agents:run', 'connectors:link'],
-    },
-  };
+function seedOrg(): Promise<LinkSeed> {
+  return seedLinkOrg({ schema, db });
 }
 
-async function seedTask(
-  s: Seed,
+function seedTask(
+  s: LinkSeed,
   values: Partial<typeof schema.task.$inferInsert> = {},
 ): Promise<string> {
-  const state = values.state ?? 'backlog';
-  const [row] = await db
-    .insert(schema.task)
-    .values({
-      organizationId: s.orgId,
-      title: 'Task',
-      teamId: s.teamId,
-      createdBy: s.actorId,
-      ...values,
-      state,
-      statusId: s.statusId('task', state),
-    })
-    .returning({ id: schema.task.id });
-  return assertDefined(row).id;
+  return seedTaskIn({ schema, db }, s, values);
 }
 
-const harnesses: { close(): Promise<void> }[] = [];
-
-async function connect(ctx: McpContext): Promise<Client> {
-  const server = new McpServer(
-    { name: 'test', version: '0.0.0' },
-    { capabilities: { tools: {}, resources: {} } },
-  );
-  registerTools(server, ctx, 'sess_link');
-  const [ct, st] = InMemoryTransport.createLinkedPair();
-  const client = new Client({ name: 'c', version: '0.0.0' });
-  await Promise.all([server.connect(st), client.connect(ct)]);
-  harnesses.push({
-    close: async () => {
-      await client.close();
-      await server.close();
-    },
-  });
-  return client;
+function connect(ctx: LinkSeed['ctx']) {
+  return harness.connect(ctx);
 }
 
 afterEach(async () => {
-  while (harnesses.length > 0) await assertDefined(harnesses.pop()).close();
+  await harness.closeAll();
   resetAuthMocks();
 });
-
-function payload(res: CallToolResult): Record<string, unknown> {
-  return JSON.parse((res.content[0] as { text: string }).text) as Record<string, unknown>;
-}
 
 describe('link', () => {
   it('records that one task blocks another', async () => {

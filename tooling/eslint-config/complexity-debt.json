@@ -739,16 +739,6 @@
       "excess": 201
     }
   },
-  "apps/api/src/mcp/link-tool.ts": {
-    "max-lines-per-function": {
-      "max": 89,
-      "excess": 9
-    },
-    "max-params": {
-      "max": 6,
-      "excess": 1
-    }
-  },
   "apps/api/src/mcp/list-work.ts": {
     "complexity": {
       "max": 28,

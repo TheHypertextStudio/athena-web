@@ -243,7 +243,14 @@ export function serializeTimeReviewState(state: TimeReviewState): URLSearchParam
 export function navigateTimeReviewPeriod(
   state: TimeReviewState,
   direction: -1 | 1,
+  cycles: readonly TimeReviewCycle[] = [],
 ): TimeReviewState {
+  if (state.period === 'cycle') {
+    const cycle = adjacentTimeReviewCycle(cycles, state.cycleId, direction);
+    return cycle
+      ? applyTimeReviewPatch(state, { cycleId: cycle.id, workspaceId: cycle.workspaceId })
+      : state;
+  }
   const anchor = Temporal.PlainDate.from(state.anchor);
   const amount =
     state.period === 'day'
@@ -274,4 +281,65 @@ export function timeReviewApiFilters(state: TimeReviewState): TimeReviewApiFilte
     ...(categoryId ? { categoryId } : {}),
     ...(captureSource ? { captureSource } : {}),
   };
+}
+
+/** Find a chronological neighbor, retaining API order for cycles with the same start. */
+export function adjacentTimeReviewCycle(
+  cycles: readonly TimeReviewCycle[],
+  cycleId: string | undefined,
+  direction: -1 | 1,
+): TimeReviewCycle | null {
+  const ordered = [...cycles].sort((left, right) =>
+    Temporal.Instant.compare(
+      Temporal.Instant.from(left.startsAt),
+      Temporal.Instant.from(right.startsAt),
+    ),
+  );
+  const index = ordered.findIndex((cycle) => cycle.id === cycleId);
+  return index < 0 ? null : (ordered[index + direction] ?? null);
+}
+
+function currentCycle(
+  state: TimeReviewState,
+  cycles: readonly TimeReviewCycle[],
+  now: string,
+): TimeReviewCycle | undefined {
+  const instant = Temporal.Instant.from(now);
+  const active = cycles.filter(
+    (cycle) =>
+      Temporal.Instant.compare(instant, Temporal.Instant.from(cycle.startsAt)) >= 0 &&
+      Temporal.Instant.compare(instant, Temporal.Instant.from(cycle.endsAt)) < 0,
+  );
+  return active.find((cycle) => cycle.workspaceId === state.workspaceId) ?? active[0];
+}
+
+/** Return the selected period to today in the person's timezone without losing unrelated filters. */
+export function todayTimeReviewState(
+  state: TimeReviewState,
+  timezone: string,
+  cycles: readonly TimeReviewCycle[] = [],
+  now = new Date().toISOString(),
+): TimeReviewState {
+  const today = currentDate(timezone, now);
+  const anchor = today.toString();
+  if (state.period === 'cycle') {
+    const cycle = currentCycle(state, cycles, now);
+    return applyTimeReviewPatch(
+      state,
+      cycle
+        ? { anchor, cycleId: cycle.id, workspaceId: cycle.workspaceId }
+        : { anchor, period: 'day', cycleId: undefined },
+    );
+  }
+  if (state.period === 'custom' && state.start && state.end) {
+    const length = Temporal.PlainDate.from(state.start).until(Temporal.PlainDate.from(state.end), {
+      largestUnit: 'days',
+    });
+    return applyTimeReviewPatch(state, {
+      anchor,
+      start: anchor,
+      end: today.add(length).toString(),
+    });
+  }
+  return applyTimeReviewPatch(state, { anchor });
 }

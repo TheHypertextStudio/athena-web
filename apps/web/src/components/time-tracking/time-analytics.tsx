@@ -24,7 +24,7 @@ import {
   Text,
 } from '@docket/ui/primitives';
 import { ResponsiveControlGroup, type ResponsiveControlItem } from '@docket/ui/components';
-import { ChevronLeft, ChevronRight, Filter, Plus, Schedule, X } from '@docket/ui/icons';
+import { Filter, Plus, Schedule, X } from '@docket/ui/icons';
 import { type JSX, useMemo, useState } from 'react';
 
 import Link from '@/components/docket-link';
@@ -37,6 +37,7 @@ import { useAppRouter } from '@/lib/interactions/navigation';
 import { useAppSearchParams } from '@/lib/app-location';
 import { STALE, apiQueryOptions, queryKeys, useApiListQuery, useApiQuery } from '@/lib/query';
 
+import { timeReviewNavigationControls } from './time-review-navigation-controls';
 import { TimeAddPastDialog } from './time-add-past-dialog';
 import { SelectedTimeFailure } from './selected-time-failure';
 import { TimeRecordDialog } from './time-record-dialog';
@@ -44,7 +45,6 @@ import { TimeSessionList } from './time-session-list';
 import { formatDuration, spokenDuration } from './format-duration';
 import {
   applyTimeReviewPatch,
-  navigateTimeReviewPeriod,
   parseTimeReviewState,
   resolveTimeReviewRange,
   serializeTimeReviewState,
@@ -213,19 +213,18 @@ export function TimeAnalytics(): JSX.Element {
         </Button>
       </div>
 
-      <ResponsiveControlGroup
-        label="Time review controls"
-        overflowLabel="More time controls"
-        items={timeReviewControlItems({
-          state,
-          cycles,
-          workspaces: orgs,
-          projects,
-          tasks,
-          categories,
-          onPatch: patch,
-          onState: update,
-        })}
+      <TimeReviewControls
+        state={state}
+        cycles={cycles}
+        workspaces={orgs}
+        projects={projects}
+        tasks={tasks}
+        categories={categories}
+        timezone={timezone}
+        preferencesPending={preferencesQ.isPending}
+        cyclesPending={cyclesQ.isPending}
+        onPatch={patch}
+        onState={update}
       />
 
       {state.period === 'custom' ? <CustomRangeControls state={state} onPatch={patch} /> : null}
@@ -362,6 +361,22 @@ interface TimeFilterProps {
   }[];
   readonly onPatch: (patch: Partial<TimeReviewState>) => void;
   readonly onState: (state: TimeReviewState) => void;
+}
+
+function TimeReviewControls(
+  props: TimeFilterProps & {
+    readonly timezone: string;
+    readonly preferencesPending: boolean;
+    readonly cyclesPending: boolean;
+  },
+): JSX.Element {
+  return (
+    <ResponsiveControlGroup
+      label="Time review controls"
+      overflowLabel="More time controls"
+      items={timeReviewControlItems(props, props)}
+    />
+  );
 }
 
 function TimeFilterItems({
@@ -589,7 +604,22 @@ function CyclePeriodOverflow(
   );
 }
 
-function timeReviewControlItems(props: TimeFilterProps): readonly ResponsiveControlItem[] {
+function timeReviewControlItems(
+  props: TimeFilterProps,
+  readiness: {
+    readonly timezone: string;
+    readonly preferencesPending: boolean;
+    readonly cyclesPending: boolean;
+  },
+): readonly ResponsiveControlItem[] {
+  const navigation = timeReviewNavigationControls({
+    state: props.state,
+    cycles: props.cycles,
+    timezone: readiness.timezone,
+    todayReady:
+      !readiness.preferencesPending && (props.state.period !== 'cycle' || !readiness.cyclesPending),
+    onState: props.onState,
+  });
   const selectPeriod = (period: (typeof PERIODS)[number][0]): void => {
     props.onPatch(
       period === 'custom'
@@ -641,58 +671,7 @@ function timeReviewControlItems(props: TimeFilterProps): readonly ResponsiveCont
 
   return [
     ...periodItems,
-    {
-      id: 'previous',
-      priority: 1,
-      inline: (
-        <Button
-          type="button"
-          size="sm"
-          variant="secondary"
-          aria-label={`Previous ${props.state.period}`}
-          onClick={() => {
-            props.onState(navigateTimeReviewPeriod(props.state, -1));
-          }}
-        >
-          <ChevronLeft aria-hidden="true" />
-        </Button>
-      ),
-      overflow: (
-        <DropdownMenuItem
-          onSelect={() => {
-            props.onState(navigateTimeReviewPeriod(props.state, -1));
-          }}
-        >
-          Previous {props.state.period}
-        </DropdownMenuItem>
-      ),
-    },
-    {
-      id: 'next',
-      priority: 1,
-      inline: (
-        <Button
-          type="button"
-          size="sm"
-          variant="secondary"
-          aria-label={`Next ${props.state.period}`}
-          onClick={() => {
-            props.onState(navigateTimeReviewPeriod(props.state, 1));
-          }}
-        >
-          <ChevronRight aria-hidden="true" />
-        </Button>
-      ),
-      overflow: (
-        <DropdownMenuItem
-          onSelect={() => {
-            props.onState(navigateTimeReviewPeriod(props.state, 1));
-          }}
-        >
-          Next {props.state.period}
-        </DropdownMenuItem>
-      ),
-    },
+    ...navigation,
     {
       id: 'filters',
       priority: 2,

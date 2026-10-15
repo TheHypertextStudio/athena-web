@@ -228,6 +228,26 @@ through archive states, and bind optional starting-field changes to the reviewed
 Whole-suite failures need focused diagnosis; a successful migration requires the real PostgreSQL
 journal order as well as in-memory schema checks.
 
+#### Calendar, Time, and daily-planning recovery
+
+Recovered chronological cycle navigation and Today behavior through the existing Time controls,
+including their narrow overflow presentation and reload state. New daily-planning blocks prefer a
+full quarter hour and use a shorter free interval when that is all that remains. Creation is disabled
+when no time remains; an unchanged historical block can still save metadata without moving into
+elapsed time. Four-kind navigation assertions preserve the current entity identity contract.
+
+Affected state, controls, navigation, editor, and model tests pass, including regressions for the
+finish boundary and historical edits. Web type checks, scoped lint, complexity checks, and the
+production web/API build pass. Two fresh authenticated journeys verify cycle reload/navigation
+and daily block persistence. Thirty-eight current captures cover desktop, narrow, and short-phone
+views in both themes, including overflow and enabled/disabled editor states; overflow checks pass.
+The broader daily-flow usability findings remain open. The source changes are confined to Time
+controls, daily planning helpers/editor/model, their tests, and existing journey coverage.
+
+The recovery showed that metadata edits must distinguish an unchanged historical placement from
+new or moved work. Runtime checks should seed the actual day/timezone and retain existing sessions
+across infrastructure restarts; the shared database is reset after acceptance.
+
 #### Blueprint implementation plan
 
 Use `docs/engineering/specs/work-template-blueprints.md` and its ordered implementation plan before

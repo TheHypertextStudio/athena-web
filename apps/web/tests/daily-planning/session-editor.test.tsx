@@ -2,6 +2,7 @@ import '@testing-library/jest-dom/vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { DailyPlanSnapshot } from '@docket/planning/daily-plan-flow';
+import type { EventBlock } from '../../src/components/daily-planning/daily-planning-agenda';
 import { SessionEditor } from '../../src/components/daily-planning/daily-planning-session-editor';
 
 const date = '2026-10-07';
@@ -38,6 +39,7 @@ const draft: DailyPlanSnapshot = {
 };
 function mount(
   editing: { taskId: string; sessionId?: string } = { taskId: 'a', sessionId: 'block' },
+  options: { earliestAt?: string; draft?: DailyPlanSnapshot; events?: readonly EventBlock[] } = {},
 ) {
   const onSave = vi.fn();
   const onRemove = vi.fn();
@@ -46,9 +48,9 @@ function mount(
     <SessionEditor
       date={date}
       timezone="UTC"
-      earliestAt="2026-10-07T08:00:00.000Z"
-      events={[]}
-      draft={draft}
+      earliestAt={options.earliestAt ?? '2026-10-07T08:00:00.000Z'}
+      events={options.events ?? []}
+      draft={options.draft ?? draft}
       names={names}
       editing={editing}
       onSave={onSave}
@@ -61,6 +63,77 @@ function mount(
 afterEach(cleanup);
 
 describe('daily planning block editor controls', () => {
+  it('offers a valid five-minute block when the day ends before the usual duration', () => {
+    const { onSave } = mount(
+      { taskId: 'd' },
+      {
+        earliestAt: '2026-10-07T11:55:00.000Z',
+        draft: { ...draft, finishAt: '2026-10-07T12:00:00.000Z' },
+      },
+    );
+    expect(screen.getByRole('spinbutton', { name: 'Duration for Check launch' })).toHaveValue(5);
+    fireEvent.click(screen.getByRole('button', { name: 'Save block' }));
+    expect(onSave).toHaveBeenCalledWith(
+      expect.objectContaining({
+        startsAt: '2026-10-07T11:55:00.000Z',
+        endsAt: '2026-10-07T12:00:00.000Z',
+      }),
+    );
+  });
+  it('explains that no time remains and prevents a new block after finish', () => {
+    const { onSave } = mount({ taskId: 'd' }, { earliestAt: '2026-10-07T17:01:00.000Z' });
+    expect(screen.getByRole('button', { name: 'Save block' })).toBeDisabled();
+    expect(screen.getByText(/no time remains before your finish time/i)).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Save block' }));
+    expect(onSave).not.toHaveBeenCalled();
+  });
+  it('keeps existing multi-task blocks editable after finish', () => {
+    const { onSave } = mount(undefined, { earliestAt: '2026-10-07T17:01:00.000Z' });
+    expect(screen.getByRole('button', { name: 'Save block' })).toBeEnabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Save block' }));
+    expect(onSave).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'block', allocations: draft.sessions[0]?.allocations }),
+    );
+  });
+  it('caps a new block at the next calendar reservation', () => {
+    const { onSave } = mount(
+      { taskId: 'd' },
+      {
+        earliestAt: '2026-10-07T11:55:00.000Z',
+        draft: { ...draft, finishAt: '2026-10-07T12:00:00.000Z' },
+        events: [
+          {
+            title: 'Meeting',
+            startsAt: '2026-10-07T11:58:00.000Z',
+            endsAt: '2026-10-07T12:00:00.000Z',
+          },
+        ],
+      },
+    );
+    expect(screen.getByRole('spinbutton', { name: 'Duration for Check launch' })).toHaveValue(3);
+    fireEvent.click(screen.getByRole('button', { name: 'Save block' }));
+    expect(onSave).toHaveBeenCalledWith(
+      expect.objectContaining({ endsAt: '2026-10-07T11:58:00.000Z' }),
+    );
+  });
+  it('prevents a new block when calendar reservations occupy the remaining time', () => {
+    mount(
+      { taskId: 'd' },
+      {
+        earliestAt: '2026-10-07T11:55:00.000Z',
+        draft: { ...draft, finishAt: '2026-10-07T12:00:00.000Z' },
+        events: [
+          {
+            title: 'Meeting',
+            startsAt: '2026-10-07T11:55:00.000Z',
+            endsAt: '2026-10-07T12:00:00.000Z',
+          },
+        ],
+      },
+    );
+    expect(screen.getByRole('button', { name: 'Save block' })).toBeDisabled();
+    expect(screen.getByRole('status')).toHaveTextContent(/no time remains/i);
+  });
   it('keeps every allocation when a block with three tasks is saved', () => {
     const { onSave } = mount();
     expect(screen.getByRole('spinbutton', { name: 'Duration for Write announcement' })).toHaveValue(

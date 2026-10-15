@@ -13,7 +13,8 @@ import {
 } from '@docket/ui/primitives';
 import { useState, type JSX } from 'react';
 import { clockValue, type EventBlock } from './daily-planning-agenda';
-import { nextAvailableStart, unplacedMinutes } from './daily-planning-model';
+import { unplacedMinutes } from './daily-planning-model';
+import { newSessionSlot } from './daily-planning-session-defaults';
 
 interface SessionEditorProps {
   readonly actual?: readonly { taskId: string | null; recordedMinutes: number }[];
@@ -43,15 +44,19 @@ function initialValues(props: SessionEditorProps) {
       ),
     ),
   );
-  const firstSlot = nextAvailableStart(props.earliestAt, minutes, props.draft.finishAt, [
+  const firstSlot = newSessionSlot(props.earliestAt, props.draft.finishAt, minutes, [
     ...props.events,
     ...props.draft.sessions,
   ]);
   return {
     existing,
-    start: clockValue(existing?.startsAt ?? firstSlot ?? props.earliestAt, props.timezone),
+    noTimeLeft: !existing && !firstSlot,
+    start: clockValue(
+      existing?.startsAt ?? firstSlot?.startsAt ?? props.earliestAt,
+      props.timezone,
+    ),
     allocations: existing?.allocations ?? [
-      { taskId: props.editing.taskId, plannedMinutes: minutes },
+      { taskId: props.editing.taskId, plannedMinutes: firstSlot?.minutes ?? minutes },
     ],
   };
 }
@@ -113,6 +118,7 @@ function useSessionForm(props: SessionEditorProps) {
   const [pinned, setPinned] = useState(initial.existing?.pinned ?? false);
   const duration = allocations.reduce((sum, part) => sum + part.plannedMinutes, 0);
   const save = (): void => {
+    if (initial.noTimeLeft) return;
     const [hour, minute] = start.split(':').map(Number);
     const startsAt = instantAt(
       props.date,
@@ -152,11 +158,13 @@ function SessionActions({
   props,
   existingId,
   allocations,
+  noTimeLeft,
   save,
 }: {
   readonly props: SessionEditorProps;
   readonly existingId: string | undefined;
   readonly allocations: DailyPlanSession['allocations'];
+  readonly noTimeLeft: boolean;
   readonly save: () => void;
 }): JSX.Element {
   return (
@@ -177,6 +185,7 @@ function SessionActions({
       <Button
         onClick={save}
         disabled={
+          noTimeLeft ||
           !allocations.every(
             (part) => Number.isInteger(part.plannedMinutes) && part.plannedMinutes > 0,
           )
@@ -215,6 +224,25 @@ function AddAllocation({
         ))}
       </Select>
     </label>
+  );
+}
+
+function SessionDuration({
+  minutes,
+  noTimeLeft,
+}: {
+  readonly minutes: number;
+  readonly noTimeLeft: boolean;
+}): JSX.Element {
+  return (
+    <>
+      <p className="text-body-small text-on-surface-variant">{minutes} minutes in this block</p>
+      {noTimeLeft ? (
+        <p role="status" className="text-body-small text-on-surface-variant">
+          No time remains before your finish time. Change your finish time or unschedule a block.
+        </p>
+      ) : null}
+    </>
   );
 }
 
@@ -258,9 +286,7 @@ export function SessionEditor(props: SessionEditorProps): JSX.Element {
             names={props.names}
             onChange={setAllocations}
           />
-          <p className="text-body-small text-on-surface-variant">
-            {duration} minutes in this block
-          </p>
+          <SessionDuration minutes={duration} noTimeLeft={initial.noTimeLeft} />
           <AddAllocation
             props={props}
             tasks={otherTasks}
@@ -292,6 +318,7 @@ export function SessionEditor(props: SessionEditorProps): JSX.Element {
             props={props}
             existingId={initial.existing?.id}
             allocations={allocations}
+            noTimeLeft={initial.noTimeLeft}
             save={save}
           />
         </div>

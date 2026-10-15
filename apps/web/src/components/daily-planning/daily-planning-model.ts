@@ -174,9 +174,19 @@ export function placeSession(
   dayStartAt: string,
 ): DailyPlanSnapshot {
   const others = snapshot.sessions.filter((item) => item.id !== session.id);
+  // Metadata edits retain a historical placement; new or moved blocks must fit remaining time.
+  const unchangedPlacement = snapshot.sessions.some(
+    (item) =>
+      item.id === session.id &&
+      item.startsAt === session.startsAt &&
+      item.endsAt === session.endsAt,
+  );
   const start = Date.parse(session.startsAt),
     end = Date.parse(session.endsAt);
-  if (start < Date.parse(dayStartAt) || end > Date.parse(snapshot.finishAt))
+  if (
+    (!unchangedPlacement && start < Date.parse(dayStartAt)) ||
+    end > Date.parse(snapshot.finishAt)
+  )
     throw new Error('Choose a time within the workday.');
   if (
     [...busy.filter((item) => item.blocksTime !== false), ...others].some(

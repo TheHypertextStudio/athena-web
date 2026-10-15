@@ -23,6 +23,63 @@ const draft: DailyPlanSnapshot = {
 };
 
 describe('daily planning model', () => {
+  it('allows a pin change to an existing unchanged block after the day has finished', () => {
+    const session = {
+      id: 'existing',
+      startsAt: '2026-09-22T16:00:00.000Z',
+      endsAt: '2026-09-22T17:00:00.000Z',
+      allocations: [{ taskId: 'a', plannedMinutes: 60 }],
+      pinned: false,
+    };
+    const saved = placeSession(
+      { ...draft, sessions: [session] },
+      { ...session, pinned: true },
+      [],
+      '2026-09-23T00:01:00.000Z',
+    );
+    expect(saved.sessions).toEqual([{ ...session, pinned: true }]);
+  });
+  it('still checks calendar overlap while editing an unchanged historical block', () => {
+    const session = {
+      id: 'existing',
+      startsAt: '2026-09-22T16:00:00.000Z',
+      endsAt: '2026-09-22T17:00:00.000Z',
+      allocations: [{ taskId: 'a', plannedMinutes: 60 }],
+      pinned: false,
+    };
+    expect(() =>
+      placeSession(
+        { ...draft, sessions: [session] },
+        { ...session, pinned: true },
+        [session],
+        '2026-09-23T00:01:00.000Z',
+      ),
+    ).toThrow('overlaps');
+  });
+  it.each([
+    { id: 'new', startsAt: '2026-09-22T16:00:00.000Z', endsAt: '2026-09-22T17:00:00.000Z' },
+    { id: 'existing', startsAt: '2026-09-22T16:05:00.000Z', endsAt: '2026-09-22T17:05:00.000Z' },
+    { id: 'existing', startsAt: '2026-09-23T00:05:00.000Z', endsAt: '2026-09-23T01:05:00.000Z' },
+  ])(
+    'still rejects a new or moved block outside the remaining workday: $id $startsAt',
+    (placement) => {
+      const session = {
+        id: 'existing',
+        startsAt: '2026-09-22T16:00:00.000Z',
+        endsAt: '2026-09-22T17:00:00.000Z',
+        allocations: [{ taskId: 'a', plannedMinutes: 60 }],
+        pinned: false,
+      };
+      expect(() =>
+        placeSession(
+          { ...draft, sessions: [session] },
+          { ...session, ...placement },
+          [],
+          '2026-09-23T00:01:00.000Z',
+        ),
+      ).toThrow('within the workday');
+    },
+  );
   beforeEach(() => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-09-22T00:00:00.000Z'));

@@ -97,8 +97,6 @@ export function useDailyPlanningTasks(input: {
     const draft = value;
     if (!draft) return;
     try {
-      if (Date.parse(session.startsAt) < Date.parse(input.startAt))
-        throw new Error('Choose a time that has not passed.');
       input.editDraft(
         placeSession(
           includeSessionBudget(draft, session, input.actual),

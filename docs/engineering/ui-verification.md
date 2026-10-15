@@ -24,6 +24,19 @@ running after this command. The tool can clean up background descendants when it
 even after the launcher prints `READY`. Run browser commands in separate sessions, stop the stack
 with `scripts/dev-stack.sh stop`, then close the holding terminal.
 
+If development filesystem caches exhaust local storage, stop the stack and remove only this
+checkout's regenerable `apps/web/.next/dev/cache` and `apps/admin/.next/dev/cache` directories.
+Restart the same stack with its optional low-disk setting:
+
+```bash
+DOCKET_DEV_DISABLE_CACHE=1 bash scripts/dev-stack.sh start
+```
+
+Both Next development servers keep their compiler cache in memory for that session. The database,
+saved browser session, host/port topology, and production build cache are unaffected. Cold startup
+may take longer after a restart. Without this flag, Next retains its normal filesystem-cache
+behavior. See [Next's filesystem-cache configuration](https://nextjs.org/docs/app/api-reference/config/next-config-js/turbopackFileSystemCache).
+
 **Each checkout gets its own port block, and this matters.** The primary checkout uses web `1355`,
 API `1356`, admin `1357`, runner `1358`. A worktree hashes its git dir into a stride-4 block from
 `1400` up, and probes forward if that block is taken. Read the ports off `dev-stack.sh env` rather

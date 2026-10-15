@@ -57,6 +57,10 @@ const securityHeaders = [
  */
 const nextConfig: NextConfig = {
   reactStrictMode: true,
+  // Use the same local low-disk option as the product app.
+  ...(process.env['DOCKET_DEV_DISABLE_CACHE'] === '1'
+    ? { experimental: { turbopackFileSystemCacheForDev: false } }
+    : {}),
   output: 'standalone',
   outputFileTracingRoot: path.join(import.meta.dirname, '../..'),
   transpilePackages: ['@docket/ui', 'domain packages', '@docket/env'],

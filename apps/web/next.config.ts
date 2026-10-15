@@ -169,6 +169,10 @@ const NON_DOCS_ROUTES = '/:path((?!docs$|docs/).*)';
  */
 const nextConfig: NextConfig = {
   reactStrictMode: true,
+  // Low-disk worktrees may keep the compiler cache in memory for this dev session.
+  ...(process.env['DOCKET_DEV_DISABLE_CACHE'] === '1'
+    ? { experimental: { turbopackFileSystemCacheForDev: false } }
+    : {}),
   env: { DOCKET_RUNTIME_TARGET: WORKERS_BUILD ? 'workers' : 'node' },
   // The dev-mode route indicator (bottom-left) is dev-only chrome that never ships to
   // production, but it overlaps real page content in narrow-viewport design-review captures

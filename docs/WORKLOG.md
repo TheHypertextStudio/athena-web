@@ -248,6 +248,20 @@ The recovery showed that metadata edits must distinguish an unchanged historical
 new or moved work. Runtime checks should seed the actual day/timezone and retain existing sessions
 across infrastructure restarts; the shared database is reset after acceptance.
 
+#### Low-disk development verification
+
+Added an explicit session option for both Next development servers to keep compiler caches in
+memory when local storage is constrained. Normal development caching remains the default, and
+production build caching is unchanged. The existing UI-verification guide documents stopping the
+stack before removing only this checkout's regenerable compiler caches and restarting the same
+stack with its saved browser session and database.
+
+The native web/API production build and admin typecheck pass. The existing stack reaches all
+health checks with the option enabled, and the planning capture matrix completes without persistent
+compiler-cache growth. The first build caught an exact-optional-property configuration issue;
+conditional omission fixes it without changing default behavior. Keep this option local to a
+verification session rather than changing shared package-store configuration.
+
 #### Blueprint implementation plan
 
 Use `docs/engineering/specs/work-template-blueprints.md` and its ordered implementation plan before

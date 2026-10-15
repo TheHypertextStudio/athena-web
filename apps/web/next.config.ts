@@ -189,6 +189,10 @@ const nextConfig: NextConfig = {
       { source: '/:path*', headers: securityHeaders },
       { source: NON_DOCS_ROUTES, headers: cspHeader },
       {
+        source: '/fonts/:family(ibm-plex-sans|ibm-plex-mono|fraunces)/:font(.*\\.woff2)',
+        headers: [{ key: 'Cache-Control', value: 'public, max-age=31536000, immutable' }],
+      },
+      {
         // Apple rejects redirects and content sniffing for this extensionless trust document.
         // Keep it on the canonical Docket origin with an explicit JSON media type.
         source: '/.well-known/apple-app-site-association',

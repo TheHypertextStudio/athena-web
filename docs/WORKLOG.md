@@ -7,6 +7,20 @@
 
 ## Active Tasks
 
+### [WEBSITE-FONT-DELIVERY] Preserve typography with deterministic font assets
+
+- **Status**: REVIEW
+- **Priority**: P1
+- **Description**: Keep web builds independent of Google Fonts responses by serving the existing
+  IBM Plex Sans, IBM Plex Mono and Fraunces files locally. Preserve their weights, variable axes,
+  glyph coverage, fallback metrics, layout variables and route-specific display-face scope.
+- **Approach**: Use ordinary public assets and CSS font faces, native React resource hints and
+  immutable caching for content-addressed WOFF2 URLs. Retain each family's license.
+- **Files**: Web font assets, layout styles and resource hints, Next headers and font documentation.
+- **Subtasks**:
+  - [x] Preserve the existing font binaries, CSS declarations and layout scope.
+  - [x] Validate the ordinary build, affected checks and rendered font delivery.
+
 ### [WEBSITE-CI-AUTHZ-FIXTURE] Use the declared database schema in authorization checks
 
 - **Status**: REVIEW

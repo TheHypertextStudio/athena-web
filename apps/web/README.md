@@ -22,6 +22,18 @@ repository root. Common Mintlify commands remain `pnpm docs:config`, `pnpm docs:
 remain installed through the genuine workspace lock. Actions uses its ephemeral GitHub token and
 package-read access; local setup requires an approved package-read identity.
 
+## Font delivery
+
+The web app hosts IBM Plex Sans, IBM Plex Mono and Fraunces in `public/fonts`, with each
+family's SIL Open Font License. The checked-in WOFF2 files preserve the existing weights,
+variable axes and glyph subsets. The layout stylesheets retain their fallback metrics and
+publish the existing font variables. Fraunces remains scoped to marketing, authentication
+and onboarding; the root layout loads the product families.
+
+React's native resource hints preload the Latin faces during layout rendering. Content-addressed
+font URLs receive immutable caching. Builds do not fetch Google Fonts, avoiding the Next font
+loader's parsing failure on Google font URLs with query parameters.
+
 ## Native Workers commands
 
 The application pins Next 16.3.8, OpenNext 1.20.10 and Wrangler 4.148.0. React remains 19.2.7.

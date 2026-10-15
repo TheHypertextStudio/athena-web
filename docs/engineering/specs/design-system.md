@@ -261,9 +261,9 @@ File: `@docket/ui/src/styles/globals.css` (imported by every app's own `globals.
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
 
-  /* type families — IBM Plex is the sole product typeface (loaded via next/font per app,
-     published as --font-ibm-plex-sans / --font-ibm-plex-mono). The marketing surface adds
-     Fraunces as a display face in its own route-group layer; see apps/web (marketing). */
+  /* type families — IBM Plex is the sole product typeface, hosted in apps/web/public/fonts
+     and published as --font-ibm-plex-sans / --font-ibm-plex-mono by the root layout CSS.
+     Marketing, authentication and onboarding add Fraunces in their route layouts. */
   --font-sans: var(--font-ibm-plex-sans), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-ibm-plex-mono), ui-monospace, 'SFMono-Regular', monospace;
 }

@@ -228,6 +228,24 @@ through archive states, and bind optional starting-field changes to the reviewed
 Whole-suite failures need focused diagnosis; a successful migration requires the real PostgreSQL
 journal order as well as in-memory schema checks.
 
+#### Blueprint implementation plan
+
+Use `docs/engineering/specs/work-template-blueprints.md` and its ordered implementation plan before
+source changes. Extend immutable publications with bounded nested children, relative rules and
+per-date manual ownership; extract existing inserts into one transaction-aware creation service.
+All creation adapters, accepted plans, and legacy recurring forests share the planner, writer,
+500-item cap, permissions, provenance, and undo. Contextual Organize landing must inherit the actual
+project or parent-task team and re-resolve workflow and template eligibility for that team. Preserve original legacy roots and destinations;
+never fabricate grouping work. Retain scheduler tables and compatibility projections until the
+Program schedule layer verifies retirement.
+
+Implement pure contracts/planning first, followed by ordered expansion/backfill/enforcement,
+canonical creation, reflow, selective previews, Save as template, and typed UI authoring. Validate
+nested versions, optional prerequisites, rollback at500/501, working dates, missing anchors,
+manual edits, concurrent preview acceptance, retained-data PostgreSQL upgrades, and the populated
+Event preparation journey in both themes and phone layouts. No complexity-debt relaxation or
+second data-access, scheduler, migration, or undo path is permitted.
+
 ### [LEGAL-POLICIES-002] Keep policy versions easy to navigate
 
 - **Status**: REVIEW

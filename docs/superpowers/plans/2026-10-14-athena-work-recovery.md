@@ -20,8 +20,8 @@ completion rules follow the four delivery layers. Use linear history and one pus
 
 - [x] Preserve refs, detached heads, staged/unstaged binary patches, untracked files, and captures.
 - [x] Verify reconstructed tracked trees, archive file hashes, and complete Git bundles.
-- [ ] Give every checkout and candidate branch a recoverable disposition.
-- [ ] Quarantine broad dirty deletion snapshots until every unique change has been classified.
+- [x] Give every checkout and candidate branch a recoverable disposition.
+- [x] Quarantine broad dirty deletion snapshots and classify every unique file group.
 - [ ] Retire only clean, unused checkouts with landed, superseded, or recoverably archived work.
 
 ## Task 2: Recover existing template and repeating-work UI
@@ -52,13 +52,13 @@ completion rules follow the four delivery layers. Use linear history and one pus
 
 ## Task 5: Work-template identity
 
-- [ ] Complete the detailed engineering specification and migration plan before coding.
-- [ ] Add identity, immutable published versions, and base templates for all four work kinds.
-- [ ] Convert workspace/team/private/seeded templates; batch-backfill existing work, then enforce
+- [x] Complete the detailed engineering specification and migration plan before coding.
+- [x] Add identity, immutable published versions, and base templates for all four work kinds.
+- [x] Convert workspace/team/private/seeded templates; batch-backfill existing work, then enforce
       required template/version associations. Imports and connectors receive base templates.
-- [ ] Add composer selection, New actions, row/header identity, filter/group support, settings,
+- [x] Add composer selection, New actions, row/header identity, filter/group support, settings,
       contributor policy, Change template, MCP discovery/creation, and compatibility adapters.
-- [ ] Prove an Event project retains identity after reopening and groups correctly by template.
+- [x] Prove an Event project retains identity after reopening and groups correctly by template.
 
 ## Task 6: Composed blueprints
 

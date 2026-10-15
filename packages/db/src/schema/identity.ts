@@ -151,6 +151,10 @@ export const organization = pgTable(
       .notNull()
       .default(defaultVocabularySkin),
     agentGuidance: text('agent_guidance'),
+    workTemplateAuthoring: text('work_template_authoring')
+      .$type<'contributors' | 'admins'>()
+      .notNull()
+      .default('contributors'),
     approvalRouting: jsonb('approval_routing').$type<ApprovalRouting>(),
     initiativeMaxDepth: integer('initiative_max_depth').notNull().default(2),
     autoCompleteParentTasks: boolean('auto_complete_parent_tasks').notNull().default(true),
@@ -180,6 +184,10 @@ export const organization = pgTable(
   },
   (t) => [
     uniqueIndex('organization_slug_uq').on(t.slug),
+    check(
+      'organization_work_template_authoring_valid',
+      sql`${t.workTemplateAuthoring} in ('contributors', 'admins')`,
+    ),
     index('organization_lifecycle_idx').on(t.lifecycleState),
     check('organization_initiative_max_depth_check', sql`${t.initiativeMaxDepth} between 1 and 5`),
     check(
@@ -296,6 +304,7 @@ export const team = pgTable(
   (t) => [
     index('team_org_idx').on(t.organizationId),
     uniqueIndex('team_org_key_uq').on(t.organizationId, t.key),
+    uniqueIndex('team_id_org_unique').on(t.id, t.organizationId),
     index('team_ancestor_path_gin').using('gin', t.ancestorPath),
   ],
 );

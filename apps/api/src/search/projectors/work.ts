@@ -16,6 +16,7 @@ import {
 } from '../types';
 
 interface NamedWorkRow extends OrgScopedRow {
+  workTypeId?: string | undefined;
   name: string;
   // The entity's own authored plain-text blurb — distinct from `description`, which is the full
   // Markdown body. Preferred for the search document's `summary` (and thus any preview that reads
@@ -54,6 +55,7 @@ function displaySummary(
 }
 
 interface TaskRow extends OrgScopedRow {
+  workTypeId?: string | undefined;
   source?: string;
   sourceProvider?: string | null;
   externalUrl?: string | null;
@@ -131,6 +133,7 @@ function namedWorkDocument(row: NamedWorkRow, kind: SearchDocumentKind): SearchD
     summary: displaySummary(row.summary, row.description),
     body: row.description,
     facet: {
+      workTypeId: row.workTypeId,
       ownerId: row.ownerId,
       leadId: row.leadId,
       status: row.status,
@@ -150,6 +153,7 @@ export const taskSearchProjector = preloadedProjector<TaskRow>('task', (row) => 
     summary: displaySummary(undefined, row.description),
     body: row.description,
     facet: {
+      workTypeId: row.workTypeId,
       provider: row.source === 'linked' ? row.sourceProvider : undefined,
       state: row.state,
       priority: row.priority,

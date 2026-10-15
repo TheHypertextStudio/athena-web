@@ -45,6 +45,8 @@ export const placedOutputSchema = z.object({
     })
     .optional()
     .describe('The existing project, program, or initiative a top-level item was filed into.'),
+  workTypeId: z.string().optional().describe('Saved template identity.'),
+  workTypeVersionId: z.string().optional().describe('Pinned publication.'),
   templateId: z
     .string()
     .optional()

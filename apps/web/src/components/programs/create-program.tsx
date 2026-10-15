@@ -1,4 +1,6 @@
 'use client';
+import { programCreateBody } from './program-create-body';
+import type { WorkTemplateDraftFields } from '@/components/composer/work-template-draft';
 import { usesInitialWorkspace } from '@/components/composer/uses-initial-workspace';
 
 import { WorkspaceActorPicker } from '@/components/people/workspace-actor-picker';
@@ -22,7 +24,6 @@ import { WorkspaceActorPicker } from '@/components/people/workspace-actor-picker
  *
  * @see {@link useComposerOptions} for the owner option source.
  */
-import { ActorId } from '@docket/identity-access/ids';
 import { type Health, type Visibility } from '@docket/work/capability-contract';
 import { type ProgramOut, type ProgramStatus } from '@docket/work/program-contract';
 
@@ -65,7 +66,7 @@ import { useProgramDraftPersistence } from './use-program-draft-persistence';
 const COMPOSER_INCLUDE = ['actors'] as const;
 
 /** Every field the program composer holds, as one value. */
-export interface ProgramDraft {
+export interface ProgramDraft extends WorkTemplateDraftFields {
   name: string;
   summary: string;
   description: string;
@@ -170,6 +171,7 @@ export const CreateProgramDialog = withComposerReset(function CreateProgramCompo
   });
   const templateContribution = useComposerTemplateContribution<ProgramDraft>({
     kind: 'program',
+    selection: draft,
     orgId,
     open,
     destinationReady,
@@ -191,7 +193,7 @@ export const CreateProgramDialog = withComposerReset(function CreateProgramCompo
     if (previousWorkspaceId.current === globalCreation.targetWorkspaceId) return;
     previousWorkspaceId.current = globalCreation.targetWorkspaceId;
     setError(null);
-    updateDraft(() => ({ ownerId: null }));
+    updateDraft(() => ({ ownerId: null, workTypeId: null, workTypeVersionId: null }));
   }, [globalCreation, updateDraft]);
 
   const canSubmit =
@@ -205,18 +207,9 @@ export const CreateProgramDialog = withComposerReset(function CreateProgramCompo
       setCreating(true);
       setError(null);
       try {
-        const trimmedBody = draft.description.trim();
         const res = await api.v1.orgs[':orgId'].programs.$post({
           param: { orgId },
-          json: {
-            name: trimmed,
-            status: draft.status,
-            visibility: draft.visibility,
-            ...(draft.summary.trim().length > 0 ? { summary: draft.summary.trim() } : {}),
-            ...(trimmedBody.length > 0 ? { description: trimmedBody } : {}),
-            ...(draft.ownerId ? { ownerId: ActorId.parse(draft.ownerId) } : {}),
-            ...(draft.health ? { health: draft.health } : {}),
-          },
+          json: programCreateBody(draft, trimmed),
         });
         if (!res.ok) {
           setError(
@@ -332,6 +325,7 @@ export const CreateProgramDialog = withComposerReset(function CreateProgramCompo
       onSubmit={() => void submit(continuation.createMore)}
       submitLabel={`Create ${programNoun}`}
     >
+      {templateContribution.selection}
       <ProgramComposerPickers
         orgId={orgId}
         actorOptions={options.actorOptions}

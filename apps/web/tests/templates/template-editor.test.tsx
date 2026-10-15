@@ -118,6 +118,41 @@ describe('Template editor', () => {
     },
   );
 
+  it('creates a private guided draft through the supplied versioned writer', async () => {
+    const saveDraft = vi.fn().mockResolvedValue(undefined);
+    const client = new QueryClient();
+    render(
+      <QueryClientProvider client={client}>
+        <TemplateEditorDialog
+          orgId="org_1"
+          targetType="project"
+          template={null}
+          open
+          onOpenChange={vi.fn()}
+          onSaved={vi.fn()}
+          saveDraft={saveDraft}
+        />
+      </QueryClientProvider>,
+    );
+    fireEvent.change(screen.getByLabelText('Template name'), { target: { value: 'Event' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    fireEvent.change(screen.getByRole('textbox', { name: 'Project name (optional)' }), {
+      target: { value: 'Community dinner' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Create template' }));
+    await waitFor(() => {
+      expect(saveDraft).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: 'Event',
+          scope: 'personal',
+          payload: expect.objectContaining({ name: 'Community dinner' }),
+        }),
+      );
+    });
+    expect(mutations.create).not.toHaveBeenCalled();
+  });
+
   it('creates a template from Basics, Work, and the actual review values', async () => {
     mutations.create.mockResolvedValue(template);
     const view = mount();

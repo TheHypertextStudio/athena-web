@@ -47,6 +47,7 @@ import { PublishAction } from '@/components/publishing/publish-action';
 import { ContainerDetailLoading } from '@/components/views/entity-snapshot-metadata';
 import { DetailPrintSummary } from '@/components/views/detail-print-summary';
 import { useDetailTab } from '@/components/views/use-detail-tab';
+import { WorkTemplateHeader } from '@/components/templates/work-template-header';
 import { EntityDetailLayout } from '@/components/views/entity-detail-layout';
 import { api } from '@/lib/api';
 import { useInitiativePageIdentity } from './use-initiative-page-identity';
@@ -427,66 +428,69 @@ export default function InitiativeDetailPage(): JSX.Element {
         />
       }
       metadata={
-        <InitiativeMastheadMetadata
-          initiativeNoun={initiativeNoun}
-          detail={detail}
-          canEdit={canEdit}
-          patch={mutations.patchInitiative}
-          planningCalendar={planningCalendar}
-          owner={{
-            options: memberOptions,
-            pickerOpen: ownerPickerOpen,
-            onPickerOpenChange: setOwnerPickerOpen,
-            loading: ownerPickerOpen && membersQ.isPending,
-            failed: ownerPickerOpen && membersQ.isError,
-            onRetry: () => void membersQ.refetch(),
-          }}
-          labels={{
-            assigned: assignedLabels,
-            available: availableLabels,
-            pickerOpen: labelsPickerOpen,
-            onPickerOpenChange: setLabelsPickerOpen,
-            loading:
-              labelsPickerOpen &&
-              !selectedLabelsQ.isError &&
-              !labelsQ.isError &&
-              (selectedLabelsQ.data === undefined || labelsQ.data === undefined),
-            failed: labelsPickerOpen && (selectedLabelsQ.isError || labelsQ.isError),
-            onRetry: () => {
-              void selectedLabelsQ.refetch();
-              void labelsQ.refetch();
-            },
-            canCreate: selectedLabelsQ.data !== undefined,
-            onCreate: (name) => {
-              createLabel.mutate(
-                { name },
-                {
-                  onSuccess: (created) => {
-                    mutations.patchInitiative({
-                      labelIds: [...assignedLabels.map((label) => label.id), created.id],
-                    });
+        <>
+          <WorkTemplateHeader orgId={orgId} kind="initiative" work={detail} canEdit={canEdit} />
+          <InitiativeMastheadMetadata
+            initiativeNoun={initiativeNoun}
+            detail={detail}
+            canEdit={canEdit}
+            patch={mutations.patchInitiative}
+            planningCalendar={planningCalendar}
+            owner={{
+              options: memberOptions,
+              pickerOpen: ownerPickerOpen,
+              onPickerOpenChange: setOwnerPickerOpen,
+              loading: ownerPickerOpen && membersQ.isPending,
+              failed: ownerPickerOpen && membersQ.isError,
+              onRetry: () => void membersQ.refetch(),
+            }}
+            labels={{
+              assigned: assignedLabels,
+              available: availableLabels,
+              pickerOpen: labelsPickerOpen,
+              onPickerOpenChange: setLabelsPickerOpen,
+              loading:
+                labelsPickerOpen &&
+                !selectedLabelsQ.isError &&
+                !labelsQ.isError &&
+                (selectedLabelsQ.data === undefined || labelsQ.data === undefined),
+              failed: labelsPickerOpen && (selectedLabelsQ.isError || labelsQ.isError),
+              onRetry: () => {
+                void selectedLabelsQ.refetch();
+                void labelsQ.refetch();
+              },
+              canCreate: selectedLabelsQ.data !== undefined,
+              onCreate: (name) => {
+                createLabel.mutate(
+                  { name },
+                  {
+                    onSuccess: (created) => {
+                      mutations.patchInitiative({
+                        labelIds: [...assignedLabels.map((label) => label.id), created.id],
+                      });
+                    },
                   },
-                },
-              );
-            },
-            onChange: (labelIds) => {
-              if (selectedLabelsQ.data === undefined) return;
-              mutations.patchInitiative({ labelIds: [...labelIds] });
-            },
-          }}
-          targetPickerOpen={targetPickerOpen}
-          onTargetPickerOpenChange={setTargetPickerOpen}
-          displayFailed={entityDisplay.error !== null}
-          onManageHierarchy={(anchor) => {
-            pickerOverlay.open({
-              kind: 'initiative-hierarchy',
-              mode: 'parent',
-              organizationId: orgId,
-              subject: initiativeObject,
-              anchor,
-            });
-          }}
-        />
+                );
+              },
+              onChange: (labelIds) => {
+                if (selectedLabelsQ.data === undefined) return;
+                mutations.patchInitiative({ labelIds: [...labelIds] });
+              },
+            }}
+            targetPickerOpen={targetPickerOpen}
+            onTargetPickerOpenChange={setTargetPickerOpen}
+            displayFailed={entityDisplay.error !== null}
+            onManageHierarchy={(anchor) => {
+              pickerOverlay.open({
+                kind: 'initiative-hierarchy',
+                mode: 'parent',
+                organizationId: orgId,
+                subject: initiativeObject,
+                anchor,
+              });
+            }}
+          />
+        </>
       }
       actions={
         // One ControlGroup at the row level, and no control inside it declares a height. That is

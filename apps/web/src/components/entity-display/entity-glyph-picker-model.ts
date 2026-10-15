@@ -193,3 +193,25 @@ function matchScore(option: EntityGlyphOption, query: string): number {
 function normalize(value: string): string {
   return value.trim().toLowerCase().replaceAll('_', ' ').replaceAll(':', '');
 }
+
+/** Find a stored glyph in either loaded catalog. */
+export function findGlyphOption(
+  glyph: EntityDisplayGlyph,
+  symbols: readonly EntityGlyphOption[],
+  emoji: readonly EntityGlyphOption[],
+): EntityGlyphOption | undefined {
+  return [...symbols, ...emoji].find((option) => sameGlyph(option.glyph, glyph));
+}
+
+/** Keep only resolved catalog entries. */
+export function isGlyphOption(option: EntityGlyphOption | undefined): option is EntityGlyphOption {
+  return option !== undefined;
+}
+
+/** Compare glyph identity independently of its catalog label. */
+export function sameGlyph(left: EntityDisplayGlyph, right: EntityDisplayGlyph): boolean {
+  if (left.kind !== right.kind) return false;
+  return left.kind === 'symbol'
+    ? left.name === (right.kind === 'symbol' ? right.name : '')
+    : left.hexcode === (right.kind === 'emoji' ? right.hexcode : '');
+}

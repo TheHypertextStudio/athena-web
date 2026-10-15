@@ -9,7 +9,6 @@ import {
   agentSession,
   athenaAssignment,
   latticeConnection,
-  organization,
   sessionActivity,
   user,
 } from '../../src/schema';
@@ -68,12 +67,10 @@ describe('Lattice reply-key lifecycle migration', () => {
     await client.exec(migrationSql('0114_hard_demogoblin.sql'));
     const db = drizzle(client);
 
-    await db.insert(organization).values({
-      id: 'org_lattice_upgrade',
-      name: 'Lattice upgrade',
-      slug: 'lattice-upgrade',
-      lifecycleState: 'active',
-    });
+    await client.query(
+      `INSERT INTO organization (id, name, slug, lifecycle_state)
+       VALUES ('org_lattice_upgrade', 'Lattice upgrade', 'lattice-upgrade', 'active')`,
+    );
     await db.insert(user).values({
       id: 'user_lattice_upgrade',
       name: 'Upgrade owner',

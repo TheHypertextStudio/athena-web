@@ -6,6 +6,8 @@ import { drizzle } from 'drizzle-orm/pglite';
 import { migrate } from 'drizzle-orm/pglite/migrator';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
+import { seedBaseWorkTemplates } from '../../src/seed-work-templates';
+
 const client = new PGlite('memory://');
 const db = drizzle(client);
 
@@ -100,6 +102,7 @@ describe('planning timeframe schema', () => {
       insert into organization (id, name, slug, fiscal_year_start_month)
       values ('timeframe-org', 'Timeframe Org', 'timeframe-org', 6)
     `);
+    await seedBaseWorkTemplates(db, 'timeframe-org');
     await db.execute(sql`
       insert into work_status (
         id, organization_id, entity_type, key, name, category, position, is_default

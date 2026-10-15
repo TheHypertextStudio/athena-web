@@ -17,9 +17,27 @@ import { orgIdParam } from './tools-shared';
 export const defineTemplateDefinition = {
   title: 'Define template',
   description:
-    'Create or edit one reusable template for tasks, projects, initiatives, or programs. Its main content is the literal Markdown body in payload.description; description is only a short usage summary. Agents generally discover these with list_templates and write work using the body structure.\n\nOmit `template` to create one, which needs `name` and `payload`; pass `template` to edit one you can see, sending only what changes. `payload` replaces the whole draft when sent, and a template never changes the kind of work it creates. The change is reversible with `undo`.',
+    'Create or edit reusable work templates. Put literal Markdown in payload.description; description summarizes usage. Omit template to create with name and payload; otherwise edit by ID/name. payload replaces the draft. Legacy workspace writes publish immediately. action draft saves, publish requires expectedRevision, and archive retires. Undo preserves publication history',
   inputSchema: {
     orgId: orgIdParam,
+    action: z
+      .enum(['draft', 'publish', 'archive'])
+      .optional()
+      .describe(
+        'Omit for legacy writes (workspace writes publish). draft edits without publishing; publish requires a reviewed revision; archive retires it.',
+      ),
+    expectedRevision: z
+      .number()
+      .int()
+      .nonnegative()
+      .optional()
+      .describe('Required for draft edits and publication; returned as revision.'),
+    defaultStatusKey: z
+      .string()
+      .min(1)
+      .nullable()
+      .optional()
+      .describe('Canonical draft status default; null clears it.'),
     template: z
       .string()
       .optional()
@@ -54,6 +72,9 @@ export const defineTemplateDefinition = {
       ),
   },
   outputSchema: {
+    revision: z.number().int(),
+    publicationState: z.enum(['draft', 'published', 'archived']),
+    workTypeVersionId: z.string().nullable(),
     changed: z.number().int().describe('1 when the template was created or edited, 0 otherwise.'),
     listHref: z.string().describe('The templates settings page.'),
     changes: z.array(CatalogRowSchema).describe('The template, with what moved on an edit.'),

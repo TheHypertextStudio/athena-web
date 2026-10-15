@@ -69,6 +69,7 @@ import { useResolvedAccountId } from '@/components/resolved-account';
 import { ContainerDetailLoading } from '@/components/views/entity-snapshot-metadata';
 import { DetailPrintSummary } from '@/components/views/detail-print-summary';
 import { useDetailTab } from '@/components/views/use-detail-tab';
+import { WorkTemplateHeader } from '@/components/templates/work-template-header';
 import { EntityDetailLayout, EntityMetadataRow } from '@/components/views/entity-detail-layout';
 import { api } from '@/lib/api';
 import { useProjectPageIdentity } from './use-project-page-identity';
@@ -621,6 +622,7 @@ export default function ProjectDetailPage(): JSX.Element {
       }
       metadata={
         <div className="flex min-w-0 flex-col gap-2">
+          <WorkTemplateHeader orgId={orgId} kind="project" work={project} canEdit={canEdit} />
           <ProjectPeopleRow
             orgId={orgId}
             sourcePeople={project.sourcePeople}

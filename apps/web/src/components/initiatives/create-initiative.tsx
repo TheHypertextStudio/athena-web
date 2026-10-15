@@ -1,4 +1,6 @@
 'use client';
+import { initiativeCreateBody } from './initiative-create-body';
+import type { WorkTemplateDraftFields } from '@/components/composer/work-template-draft';
 import { usesInitialWorkspace } from '@/components/composer/uses-initial-workspace';
 
 import { WorkspaceActorPicker } from '@/components/people/workspace-actor-picker';
@@ -26,7 +28,6 @@ import { WorkspaceActorPicker } from '@/components/people/workspace-actor-picker
  *
  * @see {@link useComposerOptions} for the owner option source.
  */
-import { ActorId } from '@docket/identity-access/ids';
 import { type Health } from '@docket/work/capability-contract';
 import {
   type InitiativeOut,
@@ -76,7 +77,7 @@ import { useInitiativeDraftPersistence } from './use-initiative-draft-persistenc
 const COMPOSER_INCLUDE = ['actors'] as const;
 
 /** Every field the initiative composer holds, as one value. */
-export interface InitiativeDraft {
+export interface InitiativeDraft extends WorkTemplateDraftFields {
   name: string;
   summary: string;
   description: string;
@@ -190,6 +191,7 @@ export const CreateInitiativeDialog = withComposerReset(function CreateInitiativ
   });
   const templateContribution = useComposerTemplateContribution<InitiativeDraft>({
     kind: 'initiative',
+    selection: draft,
     orgId,
     open,
     destinationReady,
@@ -221,6 +223,8 @@ export const CreateInitiativeDialog = withComposerReset(function CreateInitiativ
     }
     setError(null);
     updateDraft(() => ({
+      workTypeId: null,
+      workTypeVersionId: null,
       ownerId: null,
       targetTimeframe: draft.targetTimeframe?.resolution ? null : draft.targetTimeframe,
     }));
@@ -237,25 +241,9 @@ export const CreateInitiativeDialog = withComposerReset(function CreateInitiativ
       setCreating(true);
       setError(null);
       try {
-        const trimmedBody = draft.description.trim();
         const res = await api.v1.orgs[':orgId'].initiatives.$post({
           param: { orgId },
-          json: {
-            name: trimmed,
-            ...(draft.summary.trim() ? { summary: draft.summary.trim() } : {}),
-            status: draft.status,
-            priority: draft.priority,
-            updateCadence: draft.updateCadence,
-            ...(trimmedBody.length > 0 ? { description: trimmedBody } : {}),
-            ...(draft.ownerId ? { ownerId: ActorId.parse(draft.ownerId) } : {}),
-            ...(draft.targetTimeframe
-              ? {
-                  targetDate: draft.targetTimeframe.date,
-                  targetDateResolution: draft.targetTimeframe.resolution,
-                }
-              : {}),
-            ...(draft.health ? { health: draft.health } : {}),
-          },
+          json: initiativeCreateBody(draft, trimmed),
         });
         if (!res.ok) {
           setError(
@@ -371,6 +359,7 @@ export const CreateInitiativeDialog = withComposerReset(function CreateInitiativ
       onSubmit={() => void submit(continuation.createMore)}
       submitLabel={`Create ${initiativeNoun}`}
     >
+      {templateContribution.selection}
       <InitiativeComposerPickers
         orgId={orgId}
         actorOptions={options.actorOptions}

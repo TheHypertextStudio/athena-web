@@ -25,6 +25,9 @@ export const STATUS_FACET_KEYS = ['status', 'state'];
 /** The `facet` JSON key a row's health can be named under. */
 export const HEALTH_FACET_KEYS = ['health'];
 
+/** Published identity attached to native work; template definitions are never search documents. */
+export const WORK_TEMPLATE_FACET_KEYS = ['workTypeId'];
+
 /** Read a row's `facet` JSON blob as a plain record, or `{}` when it isn't shaped like one. */
 export function facetRecord(value: unknown): Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -63,26 +66,21 @@ export function filterRow(
     return false;
   }
   const facet = facetRecord(row.facet);
-  if (params.ownerIds?.length && !facetMatchesAny(facet, OWNER_FACET_KEYS, params.ownerIds)) {
-    return false;
-  }
-  if (
-    params.assigneeIds?.length &&
-    !facetMatchesAny(facet, ASSIGNEE_FACET_KEYS, params.assigneeIds)
-  ) {
-    return false;
-  }
-  if (params.labelIds?.length && !facetMatchesAny(facet, LABEL_FACET_KEYS, params.labelIds)) {
-    return false;
-  }
-  if (params.statuses?.length && !facetMatchesAny(facet, STATUS_FACET_KEYS, params.statuses)) {
-    return false;
-  }
-  if (params.healths?.length && !facetMatchesAny(facet, HEALTH_FACET_KEYS, params.healths)) {
-    return false;
-  }
+  if (!passesFacetFilters(facet, params)) return false;
   const rowTime = rowSortTime(row);
   if (fromTime !== null && rowTime < fromTime) return false;
   if (toTime !== null && rowTime > toTime) return false;
   return true;
+}
+
+function passesFacetFilters(facet: Record<string, unknown>, params: SearchQueryParams): boolean {
+  const filters: readonly [readonly string[] | undefined, readonly string[]][] = [
+    [params.ownerIds, OWNER_FACET_KEYS],
+    [params.assigneeIds, ASSIGNEE_FACET_KEYS],
+    [params.labelIds, LABEL_FACET_KEYS],
+    [params.statuses, STATUS_FACET_KEYS],
+    [params.healths, HEALTH_FACET_KEYS],
+    [params.workTypeIds, WORK_TEMPLATE_FACET_KEYS],
+  ];
+  return filters.every(([values, keys]) => !values?.length || facetMatchesAny(facet, keys, values));
 }

@@ -45,7 +45,11 @@ import {
   searchGlyphOptions,
   suggestGlyphOptions,
   SYMBOL_GLYPH_OPTIONS,
+  findGlyphOption,
+  isGlyphOption,
+  sameGlyph,
 } from './entity-glyph-picker-model';
+import { nextRadioIndex, focusRadio } from './glyph-picker-radio';
 import { ENTITY_DISPLAY_COLORS as COLOR_OPTIONS, EntityIconGlyph } from './entity-icon-glyph';
 
 const GRID_COLUMNS = 7;
@@ -83,6 +87,8 @@ export interface EntityIconPickerProps {
   onOpenChange?: (open: boolean) => void;
   /** Open the panel on its first mounted frame after the lightweight trigger requests this chunk. */
   initiallyOpen?: boolean;
+  /** Hide color editing when the host stores only a symbol or emoji. */
+  showColorControls?: boolean;
 }
 
 /** Render one choice in a symbol or emoji grid. */
@@ -412,6 +418,7 @@ export function LoadedEntityIconPicker({
   onChange,
   onOpenChange,
   initiallyOpen = false,
+  showColorControls = true,
 }: EntityIconPickerProps): JSX.Element {
   const [open, setOpen] = useState(initiallyOpen);
   const [activeTab, setActiveTab] = useState<'symbol' | 'emoji'>('symbol');
@@ -562,19 +569,7 @@ export function LoadedEntityIconPicker({
     event: KeyboardEvent<HTMLButtonElement>,
     tab: 'symbol' | 'emoji',
   ): void => {
-    if (event.key === 'Home') {
-      event.preventDefault();
-      selectTab('symbol');
-      return;
-    }
-    if (event.key === 'End') {
-      event.preventDefault();
-      selectTab('emoji');
-      return;
-    }
-    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
-    event.preventDefault();
-    selectTab(tab === 'symbol' ? 'emoji' : 'symbol');
+    handleGlyphTabKey(event, tab, selectTab);
   };
   return (
     <Popover open={open} onOpenChange={changeOpen}>
@@ -706,6 +701,7 @@ export function LoadedEntityIconPicker({
               />
             </div>
             <ColorSelector
+              visible={showColorControls}
               colorKey={display.colorKey}
               customColor={display.customColor}
               customColorPreview={customColorPreview}
@@ -1073,6 +1069,7 @@ function EmojiControls({
 }
 
 function ColorSelector({
+  visible,
   colorKey,
   customColor,
   customColorPreview,
@@ -1082,6 +1079,7 @@ function ColorSelector({
   onCustomInput,
   onCustomCommit,
 }: {
+  readonly visible: boolean;
   readonly colorKey: EntityDisplayColorKey;
   readonly customColor: string | null;
   readonly customColorPreview: string;
@@ -1090,7 +1088,7 @@ function ColorSelector({
   readonly onCustomSelect: () => void;
   readonly onCustomInput: (value: string) => void;
   readonly onCustomCommit: () => void;
-}): JSX.Element {
+}): JSX.Element | null {
   const groupRef = useRef<HTMLDivElement>(null);
   const customInputRef = useRef<HTMLInputElement>(null);
   const customIndex = COLOR_OPTIONS.length;
@@ -1108,6 +1106,7 @@ function ColorSelector({
     if (option) onPresetSelect(option.key);
     else if (index === customIndex) onCustomSelect();
   };
+  if (!visible) return null;
   return (
     <Popover>
       <div
@@ -1264,41 +1263,28 @@ function SelectedRadioIndicator(): JSX.Element {
   );
 }
 
-function nextRadioIndex(key: string, index: number, count: number): number | null {
-  if (key === 'Home') return 0;
-  if (key === 'End') return count - 1;
-  if (key === 'ArrowRight' || key === 'ArrowDown') return (index + 1) % count;
-  if (key === 'ArrowLeft' || key === 'ArrowUp') return (index - 1 + count) % count;
-  return null;
-}
-
-function focusRadio(group: HTMLDivElement | null, index: number): void {
-  requestAnimationFrame(() => {
-    group?.querySelectorAll<HTMLElement>('[role="radio"]')[index]?.focus();
-  });
-}
-
-function findGlyphOption(
-  glyph: EntityDisplayGlyph,
-  symbols: readonly EntityGlyphOption[],
-  emoji: readonly EntityGlyphOption[],
-): EntityGlyphOption | undefined {
-  return [...symbols, ...emoji].find((option) => sameGlyph(option.glyph, glyph));
-}
-
-function isGlyphOption(option: EntityGlyphOption | undefined): option is EntityGlyphOption {
-  return option !== undefined;
-}
-
-function sameGlyph(left: EntityDisplayGlyph, right: EntityDisplayGlyph): boolean {
-  if (left.kind !== right.kind) return false;
-  return left.kind === 'symbol'
-    ? left.name === (right.kind === 'symbol' ? right.name : '')
-    : left.hexcode === (right.kind === 'emoji' ? right.hexcode : '');
-}
-
 function capitalize(value: string): string {
   return value.charAt(0).toUpperCase() + value.slice(1);
 }
 
 export default LoadedEntityIconPicker;
+
+function handleGlyphTabKey(
+  event: KeyboardEvent<HTMLButtonElement>,
+  tab: 'symbol' | 'emoji',
+  selectTab: (tab: 'symbol' | 'emoji') => void,
+): void {
+  if (event.key === 'Home') {
+    event.preventDefault();
+    selectTab('symbol');
+    return;
+  }
+  if (event.key === 'End') {
+    event.preventDefault();
+    selectTab('emoji');
+    return;
+  }
+  if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+  event.preventDefault();
+  selectTab(tab === 'symbol' ? 'emoji' : 'symbol');
+}

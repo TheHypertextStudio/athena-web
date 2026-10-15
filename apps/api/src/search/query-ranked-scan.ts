@@ -1,3 +1,4 @@
+import { searchWorkTemplateCondition } from './work-template-filter';
 /**
  * `@docket/api` — the keyset-batched candidate scan behind ranked search.
  */
@@ -63,10 +64,7 @@ export async function scanRankedCandidates(
       orgIds: input.orgIds,
       query: input.query,
       includeArchived: input.includeArchived,
-      kinds: input.params.kinds ?? [],
-      families: input.params.families ?? [],
-      sources: input.params.sources ?? [],
-      ids: input.params.ids ?? [],
+      ...candidateFilters(input.params),
       afterId,
       limit: SEARCH_CANDIDATE_BATCH_SIZE,
     });
@@ -134,6 +132,7 @@ async function loadCandidateRows(input: {
   families: readonly string[];
   sources: readonly string[];
   ids: readonly string[];
+  workTypeIds: readonly string[];
   afterId: string | undefined;
   limit: number;
 }) {
@@ -144,6 +143,7 @@ async function loadCandidateRows(input: {
   const fullTextMatch = sql`${textVector} @@ ${tsQuery}`;
   const conditions = [
     documentVisibilityCondition(schema.searchDocument, input.ownerUserId, input.orgIds),
+    searchWorkTemplateCondition(schema.searchDocument.facet, input.workTypeIds),
     or(
       fullTextMatch,
       ilike(schema.searchDocument.title, pattern),
@@ -182,4 +182,14 @@ function searchTextVector(table: typeof searchDocument) {
     setweight(to_tsvector('simple', coalesce(${table.summary}, '')), 'B') ||
     setweight(to_tsvector('simple', coalesce(${table.body}, '')), 'C')
   )`;
+}
+
+function candidateFilters(params: SearchQueryParams) {
+  return {
+    kinds: params.kinds ?? [],
+    families: params.families ?? [],
+    sources: params.sources ?? [],
+    ids: params.ids ?? [],
+    workTypeIds: params.workTypeIds ?? [],
+  };
 }

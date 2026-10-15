@@ -1,7 +1,8 @@
 /** Populate organize items from visible work templates before opening the placement transaction. */
 import { LabelId } from '@docket/work/ids';
 import { TemplateDraft, TemplateTargetType } from '@docket/work/template-contract';
-import { ValidationError } from '../error';
+import { NotFoundError, ValidationError } from '../error';
+import { prepareWorkTemplateCreation } from '../lib/work-template-creation';
 import { OrganizeItem, resolveItem, type ItemRefs } from '../lib/organize/place';
 import { labelTeamForItem } from '../lib/organize/item';
 import { resolveStateTransition } from './tools-shared';
@@ -18,7 +19,7 @@ export async function populateOrganizeItem(
   item: OrganizeItem,
   teamId: string,
 ): Promise<{ item: OrganizeItem; templateId?: string }> {
-  if (item.template === undefined) {
+  if (item.template === undefined && item.workTypeId === undefined) {
     const labels = await resolveLabelSet(orgId, item.labelIds, {
       teamId: labelTeamForItem(item.kind, teamId),
     });
@@ -27,9 +28,22 @@ export async function populateOrganizeItem(
   const row = await resolveVisibleTemplate(
     orgId,
     actorId,
-    item.template,
+    item.template ?? item.workTypeId ?? '',
     TemplateTargetType.parse(item.kind),
   );
+  if (row.publicationState === 'published')
+    return populatePublishedItem(orgId, item, teamId, row.id);
+  if (item.workTypeId || item.workTypeVersionId) throw new NotFoundError('Template not found');
+  return populateLegacyItem(orgId, item, teamId, row);
+}
+
+/** Apply a readable unpublished draft without assigning a published identity. */
+async function populateLegacyItem(
+  orgId: string,
+  item: OrganizeItem,
+  teamId: string,
+  row: Awaited<ReturnType<typeof resolveVisibleTemplate>>,
+): Promise<{ item: OrganizeItem; templateId: string }> {
   const draft = TemplateDraft.parse(row.payload);
   if (draft.targetType !== item.kind || (row.scope === 'team' && row.teamId !== teamId)) {
     throw new ValidationError([
@@ -55,6 +69,29 @@ export async function populateOrganizeItem(
   return {
     item: { ...populated, labelIds: labels.map((label) => LabelId.parse(label.id)) },
     templateId: row.id,
+  };
+}
+
+/** Apply and validate a published snapshot before resolving its destination labels. */
+async function populatePublishedItem(
+  orgId: string,
+  item: OrganizeItem,
+  teamId: string,
+  workTypeId: string,
+): Promise<{ item: OrganizeItem; templateId: string }> {
+  const defaults = await prepareWorkTemplateCreation(orgId, TemplateTargetType.parse(item.kind), {
+    ...item,
+    teamId,
+    workTypeId,
+    workTypeVersionId: item.workTypeVersionId,
+  });
+  const populated = OrganizeItem.parse({ ...defaults, labelIds: item.labelIds ?? defaults.labels });
+  const labels = await resolveLabelSet(orgId, populated.labelIds, {
+    teamId: labelTeamForItem(item.kind, teamId),
+  });
+  return {
+    item: { ...populated, labelIds: labels.map((label) => LabelId.parse(label.id)) },
+    templateId: workTypeId,
   };
 }
 

@@ -1058,6 +1058,27 @@
       "when": 1791684915666,
       "tag": "0150_personal_inbound_receipts",
       "breakpoints": true
+    },
+    {
+      "idx": 151,
+      "version": "7",
+      "when": 1792020579402,
+      "tag": "0151_work_template_identity_expand",
+      "breakpoints": true
+    },
+    {
+      "idx": 152,
+      "version": "7",
+      "when": 1792020982945,
+      "tag": "0152_work_template_identity_enforce",
+      "breakpoints": true
+    },
+    {
+      "idx": 153,
+      "version": "7",
+      "when": 1792024013327,
+      "tag": "0153_process_task_template_identity",
+      "breakpoints": true
     }
   ]
 }

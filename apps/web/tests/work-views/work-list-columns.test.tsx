@@ -220,3 +220,29 @@ describe('work-list column policy', () => {
     expect(WORK_ROSTER_ROW_HEIGHT).toEqual({ compact: 44, comfortable: 56 });
   });
 });
+
+it('renders the published template name and glyph as a selectable display property', () => {
+  const view = InitiativeViewDefinition.parse({
+    ...definition,
+    presentation: { ...definition.presentation, properties: ['workTypeId'] },
+  });
+  const row = InitiativeViewRow.parse({
+    ...initiative,
+    workTypeId: '01ARZ3NDEKTSV4RRFFQ69G5FA1',
+    workTemplate: {
+      id: '01ARZ3NDEKTSV4RRFFQ69G5FA1',
+      name: 'Community event',
+      icon: { kind: 'symbol', name: 'event' },
+      isBase: false,
+      archived: false,
+      versionNumber: 1,
+      latestVersionNumber: 2,
+    },
+  });
+  const templateColumn = columns(view).find((column) => column.key === 'workTypeId');
+  expect(templateColumn).toBeDefined();
+  render(<>{templateColumn?.render({ ...membership, row })}</>);
+  expect(screen.getByText('Community event')).toBeInTheDocument();
+  expect(document.querySelector('[data-glyph-value="event"]')).toBeInTheDocument();
+  expect(screen.queryByText(row.workTypeId ?? '')).not.toBeInTheDocument();
+});

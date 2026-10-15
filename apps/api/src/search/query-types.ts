@@ -42,6 +42,7 @@ export interface SearchQueryParams {
   ownerIds?: readonly string[];
   assigneeIds?: readonly string[];
   labelIds?: readonly string[];
+  workTypeIds?: readonly string[];
   ids?: readonly string[];
   statuses?: readonly string[];
   healths?: readonly string[];

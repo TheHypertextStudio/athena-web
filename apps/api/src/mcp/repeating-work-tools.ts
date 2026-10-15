@@ -25,7 +25,11 @@ import type { McpRegistrar } from './catalog';
 import { authorize, jsonResult, runTool, scopedActor } from './result';
 import { orgIdParam } from './tools-shared';
 import { taskFromTemplate } from './template-application';
-import { templateDecisionFields, requireTemplateDecisions } from './template-selection';
+import {
+  templateDecisionFields,
+  requireTemplateDecisions,
+  mergeTemplateSelection,
+} from './template-selection';
 
 const MUTATION_ANNOTATIONS = {
   readOnlyHint: false,
@@ -118,7 +122,7 @@ function registerRepeatTask(server: McpRegistrar, ctx: McpContext): void {
     {
       title: 'Repeat task',
       description:
-        'Create one ordinary repeating Docket task in a single call. Generally discover a fitting task template through list_templates, read its literal Markdown body, and fill its sections instead of inventing a format. Pass its id or name as template and the completed body as recurringTask.task.description. Explicit body and properties take precedence; omitted fields use template defaults. When eligible saved templates exist, pass template or withoutTemplateReason. An undecided call returns choices without creating a process or series. Use this for routines such as a daily run or a weekly meetup action. Docket creates the underlying one-step process, recurrence series, and rolling window of ordinary tasks.',
+        'Create an ordinary repeating task and its rolling window. Discover a task template with list_templates; preserve the literal Markdown structure in payload.description and fill its sections. Pass template ID/name or workTypeId with optional workTypeVersionId. Explicit recurringTask.task fields override defaults. If relevant templates exist, choose one or supply withoutTemplateReason; undecided calls create nothing. Supports calendar and after-completion recurrence through the underlying one-step process',
       inputSchema: {
         orgId: orgIdParam,
         recurringTask: RecurringTaskCreate.describe(
@@ -137,12 +141,14 @@ function registerRepeatTask(server: McpRegistrar, ctx: McpContext): void {
           id: input.orgId,
           orgId: input.orgId,
         });
+        const choice = mergeTemplateSelection(input, input.recurringTask.task);
         const selection = await requireTemplateDecisions(
           input.orgId,
           actorCtx.actorId,
           [
             {
               ...input,
+              ...choice,
               ref: 'recurringTask',
               kind: 'task',
               teamId: input.recurringTask.task.teamId,
@@ -152,15 +158,19 @@ function registerRepeatTask(server: McpRegistrar, ctx: McpContext): void {
         );
         if (selection) return selection;
         const recurringTask =
-          input.template === undefined
+          choice.template === undefined && choice.workTypeId === undefined
             ? input.recurringTask
             : {
                 ...input.recurringTask,
                 task: await taskFromTemplate(
                   input.orgId,
                   actorCtx.actorId,
-                  input.template,
+                  choice.template ?? choice.workTypeId ?? '',
                   input.recurringTask.task,
+                  {
+                    workTypeVersionId: choice.workTypeVersionId,
+                    publishedOnly: choice.workTypeId !== undefined,
+                  },
                 ),
               };
         const created = await createRecurringTask(db, {

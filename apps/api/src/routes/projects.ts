@@ -1,3 +1,5 @@
+import { workTemplateAssignmentRoutes } from './work-template-assignment';
+import { prepareWorkTemplateCreation } from '../lib/work-template-creation';
 import { toProjectOut as toOut, projectTeamId, loadProjectAggregateRow } from './project-read';
 import {
   detachEditedSourcePeople,
@@ -236,6 +238,7 @@ function progressFromAggregate(row: {
 
 /** Projects router: org-scoped CRUD + weighted-progress; `contribute` to edit, `manage` to delete. */
 const projects = new Hono<AppEnv>()
+  .route('/', workTemplateAssignmentRoutes('project'))
   .post(
     '/',
     capabilityGuard('contribute'),
@@ -250,7 +253,9 @@ const projects = new Hono<AppEnv>()
     zJson(ProjectCreate),
     async (c) => {
       const { orgId, actorId } = c.get('actorCtx');
-      const body = c.req.valid('json');
+      const body = ProjectCreate.parse(
+        await prepareWorkTemplateCreation(orgId, 'project', c.req.valid('json')),
+      );
 
       // Tenant isolation: a body-provided lead/team/program must live in the caller's org.
       // The bare FK references each table's global PK, so without this a CREATE could attach
@@ -307,6 +312,8 @@ const projects = new Hono<AppEnv>()
         const inserted = await tx
           .insert(project)
           .values({
+            workTypeId: body.workTypeId,
+            workTypeVersionId: body.workTypeVersionId,
             organizationId: orgId,
             name: body.name,
             summary: body.summary,

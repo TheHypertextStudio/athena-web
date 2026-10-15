@@ -1,3 +1,15 @@
+import {
+  ProjectViewMilestone,
+  InitiativeContributingProject,
+  WorkViewActor,
+  ProgramActivitySummary,
+} from './work-view-projections';
+export {
+  ProjectViewMilestone,
+  InitiativeContributingProject,
+  WorkViewActor,
+  ProgramActivitySummary,
+} from './work-view-projections';
 import { WorkViewGroup } from './work-view-group';
 import { TaskOut } from './task';
 /**
@@ -33,8 +45,8 @@ import {
 import { Health, Visibility } from './capability';
 import { Priority } from '../task-contract';
 import { InitiativePriority, InitiativeUpdateCadence } from './initiative';
-import { ActorOut } from '@docket/identity-access/actor-contract';
-import { EntityDisplayOut } from './entity-display';
+import { workTemplateOutputFields } from './work-template-reference';
+import { EntityDisplayOut, EntityDisplayGlyph } from './entity-display';
 import { ActorId, OrganizationId, TeamId } from '@docket/identity-access/ids';
 import {
   CycleId,
@@ -46,6 +58,7 @@ import {
   ProjectId,
   SavedViewId,
   TaskId,
+  WorkTypeId,
 } from '../ids';
 import { DateString, TimestampString } from '../view-date';
 
@@ -183,6 +196,11 @@ const ratio = z.number().min(0).max(1);
 export const TASK_VIEW_CONTRACT = defineViewContract({
   target: 'task',
   fields: {
+    workTypeId: {
+      kind: 'relation-one',
+      schema: WorkTypeId,
+      capabilities: { filter: true, group: true, display: true },
+    },
     status: {
       kind: 'enum',
       schema: TaskStatusKey,
@@ -313,6 +331,11 @@ export const TASK_VIEW_CONTRACT = defineViewContract({
 export const PROJECT_VIEW_CONTRACT = defineViewContract({
   target: 'project',
   fields: {
+    workTypeId: {
+      kind: 'relation-one',
+      schema: WorkTypeId,
+      capabilities: { filter: true, group: true, display: true },
+    },
     status: {
       kind: 'enum',
       schema: ProjectStatusKey,
@@ -431,6 +454,11 @@ export const PROJECT_VIEW_CONTRACT = defineViewContract({
 export const PROGRAM_VIEW_CONTRACT = defineViewContract({
   target: 'program',
   fields: {
+    workTypeId: {
+      kind: 'relation-one',
+      schema: WorkTypeId,
+      capabilities: { filter: true, group: true, display: true },
+    },
     status: {
       kind: 'enum',
       schema: ProgramStatusKey,
@@ -498,6 +526,11 @@ export const PROGRAM_VIEW_CONTRACT = defineViewContract({
 export const INITIATIVE_VIEW_CONTRACT = defineViewContract({
   target: 'initiative',
   fields: {
+    workTypeId: {
+      kind: 'relation-one',
+      schema: WorkTypeId,
+      capabilities: { filter: true, group: true, display: true },
+    },
     status: {
       kind: 'enum',
       schema: InitiativeStatusKey,
@@ -841,6 +874,7 @@ export type WorkViewFacetBucketFor<TContract extends ViewContract> = {
     readonly options: readonly {
       readonly value: FieldOperandFor<TContract, TField>;
       readonly label: string;
+      readonly icon?: z.infer<typeof EntityDisplayGlyph> | null;
       readonly count: number;
     }[];
     readonly emptyCount: number;
@@ -871,6 +905,7 @@ function facetResponse<const TContract extends ViewContract>(
               .object({
                 value: field.operandSchema ?? field.schema,
                 label: z.string(),
+                icon: EntityDisplayGlyph.nullable().optional(),
                 count,
               })
               .strict(),
@@ -1210,40 +1245,11 @@ export const PersonalWorkViewState = z.union([
 export type PersonalWorkViewState = z.infer<typeof PersonalWorkViewState>;
 
 const baseRow = {
+  ...workTemplateOutputFields,
   organizationId: OrganizationId,
   manualRank: FractionalRank,
   isContext: z.boolean().default(false),
 };
-
-/** Dated Project checkpoint retained by the timeline projection. */
-export const ProjectViewMilestone = z
-  .object({ id: MilestoneId, name: z.string(), targetDate: nullableDate })
-  .strict();
-/** A validated Project checkpoint in a work-view row. */
-export type ProjectViewMilestone = z.infer<typeof ProjectViewMilestone>;
-
-/** Contributing Project schedule retained by an Initiative timeline rollup. */
-export const InitiativeContributingProject = z
-  .object({
-    id: ProjectId,
-    name: z.string(),
-    startDate: nullableDate,
-    targetDate: nullableDate,
-    progress: ratio,
-  })
-  .strict();
-/** A validated contributing Project schedule in an Initiative work-view row. */
-export type InitiativeContributingProject = z.infer<typeof InitiativeContributingProject>;
-
-/** Resolved actor identity carried only to roster presentation. */
-export const WorkViewActor = ActorOut.pick({
-  id: true,
-  kind: true,
-  displayName: true,
-  avatar: true,
-}).strict();
-/** A resolved actor identity for a work-view row. */
-export type WorkViewActor = z.infer<typeof WorkViewActor>;
 
 /** Task projection returned by the work-view query operation. */
 export const TaskViewRow = z
@@ -1326,25 +1332,6 @@ export const ProjectViewRow = z
   .strict();
 /** A validated Project work-view row. */
 export type ProjectViewRow = z.infer<typeof ProjectViewRow>;
-
-/** A fixed oldest-to-newest eight-week summary of visible Program activity. */
-export const ProgramActivitySummary = z
-  .object({
-    weeks: z.tuple([
-      z.number().int().nonnegative(),
-      z.number().int().nonnegative(),
-      z.number().int().nonnegative(),
-      z.number().int().nonnegative(),
-      z.number().int().nonnegative(),
-      z.number().int().nonnegative(),
-      z.number().int().nonnegative(),
-      z.number().int().nonnegative(),
-    ]),
-    latestOccurredAt: TimestampString.nullable(),
-  })
-  .strict();
-/** A validated fixed-window Program activity summary. */
-export type ProgramActivitySummary = z.infer<typeof ProgramActivitySummary>;
 
 /** Program projection returned by the work-view query operation. */
 export const ProgramViewRow = z

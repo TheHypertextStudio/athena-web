@@ -1,3 +1,6 @@
+import { deferInitiativeCreated } from './initiative-create-effects';
+import { workTemplateAssignmentRoutes } from './work-template-assignment';
+import { prepareWorkTemplateCreation } from '../lib/work-template-creation';
 /** Initiative routes mounted under an organization. */
 import {
   db,
@@ -42,7 +45,6 @@ import {
   resolveAttachedLabels,
   resolveLabelSet,
 } from '../lib/labels';
-import { deferAfterResponse } from '../lib/after-response';
 import { created, ok } from '../lib/ok';
 import { resolveContainerStatus } from '../lib/work-status';
 import { pageResult, seekAfter } from '../lib/list-cursor';
@@ -84,6 +86,7 @@ import {
 
 /** Initiatives router: org-scoped CRUD + child associations + roadmap roll-up. */
 const initiatives = new Hono<AppEnv>()
+  .route('/', workTemplateAssignmentRoutes('initiative'))
   .get(
     '/',
     apiDoc({
@@ -125,7 +128,9 @@ const initiatives = new Hono<AppEnv>()
     zJson(InitiativeCreate),
     async (c) => {
       const { orgId, actorId } = c.get('actorCtx');
-      const body = c.req.valid('json');
+      const body = InitiativeCreate.parse(
+        await prepareWorkTemplateCreation(orgId, 'initiative', c.req.valid('json')),
+      );
       await assertOwnerInOrg(orgId, body.ownerId);
       // Through the shared resolver, so an initiative obeys label-group exclusivity exactly as a
       // task does. Initiatives have no team, so only workspace-wide labels are offerable.
@@ -149,6 +154,8 @@ const initiatives = new Hono<AppEnv>()
         const inserted = await tx
           .insert(initiative)
           .values({
+            workTypeId: body.workTypeId,
+            workTypeVersionId: body.workTypeVersionId,
             organizationId: orgId,
             name: body.name,
             summary: body.summary,
@@ -182,20 +189,7 @@ const initiatives = new Hono<AppEnv>()
       // to the moment it runs, which is now after the response, so under concurrent creates the
       // feed could order two entities against the order their rows were actually written. It is
       // also part of the dedupe key, so it needs to name the domain event, not the drain.
-      const occurredAt = new Date();
-      deferAfterResponse('initiative-created-event', () =>
-        emitEvent({
-          organizationId: orgId,
-          kind: 'created',
-          actorId,
-          occurredAt,
-          title: row.name,
-          subject: { type: 'initiative', id: row.id, title: row.name },
-        }),
-      );
-      deferAfterResponse('initiative-created-search-upsert', () =>
-        enqueueSearchUpsert(orgId, 'initiative', row.id),
-      );
+      deferInitiativeCreated(row, actorId);
       return created(c, InitiativeOut, toOut(row));
     },
   )

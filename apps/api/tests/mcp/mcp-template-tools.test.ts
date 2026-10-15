@@ -313,7 +313,7 @@ describe('define_template', () => {
     expect(errorText(refused)).toContain('template');
   });
 
-  it('moves a template to the caller alone, then to a team, taking the team’s labels', async () => {
+  it('moves a private starting draft to a team, taking the team’s labels', async () => {
     const seed = await seedMcpUpdateOrg(db, schema, ['view', 'contribute']);
     await joinTeam(db, schema, seed, seed.teamId);
     await seedLabel(db, schema, seed, { name: 'Core only', teamId: seed.teamId });
@@ -324,23 +324,12 @@ describe('define_template', () => {
         arguments: {
           orgId: seed.orgId,
           name: 'Standup',
-          scope: 'organization',
+          scope: 'personal',
           payload: { targetType: 'task' },
         },
       }),
     );
     const id = String(created.changes[0]?.id);
-
-    const personal = body<TemplateResult>(
-      await client.callTool({
-        name: 'define_template',
-        arguments: { orgId: seed.orgId, template: id, scope: 'personal' },
-      }),
-    );
-    expect(personal.changes[0]?.note).toBe('Task template · Only you');
-    expect(personal.changes[0]?.fields).toEqual([
-      { field: 'scope', from: 'organization', to: 'personal' },
-    ]);
 
     const team = body<TemplateResult>(
       await client.callTool({
@@ -368,5 +357,44 @@ describe('define_template', () => {
     });
     expect(refused.isError).toBe(true);
     expect(errorText(refused)).toContain('payload');
+  });
+  it('refuses to make a published template private and applies the live authoring policy to undo', async () => {
+    const seed = await seedMcpUpdateOrg(db, schema, ['view', 'contribute']);
+    const client = await connectCatalog(registerTools, seed.ctx);
+    const created = body<TemplateResult>(
+      await client.callTool({
+        name: 'define_template',
+        arguments: {
+          orgId: seed.orgId,
+          name: 'Shared event',
+          scope: 'organization',
+          payload: { targetType: 'project' },
+        },
+      }),
+    );
+    const refused = await client.callTool({
+      name: 'define_template',
+      arguments: {
+        orgId: seed.orgId,
+        template: String(created.changes[0]?.id),
+        scope: 'personal',
+      },
+    });
+    expect(refused.isError).toBe(true);
+    expect(errorText(refused)).toContain('conflict');
+    await db
+      .update(schema.organization)
+      .set({ workTemplateAuthoring: 'admins' })
+      .where(eq(schema.organization.id, seed.orgId));
+    const undo = await client.callTool({
+      name: 'undo',
+      arguments: {
+        orgId: seed.orgId,
+        changeSetId: created.changeSetId,
+      },
+    });
+    expect(undo.isError).toBe(true);
+    expect(errorText(undo)).toContain('forbidden');
+    expect((await templateRow(String(created.changes[0]?.id)))?.publicationState).toBe('published');
   });
 });

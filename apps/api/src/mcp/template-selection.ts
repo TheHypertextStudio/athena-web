@@ -1,24 +1,28 @@
 /** Explicit template decisions at the boundary of direct MCP creation. */
-import { db, template } from '@docket/db';
+import { TeamId } from '@docket/identity-access/ids';
+import { WorkTypeId, WorkTypeVersionId } from '@docket/work/ids';
+import { listWorkTemplates } from '../lib/templates/service';
 import { TemplateTargetType } from '@docket/work/template-contract';
-import { and, asc, eq, isNull, or } from 'drizzle-orm';
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { ValidationError } from '../error';
-import { visibleTemplateWhere } from '../lib/templates/visibility';
 import { toTemplateOut } from '../lib/templates/write';
 import { jsonResult } from './result';
 import { requireScope } from './scope';
 
 /** Creation callers either select a visible template or explain their freeform choice. */
 export const templateDecisionFields = {
+  workTypeId: WorkTypeId.optional().describe(
+    'Published template ID. Do not combine with template.',
+  ),
+  workTypeVersionId: WorkTypeVersionId.optional().describe(
+    'Publication to pin; defaults to current.',
+  ),
   template: z
     .string()
     .min(1)
     .optional()
-    .describe(
-      'A relevant visible template ID or exact name from list_templates. The server copies omitted Markdown and property defaults. Explicit fields override defaults; use update to fill the returned body.',
-    ),
+    .describe('ID or exact name from list_templates. Explicit work fields override defaults.'),
   withoutTemplateReason: z
     .string()
     .trim()
@@ -26,7 +30,7 @@ export const templateDecisionFields = {
     .max(500)
     .optional()
     .describe(
-      'Explain why no template fits, the user requested freeform content, or quick capture needs no outline. Required when eligible saved templates exist and template is omitted. Do not use together with template.',
+      'Why no template fits or freeform work is intended; required if relevant templates exist.',
     ),
 };
 
@@ -36,7 +40,50 @@ export interface TemplateDecision {
   readonly kind: string;
   readonly teamId: string;
   readonly template?: string | undefined;
+  readonly workTypeId?: string | undefined;
+  readonly workTypeVersionId?: string | undefined;
   readonly withoutTemplateReason?: string | undefined;
+}
+
+/** Reject conflicting choices before discovery or reading a selected definition. */
+function validateDecision(item: TemplateDecision): boolean {
+  const selected = item.template !== undefined || item.workTypeId !== undefined;
+  if (
+    (item.template !== undefined && item.workTypeId !== undefined) ||
+    (item.workTypeVersionId !== undefined && !selected)
+  ) {
+    throw new ValidationError([
+      { path: [item.ref, 'workTypeId'], message: 'Choose one template together with its version.' },
+    ]);
+  }
+  if (selected && item.withoutTemplateReason !== undefined) {
+    throw new ValidationError([
+      {
+        path: [item.ref, 'template'],
+        message: 'Select a template or explain a freeform choice, not both.',
+      },
+    ]);
+  }
+  return selected;
+}
+
+/** Merge ordinary task-create identity fields with the MCP shorthand, rejecting conflicts. */
+export function mergeTemplateSelection(
+  outer: Pick<TemplateDecision, 'template' | 'workTypeId' | 'workTypeVersionId'>,
+  nested: Pick<TemplateDecision, 'workTypeId' | 'workTypeVersionId'>,
+): Pick<TemplateDecision, 'template' | 'workTypeId' | 'workTypeVersionId'> {
+  for (const key of ['workTypeId', 'workTypeVersionId'] as const) {
+    if (outer[key] !== undefined && nested[key] !== undefined && outer[key] !== nested[key]) {
+      throw new ValidationError([
+        { path: [key], message: 'Choose one matching template and publication.' },
+      ]);
+    }
+  }
+  return {
+    template: outer.template,
+    workTypeId: outer.workTypeId ?? nested.workTypeId,
+    workTypeVersionId: outer.workTypeVersionId ?? nested.workTypeVersionId,
+  };
 }
 
 /**
@@ -55,18 +102,10 @@ export async function requireTemplateDecisions(
   const catalogs = new Map<string, ReturnType<typeof readCatalog>>();
   const templates = new Map<string, ReturnType<typeof toTemplateOut>>();
   for (const item of items) {
-    if (item.template !== undefined && item.withoutTemplateReason !== undefined) {
-      throw new ValidationError([
-        {
-          path: [item.ref, 'template'],
-          message: 'Select a template or explain a freeform choice, not both.',
-        },
-      ]);
-    }
-    if (item.template !== undefined) requireScope(scopes, 'work:read');
+    const selected = validateDecision(item);
+    if (selected) requireScope(scopes, 'work:read');
     const kind = TemplateTargetType.safeParse(item.kind);
-    if (!kind.success || item.template !== undefined || item.withoutTemplateReason !== undefined)
-      continue;
+    if (!kind.success || selected || item.withoutTemplateReason !== undefined) continue;
     const key = `${kind.data}:${item.teamId}`;
     let catalog = catalogs.get(key);
     if (!catalog) {
@@ -125,15 +164,13 @@ async function eligibleTemplates(
   targetType: TemplateTargetType,
   teamId: string,
 ) {
-  return db
-    .select()
-    .from(template)
-    .where(
-      and(
-        visibleTemplateWhere(orgId, actorId, { targetType }),
-        or(isNull(template.teamId), eq(template.teamId, teamId)),
-      ),
-    )
-    .orderBy(asc(template.id))
-    .limit(21);
+  const rows = await listWorkTemplates(
+    { orgId, actorId },
+    { targetType, teamId: TeamId.parse(teamId), includeDrafts: 'true' },
+    { seedDefaults: false },
+  );
+  // Blank bases never make quick capture require a decision.
+  return rows
+    .filter((row) => !row.isBase && (row.scope !== 'team' || row.teamId === teamId))
+    .slice(0, 21);
 }

@@ -16,7 +16,7 @@
 import { ActorId, OrganizationId, TeamId } from '@docket/identity-access/ids';
 import { z } from 'zod';
 
-import { InitiativeId, LabelId, TemplateId } from '../ids';
+import { InitiativeId, LabelId, TemplateId, WorkTypeVersionId } from '../ids';
 import { Priority } from '../task-contract';
 import { Health, Visibility } from './capability';
 import { InitiativeUpdateCadence } from './initiative';
@@ -91,6 +91,9 @@ export const PlanNode = z
       .describe('Existing initiatives, by real id, a project also belongs to.'),
     fields: PlanNodeFields,
     templateId: TemplateId.nullable().describe('The template applied to this node, when any.'),
+    workTypeVersionId: WorkTypeVersionId.optional().describe(
+      'Publication applied to this node; absent on legacy and private drafts.',
+    ),
     inheritedLabelIds: z
       .array(LabelId)
       .optional()
@@ -177,6 +180,9 @@ export const PlanOp = z
         ref: z
           .string()
           .describe('An existing draft node, including one added earlier in this ops batch.'),
+        workTypeVersionId: WorkTypeVersionId.optional().describe(
+          'Pin this publication; otherwise use current.',
+        ),
         templateId: TemplateId.describe(
           'A visible template id from plan_start, plan_read, or list_templates whose targetType matches the node kind.',
         ),

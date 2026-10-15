@@ -1,3 +1,7 @@
+import {
+  hydrateWorkTemplateSelection,
+  serializeWorkTemplateSelection,
+} from '@/components/composer/work-template-draft';
 /**
  * The initiative composer's draft codec: its {@link InitiativeDraft} to and from the saved payload.
  *
@@ -27,6 +31,7 @@ export interface InitiativeDraftRosters {
 /** The initiative composer's draft as the API stores it. */
 export function serializeInitiativeDraft(draft: InitiativeDraft): ComposerDraftPayload {
   return {
+    ...serializeWorkTemplateSelection(draft),
     kind: 'initiative',
     name: draft.name,
     summary: draft.summary,
@@ -53,6 +58,7 @@ export function hydrateInitiativeDraft(
 ): Partial<InitiativeDraft> {
   if (payload.kind !== 'initiative') return {};
   return {
+    ...hydrateWorkTemplateSelection(payload),
     name: payload.name ?? '',
     summary: payload.summary ?? '',
     description: payload.description ?? '',

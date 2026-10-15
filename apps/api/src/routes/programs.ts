@@ -1,3 +1,6 @@
+import { workTemplateAssignmentRoutes } from './work-template-assignment';
+import { programOut as toOut } from './program-output';
+import { prepareWorkTemplateCreation } from '../lib/work-template-creation';
 /** Program routes mounted under an organization. */
 import { actor, cycle, db, program, project, task, update } from '@docket/db';
 import { CursorQuery, pageOf } from '../contracts/pagination';
@@ -47,21 +50,6 @@ import { buildTaskViewCondition, buildTaskViewFilter, toOut as taskToOut } from 
 type ProgramRow = typeof program.$inferSelect;
 type TaskRow = typeof task.$inferSelect;
 
-function toOut(p: ProgramRow): z.input<typeof ProgramOut> {
-  return {
-    id: p.id,
-    organizationId: p.organizationId,
-    name: p.name,
-    summary: p.summary,
-    description: p.description,
-    ownerId: p.ownerId,
-    status: p.status,
-    health: p.health,
-    visibility: p.visibility,
-    createdAt: p.createdAt.toISOString(),
-  };
-}
-
 /** Project one named actor without fetching the organization member roster. */
 function actorReference(row: typeof actor.$inferSelect) {
   return { actorId: row.id, displayName: row.displayName, avatar: row.avatar };
@@ -84,6 +72,7 @@ async function loadProgram(orgId: string, id: string): Promise<ProgramRow> {
 
 /** Programs router: org-scoped CRUD; `manage` to mutate. */
 const programs = new Hono<AppEnv>()
+  .route('/', workTemplateAssignmentRoutes('program'))
   .get(
     '/',
     apiDoc({
@@ -122,11 +111,15 @@ const programs = new Hono<AppEnv>()
     zJson(ProgramCreate),
     async (c) => {
       const { orgId, actorId } = c.get('actorCtx');
-      const body = c.req.valid('json');
+      const body = ProgramCreate.parse(
+        await prepareWorkTemplateCreation(orgId, 'program', c.req.valid('json')),
+      );
       const status = await resolveContainerStatus(orgId, 'program', body.status ?? 'active');
       const inserted = await db
         .insert(program)
         .values({
+          workTypeId: body.workTypeId,
+          workTypeVersionId: body.workTypeVersionId,
           organizationId: orgId,
           name: body.name,
           summary: body.summary,

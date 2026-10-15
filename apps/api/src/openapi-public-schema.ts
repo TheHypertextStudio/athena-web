@@ -150,6 +150,7 @@ function constrainedStringExample(schema: JsonObject, variant: number): string |
     'example_key',
     'A1-B2',
     'sha256:0123456789abcdef',
+    `sha256:${'0'.repeat(64)}`,
     'migration',
   ];
   const expression = new RegExp(pattern);

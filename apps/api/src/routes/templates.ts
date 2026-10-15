@@ -26,12 +26,11 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 
 import type { AppEnv } from '../context';
-import { NotFoundError } from '../error';
 import { seedDefaultTemplates } from '../lib/templates/defaults';
 import { visibleTemplateWhere } from '../lib/templates/visibility';
 import {
   createTemplate,
-  reconcileTemplateImages,
+  deleteTemplate,
   requireVisibleTemplate,
   toTemplateOut as toOut,
   updateTemplate,
@@ -41,6 +40,7 @@ import { pageResultById, seekAfterId } from '../lib/list-cursor';
 import { apiDoc } from '../lib/openapi-route';
 import { zJson, zParam, zQuery } from '../lib/validate';
 import { capabilityGuard } from '../permissions/capability-guard';
+import definitions from './work-template-definitions';
 
 const idParam = z.object({ id: z.string() });
 
@@ -52,6 +52,7 @@ const listQuery = CursorQuery.extend({
 
 /** Templates router: org-scoped CRUD over reusable create drafts; `contribute` to mutate. */
 const templates = new Hono<AppEnv>()
+  .route('/definitions', definitions)
   .get(
     '/',
     apiDoc({
@@ -93,7 +94,12 @@ const templates = new Hono<AppEnv>()
     zJson(TemplateCreate),
     async (c) => {
       const { orgId, actorId } = c.get('actorCtx');
-      const row = await createTemplate(orgId, actorId, c.req.valid('json'));
+      const row = await createTemplate(
+        orgId,
+        actorId,
+        c.req.valid('json'),
+        c.get('actorCtx').capabilities,
+      );
       return created(c, TemplateOut, toOut(row));
     },
   )
@@ -120,14 +126,20 @@ const templates = new Hono<AppEnv>()
       summary: 'Update a template',
       capability: 'contribute',
       response: TemplateOut,
-      description: `Partially update a caller-visible template; only fields present in the body change (\`name\`, \`description\`, \`scope\`, \`ownerActorId\`, \`teamId\`, \`payload\`). Requires \`contribute\`. \`payload\` is replaced wholesale when supplied, and its \`targetType\` must match the template's. A template cannot be moved into another actor's personal scope or a team the caller does not belong to. Moving \`scope\` away from \`team\` clears \`teamId\`. Shipped defaults can be edited, and those changes persist. A hidden, cross-workspace, or unknown id returns 404. Returns the updated {@link TemplateOut}.`,
+      description: `Partially update a caller-visible template; only fields present in the body change (\`name\`, \`description\`, \`scope\`, \`ownerActorId\`, \`teamId\`, \`payload\`). Requires \`contribute\`. \`payload\` is replaced wholesale when supplied, and its \`targetType\` must match the template's. A template cannot be moved into another actor's personal scope or a team the caller does not belong to. Published templates remain workspace-visible and cannot return to personal or team scope. Workspace writes publish a new immutable version transactionally. Moving \`scope\` away from \`team\` clears \`teamId\`. Shipped defaults can be edited, and those changes persist. A hidden, cross-workspace, or unknown id returns 404. Returns the updated {@link TemplateOut}.`,
     }),
     zParam(idParam),
     zJson(TemplateUpdate),
     async (c) => {
       const { orgId, actorId } = c.get('actorCtx');
       const { id } = c.req.valid('param');
-      const { after } = await updateTemplate(orgId, actorId, id, c.req.valid('json'));
+      const { after } = await updateTemplate(
+        orgId,
+        actorId,
+        id,
+        c.req.valid('json'),
+        c.get('actorCtx').capabilities,
+      );
       return ok(c, TemplateOut, toOut(after));
     },
   )
@@ -139,19 +151,13 @@ const templates = new Hono<AppEnv>()
       summary: 'Delete a template',
       capability: 'contribute',
       response: TemplateOut,
-      description: `Delete a caller-visible template permanently. Requires \`contribute\`. A deleted shipped default does not return automatically. Docket seeds defaults only when a workspace has no templates. A hidden, cross-workspace, or unknown id returns 404. The response contains the deleted {@link TemplateOut} so the client can confirm or offer to restore it.`,
+      description: `Archive a published template while retaining its immutable versions and existing work. Delete an unused unpublished starting draft permanently. Requires \`contribute\`. A deleted shipped default does not return automatically. Docket seeds defaults only when a workspace has no templates. A hidden, cross-workspace, or unknown id returns 404. The response contains the deleted {@link TemplateOut} so the client can confirm or offer to restore it.`,
     }),
     zParam(idParam),
     async (c) => {
       const { orgId, actorId } = c.get('actorCtx');
       const { id } = c.req.valid('param');
-      const deleted = await db
-        .delete(template)
-        .where(visibleTemplateWhere(orgId, actorId, { id }))
-        .returning();
-      const row = deleted[0];
-      if (!row) throw new NotFoundError('Template not found');
-      await reconcileTemplateImages(orgId, row.id, 'delete');
+      const row = await deleteTemplate(orgId, actorId, id, c.get('actorCtx').capabilities);
       return ok(c, TemplateOut, toOut(row));
     },
   );

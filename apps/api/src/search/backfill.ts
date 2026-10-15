@@ -1,3 +1,4 @@
+import { missingWorkTemplateIdentity } from './work-template-filter';
 import { and, desc, eq, gt, inArray } from 'drizzle-orm';
 
 import { enqueueSearchIndexJob } from './enqueue';
@@ -137,6 +138,7 @@ async function enqueueStaleRows(sourceTable: string, rows: readonly unknown[]): 
   const docs = await schema.db
     .select({
       entityId: schema.searchDocument.entityId,
+      facet: schema.searchDocument.facet,
       indexedAt: schema.searchDocument.indexedAt,
       sourceUpdatedAt: schema.searchDocument.sourceUpdatedAt,
     })
@@ -155,11 +157,7 @@ async function enqueueStaleRows(sourceTable: string, rows: readonly unknown[]): 
 
   for (const row of sourceRows) {
     const doc = docsByEntityId.get(row.id);
-    const freshness = sourceFreshness(row);
-    const indexedFreshness = doc?.sourceUpdatedAt ?? doc?.indexedAt ?? null;
-    if (doc && freshness && indexedFreshness && freshness.getTime() <= indexedFreshness.getTime()) {
-      continue;
-    }
+    if (sourceAlreadyIndexed(sourceTable, row, doc)) continue;
     await enqueueSearchIndexJob({
       organizationId: typeof row.organizationId === 'string' ? row.organizationId : null,
       userId: typeof row.userId === 'string' ? row.userId : null,
@@ -172,6 +170,23 @@ async function enqueueStaleRows(sourceTable: string, rows: readonly unknown[]): 
   }
 
   return enqueued;
+}
+
+function sourceAlreadyIndexed(
+  sourceTable: string,
+  row: Parameters<typeof sourceFreshness>[0] & { workTypeId?: unknown },
+  doc:
+    { facet: Record<string, unknown>; sourceUpdatedAt: Date | null; indexedAt: Date } | undefined,
+): boolean {
+  const freshness = sourceFreshness(row);
+  const indexedFreshness = doc?.sourceUpdatedAt ?? doc?.indexedAt ?? null;
+  return Boolean(
+    doc &&
+    !missingWorkTemplateIdentity(sourceTable, row, doc.facet) &&
+    freshness &&
+    indexedFreshness &&
+    freshness.getTime() <= indexedFreshness.getTime(),
+  );
 }
 
 async function repairEventRows(limit: number): Promise<RepairSearchIndexResult> {
@@ -227,6 +242,7 @@ function isRowWithId(row: unknown): row is {
   createdAt?: unknown;
   updatedAt?: unknown;
   occurredAt?: unknown;
+  workTypeId?: unknown;
 } {
   return typeof row === 'object' && row !== null && 'id' in row && typeof row.id === 'string';
 }

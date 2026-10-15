@@ -51,11 +51,16 @@ name and retains failed entries for retry. A Program's existing-project suggesti
 Program's placement; the object's Move action handles placement changes.
 
 Template setup separates metadata, work defaults, and review in a dialog that fits its content on
-desktop and fills phones. Existing templates open their work fields directly. Project repetition
+desktop and fills phones. Guided creation saves a private draft; its editor publishes an immutable workspace-visible version. Project repetition
 shows its cadence controls in the setup step. Generated work opens its schedule and occurrence
 history in a management overlay.
 See [template and repeating-work setup](docs/core/work-template-ui.md) for the saved behavior and
-draft boundaries.
+draft boundaries. Every Initiative, Program, Project, and Task retains its chosen template and
+published version, including work created by connectors or imports through a blank base template.
+Work views filter and group by template; Change template previews optional starting fields without
+changing dates or children. Workspace administrators manage team offerings and authoring policy.
+See the [identity engineering specification](docs/engineering/specs/work-template-identity.md) for
+migration ordering, private-draft preservation, and REST/MCP compatibility.
 For Codex connections that repeatedly request sign-in with several chats open, see
 [refresh coordination troubleshooting](apps/docs/developers/connect-an-agent-mcp.mdx#codex-asks-you-to-reconnect-when-several-chats-are-open).
 

@@ -1,3 +1,4 @@
+import { workTemplateProjectionSql } from './work-template-sql';
 import { sourcePersonProjection } from '../identity/source-person-projection';
 import { sql, type SQL } from 'drizzle-orm';
 
@@ -97,7 +98,7 @@ function entityDisplay(): SQL {
 }
 
 const projections = {
-  task: (): SQL => sql`${base()},
+  task: (): SQL => sql`${base()}, ${workTemplateProjectionSql('task')},
     e.id, e.title, e.description, e.state as status, e.priority,
     ${entityDisplay()} as display,
     ${scalarRelation(WORK_VIEW_SCALAR_RELATIONS.actor, 'assignee_id')} as assignee,
@@ -118,7 +119,7 @@ const projections = {
     e.start_date, e.due_date, e.created_at, e.updated_at, e.estimate, e.estimate_minutes,
     e._blocked as blocked, e._blocking as blocking, e._unfiled as unfiled,
     e._archived as archived`,
-  project: (): SQL => sql`${base()},
+  project: (): SQL => sql`${base()}, ${workTemplateProjectionSql('project')},
     e.id, e.name, e.summary, e.status, e.priority, e.health,
     ${scalarRelation(WORK_VIEW_SCALAR_RELATIONS.actor, 'lead_id')} as lead,
     ${actorIdentity('lead_id')} as lead_actor,
@@ -174,7 +175,10 @@ const projections = {
     coalesce((select json_agg(d.blocked_project_id order by d.blocked_project_id)
       from project_dependency d join authorized related on related.id=d.blocked_project_id
       where d.blocking_project_id=e.id and d.organization_id=e.organization_id), '[]'::json) blocks_ids`,
-  program: (_context: WorkViewSqlContext, execution: WorkViewSqlExecution): SQL => sql`${base()},
+  program: (
+    _context: WorkViewSqlContext,
+    execution: WorkViewSqlExecution,
+  ): SQL => sql`${base()}, ${workTemplateProjectionSql('program')},
     e.id, e.name, e.summary, e.status, e.health,
     ${scalarRelation(WORK_VIEW_SCALAR_RELATIONS.actor, 'owner_id')} as owner,
     ${actorIdentity('owner_id')} as owner_actor,
@@ -192,7 +196,10 @@ const projections = {
     ${scalarRelation(WORK_VIEW_SCALAR_RELATIONS.actor, 'created_by')} as creator, e.updated_at,
     e._project_count::int project_count, e._task_count::int task_count,
     ${compileProgramActivitySql(execution)} as activity`,
-  initiative: (_context: WorkViewSqlContext, execution: WorkViewSqlExecution): SQL => sql`${base()},
+  initiative: (
+    _context: WorkViewSqlContext,
+    execution: WorkViewSqlExecution,
+  ): SQL => sql`${base()}, ${workTemplateProjectionSql('initiative')},
     e.id, e.name, e.summary, e.status, e.priority, e.health,
     ${scalarRelation(WORK_VIEW_SCALAR_RELATIONS.actor, 'owner_id')} as owner,
     ${actorIdentity('owner_id')} as owner_actor,
@@ -285,7 +292,15 @@ export function transportWorkViewRow(
     if (['start_date', 'due_date', 'target_date'].includes(key)) {
       const timestamp = timestampValue(value);
       result[camel] = typeof timestamp === 'string' ? timestamp.slice(0, 10) : timestamp;
-    } else if (['created_at', 'updated_at', 'latest_update', 'latest_occurred_at'].includes(key)) {
+    } else if (
+      [
+        'created_at',
+        'updated_at',
+        'latest_update',
+        'latest_occurred_at',
+        'work_type_assigned_at',
+      ].includes(key)
+    ) {
       result[camel] = timestampValue(value);
     } else if (key === 'activity' && value !== null && typeof value === 'object') {
       const activity = value as Record<string, unknown>;

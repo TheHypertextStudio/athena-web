@@ -1,3 +1,7 @@
+import {
+  hydrateWorkTemplateSelection,
+  serializeWorkTemplateSelection,
+} from '@/components/composer/work-template-draft';
 /**
  * The program composer's draft codec: its {@link ProgramDraft} to and from the saved payload.
  *
@@ -22,6 +26,7 @@ export interface ProgramDraftRosters {
 /** The program composer's draft as the API stores it. */
 export function serializeProgramDraft(draft: ProgramDraft): ComposerDraftPayload {
   return {
+    ...serializeWorkTemplateSelection(draft),
     kind: 'program',
     name: draft.name,
     summary: draft.summary,
@@ -46,6 +51,7 @@ export function hydrateProgramDraft(
 ): Partial<ProgramDraft> {
   if (payload.kind !== 'program') return {};
   return {
+    ...hydrateWorkTemplateSelection(payload),
     name: payload.name ?? '',
     summary: payload.summary ?? '',
     description: payload.description ?? '',

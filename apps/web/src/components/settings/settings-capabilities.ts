@@ -57,6 +57,13 @@ const workspaceNode = (
 
 /** Every stable Settings group and subsection that Cmd+K can open directly. */
 export const SETTINGS_NODES = {
+  templatesAuthoring: workspaceNode(
+    'templates-authoring',
+    'templates',
+    'Authoring',
+    'Choose who may edit and publish work templates. Private drafts keep their visibility.',
+    ['template', 'work templates', 'work type', 'blueprint'],
+  ),
   profileIdentity: personalNode(
     'profile-identity',
     'profile',

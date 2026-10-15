@@ -19,6 +19,14 @@ describe('public OpenAPI examples', () => {
     expect(example).toEqual(['01ARZ3NDEKTSV4RRFFQ69G5FAV', '01ARZ3NDEKTSV4RRFFQ69G5FAW']);
   });
 
+  it('generates a complete SHA-256 example for reviewed-change tokens', () => {
+    const example = exampleForSchema(
+      { type: 'string', pattern: '^sha256:[a-f0-9]{64}$' },
+      components,
+    );
+    expect(example).toMatch(/^sha256:[a-f0-9]{64}$/);
+  });
+
   it('uses readable bounded numbers instead of safe-integer sentinels', () => {
     expect(
       exampleForSchema(

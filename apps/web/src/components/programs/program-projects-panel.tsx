@@ -18,6 +18,7 @@ import { Button, Skeleton } from '@docket/ui/primitives';
 import Link from '@/components/docket-link';
 import { type JSX, useMemo } from 'react';
 
+import { ProgramTemplateCreate } from './program-template-create';
 import { useCreateObject } from '@/components/create-object/create-object-provider';
 import { useWorkStatusResolver } from '@/components/entity-display/use-work-status';
 import { WorkStatusBadge } from '@/components/entity-display/work-status';
@@ -49,29 +50,23 @@ export function ProgramProjectsPanel({
   const options = useComposerOptions(orgId, ['projects'], true);
   const { attach, detach, pending } = useProgramProjects(orgId, programId);
 
-  const filed = useMemo<readonly ProjectOut[]>(
-    () => options.projects.filter((project) => project.programId === programId),
-    [options.projects, programId],
-  );
-  const unfiledOptions = useMemo(
-    () =>
-      options.projects
-        .filter((project) => project.programId !== programId)
-        .map((project) => ({ value: project.id, label: project.name })),
+  const { filed, unfiledOptions } = useMemo(
+    () => partitionProgramProjects(options.projects, programId),
     [options.projects, programId],
   );
 
   // placeholder: the projects filed under this program.
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-between gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-on-surface-variant text-body-medium">
           {filed.length > 0
             ? `${filed.length} ${filed.length === 1 ? projectNounLower : `${projectNounLower}s`}`
             : `No ${projectNounLower}s yet.`}
         </p>
         {canEdit ? (
-          <div className="flex shrink-0 items-center gap-2">
+          <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
+            <ProgramTemplateCreate orgId={orgId} programId={programId} onCreated={onOpenProject} />
             <EntityPicker
               options={unfiledOptions}
               value={null}
@@ -168,4 +163,13 @@ export function ProgramProjectsPanel({
       )}
     </div>
   );
+}
+
+function partitionProgramProjects(projects: readonly ProjectOut[], programId: string) {
+  return {
+    filed: projects.filter((project) => project.programId === programId),
+    unfiledOptions: projects
+      .filter((project) => project.programId !== programId)
+      .map((project) => ({ value: project.id, label: project.name })),
+  };
 }

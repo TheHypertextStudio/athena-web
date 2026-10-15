@@ -41,7 +41,9 @@
     "./slug-contract": "./src/contracts/slug.ts",
     "./publish-contract": "./src/contracts/publish.ts",
     "./provenance-contract": "./src/contracts/provenance.ts",
-    "./workflow": "./src/workflow.ts"
+    "./workflow": "./src/workflow.ts",
+    "./work-template-contract": "./src/contracts/work-template.ts",
+    "./work-template-reference": "./src/contracts/work-template-reference.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

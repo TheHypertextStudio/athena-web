@@ -1,6 +1,7 @@
 import { SearchDocumentFamily, SearchDocumentKind } from '../contracts/search';
 import { SourceSystemKind } from '@docket/connections/event-contract';
 import { z } from 'zod';
+import { WorkTypeId } from '@docket/work/ids';
 
 function csvEnum<T extends z.ZodEnum>(schema: T) {
   return z
@@ -59,6 +60,7 @@ export const SearchHttpQuery = z.object({
   ownerIds: csvStringList(),
   assigneeIds: csvStringList(),
   labelIds: csvStringList(),
+  workTypeIds: csvStringList().pipe(z.array(WorkTypeId)),
   /** Resolve specific source entity ids, for a deep link to a row that is not on the first page. */
   ids: csvStringList(),
   statuses: csvStringList(),

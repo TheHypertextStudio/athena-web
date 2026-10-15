@@ -1,3 +1,4 @@
+import { WorkTemplateAuthoringPolicy } from '@docket/work/work-template-contract';
 /**
  * `domain packages` — Organization slice DTOs.
  */
@@ -78,6 +79,7 @@ export type OrgCreate = z.infer<typeof OrgCreate>;
 /** Mutable, user-facing workspace identity attributes. */
 export const OrgUpdate = z
   .object({
+    workTemplateAuthoring: WorkTemplateAuthoringPolicy.optional(),
     name: z
       .string()
       .trim()
@@ -110,6 +112,7 @@ export type OrgUpdate = z.infer<typeof OrgUpdate>;
 /** Full organization representation returned by reads. */
 export const OrgOut = z
   .object({
+    workTemplateAuthoring: WorkTemplateAuthoringPolicy.optional(),
     id: OrganizationId.describe('Stable ULID identifier of the organization.'),
     name: z.string().describe("The organization's display name."),
     slug: z

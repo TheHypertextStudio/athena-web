@@ -1,5 +1,5 @@
 /**
- * `@docket/db` — seeding a workspace's status sets.
+ * `@docket/db` — provisioning a workspace's status sets and base work templates.
  *
  * @remarks
  * Every workspace needs a status set for each kind of work it tracks before any of that work can
@@ -19,6 +19,10 @@ import {
 } from '@docket/work/work-status-contract';
 
 import type { Database } from './client';
+import {
+  seedBaseWorkTemplatesInTransaction,
+  type WorkTemplateProvisionDatabase,
+} from './seed-work-templates';
 import { genId } from './id';
 import { workStatus } from './schema';
 
@@ -58,7 +62,7 @@ type DbLike = Pick<Database, 'insert' | 'select'>;
  * const landing = statuses.get(statusLookupKey('task', 'backlog'));
  * ```
  */
-export async function seedWorkspaceStatuses(
+async function seedStatusRows(
   db: DbLike,
   organizationId: string,
   createdBy: string | null = null,
@@ -91,3 +95,19 @@ export async function seedWorkspaceStatuses(
   await db.insert(workStatus).values(rows);
   return new Map(rows.map((row) => [statusLookupKey(row.entityType, row.key), row.id]));
 }
+
+/** Provision every required workspace work default in one transaction, preserving existing sets. */
+export async function seedWorkspaceWorkDefaults(
+  database: WorkTemplateProvisionDatabase,
+  organizationId: string,
+  createdBy: string | null = null,
+): Promise<SeededStatuses> {
+  return database.transaction(async (transaction) => {
+    const statuses = await seedStatusRows(transaction, organizationId, createdBy);
+    await seedBaseWorkTemplatesInTransaction(transaction, organizationId, createdBy);
+    return statuses;
+  });
+}
+
+/** Compatibility name for provisioning statuses and the required base work-template identities. */
+export const seedWorkspaceStatuses = seedWorkspaceWorkDefaults;

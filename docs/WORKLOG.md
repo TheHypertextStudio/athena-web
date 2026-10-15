@@ -153,6 +153,58 @@ and stale responses pass. Broad MCP regression found only the toolbox prompt-bud
 now passes after shortening guidance. Affected types, build, lint, and complexity pass. Real-host
 and production availability remain separate operational acceptance work.
 
+#### Template identity implementation plan
+
+Use the detailed identity specification before coding: extend the existing template definition,
+add immutable publications and required four-kind references, and preserve personal/team draft
+privacy. Run expansion SQL, a resumable batched backfill, and enforcement through the established
+migration runner; generate IDs through the existing application generator. Provision bases with
+workspace work defaults and enforce identity on indirect inserts. Extend the shared persistence
+service, REST/MCP adapters, typed work/view/search contracts, composer selection, headers/rows,
+full-page Settings, and Change template. Prove populated PostgreSQL migration ordering and the
+Event-project save/reopen/group journey. Keep maintenance and remaining candidate comparisons open
+while prioritizing the user's typed-work system; preserved checkouts are not retired speculatively.
+
+#### Template identity implementation and review
+
+Implemented the existing definition's immutable publications, four-kind base references, migration
+checkpoint/backfill, compatibility adapters, canonical creation defaults, work-view identity, and
+full-page draft authoring. Real PostgreSQL validation covers retained work, interrupted backfills,
+future-journal upgrades, immutable snapshots, and restricted-role tenant isolation. Fresh review
+found lifecycle privacy, concurrent legacy-draft loss, offering authority, default propagation,
+search, and optional change-preview gaps; focused regressions reproduce those behaviors before
+fixes. Guided creation remains reachable and saves privately before publication. Manual composer
+selection now asks whether to keep authored fields or apply starting values. Session-only draft
+retention prevents navigation loss and clears on account/permission changes.
+
+Authenticated acceptance passes all four private draft/save/reopen/publication journeys and
+all four guided creation journeys. The Event journey proves retained identity, immutable version
+selection, body-preserving reassignment, and grouping by template. Repeating-work revision/history,
+dirty dismissal, keyboard focus, long documents, both themes, and phone overflow checks pass. A
+fresh short-phone failure/retry journey retains the edited draft and hides provider error text.
+Forty final-state captures cover five surfaces; the library was recaptured after moving the
+secondary authoring policy below useful templates.
+
+Validation passes the 24-task affected type graph, 343 domain tests, 290 database tests, real
+PostgreSQL 18 migration verification, changed-file lint, complexity, and native production builds.
+The broad API run passed 4,595 cases and exposed one OpenAPI sample-length defect; the corrected
+sample generator passes 75 affected cases. The broad web run passed 5,085 cases and exposed two stale
+command fixtures, one Settings discovery descriptor gap, and one load-sensitive performance case;
+focused reruns after those corrections pass. Checks were repeated only for affected source.
+The reviewed local interface meets the craft bar in
+`docs/design/audits/2026-10-14-work-template-identity.md`.
+
+The recovery inventory now gives every original checkout and retained candidate branch an explicit
+preserved outcome, including the distinct 145-commit lint series. Native signing inheritance and
+historical Android acceptance documentation were recovered independently; source/build evidence
+does not establish current physical-device or provider acceptance. Blueprint, schedule, gallery,
+remaining demonstrated recovery gaps, and operational acceptance work remain in progress.
+
+**Retrospective**: Treat legacy adapters as concurrent writers, preserve unpublished-body privacy
+through archive states, and bind optional starting-field changes to the reviewed publication.
+Whole-suite failures need focused diagnosis; a successful migration requires the real PostgreSQL
+journal order as well as in-memory schema checks.
+
 ### [LEGAL-POLICIES-002] Keep policy versions easy to navigate
 
 - **Status**: REVIEW

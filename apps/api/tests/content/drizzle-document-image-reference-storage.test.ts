@@ -2,6 +2,11 @@ import { beforeAll, describe, expect, it } from 'vitest';
 
 import type * as DbModule from '@docket/db';
 import { eq } from 'drizzle-orm';
+import { serializeDocumentFigure } from '@docket/markdown-tree';
+import { WorkTemplateDefinition } from '@docket/work/work-template-contract';
+import { createTemplate, updateTemplate } from '../../src/lib/templates/write';
+import { editWorkTemplateDraft } from '../../src/lib/templates/service';
+import { getDocumentImageReferenceReconciler } from '../../src/content/document-image-reference-registry';
 
 import { createDrizzleDocumentImageReferenceStorage } from '../../src/content/drizzle-document-image-reference-storage';
 import { getDb, one, seedBaseOrg } from '../support/routes-harness';
@@ -67,6 +72,62 @@ describe('Drizzle document image reference storage', () => {
     await expect(
       storage.images.filterOwnedImageIds(mine.orgId, ['image_mine_1', 'image_theirs']),
     ).resolves.toEqual(new Set(['image_mine_1']));
+  });
+
+  it('retains images in previous publications and an unpublished draft during reconciliation and cleanup', async () => {
+    const org = await seedBaseOrg(db, schema);
+    const actor = { orgId: org.orgId, actorId: org.humanActorId, capabilities: ['manage'] };
+    const imageIds = [
+      'template_published_old',
+      'template_published_new',
+      'template_private_draft',
+    ] as const;
+    for (const id of imageIds) await insertImage(org.orgId, id);
+    const prose = (id: string) =>
+      serializeDocumentFigure({
+        version: 1,
+        alt: id,
+        src: `/v1/orgs/${org.orgId}/images/${id}`,
+        decorative: false,
+      });
+    const created = await createTemplate(
+      org.orgId,
+      org.humanActorId,
+      {
+        targetType: 'task',
+        scope: 'organization',
+        name: 'Images',
+        payload: { targetType: 'task', description: prose(imageIds[0]) },
+      },
+      actor.capabilities,
+    );
+    const { after } = await updateTemplate(
+      org.orgId,
+      org.humanActorId,
+      created.id,
+      {
+        payload: { targetType: 'task', description: prose(imageIds[1]) },
+      },
+      actor.capabilities,
+    );
+    await editWorkTemplateDraft(actor, created.id, {
+      expectedRevision: after.draftRevision,
+      definition: WorkTemplateDefinition.parse({
+        name: 'Draft',
+        payload: { targetType: 'task', description: prose(imageIds[2]) },
+      }),
+    });
+    const storage = createDrizzleDocumentImageReferenceStorage();
+    for (const id of imageIds) {
+      await expect(storage.references.hasImageReference(org.orgId, id)).resolves.toBe(true);
+    }
+    // A lost projection must recover its references from every retained publication and draft.
+    await storage.references.deleteForSubject(org.orgId, 'template', created.id);
+    for (const id of imageIds) {
+      await expect(getDocumentImageReferenceReconciler().isImageInUse(org.orgId, id)).resolves.toBe(
+        true,
+      );
+    }
   });
 
   it('reads all nine authoritative prose shapes, including template payload descriptions', async () => {

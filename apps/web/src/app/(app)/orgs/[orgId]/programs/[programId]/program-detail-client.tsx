@@ -28,9 +28,10 @@ import { useCategoryOf } from '@/components/entity-display/use-work-status';
 import { LatestUpdateSummary } from '@/components/entity-detail/latest-update-summary';
 import { PartialLoadBanner, QueryLoadFailure } from '@/components/feedback';
 import { PageContainer } from '@/components/views/page-layout';
-import { DetailPrintSummary } from '@/components/views/detail-print-summary';
+import { ProgramPrintSummary } from '@/components/programs/program-print-summary';
 import { ContainerDetailLoading } from '@/components/views/entity-snapshot-metadata';
 import { useDetailTab } from '@/components/views/use-detail-tab';
+import { WorkTemplateHeader } from '@/components/templates/work-template-header';
 import { EntityDetailLayout, EntityMetadataRow } from '@/components/views/entity-detail-layout';
 import { ProgramProjectsPanel } from '@/components/programs/program-projects-panel';
 import { FlowSnapshot } from '@/components/programs/flow-snapshot';
@@ -276,16 +277,9 @@ export default function ProgramDetailPage(): JSX.Element {
         title: program.name,
       }}
       printSummary={
-        <DetailPrintSummary
-          title={program.name}
-          summary={program.summary}
-          description={program.description}
-          properties={[
-            { label: 'Status', value: program.status.replace('_', ' ') },
-            { label: 'Health', value: health ? health.replace('_', ' ') : '—' },
-            { label: 'Owner', value: aggregate?.references.owner?.displayName ?? '—' },
-            { label: 'Visibility', value: program.visibility },
-          ]}
+        <ProgramPrintSummary
+          program={program}
+          ownerName={aggregate?.references.owner?.displayName ?? '—'}
         />
       }
       icon={
@@ -329,6 +323,7 @@ export default function ProgramDetailPage(): JSX.Element {
       }
       metadata={
         <div className="flex flex-col gap-2">
+          <WorkTemplateHeader orgId={orgId} kind="program" work={program} canEdit={canEdit} />
           <EntityMetadataRow ariaLabel={`${programLabel} properties`}>
             <ProgramPropertiesPanel
               ownerId={program.ownerId ?? null}

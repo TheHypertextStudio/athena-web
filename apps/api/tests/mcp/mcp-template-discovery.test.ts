@@ -36,7 +36,13 @@ afterEach(async () => {
 
 type Seed = Awaited<ReturnType<typeof seedMcpUpdateOrg>>;
 interface CatalogPage {
-  templates: { id: string; name: string; targetType: string; payload: { description?: string } }[];
+  templates: {
+    id: string;
+    name: string;
+    targetType: string;
+    isBase?: boolean;
+    payload: { description?: string };
+  }[];
   nextCursor: string | null;
 }
 
@@ -106,8 +112,13 @@ describe('MCP template discovery', () => {
         arguments: { orgId: seed.orgId, targetType: 'task' },
       }),
     );
-    expect(page.templates.map((t) => t.id).sort()).toEqual([own, workspace, team].sort());
-    expect(page.templates[0]?.payload.description).toBe('## Review');
+    expect(
+      page.templates
+        .filter((t) => !t.isBase)
+        .map((t) => t.id)
+        .sort(),
+    ).toEqual([own, workspace, team].sort());
+    expect(page.templates.find((t) => t.id === own)?.payload.description).toBe('## Review');
     expect(page.nextCursor).toBeNull();
   });
 
@@ -127,7 +138,20 @@ describe('MCP template discovery', () => {
       }),
     );
     expect(second.templates[0]?.id).not.toBe(first.templates[0]?.id);
-    expect(second.nextCursor).toBeNull();
+    const all = [...first.templates, ...second.templates];
+    let cursor = second.nextCursor;
+    while (cursor) {
+      const page = body<CatalogPage>(
+        await client.callTool({
+          name: 'list_templates',
+          arguments: { orgId: seed.orgId, limit: 1, cursor },
+        }),
+      );
+      all.push(...page.templates);
+      cursor = page.nextCursor;
+    }
+    expect(all).toHaveLength(6);
+    expect(new Set(all.map((entry) => entry.id)).size).toBe(6);
     const foreign = await seedMcpUpdateOrg(db, schema, ['view']);
     const otherClient = await connectCatalog(registerTools, foreign.ctx);
     expect(
@@ -164,15 +188,15 @@ describe('MCP template discovery', () => {
           arguments: { orgId: seed.orgId, targetType },
         }),
       );
-      expect(page.templates).toHaveLength(1);
-      expect(page.templates[0]?.payload.description).toBe(markdown);
+      expect(page.templates).toHaveLength(2);
+      expect(page.templates.find((entry) => !entry.isBase)?.payload.description).toBe(markdown);
     }
     const start = body<{
       planId: string;
       templates: { id: string; targetType: string; body: string }[];
     }>(await client.callTool({ name: 'plan_start', arguments: { orgId: seed.orgId } }));
-    expect(start.templates).toHaveLength(4);
-    for (const entry of start.templates) {
+    expect(start.templates).toHaveLength(8);
+    for (const entry of start.templates.filter((entry) => entry.body)) {
       expect(entry.body).toBe(
         `## ${entry.targetType} outcome\n\n- Keep this structure.  \n\n## Evidence\n`,
       );
@@ -181,13 +205,15 @@ describe('MCP template discovery', () => {
       await client.callTool({ name: 'plan_read', arguments: { planId: start.planId } }),
     );
     expect(read.templates).toEqual(start.templates);
-    const items = start.templates.map((entry) => ({
-      ref: entry.targetType,
-      kind: entry.targetType,
-      title: `Templated ${entry.targetType}`,
-      template: start.templates.find((t) => t.targetType === entry.targetType)?.id,
-      description: entry.body.replace('Keep this structure.', 'Deliver the October review.'),
-    }));
+    const items = start.templates
+      .filter((entry) => entry.body)
+      .map((entry) => ({
+        ref: entry.targetType,
+        kind: entry.targetType,
+        title: `Templated ${entry.targetType}`,
+        template: entry.id,
+        description: entry.body.replace('Keep this structure.', 'Deliver the October review.'),
+      }));
     const created = body<{ placed: { kind: string; id: string }[] }>(
       await client.callTool({ name: 'organize', arguments: { orgId: seed.orgId, items } }),
     );
@@ -220,7 +246,12 @@ describe('MCP template discovery', () => {
     expect(new Set(result.templates.map((t) => t.targetType))).toEqual(
       new Set(['task', 'project', 'initiative', 'program']),
     );
-    expect(result.templates.every((t) => typeof t.payload.description === 'string')).toBe(true);
+    expect(result.templates.filter((t) => t.isBase)).toHaveLength(4);
+    expect(
+      result.templates
+        .filter((t) => !t.isBase)
+        .every((t) => typeof t.payload.description === 'string'),
+    ).toBe(true);
   });
 
   it('puts the template-body instruction in creation tool descriptions for clients that only read tools', async () => {

@@ -1,3 +1,4 @@
+import type { task } from '@docket/db';
 /**
  * `@docket/api` — the intent-shaped write tools, and the undo that makes them safe.
  *
@@ -13,6 +14,7 @@
 import { TaskId } from '@docket/work/ids';
 import { z } from 'zod';
 
+import { requireTemplateUndoAuthor } from '../lib/templates/service';
 import { NotFoundError } from '../error';
 import { createCapturedTasks } from './capture-template-tasks';
 import { templateDecisionFields, requireTemplateDecisions } from './template-selection';
@@ -61,6 +63,20 @@ function reindexes(outcome: UndoOutcome): boolean {
   return outcome.reverted && !isCompanionKind(outcome.kind);
 }
 
+/** Return captured work with its stored publication and authored body. */
+function capturedTaskOut(orgId: string, row: typeof task.$inferSelect) {
+  return {
+    id: row.id,
+    title: row.title,
+    description: row.description,
+    workTypeId: row.workTypeId,
+    workTypeVersionId: row.workTypeVersionId,
+    href: entityHref(orgId, 'task', row.id),
+    state: row.state,
+    teamId: row.teamId,
+  };
+}
+
 /** Register capture and undo on `server`. */
 export function registerWriteTools(server: McpRegistrar, ctx: McpContext): void {
   server.registerTool(
@@ -68,7 +84,7 @@ export function registerWriteTools(server: McpRegistrar, ctx: McpContext): void 
     {
       title: 'Capture',
       description:
-        'Create tasks from text. Before writing a structured task body, call list_templates with targetType task and look for a relevant template. Read its literal Markdown in payload.description, keep its sections, and fill them with the task details instead of inventing a format. Pass template by ID or name. With a template, one-line text is the title and omitted description copies the saved Markdown; multiline text is an explicit body. Explicit description, priority, and labelIds override defaults. The result returns the saved body for filling through update. Supply withoutTemplateReason for freeform text or quick capture. When eligible templates exist and neither choice is supplied, no tasks are created and choices are returned. The team, workflow state, current cycle, and assignee are all resolved for you, so this is the cheapest path from a sentence to a tracked piece of work. `text` takes a list, so capturing ten things said in one breath is one call and not ten. Use organize when the things need placing under a project or each other.',
+        'Create tasks from text. Call list_templates before writing structured Markdown: preserve payload.description sections and fill them instead of inventing a format. Select template ID/name or workTypeId with optional workTypeVersionId. With a template, one-line text is the title; multiline text is an explicit body. Omitted fields inherit defaults; explicit description, priority, and labelIds win. Results include saved bodies for update. Use withoutTemplateReason for freeform or quick capture; undecided calls return choices without writes. Text accepts one string or a list. Team, workflow, cycle, and assignee are resolved automatically. Use organize to place work under containers',
       inputSchema: {
         orgId: orgIdParam,
         ...templateDecisionFields,
@@ -91,13 +107,15 @@ export function registerWriteTools(server: McpRegistrar, ctx: McpContext): void 
           .array(
             z.object({
               id: TaskId,
+              workTypeId: z.string(),
+              workTypeVersionId: z.string(),
               title: z.string(),
               description: z
                 .string()
                 .nullable()
                 .describe('The saved body. Fill template sections through update.'),
               href: z.string().describe('Where it lives in the product app.'),
-              state: z.string().describe("The workflow state it landed in — the team's first."),
+              state: z.string().describe('The saved workflow state.'),
               teamId: z.string().describe('The team it landed on.'),
             }),
           )
@@ -181,14 +199,7 @@ export function registerWriteTools(server: McpRegistrar, ctx: McpContext): void 
         });
 
         return jsonResult({
-          items: rows.map((row) => ({
-            id: row.id,
-            title: row.title,
-            description: row.description,
-            href: entityHref(input.orgId, 'task', row.id),
-            state: row.state,
-            teamId: row.teamId,
-          })),
+          items: rows.map((row) => capturedTaskOut(input.orgId, row)),
           listHref: entityListHref(input.orgId, 'task'),
           changeSetId,
         });
@@ -245,6 +256,10 @@ export function registerWriteTools(server: McpRegistrar, ctx: McpContext): void 
           input.changeSetId ?? (await latestOwnChangeSet(input.orgId, actorCtx.actorId));
         if (!targetId) throw new NotFoundError('Nothing to undo');
 
+        await requireTemplateUndoAuthor(
+          { orgId: input.orgId, actorId: actorCtx.actorId },
+          targetId,
+        );
         const { summary, outcomes } = await undoChangeSet(input.orgId, targetId);
         for (const outcome of outcomes) {
           if (reindexes(outcome)) await enqueueSearchUpsert(input.orgId, outcome.kind, outcome.id);

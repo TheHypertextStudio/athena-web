@@ -223,8 +223,8 @@ const WORK_CONFIGURATION_SECTIONS: readonly SettingsSection[] = [
   },
   {
     key: 'templates',
-    label: 'Templates',
-    description: 'Reusable starting points for new work.',
+    label: 'Work templates',
+    description: 'Reusable work definitions and their published versions.',
     icon: LayoutTemplate,
     href: 'templates',
   },

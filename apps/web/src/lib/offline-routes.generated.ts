@@ -206,6 +206,16 @@ export const OFFLINE_ROUTES = [
     load: async () => (await import('@/app/(app)/orgs/[orgId]/settings/statuses/page')).default,
   },
   {
+    pattern: '/orgs/[orgId]/settings/templates/[templateId]',
+    load: async () =>
+      (await import('@/app/(app)/orgs/[orgId]/settings/templates/[templateId]/page')).default,
+  },
+  {
+    pattern: '/orgs/[orgId]/settings/templates/new',
+    load: async () =>
+      (await import('@/app/(app)/orgs/[orgId]/settings/templates/new/page')).default,
+  },
+  {
     pattern: '/orgs/[orgId]/settings/templates',
     load: async () => (await import('@/app/(app)/orgs/[orgId]/settings/templates/page')).default,
   },

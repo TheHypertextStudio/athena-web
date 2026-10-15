@@ -19,6 +19,7 @@ import type { z } from 'zod';
 
 import { ConflictError } from '../../error';
 import { labelsForSubject } from '../labels';
+import { prepareWorkTemplateCreation } from '../work-template-creation';
 import { toOut } from '../../routes/task-helpers';
 import { calendarDaysBetween, compareCalendarDates } from '@docket/planning/calendar-date';
 import { expandCalendarSchedule, materializationWindow } from './expand';
@@ -62,6 +63,8 @@ function oneTaskProcess(body: RecurringTaskCreateValue, anchor: string): Process
         title: draft.title,
         description: draft.description,
         teamId: draft.teamId,
+        workTypeId: draft.workTypeId,
+        workTypeVersionId: draft.workTypeVersionId,
         state: draft.state,
         priority: draft.priority ?? 'none',
         assigneeId: draft.assigneeId,
@@ -85,12 +88,24 @@ function oneTaskProcess(body: RecurringTaskCreateValue, anchor: string): Process
   };
 }
 
+/** Apply and pin selected task defaults before the process transaction opens. */
+async function preparedRecurringTask(
+  database: Database,
+  command: CreateRecurringTaskCommand,
+): Promise<RecurringTaskCreateValue> {
+  const parsed = RecurringTaskCreate.parse(command.recurringTask);
+  return RecurringTaskCreate.parse({
+    ...parsed,
+    task: await prepareWorkTemplateCreation(command.organizationId, 'task', parsed.task, database),
+  });
+}
+
 /** Create the shared process definition, series, and first planning window for a recurring task. */
 export async function createRecurringTask(
   database: Database,
   command: CreateRecurringTaskCommand,
 ): Promise<z.input<typeof RecurringTaskCreated>> {
-  const body = RecurringTaskCreate.parse(command.recurringTask);
+  const body = await preparedRecurringTask(database, command);
   const today = utcCalendarDate(command.now);
   const anchor = firstAnchor(body, today);
   const process = await createPublishedProcessDefinition(database, {

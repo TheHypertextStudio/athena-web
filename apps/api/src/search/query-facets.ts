@@ -9,6 +9,7 @@ import {
   LABEL_FACET_KEYS,
   OWNER_FACET_KEYS,
   STATUS_FACET_KEYS,
+  WORK_TEMPLATE_FACET_KEYS,
 } from './query-filters';
 import type { ScoredRow, SearchDocumentRow } from './query-types';
 
@@ -21,6 +22,7 @@ interface FacetCounts {
   readonly label: Map<string, number>;
   readonly status: Map<string, number>;
   readonly health: Map<string, number>;
+  readonly workType: Map<string, number>;
 }
 
 /** A fresh, empty tally for every facet field a search response can summarize. */
@@ -34,6 +36,7 @@ export function createFacetCounts(): FacetCounts {
     label: new Map(),
     status: new Map(),
     health: new Map(),
+    workType: new Map(),
   };
 }
 
@@ -66,6 +69,7 @@ export function addFacetCountRow(counts: FacetCounts, row: SearchDocumentRow): v
   addFacetValues(counts.label, facet, LABEL_FACET_KEYS);
   addFacetValues(counts.status, facet, STATUS_FACET_KEYS);
   addFacetValues(counts.health, facet, HEALTH_FACET_KEYS);
+  addFacetValues(counts.workType, facet, WORK_TEMPLATE_FACET_KEYS);
 }
 
 function facetSummary(
@@ -91,6 +95,7 @@ export function facetSummaries(counts: FacetCounts): SearchOut['facets'] {
     facetSummary('label', 'Label', counts.label),
     facetSummary('status', 'Status', counts.status),
     facetSummary('health', 'Health', counts.health),
+    facetSummary('workTypeId', 'Template', counts.workType),
   ].filter((facet) => facet.values.length > 0);
 }
 

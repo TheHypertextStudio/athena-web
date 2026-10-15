@@ -1,3 +1,7 @@
+import { taskCreateBody } from '@/components/tasks/task-create-body';
+import { projectCreateBody } from '@/components/projects/project-create-body';
+import { initiativeCreateBody } from '@/components/initiatives/initiative-create-body';
+import { programCreateBody } from '@/components/programs/program-create-body';
 /**
  * The five composer draft codecs: a draft round-trips through its payload, a reference the
  * workspace no longer offers is dropped on the way back, and another kind's payload is ignored.
@@ -293,5 +297,36 @@ describe('team draft codec', () => {
   it('ignores another kind of payload', () => {
     const task: ComposerDraftPayload = { kind: 'task', title: 'Not this composer' };
     expect(hydrateTeamDraft(task)).toEqual({});
+  });
+});
+
+describe('explicit empty values after template selection', () => {
+  const selection = {
+    workTypeId: '01ARZ3NDEKTSV4RRFFQ69G5FAV',
+    workTypeVersionId: '01ARZ3NDEKTSV4RRFFQ69G5FAW',
+  };
+  it('keeps cleared prose, labels and health rather than letting defaults reappear on create', () => {
+    expect(
+      taskCreateBody({ ...TASK, ...selection, description: '', labelIds: [] }, TEAM_ID),
+    ).toMatchObject({ description: '', labels: [] });
+    expect(
+      projectCreateBody(
+        { ...PROJECT, ...selection, description: '', summary: '', health: null },
+        'Event',
+        TEAM_ID,
+      ),
+    ).toMatchObject({ description: '', summary: '', health: null });
+    expect(
+      initiativeCreateBody(
+        { ...INITIATIVE, ...selection, description: '', summary: '', health: null },
+        'Campaign',
+      ),
+    ).toMatchObject({ description: '', summary: '', health: null });
+    expect(
+      programCreateBody(
+        { ...PROGRAM, ...selection, description: '', summary: '', health: null },
+        'Dinners',
+      ),
+    ).toMatchObject({ description: '', summary: '', health: null });
   });
 });

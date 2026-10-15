@@ -38,6 +38,7 @@ import { addCalendarDays, parseCalendarDate } from '@docket/planning/calendar-da
 import type { TaskStateMutation } from '../task-state';
 import { loadStatusSets } from '../work-status';
 import { recordMaterializedWork } from './record-materialized';
+import { processTaskTemplateIdentity } from './task-template-identity';
 
 /** Transaction handle shared with completion advancement. */
 export type ProcessTransaction = Parameters<Parameters<Database['transaction']>[0]>[0];
@@ -460,6 +461,7 @@ export async function materializeInstanceSteps(
             title: renderName(spec.title, command.scheduledFor),
             description: spec.description,
             teamId: spec.teamId,
+            ...processTaskTemplateIdentity(spec),
             statusId: generated.id,
             state,
             priority: spec.priority,

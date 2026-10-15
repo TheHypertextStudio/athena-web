@@ -192,29 +192,7 @@ describe('work-view routes', () => {
     expectTypeOf<
       Extract<FacetResponse, { target: 'task' }>['buckets'][number]['field']
     >().toEqualTypeOf<
-      | 'status'
-      | 'priority'
-      | 'assignee'
-      | 'delegate'
-      | 'team'
-      | 'project'
-      | 'program'
-      | 'cycle'
-      | 'milestone'
-      | 'parent'
-      | 'labels'
-      | 'title'
-      | 'creator'
-      | 'startDate'
-      | 'dueDate'
-      | 'createdAt'
-      | 'updatedAt'
-      | 'estimate'
-      | 'estimateMinutes'
-      | 'blocked'
-      | 'blocking'
-      | 'unfiled'
-      | 'archived'
+      Extract<WorkViewFacetResponseValue, { target: 'task' }>['buckets'][number]['field']
     >();
   });
 

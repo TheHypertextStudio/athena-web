@@ -62,6 +62,7 @@ describe('workspace general settings', () => {
         slug: `operations-${Math.random().toString(36).slice(2, 8)}`,
         avatar: 'https://example.com/logo.png',
         vocabulary: 'agency',
+        workTemplateAuthoring: 'admins',
       }),
     });
     expect(updatedResponse.status).toBe(200);
@@ -70,6 +71,7 @@ describe('workspace general settings', () => {
       purpose: 'Keep every workstream moving.',
       avatar: 'https://example.com/logo.png',
       vocabulary: { preset: 'agency' },
+      workTemplateAuthoring: 'admins',
     });
 
     const clearedResponse = await app.request(`/${orgId}`, {

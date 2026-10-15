@@ -30,6 +30,7 @@ import type {
   PlanDraftOut,
   PlanDraftPatch,
   PlanNodeKind,
+  PlanOp,
   PlanObjectSnapshot,
   PlanRoster,
   PlanTemplateOption,
@@ -50,6 +51,8 @@ import { seedDefaultTemplates } from '../templates/defaults';
 import { visiblePlan, visiblePlanDocument } from './visibility';
 import { refreshExistingWork, withExistingWork } from './existing-work';
 import { visibleTemplateWhere } from '../templates/visibility';
+import { listWorkTemplates, listWorkTemplateVersions } from '../templates/service';
+import { WorkTypeVersionId } from '@docket/work/ids';
 
 /** A stored plan. */
 export type PlanDraftRow = typeof planDraft.$inferSelect;
@@ -241,15 +244,38 @@ export async function attachPlanSession(
 /** The template payloads the plan's owner may apply in its workspace. */
 export async function planTemplateEnvironment(
   row: Pick<PlanDraftRow, 'ownerUserId' | 'organizationId'>,
+  ops: readonly PlanOp[] = [],
 ): Promise<PlanOpEnvironment> {
   const actorId = await ownerActorInOrg(row.ownerUserId, row.organizationId);
   if (actorId === null) return { templatePayload: () => undefined };
-  const rows = await db
-    .select({ id: template.id, payload: template.payload })
-    .from(template)
-    .where(visibleTemplateWhere(row.organizationId, actorId, {}));
-  const byId = new Map<string, TemplateDraft>(rows.map((entry) => [entry.id, entry.payload]));
-  return { templatePayload: (templateId) => byId.get(templateId) };
+  const actorContext = { orgId: row.organizationId, actorId };
+  const rows = await listWorkTemplates(actorContext, { includeDrafts: 'true' });
+  const historical = new Set<string>(
+    ops.flatMap((op) =>
+      op.op === 'apply_template' && op.workTypeVersionId ? [op.templateId] : [],
+    ),
+  );
+  const payloads = new Map<string, TemplateDraft>();
+  const versions = new Map<string, WorkTypeVersionId>();
+  await Promise.all(
+    rows.map(async (entry) => {
+      payloads.set(entry.id, entry.payload);
+      if (!entry.latestPublishedVersionId) return;
+      versions.set(entry.id, WorkTypeVersionId.parse(entry.latestPublishedVersionId));
+      if (!historical.has(entry.id)) return;
+      for (const version of await listWorkTemplateVersions(actorContext, entry.id)) {
+        const key = `${entry.id}:${version.id}`;
+        payloads.set(key, version.definition.payload);
+        versions.set(key, WorkTypeVersionId.parse(version.id));
+      }
+    }),
+  );
+  const keyFor = (id: string, versionId?: string): string =>
+    versionId ? `${id}:${versionId}` : id;
+  return {
+    templatePayload: (id, versionId) => payloads.get(keyFor(id, versionId)),
+    templateVersionId: (id, versionId) => versions.get(keyFor(id, versionId)),
+  };
 }
 
 /** The templates Athena and the inspector may offer, seeding the workspace defaults first. */
@@ -268,7 +294,7 @@ export async function listPlanTemplates(
       payload: template.payload,
     })
     .from(template)
-    .where(visibleTemplateWhere(row.organizationId, actorId, {}));
+    .where(visibleTemplateWhere(row.organizationId, actorId, { includeBase: true }));
   return rows.map((entry) => ({
     id: entry.id,
     targetType: entry.targetType,
@@ -372,7 +398,7 @@ export async function patchPlan(
 ): Promise<PlanDraftRow> {
   const current = await loadOwnedPlan(ownerUserId, id);
   if (current.status === 'archived') throw new NotFoundError('Plan not found');
-  const env = await planTemplateEnvironment(current);
+  const env = await planTemplateEnvironment(current, patch.ops);
   return db.transaction(async (tx) => {
     const locked = await tx
       .select()

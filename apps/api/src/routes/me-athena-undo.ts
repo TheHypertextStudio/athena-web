@@ -23,6 +23,7 @@ import { z } from 'zod';
 
 import type { AppEnv } from '../context';
 import { AuthError, NotFoundError } from '../error';
+import { requireTemplateUndoAuthor } from '../lib/templates/service';
 import { ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
 import { reopenUndoneNodes } from '../lib/plan-draft/reopen';
@@ -116,6 +117,7 @@ const meAthenaChanges = new Hono<AppEnv>().post(
     const owner = requestOwner(c);
     const { changeSetId } = c.req.valid('param');
     const { organizationId, planId } = await loadOwnedChangeSet(owner, changeSetId);
+    await requireTemplateUndoAuthor({ orgId: organizationId, userId: owner }, changeSetId);
     // A plan commit creates initiatives and projects as well as tasks, and the atomic reversal
     // understands only tasks and the edges between them — it refuses a container outright. The
     // reporting reversal is the one Athena's own `undo` tool already runs for `organize`, which

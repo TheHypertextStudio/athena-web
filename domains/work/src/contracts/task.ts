@@ -1,3 +1,8 @@
+import {
+  workTemplateCreationFields,
+  workTemplateOutputFields,
+  validateWorkTemplateSelection,
+} from './work-template-reference';
 import { TaskRef } from './task-reference';
 import { SourcePersonReference } from './source-person';
 /**
@@ -20,24 +25,10 @@ import { z } from 'zod';
 
 import { Priority } from '../task-contract';
 import { LabelRef } from './label';
-import { CursorQuery } from '../cursor-query';
 import { ActorId, OrganizationId, TeamId } from '@docket/identity-access/ids';
 import { CycleId, LabelId, MilestoneId, ProgramId, ProjectId, TaskId, TemplateId } from '../ids';
 
-/** Query filters for listing tasks. */
-export const TaskListQuery = CursorQuery.extend({
-  programId: ProgramId.optional().describe(
-    'Restrict the list to tasks under a Program — carrying its `programId` directly, or belonging to one of the Program’s Projects. Omit for the full active-task list.',
-  ),
-  labelId: LabelId.optional().describe(
-    'Restrict the list to tasks carrying this label. Combines with `programId` as an AND. Omit for no label filter.',
-  ),
-  milestoneId: MilestoneId.optional().describe(
-    'Restrict the list to tasks on this milestone. Combines with the other filters as an AND. Omit for no milestone filter.',
-  ),
-}).meta({ id: 'TaskListQuery', description: 'Query filters for listing tasks.' });
-/** Validated task-list query value. */
-export type TaskListQuery = z.infer<typeof TaskListQuery>;
+export { TaskListQuery } from './task-list-query';
 
 /**
  * The earliest calendar day any task date may name.
@@ -136,6 +127,7 @@ function checkRelatedTaskIds(
 /** Body for creating a Task; `state` defaults to the team's first workflow state. */
 export const TaskCreate = z
   .object({
+    ...workTemplateCreationFields,
     title: z
       .string()
       .min(1)
@@ -216,6 +208,7 @@ export const TaskCreate = z
       .describe('Label ids to tag the task with for classification/filtering.'),
   })
   .superRefine((value, ctx) => {
+    validateWorkTemplateSelection(value, ctx);
     checkTaskDates(value, ctx);
     checkRelatedTaskIds(value, ctx);
   })
@@ -332,6 +325,7 @@ export function taskCreationEntryId(taskId: string): string {
 /** Full task representation returned by reads. */
 export const TaskOut = z
   .object({
+    ...workTemplateOutputFields,
     sourcePeople: z.array(SourcePersonReference).optional(),
     id: TaskId.describe('Opaque task id.'),
     organizationId: OrganizationId.describe('Owning org id (the tenant key).'),

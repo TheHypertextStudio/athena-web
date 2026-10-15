@@ -41,6 +41,8 @@ import type { z } from 'zod';
 import { ConflictError, CycleError, NotFoundError } from '../../error';
 import { calendarDaysBetween } from '@docket/planning/calendar-date';
 import { listActiveProcessDefinitionRows } from './list-store';
+import { prepareProcessTemplates, type PreparedProcessDefinition } from './task-template-identity';
+import { projectProcessTasks, timingFromRow } from './process-task-projection';
 
 type Transaction = Parameters<Parameters<Database['transaction']>[0]>[0];
 
@@ -161,7 +163,7 @@ export function validateProcessDefinitionGraph(definition: ProcessDefinitionCrea
 async function validateReferenceOwnership(
   tx: Transaction,
   organizationId: string,
-  definition: ProcessDefinitionCreateValue,
+  definition: PreparedProcessDefinition,
 ): Promise<void> {
   const actorIds = new Set([
     ...(definition.project?.leadId ? [definition.project.leadId] : []),
@@ -346,7 +348,7 @@ async function persistRevision(
     readonly actorId?: string | undefined;
     readonly definitionId: string;
     readonly revisionNumber: number;
-    readonly definition: ProcessDefinitionCreateValue;
+    readonly definition: PreparedProcessDefinition;
   },
 ): Promise<PublishedProcessRevision> {
   const { organizationId, actorId, definitionId, revisionNumber, definition } = input;
@@ -431,6 +433,8 @@ async function persistRevision(
       title: step.title,
       description: step.description,
       teamId: step.teamId,
+      workTypeId: step.workTypeId,
+      workTypeVersionId: step.workTypeVersionId,
       state: step.state,
       priority: step.priority,
       assigneeId: step.assigneeId,
@@ -479,7 +483,11 @@ export async function createPublishedProcessDefinition(
   database: Database,
   command: CreatePublishedProcessDefinitionCommand,
 ): Promise<PublishedProcessRevision> {
-  const definition = ProcessDefinitionCreate.parse(command.definition);
+  const definition = await prepareProcessTemplates(
+    database,
+    command.organizationId,
+    command.definition,
+  );
   validateProcessDefinitionGraph(definition);
   return database.transaction(async (tx) => {
     await validateReferenceOwnership(tx, command.organizationId, definition);
@@ -649,7 +657,11 @@ export async function appendPublishedProcessRevision(
   database: Database,
   command: AppendPublishedProcessRevisionCommand,
 ): Promise<PublishedProcessRevision> {
-  const definition = ProcessDefinitionCreate.parse(command.revision);
+  const definition = await prepareProcessTemplates(
+    database,
+    command.organizationId,
+    command.revision,
+  );
   validateProcessDefinitionGraph(definition);
   return database.transaction(async (tx) => {
     const existing = await tx
@@ -686,24 +698,6 @@ export async function appendPublishedProcessRevision(
       definition,
     });
   });
-}
-
-/** Convert normalized timing columns back to the public discriminated timing union. */
-function timingFromRow(
-  row: typeof processStep.$inferSelect,
-  keysByStepId: ReadonlyMap<string, string>,
-): ProcessStepTiming {
-  if (row.timingKind === 'on_trigger') return { kind: 'on_trigger' };
-  if (row.timingKind === 'relative_to_trigger') {
-    return { kind: 'relative_to_trigger', offsetDays: row.offsetDays ?? 0 };
-  }
-  const stepKey = row.afterStepId ? keysByStepId.get(row.afterStepId) : undefined;
-  if (!stepKey) throw new ConflictError('Published process timing is incomplete');
-  return {
-    kind: 'after_step_completion',
-    stepKey,
-    offsetDays: row.offsetDays ?? 0,
-  };
 }
 
 /** Load one org-scoped process and reconstruct its latest immutable revision. */
@@ -824,36 +818,7 @@ export async function loadProcessDefinitionDetail(
       timing: timingFromRow(step, keysByStepId),
     };
   });
-  const tasksOut = taskSpecs.map((spec) => {
-    const step = stepsById.get(spec.stepId);
-    if (!step) throw new ConflictError('Published task specification is incomplete');
-    return {
-      key: step.key,
-      title: spec.title,
-      ...(spec.description === null ? {} : { description: spec.description }),
-      teamId: spec.teamId,
-      ...(spec.state === null ? {} : { state: spec.state }),
-      priority: spec.priority,
-      ...(spec.assigneeId === null ? {} : { assigneeId: spec.assigneeId }),
-      ...(spec.projectId === null ? {} : { projectId: spec.projectId }),
-      ...(spec.projectStepId === null ? {} : { projectKey: keysByStepId.get(spec.projectStepId) }),
-      ...(spec.milestoneId === null ? {} : { milestoneId: spec.milestoneId }),
-      ...(spec.milestoneStepId === null
-        ? {}
-        : { milestoneKey: keysByStepId.get(spec.milestoneStepId) }),
-      ...(spec.cycleId === null ? {} : { cycleId: spec.cycleId }),
-      ...(spec.parentTaskId === null ? {} : { parentTaskId: spec.parentTaskId }),
-      ...(spec.parentTaskStepId === null
-        ? {}
-        : { parentTaskKey: keysByStepId.get(spec.parentTaskStepId) }),
-      ...(spec.estimate === null ? {} : { estimate: spec.estimate }),
-      ...(spec.estimateMinutes === null ? {} : { estimateMinutes: spec.estimateMinutes }),
-      ...(spec.startOffsetDays === null ? {} : { startOffsetDays: spec.startOffsetDays }),
-      ...(spec.dueOffsetDays === null ? {} : { dueOffsetDays: spec.dueOffsetDays }),
-      labelIds: taskLabelsByStep.get(spec.stepId) ?? [],
-      timing: timingFromRow(step, keysByStepId),
-    };
-  });
+  const tasksOut = projectProcessTasks(taskSpecs, stepsById, keysByStepId, taskLabelsByStep);
   const dependenciesOut = dependencies.map((edge) => {
     const blockingStepKey = keysByStepId.get(edge.blockingStepId);
     const blockedStepKey = keysByStepId.get(edge.blockedStepId);

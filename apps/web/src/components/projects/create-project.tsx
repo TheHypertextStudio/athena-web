@@ -66,6 +66,7 @@ import { projectMilestonesSection } from '@/components/projects/project-mileston
 import {
   type ProjectDraft,
   projectCreateBody,
+  projectWorkspaceReset,
   seededInitiativeIds,
 } from '@/components/projects/project-create-body';
 import { useProjectDraftPersistence } from './use-project-draft-persistence';
@@ -209,6 +210,7 @@ export const CreateProjectDialog = withComposerReset(function CreateProjectCompo
   });
   const templateContribution = useComposerTemplateContribution<ProjectDraft>({
     kind: 'project',
+    selection: draft,
     orgId,
     open,
     destinationReady,
@@ -241,14 +243,7 @@ export const CreateProjectDialog = withComposerReset(function CreateProjectCompo
       return;
     }
     setError(null);
-    updateDraft(() => ({
-      teamOverride: null,
-      leadId: null,
-      programId: null,
-      initiativeIds: [],
-      startTimeframe: draft.startTimeframe?.resolution ? null : draft.startTimeframe,
-      targetTimeframe: draft.targetTimeframe?.resolution ? null : draft.targetTimeframe,
-    }));
+    updateDraft(() => projectWorkspaceReset(draft.startTimeframe, draft.targetTimeframe));
   }, [draft.startTimeframe, draft.targetTimeframe, globalCreation, updateDraft]);
 
   /** Toggle an initiative id in/out of the selected set. */
@@ -418,6 +413,7 @@ export const CreateProjectDialog = withComposerReset(function CreateProjectCompo
       onSubmit={() => void submit(continuation.createMore)}
       submitLabel={`Create ${projectNoun}`}
     >
+      {templateContribution.selection}
       <ProjectComposerPickers
         orgId={orgId}
         status={draft.status}

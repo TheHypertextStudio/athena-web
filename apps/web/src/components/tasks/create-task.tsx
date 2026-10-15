@@ -1,4 +1,5 @@
 'use client';
+import type { WorkTemplateDraftFields } from '@/components/composer/work-template-draft';
 
 /**
  * The robust "New task" create composer.
@@ -79,7 +80,7 @@ import { useTaskDraftPersistence } from './use-task-draft-persistence';
 const COMPOSER_INCLUDE = ['actors', 'projects', 'labels', 'milestones'] as const;
 
 /** Every field the task composer holds, as one value. */
-export interface TaskDraft {
+export interface TaskDraft extends WorkTemplateDraftFields {
   title: string;
   description: string;
   /** The team chosen in the picker, or null to follow the org default. */
@@ -261,6 +262,7 @@ export const CreateTaskDialog = withComposerReset(function CreateTaskComposer({
   });
   const templateContribution = useComposerTemplateContribution<TaskDraft>({
     kind: 'task',
+    selection: draft,
     orgId,
     open,
     destinationReady,
@@ -298,6 +300,8 @@ export const CreateTaskDialog = withComposerReset(function CreateTaskComposer({
     setWorkflowStates([]);
     setError(null);
     updateDraft(() => ({
+      workTypeId: null,
+      workTypeVersionId: null,
       teamOverride: null,
       state: null,
       assigneeId: null,
@@ -528,6 +532,7 @@ export const CreateTaskDialog = withComposerReset(function CreateTaskComposer({
             : 'Create repeating task'
       }
     >
+      {templateContribution.selection}
       <TaskComposerPickers
         orgId={orgId}
         teamId={teamId}

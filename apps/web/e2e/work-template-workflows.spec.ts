@@ -1,6 +1,5 @@
 import { readFileSync } from 'node:fs';
 import type { Page } from '@playwright/test';
-import type { TemplateOut } from '@docket/work/template-contract';
 import type { RecurrenceSeriesDetailOut } from '../src/lib/contracts/recurrence';
 
 import { signUpAndOnboard } from './helpers/app';
@@ -32,11 +31,6 @@ async function workspace(
   }
   const { orgId } = await signUpAndOnboard(page, 'WorkTemplates');
   return { orgId };
-}
-
-async function openTemplate(page: Page, name: string): Promise<void> {
-  await page.getByRole('button', { name: `Actions for ${name}`, exact: true }).click();
-  await page.getByRole('menuitem', { name: 'Edit', exact: true }).click();
 }
 
 async function changeCadence(page: Page, cadence: string): Promise<void> {
@@ -77,45 +71,38 @@ for (const kind of ['Task', 'Project', 'Initiative', 'Program'] as const) {
       .fill('Record the goal, owner, and next action.');
     await dialog.getByRole('button', { name: 'Continue', exact: true }).click();
     await expect(dialog.getByText(name, { exact: true })).toBeVisible();
-    const saved = waitForApiResponse(page, /\/templates$/, { method: 'POST' });
+    const saved = waitForApiResponse(page, /\/templates\/definitions$/, { method: 'POST' });
     await dialog.getByRole('button', { name: 'Create template', exact: true }).click();
-    expect((await saved).ok()).toBe(true);
-    await expect(dialog).not.toBeVisible();
-    await openTemplate(page, name);
-    const editing = page.getByRole('dialog', { name: name, exact: true });
-    await expect(editing.getByRole('tab', { name: 'Work', exact: true })).toHaveAttribute(
-      'aria-selected',
-      'true',
-    );
-    await expect(editing.getByRole('textbox', { name: title, exact: true })).toHaveValue(
+    const response = await saved;
+    expect(response.ok()).toBe(true);
+    const draft = (await response.json()) as { id: string; scope: string; status: string };
+    expect(draft.scope).toBe('personal');
+    expect(draft.status).toBe('draft');
+    await expect(page).toHaveURL(new RegExp(`/templates/${draft.id}$`));
+    const starting = kind === 'Task' ? 'Starting title' : 'Starting name';
+    await expect(page.getByRole('textbox', { name: starting, exact: true })).toHaveValue(
       `${kind} starting name`,
     );
-    await expect(
-      editing.getByRole('textbox', { name: 'Work description', exact: true }),
-    ).toContainText('Record the goal, owner, and next action.');
-    await editing.getByRole('tab', { name: 'Basics', exact: true }).click();
     const renamed = `${name} revised`;
-    await editing.getByRole('textbox', { name: 'Template name', exact: true }).fill(renamed);
-    await editing.getByRole('textbox', { name: 'When to use it', exact: true }).fill('');
-    await editing.getByRole('button', { name: /^Shared with —/ }).click();
-    await page.getByRole('option', { name: 'Only you', exact: true }).click();
-    const updated = waitForApiResponse(page, /\/templates\/[^/]+$/, { method: 'PATCH' });
-    await editing.getByRole('button', { name: 'Save changes', exact: true }).click();
+    await page.getByRole('textbox', { name: 'Template name', exact: true }).fill(renamed);
+    await page.getByRole('textbox', { name: 'When to use it', exact: true }).fill('');
+    const updated = waitForApiResponse(page, /\/draft$/, { method: 'PATCH' });
+    await page.getByRole('button', { name: 'Save draft', exact: true }).click();
     expect((await updated).ok()).toBe(true);
-    await expect(editing).not.toBeVisible();
     await page.reload({ waitUntil: 'commit' });
-    await openTemplate(page, renamed);
-    const reopened = page.getByRole('dialog', { name: renamed, exact: true });
-    await reopened.getByRole('tab', { name: 'Basics', exact: true }).click();
+    await expect(page.getByRole('textbox', { name: 'Template name', exact: true })).toHaveValue(
+      renamed,
+    );
+    await expect(page.getByRole('textbox', { name: 'When to use it', exact: true })).toHaveValue(
+      '',
+    );
     await expect(
-      reopened.getByRole('textbox', { name: 'When to use it', exact: true }),
-    ).toHaveValue('');
-    const templates = await apiJson<{ items: TemplateOut[] }>(page, `/v1/orgs/${orgId}/templates`);
-    const persisted = templates.items.find((item) => item.name === renamed);
-    expect(persisted?.scope).toBe('personal');
-    expect(persisted?.targetType).toBe(kind.toLowerCase());
-    await reopened.getByRole('button', { name: 'Close', exact: true }).click();
-    await expect(reopened).not.toBeVisible();
+      page.getByRole('textbox', { name: 'Starting document', exact: true }),
+    ).toContainText('Record the goal, owner, and next action.');
+    const publication = waitForApiResponse(page, /\/publish$/, { method: 'POST' });
+    await page.getByRole('button', { name: 'Publish to workspace', exact: true }).click();
+    expect((await publication).ok()).toBe(true);
+    await expect(page.getByRole('button', { name: 'Version 1', exact: true })).toBeVisible();
   });
 }
 
@@ -249,115 +236,51 @@ test('generated work opens schedule management in place and restores focus after
 
 test.describe('touch template layout', () => {
   test.use({ hasTouch: true });
-  test('short template setup stays compact and long documents scroll without hiding actions', async ({
+  test('guided draft creation preserves dirty dismissal and long-document actions at every phone size', async ({
     page,
   }) => {
     const { orgId } = await workspace(page);
-    await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto(`/orgs/${orgId}/settings/templates`, {
       waitUntil: 'commit',
       timeout: TIMEOUTS.pageReady,
     });
-    await openTemplate(page, 'Running a business');
-    const short = page.getByRole('dialog', { name: 'Running a business', exact: true });
-    const shortBounds = await short.boundingBox();
-    expect(shortBounds?.height).toBeLessThan(700);
-    const description = short.getByRole('textbox', { name: 'Work description', exact: true });
-    const fieldBounds = await description.boundingBox();
-    const saveBounds = await short
-      .getByRole('button', { name: 'Save changes', exact: true })
-      .boundingBox();
-    if (!fieldBounds || !saveBounds)
-      throw new Error('The document and save action must be visible.');
-    expect(saveBounds.y - (fieldBounds.y + fieldBounds.height)).toBeGreaterThanOrEqual(0);
-    expect(saveBounds.y - (fieldBounds.y + fieldBounds.height)).toBeLessThan(70);
-    expect(
-      await short
-        .locator('[data-overlay-scroll-owner]')
-        .evaluate((el) => el.scrollHeight <= el.clientHeight),
-    ).toBe(true);
-    await description.click();
-    await page.keyboard.press('End');
-    await page.keyboard.type(' A draft note.');
-    await page.keyboard.press('Escape');
-    await short.getByRole('button', { name: 'Keep editing', exact: true }).click();
-    await expect(description).toBeFocused();
-    await page.keyboard.press('Escape');
-    await short.getByRole('button', { name: 'Discard', exact: true }).click();
-    await expect(short).not.toBeVisible();
-
-    const blankName = 'Blank project setup';
-    const longName =
-      'Monthly finance review for the business, the nonprofit, and each team that needs to report its progress and next decisions';
-    const body = Array.from(
-      { length: 18 },
-      (_, i) =>
-        `## Review ${i + 1}\n\nRecord the numbers, discuss what changed, and agree on the next actions.\n\n- Check the current budget.\n- Record the decision and owner.`,
-    ).join('\n\n');
-    const existing = await apiJson<{ items: TemplateOut[] }>(page, `/v1/orgs/${orgId}/templates`);
-    for (const [name, description] of [
-      [blankName, ''],
-      [longName, body],
-    ]) {
-      const saved = existing.items.find((item) => item.name === name);
-      await apiJson<TemplateOut>(
-        page,
-        `/v1/orgs/${orgId}/templates${saved ? `/${saved.id}` : ''}`,
-        {
-          method: saved ? 'PATCH' : 'POST',
-          body: {
-            name,
-            description: '',
-            scope: 'personal',
-            targetType: 'project',
-            payload: { targetType: 'project', description, status: 'planned' },
-          },
-        },
-      );
-    }
-    await page.reload({ waitUntil: 'commit' });
-    await openTemplate(page, longName);
-    const long = page.getByRole('dialog', { name: longName, exact: true });
-    const scroll = long.locator('[data-overlay-scroll-owner]');
+    await page.getByRole('button', { name: 'New template', exact: true }).click();
+    await page.getByRole('menuitem', { name: 'Project', exact: true }).click();
+    const dialog = page.getByRole('dialog', { name: 'New project template', exact: true });
+    await dialog
+      .getByRole('textbox', { name: 'Template name', exact: true })
+      .fill('Community dinner outline');
+    await dialog.getByRole('button', { name: 'Continue', exact: true }).click();
+    const document = dialog.getByRole('textbox', { name: 'Work description', exact: true });
+    await document.fill(
+      Array.from(
+        { length: 18 },
+        (_, i) => `Review ${i + 1}: Record the numbers, changed plans and next decisions.`,
+      ).join('\n\n'),
+    );
+    const scroll = dialog.locator('[data-overlay-scroll-owner]');
     await expect(scroll).toHaveCount(1);
-    await expect.poll(() => scroll.evaluate((el) => el.scrollHeight > el.clientHeight)).toBe(true);
-    await scroll.evaluate((el) => {
-      el.scrollTop = el.scrollHeight;
-    });
-    await expect(long.getByRole('textbox', { name: 'Work description' })).toContainText(
-      'Review 18',
-    );
-    await expect(long.getByRole('button', { name: 'Save changes', exact: true })).toBeInViewport();
-    const nested = await long.evaluate(
-      (el) =>
-        Array.from(el.querySelectorAll('*')).filter((node) => {
-          const style = getComputedStyle(node);
-          return (
-            ['auto', 'scroll'].includes(style.overflowY) && node.scrollHeight > node.clientHeight
-          );
-        }).length,
-    );
-    expect(nested).toBe(1);
-    await long.getByRole('button', { name: 'Close', exact: true }).click();
-    await expect(long).not.toBeVisible();
-    for (const height of [844, 600]) {
-      await page.setViewportSize({ width: height === 844 ? 320 : 390, height });
-      await openTemplate(page, blankName);
-      const blank = page.getByRole('dialog', { name: blankName, exact: true });
-      await expect(
-        blank.getByRole('button', { name: 'Save changes', exact: true }),
-      ).toBeInViewport();
+    for (const [width, height] of [
+      [1440, 900],
+      [320, 844],
+      [390, 600],
+    ]) {
+      await page.setViewportSize({ width, height });
+      const next = dialog.getByRole('button', { name: 'Continue', exact: true });
+      await expect(next).toBeInViewport();
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
         true,
       );
-      const save = blank.getByRole('button', { name: 'Save changes', exact: true });
-      await expect.poll(async () => (await save.boundingBox())?.height).toBeGreaterThanOrEqual(40);
       for (const colorScheme of ['light', 'dark'] as const) {
         await page.emulateMedia({ colorScheme });
-        await expect.poll(() => renderedContrastRatio(save)).toBeGreaterThanOrEqual(4.5);
+        await expect.poll(() => renderedContrastRatio(next)).toBeGreaterThanOrEqual(4.5);
       }
-      await blank.getByRole('button', { name: 'Close', exact: true }).click();
-      await expect(blank).not.toBeVisible();
     }
+    await page.keyboard.press('Escape');
+    await dialog.getByRole('button', { name: 'Keep editing', exact: true }).click();
+    await expect(document).toContainText('Review 18');
+    await page.keyboard.press('Escape');
+    await dialog.getByRole('button', { name: 'Discard', exact: true }).click();
+    await expect(dialog).not.toBeVisible();
   });
 });

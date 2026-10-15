@@ -1,3 +1,4 @@
+import { workTemplateIdentityOut } from '../lib/work-template-creation';
 import {
   actor,
   db,
@@ -39,6 +40,7 @@ export const hierarchyLinkParam = z.object({ linkId: z.string() });
 /** toOut converts internal API route data into the public API response shape. */
 export function toOut(i: InitiativeRow): z.input<typeof InitiativeOut> {
   return {
+    ...workTemplateIdentityOut(i),
     id: i.id,
     organizationId: i.organizationId,
     name: i.name,

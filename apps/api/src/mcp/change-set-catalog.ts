@@ -2,10 +2,10 @@
  * `@docket/api` — recording and reversing changes to labels, label groups, and templates.
  *
  * @remarks
- * None of these rows has an archived state that the product honours. Labels and groups have no
- * `archivedAt` column at all, and the template pickers do not filter on theirs. So undoing a create
- * deletes the row, which is only safe while nothing depends on it. A label that has been put on
- * work since, or a group that has gained members, is reported as `in_use` and left alone. Undoing
+ * Labels and groups have no archived state, so undoing their creation deletes unused rows.
+ * Template undo preserves immutable publications: creation is archived, and an edit is restored
+ * by appending another publication. Unpublished drafts may be deleted while unused. Labels placed
+ * on work and groups that gained members are reported as `in_use` and left alone. Undoing
  * an edit restores the recorded fields, and only when nobody has edited them since.
  */
 import { label, labelGroup, template } from '@docket/db';
@@ -14,6 +14,7 @@ import type { AnyPgColumn, PgTable } from 'drizzle-orm/pg-core';
 
 import { labelInUse } from '../lib/labels';
 import { reconcileTemplateImages } from '../lib/templates/write';
+import { restoreTemplateSnapshot } from '../lib/templates/persistence';
 import { enqueueSearchDelete, enqueueSearchUpsert } from '../search/write-through';
 import type { CatalogKind } from './catalog-rows';
 import type { StoredChange, Tx } from './change-set';
@@ -25,7 +26,19 @@ const CATALOG = {
   label_group: { table: labelGroup, fields: ['name', 'exclusive', 'sortOrder', 'teamId'] },
   template: {
     table: template,
-    fields: ['name', 'description', 'scope', 'ownerActorId', 'teamId', 'payload'],
+    fields: [
+      'name',
+      'description',
+      'scope',
+      'ownerActorId',
+      'teamId',
+      'payload',
+      'draftRevision',
+      'latestPublishedVersionId',
+      'publicationState',
+      'draftDefinition',
+      'icon',
+    ],
   },
 } as const satisfies Record<CatalogKind, { table: PgTable; fields: readonly string[] }>;
 
@@ -157,6 +170,20 @@ export async function revertCatalogEntry(
   const [current] = await tx.select().from(table).where(where).limit(1).for('update');
   if (!current) return skip('gone');
   if (entry.after && !unchanged(current, entry.after)) return skip('changed_since');
+  if (kind === 'template') {
+    const restored = await restoreTemplateSnapshot(
+      tx,
+      orgId,
+      entry.entityId,
+      entry.op,
+      entry.before,
+    );
+    if (restored !== 'restored') return skip(restored);
+    return {
+      outcome: { ...ref, reverted: true },
+      settle: () => reconcileTemplateImages(orgId, entry.entityId, 'upsert'),
+    };
+  }
   if (entry.op === 'create') {
     if (await inUse(kind, orgId, entry.entityId, tx)) return skip('in_use');
     await tx.delete(table).where(where);

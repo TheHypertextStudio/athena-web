@@ -53,6 +53,7 @@ export function workViewRowValue(row: WorkViewRowFor<ViewTarget>, field: string)
 
 /** Resolve display-only relation projections while preserving raw values for other fields. */
 export function workViewRowDisplayValue(row: WorkViewRowFor<ViewTarget>, field: string): unknown {
+  if (field === 'workTypeId') return row.workTemplate;
   if (row.target === 'task' && field === 'assignee') return row.assigneeActor;
   if (row.target === 'project' && field === 'lead') return row.leadActor;
   if (row.target === 'program' && field === 'owner') return row.ownerActor;
@@ -76,19 +77,20 @@ const DATE_TIME_OPTIONS: Intl.DateTimeFormatOptions = {
   minute: '2-digit',
 };
 
+function projectedRelationName(value: unknown): string | null {
+  if (typeof value !== 'object' || value === null) return null;
+  for (const key of ['displayName', 'label', 'name']) {
+    const name: unknown = Reflect.get(value, key);
+    if (typeof name === 'string') return name;
+  }
+  return null;
+}
+
 /** Format a projected scalar or relation value for a compact row or card. */
 export function formatWorkViewValue(value: unknown, kind?: string): string {
   if (value === null || value === undefined || value === '') return '—';
-  if (
-    typeof value === 'object' &&
-    'displayName' in value &&
-    typeof value.displayName === 'string'
-  ) {
-    return value.displayName;
-  }
-  if (typeof value === 'object' && 'label' in value && typeof value.label === 'string') {
-    return value.label;
-  }
+  const named = projectedRelationName(value);
+  if (named !== null) return named;
   if (kind === 'relation-one') return '—';
   if (kind === 'relation-many')
     return Array.isArray(value) && value.length > 0 ? String(value.length) : '—';

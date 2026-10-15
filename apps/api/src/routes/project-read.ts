@@ -1,3 +1,4 @@
+import { workTemplateIdentityOut } from '../lib/work-template-creation';
 import { actor, db, program, project, team } from '@docket/db';
 import { and, eq, isNull } from 'drizzle-orm';
 import type { z } from 'zod';
@@ -21,6 +22,7 @@ export function toProjectOut(
   sourcePeople?: z.input<typeof ProjectOut>['sourcePeople'],
 ): z.input<typeof ProjectOut> {
   return {
+    ...workTemplateIdentityOut(p),
     id: p.id,
     ...(sourcePeople ? { sourcePeople } : {}),
     organizationId: p.organizationId,

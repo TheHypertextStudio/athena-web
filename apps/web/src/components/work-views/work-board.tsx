@@ -1,5 +1,7 @@
 'use client';
 
+import { workTemplateGlyph } from './work-template-label';
+
 import { Ellipsis, Plus } from '@docket/ui/icons';
 import { cn } from '@docket/ui/lib/utils';
 import {
@@ -346,6 +348,7 @@ export function WorkBoard<TTarget extends ViewTarget>({
           key: '__all__',
           label: `All ${target}s`,
           count: totalCount,
+          icon: null,
         },
       ]
     : visibleBoardColumns(groups, hiddenColumns);
@@ -470,6 +473,7 @@ export function WorkBoard<TTarget extends ViewTarget>({
             className="bg-surface-container-low flex min-h-0 w-72 flex-col rounded-xl"
           >
             <header className="border-outline-variant flex h-10 shrink-0 items-center gap-2 border-b px-3">
+              {workTemplateGlyph(target, column.icon)}
               <h2 className="text-on-surface text-label-large min-w-0 flex-1 truncate">
                 {column.label}
               </h2>
@@ -542,7 +546,10 @@ export function WorkBoard<TTarget extends ViewTarget>({
                   >
                     {lane ? (
                       <h3 className="text-on-surface-variant text-label-medium mb-2 flex items-center justify-between px-1">
-                        <span>{lane.label}</span>
+                        <span className="flex min-w-0 items-center gap-1.5">
+                          {workTemplateGlyph(target, lane.icon)}
+                          {lane.label}
+                        </span>
                         <span className="tabular-nums">{lane.count}</span>
                       </h3>
                     ) : null}

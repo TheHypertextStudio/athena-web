@@ -1,3 +1,7 @@
+import {
+  hydrateWorkTemplateSelection,
+  serializeWorkTemplateSelection,
+} from '@/components/composer/work-template-draft';
 /**
  * The task composer's draft codec: its {@link TaskDraft} to and from the saved payload.
  *
@@ -57,6 +61,7 @@ export interface TaskDraftRosters {
 /** The task composer's draft as the API stores it. */
 export function serializeTaskDraft(draft: TaskDraft): ComposerDraftPayload {
   return {
+    ...serializeWorkTemplateSelection(draft),
     kind: 'task',
     title: draft.title,
     description: draft.description,
@@ -152,6 +157,7 @@ export function hydrateTaskDraft(
 ): Partial<TaskDraft> {
   if (payload.kind !== 'task') return {};
   return {
+    ...hydrateWorkTemplateSelection(payload),
     title: payload.title ?? '',
     description: payload.description ?? '',
     priority: payload.priority ?? 'none',

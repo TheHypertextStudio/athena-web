@@ -111,8 +111,15 @@ vi.mock('../../../src/components/templates/queries', () => ({
   templatesDef: () => ({}),
 }));
 
+vi.mock('../../../src/components/templates/work-template-queries', () => ({
+  workTemplatesDef: () => ({ queryKey: ['publications'] }),
+}));
+
 vi.mock('../../../src/lib/query', () => ({
-  useApiQuery: () => templates,
+  useApiQuery: ({ queryKey }: { queryKey?: string[] }) =>
+    queryKey?.includes('publications')
+      ? { data: { items: [{ id: 'template_bug', offeredTeamIds: [] }] } }
+      : templates,
   useApiListQuery: () => members,
   apiQueryOptions: () => ({}),
   queryKeys: { members: () => ['members'] },

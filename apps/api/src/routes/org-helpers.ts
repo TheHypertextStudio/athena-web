@@ -1,6 +1,6 @@
 import { db, type GrantCapability, organization } from '@docket/db';
 import { PUBLIC_SLUG_MAX_LENGTH, RESERVED_PUBLIC_SLUGS } from '@docket/work/slug-contract';
-import { type OrgOut } from '../contracts/organization';
+import { type OrgUpdate, type OrgOut } from '../contracts/organization';
 import { eq } from 'drizzle-orm';
 import type { z } from 'zod';
 
@@ -11,6 +11,7 @@ type OrgRow = typeof organization.$inferSelect;
 /** toOrgOut converts internal API route data into the public API response shape. */
 export function toOrgOut(o: OrgRow): z.input<typeof OrgOut> {
   return {
+    workTemplateAuthoring: o.workTemplateAuthoring,
     id: o.id,
     name: o.name,
     slug: o.slug,
@@ -118,3 +119,24 @@ export const SYSTEM_ROLES: {
     capabilities: [],
   },
 ];
+
+/** Build only the supplied workspace settings, preserving terminology overrides. */
+export function workspaceSettingsPatch(
+  current: OrgRow,
+  body: OrgUpdate,
+  slug: string,
+  avatar: string | null | undefined,
+): Partial<typeof organization.$inferInsert> {
+  return {
+    ...(body.workTemplateAuthoring !== undefined
+      ? { workTemplateAuthoring: body.workTemplateAuthoring }
+      : {}),
+    ...(body.name !== undefined ? { name: body.name } : {}),
+    ...(body.purpose !== undefined ? { purpose: body.purpose } : {}),
+    ...(body.slug !== undefined ? { slug } : {}),
+    ...(avatar !== undefined ? { avatar } : {}),
+    ...(body.vocabulary !== undefined
+      ? { vocabulary: { ...current.vocabulary, preset: body.vocabulary } }
+      : {}),
+  };
+}

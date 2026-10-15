@@ -1,12 +1,13 @@
 /** Permission-filtered template discovery for clients that expose only MCP tools. */
-import { db, template } from '@docket/db';
+import { TeamId } from '@docket/identity-access/ids';
+import { listWorkTemplates } from '../lib/templates/service';
+import { toWorkTemplateOut } from '../lib/templates/projection';
 import { TemplateOut, TemplateTargetType } from '@docket/work/template-contract';
-import { and, asc, gt } from 'drizzle-orm';
+import { WorkTemplateDefinition } from '@docket/work/work-template-contract';
 import { z } from 'zod';
 
 import { ValidationError } from '../error';
 import { seedDefaultTemplates } from '../lib/templates/defaults';
-import { visibleTemplateWhere } from '../lib/templates/visibility';
 import { toTemplateOut } from '../lib/templates/write';
 import type { McpContext } from './auth';
 import type { McpRegistrar } from './catalog';
@@ -19,6 +20,7 @@ const cursorCodec = createCursorCodec({
     orgId: z.string(),
     actorId: z.string(),
     targetType: TemplateTargetType.nullable(),
+    teamId: z.string().nullable(),
     after: z.string(),
   }),
   invalidCursorError: () =>
@@ -30,22 +32,34 @@ const cursorCodec = createCursorCodec({
 const definition = {
   title: 'List templates',
   description:
-    'Discover literal Markdown template bodies before writing tasks, projects, initiatives, or programs. Generally use a fitting template: read payload.description, preserve its structure, and fill its sections with work-specific content. The template description is only a usage summary. Returns only workspace templates, your personal templates, and templates for teams you belong to, with their full payloads. Use an id with organize items[].template, capture template, repeat_task template, or plan_draft apply_template. Direct creation copies omitted fields and returns the saved body for editing; explicit fields override defaults. Supply withoutTemplateReason when deliberately creating freeform work. Use define_template to author or edit a draft. No matching template is required for quick capture or explicitly freeform work.',
+    'Discover published templates, versions, blank bases, and readable legacy drafts. Read literal Markdown in payload.description and fill its sections; description only summarizes usage. organize, capture, and repeat_task accept workTypeId/version for publication or template ID/name for legacy drafts (which retain base identity). Explicit fields win; withoutTemplateReason chooses freeform work. plan_draft apply_template copies defaults; define_template authors them. Discovery creates no work',
   inputSchema: {
     orgId: orgIdParam,
     targetType: TemplateTargetType.optional().describe(
       'Only templates for this kind of work. Match it to the plan node kind; repeat_task requires task.',
     ),
+    teamId: TeamId.optional().describe('Offer templates for this destination team.'),
     limit: z.number().int().min(1).max(100).default(50),
     cursor: z
       .string()
       .optional()
-      .describe('The nextCursor from the preceding page. Keep orgId and targetType unchanged.'),
+      .describe(
+        'The nextCursor from the preceding page. Keep orgId, targetType and teamId unchanged.',
+      ),
   },
   outputSchema: {
     templates: z
-      .array(TemplateOut)
-      .describe('Visible drafts. A team-scoped draft applies only to work on its teamId.'),
+      .array(
+        TemplateOut.extend({
+          revision: z.number().int().nonnegative(),
+          offeredTeamIds: z.array(TeamId),
+          versionNumber: z.number().int().positive().nullable(),
+          draftDefinition: WorkTemplateDefinition.optional(),
+        }),
+      )
+      .describe(
+        'Published templates and readable legacy drafts; team drafts apply only on their teamId.',
+      ),
     nextCursor: z
       .string()
       .nullable()
@@ -59,6 +73,32 @@ const definition = {
   },
 };
 
+/** Bind discovery pagination to the authorized caller and exact destination filters. */
+function validateCursor(
+  cursor: ReturnType<typeof cursorCodec.decode> | undefined,
+  input: {
+    orgId: string;
+    actorId: string;
+    targetType?: string | undefined;
+    teamId?: string | undefined;
+  },
+): void {
+  if (!cursor) return;
+  if (
+    cursor.orgId !== input.orgId ||
+    cursor.actorId !== input.actorId ||
+    cursor.targetType !== (input.targetType ?? null) ||
+    cursor.teamId !== (input.teamId ?? null)
+  ) {
+    throw new ValidationError([
+      {
+        path: ['cursor'],
+        message: 'The template cursor belongs to another caller, workspace, or filter.',
+      },
+    ]);
+  }
+}
+
 /** Register read-only template discovery with signed pagination bound to the actor and filters. */
 export function registerTemplateDiscoveryTool(server: McpRegistrar, ctx: McpContext): void {
   server.registerTool('list_templates', definition, (input) =>
@@ -70,41 +110,47 @@ export function registerTemplateDiscoveryTool(server: McpRegistrar, ctx: McpCont
         orgId: input.orgId,
       });
       const cursor = input.cursor ? cursorCodec.decode(input.cursor) : undefined;
-      if (
-        cursor &&
-        (cursor.orgId !== input.orgId ||
-          cursor.actorId !== actor.actorId ||
-          cursor.targetType !== (input.targetType ?? null))
-      ) {
-        throw new ValidationError([
-          {
-            path: ['cursor'],
-            message: 'The template cursor belongs to another caller, workspace, or filter.',
-          },
-        ]);
-      }
+      validateCursor(cursor, { ...input, actorId: actor.actorId });
       await seedDefaultTemplates(input.orgId, actor.actorId);
-      const rows = await db
-        .select()
-        .from(template)
-        .where(
-          and(
-            visibleTemplateWhere(input.orgId, actor.actorId, { targetType: input.targetType }),
-            cursor ? gt(template.id, cursor.after) : undefined,
-          ),
+      const catalog = await listWorkTemplates(
+        { orgId: input.orgId, actorId: actor.actorId },
+        { targetType: input.targetType, teamId: input.teamId, includeDrafts: 'true' },
+      );
+      const rows = catalog
+        .filter(
+          (row) =>
+            (!input.teamId || row.scope !== 'team' || row.teamId === input.teamId) &&
+            (!cursor || row.id > cursor.after),
         )
-        .orderBy(asc(template.id))
-        .limit(input.limit + 1);
+        .slice(0, input.limit + 1);
       const page = rows.slice(0, input.limit);
+      const templates = await Promise.all(
+        page.map(async (row) => {
+          const legacy = toTemplateOut(row);
+          const projection = await toWorkTemplateOut(
+            { orgId: input.orgId, actorId: actor.actorId },
+            row,
+          );
+          return {
+            ...legacy,
+            revision: projection.revision,
+            offeredTeamIds: projection.offeredTeamIds,
+            versionNumber: projection.latestVersion?.number ?? null,
+            ...(row.isBase ? { name: projection.definition.name } : {}),
+            ...(projection.draftDefinition ? { draftDefinition: projection.draftDefinition } : {}),
+          };
+        }),
+      );
       const last = page.at(-1);
       return jsonResult({
-        templates: page.map(toTemplateOut),
+        templates,
         nextCursor:
           rows.length > input.limit && last
             ? cursorCodec.encode({
                 orgId: input.orgId,
                 actorId: actor.actorId,
                 targetType: input.targetType ?? null,
+                teamId: input.teamId ?? null,
                 after: last.id,
               })
             : null,

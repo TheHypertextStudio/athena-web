@@ -1,3 +1,4 @@
+import { searchWorkTemplateCondition } from './work-template-filter';
 /**
  * `@docket/api` — browse mode: the same permission-filtered corpus as ranked search, with no query
  * and no scoring, ordered by recency.
@@ -98,6 +99,7 @@ export async function browseDocuments(input: BrowseInput): Promise<SearchOut> {
       kinds: input.params.kinds ?? [],
       families: input.params.families ?? [],
       ids: input.params.ids ?? [],
+      workTypeIds: input.params.workTypeIds ?? [],
     });
     if (rows.length < chunkSize) exhausted = true;
     const lastFetched = rows[rows.length - 1];
@@ -182,10 +184,12 @@ async function loadBrowseRows(input: {
   kinds: readonly string[];
   families: readonly string[];
   ids: readonly string[];
+  workTypeIds: readonly string[];
 }) {
   const schema = await import('@docket/db');
   const conditions = [
     documentVisibilityCondition(schema.searchDocument, input.ownerUserId, input.orgIds),
+    searchWorkTemplateCondition(schema.searchDocument.facet, input.workTypeIds),
     seekAfter(schema.searchDocument.updatedAt, schema.searchDocument.id, input.cursor),
   ];
   if (!input.includeArchived) conditions.push(isNull(schema.searchDocument.archivedAt));

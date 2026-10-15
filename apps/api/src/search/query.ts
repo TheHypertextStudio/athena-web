@@ -72,6 +72,7 @@ function searchCursorFingerprint(
     ownerIds: normalizedSet(input.params.ownerIds),
     assigneeIds: normalizedSet(input.params.assigneeIds),
     labelIds: normalizedSet(input.params.labelIds),
+    workTypeIds: normalizedSet(input.params.workTypeIds),
     ids: normalizedSet(input.params.ids),
     statuses: normalizedSet(input.params.statuses),
     healths: normalizedSet(input.params.healths),

@@ -4,7 +4,8 @@ import type { LabelId } from '@docket/work/ids';
 import { ValidationError } from '../../error';
 import { resolveAttachedLabels } from '../labels';
 import type { OrganizeItem } from '../organize/item';
-import { requireVisibleTemplate } from '../templates/write';
+import { resolveVisibleTemplate } from '../../mcp/template-application';
+import { populateOrganizeItem } from '../../mcp/organize-templates';
 
 /**
  * Validate attribution for both human and MCP confirmation without replacing authored fields.
@@ -19,7 +20,7 @@ export async function preparePlanTemplate(
   inheritedLabelIds: readonly LabelId[] | undefined,
 ): Promise<OrganizeItem> {
   if (item.template === undefined) return item;
-  const saved = await requireVisibleTemplate(orgId, actorId, item.template);
+  const saved = await resolveVisibleTemplate(orgId, actorId, item.template);
   const draft = TemplateDraft.parse(saved.payload);
   if (draft.targetType !== item.kind || (saved.scope === 'team' && saved.teamId !== teamId)) {
     throw new ValidationError([
@@ -29,11 +30,15 @@ export async function preparePlanTemplate(
       },
     ]);
   }
-  if (draft.targetType !== 'task') return item;
-  if (inheritedLabelIds === undefined) return item;
+  const prepared =
+    saved.publicationState === 'published'
+      ? (await populateOrganizeItem(orgId, actorId, item, teamId)).item
+      : item;
+  if (draft.targetType !== 'task') return prepared;
+  if (inheritedLabelIds === undefined) return prepared;
   const defaults = inheritedLabelIds;
   const surviving = new Set(
     (await resolveAttachedLabels(orgId, defaults)).map((label) => label.id),
   );
-  return { ...item, labelIds: defaults.filter((id) => surviving.has(id)) };
+  return { ...prepared, labelIds: defaults.filter((id) => surviving.has(id)) };
 }

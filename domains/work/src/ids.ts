@@ -114,6 +114,14 @@ export const TemplateId = ownedId
   );
 /** Work template identifier value. */
 export type TemplateId = z.infer<typeof TemplateId>;
+/** Canonical work-type identity; legacy TemplateId names the same persisted definition. */
+export const WorkTypeId = TemplateId;
+/** Work-template definition identifier value. */
+export type WorkTypeId = TemplateId;
+/** Identifier of one immutable published work-template snapshot. */
+export const WorkTypeVersionId = ownedId.brand<'WorkTypeVersionId'>();
+/** Published work-template version identifier value. */
+export type WorkTypeVersionId = z.infer<typeof WorkTypeVersionId>;
 /** Process definition identifier. */
 export const ProcessDefinitionId = ownedId
   .brand<'ProcessDefinitionId'>()

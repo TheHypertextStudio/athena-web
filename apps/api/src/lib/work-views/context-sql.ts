@@ -187,20 +187,24 @@ function enrichmentSql(target: ViewTarget): SQL {
 function baseColumns(target: ViewTarget): SQL {
   switch (target) {
     case 'task':
-      return sql`e.organization_id, e.id, e.title, e.description, e.state, e.status_id, e.priority,
+      return sql`e.work_type_id, e.work_type_version_id, e.work_type_assigned_at, e.work_type_assignment_source,
+        e.organization_id, e.id, e.title, e.description, e.state, e.status_id, e.priority,
         e.assignee_id, e.delegate_id, e.team_id, e.project_id, e.program_id, e.cycle_id,
         e.milestone_id, e.parent_task_id, e.created_by, e.start_date, e.due_date,
         e.created_at, e.updated_at, e.estimate, e.estimate_minutes, e.archived_at`;
     case 'project':
-      return sql`e.organization_id, e.id, e.name, e.summary, e.status, e.status_id, e.priority, e.health,
+      return sql`e.work_type_id, e.work_type_version_id, e.work_type_assigned_at, e.work_type_assignment_source,
+        e.organization_id, e.id, e.name, e.summary, e.status, e.status_id, e.priority, e.health,
         e.lead_id, e.team_id, e.program_id, e.visibility, e.start_date, e.target_date,
         e.target_date_resolution, e.target_date_fiscal_year_start_month, e.created_by,
         e.created_at, e.updated_at`;
     case 'program':
-      return sql`e.organization_id, e.id, e.name, e.summary, e.status, e.status_id, e.health,
+      return sql`e.work_type_id, e.work_type_version_id, e.work_type_assigned_at, e.work_type_assignment_source,
+        e.organization_id, e.id, e.name, e.summary, e.status, e.status_id, e.health,
         e.owner_id, e.visibility, e.created_by, e.updated_at`;
     case 'initiative':
-      return sql`e.organization_id, e.id, e.name, e.summary, e.status, e.status_id, e.priority, e.health,
+      return sql`e.work_type_id, e.work_type_version_id, e.work_type_assigned_at, e.work_type_assignment_source,
+        e.organization_id, e.id, e.name, e.summary, e.status, e.status_id, e.priority, e.health,
         e.owner_id, e.lead_team_id, e.target_date, e.update_cadence, e.updated_at`;
   }
 }

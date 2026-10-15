@@ -1,5 +1,11 @@
 'use client';
 
+import {
+  WorkCardTemplateIdentity,
+  workViewPropertyLabel,
+  workTemplateRowGlyph,
+} from './work-template-label';
+
 import { defaultEntityDisplay } from '@docket/work/entity-display-contract';
 import { entityNavigationSnapshotFromWorkViewRow } from '../../lib/contracts/entity-navigation';
 import { Button, Card, Checkbox } from '@docket/ui/primitives';
@@ -26,12 +32,7 @@ import {
 } from './card-styles';
 import type { WorkViewDefinitionFor } from './view-state';
 import { workViewDisplayFieldCatalog } from './view-state';
-import {
-  formatWorkViewValue,
-  type WorkViewRowFor,
-  workViewRowDisplayValue,
-  workViewRowTitle,
-} from './renderer-types';
+import { type WorkViewRowFor, workViewRowTitle } from './renderer-types';
 import {
   objectForWorkViewRow,
   workViewRowInteractionPolicy,
@@ -101,7 +102,7 @@ function CardIdentity({ row }: { row: WorkViewRowFor<ViewTarget> }): JSX.Element
   return (
     <EntityIconGlyph
       subjectType={row.target}
-      glyph={display.glyph}
+      glyph={workTemplateRowGlyph(row)}
       colorKey={display.colorKey}
       customColor={display.customColor}
       size={24}
@@ -224,17 +225,13 @@ export function WorkCards<TTarget extends ViewTarget>({
                         {workViewRowTitle(row)}
                       </h2>
                     </div>
+                    <WorkCardTemplateIdentity row={row} properties={propertyKeys} />
                     {properties.length > 0 ? (
                       <dl className="text-on-surface-variant text-body-small grid gap-1">
                         {properties.map((field) => (
                           <div key={field.key} className="flex min-w-0 gap-2">
                             <dt className="shrink-0">{field.label}</dt>
-                            <dd className="truncate">
-                              {formatWorkViewValue(
-                                workViewRowDisplayValue(row, field.key),
-                                field.kind,
-                              )}
-                            </dd>
+                            <dd className="truncate">{workViewPropertyLabel(row, field)}</dd>
                           </div>
                         ))}
                       </dl>

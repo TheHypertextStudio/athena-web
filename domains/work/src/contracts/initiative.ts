@@ -1,3 +1,8 @@
+import {
+  workTemplateCreationFields,
+  workTemplateOutputFields,
+  validateWorkTemplateSelection,
+} from './work-template-reference';
 /**
  * `domain packages` — Initiative slice DTOs.
  */
@@ -54,6 +59,7 @@ export type InitiativeUpdateCadence = z.infer<typeof InitiativeUpdateCadence>;
 /** Body for creating an Initiative (organizationId comes from the path, never the body). */
 export const InitiativeCreate = z
   .object({
+    ...workTemplateCreationFields,
     name: z
       .string()
       .min(1)
@@ -83,14 +89,17 @@ export const InitiativeCreate = z
     targetDateResolution: DateResolution.nullable()
       .optional()
       .describe('Linear-compatible broad resolution, or null/omitted for a precise target day.'),
-    health: Health.optional().describe(
-      'Optional initial health verdict (`on_track`/`at_risk`/`off_track`). Omit to leave unset.',
-    ),
+    health: Health.nullable()
+      .optional()
+      .describe(
+        'Optional initial health verdict (`on_track`/`at_risk`/`off_track`). Omit to leave unset.',
+      ),
     labelIds: z
       .array(LabelId)
       .optional()
       .describe('Organization-global Labels to attach during creation.'),
   })
+  .superRefine(validateWorkTemplateSelection)
   .meta({ id: 'InitiativeCreate', description: 'Create an initiative within an organization.' });
 /** Validated initiative-create body. */
 export type InitiativeCreate = z.infer<typeof InitiativeCreate>;
@@ -168,6 +177,7 @@ export type InitiativeLabelLinked = z.infer<typeof InitiativeLabelLinked>;
 /** Full initiative representation returned by reads. */
 export const InitiativeOut = z
   .object({
+    ...workTemplateOutputFields,
     id: InitiativeId.describe('Stable unique identifier of the initiative.'),
     organizationId: OrganizationId.describe('The owning organization (tenant).'),
     name: z.string().describe('Human-readable initiative name.'),

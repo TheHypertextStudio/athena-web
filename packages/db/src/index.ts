@@ -34,4 +34,13 @@ export {
   type GrantStaffOptions,
   type GrantStaffResult,
 } from './seed';
-export { seedWorkspaceStatuses, statusLookupKey, type SeededStatuses } from './seed-statuses';
+export {
+  seedWorkspaceStatuses,
+  seedWorkspaceWorkDefaults,
+  statusLookupKey,
+  type SeededStatuses,
+} from './seed-statuses';
+
+/** Canonical engineering alias for the existing template definition table. */
+export { template as workType } from './schema/work-template';
+export { seedBaseWorkTemplates, type SeededWorkTemplates } from './seed-work-templates';

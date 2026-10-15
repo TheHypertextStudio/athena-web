@@ -695,18 +695,18 @@ Each layer ships something usable and gets its own spec and plan.
   their kind's base template until Layer 4's conversion offers apply.
 - **Views and search.** Grouping and filtering by template needs a work-view field and a search
   facet; `templates.md` currently keeps templates out of the search index. Layer 1 decides the facet.
-- **Parallel MCP template work.** The branch `claude/docket-mcp-templates-7fd14e` adds agent tools
-  for today's template model. If it lands first, Layer 1 moves those tools onto work templates; if
-  it has not landed, Layer 1 builds the §9 tools directly and that branch is closed.
+- **MCP template compatibility.** Existing template discovery and definition tools remain supported.
+  Layer 1 moves them onto the shared work-template persistence service through explicit adapters.
 
-## 15. Decisions to confirm
+## 15. Confirmed migration and product limits
 
-1. **Personal templates** become unpublished drafts visible only to their author (§13). The
-   alternative is a personal availability option on templates, which D6 does not include.
-2. **Short-form copy**: in-context actions say "template" ("Change template") while the section and
+1. **Personal templates** become unpublished drafts visible only to their author (§13).
+2. **Team templates** remain team-visible unpublished drafts until explicitly published. Their
+   existing bodies never become workspace-visible merely because migration runs.
+3. **Short-form copy**: in-context actions say "template" ("Change template") while the section and
    concept say "Work templates" (§2).
-3. **Size limit**: one creation produces at most 500 items (§5.7). The number is a starting guard
-   and the Layer 2 spec may change it after measuring §14's date-recalculation cost.
+4. **Size limit**: one creation produces at most 500 items (§5.7). The blueprint layer must reject
+   larger expansions transactionally; measurements do not silently raise the approved cap.
 
 ## 16. Resolved limitations
 

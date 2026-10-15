@@ -39,7 +39,9 @@ export const EMPTY_PLAN_DOCUMENT: PlanDocument = { nodes: [], edges: [] };
 /** What the reducer needs from outside: the payload behind a template id. */
 export interface PlanOpEnvironment {
   /** The template's draft, or undefined when no such template is visible. */
-  templatePayload(templateId: string): TemplateDraft | undefined;
+  templatePayload(templateId: string, workTypeVersionId?: string): TemplateDraft | undefined;
+  /** The matching immutable publication; private drafts have no version. */
+  templateVersionId?(templateId: string, workTypeVersionId?: string): PlanNode['workTypeVersionId'];
 }
 
 /** Which fields each kind carries. */
@@ -233,6 +235,10 @@ function mergeUpsert(
     initiativeIds: supplied(node.initiativeIds, base.initiativeIds),
     fields: { ...base.fields, ...node.fields, title: node.fields.title ?? base.fields.title },
     templateId: supplied(node.templateId, base.templateId),
+    workTypeVersionId:
+      node.templateId === undefined || node.templateId === base.templateId
+        ? base.workTypeVersionId
+        : undefined,
     inheritedLabelIds: node.fields.labelIds === undefined ? base.inheritedLabelIds : undefined,
     status: 'draft',
     objectId: null,
@@ -306,8 +312,12 @@ function applyTemplate(
   env: PlanOpEnvironment,
 ): PlanDocument {
   const node = requireDraft(index, document, op.ref, `ops.${index}.ref`);
-  const payload = env.templatePayload(op.templateId);
+  const payload = env.templatePayload(op.templateId, op.workTypeVersionId);
   const path = `ops.${index}.templateId`;
+  const workTypeVersionId = env.templateVersionId?.(op.templateId, op.workTypeVersionId);
+  if (op.workTypeVersionId !== undefined && workTypeVersionId !== op.workTypeVersionId) {
+    throw new PlanOpError(index, path, 'That published version does not exist here.');
+  }
   if (!payload) throw new PlanOpError(index, path, 'That template does not exist here.');
   if (payload.targetType !== node.kind) {
     throw new PlanOpError(index, path, `That template creates a ${payload.targetType}.`);
@@ -326,6 +336,7 @@ function applyTemplate(
             ...candidate,
             fields: fields as PlanNodeFields,
             templateId: op.templateId,
+            workTypeVersionId,
             inheritedLabelIds:
               node.fields.labelIds === undefined && payload.targetType === 'task'
                 ? payload.labelIds

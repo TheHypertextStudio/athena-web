@@ -1,4 +1,8 @@
 'use client';
+import type { WorkTemplateDraftFields } from './work-template-draft';
+import type { ReactNode } from 'react';
+import { useTemplateApplication } from './use-template-application';
+import { ComposerTemplateSelection } from './composer-template-selection';
 
 /**
  * `useComposerTemplateContribution` — the template control a create composer shows in its empty
@@ -20,11 +24,7 @@
 import type { TemplateDraft, TemplateTargetType } from '@docket/work/template-contract';
 
 import type { EditorContribution } from '@/components/editor/editor-contribution';
-import {
-  type PartialWithUndefined,
-  type TemplateMergeRule,
-  templateMerge,
-} from '@/components/templates/merge';
+import { type PartialWithUndefined, type TemplateMergeRule } from '@/components/templates/merge';
 
 import { ComposerTemplateControl } from './template-menu';
 
@@ -37,6 +37,7 @@ export interface TemplateHostFacts {
 /** What the hook needs from the composer. */
 export interface ComposerTemplateContributionOptions<T extends object> {
   readonly kind: TemplateTargetType;
+  readonly selection?: WorkTemplateDraftFields | undefined;
   readonly orgId: string;
   readonly open: boolean;
   /** Whether the destination workspace and its creation data have resolved. */
@@ -69,6 +70,7 @@ export interface ComposerTemplateContributionOptions<T extends object> {
  */
 export function useComposerTemplateContribution<T extends object>({
   kind,
+  selection,
   orgId,
   open,
   destinationReady,
@@ -83,12 +85,31 @@ export function useComposerTemplateContribution<T extends object>({
   updateDraft,
   patch,
   rule,
-}: ComposerTemplateContributionOptions<T>): EditorContribution {
+}: ComposerTemplateContributionOptions<T>): EditorContribution & { selection: ReactNode } {
   const resuming = resumeDraftId !== null && resumeDraftId !== undefined;
   const hosted = host !== undefined;
 
+  const application = useTemplateApplication({
+    orgId,
+    kind,
+    teamId,
+    open: open && destinationReady,
+    updateDraft,
+    patch,
+    rule,
+  });
   return {
     id: `composer-description-templates-${kind}`,
+    selection: (
+      <ComposerTemplateSelection
+        orgId={orgId}
+        kind={kind}
+        teamId={teamId}
+        selection={selection}
+        disabled={creating || committed || !destinationReady}
+        application={application}
+      />
+    ),
     renderEmptyAction: () => (
       <ComposerTemplateControl
         orgId={orgId}
@@ -105,9 +126,9 @@ export function useComposerTemplateContribution<T extends object>({
               }
             : undefined
         }
-        onApply={(chosen) => {
-          updateDraft((current) => templateMerge(current, patch(chosen.payload), rule));
-        }}
+        canonicalTemplates={application.publications}
+        applicationReady={application.ready}
+        onApply={application.legacy}
         disabled={creating || committed || !destinationReady}
       />
     ),

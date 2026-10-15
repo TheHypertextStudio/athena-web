@@ -1,3 +1,5 @@
+import { WorkTemplateDisplay, WorkTemplateIdentity } from '@docket/work/work-template-reference';
+import { workTemplateGroupSql, workTemplateIdSql } from './work-template-sql';
 import { sourceAwarePersonFilter, sourceAwarePersonGroup } from './source-person-sql';
 import { sql, type SQL } from 'drizzle-orm';
 import { z } from 'zod';
@@ -76,6 +78,7 @@ const numberSort = (value: SQL, semanticRanks?: readonly SQL[]) => ({
 const booleanSort = (value: SQL) => ({ value, cursor: booleanCursor });
 
 const taskFilter = {
+  workTypeId: { kind: 'relation-one', value: workTemplateIdSql('task') },
   status: { kind: 'enum', value: column('state') },
   priority: { kind: 'enum', value: column('priority') },
   assignee: sourceAwarePersonFilter({
@@ -166,6 +169,7 @@ const statusGroup = (name: string) =>
   );
 
 const taskGroup = {
+  workTypeId: workTemplateGroupSql('task'),
   status: statusGroup('state'),
   priority: scalar('priority'),
   assignee: sourceAwarePersonGroup({
@@ -192,6 +196,7 @@ const taskGroup = {
 } satisfies GroupCompilerMap<GroupableFieldKey<typeof TASK_VIEW_CONTRACT>>;
 
 const projectFilter = {
+  workTypeId: { kind: 'relation-one', value: workTemplateIdSql('project') },
   status: { kind: 'enum', value: column('status') },
   priority: { kind: 'enum', value: column('priority') },
   health: { kind: 'enum', value: column('health') },
@@ -244,6 +249,7 @@ const projectSort = {
 } satisfies SortCompilerMap<SortableFieldKey<typeof PROJECT_VIEW_CONTRACT>>;
 
 const projectGroup = {
+  workTypeId: workTemplateGroupSql('project'),
   status: statusGroup('status'),
   priority: scalar('priority'),
   health: scalar('health'),
@@ -276,6 +282,7 @@ const projectGroup = {
 } satisfies GroupCompilerMap<GroupableFieldKey<typeof PROJECT_VIEW_CONTRACT>>;
 
 const programFilter = {
+  workTypeId: { kind: 'relation-one', value: workTemplateIdSql('program') },
   status: { kind: 'enum', value: column('status') },
   health: { kind: 'enum', value: column('health') },
   owner: tenantScalarRelationFilter(WORK_VIEW_SCALAR_RELATIONS.actor, column('owner_id')),
@@ -306,6 +313,7 @@ const programSort = {
 } satisfies SortCompilerMap<SortableFieldKey<typeof PROGRAM_VIEW_CONTRACT>>;
 
 const programGroup = {
+  workTypeId: workTemplateGroupSql('program'),
   status: statusGroup('status'),
   health: scalar('health'),
   owner: actorGroup('owner_id'),
@@ -316,6 +324,7 @@ const programGroup = {
 } satisfies GroupCompilerMap<GroupableFieldKey<typeof PROGRAM_VIEW_CONTRACT>>;
 
 const initiativeFilter = {
+  workTypeId: { kind: 'relation-one', value: workTemplateIdSql('initiative') },
   status: { kind: 'enum', value: column('status') },
   priority: { kind: 'enum', value: column('priority') },
   health: { kind: 'enum', value: column('health') },
@@ -350,6 +359,7 @@ const initiativeSort = {
 } satisfies SortCompilerMap<SortableFieldKey<typeof INITIATIVE_VIEW_CONTRACT>>;
 
 const initiativeGroup = {
+  workTypeId: workTemplateGroupSql('initiative'),
   status: statusGroup('status'),
   priority: scalar('priority'),
   health: scalar('health'),
@@ -372,10 +382,19 @@ export interface WorkViewRowByTarget {
 }
 
 const workViewRowSchemas = {
-  task: TaskViewRow,
-  project: ProjectViewRow,
-  program: ProgramViewRow,
-  initiative: InitiativeViewRow,
+  task: TaskViewRow.extend({ ...WorkTemplateIdentity.shape, workTemplate: WorkTemplateDisplay }),
+  project: ProjectViewRow.extend({
+    ...WorkTemplateIdentity.shape,
+    workTemplate: WorkTemplateDisplay,
+  }),
+  program: ProgramViewRow.extend({
+    ...WorkTemplateIdentity.shape,
+    workTemplate: WorkTemplateDisplay,
+  }),
+  initiative: InitiativeViewRow.extend({
+    ...WorkTemplateIdentity.shape,
+    workTemplate: WorkTemplateDisplay,
+  }),
 } satisfies { readonly [TTarget in ViewTarget]: z.ZodType<WorkViewRowByTarget[TTarget]> };
 
 /** Exhaustive SQL registries for one target contract. */

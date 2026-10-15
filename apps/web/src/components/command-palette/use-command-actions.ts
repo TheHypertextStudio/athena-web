@@ -4,7 +4,10 @@ import { Building, LayoutTemplate } from '@docket/ui/icons';
 import { useVocabulary } from '@docket/ui/hooks';
 import { useAppRouter as useRouter } from '@/lib/interactions/navigation';
 import { useMemo } from 'react';
+import type { TemplateOut } from '@docket/work/template-contract';
+import type { WorkTemplateOut } from '@docket/work/work-template-contract';
 
+import { workTemplatesDef } from '@/components/templates/work-template-queries';
 import { useActiveOrg } from '@/components/active-org';
 import { useCreateObject } from '@/components/create-object/create-object-provider';
 import {
@@ -46,6 +49,10 @@ export function useCommandActions({ open, close }: CommandActionsInput): readonl
     ...templatesDef(activeOrgId ?? ''),
     enabled: open && activeOrgId !== null,
   });
+  const publications = useApiQuery({
+    ...workTemplatesDef(activeOrgId ?? ''),
+    enabled: open && activeOrgId !== null,
+  });
   const membersQuery = useApiListQuery(
     apiQueryOptions(
       queryKeys.members(activeOrgId ?? ''),
@@ -58,27 +65,27 @@ export function useCommandActions({ open, close }: CommandActionsInput): readonl
     membersQuery.data?.items.find((member) => member.userId === session?.user.id)?.actorId ?? null;
   const scopedTemplates = useMemo(
     () =>
-      templatesQuery.data?.items.filter((template) =>
-        templateMatchesContext(
-          template,
-          currentActorId,
-          template.targetType === 'task' || template.targetType === 'project'
-            ? defaultTeamId
-            : null,
-        ),
-      ),
-    [currentActorId, defaultTeamId, templatesQuery.data?.items],
+      commandTemplates({
+        items: templatesQuery.data?.items,
+        currentActorId,
+        defaultTeamId,
+        publications: publications.data?.items,
+      }),
+    [currentActorId, defaultTeamId, publications.data?.items, templatesQuery.data?.items],
   );
 
   return useMemo(() => {
     const items: PaletteItem[] = [];
-    if (activeOrgId && scopedTemplates) {
+    if (activeOrgId) {
       for (const template of sortTemplates(scopedTemplates)) {
         const noun = nounFor[template.targetType];
         items.push({
           id: `template:${template.id}`,
           section: 'templates',
-          label: `New ${noun.toLocaleLowerCase()} from ${template.name}`,
+          label:
+            template.scope === 'organization'
+              ? `New ${template.name}`
+              : `New ${noun.toLocaleLowerCase()} from ${template.name} · Draft`,
           hint: noun,
           icon: LayoutTemplate,
           keywords: [template.name, noun, 'template', 'new', 'create'],
@@ -97,21 +104,58 @@ export function useCommandActions({ open, close }: CommandActionsInput): readonl
       }
     }
 
-    for (const org of orgs) {
-      items.push({
-        id: `org:${org.id}`,
-        section: 'organizations',
-        label: `Switch to ${org.name}`,
-        icon: Building,
-        keywords: [org.name, org.slug],
-        org: { id: org.id, name: org.name },
-        run: () => {
-          close();
-          router.push(`/orgs/${org.id}/my-work`);
-        },
-      });
-    }
+    items.push(...workspaceCommands({ orgs, router, close }));
 
     return items;
   }, [activeOrgId, close, nounFor, openCreate, orgName, orgs, router, scopedTemplates]);
+}
+
+function commandTemplates({
+  items,
+  currentActorId,
+  defaultTeamId,
+  publications,
+}: {
+  items: readonly TemplateOut[] | undefined;
+  currentActorId: string | null;
+  defaultTeamId: string | null;
+  publications: readonly WorkTemplateOut[] | undefined;
+}): readonly TemplateOut[] {
+  return (items ?? []).filter(
+    (template) =>
+      templateMatchesContext(
+        template,
+        currentActorId,
+        template.targetType === 'task' || template.targetType === 'project' ? defaultTeamId : null,
+      ) &&
+      (template.scope !== 'organization' ||
+        publications?.some(
+          (item) =>
+            item.id === template.id &&
+            (item.offeredTeamIds.length === 0 ||
+              item.offeredTeamIds.some((id) => id === defaultTeamId)),
+        )),
+  );
+}
+function workspaceCommands({
+  orgs,
+  router,
+  close,
+}: {
+  orgs: ReturnType<typeof useActiveOrg>['orgs'];
+  router: ReturnType<typeof useRouter>;
+  close: () => void;
+}): PaletteItem[] {
+  return orgs.map((org) => ({
+    id: `org:${org.id}`,
+    section: 'organizations',
+    label: `Switch to ${org.name}`,
+    icon: Building,
+    keywords: [org.name, org.slug],
+    org: { id: org.id, name: org.name },
+    run: () => {
+      close();
+      router.push(`/orgs/${org.id}/my-work`);
+    },
+  }));
 }

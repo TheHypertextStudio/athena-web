@@ -46,6 +46,7 @@ import { notBlank } from './constraints';
 import { actor, auditColumns, organization, team } from './identity';
 import { integration, template } from './crosscutting';
 import { workStatus } from './work-status';
+import { workTemplateColumns, workTemplateConstraints } from './work-template-reference';
 
 /**
  * How every table on this island points at its status.
@@ -148,6 +149,7 @@ export const initiative = pgTable(
   'initiative',
   {
     ...auditColumns(),
+    ...workTemplateColumns(),
     name: text('name').notNull(),
     summary: text('summary'),
     description: text('description'),
@@ -163,6 +165,7 @@ export const initiative = pgTable(
     health: health('health'),
   },
   (t) => [
+    ...workTemplateConstraints(t, 'initiative'),
     index('initiative_org_idx').on(t.organizationId),
     index('initiative_status_idx').on(t.statusId),
     foreignKey({
@@ -196,6 +199,7 @@ export const program = pgTable(
   'program',
   {
     ...auditColumns(),
+    ...workTemplateColumns(),
     name: text('name').notNull(),
     description: text('description'),
     summary: text('summary'),
@@ -210,6 +214,7 @@ export const program = pgTable(
       .default(sql`'{}'`),
   },
   (t) => [
+    ...workTemplateConstraints(t, 'program'),
     index('program_org_idx').on(t.organizationId),
     index('program_status_idx').on(t.statusId),
     index('program_ancestor_path_gin').using('gin', t.ancestorPath),
@@ -274,6 +279,7 @@ export const project = pgTable(
   'project',
   {
     ...auditColumns(),
+    ...workTemplateColumns(),
     name: text('name').notNull(),
     summary: text('summary'),
     description: text('description'),
@@ -306,6 +312,7 @@ export const project = pgTable(
     externalUpdatedAt: timestamp('external_updated_at'),
   },
   (t) => [
+    ...workTemplateConstraints(t, 'project'),
     index('project_org_idx').on(t.organizationId),
     index('project_status_idx').on(t.statusId),
     index('project_program_idx').on(t.programId),
@@ -421,6 +428,7 @@ export const task = pgTable(
   'task',
   {
     ...auditColumns(),
+    ...workTemplateColumns(),
     title: text('title').notNull(),
     description: text('description'),
     /**
@@ -481,6 +489,7 @@ export const task = pgTable(
       .default(sql`'{}'`),
   },
   (t) => [
+    ...workTemplateConstraints(t, 'task'),
     index('task_org_idx').on(t.organizationId),
     index('task_team_state_idx').on(t.teamId, t.state),
     index('task_status_idx').on(t.statusId),

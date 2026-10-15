@@ -30,6 +30,8 @@ import { Health } from '@docket/work/capability-contract';
 import { Priority } from '@docket/work/task-contract';
 import { ProjectStatus } from './project';
 import { TaskCreate, TaskOut } from '@docket/work/task-model';
+import { workTemplateCreationFields } from '@docket/work/work-template-reference';
+import { validateProcessTaskSelection } from './recurrence-task-validation';
 
 /** A weekday in an explicit, locale-independent recurrence rule. */
 export const RecurrenceWeekday = z.enum([
@@ -394,6 +396,7 @@ export type ProcessMilestoneSpec = z.infer<typeof ProcessMilestoneSpec>;
 /** Reusable task specification within a process revision. */
 export const ProcessTaskSpec = z
   .object({
+    ...workTemplateCreationFields,
     key: ProcessStepKey,
     title: z.string().min(1),
     description: z.string().optional(),
@@ -416,33 +419,20 @@ export const ProcessTaskSpec = z
     timing: ProcessStepTiming.default({ kind: 'on_trigger' }),
   })
   .strict()
-  .superRefine((value, ctx) => {
-    for (const [fixedField, generatedField] of [
-      ['projectId', 'projectKey'],
-      ['milestoneId', 'milestoneKey'],
-      ['parentTaskId', 'parentTaskKey'],
-    ] as const) {
-      if (value[fixedField] === undefined || value[generatedField] === undefined) continue;
-      ctx.addIssue({
-        code: 'custom',
-        path: [fixedField],
-        message: 'A task reference must be either fixed or generated, not both',
-      });
-    }
-    if (
-      value.startOffsetDays !== undefined &&
-      value.dueOffsetDays !== undefined &&
-      value.dueOffsetDays < value.startOffsetDays
-    ) {
-      ctx.addIssue({
-        code: 'custom',
-        path: ['dueOffsetDays'],
-        message: 'Due-date offset cannot fall before the start-date offset',
-      });
-    }
-  });
+  .superRefine(validateProcessTaskSelection);
 /** Process task specification value. */
 export type ProcessTaskSpec = z.infer<typeof ProcessTaskSpec>;
+
+/** Task input retains omission until selected starting defaults have been applied. */
+export const ProcessTaskCreate = z
+  .strictObject({
+    ...ProcessTaskSpec.shape,
+    priority: Priority.optional(),
+    labelIds: z.array(LabelId).optional(),
+  })
+  .superRefine(validateProcessTaskSelection);
+/** Task specification before starting-default normalization. */
+export type ProcessTaskCreate = z.infer<typeof ProcessTaskCreate>;
 
 /** A blocking edge between two task steps in one process revision. */
 export const ProcessDependencySpec = z
@@ -459,7 +449,7 @@ export const ProcessDefinitionCreate = z
     creationMode: ProcessCreationMode.default('all_at_once'),
     project: ProcessProjectSpec.optional(),
     milestones: z.array(ProcessMilestoneSpec).default([]),
-    tasks: z.array(ProcessTaskSpec).min(1),
+    tasks: z.array(ProcessTaskCreate).min(1),
     dependencies: z.array(ProcessDependencySpec).default([]),
   })
   .strict()

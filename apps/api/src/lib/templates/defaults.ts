@@ -15,9 +15,11 @@
  * An existing template prevents reseeding, so updates to this catalog do not overwrite workspace
  * templates. Removing every template makes the workspace empty and seeds defaults on its next read.
  */
-import { db, template } from '@docket/db';
+import { db, organization, template } from '@docket/db';
+import { WorkTemplateDefinition } from '@docket/work/work-template-contract';
+import { appendPublication } from './persistence';
 import type { TemplateDraft, TemplateTargetType } from '@docket/work/template-contract';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 
 /** One shipped default template (seeded per org as an editable `isSeed` row). */
 export interface DefaultTemplate {
@@ -220,24 +222,42 @@ export const DEFAULT_TEMPLATES: readonly DefaultTemplate[] = [
  * @returns how many rows it created.
  */
 export async function seedDefaultTemplates(orgId: string, actorId: string | null): Promise<number> {
-  const existing = await db
-    .select({ id: template.id })
-    .from(template)
-    .where(eq(template.organizationId, orgId))
-    .limit(1);
-  if (existing.length > 0) return 0;
-
-  await db.insert(template).values(
-    DEFAULT_TEMPLATES.map((t) => ({
-      organizationId: orgId,
-      createdBy: actorId,
-      targetType: t.targetType,
-      name: t.name,
-      description: t.description,
-      scope: 'organization' as const,
-      payload: t.payload,
-      isSeed: true,
-    })),
-  );
-  return DEFAULT_TEMPLATES.length;
+  return db.transaction(async (tx) => {
+    // Serialize first-list seeding across concurrent callers; bases never suppress the catalog.
+    await tx
+      .select({ id: organization.id })
+      .from(organization)
+      .where(eq(organization.id, orgId))
+      .for('update');
+    const existing = await tx
+      .select({ id: template.id })
+      .from(template)
+      .where(and(eq(template.organizationId, orgId), eq(template.isBase, false)))
+      .limit(1);
+    if (existing.length > 0) return 0;
+    for (const item of DEFAULT_TEMPLATES) {
+      const definition = WorkTemplateDefinition.parse({
+        name: item.name,
+        description: item.description,
+        payload: item.payload,
+      });
+      const [row] = await tx
+        .insert(template)
+        .values({
+          organizationId: orgId,
+          createdBy: actorId,
+          targetType: item.targetType,
+          name: item.name,
+          description: item.description,
+          scope: 'organization',
+          payload: item.payload,
+          draftDefinition: definition,
+          isSeed: true,
+        })
+        .returning();
+      if (!row) throw new Error('Default template insert returned no row');
+      await appendPublication(tx, row, actorId);
+    }
+    return DEFAULT_TEMPLATES.length;
+  });
 }

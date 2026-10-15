@@ -45,7 +45,13 @@ import { capabilityGuard } from '../permissions/capability-guard';
 import { orgContextMiddleware } from '../permissions/org-context-middleware';
 import { enqueueSearchUpsert } from '../search/write-through';
 import { initiativeHierarchyDepth } from './initiative-hierarchy';
-import { SYSTEM_ROLES, resolveUniqueSlug, slugify, toOrgOut } from './org-helpers';
+import {
+  SYSTEM_ROLES,
+  resolveUniqueSlug,
+  slugify,
+  toOrgOut,
+  workspaceSettingsPatch,
+} from './org-helpers';
 import { createTeamActor } from './team-actor';
 import activity from './activity';
 import stream from './stream';
@@ -444,15 +450,7 @@ Every new organization includes the Owner, Admin, Member, and Guest roles plus a
       } else if (body.avatar?.startsWith('data:image/')) {
         avatar = await storeSettingsImage(`settings/workspace/${orgId}`, body.avatar);
       }
-      const values: Partial<typeof organization.$inferInsert> = {
-        ...(body.name !== undefined ? { name: body.name } : {}),
-        ...(body.purpose !== undefined ? { purpose: body.purpose } : {}),
-        ...(body.slug !== undefined ? { slug } : {}),
-        ...(avatar !== undefined ? { avatar } : {}),
-        ...(body.vocabulary !== undefined
-          ? { vocabulary: { ...current.vocabulary, preset: body.vocabulary } }
-          : {}),
-      };
+      const values = workspaceSettingsPatch(current, body, slug, avatar);
       const updatedRows = await db
         .update(organization)
         .set(values)

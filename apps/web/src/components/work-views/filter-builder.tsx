@@ -1,5 +1,8 @@
 'use client';
 
+import { filterChoiceLabel } from './work-template-label';
+import { labelTarget, operatorLabel } from './filter-editor-labels';
+
 import { Filter, Plus, X } from '@docket/ui/icons';
 import {
   Button,
@@ -83,18 +86,6 @@ export interface FilterBuilderProps<TTarget extends ViewTarget> {
 
 function emptyPredicate<TTarget extends ViewTarget>(): WorkViewFilterDraftFor<TTarget> {
   return { kind: 'predicate', field: null, operator: null };
-}
-
-function labelTarget(target: ViewTarget): string {
-  return target === 'initiative' ? 'initiatives' : `${target}s`;
-}
-
-function operatorLabel(operator: string): string {
-  const words = operator
-    .replace(/-/g, ' ')
-    .replace(/([A-Z])/g, ' $1')
-    .toLowerCase();
-  return `${words.charAt(0).toUpperCase()}${words.slice(1)}`;
 }
 
 function pathKey(path: readonly number[]): string {
@@ -859,7 +850,7 @@ function DraftEditor<TTarget extends ViewTarget>({
                   }}
                 />
                 <Text as="span" token="label-medium">
-                  {option.label}
+                  {filterChoiceLabel(target, option)}
                 </Text>
                 <Text as="span" token="body-small" tone="muted">
                   {option.count}

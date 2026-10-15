@@ -55,6 +55,28 @@ async function renderPicker(onChange = vi.fn()): Promise<ReturnType<typeof vi.fn
 }
 
 describe('EntityIconPicker', () => {
+  it('offers glyph selection without color controls when its host stores only a glyph', async () => {
+    const onChange = vi.fn();
+    render(
+      <EntityIconPicker
+        display={baseDisplay}
+        workspaceId="workspace-1"
+        entityName="Event template"
+        editable
+        pending={false}
+        showColorControls={false}
+        onChange={onChange}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Customize Event template icon' }));
+    await screen.findByRole('searchbox', { name: 'Search icons' });
+    expect(screen.queryByTestId('entity-glyph-color-footer')).not.toBeInTheDocument();
+    const option = screen.getAllByTestId('entity-glyph-option')[0];
+    if (!option) throw new Error('The glyph catalog must contain an option.');
+    fireEvent.click(option);
+    expect(onChange).toHaveBeenCalled();
+  });
+
   it('autofocuses the selected catalog search and exposes separate browse tabs', async () => {
     await renderPicker();
 

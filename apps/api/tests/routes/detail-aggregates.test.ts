@@ -1,3 +1,4 @@
+import { initiativeRow, projectRow } from './detail-aggregate-row-fixtures';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { eq } from 'drizzle-orm';
 
@@ -15,10 +16,8 @@ import {
   assertOwnerInOrg,
   buildInitiativeDetail,
   buildInitiativeDetailFromSummary,
-  type InitiativeRow,
   loadInitiative,
   projectOverlapsWindow,
-  type ProjectRow,
   toOut,
 } from '../../src/routes/initiative-helpers';
 import {
@@ -41,60 +40,6 @@ let projects!: typeof projectsRouter;
 let projectRollup!: typeof projectRollupRouter;
 let programs!: typeof programsRouter;
 let initiatives!: typeof initiativesRouter;
-
-const initiativeRow: InitiativeRow = {
-  id: 'initiative-row',
-  organizationId: 'organization-row',
-  createdBy: null,
-  createdAt: new Date('2026-08-24T00:00:00.000Z'),
-  updatedAt: new Date('2026-08-24T00:00:00.000Z'),
-  archivedAt: null,
-  name: 'Complete street access',
-  summary: null,
-  description: null,
-  ownerId: null,
-  leadTeamId: null,
-  status: 'active',
-  statusId: 'initiative-active',
-  priority: 'none',
-  updateCadence: 'monthly',
-  targetDate: null,
-  targetDateResolution: null,
-  targetDateFiscalYearStartMonth: null,
-  health: null,
-};
-
-const projectRow: ProjectRow = {
-  id: 'project-row',
-  organizationId: 'organization-row',
-  createdBy: null,
-  createdAt: new Date('2026-08-24T00:00:00.000Z'),
-  updatedAt: new Date('2026-08-24T00:00:00.000Z'),
-  archivedAt: null,
-  name: 'Protected bike lanes',
-  summary: null,
-  description: null,
-  leadId: null,
-  programId: null,
-  teamId: null,
-  status: 'planned',
-  statusId: 'project-planned',
-  priority: 'none',
-  health: null,
-  startDate: null,
-  startDateResolution: null,
-  startDateFiscalYearStartMonth: null,
-  targetDate: null,
-  targetDateResolution: null,
-  targetDateFiscalYearStartMonth: null,
-  visibility: 'public',
-  ancestorPath: [],
-  source: 'native',
-  sourceIntegrationId: null,
-  externalId: null,
-  externalUrl: null,
-  externalUpdatedAt: null,
-};
 
 /** Count database round trips for one aggregate request without counting its fixture setup. */
 function observeDatabaseQueries(): { readonly count: () => number; readonly restore: () => void } {

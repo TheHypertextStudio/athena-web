@@ -161,6 +161,7 @@ const FILTER_SCHEMA_BY_TARGET: {
 
 const FIELD_LABELS = {
   task: {
+    workTypeId: 'Template',
     status: 'Status',
     priority: 'Priority',
     assignee: 'Assignee',
@@ -186,6 +187,7 @@ const FIELD_LABELS = {
     archived: 'Archived',
   } satisfies Record<keyof typeof TASK_VIEW_CONTRACT.fields, string>,
   project: {
+    workTypeId: 'Template',
     status: 'Status',
     priority: 'Priority',
     health: 'Health',
@@ -207,6 +209,7 @@ const FIELD_LABELS = {
     name: 'Name',
   } satisfies Record<keyof typeof PROJECT_VIEW_CONTRACT.fields, string>,
   program: {
+    workTypeId: 'Template',
     status: 'Status',
     health: 'Health',
     owner: 'Owner',
@@ -220,6 +223,7 @@ const FIELD_LABELS = {
     name: 'Name',
   } satisfies Record<keyof typeof PROGRAM_VIEW_CONTRACT.fields, string>,
   initiative: {
+    workTypeId: 'Template',
     status: 'Status',
     priority: 'Priority',
     health: 'Health',

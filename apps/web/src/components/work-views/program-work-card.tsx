@@ -1,5 +1,11 @@
 'use client';
 
+import {
+  WorkCardTemplateIdentity,
+  workViewPropertyLabel,
+  workTemplateRowGlyph,
+} from './work-template-label';
+
 import { defaultEntityDisplay } from '@docket/work/entity-display-contract';
 import { type ProgramViewRow } from '@docket/work/work-view-contract';
 import { cn, relativeTime } from '@docket/ui';
@@ -15,7 +21,6 @@ import { useWorkStatus } from '@/components/entity-display/use-work-status';
 import { WorkStatusBadge } from '@/components/entity-display/work-status';
 
 import { CARD_GLYPH_FADE_CLASS } from './card-styles';
-import { formatWorkViewValue, workViewRowDisplayValue } from './renderer-types';
 import { workViewDisplayFieldCatalog } from './view-state';
 
 /** Props for {@link ProgramWorkCard}. */
@@ -184,7 +189,7 @@ export function ProgramWorkCard({ row, properties }: ProgramWorkCardProps): JSX.
         <span className={CARD_GLYPH_FADE_CLASS}>
           <EntityIconGlyph
             subjectType="program"
-            glyph={display.glyph}
+            glyph={workTemplateRowGlyph(row)}
             colorKey={display.colorKey}
             customColor={display.customColor}
             size={40}
@@ -201,6 +206,7 @@ export function ProgramWorkCard({ row, properties }: ProgramWorkCardProps): JSX.
         ) : null}
       </div>
 
+      <WorkCardTemplateIdentity row={row} properties={properties} />
       {row.summary ? (
         <Text as="p" token="body-medium" tone="muted" className="line-clamp-2">
           {row.summary}
@@ -264,9 +270,7 @@ export function ProgramWorkCard({ row, properties }: ProgramWorkCardProps): JSX.
             {extras.map((field) => (
               <div key={field.key} className="flex min-w-0 gap-2">
                 <dt className="shrink-0">{field.label}</dt>
-                <dd className="truncate">
-                  {formatWorkViewValue(workViewRowDisplayValue(row, field.key), field.kind)}
-                </dd>
+                <dd className="truncate">{workViewPropertyLabel(row, field)}</dd>
               </div>
             ))}
           </dl>

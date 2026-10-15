@@ -25,7 +25,7 @@ import { Health, Visibility } from './capability';
 import { Priority } from '../task-contract';
 import { InitiativePriority, InitiativeStatus, InitiativeUpdateCadence } from './initiative';
 import { ActorId, OrganizationId, TeamId } from '@docket/identity-access/ids';
-import { LabelId, TemplateId } from '../ids';
+import { LabelId, TemplateId, WorkTypeVersionId } from '../ids';
 import { ProgramStatus } from './program';
 import { ViewScope } from './saved-view';
 
@@ -224,6 +224,9 @@ export type TemplateUpdate = z.infer<typeof TemplateUpdate>;
 /** Full template representation returned by reads. */
 export const TemplateOut = z
   .object({
+    workTypeVersionId: WorkTypeVersionId.nullable().optional(),
+    publicationState: z.enum(['draft', 'published', 'archived']).optional(),
+    isBase: z.boolean().optional(),
     id: TemplateId.describe('Opaque template id.'),
     organizationId: OrganizationId.describe('Owning org id (the tenant key).'),
     targetType: TemplateTargetType.describe('The kind this template creates.'),

@@ -28,6 +28,7 @@ import { TaskSections } from '@/components/task-detail/task-sections';
 import { useDescriptionExpansion } from '@/components/task-detail/use-description-expansion';
 import { useTaskPropertyModel } from '@/components/task-detail/use-task-property-model';
 import { useTaskRosters } from '@/components/task-detail/use-task-rosters';
+import { WorkTemplateHeader } from '@/components/templates/work-template-header';
 import { EntityDetailLayout } from '@/components/views/entity-detail-layout';
 import { useDetailTab } from '@/components/views/use-detail-tab';
 import { taskObjectRef } from '@/lib/actions';
@@ -97,6 +98,7 @@ function TaskDetailReady({
         metadata={
           <>
             <TaskPaletteCommands canEdit={canEdit} tab={tab} onTabChange={onTabChange} />
+            <WorkTemplateHeader orgId={orgId} kind="task" work={task} canEdit={canEdit} />
             <TaskMetadataRow model={model} />
           </>
         }

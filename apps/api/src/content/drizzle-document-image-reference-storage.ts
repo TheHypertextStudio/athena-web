@@ -19,24 +19,66 @@ function stringProperty(row: Readonly<Record<string, unknown>>, field: string): 
   return typeof value === 'string' ? value : undefined;
 }
 
-/** Read the template draft's Markdown body from its typed JSON payload. */
-function templateDescription(row: Readonly<Record<string, unknown>>): string | undefined {
-  const payload = row['payload'];
+/** Read a published or editable definition's starting-draft Markdown. */
+function definitionDescription(definition: unknown): string | undefined {
+  if (typeof definition !== 'object' || definition === null) return undefined;
+  const payload: unknown = Reflect.get(definition, 'payload');
   if (typeof payload !== 'object' || payload === null) return undefined;
   return stringProperty(payload as Readonly<Record<string, unknown>>, 'description');
+}
+
+/** Retain image references across the editable draft and every immutable publication. */
+function templateDescription(
+  row: Readonly<Record<string, unknown>>,
+  publications: readonly unknown[],
+): string | undefined {
+  const bodies = [
+    definitionDescription(row),
+    definitionDescription(row['draftDefinition']),
+    ...publications.map(definitionDescription),
+  ].filter((body): body is string => body !== undefined);
+  return bodies.length === 0 ? undefined : [...new Set(bodies)].join('\n\n');
+}
+
+/** Batch immutable publication bodies without exposing them through any public projection. */
+async function templatePublications(
+  organizationId: string,
+  ids: readonly string[],
+): Promise<Map<string, unknown[]>> {
+  const result = new Map<string, unknown[]>();
+  if (ids.length === 0) return result;
+  const schema = await import('@docket/db');
+  const versions = await schema.db
+    .select()
+    .from(schema.workTypeVersion)
+    .where(
+      and(
+        eq(schema.workTypeVersion.organizationId, organizationId),
+        inArray(schema.workTypeVersion.workTypeId, [...ids]),
+      ),
+    );
+  for (const version of versions) {
+    const definitions = result.get(version.workTypeId) ?? [];
+    definitions.push(version.definition);
+    result.set(version.workTypeId, definitions);
+  }
+  return result;
 }
 
 /** Project a database row into the prose shape the reconciler consumes. */
 function toSubjectRow(
   subjectType: DocumentImageSubjectType,
   row: Readonly<Record<string, unknown>>,
+  publications: readonly unknown[] = [],
 ): DocumentImageSubjectRow | undefined {
   const id = stringProperty(row, 'id');
   const organizationId = stringProperty(row, 'organizationId');
   if (id === undefined || organizationId === undefined) return undefined;
   const field = DOCUMENT_IMAGE_FIELDS[subjectType][0];
   const markdown =
-    subjectType === 'template' ? templateDescription(row) : stringProperty(row, field);
+    subjectType === 'template'
+      ? templateDescription(row, publications)
+      : stringProperty(row, field);
   return {
     organizationId,
     subjectType,
@@ -69,9 +111,38 @@ async function listSubjectRows(
   const schema = await import('@docket/db');
   const table = await sourceTable(subjectType);
   const rows = await schema.db.select().from(table).where(eq(table.organizationId, organizationId));
+  const publications =
+    subjectType === 'template'
+      ? await templatePublications(
+          organizationId,
+          rows.map((row) => row.id),
+        )
+      : new Map<string, unknown[]>();
   return rows
-    .map((row) => toSubjectRow(subjectType, row))
+    .map((row) => toSubjectRow(subjectType, row, publications.get(row.id)))
     .filter((row): row is DocumentImageSubjectRow => row !== undefined);
+}
+
+/** Read one authoritative subject together with retained immutable template publications. */
+async function readSubjectRow(
+  subjectType: DocumentImageSubjectType,
+  subjectId: string,
+  organizationId: string,
+): Promise<DocumentImageSubjectRow | undefined> {
+  const schema = await import('@docket/db');
+  const table = await sourceTable(subjectType);
+  const rows = await schema.db
+    .select()
+    .from(table)
+    .where(and(eq(table.id, subjectId), eq(table.organizationId, organizationId)))
+    .limit(1);
+  const publications =
+    subjectType === 'template'
+      ? await templatePublications(organizationId, [subjectId])
+      : new Map<string, unknown[]>();
+  return rows[0] === undefined
+    ? undefined
+    : toSubjectRow(subjectType, rows[0], publications.get(subjectId));
 }
 
 /** Build the image-reference storage ports over the application database. */
@@ -153,20 +224,7 @@ export function createDrizzleDocumentImageReferenceStorage(): DocumentImageRefer
   };
 
   const subjects: DocumentImageSubjectReader = {
-    async read(
-      subjectType,
-      subjectId,
-      organizationId,
-    ): Promise<DocumentImageSubjectRow | undefined> {
-      const schema = await import('@docket/db');
-      const table = await sourceTable(subjectType);
-      const rows = await schema.db
-        .select()
-        .from(table)
-        .where(and(eq(table.id, subjectId), eq(table.organizationId, organizationId)))
-        .limit(1);
-      return rows[0] === undefined ? undefined : toSubjectRow(subjectType, rows[0]);
-    },
+    read: readSubjectRow,
 
     async listAll(organizationId): Promise<readonly DocumentImageSubjectRow[]> {
       const subjectTypes = Object.keys(DOCUMENT_IMAGE_FIELDS) as DocumentImageSubjectType[];

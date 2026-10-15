@@ -11,6 +11,7 @@ export * from './audit-event';
 export * from './daily-planning';
 export * from './notion-mirror';
 export * from './work-status';
+export * from './work-template';
 export * from './work';
 export * from './joins';
 export * from './agents';

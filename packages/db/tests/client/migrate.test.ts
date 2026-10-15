@@ -17,9 +17,18 @@ const migrateMocks = vi.hoisted(() => ({
   openPglite: vi.fn(),
 }));
 
-vi.mock('../../src/client', () => ({ openPglite: migrateMocks.openPglite }));
+vi.mock('../../src/client', () => ({ openPglite: migrateMocks.openPglite, fullSchema: {} }));
 vi.mock('drizzle-orm/pglite', () => ({ drizzle: migrateMocks.drizzlePglite }));
 vi.mock('drizzle-orm/pglite/migrator', () => ({ migrate: migrateMocks.migratePglite }));
+vi.mock('../../src/migrate-work-templates', () => ({
+  migrateWithWorkTemplateCheckpoint: async (
+    _database: unknown,
+    options: {
+      migrationsFolder: string;
+      applySqlMigrations: (folder: string) => Promise<void>;
+    },
+  ) => options.applySqlMigrations(options.migrationsFolder),
+}));
 
 function resetDriverMocks(): void {
   migrateMocks.clients.length = 0;
@@ -49,6 +58,13 @@ afterEach(() => {
 });
 
 describe('migrate main()', () => {
+  it('closes the embedded client when a migration checkpoint fails', async () => {
+    vi.stubEnv('DATABASE_URL', 'pglite://memory');
+    migrateMocks.migratePglite.mockRejectedValueOnce(new Error('Checkpoint refused'));
+    const { main } = await import('../../src/migrate');
+    await expect(main()).rejects.toThrow('Checkpoint refused');
+    expect(assertDefined(migrateMocks.clients[0]).close).toHaveBeenCalledTimes(1);
+  });
   it('migrates a fresh in-memory PGlite URL', async () => {
     vi.stubEnv('DATABASE_URL', 'pglite://memory');
     const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);

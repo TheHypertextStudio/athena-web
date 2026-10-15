@@ -14,6 +14,14 @@
 import { db, team } from '@docket/db';
 import { TemplateCreate, TemplateUpdate, type TemplateDraft } from '@docket/work/template-contract';
 import { eq } from 'drizzle-orm';
+import { WorkTemplateCreate, WorkTemplateDefinition } from '@docket/work/work-template-contract';
+import {
+  archiveWorkTemplate,
+  createWorkTemplate,
+  editWorkTemplateDraft,
+  publishWorkTemplate,
+} from '../lib/templates/service';
+import { draftOf } from '../lib/templates/model';
 import type { z } from 'zod';
 
 import { ValidationError } from '../error';
@@ -79,7 +87,11 @@ function draftToWrite(
   before: TemplateRow | null,
 ): TemplateDraft | undefined {
   if (input.payload !== undefined) return input.payload;
-  return input.labels !== undefined && before ? before.payload : undefined;
+  return input.labels !== undefined && before
+    ? input.action === 'draft'
+      ? draftOf(before).payload
+      : before.payload
+    : undefined;
 }
 
 /** The team whose labels the template may carry: its team when team-scoped, otherwise none. */
@@ -124,6 +136,7 @@ function assertSomethingToChange(input: DefineTemplateInput): void {
     input.team,
     input.payload,
     input.labels,
+    input.defaultStatusKey,
   ];
   if (fields.every((value) => value === undefined)) {
     invalid('template', 'Name at least one thing to change.');
@@ -146,6 +159,9 @@ async function writeTemplate(
   const before = input.template
     ? await resolveVisibleTemplate(orgId, actor.actorId, input.template)
     : null;
+  if (input.action !== undefined) return writeCanonicalTemplate(actor, input, before);
+  if (input.defaultStatusKey !== undefined || input.expectedRevision !== undefined)
+    invalid('action', 'Choose draft or publish for revision-aware changes.');
   if (before) assertSomethingToChange(input);
   const teamId = await resolveOptional(orgId, 'team', input.team, 'team');
   const payload = await payloadToWrite(input, before, teamId);
@@ -159,8 +175,91 @@ async function writeTemplate(
   return { before: null, after: await createTemplate(orgId, actor.actorId, body) };
 }
 
+/** Require a reviewed revision for an existing canonical draft. */
+function reviewedRevision(input: DefineTemplateInput): number {
+  if (input.expectedRevision === undefined)
+    invalid('expectedRevision', 'Choose the revision you reviewed.');
+  return input.expectedRevision;
+}
+
+/** Refuse fields that a publication or archive operation would otherwise ignore. */
+function assertLifecycleInput(input: DefineTemplateInput): void {
+  const fields = [
+    input.name,
+    input.description,
+    input.scope,
+    input.team,
+    input.payload,
+    input.labels,
+    input.defaultStatusKey,
+  ];
+  if (fields.some((field) => field !== undefined))
+    invalid('action', 'Save draft changes before publishing or archiving.');
+}
+
+/** Merge explicit authoring fields into the current unpublished definition. */
+async function canonicalDefinition(
+  input: DefineTemplateInput,
+  before: TemplateRow | null,
+  teamId: string | undefined,
+): Promise<WorkTemplateDefinition> {
+  const payload = await payloadToWrite(input, before, teamId);
+  const previous = before ? draftOf(before) : undefined;
+  return parsed(WorkTemplateDefinition, {
+    ...previous,
+    name: input.name ?? previous?.name,
+    description: input.description ?? previous?.description,
+    payload: payload ?? previous?.payload,
+    defaultStatusKey:
+      input.defaultStatusKey === undefined ? previous?.defaultStatusKey : input.defaultStatusKey,
+  });
+}
+
+/** Execute explicit authoring operations through the canonical persistence service. */
+async function writeCanonicalTemplate(
+  actor: McpActor,
+  input: DefineTemplateInput,
+  before: TemplateRow | null,
+): Promise<{ before: TemplateRow | null; after: TemplateRow }> {
+  const context = { orgId: input.orgId, actorId: actor.actorId };
+  if (input.action === 'publish' || input.action === 'archive') {
+    if (!before) invalid('template', 'Choose an existing template.');
+    assertLifecycleInput(input);
+    const after =
+      input.action === 'publish'
+        ? await publishWorkTemplate(context, before.id, reviewedRevision(input))
+        : await archiveWorkTemplate(context, before.id);
+    return { before, after };
+  }
+  const teamId = await resolveOptional(input.orgId, 'team', input.team, 'team');
+  const definition = await canonicalDefinition(input, before, teamId);
+  if (before) {
+    assertSomethingToChange(input);
+    if (input.scope !== undefined || input.team !== undefined)
+      invalid('scope', 'Draft edits preserve visibility; publish explicitly to share.');
+    return {
+      before,
+      after: await editWorkTemplateDraft(context, before.id, {
+        expectedRevision: reviewedRevision(input),
+        definition,
+      }),
+    };
+  }
+  const body = parsed(WorkTemplateCreate, {
+    targetType: definition.payload.targetType,
+    scope: input.scope,
+    teamId,
+    definition,
+  });
+  return { before, after: await createWorkTemplate(context, body) };
+}
+
 /** Flatten a template into the fields its card row compares, with ids turned into names. */
-function snapshot(row: TemplateRow, names: ReadonlyMap<string, string>): Record<string, unknown> {
+function snapshot(
+  row: TemplateRow,
+  names: ReadonlyMap<string, string>,
+  canonical = false,
+): Record<string, unknown> {
   const named = (ids: readonly unknown[]): string =>
     ids.map((id) => nameOf(names, id, String(id))).join(', ');
   const draft = Object.entries(row.payload as Record<string, unknown>)
@@ -174,6 +273,14 @@ function snapshot(row: TemplateRow, names: ReadonlyMap<string, string>): Record<
   return {
     name: row.name,
     description: row.description,
+    ...(canonical
+      ? {
+          publicationState: row.publicationState,
+          revision: row.draftRevision,
+          version: row.latestPublishedVersionId,
+          defaultStatusKey: draftOf(row).defaultStatusKey,
+        }
+      : {}),
     scope: row.scope,
     teamId: nameOf(names, row.teamId, 'none'),
     ...Object.fromEntries(draft),
@@ -203,6 +310,7 @@ async function rowFor(
   orgId: string,
   before: TemplateRow | null,
   after: TemplateRow,
+  action: DefineTemplateInput['action'],
 ): Promise<CatalogRow> {
   const labelIds = [before?.payload, after.payload].flatMap((p) =>
     p?.targetType === 'task' ? (p.labelIds ?? []) : [],
@@ -212,11 +320,19 @@ async function rowFor(
     resolveAttachedLabels(orgId, labelIds),
   ]);
   const names = new Map([...teams, ...labels].map((r) => [r.id, r.name]));
-  const fields = before ? fieldDiffs(snapshot(before, names), snapshot(after, names), show) : [];
+  const effective = (row: TemplateRow): TemplateRow =>
+    action === 'draft' ? { ...row, ...draftOf(row) } : row;
+  const fields = before
+    ? fieldDiffs(
+        snapshot(effective(before), names, action !== undefined),
+        snapshot(effective(after), names, action !== undefined),
+        show,
+      )
+    : [];
   return {
     kind: 'template',
     id: after.id,
-    title: after.name,
+    title: effective(after).name,
     href: entityListHref(orgId, 'template'),
     note: noteFor(after, before === null, names),
     matched: before !== null && fields.length === 0,
@@ -235,7 +351,7 @@ export function registerTemplateTools(server: McpRegistrar, ctx: McpContext): vo
         orgId: input.orgId,
       });
       const { before, after } = await writeTemplate(actor, input);
-      const row = await rowFor(input.orgId, before, after);
+      const row = await rowFor(input.orgId, before, after, input.action);
       const changed = !row.matched;
       const changeSetId = await recordChangeSet({
         orgId: input.orgId,
@@ -246,6 +362,9 @@ export function registerTemplateTools(server: McpRegistrar, ctx: McpContext): vo
       });
       return jsonResult({
         changed: changed ? 1 : 0,
+        revision: after.draftRevision,
+        publicationState: after.publicationState,
+        workTypeVersionId: after.latestPublishedVersionId,
         listHref: entityListHref(input.orgId, 'template'),
         changes: [row],
         skipped: [],

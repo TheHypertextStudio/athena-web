@@ -7,6 +7,7 @@
  * command palette and the full `/search` page both consume this same shape.
  */
 import { z } from 'zod';
+import { WorkTypeId } from '@docket/work/ids';
 
 import { SourceSystemKind } from '@docket/connections/event-contract';
 import { EntityDisplayOut } from '@docket/work/entity-display-contract';
@@ -235,6 +236,7 @@ export const SearchQuery = z
     ownerIds: z.array(z.string()).default([]),
     assigneeIds: z.array(z.string()).default([]),
     labelIds: z.array(z.string()).default([]),
+    workTypeIds: z.array(WorkTypeId).default([]),
     /** Resolve specific source entity ids, for a deep link to a row that is not on the first page. */
     ids: z.array(z.string()).default([]),
     statuses: z.array(z.string()).default([]),

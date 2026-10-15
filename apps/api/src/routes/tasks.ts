@@ -1,3 +1,5 @@
+import { workTemplateAssignmentRoutes } from './work-template-assignment';
+import { prepareWorkTemplateCreation } from '../lib/work-template-creation';
 import { loadTaskDetailRow } from './task-detail-row';
 import { assertTaskAssignmentEdit, detachTaskAssigneeEdit } from './task-person-edit';
 import { taskListOutput } from './task-list-output';
@@ -383,6 +385,7 @@ async function loadTaskDetail(
 
 /** Tasks router: lifecycle (create/list/detail/update/archive/state) + subtasks + dependencies. */
 const tasks = new Hono<AppEnv>()
+  .route('/', workTemplateAssignmentRoutes('task'))
   .post(
     '/',
     capabilityGuard('contribute'),
@@ -401,7 +404,9 @@ The new task appears in the organization's activity stream. An assigned task als
     zJson(TaskCreate),
     async (c) => {
       const { orgId, actorId } = c.get('actorCtx');
-      const body = c.req.valid('json');
+      const body = TaskCreate.parse(
+        await prepareWorkTemplateCreation(orgId, 'task', c.req.valid('json')),
+      );
 
       const teamRows = await db
         .select()
@@ -490,6 +495,8 @@ The new task appears in the organization's activity stream. An assigned task als
         const inserted = await tx
           .insert(task)
           .values({
+            workTypeId: body.workTypeId,
+            workTypeVersionId: body.workTypeVersionId,
             organizationId: orgId,
             title: body.title,
             description: body.description,

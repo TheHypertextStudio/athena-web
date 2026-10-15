@@ -43,6 +43,7 @@ import { calendarLayer } from './calendar';
 import { label } from './crosscutting';
 import { actor, auditColumns, organization, team } from './identity';
 import { cycle, milestone, program, project, task } from './work';
+import { taskTemplateColumns, taskSpecConstraints } from './recurrence-template';
 
 /** A named reusable process whose immutable revisions describe generated work. */
 export const processDefinition = pgTable(
@@ -185,6 +186,7 @@ export const processTaskSpec = pgTable(
       .notNull()
       .references(() => organization.id, { onDelete: 'cascade' }),
     title: text('title').notNull(),
+    ...taskTemplateColumns(),
     description: text('description'),
     teamId: text('team_id')
       .notNull()
@@ -210,11 +212,7 @@ export const processTaskSpec = pgTable(
   },
   (t) => [
     index('process_task_spec_org_team_idx').on(t.organizationId, t.teamId),
-    foreignKey({
-      columns: [t.parentTaskStepId],
-      foreignColumns: [t.stepId],
-      name: 'process_task_spec_parent_fk',
-    }).onDelete('set null'),
+    ...taskSpecConstraints(t),
     check('process_task_spec_title_not_blank', sql`length(btrim(${t.title})) > 0`),
     check(
       'process_task_spec_state_not_blank',

@@ -1,3 +1,4 @@
+import { workTemplateGlyph } from './work-template-label';
 import {
   flattenEntityTableEntries,
   type EntityTableContinuation,
@@ -184,6 +185,7 @@ function nestedGroups<TTarget extends ViewTarget>(
     const base = {
       id,
       label: summary.label,
+      ...(summary.icon ? { decoration: workTemplateGlyph(target, summary.icon) } : {}),
       count: summary.count,
       ...(continuation === undefined ? {} : { continuation }),
     };
@@ -197,6 +199,7 @@ function nestedGroups<TTarget extends ViewTarget>(
           return {
             id: childId,
             label: child.label,
+            ...(child.icon ? { decoration: workTemplateGlyph(target, child.icon) } : {}),
             count: child.count,
             rows: membershipsForPath(target, child.path, childPage?.rows ?? []),
             ...(childContinuation === undefined ? {} : { continuation: childContinuation }),

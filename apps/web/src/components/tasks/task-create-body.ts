@@ -1,3 +1,4 @@
+import { serializeWorkTemplateSelection } from '@/components/composer/work-template-draft';
 /**
  * `tasks/task-create-body` — the `POST /tasks` body for a task composer draft.
  *
@@ -50,19 +51,31 @@ export function taskCreateBody(draft: TaskDraft, teamId: string): TaskCreate {
   const { title, estimateMinutes } = draftTitleEstimate(draft);
   const description = draft.description.trim();
   return {
+    ...serializeWorkTemplateSelection(draft),
     title,
     teamId: TeamId.parse(teamId),
     priority: draft.priority,
-    ...(description.length > 0 ? { description } : {}),
+    ...(description.length > 0 || draft.workTypeId ? { description } : {}),
     ...(draft.state ? { state: draft.state } : {}),
     ...(draft.assigneeId ? { assigneeId: ActorId.parse(draft.assigneeId) } : {}),
     ...(draft.projectId ? { projectId: ProjectId.parse(draft.projectId) } : {}),
+    ...taskSchedulingFields(draft),
+    ...(draft.labelIds.length > 0 || draft.workTypeId
+      ? { labels: draft.labelIds.map((id) => LabelId.parse(id)) }
+      : {}),
+    ...(draft.estimate !== null ? { estimate: draft.estimate } : {}),
+    ...(estimateMinutes !== null ? { estimateMinutes } : {}),
+  };
+}
+
+/** Keep scheduling references together with the dates they qualify. */
+function taskSchedulingFields(
+  draft: TaskDraft,
+): Pick<TaskCreate, 'milestoneId' | 'cycleId' | 'startDate' | 'dueDate'> {
+  return {
     ...(draft.milestoneId ? { milestoneId: MilestoneId.parse(draft.milestoneId) } : {}),
     ...(draft.cycleId ? { cycleId: CycleId.parse(draft.cycleId) } : {}),
     ...(draft.startDate ? { startDate: draft.startDate } : {}),
     ...(draft.dueDate ? { dueDate: draft.dueDate } : {}),
-    ...(draft.labelIds.length > 0 ? { labels: draft.labelIds.map((id) => LabelId.parse(id)) } : {}),
-    ...(draft.estimate !== null ? { estimate: draft.estimate } : {}),
-    ...(estimateMinutes !== null ? { estimateMinutes } : {}),
   };
 }

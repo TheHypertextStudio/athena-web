@@ -1,3 +1,8 @@
+import {
+  workTemplateCreationFields,
+  workTemplateOutputFields,
+  validateWorkTemplateSelection,
+} from './work-template-reference';
 /**
  * `domain packages` — Program slice DTOs.
  */
@@ -43,6 +48,7 @@ export const DEFAULT_PROGRAM_STATUS_KEYS = [
 /** Body for creating a Program (organizationId comes from the path, never the body). */
 export const ProgramCreate = z
   .object({
+    ...workTemplateCreationFields,
     name: z.string().min(1).describe('Human-readable program name. Required, non-empty.'),
     description: z
       .string()
@@ -57,13 +63,16 @@ export const ProgramCreate = z
       'Optional owning Actor (the accountable person). Must reference an Actor in the caller’s org.',
     ),
     status: ProgramStatus.optional().describe('Initial status. Defaults to `active` when omitted.'),
-    health: Health.optional().describe(
-      'Optional initial health verdict (`on_track`/`at_risk`/`off_track`). Omit to leave unset (no verdict yet).',
-    ),
+    health: Health.nullable()
+      .optional()
+      .describe(
+        'Optional initial health verdict (`on_track`/`at_risk`/`off_track`). Omit to leave unset (no verdict yet).',
+      ),
     visibility: Visibility.optional().describe(
       'Access scope. Defaults to `public` (visible to all org members) when omitted; `private` restricts the program to actors with an explicit grant.',
     ),
   })
+  .superRefine(validateWorkTemplateSelection)
   .meta({ id: 'ProgramCreate', description: 'Create a program within an organization.' });
 /** Validated program-create body. */
 export type ProgramCreate = z.infer<typeof ProgramCreate>;
@@ -122,6 +131,7 @@ export type ProgramLabelLinked = z.infer<typeof ProgramLabelLinked>;
 /** Full program representation returned by reads. */
 export const ProgramOut = z
   .object({
+    ...workTemplateOutputFields,
     id: ProgramId.describe('Stable unique identifier of the program.'),
     organizationId: OrganizationId.describe('The owning organization (tenant).'),
     name: z.string().describe('Human-readable program name.'),

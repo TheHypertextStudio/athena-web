@@ -17,7 +17,8 @@ import { drizzle as drizzlePostgres } from 'drizzle-orm/postgres-js';
 import { migrate as migratePostgres } from 'drizzle-orm/postgres-js/migrator';
 import postgres from 'postgres';
 
-import { openPglite } from './client';
+import { fullSchema, openPglite } from './client';
+import { migrateWithWorkTemplateCheckpoint } from './migrate-work-templates';
 
 const migrationsFolder = resolve(dirname(fileURLToPath(import.meta.url)), '../drizzle');
 
@@ -110,9 +111,16 @@ export async function main(): Promise<void> {
 
   if (url.startsWith('pglite:')) {
     const client = openPglite(url);
-    await ensureEnumValues((statement) => client.exec(statement));
-    await migratePglite(drizzlePglite(client), { migrationsFolder });
-    await client.close();
+    try {
+      await ensureEnumValues((statement) => client.exec(statement));
+      const database = drizzlePglite(client, { schema: fullSchema });
+      await migrateWithWorkTemplateCheckpoint(database, {
+        migrationsFolder,
+        applySqlMigrations: (folder) => migratePglite(database, { migrationsFolder: folder }),
+      });
+    } finally {
+      await client.close();
+    }
   } else {
     const pgUrl = url.startsWith('neon:') ? url.replace(/^neon:/, 'postgres:') : url;
     const client = postgres(pgUrl, {
@@ -127,9 +135,16 @@ export async function main(): Promise<void> {
         console.warn(notice);
       },
     });
-    await ensureEnumValues((statement) => client.unsafe(statement));
-    await migratePostgres(drizzlePostgres(client), { migrationsFolder });
-    await client.end();
+    try {
+      await ensureEnumValues((statement) => client.unsafe(statement));
+      const database = drizzlePostgres(client, { schema: fullSchema });
+      await migrateWithWorkTemplateCheckpoint(database, {
+        migrationsFolder,
+        applySqlMigrations: (folder) => migratePostgres(database, { migrationsFolder: folder }),
+      });
+    } finally {
+      await client.end();
+    }
   }
 
   console.log(`✓ migrations applied (${url.split(':')[0]})`);

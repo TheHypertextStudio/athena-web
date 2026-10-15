@@ -1,3 +1,8 @@
+import {
+  workTemplateCreationFields,
+  workTemplateOutputFields,
+  validateWorkTemplateSelection,
+} from '@docket/work/work-template-reference';
 /**
  * `domain packages` — Project slice DTOs.
  */
@@ -47,6 +52,7 @@ export const PROJECT_CREATE_MILESTONE_LIMIT = 50;
 /** Body for creating a Project (organizationId comes from the path, never the body). */
 export const ProjectCreate = z
   .object({
+    ...workTemplateCreationFields,
     name: z.string().min(1).describe('Human-readable project name. Required, non-empty.'),
     summary: z
       .string()
@@ -69,7 +75,7 @@ export const ProjectCreate = z
     status: ProjectStatus.optional().describe(
       'Optional initial lifecycle status. Defaults to `planned` when omitted.',
     ),
-    health: Health.optional().describe('Optional initial health verdict.'),
+    health: Health.nullable().optional().describe('Optional initial health verdict.'),
     priority: Priority.optional().describe('Optional initial Project priority.'),
     startDate: z.iso
       .date()
@@ -107,6 +113,7 @@ export const ProjectCreate = z
         `Optional checkpoints to create with the new project, in order. Each entry's array position determines its \`sort\` value unless it supplies one. A request may include at most ${String(PROJECT_CREATE_MILESTONE_LIMIT)}; add more through \`POST /projects/:id/milestones\`. Project creation either creates every supplied milestone or creates nothing.`,
       ),
   })
+  .superRefine(validateWorkTemplateSelection)
   .meta({ id: 'ProjectCreate', description: 'Create a project within an organization.' });
 /** Validated project-create body. */
 export type ProjectCreate = z.infer<typeof ProjectCreate>;
@@ -226,6 +233,7 @@ export type ProjectResourceCreate = z.infer<typeof ProjectResourceCreate>;
 /** Full project representation returned by reads. */
 export const ProjectOut = z
   .object({
+    ...workTemplateOutputFields,
     sourcePeople: TaskOut.shape.sourcePeople,
     id: ProjectId.describe('Stable unique identifier of the project.'),
     organizationId: OrganizationId.describe('The owning organization (tenant).'),
@@ -446,9 +454,7 @@ export const ProjectProgress = z
       .number()
       .int()
       .min(0)
-      .describe(
-        'Raw number of tasks in the project (always the row count, regardless of weighting mode).',
-      ),
+      .describe('Number of tasks in the project, regardless of the progress weighting mode.'),
     completedCount: z
       .number()
       .int()
@@ -525,7 +531,7 @@ export const ProjectWorkSectionsOut = z
   .strict()
   .meta({
     id: 'ProjectWorkSectionsOut',
-    description: 'Project-scoped work rows and milestone grouping, loaded outside initial detail.',
+    description: 'Project-scoped work and milestone groups returned outside the initial detail.',
   });
 /** Deferred Project work content. */
 export type ProjectWorkSectionsOut = z.infer<typeof ProjectWorkSectionsOut>;

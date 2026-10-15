@@ -13,6 +13,7 @@ import type {
 import type { ProgramStatus } from '@docket/work/program-contract';
 import type { ProjectStatus } from '../../lib/contracts/project';
 import type {
+  TemplateCreate,
   TemplateDraft,
   TemplateOut,
   TemplateTargetType,
@@ -111,6 +112,8 @@ export interface TemplateEditorDialogProps {
   open: boolean;
   /** Notify the parent that the open state changed. */
   onOpenChange: (open: boolean) => void;
+  /** Optional canonical draft writer; publication remains a separate reviewed action. */
+  saveDraft?: ((input: TemplateCreate) => Promise<void>) | undefined;
   /** Notify the parent that a template was saved, so it can close and refresh. */
   onSaved: () => void;
 }
@@ -128,14 +131,16 @@ export const TemplateEditorDialog = withComposerReset(function TemplateEditor({
   open,
   onOpenChange,
   onSaved,
+  saveDraft,
 }: TemplateEditorDialogProps): JSX.Element {
   const noun = useVocabulary(targetType);
   const nameFieldId = useId();
   const descriptionFieldId = useId();
 
+  const initialScope = templateInitialScope(template, saveDraft !== undefined);
   const [name, setName] = useState(template?.name ?? '');
   const [description, setDescription] = useState(template?.description ?? '');
-  const [scope, setScope] = useState<TemplateOut['scope']>(template?.scope ?? 'organization');
+  const [scope, setScope] = useState<TemplateOut['scope']>(initialScope);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -156,7 +161,9 @@ export const TemplateEditorDialog = withComposerReset(function TemplateEditor({
           payload,
           ...(scope === 'team' && template?.teamId ? { teamId: template.teamId } : {}),
         };
-        if (template) {
+        if (saveDraft && !template) {
+          await saveDraft({ targetType, ...shared });
+        } else if (template) {
           await update.mutateAsync({ id: template.id, ...shared });
         } else {
           await create.mutateAsync({ targetType, ...shared });
@@ -169,7 +176,18 @@ export const TemplateEditorDialog = withComposerReset(function TemplateEditor({
         setSaving(false);
       }
     },
-    [name, description, scope, template, targetType, create, update, onOpenChange, onSaved],
+    [
+      name,
+      description,
+      scope,
+      template,
+      targetType,
+      create,
+      update,
+      saveDraft,
+      onOpenChange,
+      onSaved,
+    ],
   );
 
   // The per-kind bodies hand this to a click handler, which must not be given a promise to drop
@@ -193,6 +211,7 @@ export const TemplateEditorDialog = withComposerReset(function TemplateEditor({
       onDescriptionChange={setDescription}
       onScopeChange={setScope}
       teamScoped={template?.scope === 'team'}
+      draftOnly={saveDraft !== undefined}
     />
   );
 
@@ -208,7 +227,7 @@ export const TemplateEditorDialog = withComposerReset(function TemplateEditor({
     templateScope: scope,
     targetType,
     editing: template !== null,
-    metadataDirty: metadataChanged(template, name, description, scope),
+    metadataDirty: metadataChanged({ template, initialScope }, name, description, scope),
     originalPayload: template?.payload,
     templateTeamId: template?.teamId ?? null,
     error,
@@ -488,7 +507,7 @@ function ProgramTemplateBody({ shared, template, noun, onSave }: KindBodyProps):
 }
 
 function metadataChanged(
-  template: TemplateOut | null,
+  { template, initialScope }: { template: TemplateOut | null; initialScope: TemplateOut['scope'] },
   name: string,
   description: string,
   scope: TemplateOut['scope'],
@@ -496,7 +515,7 @@ function metadataChanged(
   return (
     name !== (template?.name ?? '') ||
     description !== (template?.description ?? '') ||
-    scope !== (template?.scope ?? 'organization')
+    scope !== (template?.scope ?? initialScope)
   );
 }
 
@@ -506,3 +525,10 @@ const TEMPLATE_BODIES = {
   initiative: InitiativeTemplateBody,
   program: ProgramTemplateBody,
 };
+
+function templateInitialScope(
+  template: TemplateOut | null,
+  canonical: boolean,
+): TemplateOut['scope'] {
+  return template?.scope ?? (canonical ? 'personal' : 'organization');
+}

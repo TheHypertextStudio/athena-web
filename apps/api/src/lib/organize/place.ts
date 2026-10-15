@@ -77,6 +77,8 @@ export interface Placed {
   readonly description?: string | null | undefined;
   /** The template selected for this creation, when any. */
   readonly templateId?: string | undefined;
+  readonly workTypeId?: string | undefined;
+  readonly workTypeVersionId?: string | undefined;
 }
 
 /**
@@ -352,6 +354,8 @@ async function placeInitiative(tx: Tx, input: PlaceInput): Promise<PlaceResult> 
     .insert(initiative)
     .values({
       organizationId: orgId,
+      workTypeId: item.workTypeId,
+      workTypeVersionId: item.workTypeVersionId,
       ...(await containerStatus(tx, orgId, 'initiative', item.status ?? 'active')),
       name: item.title,
       description: item.description,
@@ -374,6 +378,8 @@ async function placeInitiative(tx: Tx, input: PlaceInput): Promise<PlaceResult> 
       id: row.id,
       created: true,
       description: row.description,
+      workTypeId: row.workTypeId,
+      workTypeVersionId: row.workTypeVersionId,
     },
     change: {
       kind: 'initiative',
@@ -404,6 +410,8 @@ async function placeProgram(tx: Tx, input: PlaceInput): Promise<PlaceResult> {
         .insert(program)
         .values({
           organizationId: orgId,
+          workTypeId: item.workTypeId,
+          workTypeVersionId: item.workTypeVersionId,
           ...(await containerStatus(tx, orgId, 'program', item.status ?? 'active')),
           name: item.title,
           description: item.description,
@@ -426,7 +434,13 @@ async function placeProgram(tx: Tx, input: PlaceInput): Promise<PlaceResult> {
       kind: 'program',
       id,
       created: row !== undefined,
-      ...(row ? { description: row.description } : {}),
+      ...(row
+        ? {
+            description: row.description,
+            workTypeId: row.workTypeId,
+            workTypeVersionId: row.workTypeVersionId,
+          }
+        : {}),
     },
     ...(row
       ? { change: { kind: 'program', id, op: 'create', after: trackedFields('program', row) } }
@@ -455,6 +469,8 @@ async function placeProject(tx: Tx, input: PlaceInput): Promise<PlaceResult> {
         .insert(project)
         .values({
           organizationId: orgId,
+          workTypeId: item.workTypeId,
+          workTypeVersionId: item.workTypeVersionId,
           ...(await containerStatus(tx, orgId, 'project', item.status ?? 'planned')),
           name: item.title,
           description: item.description,
@@ -481,7 +497,13 @@ async function placeProject(tx: Tx, input: PlaceInput): Promise<PlaceResult> {
       kind: 'project',
       id,
       created: row !== undefined,
-      ...(row ? { description: row.description } : {}),
+      ...(row
+        ? {
+            description: row.description,
+            workTypeId: row.workTypeId,
+            workTypeVersionId: row.workTypeVersionId,
+          }
+        : {}),
     },
     ...(row
       ? { change: { kind: 'project', id, op: 'create', after: trackedFields('project', row) } }
@@ -535,6 +557,8 @@ async function placeTask(tx: Tx, input: PlaceInput): Promise<PlaceResult> {
       description: item.description,
       summary: item.summary,
       templateId: input.templateId,
+      workTypeId: item.workTypeId,
+      workTypeVersionId: item.workTypeVersionId,
       teamId: input.teamId,
       statusId: input.state.statusId,
       state: input.state.state,
@@ -561,6 +585,8 @@ async function placeTask(tx: Tx, input: PlaceInput): Promise<PlaceResult> {
       id: row.id,
       created: true,
       description: row.description,
+      workTypeId: row.workTypeId,
+      workTypeVersionId: row.workTypeVersionId,
     },
     change: { kind: 'task', id: row.id, op: 'create', after: trackedFields('task', row) },
   };

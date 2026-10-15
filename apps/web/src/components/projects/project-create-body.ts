@@ -1,3 +1,5 @@
+import { serializeWorkTemplateSelection } from '@/components/composer/work-template-draft';
+import type { WorkTemplateDraftFields } from '@/components/composer/work-template-draft';
 /**
  * The project composer's draft value and the pure functions that turn it into a create body.
  *
@@ -13,10 +15,10 @@ import type { MilestoneCreate } from '@docket/work/milestone-contract';
 import type { PlanningTimeframe } from '@docket/work/planning-timeframe';
 
 import type { DraftMilestone } from '@/components/projects/project-milestones-field';
-import { type ProjectStatus } from '@/lib/contracts/project';
+import { type ProjectCreate, type ProjectStatus } from '@/lib/contracts/project';
 
 /** Every field the project composer holds, as one value. */
-export interface ProjectDraft {
+export interface ProjectDraft extends WorkTemplateDraftFields {
   name: string;
   summary: string;
   description: string;
@@ -37,6 +39,23 @@ export interface ProjectDraft {
    * sends them in the create body. Their position in this list becomes their `sort`.
    */
   milestones: readonly DraftMilestone[];
+}
+
+/** Clear destination-owned references while retaining portable authored dates. */
+export function projectWorkspaceReset(
+  startTimeframe: PlanningTimeframe | null,
+  targetTimeframe: PlanningTimeframe | null,
+): Partial<ProjectDraft> {
+  return {
+    workTypeId: null,
+    workTypeVersionId: null,
+    teamOverride: null,
+    leadId: null,
+    programId: null,
+    initiativeIds: [],
+    startTimeframe: startTimeframe?.resolution ? null : startTimeframe,
+    targetTimeframe: targetTimeframe?.resolution ? null : targetTimeframe,
+  };
 }
 
 /**
@@ -82,29 +101,16 @@ export function projectCreateBody(draft: ProjectDraft, name: string, teamId: str
   const description = draft.description.trim();
   const milestones = draftMilestoneBodies(draft.milestones);
   return {
+    ...serializeWorkTemplateSelection(draft),
     name,
-    ...(summary.length > 0 ? { summary } : {}),
-    ...(description.length > 0 ? { description } : {}),
+    ...(summary.length > 0 || draft.workTypeId ? { summary } : {}),
+    ...(description.length > 0 || draft.workTypeId ? { description } : {}),
     ...(teamId ? { teamId: TeamId.parse(teamId) } : {}),
     ...(draft.leadId ? { leadId: ActorId.parse(draft.leadId) } : {}),
     ...(draft.programId ? { programId: ProgramId.parse(draft.programId) } : {}),
     status: draft.status,
-    ...(draft.health ? { health: draft.health } : {}),
-    ...(draft.startTimeframe
-      ? {
-          startDate: draft.startTimeframe.date,
-          startDateResolution: draft.startTimeframe.resolution,
-        }
-      : {}),
-    ...(draft.targetTimeframe
-      ? {
-          targetDate: draft.targetTimeframe.date,
-          targetDateResolution: draft.targetTimeframe.resolution,
-        }
-      : {}),
-    ...(draft.initiativeIds.length > 0
-      ? { initiativeIds: draft.initiativeIds.map((id) => InitiativeId.parse(id)) }
-      : {}),
+    ...(draft.health || draft.workTypeId ? { health: draft.health } : {}),
+    ...projectPlanningFields(draft),
     // Written in the Project's own transaction, so there is no window where the Project exists and
     // its checkpoints do not — and nothing for this composer to recover from.
     ...(milestones.length > 0 ? { milestones } : {}),
@@ -129,4 +135,30 @@ export function seededInitiativeIds(
 ): readonly string[] {
   if (!applies) return [];
   return defaults ?? [];
+}
+
+/** Keep the Project's authored planning windows and Initiative links in its create request. */
+function projectPlanningFields(
+  draft: ProjectDraft,
+): Pick<
+  ProjectCreate,
+  'startDate' | 'startDateResolution' | 'targetDate' | 'targetDateResolution' | 'initiativeIds'
+> {
+  return {
+    ...(draft.startTimeframe
+      ? {
+          startDate: draft.startTimeframe.date,
+          startDateResolution: draft.startTimeframe.resolution,
+        }
+      : {}),
+    ...(draft.targetTimeframe
+      ? {
+          targetDate: draft.targetTimeframe.date,
+          targetDateResolution: draft.targetTimeframe.resolution,
+        }
+      : {}),
+    ...(draft.initiativeIds.length > 0
+      ? { initiativeIds: draft.initiativeIds.map((id) => InitiativeId.parse(id)) }
+      : {}),
+  };
 }

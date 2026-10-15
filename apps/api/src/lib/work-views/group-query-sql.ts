@@ -1,8 +1,25 @@
+import { workTemplateChoiceIconSql } from './work-template-sql';
 import type { ViewTarget } from '@docket/work/view-contract';
 import { and, sql, type SQL } from 'drizzle-orm';
 
 import { WORK_VIEW_SQL_CONTRACTS } from './contracts';
 import { compileGroupMembershipSql, type GroupFieldCompiler } from './group-sql';
+
+/** Add read-only and glyph metadata to authorized materialized groups. */
+function groupMetadataSql(target: ViewTarget, groupBy: string, subGroupBy: string | null): SQL {
+  const isTemplate = sql`(array_length(grouped.path, 1)=1 and ${groupBy === 'workTypeId'})
+    or (array_length(grouped.path, 1)=2 and ${subGroupBy === 'workTypeId'})`;
+  const icon =
+    groupBy === 'workTypeId' || subGroupBy === 'workTypeId'
+      ? sql`case when ${isTemplate} then jsonb_build_object('icon',
+        ${workTemplateChoiceIconSql(target, sql`grouped.key`, sql`grouped.organization_id`)})
+      else '{}'::jsonb end`
+      : sql`'{}'::jsonb`;
+  return sql`${icon} || case when array_to_string(grouped.path, '/') like '%source-person:%'
+    or ${groupBy === 'workTypeId'}
+    or (${subGroupBy === 'workTypeId'} and array_length(grouped.path, 1)=2)
+    then '{"mutable":false}'::jsonb else '{}'::jsonb end`;
+}
 
 /**
  * Compile grouped count JSON from one already-authorized roster.
@@ -28,8 +45,8 @@ export function compileGroupJsonSql(
   if (!subGroupBy) {
     return sql`coalesce((select json_agg(jsonb_build_object(
         'path', grouped.path, 'key', grouped.key, 'label', grouped.label, 'count', grouped.count
-      ) || case when array_to_string(grouped.path, '/') like '%source-person:%' then '{"mutable":false}'::jsonb else '{}'::jsonb end order by grouped.label, grouped.key) from (
-      select array[g.key] path, g.key, g.label, count(distinct e.id)::int count
+      ) || ${groupMetadataSql(target, groupBy, subGroupBy)} order by grouped.label, grouped.key) from (
+      select min(e.organization_id)::text organization_id, array[g.key] path, g.key, g.label, count(distinct e.id)::int count
       from ${sql.raw(source)} e cross join lateral (${primary}) g
       group by g.key,g.label
     ) grouped), '[]'::json)`;
@@ -39,12 +56,12 @@ export function compileGroupJsonSql(
   const secondary = compileGroupMembershipSql(secondaryField, sql`e.id`);
   return sql`coalesce((select json_agg(jsonb_build_object(
       'path', grouped.path, 'key', grouped.key, 'label', grouped.label, 'count', grouped.count
-    ) || case when array_to_string(grouped.path, '/') like '%source-person:%' then '{"mutable":false}'::jsonb else '{}'::jsonb end order by grouped.path) from (
-    select array[g.key] path, g.key, g.label, count(distinct e.id)::int count
+      ) || ${groupMetadataSql(target, groupBy, subGroupBy)} order by grouped.path) from (
+    select min(e.organization_id)::text organization_id, array[g.key] path, g.key, g.label, count(distinct e.id)::int count
     from ${sql.raw(source)} e cross join lateral (${primary}) g
     group by g.key,g.label
     union all
-    select array[g.key,sg.key] path, sg.key, sg.label, count(distinct e.id)::int count
+    select min(e.organization_id)::text organization_id, array[g.key,sg.key] path, sg.key, sg.label, count(distinct e.id)::int count
     from ${sql.raw(source)} e cross join lateral (${primary}) g cross join lateral (${secondary}) sg
     group by g.key,sg.key,sg.label
   ) grouped), '[]'::json)`;

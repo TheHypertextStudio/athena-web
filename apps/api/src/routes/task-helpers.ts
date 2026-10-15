@@ -1,3 +1,4 @@
+import { workTemplateIdentityOut } from '../lib/work-template-creation';
 import { canActor, type Capability } from '@docket/authz';
 import type { cycle, program } from '@docket/db';
 import { actor, db, grant, milestone, project, role, task, type Database } from '@docket/db';
@@ -34,6 +35,7 @@ export function toOut(
   sourcePeople?: z.input<typeof TaskOut>['sourcePeople'],
 ): z.input<typeof TaskOut> {
   return {
+    ...workTemplateIdentityOut(t),
     labels: [...labels],
     ...(sourcePeople ? { sourcePeople } : {}),
     id: t.id,

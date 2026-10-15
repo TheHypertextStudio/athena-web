@@ -1,3 +1,7 @@
+import {
+  hydrateWorkTemplateSelection,
+  serializeWorkTemplateSelection,
+} from '@/components/composer/work-template-draft';
 /**
  * The project composer's draft codec: its {@link ProjectDraft} to and from the saved payload.
  *
@@ -35,6 +39,7 @@ export interface ProjectDraftRosters {
 /** The project composer's draft as the API stores it. */
 export function serializeProjectDraft(draft: ProjectDraft): ComposerDraftPayload {
   return {
+    ...serializeWorkTemplateSelection(draft),
     kind: 'project',
     name: draft.name,
     summary: draft.summary,
@@ -69,6 +74,7 @@ export function hydrateProjectDraft(
 ): Partial<ProjectDraft> {
   if (payload.kind !== 'project') return {};
   return {
+    ...hydrateWorkTemplateSelection(payload),
     name: payload.name ?? '',
     summary: payload.summary ?? '',
     description: payload.description ?? '',

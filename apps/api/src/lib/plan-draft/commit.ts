@@ -192,6 +192,7 @@ function toOrganizeItem(
     updateCadence: fields.updateCadence,
     labelIds: fields.labelIds,
     template: node.templateId ?? undefined,
+    workTypeVersionId: node.workTypeVersionId,
     status: node.kind === 'task' ? undefined : fields.status,
     ...existingParentRefs(node, byRef, closure),
     ...(fields.assigneeId ? { assignee: fields.assigneeId } : {}),

@@ -18,6 +18,7 @@
  * A template rewrites the document, so the action belongs with the empty document prompt. The
  * shared editor receives it through a generic contribution rather than importing template code.
  */
+import type { WorkTemplateOut } from '@docket/work/work-template-contract';
 import type { TemplateOut, TemplateTargetType } from '@docket/work/template-contract';
 import {
   Button,
@@ -55,7 +56,7 @@ export interface TemplateMenuProps {
   /** The templates that create this composer's kind. */
   templates: readonly TemplateOut[];
   /** Apply a template to the draft. */
-  onApply: (template: TemplateOut) => void;
+  onApply: (template: TemplateOut, automatic?: boolean) => void;
   /** Where "Manage templates…" leads (the workspace's Templates settings). */
   manageHref: string;
   /** Close a shell-global composer before the persistent shell navigates to settings. */
@@ -132,6 +133,7 @@ export function TemplateMenu({
                 {...(template.description ? { supporting: template.description } : {})}
               >
                 {template.name}
+                {template.publicationState === 'draft' ? ' · Draft' : ''}
               </DropdownMenuItem>
             ))}
           </div>
@@ -150,6 +152,10 @@ export function TemplateMenu({
 
 /** Props for {@link ComposerTemplateControl}. */
 export interface ComposerTemplateControlProps {
+  /** Current canonical publications supply offering restrictions for compatible discovery. */
+  canonicalTemplates?: readonly WorkTemplateOut[] | undefined;
+  /** Wait for canonical defaults before consuming an automatic launch. */
+  applicationReady?: boolean | undefined;
   /** The org whose templates to offer (from the route). */
   orgId: string;
   /** The kind this composer creates. */
@@ -157,7 +163,7 @@ export interface ComposerTemplateControlProps {
   /** Whether the composer is open — the read is skipped while it is not. */
   open: boolean;
   /** Apply a template to the draft. */
-  onApply: (template: TemplateOut) => void;
+  onApply: (template: TemplateOut, automatic?: boolean) => void;
   /**
    * The signed-in member's Actor id in this destination workspace.
    *
@@ -208,6 +214,8 @@ export function ComposerTemplateControl({
   orgId,
   kind,
   open,
+  canonicalTemplates,
+  applicationReady = true,
   onApply,
   currentActorId,
   teamId,
@@ -220,7 +228,14 @@ export function ComposerTemplateControl({
   const items = query.data?.items;
   // Memoized so the auto-apply effect below is not re-entered on every unrelated render.
   const templates = useMemo(() => {
-    const all = items ?? [];
+    const all = (items ?? []).filter((item) => {
+      const canonical = canonicalTemplates?.find((value) => value.id === item.id);
+      return (
+        !canonical ||
+        canonical.offeredTeamIds.length === 0 ||
+        canonical.offeredTeamIds.some((id) => id === teamId)
+      );
+    });
     // Legacy page-owned composer mounts have no selected-person context yet, so keep their
     // existing visibility unchanged. A migrated global composer passes both values and makes the
     // server's intentionally broad read safe for the destination currently on screen.
@@ -228,17 +243,17 @@ export function ComposerTemplateControl({
     return all.filter((template) =>
       templateMatchesContext(template, currentActorId ?? null, teamId ?? null),
     );
-  }, [currentActorId, items, teamId]);
+  }, [canonicalTemplates, currentActorId, items, teamId]);
 
   // Guarded by a ref so a re-render after the merge does not apply the same template twice.
   const autoApplied = useRef(false);
   useEffect(() => {
-    if (!autoApplyId || autoApplied.current) return;
+    if (!autoApplyId || autoApplied.current || !applicationReady) return;
     const match = templates.find((template) => template.id === autoApplyId);
     if (!match) return;
     autoApplied.current = true;
-    onApply(match);
-  }, [autoApplyId, templates, onApply]);
+    onApply(match, true);
+  }, [applicationReady, autoApplyId, templates, onApply]);
 
   const visible = open && templates.length > 0;
 

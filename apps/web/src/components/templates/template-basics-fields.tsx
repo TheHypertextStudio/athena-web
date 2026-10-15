@@ -21,6 +21,7 @@ export function TemplateBasicsFields({
   onDescriptionChange,
   onScopeChange,
   teamScoped,
+  draftOnly = false,
 }: {
   name: string;
   description: string;
@@ -32,6 +33,7 @@ export function TemplateBasicsFields({
   onDescriptionChange: (value: string) => void;
   onScopeChange: (value: TemplateOut['scope']) => void;
   teamScoped: boolean;
+  draftOnly?: boolean;
 }): JSX.Element {
   return (
     <>
@@ -64,13 +66,11 @@ export function TemplateBasicsFields({
         />
       </div>
       <div className="flex flex-col gap-1.5">
-        <span className="text-label-large text-on-surface">Shared with</span>
+        <span className="text-label-large text-on-surface">
+          {draftOnly ? 'Draft visible to' : 'Shared with'}
+        </span>
         <EnumPicker
-          options={
-            teamScoped
-              ? [...SCOPE_OPTIONS, { value: 'team' as const, label: 'This team' }]
-              : SCOPE_OPTIONS
-          }
+          options={scopeOptions(teamScoped, draftOnly)}
           value={scope}
           onChange={(next) => {
             if (next) onScopeChange(next);
@@ -79,9 +79,16 @@ export function TemplateBasicsFields({
           ariaLabel="Shared with"
           triggerVariant="secondary"
           triggerClassName="w-full justify-start"
-          disabled={saving}
+          disabled={saving || draftOnly}
         />
       </div>
     </>
   );
+}
+
+function scopeOptions(teamScoped: boolean, draftOnly: boolean) {
+  if (draftOnly) return [SCOPE_OPTIONS[0]];
+  return teamScoped
+    ? [...SCOPE_OPTIONS, { value: 'team' as const, label: 'This team' }]
+    : SCOPE_OPTIONS;
 }

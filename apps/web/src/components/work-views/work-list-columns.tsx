@@ -1,5 +1,7 @@
 'use client';
 
+import { WorkTemplateLabel } from './work-template-label';
+
 import type { Column, ColumnPriority } from '@docket/ui/components';
 import { Calendar } from '@docket/ui/icons';
 import { STRETCHED_LINK } from '@docket/ui/lib/stretched-link';
@@ -59,6 +61,7 @@ export const WORK_ROSTER_IDENTITY_MIN_WIDTH = 'min(22rem, calc(100cqw - 4rem))';
 
 /** Numeric widths for every work-view metadata field with a non-default contract. */
 export const WORK_ROSTER_FIELD_WIDTH_PX: Readonly<Record<string, number>> = {
+  workTypeId: 160,
   status: 128,
   priority: 80,
   health: 96,
@@ -148,7 +151,7 @@ function IdentityGlyph({ row }: { readonly row: WorkViewRowFor<ViewTarget> }): J
   return (
     <EntityIconGlyph
       subjectType={row.target}
-      glyph={display.glyph}
+      glyph={row.display?.glyph ?? row.workTemplate?.icon ?? display.glyph}
       colorKey={display.colorKey}
       customColor={display.customColor}
       size={HIERARCHY_LEADING_SLOT_PX}
@@ -345,6 +348,11 @@ function IdentityCell<TTarget extends ViewTarget>({
           <span data-roster-title="" className="text-on-surface text-body-medium block truncate">
             {workViewRowTitle(row)}
           </span>
+          {row.workTemplate && !row.workTemplate.isBase ? (
+            <span className="text-on-surface-variant text-label-small block">
+              <WorkTemplateLabel target={row.target} template={row.workTemplate} />
+            </span>
+          ) : null}
           {summary ? (
             <span className="text-on-surface-variant text-body-small block max-w-[52ch] truncate">
               {summary}
@@ -472,6 +480,8 @@ function PropertyValue<TTarget extends ViewTarget>({
   const displayRow = row as WorkViewRowFor<ViewTarget>;
   const value = workViewRowValue(displayRow, fieldKey);
   const actor = rowActor(displayRow, fieldKey);
+  if (fieldKey === 'workTypeId')
+    return <WorkTemplateLabel target={displayRow.target} template={displayRow.workTemplate} />;
   return (
     renderStatusPropertyValue({ fieldKey, value, statusOf }) ??
     renderPriorityPropertyValue({ fieldKey, value }) ??

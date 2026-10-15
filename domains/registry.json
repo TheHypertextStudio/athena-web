@@ -238,7 +238,9 @@
         "./slug-contract",
         "./publish-contract",
         "./provenance-contract",
-        "./workflow"
+        "./workflow",
+        "./work-template-contract",
+        "./work-template-reference"
       ],
       "allowedRuntimeDependencies": ["@docket/identity-access", "zod"],
       "supportedDeployableRuntimes": ["api", "web", "admin", "runner", "desktop"]

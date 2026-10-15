@@ -7,6 +7,18 @@
 
 ## Active Tasks
 
+### [WEBSITE-CI-CONTAINMENT] Verify authorization ancestry for standalone work
+
+- **Status**: IN PROGRESS
+- **Priority**: P1
+- **Description**: Keep ordinary database coverage meaningful by exercising containment for work
+  without optional parents. A standalone task retains only its team and organization ancestors;
+  a standalone project retains only its organization. Preserve authorization implementation and
+  release coverage thresholds.
+- **Subtasks**:
+  - [x] Cover standalone task and project ancestry in the existing persistence suite.
+  - [x] Validate the database coverage gate and affected checks.
+
 ### [WEBSITE-CI-BILLING-FIXTURE] Keep release-gate billing fixtures aligned with organization schema
 
 - **Status**: IN PROGRESS

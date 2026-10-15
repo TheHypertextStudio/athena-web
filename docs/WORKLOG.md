@@ -14,7 +14,7 @@
 - **Priority**: P1
 - **Description**: Prepare the reviewed legal source as a native Linux Vercel artifact using the repository's existing package access, without deploying it.
 - **Plan**: Use an opt-in build workflow, public production settings, and the native adapter's unchanged output and exact traced dependency paths.
-- **Acceptance**: Mandatory package policies remain enabled; the artifact excludes credentials, rejects incompatible native binaries, preserves source identity, and leaves existing production gates intact.
+- **Acceptance**: Mandatory package policies remain enabled; tests use their own environment fixtures; the artifact excludes credentials, rejects incompatible native binaries, preserves source identity, and leaves existing production gates intact.
 - **Validation**: Require artifact-packaging regression tests, workflow validation, normal commit checks, and a successful Linux artifact run before calling the artifact deployable.
 - **Files changed**: The artifact workflow, typed packager, packaging and CI-policy tests, and web setup README.
 - **Decisions**: Artifact preparation preserves the existing source, backend, and provider release gates.

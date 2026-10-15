@@ -250,7 +250,7 @@ export default function PrivacyPage(): JSX.Element {
   return (
     <LegalPolicyDocument
       title="Privacy policy"
-      dates={<p>Effective October 14, 2026.</p>}
+      dates={<p>Published and effective October 14, 2026.</p>}
       sections={sections}
     />
   );

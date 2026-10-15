@@ -47,6 +47,7 @@ describe('Studio legal policy navigation and contacts', () => {
 
   it('separates privacy requests from product support and explains hosted processing', () => {
     render(<PrivacyPage />);
+    expect(screen.getByText('Published and effective October 14, 2026.')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /^contact@/ })).toHaveAttribute(
       'href',
       expect.stringMatching(/^mailto:contact@/),

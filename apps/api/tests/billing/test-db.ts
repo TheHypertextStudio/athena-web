@@ -42,6 +42,7 @@ export async function createBillingLifecycleDb(): Promise<BillingLifecycleDbFixt
       is_personal boolean not null default false,
       vocabulary jsonb not null default '{}'::jsonb,
       agent_guidance text,
+      work_template_authoring text not null default 'contributors',
       approval_routing jsonb,
       initiative_max_depth integer not null default 2,
       auto_complete_parent_tasks boolean not null default true,

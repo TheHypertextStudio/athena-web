@@ -7,6 +7,18 @@
 
 ## Active Tasks
 
+### [WEBSITE-CI-BILLING-FIXTURE] Keep release-gate billing fixtures aligned with organization schema
+
+- **Status**: IN PROGRESS
+- **Priority**: P1
+- **Description**: Preserve the ordinary release gate by keeping the in-memory billing lifecycle
+  database compatible with the organization fields that Drizzle includes in inserts. Carry the
+  schema's work-template authoring column and default without changing billing assertions,
+  production migrations or coverage requirements.
+- **Subtasks**:
+  - [x] Align the minimal billing fixture with the declared organization schema.
+  - [x] Validate the existing billing lifecycle suite and affected source checks.
+
 ### [WEBSITE-STAGING-AUTH] Align the protected Workers frontend and staging API
 
 - **Status**: IN PROGRESS

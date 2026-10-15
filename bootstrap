@@ -6,6 +6,10 @@ set -eu
 repo_root=$(CDPATH='' cd -- "$(dirname "$0")" && pwd)
 cd "$repo_root"
 
+case "${1:-}" in
+  worktree) exec "$repo_root/scripts/bootstrap-worktree-engine" "$@" ;;
+esac
+
 command_name=converge
 command_seen=0
 target=local
@@ -20,6 +24,7 @@ usage() {
   cat <<'EOF'
 Usage:
   ./bootstrap [flags]
+  ./bootstrap worktree prepare|check|plan [--json] [--offline] [--no-install]
   ./bootstrap check [flags]
   ./bootstrap plan [local|production] [flags]
   ./bootstrap production [flags]

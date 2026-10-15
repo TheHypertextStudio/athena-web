@@ -87,7 +87,16 @@ Workers runtime and exact-source provider acceptance remain required. Applicatio
 
 ## Frontend setup and Workers
 
-Use the existing `./bootstrap` for the backend development stack and local application data.
+Prepare a fresh checkout with the shared company worktree engine:
+
+```sh
+./bootstrap worktree prepare
+```
+
+The pinned engine reuses native dependency caches and keeps installed dependencies and mutable
+outputs local to the checkout. `./bootstrap worktree check` and `./bootstrap worktree plan` inspect
+setup without changing it. Use the existing `./bootstrap` for the backend development stack and
+local application data.
 The web workspace uses Next.js, OpenNext and Wrangler directly, with pinned dependencies and the
 existing Turbo prerequisite graph:
 

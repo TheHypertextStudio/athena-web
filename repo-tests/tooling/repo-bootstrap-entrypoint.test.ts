@@ -31,6 +31,11 @@ function fixture(): string {
       { mode: 0o755 },
     );
   }
+  writeFileSync(
+    resolve(root, 'scripts/bootstrap-worktree-engine'),
+    `#!/bin/sh\nprintf '%s\\n' "worktree-engine $*" >> "$BOOTSTRAP_TEST_LOG"\n`,
+    { mode: 0o755 },
+  );
   return root;
 }
 
@@ -125,6 +130,20 @@ describe('repository bootstrap entrypoint', () => {
     expect(result.hookEnvironment).toBe('approved=1 noninteractive=1 offline=1 noinstall=1 ci=1\n');
     expect(result.stderr).toBe('');
   });
+
+  it.each(['prepare', 'check', 'plan'])(
+    'delegates worktree %s with its constraints to the shared setup engine',
+    (operation) => {
+      const root = fixture();
+      const result = run(root, ['worktree', operation, '--offline', '--no-install', '--json']);
+
+      expect(result.status).toBe(0);
+      expect(result.calls).toBe(
+        `worktree-engine worktree ${operation} --offline --no-install --json\n`,
+      );
+      expect(result.hookEnvironment).toBe('');
+    },
+  );
 
   it('rejects unknown commands, targets, and flags', () => {
     const root = fixture();

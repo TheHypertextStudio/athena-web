@@ -7,6 +7,18 @@
 
 ## Active Tasks
 
+### [WEBSITE-WORKTREE-SETUP] Adopt shared worktree preparation
+
+- **Status**: REVIEW
+- **Started**: 2026-10-14
+- **Priority**: P1
+- **Description**: Support the company’s shared worktree setup command through the existing
+  bootstrap entrypoint, using the pinned shared engine and ordinary repository caches.
+- **Subtasks**:
+  - [x] Delegate worktree prepare/check/plan to the shared engine.
+  - [x] Preserve the existing application bootstrap and production approval contract.
+  - [x] Validate native preparation and document the frontend setup entrypoint.
+
 ### [WEBSITE-MCP-DOCS] Keep workload reference complete
 
 - **Status**: REVIEW

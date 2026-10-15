@@ -6,8 +6,11 @@ see [docs authoring](../../docs/engineering/docs-authoring.md).
 
 ## Setup
 
-Run `./bootstrap` from the repository root for the existing backend development stack, dependency
-installation, local topology and application data. Read
+Run `./bootstrap worktree prepare` from the repository root in a fresh checkout. It uses the
+pinned shared company engine, native dependency caches and checkout-local mutable outputs.
+Use `./bootstrap worktree check` or `./bootstrap worktree plan` for read-only setup inspection.
+Run the existing `./bootstrap` for the backend development stack, local topology and application
+data. Read
 [UI verification](../../docs/engineering/ui-verification.md) before starting that stack.
 The repository pins pnpm and Node through `packageManager` and `.node-version`; the accepted
 workspace lock is unchanged. Shared company ESLint/TypeScript/Prettier configuration composes with

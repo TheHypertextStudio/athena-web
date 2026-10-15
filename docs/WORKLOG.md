@@ -7,6 +7,18 @@
 
 ## Active Tasks
 
+### [WEBSITE-HOST-POLICY] Preserve the official legal contact during domain migration
+
+- **Status**: REVIEW
+- **Started**: 2026-10-14
+- **Priority**: P1
+- **Description**: Distinguish the approved company legal mailbox from legacy product hosts in
+  the domain migration policy. Keep product URL and unapproved address checks strict.
+- **Subtasks**:
+  - [x] Allow only the exact official legal mailbox as text or a mailto address.
+  - [x] Preserve rejection of legacy URLs, other mailboxes, suffixes and mixed references.
+  - [x] Validate the existing host policy and affected environment package checks.
+
 ### [WEBSITE-WORKTREE-SETUP] Adopt shared worktree preparation
 
 - **Status**: REVIEW

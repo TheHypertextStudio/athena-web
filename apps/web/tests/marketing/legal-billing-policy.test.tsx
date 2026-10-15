@@ -25,9 +25,7 @@ describe('Studio legal policy navigation and contacts', () => {
   it('gives prospective terms dates and links to prior versions', () => {
     render(<TermsPage />);
     expect(screen.getByText(/^Published October 14, 2026\.$/i)).toBeInTheDocument();
-    expect(
-      screen.getByText(/^Effective for existing users November 13, 2026/i),
-    ).toBeInTheDocument();
+    expect(screen.getByText(/^Effective November 13, 2026\.$/i)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Prior policy versions' })).toHaveAttribute(
       'href',
       '/legal/history',
@@ -37,7 +35,10 @@ describe('Studio legal policy navigation and contacts', () => {
       'mailto:legal@hypertext.studio',
     );
     expect(screen.getByRole('heading', { name: 'Governing law' })).toBeInTheDocument();
-    const notice = screen.getByText(/These terms apply to new users/);
+    const applicability = screen.getByText(/If you used Docket before October 14, 2026/);
+    expect(applicability).toHaveTextContent(/prior terms apply until then/);
+    expect(applicability).toHaveTextContent(/when you create an account or use the service/);
+    const notice = screen.getByText(/before future material changes apply/);
     expect(notice).toHaveTextContent(
       /at least 30 days' notice before future material changes apply/,
     );

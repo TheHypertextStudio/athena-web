@@ -262,6 +262,20 @@ compiler-cache growth. The first build caught an exact-optional-property configu
 conditional omission fixes it without changing default behavior. Keep this option local to a
 verification session rather than changing shared package-store configuration.
 
+#### Public API coverage recovery
+
+Recovered the useful missing assertions from the retained API coverage branch. Unauthenticated
+responses now check complete email addresses, allowing only the exact reserved OpenAPI example
+on the documentation endpoint. Prefixes, additional domain labels, mixed private/example values,
+and the same example on other endpoints remain forbidden. This strengthens the existing security
+test rather than changing the public API.
+
+The focused route-auth suite passes all seventeen cases after four expected failures established
+the old substring-removal gap. API typechecking and scoped lint pass for this test-only slice.
+The broader typed-route proposal remains incompatible with the installed routing output and is
+preserved as an explicit tooling alternative. Assertions should compare the complete value that
+crosses the boundary rather than remove an allowed substring from arbitrary response text.
+
 #### Blueprint implementation plan
 
 Use `docs/engineering/specs/work-template-blueprints.md` and its ordered implementation plan before

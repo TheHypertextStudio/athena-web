@@ -482,6 +482,36 @@ describe('the unauthenticated surface is exactly the documented public one', () 
    */
   const PUBLIC_SURFACE = ['/v1/health', '/v1/openapi.json', '/v1/config'];
 
+  /** Addresses outside the document's deliberately reserved example allowance. */
+  function unexpectedPublicEmails(path: string, body: string): string[] {
+    const emails = [...body.matchAll(/[\w.+-]+@(?:[\w-]+\.)+[a-z]{2,}/gi)].map(([email]) => email);
+    return [...new Set(emails)]
+      .filter((email) => path !== '/v1/openapi.json' || email !== 'developer@example.com')
+      .sort();
+  }
+
+  it.each([
+    ['/v1/openapi.json', 'developer@example.com', []],
+    ['/v1/openapi.json', 'admin+developer@example.com', ['admin+developer@example.com']],
+    ['/v1/openapi.json', 'developer@example.com.evil', ['developer@example.com.evil']],
+    ['/v1/health', 'developer@example.com', ['developer@example.com']],
+    ['/v1/config', 'private@tenant.example.org', ['private@tenant.example.org']],
+  ] as const)(
+    'allows only the complete documented email example at %s: %s',
+    (path, body, emails) => {
+      expect(unexpectedPublicEmails(path, body)).toEqual(emails);
+    },
+  );
+
+  it('checks each distinct full address when the allowed example appears beside private values', () => {
+    expect(
+      unexpectedPublicEmails(
+        '/v1/openapi.json',
+        'private@tenant.example.org developer@example.com private@tenant.example.org admin+developer@example.com',
+      ),
+    ).toEqual(['admin+developer@example.com', 'private@tenant.example.org']);
+  });
+
   it('serves every documented public endpoint without a session', async () => {
     for (const path of PUBLIC_SURFACE) {
       const response = await server.request(path);
@@ -495,16 +525,14 @@ describe('the unauthenticated surface is exactly the documented public one', () 
     // path parameters. What no public endpoint may carry is a real address or a credential, and
     // what the two non-document endpoints may not carry is an entity id of any kind.
     // The generated contract deliberately includes the reserved developer@example.com example.
-    const alwaysForbidden = [
-      /[\w.+-]+@[\w-]+\.[a-z]{2,}/i,
-      /Bearer\s+[A-Za-z0-9._-]{20,}/i,
-      /ciphertext/i,
-    ];
+    const alwaysForbidden = [/Bearer\s+[A-Za-z0-9._-]{20,}/i, /ciphertext/i];
     const forbiddenOutsideTheDocument = [/\b01[0-9A-HJKMNP-TV-Z]{24}\b/];
     for (const path of PUBLIC_SURFACE) {
-      const body = await (await server.request(path)).text();
-      const text =
-        path === '/v1/openapi.json' ? body.replaceAll('developer@example.com', '') : body;
+      const text = await (await server.request(path)).text();
+      expect(
+        unexpectedPublicEmails(path, text),
+        `${path} body carried an unexpected email value`,
+      ).toEqual([]);
       const markers =
         path === '/v1/openapi.json'
           ? alwaysForbidden

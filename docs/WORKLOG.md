@@ -7,6 +7,17 @@
 
 ## Active Tasks
 
+### [LEGAL-POLICIES-008] Keep published policies clear and evidence-supported
+
+- **Status**: REVIEW
+- **Priority**: P1
+- **Description**: Keep Docket's current terms and privacy policy aligned with the shared Studio baseline and understandable to the people using the product.
+- **Context**: Public policies describe verified processing, recipients, rights and Studio commitments. Account-specific AI provider checks remain operational follow-up; unsupported retention, logging or training guarantees do not belong in public wording.
+- **Acceptance**: Preserve billing and mandatory consumer rights, official contact details, shared-record and deletion limits, at least 30 days of notice for material contractual changes, explicit publication and effective dates, and exact prior policy documents. Keep internal environment and configuration details out of public prose.
+- **Subtasks**:
+  - [x] Apply the readable policy wording and focused material-fact checks.
+  - [x] Validate the affected source and preserve unrelated application work.
+
 ### [WEBSITE-VERIFICATION-IMPORTS] Use declared dependencies for the MCP verification tool
 
 - **Status**: REVIEW

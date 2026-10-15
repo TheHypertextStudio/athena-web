@@ -7,6 +7,17 @@
 
 ## Active Tasks
 
+### [WEBSITE-CI-AUTHZ-FIXTURE] Use the declared database schema in authorization checks
+
+- **Status**: REVIEW
+- **Priority**: P1
+- **Description**: Keep authorization fixtures compatible with required workspace defaults by
+  applying the existing database migrations instead of maintaining a partial SQL copy. Seed real
+  user identities for actor foreign keys and preserve the authorization assertions and coverage gates.
+- **Subtasks**:
+  - [x] Use the native PGlite migrations and seed the fixture's referenced users.
+  - [x] Validate the existing authorization suite and affected source checks.
+
 ### [WEBSITE-CI-CONTAINMENT] Verify authorization ancestry for standalone work
 
 - **Status**: IN PROGRESS

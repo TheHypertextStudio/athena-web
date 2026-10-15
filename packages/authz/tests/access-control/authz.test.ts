@@ -1,3 +1,4 @@
+import { resolve } from 'node:path';
 import {
   actor,
   type Database,
@@ -9,6 +10,7 @@ import {
   role,
   task,
   team,
+  user,
 } from '@docket/db';
 import { ancestorChain as dbAncestorChain } from '@docket/db/identity-access';
 import { evaluateExplicitAllow } from '@docket/identity-access/authorization';
@@ -23,6 +25,7 @@ import type {
 } from '@docket/identity-access/grants';
 import { PGlite } from '@electric-sql/pglite';
 import { drizzle } from 'drizzle-orm/pglite';
+import { migrate } from 'drizzle-orm/pglite/migrator';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { ancestorChain, type ResourceRef } from '../../src/ancestor-chain';
@@ -126,255 +129,16 @@ const explicitGrantParityCases: readonly ExplicitGrantParityCase[] = [
   },
 ];
 
-async function bootstrapAuthzSchema(client: PGlite): Promise<void> {
-  await client.exec(`
-    create type actor_kind as enum ('human', 'agent', 'team');
-    create type actor_status as enum ('active', 'suspended');
-    create type org_lifecycle_state as enum (
-      'trialing',
-      'active',
-      'past_due',
-      'export_window',
-      'pending_deletion',
-      'deleted'
-    );
-    create type work_status_entity as enum ('task', 'project', 'program', 'initiative');
-    create type work_status_category as enum (
-      'backlog',
-      'unstarted',
-      'started',
-      'completed',
-      'canceled'
-    );
-    create type health as enum ('on_track', 'at_risk', 'off_track');
-    create type planning_date_resolution as enum ('month', 'quarter', 'halfYear', 'year');
-    create type task_priority as enum ('none', 'urgent', 'high', 'medium', 'low');
-    create type provenance_source as enum ('native', 'linked');
-    create type sync_mode as enum ('import', 'mirror');
-    create type grant_capability as enum ('view', 'comment', 'contribute', 'assign', 'manage');
-    create type grant_subject_kind as enum ('actor', 'role');
-    create type resource_kind as enum (
-      'organization',
-      'team',
-      'initiative',
-      'program',
-      'project',
-      'cycle',
-      'task'
-    );
-    create type visibility as enum ('public', 'private');
-    create type grant_effect as enum ('allow', 'deny');
-    create type estimation_scale as enum ('none', 'exponential', 'fibonacci', 'linear', 't_shirt');
-
-    create table "organization" (
-      id text primary key,
-      name text not null,
-      slug text not null,
-      purpose text,
-      avatar text,
-      is_personal boolean not null default false,
-      vocabulary jsonb not null default '{}'::jsonb,
-      agent_guidance text,
-      approval_routing jsonb,
-      initiative_max_depth integer not null default 2,
-      auto_complete_parent_tasks boolean not null default true,
-      estimation_scale estimation_scale not null default 'fibonacci',
-      fiscal_year_start_month integer not null default 0,
-      lifecycle_state org_lifecycle_state not null default 'trialing',
-      export_ready_at timestamp,
-      -- Drizzle names every column of the table in its INSERT, so this fixture has to carry
-      -- columns these tests never read; omitting one fails the insert rather than the assertion.
-      export_blob_key text,
-      delete_after_at timestamp,
-      created_at timestamp not null default now(),
-      updated_at timestamp not null default now(),
-      archived_at timestamp
-    );
-
-    create table "role" (
-      id text primary key,
-      organization_id text not null,
-      key text not null,
-      name text not null,
-      is_system boolean not null default false,
-      capabilities jsonb not null default '[]'::jsonb,
-      base_capability grant_capability,
-      default_visibility visibility not null default 'public',
-      created_at timestamp not null default now(),
-      updated_at timestamp not null default now()
-    );
-
-    create table "actor" (
-      id text primary key,
-      organization_id text not null,
-      kind actor_kind not null,
-      display_name text not null,
-      title text,
-      avatar text,
-      status actor_status not null default 'active',
-      user_id text,
-      role_id text,
-      team_id text,
-      created_at timestamp not null default now(),
-      updated_at timestamp not null default now(),
-      archived_at timestamp
-    );
-
-    create table "team" (
-      id text primary key,
-      organization_id text not null,
-      name text not null,
-      key text not null,
-      description text,
-      summary text,
-      workflow_states jsonb not null default '[]'::jsonb,
-      triage_enabled boolean not null default true,
-      cycle_cadence_days integer not null default 7, cycle_cadence_anchor date not null default '2024-01-01', cycle_cadence_revision integer not null default 1,
-      agent_guidance text,
-      approval_routing jsonb,
-      visibility visibility not null default 'public',
-      ancestor_path text[] not null default '{}'::text[],
-      created_at timestamp not null default now(),
-      updated_at timestamp not null default now(),
-      archived_at timestamp
-    );
-
-    create table "work_status" (
-      id text primary key,
-      organization_id text not null,
-      created_by text,
-      created_at timestamp not null default now(),
-      updated_at timestamp not null default now(),
-      archived_at timestamp,
-      entity_type work_status_entity not null,
-      team_id text,
-      key text not null,
-      name text not null,
-      description text,
-      category work_status_category not null,
-      position integer not null,
-      is_default boolean not null default false
-    );
-
-    create unique index "work_status_id_key_org_uq"
-      on "work_status" (id, key, organization_id);
-
-    create table "program" (
-      id text primary key,
-      organization_id text not null,
-      created_by text,
-      created_at timestamp not null default now(),
-      updated_at timestamp not null default now(),
-      archived_at timestamp,
-      name text not null,
-      summary text,
-      description text,
-      owner_id text,
-      status text not null default 'active',
-      status_id text not null,
-      health health,
-      visibility visibility not null default 'public',
-      ancestor_path text[] not null default '{}'::text[]
-    );
-
-    create table "project" (
-      id text primary key,
-      organization_id text not null,
-      created_by text,
-      created_at timestamp not null default now(),
-      updated_at timestamp not null default now(),
-      archived_at timestamp,
-      name text not null,
-      summary text,
-      description text,
-      lead_id text,
-      program_id text,
-      team_id text,
-      status text not null default 'planned',
-      status_id text not null,
-      priority task_priority not null default 'none',
-      health health,
-      start_date timestamp,
-      start_date_resolution planning_date_resolution,
-      start_date_fiscal_year_start_month integer,
-      target_date timestamp,
-      target_date_resolution planning_date_resolution,
-      target_date_fiscal_year_start_month integer,
-      visibility visibility not null default 'public',
-      ancestor_path text[] not null default '{}'::text[],
-      source provenance_source not null default 'native',
-      source_integration_id text,
-      external_id text,
-      external_url text,
-      external_updated_at timestamp
-    );
-
-    create table "task" (
-      id text primary key,
-      organization_id text not null,
-      created_by text,
-      created_at timestamp not null default now(),
-      updated_at timestamp not null default now(),
-      archived_at timestamp,
-      title text not null,
-      description text,
-      summary text,
-      team_id text not null,
-      state text not null,
-      status_id text not null,
-      priority task_priority not null default 'none',
-      assignee_id text,
-      delegate_id text,
-      project_id text,
-      program_id text,
-      milestone_id text,
-      cycle_id text,
-      template_id text,
-      parent_task_id text,
-      estimate integer,
-      estimate_minutes integer,
-      start_date timestamp,
-      due_date timestamp,
-      source provenance_source not null default 'native',
-      source_integration_id text,
-      external_id text,
-      external_url text,
-      source_sync_mode sync_mode,
-      external_updated_at timestamp,
-      external_etag text,
-      external_list_id text,
-      last_pushed_at timestamp, external_body_hash text,
-      completed_at timestamp,
-      canceled_at timestamp,
-      auto_completed_by_subtasks boolean not null default false,
-      visibility visibility not null default 'public',
-      ancestor_path text[] not null default '{}'::text[]
-    );
-
-    create table "grant" (
-      id text primary key,
-      organization_id text not null,
-      subject_kind grant_subject_kind not null,
-      subject_id text not null,
-      resource_kind resource_kind not null,
-      resource_id text not null,
-      capabilities jsonb not null,
-      effect grant_effect not null default 'allow',
-      cascades boolean not null default true,
-      visibility_override visibility,
-      expires_at timestamp,
-      visibility visibility not null default 'public',
-      created_by text,
-      created_at timestamp not null default now()
-    );
-  `);
-}
-
 beforeAll(async () => {
   client = new PGlite('memory://');
   const d = drizzle(client, { schema: fullSchema });
-  await bootstrapAuthzSchema(client);
+  await migrate(d, { migrationsFolder: resolve(import.meta.dirname, '../../../db/drizzle') });
   db = d;
+  await db.insert(user).values([
+    { id: 'owner-account', name: 'Owner', email: 'owner@example.test' },
+    { id: 'second-owner-account', name: 'Second owner', email: 'second-owner@example.test' },
+    { id: 'archived-owner-account', name: 'Archived owner', email: 'archived-owner@example.test' },
+  ]);
 
   const orgRows = await db.insert(organization).values({ name: 'Acme', slug: 'acme' }).returning();
   orgId = assertDefined(orgRows[0]).id;

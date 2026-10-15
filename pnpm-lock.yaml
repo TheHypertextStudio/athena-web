@@ -159,6 +159,9 @@ importers:
       '@eslint/js':
         specifier: 'catalog:'
         version: 10.0.1(eslint@10.9.1(jiti@2.7.0))
+      '@playwright/test':
+        specifier: 1.62.1
+        version: 1.62.1
       '@types/node':
         specifier: 26.1.1
         version: 26.1.1
@@ -168,6 +171,9 @@ importers:
       '@vitest/coverage-v8':
         specifier: 'catalog:'
         version: 4.1.11(vitest@4.1.11)
+      axe-core:
+        specifier: ^4.13.0
+        version: 4.13.0
       dotenv-cli:
         specifier: ^11.0.0
         version: 11.0.0

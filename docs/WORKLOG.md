@@ -7,6 +7,19 @@
 
 ## Active Tasks
 
+### [WEBSITE-VERIFICATION-IMPORTS] Use declared dependencies for the MCP verification tool
+
+- **Status**: REVIEW
+- **Started**: 2026-10-14
+- **Priority**: P1
+- **Description**: Load the verification tool's browser and accessibility libraries from its own
+  declared repository development dependencies using static imports. Keep browser verification
+  in repository tooling, preserve the domain import policy and retain the existing behavior.
+- **Subtasks**:
+  - [x] Place browser verification in repository tooling and use declared public imports.
+  - [x] Preserve the accepted dependency versions in the native workspace lock.
+  - [x] Validate module loading and the existing domain import policy.
+
 ### [WEBSITE-HOST-POLICY] Preserve the official legal contact during domain migration
 
 - **Status**: REVIEW

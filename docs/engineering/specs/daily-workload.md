@@ -94,7 +94,7 @@ pnpm --filter @docket/api build
 WORKLOAD_EVIDENCE_DIR=/tmp/docket-workload-evidence pnpm --filter @docket/api exec vitest run \
   tests/workload/calculations.test.ts tests/mcp/mcp-workload.test.ts \
   tests/mcp/mcp-apps.test.ts tests/mcp/mcp-app-runtime.test.ts tests/mcp/mcp-apps-tokens.test.ts
-WORKLOAD_EVIDENCE_DIR=/tmp/docket-workload-evidence node apps/api/scripts/verify-workload-app.mjs
+WORKLOAD_EVIDENCE_DIR=/tmp/docket-workload-evidence node scripts/verify-workload-app.mjs
 ```
 
 The MCP tests migrate an isolated in-memory PGlite database and seed named test accounts. The optional

@@ -1,17 +1,18 @@
 /** Render the actual MCP resource with persisted test-account results through a local MCP host. */
 import { readFileSync, mkdirSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
-import { createRequire } from 'node:module';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import assert from 'node:assert/strict';
+import { chromium } from '@playwright/test';
+import axe from 'axe-core';
 
-const root = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
-const requireWeb = createRequire(resolve(root, 'apps/web/package.json'));
-const { chromium } = requireWeb('@playwright/test');
-const axeSource = readFileSync(requireWeb.resolve('axe-core/axe.min.js'), 'utf8');
+const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+const axeSource = axe.source;
 const evidenceDir = process.env.WORKLOAD_EVIDENCE_DIR || '/tmp/docket-workload-evidence';
-const outputDir = resolve(process.env.WORKLOAD_CAPTURE_DIR || resolve(root, 'apps/api/.data/workload-captures'));
+const outputDir = resolve(
+  process.env.WORKLOAD_CAPTURE_DIR || resolve(root, 'apps/api/.data/workload-captures'),
+);
 mkdirSync(outputDir, { recursive: true });
 const read = (name) => JSON.parse(readFileSync(resolve(evidenceDir, name + '.json'), 'utf8'));
 const resource = read('resource').contents[0].text;
@@ -105,8 +106,19 @@ try {
           }),
       );
       if (axe.violations.length) {
-        await page.screenshot({ path: resolve(outputDir, `a11y-failure-${width}-${theme}.png`), fullPage: true });
-        console.log('Accessibility diagnostic', { width, height, theme }, await frame.locator('body').evaluate((body) => ({ color: getComputedStyle(body).color, background: getComputedStyle(body).backgroundColor, scheme: getComputedStyle(document.documentElement).colorScheme })));
+        await page.screenshot({
+          path: resolve(outputDir, `a11y-failure-${width}-${theme}.png`),
+          fullPage: true,
+        });
+        console.log(
+          'Accessibility diagnostic',
+          { width, height, theme },
+          await frame.locator('body').evaluate((body) => ({
+            color: getComputedStyle(body).color,
+            background: getComputedStyle(body).backgroundColor,
+            scheme: getComputedStyle(document.documentElement).colorScheme,
+          })),
+        );
       }
       assert.deepEqual(
         axe.violations.map((v) => ({
@@ -123,9 +135,15 @@ try {
         'expanded controls/table overflow',
       );
       await frame.locator('details').evaluateAll((nodes) => nodes.forEach((n) => (n.open = false)));
-      const closedHeight = await frame.locator('body').evaluate((body) => Math.ceil(body.getBoundingClientRect().height));
-      await page.waitForFunction((expected) => document.querySelector('iframe').getBoundingClientRect().height <= expected + 2, closedHeight, { timeout: 5000 });
-
+      const closedHeight = await frame
+        .locator('body')
+        .evaluate((body) => Math.ceil(body.getBoundingClientRect().height));
+      await page.waitForFunction(
+        (expected) =>
+          document.querySelector('iframe').getBoundingClientRect().height <= expected + 2,
+        closedHeight,
+        { timeout: 5000 },
+      );
 
       const overflow = await frame
         .locator('html')
@@ -258,7 +276,11 @@ try {
         await frame.locator('#next-day').click();
         await frame.locator('#previous').click();
         await page.waitForFunction(() => window.pendingReads.length === 2);
-        assert.deepEqual(await page.evaluate(() => window.pendingReads.map((read) => read.params.arguments.date)), ['2026-10-15', '2026-10-14'], 'relative navigation did not follow the requested day');
+        assert.deepEqual(
+          await page.evaluate(() => window.pendingReads.map((read) => read.params.arguments.date)),
+          ['2026-10-15', '2026-10-14'],
+          'relative navigation did not follow the requested day',
+        );
         await page.evaluate(() => {
           const a = window.pendingReads;
           const f = document.querySelector('iframe');
@@ -276,7 +298,14 @@ try {
         await frame.locator('#metrics').getByText('Over capacity', { exact: true }).waitFor();
       }
       assert.deepEqual(errors, [], 'browser exceptions');
-      results.push({ width, height, theme, overflow: false, wcagViolations: 0, consoleErrors: errors });
+      results.push({
+        width,
+        height,
+        theme,
+        overflow: false,
+        wcagViolations: 0,
+        consoleErrors: errors,
+      });
       await page.close();
     }
   }

@@ -80,6 +80,20 @@
   - [x] Validate the existing documentation coverage policy and Mintlify source.
 
 ### [WORK-RECOVERY-001] Recover useful unfinished work and deliver work templates
+### [LEGAL-POLICY-COPY] Simplify public policy copy
+
+- **Status**: REVIEW
+- **Priority**: P2
+- **Description**: Make current policy introductions, dates, and body copy concise without changing legal rights or processing disclosures.
+- **Context**: Show publication and effective dates below the title; explain initial applicability once in the terms body. Preserve archived policy bodies and publish from the accepted application baseline.
+- **Approach**: Remove repetition in current terms, privacy, and history copy; retain meaningful limits, deadlines, contacts, and rights.
+- **Files changed**: Current marketing terms, privacy and history pages, and the existing legal navigation tests.
+- **Acceptance**:
+  - [x] Concise metadata and body copy preserve substantive meaning and archived versions.
+  - [ ] Affected source checks and native artifact checks pass.
+  - [ ] Published pages render clearly on desktop and mobile.
+
+### [LEGAL-POLICY-PUBLICATION] Publish understandable policies independently of AI provider verification
 
 - **Status**: IN_PROGRESS
 - **Started**: 2026-10-14

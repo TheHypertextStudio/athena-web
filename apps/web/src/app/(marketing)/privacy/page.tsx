@@ -19,9 +19,8 @@ const sections: readonly LegalPolicySection[] = [
     body: (
       <p>
         Hypertext Studio provides Docket, Docket Pro, and Athena. This policy explains how we handle
-        personal information in those services, our website, and support. Organizations also decide
-        what their members put in shared workspaces and how they use it. Contact your organization
-        about its own practices as well as contacting us.
+        personal information in those services, our website, and support. Your organization decides
+        how it uses shared-workspace information. Ask it about its own privacy practices.
       </p>
     ),
   },
@@ -41,9 +40,9 @@ const sections: readonly LegalPolicySection[] = [
           Where the law requires a legal basis, we use information to fulfill our agreement with
           you, including your account, purchases, and requested features; for our legitimate
           interests in security, abuse prevention, and support, balanced against your rights; and to
-          meet legal recordkeeping obligations. We rely on consent where required for optional or
-          sensitive processing and will not start that processing until valid consent is given. You
-          can withdraw consent without affecting earlier lawful processing.
+          meet legal recordkeeping obligations. We obtain consent before any optional or sensitive
+          processing that requires it. You can withdraw consent without affecting earlier lawful
+          processing.
         </p>
         <p>
           Connecting another service gives Docket permission to access the information needed for
@@ -162,7 +161,7 @@ const sections: readonly LegalPolicySection[] = [
           14-day account recovery period.
         </p>
         <p>
-          Some information may also remain in separate copies that do not expire automatically and
+          Some information may also remain in separate copies that do not expire automatically. They
           stay until manually removed. Deleting information from your account does not automatically
           remove it from those copies. When you request deletion, we also review these separate
           copies and remove matching information unless the law allows or requires us to keep it.

@@ -17,12 +17,19 @@ const sections: readonly LegalPolicySection[] = [
   {
     title: 'Operator and scope',
     body: (
-      <p>
-        These terms are an agreement between you and Hypertext Studio for Docket, Docket Pro,
-        Athena, and the connected services we provide. By creating an account or using Docket, you
-        accept the terms that apply to you. If you use Docket for an organization, you must have
-        authority to agree on its behalf.
-      </p>
+      <>
+        <p>
+          These terms are an agreement between you and Hypertext Studio for Docket, Docket Pro,
+          Athena, and the connected services we provide. By creating an account or using Docket, you
+          accept the terms that apply to you. If you use Docket for an organization, you must have
+          authority to agree on its behalf.
+        </p>
+        <p>
+          If you used Docket before October 14, 2026, these terms take effect on November 13, 2026.
+          The prior terms apply until then. If you start using Docket on or after October 14, 2026,
+          you accept these terms when you create an account or use the service.
+        </p>
+      </>
     ),
   },
   {
@@ -31,8 +38,7 @@ const sections: readonly LegalPolicySection[] = [
       <p>
         You must be at least 16 to create a hosted Docket account. If you are not legally an adult
         where you live, a parent or legal guardian must agree when the law requires it. Purchases
-        must be made by an adult or someone authorized to buy for an organization. You must follow
-        the law when using Docket.
+        must be made by an adult or someone authorized to buy for an organization.
       </p>
     ),
   },
@@ -42,9 +48,8 @@ const sections: readonly LegalPolicySection[] = [
       <p>
         Keep your contact details current and protect your passkeys and recovery codes. You are
         responsible for activity under your account. Connect only accounts and organizations you are
-        allowed to access. Other services have their own terms. You can disconnect services in
-        Settings, but removing an account used to sign in may first require you to disconnect
-        related services and keep another way to sign in.
+        allowed to access. Other services have their own terms. The Privacy Policy explains how to
+        disconnect services and remove sign-in accounts.
       </p>
     ),
   },
@@ -67,7 +72,7 @@ const sections: readonly LegalPolicySection[] = [
         <p>
           A personal workspace is free and includes planning, scheduling, and time tracking. Docket
           Pro adds shared work, connected services, Athena features, and connections for compatible
-          AI tools. The product describes the available features and what you need to connect.
+          AI tools.
         </p>
         <p>
           Athena sends requests and relevant context to AI providers, or to a Lattice service you
@@ -95,15 +100,14 @@ const sections: readonly LegalPolicySection[] = [
         </p>
         <p>
           An eligible organization may receive one 14-day trial, which requires a payment method.
-          Starting checkout again does not give another trial. Unless an authorized administrator
-          cancels before the trial ends, monthly billing starts on the date shown at Checkout and
-          continues until canceled.
+          Unless an authorized administrator cancels before the trial ends, monthly billing starts
+          on the date shown at Checkout and continues until canceled.
         </p>
         <p>
           Canceling keeps Pro available until the paid period ends, as shown in Billing settings.
-          After that date, shared work becomes read-only. You can export or reactivate while the
-          workspace is available. Docket does not delete workspace data when Pro ends. Deleting your
-          account in Settings is a separate action.
+          After that date, shared work becomes read-only. You can export retained work or reactivate
+          Pro. Docket does not delete workspace data when Pro ends. Deleting your account in
+          Settings is a separate action.
         </p>
         <p>
           If a payment fails, Pro stays available until the seven-day recovery deadline shown in
@@ -146,13 +150,11 @@ const sections: readonly LegalPolicySection[] = [
           recovery periods.
         </p>
         <p>
-          These terms apply to new users when they create an account. Existing users receive 30
-          days&apos; notice before they apply, on the date shown above. Until then, the prior terms
-          continue to apply. Changes do not take away rights or remedies for earlier events. We will
-          give at least 30 days&apos; notice before future material changes apply, unless the law or
-          urgent security needs require an earlier change, which we will explain. We will give any
-          additional notice or obtain any consent required by law. You can read prior versions
-          through the history link above.
+          Changes do not take away rights or remedies for earlier events. We will give at least 30
+          days&apos; notice before future material changes apply, unless the law or urgent security
+          needs require an earlier change, which we will explain. We will give any additional notice
+          or obtain any consent required by law. You can read prior versions through the history
+          link above.
         </p>
       </>
     ),
@@ -184,8 +186,7 @@ const sections: readonly LegalPolicySection[] = [
       <p>
         Nevada law governs these terms, subject to the mandatory protections of the law where you
         live. Disputes may be brought in the state or federal courts in Clark County, Nevada, unless
-        the law gives you a right to bring a claim in your home forum or requires another court. You
-        keep those mandatory protections and home-forum rights.
+        the law gives you a right to bring a claim in your home forum or requires another court.
       </p>
     ),
   },
@@ -200,10 +201,7 @@ export default function TermsPage(): JSX.Element {
       dates={
         <>
           <p>Published October 14, 2026.</p>
-          <p>
-            Effective for existing users November 13, 2026; for new users when they create an
-            account.
-          </p>
+          <p>Effective November 13, 2026.</p>
         </>
       }
       sections={sections}

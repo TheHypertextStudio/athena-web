@@ -15,8 +15,7 @@ export default function LegalHistoryPage(): JSX.Element {
         Policy history
       </h1>
       <p className="text-ink-muted text-body-large">
-        Read the prior policies below. Current policies include their publication and effective
-        dates.
+        Read earlier versions of our terms and privacy policy.
       </p>
       <ul className="text-ink flex list-disc flex-col gap-4 pl-5">
         <li>

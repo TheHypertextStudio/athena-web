@@ -7,6 +7,18 @@
 
 ## Active Tasks
 
+### [LEGAL-POLICY-PUBLICATION] Publish understandable policies independently of AI provider verification
+
+- **Status**: IN_PROGRESS
+- **Priority**: P1
+- **Description**: Publish the shared Studio terms and privacy baseline with Docket-specific, evidence-supported disclosures and readable policy history.
+- **Context**: Publish legal wording from the live application baseline so unrelated application changes do not ship with it. Provider account-setting checks remain separate from publication of verified processing facts; unsupported retention, logging and training guarantees must not appear in public text.
+- **Acceptance**: Preserve prior policy bodies, consumer rights, billing distinctions, official Studio contact and prospective terms notice. Keep the live application's routes, authorization and backend behavior intact. Verify the exact native artifact and rendered current/history pages before publication is considered complete.
+- **Subtasks**:
+  - [x] Prepare current policy wording and accessible history navigation.
+  - [ ] Validate the affected source and native release artifact.
+  - [ ] Publish and verify the live legal pages and preserved application routing.
+
 ### [INBOUND-NOTIFICATIONS-001] General personal inbound events and notification triage
 
 - **Status**: BLOCKED

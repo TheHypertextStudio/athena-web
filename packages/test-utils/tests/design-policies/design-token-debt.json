@@ -69,10 +69,6 @@
     "ad-hoc-border": 2,
     "raw-type-utility": 5
   },
-  "apps/web/src/app/(marketing)/privacy/page.tsx": {
-    "ad-hoc-border": 2,
-    "raw-type-utility": 6
-  },
   "apps/web/src/app/(marketing)/problems/[code]/page.tsx": {
     "ad-hoc-border": 2,
     "raw-type-utility": 10
@@ -80,10 +76,6 @@
   "apps/web/src/app/(marketing)/problems/page.tsx": {
     "ad-hoc-border": 3,
     "raw-type-utility": 7
-  },
-  "apps/web/src/app/(marketing)/terms/page.tsx": {
-    "ad-hoc-border": 2,
-    "raw-type-utility": 6
   },
   "apps/web/src/app/layout.tsx": {
     "hardcoded-color": 2

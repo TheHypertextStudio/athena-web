@@ -1,7 +1,8 @@
 import type { Metadata } from 'next';
 import type { JSX } from 'react';
 
-import { SUPPORT_EMAIL } from '@/lib/support-contact';
+import { LEGAL_EMAIL } from '@/lib/legal-policy';
+import { CONTACT_EMAIL, SUPPORT_EMAIL } from '@/lib/support-contact';
 
 /** About page metadata. */
 export const metadata: Metadata = {
@@ -25,11 +26,19 @@ export default function AboutPage(): JSX.Element {
       </h1>
       <div className="text-ink-muted mt-10 flex flex-col gap-6 text-lg leading-relaxed">
         <p>Docket keeps planning, scheduling, and tracked time on the same work records.</p>
-        <p>Docket is operated by The Hypertext Studio.</p>
+        <p>Docket is operated by Hypertext Studio.</p>
         <p>
-          Questions, access requests, and deletion requests can be sent to{' '}
+          For general inquiries, contact{' '}
+          <a className="text-ink underline" href={`mailto:${CONTACT_EMAIL}`}>
+            {CONTACT_EMAIL}
+          </a>
+          . For product help, contact{' '}
           <a className="text-ink underline" href={`mailto:${SUPPORT_EMAIL}`}>
             {SUPPORT_EMAIL}
+          </a>
+          . For access, deletion, or other privacy requests, contact{' '}
+          <a className="text-ink underline" href={`mailto:${LEGAL_EMAIL}`}>
+            {LEGAL_EMAIL}
           </a>
           .
         </p>

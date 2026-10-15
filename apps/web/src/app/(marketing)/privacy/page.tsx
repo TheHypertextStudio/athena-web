@@ -1,133 +1,257 @@
 import type { Metadata } from 'next';
-import type { JSX, ReactNode } from 'react';
+import type { JSX } from 'react';
 
-import { SUPPORT_EMAIL } from '@/lib/support-contact';
+import {
+  LegalPolicyContact,
+  LegalPolicyDocument,
+  type LegalPolicySection,
+} from '@/components/marketing/legal-policy-document';
 
 /** Privacy-policy metadata. */
 export const metadata: Metadata = {
   title: 'Privacy',
-  description:
-    'How Docket collects, uses, protects, and deletes account and Google Workspace data.',
+  description: 'How Docket processes account, workspace, AI, and connected-service data.',
 };
 
-/** One policy section in the public legal-page register. */
-function PolicySection({ title, children }: { title: string; children: ReactNode }): JSX.Element {
-  return (
-    <section className="border-outline-variant flex flex-col gap-3 border-t pt-7">
-      <h2 className="font-display text-ink text-2xl tracking-tight">{title}</h2>
-      <div className="text-ink-muted flex flex-col gap-3 leading-relaxed">{children}</div>
-    </section>
-  );
-}
+const sections: readonly LegalPolicySection[] = [
+  {
+    title: 'Operator and scope',
+    body: (
+      <p>
+        Hypertext Studio provides Docket, Docket Pro, and Athena. This policy explains how we handle
+        personal information in those services, our website, and support. Organizations also decide
+        what their members put in shared workspaces and how they use it. Contact your organization
+        about its own practices as well as contacting us.
+      </p>
+    ),
+  },
+  {
+    title: 'Data and purposes',
+    body: (
+      <>
+        <p>
+          We collect account and contact details, sign-in information, workspace membership and
+          permissions, your work and files, planning and time records, preferences, support
+          messages, and logs that help us run and protect Docket. We use this information to sign
+          you in, provide requested features, sync connected services, manage subscriptions,
+          communicate with you, prevent abuse, and handle support and legal requests. We do not
+          store passkey private keys or full card details. Stripe processes payments.
+        </p>
+        <p>
+          Where the law requires a legal basis, we use information to fulfill our agreement with
+          you, including your account, purchases, and requested features; for our legitimate
+          interests in security, abuse prevention, and support, balanced against your rights; and to
+          meet legal recordkeeping obligations. We rely on consent where required for optional or
+          sensitive processing and will not start that processing until valid consent is given. You
+          can withdraw consent without affecting earlier lawful processing.
+        </p>
+        <p>
+          Connecting another service gives Docket permission to access the information needed for
+          that feature. We store encrypted connection credentials and information needed to sync
+          your work. Google Calendar supports viewing and editing events, and Google Tasks supports
+          syncing tasks both ways. Google Drive access is read-only for finding and attaching files.
+          Gmail access lets Docket read relevant message details and content and make mailbox
+          changes you request. We ask for permissions as needed.
+        </p>
+        <p>
+          If you enable device notification syncing, Docket receives the notification text, app or
+          source, and message details you choose to share. Optional location features use saved
+          places, selected addresses, and location information as explained below.
+        </p>
+      </>
+    ),
+  },
+  {
+    title: 'Local and hosted processing',
+    body: (
+      <>
+        <p>
+          Docket stores account information, shared work, connected-service data, and Athena
+          conversations on our servers. Your browser also keeps sign-in cookies and cached
+          information. Browser caching does not make Docket local-only or end-to-end encrypted.
+        </p>
+        <p>
+          Your browser can check whether you are at one of your saved places. For this check, Docket
+          receives the matched place and location accuracy, rather than your precise browser
+          position. Address searches send the text you type to Mapbox. Docket does not save
+          temporary suggestions. Choosing an address or a point on the map stores the selected
+          address and coordinates.
+        </p>
+      </>
+    ),
+  },
+  {
+    title: 'Recipients and AI',
+    body: (
+      <>
+        <p>
+          People and agents can see shared work according to workspace permissions. Owners and
+          administrators manage membership and access, but joining an organization does not give
+          them access to all your personal records or your personal Athena conversations. Athena
+          sessions used for shared work, and records it adds to a workspace, follow workspace
+          permissions. Leaving an organization removes your access; it does not automatically erase
+          its work history.
+        </p>
+        <p>
+          We use service providers to host and store information, protect Docket, process payments,
+          send service emails, and provide maps. These include Google Cloud, Neon, Vercel,
+          Cloudflare, Stripe, Resend, and Mapbox. Information also goes to services you connect when
+          you use their features. Authorized Hypertext Studio operators may access hosted
+          information for support, security, and running the service. We may disclose information
+          when legally required or needed to protect people and the service.
+        </p>
+        <p>
+          When you use Athena or another AI feature, the provider receives your request and the
+          context needed to answer it. This can include instructions, relevant conversation history,
+          selected information from your work, results from connected tools, and generated
+          responses. Docket keeps conversations and activity so you can resume and review work.
+          Hosted Athena currently uses Google Vertex AI. If you connect a Lattice service, requests
+          and context go to that service and the providers it uses.
+        </p>
+        <p>
+          Google processes hosted Athena requests under the terms that apply to our Vertex AI
+          service and may retain requests and responses for service operation and abuse prevention.
+          See Google&apos;s{' '}
+          <a
+            className="text-ink underline"
+            href="https://cloud.google.com/vertex-ai/generative-ai/docs/data-governance"
+          >
+            data-use and retention information
+          </a>
+          . If you connect a Lattice service, its operator and the providers it uses have their own
+          data-use and retention terms. Disconnecting does not recall information already sent.
+        </p>
+        <p>
+          We do not sell Google user data, use it for advertising, give it to data brokers, or use
+          it to train generalized AI models. We use it only for the user-facing features you
+          initiate, following the Google API Services User Data Policy and its Limited Use
+          requirements. Storing a conversation so you can use it later is different from training a
+          model.
+        </p>
+      </>
+    ),
+  },
+  {
+    title: 'Retention and deletion',
+    body: (
+      <>
+        <p>
+          We keep account, work, and conversation data while needed to provide Docket and the
+          history you request. Canceling Pro does not delete workspace data. Disconnecting a service
+          stops future access, but information already copied into shared work may remain in its
+          history.
+        </p>
+        <p>
+          Removing an account used to sign in is separate from disconnecting a workspace service.
+          You may first need to disconnect services linked to that account and keep another way to
+          sign in. We may ask you to verify your identity again. Removing the sign-in account
+          removes its stored credentials from Docket. You can also revoke access in the other
+          provider&apos;s settings. Revoking access does not automatically delete existing Docket
+          records or copies held by that provider.
+        </p>
+        <p>
+          Account deletion has a 14-day recovery period, during which you can cancel your request.
+          If you are the only active owner of an organization with other members, we may be unable
+          to start or finish deletion until you transfer ownership or delete that organization.
+          After the recovery period, we delete your account, personal records, and workspaces used
+          only by you. Shared organization records may remain available to other members. Export
+          what you need before deleting your account.
+        </p>
+        <p>
+          We keep six hours of recent database history for recovery. This is separate from the
+          14-day account recovery period.
+        </p>
+        <p>
+          Some information may also remain in separate copies that do not expire automatically and
+          stay until manually removed. Deleting information from your account does not automatically
+          remove it from those copies. When you request deletion, we also review these separate
+          copies and remove matching information unless the law allows or requires us to keep it.
+        </p>
+        <p>
+          Billing, security, legal, and backup records may remain for as long as needed for their
+          purpose or required by law. Retention periods for backups and logs vary, and deleting an
+          account does not immediately delete every backup or a recipient&apos;s copy. Synced device
+          notifications follow the retention setting for that device; changing it affects future
+          uploads.
+        </p>
+      </>
+    ),
+  },
+  {
+    title: 'Security',
+    body: (
+      <p>
+        We limit access to hosted information, encrypt stored connection credentials, and monitor
+        for suspicious activity. These measures reduce risk but cannot guarantee complete security.
+        Protect your sign-in methods, review workspace and connection permissions, and contact us if
+        you suspect unauthorized access.
+      </p>
+    ),
+  },
+  {
+    title: 'Choices and rights',
+    body: (
+      <>
+        <p>
+          In Settings, you can manage your profile, sign-in methods, connected services,
+          notifications, optional location and device notification features, exports, and account
+          deletion. Workspace administrators manage organization access and shared records. Contact
+          us if a control does not resolve your request or your organization prevents a change.
+        </p>
+        <p>
+          Depending on where you live and the law that applies, you may have rights to access,
+          correct, export, restrict, object to, or delete your information; withdraw consent; or
+          complain to a data-protection regulator. We may verify your identity and authority before
+          acting. We will follow the response periods required by law and explain any lawful limit
+          on your request.
+        </p>
+      </>
+    ),
+  },
+  {
+    title: 'Children',
+    body: (
+      <p>
+        Hosted Docket accounts are for people aged 16 and older. We do not knowingly collect account
+        information from children under 16. Contact us if you believe a child under 16 has given us
+        personal information so we can investigate and address it. A parent or guardian must agree
+        to a minor&apos;s use when the law requires it.
+      </p>
+    ),
+  },
+  {
+    title: 'International processing',
+    body: (
+      <p>
+        Hypertext Studio is based in the United States. We and our providers may process information
+        in the United States and other countries where we operate. Their protections may differ from
+        those where you live. International transfers must meet applicable legal requirements.
+        Contact us to ask about safeguards for a particular transfer.
+      </p>
+    ),
+  },
+  {
+    title: 'Changes and contact',
+    body: (
+      <>
+        <p>
+          We will update this page when our practices materially change and give additional notice
+          or obtain consent when required. This policy does not allow us to use past information for
+          new purposes retroactively. You can read prior versions through the history link above.
+        </p>
+        <LegalPolicyContact />
+      </>
+    ),
+  },
+];
 
-function InformationCollectedSection(): JSX.Element {
-  return (
-    <PolicySection title="Information we collect">
-      <p>
-        We process account profile details, passkey and session metadata, the organizations and work
-        you create, product settings, support communications, and technical logs needed to secure
-        and operate Docket. We do not store passkey private keys.
-      </p>
-      <p>
-        When you authorize a connector, we also process the provider account identifier, granted
-        scopes, encrypted OAuth access and refresh tokens, synchronization cursors, and the data
-        needed to provide that connector.
-      </p>
-      <p>
-        When you search for a saved-place address, Docket sends the text you type to Mapbox through
-        Docket&apos;s API. Docket does not store temporary autocomplete results. When you choose a
-        result or ask Docket to identify a point on the map, Docket requests a permanent Mapbox
-        result and stores the selected address and coordinates with your saved place.
-      </p>
-    </PolicySection>
-  );
-}
-
-/** Public privacy policy for Docket, including Google API Limited Use disclosures. */
+/** Public privacy policy covering hosted, shared, connected, and AI processing. */
 export default function PrivacyPage(): JSX.Element {
   return (
-    <article className="mx-auto flex w-full max-w-3xl flex-col gap-10 px-6 pt-20 pb-24">
-      <header>
-        <p className="text-ink-muted text-sm font-medium">Legal</p>
-        <h1 className="font-display text-display-large-small text-ink mt-4 tracking-tight">
-          Privacy policy
-        </h1>
-        <p className="text-ink-muted mt-4">Effective September 8, 2026</p>
-      </header>
-
-      <PolicySection title="Who operates Docket">
-        <p>
-          Docket is operated by The Hypertext Studio. Questions, access requests, and deletion
-          requests can be sent to{' '}
-          <a className="text-ink underline" href={`mailto:${SUPPORT_EMAIL}`}>
-            {SUPPORT_EMAIL}
-          </a>
-          .
-        </p>
-      </PolicySection>
-
-      <InformationCollectedSection />
-
-      <PolicySection title="Google user data">
-        <p>
-          Google access is optional and requested incrementally. Calendar access lets Docket list
-          your calendars, display selected events, detect changes, and create, update, or delete
-          events when you use editing features. Tasks access supports two-way task synchronization.
-          Drive read-only access lets you find and attach files you choose. Gmail modify access lets
-          Docket read relevant message metadata and content and apply mailbox actions you request.
-        </p>
-        <p>
-          Docket uses Google user data only to provide or improve the user-facing features you
-          initiate. We do not sell Google user data, use it for advertising, transfer it to data
-          brokers, or use it to train generalized artificial-intelligence models.
-        </p>
-        <p>
-          Docket&apos;s use and transfer of information received from Google APIs adheres to the
-          Google API Services User Data Policy, including the Limited Use requirements.
-        </p>
-      </PolicySection>
-
-      <PolicySection title="Storage and sharing">
-        <p>
-          OAuth bearer tokens are encrypted before database storage. Docket stores application data
-          with contracted infrastructure providers, including Google Cloud, Neon, Vercel, and
-          Cloudflare, only as needed to host, secure, back up, and deliver the service. We may also
-          disclose information when required by law or to protect users and the service.
-        </p>
-        <p>
-          Automatic location matches your foreground browser position against saved places on your
-          device. Docket receives the matched place identifier and accuracy. It does not receive the
-          raw foreground position used for routine matching.
-        </p>
-      </PolicySection>
-
-      <PolicySection title="Retention and your controls">
-        <p>
-          Connector data remains while the account is linked and as needed for synchronization.
-          Unlinking a Google account removes its encrypted tokens and cached Calendar data. You can
-          also revoke Docket in your Google Account security settings. Organization records that
-          originated from a connector may remain as Docket work history but lose access to the
-          provider and are marked for reconnection.
-        </p>
-        <p>
-          Account deletion uses a 14-day recovery period. After that period Docket deletes the
-          account and associated personal data, subject to limited security, legal, and backup
-          retention obligations. You may export your data before deletion.
-        </p>
-      </PolicySection>
-
-      <PolicySection title="Security, changes, and rights">
-        <p>
-          We use access controls, encryption, tenant isolation, audit logging, and operational
-          monitoring appropriate to the data we process. No system is completely secure. Depending
-          on where you live, you may have rights to access, correct, export, restrict, object to, or
-          delete personal information.
-        </p>
-        <p>
-          We will update this page when practices materially change and will provide additional
-          notice when required. Contact support to exercise a right or raise a concern.
-        </p>
-      </PolicySection>
-    </article>
+    <LegalPolicyDocument
+      title="Privacy policy"
+      dates={<p>Effective October 14, 2026.</p>}
+      sections={sections}
+    />
   );
 }

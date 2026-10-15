@@ -88,7 +88,13 @@
         }
       ],
       "vars": {
-        "STUDIO_DEPLOYMENT_ENV": "production"
+        "STUDIO_DEPLOYMENT_ENV": "production",
+        "WEB_URL": "https://clearthedocket.com",
+        "API_URL": "https://api.clearthedocket.com",
+        "PUBLIC_BRIEF_HOST": "briefs.clearthedocket.com",
+        "BETTER_AUTH_PASSKEY_RP_ID": "clearthedocket.com",
+        "BETTER_AUTH_PASSKEY_LEGACY_RP_ID": "hypertext.studio",
+        "DOCS_MINTLIFY_ORIGIN": "https://docket.mintlify.dev"
       },
       "routes": []
     }

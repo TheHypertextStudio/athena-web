@@ -57,9 +57,40 @@ pnpm --dir apps/web deploy:worker --env staging --rclone --no-x-provision --env-
 Both populate the selected remote cache and write to Cloudflare. Upload creates a version without
 serving it; deploy publishes it. They are separate operator choices, not a sequence required for
 every release. Neither command is run automatically. Production uses `--env production` only
-after explicit production approval, complete bindings and recovery review. Current production
-bindings are incomplete and intentionally fail closed. Source configuration is not provisioning
-or deployment acceptance; verify the actual Worker, Images, R2 and custom-domain ownership first.
+after explicit production approval, provider resource preparation and recovery review. Production
+public bindings name the existing app/API, Publishing host, current passkey RP and legacy RP.
+Verify the actual Worker, Images, R2 and custom-domain ownership before deployment acceptance.
+
+### Production build inputs
+
+Use `env.production.vars` in `wrangler.jsonc` as the source of truth for the public build inputs.
+Next embeds public values during its build, so runtime bindings alone cannot set them afterward:
+
+| Build input                 | Worker configuration value  |
+| --------------------------- | --------------------------- |
+| `STUDIO_DEPLOYMENT_ENV`     | `STUDIO_DEPLOYMENT_ENV`     |
+| `NEXT_PUBLIC_APP_URL`       | `WEB_URL`                   |
+| `NEXT_PUBLIC_API_URL`       | `API_URL`                   |
+| `NEXT_PUBLIC_PASSKEY_RP_ID` | `BETTER_AUTH_PASSKEY_RP_ID` |
+| `NEXT_PUBLIC_BRIEF_HOST`    | `PUBLIC_BRIEF_HOST`         |
+| `DOCS_MINTLIFY_ORIGIN`      | `DOCS_MINTLIFY_ORIGIN`      |
+
+For the declared production identities, the native build command is:
+
+```sh
+STUDIO_DEPLOYMENT_ENV=production \
+NEXT_PUBLIC_APP_URL=https://clearthedocket.com \
+NEXT_PUBLIC_API_URL=https://api.clearthedocket.com \
+NEXT_PUBLIC_PASSKEY_RP_ID=clearthedocket.com \
+NEXT_PUBLIC_BRIEF_HOST=briefs.clearthedocket.com \
+DOCS_MINTLIFY_ORIGIN=https://docket.mintlify.dev \
+pnpm exec turbo run build:worker --filter=@docket/web --concurrency=1
+```
+
+The legacy RP remains a request-time binding. Keep the separate production self-reference and
+cache bucket from the same configuration. Provision production deployment/cache credentials and
+provider resources through their existing owners, and review domain attachment and rollback before
+the separately approved cutover.
 
 ## Manual staging workflow
 
@@ -92,9 +123,9 @@ provider acceptance.
 
 Before dispatch, an operator must establish all of these prerequisites:
 
-- The current production backend baseline was read through authenticated Google Console on
-  October 11. Reviewed source was integrated at `2a5ab95f`; the user approved the existing
-  automatic backend rollout with that integration. Frontend production cutover remains separate.
+- Read the current production API/admin revision, image and public configuration through the
+  authenticated Google account before an integration that enters the existing automatic backend
+  release pipeline. Frontend production cutover requires separate approval.
 - Verify that this repository actually has a protected `staging` GitHub environment, restricted to
   main and the intended environment-owned
   three staging secrets listed above. The generic repository `CLOUDFLARE_API_TOKEN` is never referenced. A YAML
@@ -107,8 +138,8 @@ Before dispatch, an operator must establish all of these prerequisites:
   they do not create a temporary cache Worker. Production
   Worker/DNS/Cloud Run resources must remain outside this operation.
 - Reconcile the existing isolated API's actual allowed origins/hosts, RP, cookie scope, OAuth and
-  Lattice metadata/callbacks with the configured frontend. The dated public API config still
-  advertises the Vercel-stage RP; no source value proves that transition complete. Review isolated
+  Lattice metadata/callbacks with the configured frontend. Read the actual backend settings before
+  accepting the configured frontend identity. Review isolated
   Publishing/data/secret inputs rather than inventing a brief host, copying production values or
   treating an unavailable metadata read as acceptance.
 - Confirm intended staging compile identity and absence of app-local `.env*` input, retain the

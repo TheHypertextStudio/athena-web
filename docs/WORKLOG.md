@@ -17,6 +17,18 @@
 - **Subtasks**:
   - [x] Apply the readable policy wording and focused material-fact checks.
   - [x] Validate the affected source and preserve unrelated application work.
+### [WEBSITE-PRODUCTION-CONFIG] Prepare native Workers production bindings
+
+- **Status**: REVIEW
+- **Started**: 2026-10-14
+- **Priority**: P1
+- **Description**: Declare the existing production app/API, Publishing and passkey identities in
+  the single frontend Worker configuration. Document matching public build inputs and preserve
+  separate credentials, cache resources, route ownership and production cutover approval.
+- **Subtasks**:
+  - [x] Bind the existing production app/API origins, brief host and passkey identities.
+  - [x] Validate the existing runtime guard against the production configuration.
+  - [x] Document production build inputs and the remaining provider/cutover prerequisites.
 
 ### [WEBSITE-VERIFICATION-IMPORTS] Use declared dependencies for the MCP verification tool
 

@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { imageConfigDefault } from 'next/dist/shared/lib/image-config';
+import { readWorkerRuntimeConfig } from '../../worker-runtime-config';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -53,6 +54,15 @@ describe('Workers provider configuration', () => {
           ],
         },
         production: {
+          vars: {
+            STUDIO_DEPLOYMENT_ENV: 'production',
+            WEB_URL: 'https://clearthedocket.com',
+            API_URL: 'https://api.clearthedocket.com',
+            PUBLIC_BRIEF_HOST: 'briefs.clearthedocket.com',
+            BETTER_AUTH_PASSKEY_RP_ID: 'clearthedocket.com',
+            BETTER_AUTH_PASSKEY_LEGACY_RP_ID: 'hypertext.studio',
+            DOCS_MINTLIFY_ORIGIN: 'https://docket.mintlify.dev',
+          },
           images: { binding: 'IMAGES' },
           r2_buckets: [
             {
@@ -63,6 +73,15 @@ describe('Workers provider configuration', () => {
           ],
         },
       },
+    });
+    const production = (config as { env: { production: { vars: Record<string, unknown> } } }).env
+      .production;
+    expect(readWorkerRuntimeConfig(production.vars)).toMatchObject({
+      apiOrigin: 'https://api.clearthedocket.com',
+      appOrigin: 'https://clearthedocket.com',
+      briefHostname: 'briefs.clearthedocket.com',
+      legacyRpHostname: 'hypertext.studio',
+      local: false,
     });
   });
 });

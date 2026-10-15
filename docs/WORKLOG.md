@@ -17,6 +17,7 @@
 - **Subtasks**:
   - [x] Apply the readable policy wording and focused material-fact checks.
   - [x] Validate the affected source and preserve unrelated application work.
+
 ### [WEBSITE-PRODUCTION-CONFIG] Prepare native Workers production bindings
 
 - **Status**: REVIEW
@@ -80,20 +81,6 @@
   - [x] Validate the existing documentation coverage policy and Mintlify source.
 
 ### [WORK-RECOVERY-001] Recover useful unfinished work and deliver work templates
-### [LEGAL-POLICY-COPY] Simplify public policy copy
-
-- **Status**: REVIEW
-- **Priority**: P2
-- **Description**: Make current policy introductions, dates, and body copy concise without changing legal rights or processing disclosures.
-- **Context**: Show publication and effective dates below the title; explain initial applicability once in the terms body. Preserve archived policy bodies and publish from the accepted application baseline.
-- **Approach**: Remove repetition in current terms, privacy, and history copy; retain meaningful limits, deadlines, contacts, and rights.
-- **Files changed**: Current marketing terms, privacy and history pages, and the existing legal navigation tests.
-- **Acceptance**:
-  - [x] Concise metadata and body copy preserve substantive meaning and archived versions.
-  - [ ] Affected source checks and native artifact checks pass.
-  - [ ] Published pages render clearly on desktop and mobile.
-
-### [LEGAL-POLICY-PUBLICATION] Publish understandable policies independently of AI provider verification
 
 - **Status**: IN_PROGRESS
 - **Started**: 2026-10-14
@@ -12529,6 +12516,19 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
 
 ## Completed Tasks
 
+### [LEGAL-POLICY-COPY] Simplify public policy copy
+
+- **Status**: COMPLETED
+- **Priority**: P2
+- **Description**: Make current policy introductions, dates, and body copy concise without changing legal rights or processing disclosures.
+- **Context**: Show publication and effective dates below the title; explain initial applicability once in the terms body. Preserve archived policy bodies and publish from the accepted application baseline.
+- **Approach**: Remove repetition in current terms, privacy, and history copy; retain meaningful limits, deadlines, contacts, and rights.
+- **Files changed**: Current marketing terms, privacy and history pages, and the existing legal navigation tests.
+- **Acceptance**:
+  - [x] Concise metadata and body copy preserve substantive meaning and archived versions.
+  - [x] Affected source checks and native artifact checks pass.
+  - [x] Published pages render clearly on desktop and mobile.
+
 ### [MCP-AUTH-REFRESH-002] Restore persistent Codex MCP authentication
 
 - **Completed**: 2026-10-13
@@ -12561,18 +12561,6 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
 - **Production evidence**: After owner reauthenticated the existing gcloud account, read-only Cloud Run request logs showed 2,136 token requests in six hours: 1,443 HTTP 400, 678 HTTP 429 and 15 HTTP 200. At 00:34:55 UTC a successful exchange was followed at 00:34:56 by multiple failures from the same Codex client version. This supports the rotation/retry failure mechanism but request logs do not expose grant type or rejection reason; do not claim every rejection has been attributed. No customer token, cookie or secret was read or replayed.
 - **Review and retrospective**: Independent review found expired ciphertext could accumulate in refresh-only workloads; corrected with bounded cleanup and regression coverage. Follow-up review found no further actionable issues. Existing seeded happy-path refresh tests concealed a client-visible failure by treating the duplicate rejection as expected. Acceptance must include identical successful recovery as well as keeping the winning grant live.
 - **Rollout reconciliation (October 13)**: Commit `fb26a9a9b` was delivered to main and is included in image `945f98fc8`, deployed by successful run `38333596421` to `docket-api-00350-xb9`, currently serving 100% of traffic. This supersedes the earlier pending-rollout note. Repeated real-client failure persists with legacy Codex refresh coordination disabled; the completed investigation and multi-chat acceptance are recorded under `MCP-AUTH-REFRESH-002`. Existing invalidated grants require a replacement authorization. No lasting recovery is claimed from the rollout alone.
-### [LEGAL-POLICY-COPY] Simplify public policy copy
-
-- **Status**: COMPLETED
-- **Priority**: P2
-- **Description**: Make current policy introductions, dates, and body copy concise without changing legal rights or processing disclosures.
-- **Context**: Show publication and effective dates below the title; explain initial applicability once in the terms body. Preserve archived policy bodies and publish from the accepted application baseline.
-- **Approach**: Remove repetition in current terms, privacy, and history copy; retain meaningful limits, deadlines, contacts, and rights.
-- **Files changed**: Current marketing terms, privacy and history pages, and the existing legal navigation tests.
-- **Acceptance**:
-  - [x] Concise metadata and body copy preserve substantive meaning and archived versions.
-  - [x] Affected source checks and native artifact checks pass.
-  - [x] Published pages render clearly on desktop and mobile.
 
 ### [ATHENA-LATTICE-FOLLOWUPS-003] Finish relay deployment acceptance and land receipts
 

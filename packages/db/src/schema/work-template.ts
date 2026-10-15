@@ -38,6 +38,8 @@ export const template = pgTable(
     ownerActorId: text('owner_actor_id').references(() => actor.id, { onDelete: 'set null' }),
     teamId: text('team_id').references(() => team.id, { onDelete: 'cascade' }),
     payload: jsonb('payload').$type<TemplateDraft>().notNull(),
+    originWorkTypeId: text('origin_work_type_id'),
+    originWorkTypeVersionId: text('origin_work_type_version_id'),
     isSeed: boolean('is_seed').notNull().default(false),
     isBase: boolean('is_base').notNull().default(false),
     publicationState: text('publication_state')
@@ -56,6 +58,10 @@ export const template = pgTable(
   },
   (table) => [
     index('template_org_target_idx').on(table.organizationId, table.targetType),
+    check(
+      'template_copy_origin_pair',
+      sql`(${table.originWorkTypeId} is null)=(${table.originWorkTypeVersionId} is null)`,
+    ),
     uniqueIndex('work_type_id_org_unique').on(table.id, table.organizationId),
     uniqueIndex('work_type_base_unique')
       .on(table.organizationId, table.targetType)
@@ -86,6 +92,7 @@ export const workTypeVersion = pgTable(
     }),
   },
   (table) => [
+    uniqueIndex('work_type_version_id_org_unique').on(table.id, table.organizationId),
     uniqueIndex('work_type_version_number_unique').on(table.workTypeId, table.number),
     uniqueIndex('work_type_version_identity_unique').on(
       table.id,

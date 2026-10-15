@@ -62,6 +62,13 @@ beforeAll(async () => {
 
 const MISSING = '01ARZ3NDEKTSV4RRFFQ69G5FAV';
 const J = { 'content-type': 'application/json' };
+const DEFAULT_WORKSPACE_SETTINGS = {
+  initiativeMaxDepth: 2,
+  autoCompleteParentTasks: true,
+  estimationScale: 'fibonacci',
+  fiscalYearStartMonth: 0,
+  workingWeekdays: [1, 2, 3, 4, 5],
+};
 async function body<T>(res: Response): Promise<T> {
   return (await res.json()) as T;
 }
@@ -373,12 +380,7 @@ describe('orgs router', () => {
 
     const initial = await app.request(`/${orgId}/settings/work-structure`);
     expect(initial.status).toBe(200);
-    expect(await body(initial)).toEqual({
-      initiativeMaxDepth: 2,
-      autoCompleteParentTasks: true,
-      estimationScale: 'fibonacci',
-      fiscalYearStartMonth: 0,
-    });
+    expect(await body(initial)).toEqual(DEFAULT_WORKSPACE_SETTINGS);
 
     const raised = await app.request(`/${orgId}/settings/work-structure`, {
       method: 'PATCH',
@@ -386,12 +388,7 @@ describe('orgs router', () => {
       body: JSON.stringify({ initiativeMaxDepth: 3 }),
     });
     expect(raised.status).toBe(200);
-    expect(await body(raised)).toEqual({
-      initiativeMaxDepth: 3,
-      autoCompleteParentTasks: true,
-      estimationScale: 'fibonacci',
-      fiscalYearStartMonth: 0,
-    });
+    expect(await body(raised)).toEqual({ ...DEFAULT_WORKSPACE_SETTINGS, initiativeMaxDepth: 3 });
 
     const rescaled = await app.request(`/${orgId}/settings/work-structure`, {
       method: 'PATCH',
@@ -400,10 +397,9 @@ describe('orgs router', () => {
     });
     expect(rescaled.status).toBe(200);
     expect(await body(rescaled)).toEqual({
+      ...DEFAULT_WORKSPACE_SETTINGS,
       initiativeMaxDepth: 3,
-      autoCompleteParentTasks: true,
       estimationScale: 't_shirt',
-      fiscalYearStartMonth: 0,
     });
 
     const fiscal = await app.request(`/${orgId}/settings/work-structure`, {
@@ -413,8 +409,8 @@ describe('orgs router', () => {
     });
     expect(fiscal.status).toBe(200);
     expect(await body(fiscal)).toEqual({
+      ...DEFAULT_WORKSPACE_SETTINGS,
       initiativeMaxDepth: 3,
-      autoCompleteParentTasks: true,
       estimationScale: 't_shirt',
       fiscalYearStartMonth: 6,
     });
@@ -455,8 +451,8 @@ describe('orgs router', () => {
     expect(conflict.status).toBe(409);
     const unchanged = await app.request(`/${orgId}/settings/work-structure`);
     expect(await body(unchanged)).toEqual({
+      ...DEFAULT_WORKSPACE_SETTINGS,
       initiativeMaxDepth: 3,
-      autoCompleteParentTasks: true,
       estimationScale: 't_shirt',
       fiscalYearStartMonth: 6,
     });

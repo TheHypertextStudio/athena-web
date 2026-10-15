@@ -52,7 +52,7 @@ const {
   };
 });
 
-vi.mock('../../src/lib/api', () => ({
+vi.mock('../../src/lib/api', async () => ({
   api: {
     v1: {
       orgs: {
@@ -62,7 +62,10 @@ vi.mock('../../src/lib/api', () => ({
           agents: { $get: agentsGet },
           initiatives: { $get: initiativesGet },
           programs: { $get: programsGet },
-          templates: { $get: templatesGet },
+          templates: {
+            $get: templatesGet,
+            definitions: (await import('./blank-template-routes')).blankTemplateRoutes,
+          },
           settings: { 'work-structure': { $get: settingsGet } },
         },
       },

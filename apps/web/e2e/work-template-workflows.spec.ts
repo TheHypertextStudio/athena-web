@@ -1,4 +1,3 @@
-import { readFileSync } from 'node:fs';
 import type { Page } from '@playwright/test';
 import type { RecurrenceSeriesDetailOut } from '../src/lib/contracts/recurrence';
 
@@ -7,6 +6,7 @@ import { TIMEOUTS } from './helpers/constants';
 import { renderedContrastRatio } from './helpers/calendar-ui';
 import { expect, test } from './helpers/fixtures';
 import { createMobileAuditFixture, type MobileAuditFixture } from './helpers/mobile-audit-fixture';
+import { blueprintWorkspace } from './helpers/work-template-blueprints';
 import { apiJson, waitForApiResponse } from './helpers/net';
 
 const sessionPath = process.env['E2E_WORK_TEMPLATE_SESSION'];
@@ -16,18 +16,10 @@ if (sessionPath) test.use({ storageState: sessionPath });
 async function workspace(
   page: Page,
 ): Promise<{ orgId: string; fixture?: MobileAuditFixture | undefined }> {
+  page.setDefaultTimeout(TIMEOUTS.ui);
   if (sessionPath) {
-    const metadata = JSON.parse(readFileSync(`${sessionPath}.meta.json`, 'utf8')) as {
-      orgId: string;
-      mobileAuditFixture?: MobileAuditFixture;
-    };
-    if (!metadata.mobileAuditFixture) {
-      await page.goto('/', { waitUntil: 'commit', timeout: TIMEOUTS.pageReady });
-    }
-    return {
-      orgId: metadata.mobileAuditFixture?.orgId ?? metadata.orgId,
-      fixture: metadata.mobileAuditFixture,
-    };
+    const fixture = await blueprintWorkspace(page);
+    return { orgId: fixture.orgId, fixture };
   }
   const { orgId } = await signUpAndOnboard(page, 'WorkTemplates');
   return { orgId };
@@ -55,34 +47,37 @@ for (const kind of ['Task', 'Project', 'Initiative', 'Program'] as const) {
     });
     const suffix = Date.now();
     const name = `${kind} workflow ${suffix}`;
-    await page.getByRole('button', { name: 'New template', exact: true }).click();
-    await page.getByRole('menuitem', { name: kind, exact: true }).click();
-    const dialog = page.getByRole('dialog', { name: `New ${kind.toLowerCase()} template` });
-    await expect(dialog.getByRole('button', { name: 'Continue', exact: true })).toBeDisabled();
-    await dialog.getByRole('textbox', { name: 'Template name', exact: true }).fill(name);
-    await dialog
+    await page.getByRole('link', { name: 'New template', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'Save draft', exact: true })).toBeDisabled();
+    await page
+      .getByRole('combobox', { name: 'Kind of work', exact: true })
+      .selectOption(kind.toLocaleLowerCase());
+    await page.getByRole('textbox', { name: 'Template name', exact: true }).fill(name);
+    await page
       .getByRole('textbox', { name: 'When to use it', exact: true })
-      .fill(`Reusable ${kind.toLowerCase()} starting fields.`);
-    await dialog.getByRole('button', { name: 'Continue', exact: true }).click();
-    const title = kind === 'Task' ? 'Task title (optional)' : `${kind} name (optional)`;
-    await dialog.getByRole('textbox', { name: title, exact: true }).fill(`${kind} starting name`);
-    await dialog
-      .getByRole('textbox', { name: 'Work description', exact: true })
+      .fill(`Reusable ${kind.toLocaleLowerCase()} starting fields.`);
+    await page.getByRole('button', { name: 'Define the work', exact: true }).click();
+    const starting = kind === 'Task' ? 'Starting title' : 'Starting name';
+    await page.getByRole('textbox', { name: starting, exact: true }).fill(`${kind} starting name`);
+    await page
+      .getByRole('textbox', { name: 'Starting document', exact: true })
       .fill('Record the goal, owner, and next action.');
-    await dialog.getByRole('button', { name: 'Continue', exact: true }).click();
-    await expect(dialog.getByText(name, { exact: true })).toBeVisible();
     const saved = waitForApiResponse(page, /\/templates\/definitions$/, { method: 'POST' });
-    await dialog.getByRole('button', { name: 'Create template', exact: true }).click();
+    await page.getByRole('button', { name: 'Save draft', exact: true }).click();
     const response = await saved;
     expect(response.ok()).toBe(true);
     const draft = (await response.json()) as { id: string; scope: string; status: string };
     expect(draft.scope).toBe('personal');
     expect(draft.status).toBe('draft');
     await expect(page).toHaveURL(new RegExp(`/templates/${draft.id}$`));
-    const starting = kind === 'Task' ? 'Starting title' : 'Starting name';
+    await expect(page.getByRole('tab', { name: 'Work', exact: true })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
     await expect(page.getByRole('textbox', { name: starting, exact: true })).toHaveValue(
       `${kind} starting name`,
     );
+    await page.getByRole('tab', { name: 'Purpose', exact: true }).click();
     const renamed = `${name} revised`;
     await page.getByRole('textbox', { name: 'Template name', exact: true }).fill(renamed);
     await page.getByRole('textbox', { name: 'When to use it', exact: true }).fill('');
@@ -90,18 +85,26 @@ for (const kind of ['Task', 'Project', 'Initiative', 'Program'] as const) {
     await page.getByRole('button', { name: 'Save draft', exact: true }).click();
     expect((await updated).ok()).toBe(true);
     await page.reload({ waitUntil: 'commit' });
+    await expect(page.getByRole('tab', { name: 'Work', exact: true })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    await page.getByRole('tab', { name: 'Purpose', exact: true }).click();
     await expect(page.getByRole('textbox', { name: 'Template name', exact: true })).toHaveValue(
       renamed,
     );
     await expect(page.getByRole('textbox', { name: 'When to use it', exact: true })).toHaveValue(
       '',
     );
+    await page.getByRole('tab', { name: 'Work', exact: true }).click();
     await expect(
       page.getByRole('textbox', { name: 'Starting document', exact: true }),
     ).toContainText('Record the goal, owner, and next action.');
+    await page.getByRole('tab', { name: 'Review', exact: true }).click();
     const publication = waitForApiResponse(page, /\/publish$/, { method: 'POST' });
     await page.getByRole('button', { name: 'Publish to workspace', exact: true }).click();
     expect((await publication).ok()).toBe(true);
+    await page.getByRole('button', { name: 'Published history', exact: true }).click();
     await expect(page.getByRole('button', { name: 'Version 1', exact: true })).toBeVisible();
   });
 }
@@ -112,7 +115,26 @@ test('a project repeats through persisted setup and future revisions preserve oc
   const initial = await workspace(page);
   const fixture = initial.fixture ?? (await createMobileAuditFixture(page));
   const orgId = fixture.orgId;
-  await page.goto(`/orgs/${orgId}/projects/${fixture.projectId}`, {
+  const project = await apiJson<{ id: string }>(page, `/v1/orgs/${orgId}/projects`, {
+    method: 'POST',
+    body: {
+      name: `Repeatable community dinner ${Date.now()}`,
+      teamId: fixture.teamId,
+      leadId: fixture.ownerActorId,
+      programId: fixture.programId,
+      description: 'Prepare a welcoming community dinner and record the outcome.',
+    },
+  });
+  await apiJson(page, `/v1/orgs/${orgId}/tasks`, {
+    method: 'POST',
+    body: {
+      title: 'Confirm the venue and volunteer roles',
+      teamId: fixture.teamId,
+      projectId: project.id,
+      assigneeId: fixture.ownerActorId,
+    },
+  });
+  await page.goto(`/orgs/${orgId}/projects/${project.id}`, {
     waitUntil: 'commit',
     timeout: TIMEOUTS.pageReady,
   });
@@ -236,7 +258,7 @@ test('generated work opens schedule management in place and restores focus after
 
 test.describe('touch template layout', () => {
   test.use({ hasTouch: true });
-  test('guided draft creation preserves dirty dismissal and long-document actions at every phone size', async ({
+  test('guided draft creation preserves unsaved navigation and warns on document dismissal and long-document actions at every phone size', async ({
     page,
   }) => {
     const { orgId } = await workspace(page);
@@ -244,29 +266,27 @@ test.describe('touch template layout', () => {
       waitUntil: 'commit',
       timeout: TIMEOUTS.pageReady,
     });
-    await page.getByRole('button', { name: 'New template', exact: true }).click();
-    await page.getByRole('menuitem', { name: 'Project', exact: true }).click();
-    const dialog = page.getByRole('dialog', { name: 'New project template', exact: true });
-    await dialog
+    await page.getByRole('link', { name: 'New template', exact: true }).click();
+    await page
       .getByRole('textbox', { name: 'Template name', exact: true })
       .fill('Community dinner outline');
-    await dialog.getByRole('button', { name: 'Continue', exact: true }).click();
-    const document = dialog.getByRole('textbox', { name: 'Work description', exact: true });
-    await document.fill(
+    await page.getByRole('button', { name: 'Define the work', exact: true }).click();
+    const bodyEditor = page.getByRole('textbox', { name: 'Starting document', exact: true });
+    await bodyEditor.fill(
       Array.from(
         { length: 18 },
         (_, i) => `Review ${i + 1}: Record the numbers, changed plans and next decisions.`,
       ).join('\n\n'),
     );
-    const scroll = dialog.locator('[data-overlay-scroll-owner]');
-    await expect(scroll).toHaveCount(1);
+    await expect(page.getByRole('dialog', { name: 'Settings', exact: true })).toHaveCount(0);
     for (const [width, height] of [
       [1440, 900],
       [320, 844],
       [390, 600],
-    ]) {
+    ] as const) {
       await page.setViewportSize({ width, height });
-      const next = dialog.getByRole('button', { name: 'Continue', exact: true });
+      const next = page.getByRole('button', { name: 'Save draft', exact: true });
+      await next.scrollIntoViewIfNeeded();
       await expect(next).toBeInViewport();
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
         true,
@@ -276,11 +296,22 @@ test.describe('touch template layout', () => {
         await expect.poll(() => renderedContrastRatio(next)).toBeGreaterThanOrEqual(4.5);
       }
     }
-    await page.keyboard.press('Escape');
-    await dialog.getByRole('button', { name: 'Keep editing', exact: true }).click();
-    await expect(document).toContainText('Review 18');
-    await page.keyboard.press('Escape');
-    await dialog.getByRole('button', { name: 'Discard', exact: true }).click();
-    await expect(dialog).not.toBeVisible();
+    await page.getByRole('link', { name: 'Work templates', exact: true }).click();
+    await page.getByRole('link', { name: 'New template', exact: true }).click();
+    await page.getByRole('tab', { name: 'Work', exact: true }).click();
+    await expect(bodyEditor).toContainText('Review 18');
+    await page.getByRole('tab', { name: 'Purpose', exact: true }).click();
+    await expect(page.getByRole('textbox', { name: 'Template name', exact: true })).toHaveValue(
+      'Community dinner outline',
+    );
+    // Reload is a document dismissal; the browser must warn before losing unsaved in-memory input.
+    const warning = page.waitForEvent('dialog');
+    const reload = page.reload({ waitUntil: 'commit' }).catch(() => undefined);
+    const prompt = await warning;
+    expect(prompt.type()).toBe('beforeunload');
+    await prompt.dismiss();
+    await reload;
+    await page.getByRole('tab', { name: 'Work', exact: true }).click();
+    await expect(bodyEditor).toContainText('Review 18');
   });
 });

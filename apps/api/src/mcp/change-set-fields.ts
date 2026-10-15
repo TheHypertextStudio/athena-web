@@ -35,6 +35,12 @@ export const TRACKED: Record<RecordableKind, readonly string[]> = {
     'canceledAt',
     'autoCompletedBySubtasks',
     'archivedAt',
+    'blueprintDateBindings',
+    'workTypeId',
+    'workTypeVersionId',
+    'workTypeAssignedAt',
+    'workTypeAssignmentSource',
+    'blueprintState',
   ],
   project: [
     'visibility',
@@ -55,6 +61,12 @@ export const TRACKED: Record<RecordableKind, readonly string[]> = {
     'targetDateResolution',
     'targetDateFiscalYearStartMonth',
     'archivedAt',
+    'blueprintDateBindings',
+    'workTypeId',
+    'workTypeVersionId',
+    'workTypeAssignedAt',
+    'workTypeAssignmentSource',
+    'blueprintState',
   ],
   program: [
     'name',
@@ -66,6 +78,12 @@ export const TRACKED: Record<RecordableKind, readonly string[]> = {
     'visibility',
     'ownerId',
     'archivedAt',
+    'blueprintDateBindings',
+    'workTypeId',
+    'workTypeVersionId',
+    'workTypeAssignedAt',
+    'workTypeAssignmentSource',
+    'blueprintState',
   ],
   initiative: [
     'statusId',
@@ -81,8 +99,14 @@ export const TRACKED: Record<RecordableKind, readonly string[]> = {
     'targetDateResolution',
     'targetDateFiscalYearStartMonth',
     'archivedAt',
+    'blueprintDateBindings',
+    'workTypeId',
+    'workTypeVersionId',
+    'workTypeAssignedAt',
+    'workTypeAssignmentSource',
+    'blueprintState',
   ],
-  milestone: ['projectId', 'name', 'description', 'targetDate', 'sort'],
+  milestone: ['projectId', 'name', 'description', 'targetDate', 'sort', 'blueprintDateBindings'],
 };
 
 /**
@@ -96,5 +120,14 @@ export function trackedFields(
   kind: RecordableKind,
   row: Record<string, unknown>,
 ): Record<string, unknown> {
-  return Object.fromEntries(TRACKED[kind].map((key) => [key, row[key]]));
+  return Object.fromEntries(
+    TRACKED[kind].map((key) => [key, comparableTrackedValue(key, row[key])]),
+  );
+}
+
+/** Exclude receipt identity from state comparisons while retaining accepted dependency ownership and manifests. */
+export function comparableTrackedValue(key: string, value: unknown): unknown {
+  if (key === 'blueprintState' && value && typeof value === 'object' && !Array.isArray(value))
+    return { ...value, lastApplicationChangeSetId: null };
+  return value instanceof Date ? value.toISOString() : value;
 }

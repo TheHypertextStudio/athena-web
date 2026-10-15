@@ -3,10 +3,18 @@ import { beforeAll, describe, expect, it, vi } from 'vitest';
 
 import type * as DbModule from '@docket/db';
 
-import { getDb, one, seedBaseOrg, type StatusIdLookup } from '../support/routes-harness';
+import {
+  getDb,
+  one,
+  seedBaseOrg,
+  seedTaskAccessOrg,
+  seedTask as seedWorkTask,
+  type StatusIdLookup,
+} from '../support/routes-harness';
 import { buildAutomationRegistry, type MailApplier } from '../../src/lib/automation/handlers';
 import { defaultMailApplier, runAutomationsForEvent } from '../../src/lib/automation/runtime';
 import { loadEnabledRules, seedDefaultAutomationRules } from '../../src/lib/automation/rules-store';
+import { fireAutomationTestEvent } from './automation-test-event';
 import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
@@ -76,11 +84,17 @@ async function seedTaskWithEmail() {
   };
 }
 
-async function addRule(orgId: string, on: unknown, then: unknown, enabled = true) {
+async function addRule(
+  orgId: string,
+  on: unknown,
+  then: unknown,
+  options: boolean | { readonly createdBy: string } = true,
+) {
   await db.insert(schema.automationRule).values({
     organizationId: orgId,
     name: 'test rule',
-    enabled,
+    createdBy: typeof options === 'boolean' ? undefined : options.createdBy,
+    enabled: typeof options === 'boolean' ? options : true,
     eventMatch: on,
     condition: { op: 'and', nodes: [] },
     actions: then,
@@ -232,24 +246,7 @@ describe('defaultMailApplier org-scoping (security)', () => {
 });
 
 describe('generic action handlers (M5)', () => {
-  /** Run one event through the real registry with a recording mail applier. */
-  async function fire(
-    orgId: string,
-    event: Partial<Parameters<typeof runAutomationsForEvent>[0]>,
-  ): Promise<void> {
-    const registry = buildAutomationRegistry({ mailApplier: async () => undefined });
-    await runAutomationsForEvent(
-      {
-        organizationId: orgId,
-        kind: 'created',
-        source: 'docket',
-        detail: {},
-        occurredAt: new Date(0),
-        ...event,
-      },
-      registry,
-    );
-  }
+  const fire = fireAutomationTestEvent;
 
   async function seedTask(
     statusId: StatusIdLookup,
@@ -257,27 +254,24 @@ describe('generic action handlers (M5)', () => {
     teamId: string,
     actorId: string,
   ) {
-    return one(
-      await db
-        .insert(schema.task)
-        .values({
-          organizationId: orgId,
-          teamId,
-          title: 'Automatable task',
-          state: 'todo',
-          statusId: statusId('task', 'todo'),
-          createdBy: actorId,
-        })
-        .returning(),
-    );
+    return seedWorkTask(db, schema, statusId, {
+      organizationId: orgId,
+      teamId,
+      title: 'Automatable task',
+      state: 'todo',
+      createdBy: actorId,
+    });
   }
 
   it('task.setStatus transitions via the shared lib (terminal state derives completedAt)', async () => {
-    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, humanActorId, statusId } = await seedTaskAccessOrg(db, schema);
     const t = await seedTask(statusId, orgId, teamId, humanActorId);
-    await addRule(orgId, { kind: 'created', subjectType: 'task' }, [
-      { type: 'task.setStatus', params: { state: 'done' } },
-    ]);
+    await addRule(
+      orgId,
+      { kind: 'created', subjectType: 'task' },
+      [{ type: 'task.setStatus', params: { state: 'done' } }],
+      { createdBy: humanActorId },
+    );
 
     await fire(orgId, { subjectType: 'task', subjectId: t.id, actorId: humanActorId });
 
@@ -292,7 +286,7 @@ describe('generic action handlers (M5)', () => {
     // runAutomationsForEvent. A regression here (e.g. the mutation becoming fire-and-forget,
     // decoupled from the awaited automationDispatch.run scope) would let the internally-
     // emitted 'completed' event trigger a second rule pass.
-    const { orgId, teamId, statusId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, statusId, humanActorId } = await seedTaskAccessOrg(db, schema);
     const [u] = await db
       .insert(schema.user)
       .values({ name: 'Ada', email: `cascade-${Date.now().toString()}@example.com` })
@@ -312,9 +306,12 @@ describe('generic action handlers (M5)', () => {
 
     // Rule 1 fires on the initiating 'created' event and transitions the task to a terminal
     // state — internally emitting 'completed' through the real emitEvent facade.
-    await addRule(orgId, { kind: 'created', subjectType: 'task' }, [
-      { type: 'task.setStatus', params: { state: 'done' } },
-    ]);
+    await addRule(
+      orgId,
+      { kind: 'created', subjectType: 'task' },
+      [{ type: 'task.setStatus', params: { state: 'done' } }],
+      { createdBy: humanActorId },
+    );
     // Rule 2 would fire on that internally-emitted 'completed' event, IF the cascade cap didn't
     // suppress it.
     await addRule(orgId, { kind: 'completed', subjectType: 'task' }, [

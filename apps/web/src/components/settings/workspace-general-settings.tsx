@@ -15,6 +15,7 @@ import { useDebouncedAutosave } from '@/lib/use-debounced-autosave';
 import { SettingsImagePicker } from './settings-image-picker';
 import { useCanManageOrg } from './use-can-manage-org';
 import { SettingsSectionPage } from './settings-section-page';
+import { WorkspaceWorkingWeekdays } from './workspace-working-weekdays';
 
 /** Props for the workspace General settings editor. */
 export interface WorkspaceGeneralSettingsProps {
@@ -38,6 +39,45 @@ function draftFromWorkspace(workspace: OrgOut): WorkspaceDraft {
     avatar: workspace.avatar ?? '',
     vocabulary: workspace.vocabulary.preset,
   };
+}
+
+/** Keep the existing independent identity-field autosaves separate from the page layout. */
+function useWorkspaceIdentityAutosave({
+  draft,
+  current,
+  canEdit,
+  save,
+}: {
+  readonly draft: WorkspaceDraft | null;
+  readonly current: WorkspaceDraft | null;
+  readonly canEdit: boolean;
+  readonly save: (patch: OrgUpdate) => void;
+}): void {
+  useDebouncedAutosave({
+    value: draft?.name.trim() ?? '',
+    baseline: current?.name,
+    ready: canEdit && current !== null,
+    save: (name) => {
+      if (name) save({ name });
+    },
+  });
+  useDebouncedAutosave({
+    value: draft?.purpose.trim() ?? '',
+    baseline: current?.purpose,
+    ready: canEdit && current !== null,
+    save: (purpose) => {
+      save({ purpose: purpose || null });
+    },
+  });
+  useDebouncedAutosave({
+    value: draft?.vocabulary,
+    baseline: current?.vocabulary,
+    ready: canEdit && current !== null,
+    delayMs: 0,
+    save: (vocabulary) => {
+      if (vocabulary) save({ vocabulary });
+    },
+  });
 }
 
 /**
@@ -99,38 +139,14 @@ export function WorkspaceGeneralSettings({ orgId }: WorkspaceGeneralSettingsProp
     setEditing(true);
   }
 
-  useDebouncedAutosave({
-    value: draft?.name.trim() ?? '',
-    baseline: current?.name,
-    ready: canEdit && current !== null,
-    save: (name) => {
-      if (name) save.mutate({ name });
-    },
-  });
-  useDebouncedAutosave({
-    value: draft?.purpose.trim() ?? '',
-    baseline: current?.purpose,
-    ready: canEdit && current !== null,
-    save: (purpose) => {
-      save.mutate({ purpose: purpose || null });
-    },
-  });
-  useDebouncedAutosave({
-    value: draft?.vocabulary,
-    baseline: current?.vocabulary,
-    ready: canEdit && current !== null,
-    delayMs: 0,
-    save: (vocabulary) => {
-      if (vocabulary) save.mutate({ vocabulary });
-    },
-  });
+  useWorkspaceIdentityAutosave({ draft, current, canEdit, save: save.mutate });
 
   const nameInvalid = draft !== null && draft.name.trim() === '';
 
   return (
     <SettingsSectionPage
       title="General"
-      description="Edit how this workspace appears and how its work is named."
+      description="Edit how this workspace appears, how its work is named, and its working calendar."
     >
       {workspaceQ.isError ? (
         <QueryLoadFailure title="Workspace settings" query={workspaceQ} />
@@ -189,6 +205,10 @@ export function WorkspaceGeneralSettings({ orgId }: WorkspaceGeneralSettingsProp
                 <option value="agency">Agency and client work</option>
               </Select>
             </Field>
+
+            <div className="sm:col-span-2">
+              <WorkspaceWorkingWeekdays orgId={orgId} canEdit={canEdit} />
+            </div>
 
             <div className="sm:col-span-2">
               <SettingsImagePicker

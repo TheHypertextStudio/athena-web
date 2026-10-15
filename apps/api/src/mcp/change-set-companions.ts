@@ -9,12 +9,17 @@
  * which module an entry belongs to, so both undo paths dispatch the same way. `change-set.ts` is
  * pinned at its size in the complexity ledger, which is why the dispatch is not inline there.
  */
-import { db, type changeSetEntry } from '@docket/db';
+import { type changeSetEntry } from '@docket/db';
 
 import type { Tx, UndoOutcome } from './change-set';
-import { isCatalogKind, revertCatalogEntry } from './change-set-catalog';
+import { isCatalogKind, revertCatalogEntry, prelockCatalogTemplates } from './change-set-catalog';
 import { isInitiativeParentKind, revertInitiativeParent } from './change-set-hierarchy';
 import { isLabelSetKind, revertLabelSet } from './change-set-labels';
+import {
+  isRetainedDateOwnershipKind,
+  revertRetainedDateOwnership,
+} from './change-set-retained-dates';
+import { serializableTx } from '../lib/serializable-tx';
 
 /** A stored change-set entry, as undo reads it back; `op` is widened to match `revertEntry`. */
 export type StoredEntry = Pick<
@@ -37,7 +42,12 @@ export interface RevertResult {
 
 /** Whether another module reverses this entry kind. */
 export function isCompanionKind(kind: string): boolean {
-  return isLabelSetKind(kind) || isCatalogKind(kind) || isInitiativeParentKind(kind);
+  return (
+    isLabelSetKind(kind) ||
+    isCatalogKind(kind) ||
+    isInitiativeParentKind(kind) ||
+    isRetainedDateOwnershipKind(kind)
+  );
 }
 
 /**
@@ -50,6 +60,8 @@ export function revertCompanionIn(
   orgId: string,
   tx: Tx,
 ): Promise<RevertResult> {
+  if (isRetainedDateOwnershipKind(entry.entityKind))
+    return revertRetainedDateOwnership(entry, orgId, tx);
   if (isCatalogKind(entry.entityKind))
     return revertCatalogEntry(entry.entityKind, entry, orgId, tx);
   if (isInitiativeParentKind(entry.entityKind)) return revertInitiativeParent(entry, orgId, tx);
@@ -64,7 +76,10 @@ export function revertCompanionIn(
  * @returns What happened to it.
  */
 export async function revertCompanion(entry: StoredEntry, orgId: string): Promise<UndoOutcome> {
-  const result = await db.transaction((tx) => revertCompanionIn(entry, orgId, tx));
+  const result = await serializableTx(async (tx) => {
+    await prelockCatalogTemplates([entry], orgId, tx);
+    return revertCompanionIn(entry, orgId, tx);
+  });
   await result.settle?.();
   return result.outcome;
 }

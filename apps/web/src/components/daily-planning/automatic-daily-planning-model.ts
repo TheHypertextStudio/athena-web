@@ -46,13 +46,13 @@ export function isDailyPlanningWorkday(
   );
 }
 
-/** Let active editors, pickers, menus, and modals retain input before announcing planning. */
+/** Let sustained work-definition flows, active editors and overlays retain ownership before planning. */
 export function dailyPlanningOwnsInput(): boolean {
   const active = document.activeElement;
   return (
     Boolean(
       document.querySelector(
-        '[role="dialog"][data-state="open"]:not([data-daily-planning-entry]), [role="alertdialog"], [role="menu"][data-state="open"], [role="listbox"][data-state="open"]',
+        '[data-work-template-authoring], [role="dialog"][data-state="open"]:not([data-daily-planning-entry]), [role="alertdialog"], [role="menu"][data-state="open"], [role="listbox"][data-state="open"]',
       ),
     ) ||
     (active instanceof HTMLElement &&

@@ -15,7 +15,7 @@ import {
   appWithActor,
   getDb,
   one,
-  seedBaseOrg,
+  seedTaskAccessOrg as seedBaseOrg,
   seedInitiative,
   seedProject,
 } from '../support/routes-harness';

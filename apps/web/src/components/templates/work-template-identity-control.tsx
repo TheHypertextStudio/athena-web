@@ -2,12 +2,14 @@
 import type { TemplateTargetType } from '@docket/work/template-contract';
 import type {
   WorkTemplateChoice,
+  WorkTemplateDisplay,
   WorkTemplateChangeRequest,
   WorkTemplateChangeField,
 } from '@docket/work/work-template-reference';
 import { Button } from '@docket/ui/primitives';
 import { useQueryClient } from '@tanstack/react-query';
 import { type JSX, useState } from 'react';
+import { UserFacingError } from '@/lib/problem';
 import { useApiQuery } from '@/lib/query';
 import { workTargetCollectionKey } from '@/lib/query-keys';
 import { WorkTemplateChoiceMenu, WorkTemplateIdentityLabel } from './work-template-choice-menu';
@@ -39,7 +41,7 @@ export function WorkTemplateIdentityControl({
   workTypeVersionId,
   canEdit,
 }: WorkTemplateIdentityControlProps): JSX.Element {
-  const change = useTemplateChangeController(orgId, kind, workId);
+  const change = useTemplateChangeController(orgId, kind, workId, workTypeId);
   const queryClient = useQueryClient();
   const identity = useApiQuery(workTemplateIdentityDef(orgId, workTypeId, workTypeVersionId));
   const current = identity.data;
@@ -72,27 +74,55 @@ export function WorkTemplateIdentityControl({
           <WorkTemplateIdentityLabel kind={kind} current={current} />
         </span>
       )}
+      {canEdit &&
+      !current.archived &&
+      current.latestVersionNumber > current.versionNumber &&
+      workTypeVersionId ? (
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={() => {
+            change.select({
+              ...current,
+              versionNumber: current.latestVersionNumber,
+            });
+          }}
+        >
+          Update template
+        </Button>
+      ) : null}
       <WorkTemplateChangePreview key={change.previewKey} {...change.previewProps} />
     </>
   );
 }
 
-function useTemplateChangeController(orgId: string, kind: TemplateTargetType, workId: string) {
-  const [selected, setSelected] = useState<WorkTemplateChoice | null>(null);
+function useTemplateChangeController(
+  orgId: string,
+  kind: TemplateTargetType,
+  workId: string,
+  currentTypeId: string | undefined,
+) {
+  const [selected, setSelected] = useState<WorkTemplateChoice | WorkTemplateDisplay | null>(null);
   const mutation = useWorkTemplateAssignment(orgId, kind, workId);
   const selection: WorkTemplateChangeRequest | null = selected
-    ? { workTypeId: selected.id, workTypeVersionId: selected.versionId }
+    ? {
+        workTypeId: selected.id,
+        ...(selected.id === currentTypeId
+          ? { mode: 'update' as const }
+          : { workTypeVersionId: 'versionId' in selected ? selected.versionId : undefined }),
+      }
     : null;
   const preview = useApiQuery(workTemplateChangePreviewDef(orgId, kind, workId, selection));
   const close = (): void => {
     setSelected(null);
   };
   return {
-    select: (choice: WorkTemplateChoice): void => {
+    select: (choice: WorkTemplateChoice | WorkTemplateDisplay): void => {
       mutation.reset();
       setSelected(choice);
     },
-    previewKey: `${selected?.id ?? ''}:${preview.data?.previewToken ?? ''}`,
+    previewKey: `${selected?.id ?? ''}:${selection?.mode ?? 'change'}`,
     previewProps: {
       selected,
       preview: preview.data,
@@ -100,12 +130,14 @@ function useTemplateChangeController(orgId: string, kind: TemplateTargetType, wo
       previewFailed: preview.isError,
       pending: mutation.isPending,
       failed: mutation.isError,
+      stale: mutation.error instanceof UserFacingError && mutation.error.status === 409,
+      mode: selection?.mode ?? 'change',
       onRetryPreview: (): void => {
         mutation.reset();
         void preview.refetch();
       },
       onClose: close,
-      onConfirm: (applyFields: WorkTemplateChangeField[]): void => {
+      onConfirm: (applyFields: WorkTemplateChangeField[], acceptChildChanges: string[]): void => {
         if (!selected || !preview.data || preview.isError) return;
         mutation.mutate(
           {
@@ -113,6 +145,8 @@ function useTemplateChangeController(orgId: string, kind: TemplateTargetType, wo
             workTypeVersionId: preview.data.workTypeVersionId,
             previewToken: preview.data.previewToken,
             applyFields,
+            ...(selection?.mode === 'update' ? { mode: 'update' as const } : {}),
+            ...(acceptChildChanges.length ? { acceptChildChanges } : {}),
           },
           { onSuccess: close },
         );

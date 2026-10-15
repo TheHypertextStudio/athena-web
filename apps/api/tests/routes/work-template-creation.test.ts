@@ -3,7 +3,10 @@ import type * as DbModule from '@docket/db';
 import { eq } from 'drizzle-orm';
 import { WorkTemplateDefinition } from '@docket/work/work-template-contract';
 import { appWithAuthenticatedActor, getDb, seedTaskAccessOrg } from '../support/routes-harness';
-import { prepareWorkTemplateCreation } from '../../src/lib/work-template-creation';
+import {
+  prepareWorkTemplateCreation,
+  prepareBlueprintChildTemplateCreation,
+} from '../../src/lib/work-template-creation';
 import { ProjectCreate } from '../../src/contracts/project';
 
 let schema: typeof DbModule;
@@ -13,7 +16,10 @@ beforeAll(async () => {
   db = schema.db;
 });
 
-async function published(kind: 'task' | 'project' | 'initiative' | 'program') {
+async function published(
+  kind: 'task' | 'project' | 'initiative' | 'program',
+  startingFields: Readonly<Record<string, unknown>> = {},
+) {
   const workspace = await seedTaskAccessOrg(db, schema, 'manage');
   const definition = WorkTemplateDefinition.parse({
     name: 'Event',
@@ -21,6 +27,7 @@ async function published(kind: 'task' | 'project' | 'initiative' | 'program') {
       targetType: kind,
       description: '## Preparation\n\n## Event',
       ...(kind === 'task' ? { priority: 'high' } : { status: 'obsolete-status' }),
+      ...startingFields,
     },
   });
   const [row] = await db
@@ -48,6 +55,56 @@ async function published(kind: 'task' | 'project' | 'initiative' | 'program') {
 }
 
 describe('published work-template creation', () => {
+  it('retains a reviewed nested publication outside its menu offerings and after archive', async () => {
+    const fixture = await published('task');
+    await db.insert(schema.workTypeTeam).values({
+      organizationId: fixture.orgId,
+      workTypeId: fixture.templateId,
+      teamId: fixture.teamId,
+    });
+    const selection = { workTypeId: fixture.templateId, workTypeVersionId: fixture.versionId };
+    await expect(
+      prepareWorkTemplateCreation(fixture.orgId, 'task', selection),
+    ).rejects.toMatchObject({ status: 422 });
+    await expect(
+      prepareBlueprintChildTemplateCreation(fixture.orgId, 'task', selection),
+    ).resolves.toMatchObject({ ...selection, description: '## Preparation\n\n## Event' });
+    await db
+      .update(schema.template)
+      .set({ publicationState: 'archived', archivedAt: new Date() })
+      .where(eq(schema.template.id, fixture.templateId));
+    await expect(
+      prepareWorkTemplateCreation(fixture.orgId, 'task', selection),
+    ).rejects.toMatchObject({ status: 404 });
+    await expect(
+      prepareBlueprintChildTemplateCreation(fixture.orgId, 'task', selection),
+    ).resolves.toMatchObject({ ...selection, description: '## Preparation\n\n## Event' });
+  });
+
+  it('requires an exact reviewed publication for the internal child adapter', async () => {
+    const fixture = await published('task');
+    await expect(
+      prepareBlueprintChildTemplateCreation(fixture.orgId, 'task', {
+        workTypeId: fixture.templateId,
+      }),
+    ).rejects.toMatchObject({ status: 422 });
+  });
+
+  it('retains a canonical Task starting state while explicit state still wins', async () => {
+    const fixture = await published('task', { state: 'in_progress' });
+    const prepared = await prepareWorkTemplateCreation(fixture.orgId, 'task', {
+      teamId: fixture.teamId,
+      workTypeId: fixture.templateId,
+    });
+    expect(prepared.state).toBe('in_progress');
+    const explicit = await prepareWorkTemplateCreation(fixture.orgId, 'task', {
+      teamId: fixture.teamId,
+      workTypeId: fixture.templateId,
+      state: 'backlog',
+    });
+    expect(explicit.state).toBe('backlog');
+  });
+
   it('retains project identity and rejects a version alone in the wire contract', () => {
     const workTypeId = '01ARZ3NDEKTSV4RRFFQ69G5FAV';
     const workTypeVersionId = '01ARZ3NDEKTSV4RRFFQ69G5FAW';

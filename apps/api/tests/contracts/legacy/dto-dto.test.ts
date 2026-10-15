@@ -132,8 +132,6 @@ import {
   OrgOut,
   OrgSummary,
   OrgUpdate,
-  WorkspaceSettingsOut,
-  WorkspaceSettingsUpdate,
 } from '../../../src/contracts/organization';
 import {
   DEFAULT_PROGRAM_STATUS_KEYS,
@@ -842,28 +840,6 @@ describe('entity display DTOs', () => {
     for (const id of [ID, ID2, ID3]) {
       expect(TEAM_DEFAULT_COLOR_KEYS).toContain(defaultEntityDisplay('team', id).colorKey);
     }
-  });
-});
-
-describe('workspace settings DTOs', () => {
-  it('accepts Initiative maximum depths from one through five', () => {
-    // Out is what the server sends, so every field is present — including estimationScale, which
-    // has no default precisely because a workspace's scale is always a real stored choice.
-    expect(
-      WorkspaceSettingsOut.parse({
-        initiativeMaxDepth: 2,
-        autoCompleteParentTasks: true,
-        estimationScale: 'fibonacci',
-        fiscalYearStartMonth: 0,
-      }).initiativeMaxDepth,
-    ).toBe(2);
-    expect(WorkspaceSettingsUpdate.parse({ initiativeMaxDepth: 1 }).initiativeMaxDepth).toBe(1);
-    expect(WorkspaceSettingsUpdate.parse({ initiativeMaxDepth: 5 }).initiativeMaxDepth).toBe(5);
-  });
-
-  it('rejects Initiative maximum depths outside one through five', () => {
-    expect(WorkspaceSettingsUpdate.safeParse({ initiativeMaxDepth: 0 }).success).toBe(false);
-    expect(WorkspaceSettingsUpdate.safeParse({ initiativeMaxDepth: 6 }).success).toBe(false);
   });
 });
 

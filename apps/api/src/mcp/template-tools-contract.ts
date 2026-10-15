@@ -6,6 +6,7 @@
  */
 import { ViewScope } from '@docket/work/saved-view-contract';
 import { TemplateDraft } from '@docket/work/template-contract';
+import { Blueprint } from '@docket/work/work-template-blueprint';
 import { z } from 'zod';
 
 import { WIDGET, widgetMeta } from './apps';
@@ -17,7 +18,7 @@ import { orgIdParam } from './tools-shared';
 export const defineTemplateDefinition = {
   title: 'Define template',
   description:
-    'Create or edit reusable work templates. Put literal Markdown in payload.description; description summarizes usage. Omit template to create with name and payload; otherwise edit by ID/name. payload replaces the draft. Legacy workspace writes publish immediately. action draft saves, publish requires expectedRevision, and archive retires. Undo preserves publication history',
+    'Create or edit reusable work templates. Put literal Markdown in payload.description; description summarizes usage. Omit template to create with name and payload; otherwise edit by ID/name. payload replaces the draft. Legacy workspace writes publish immediately. action draft saves included child work in blueprint without publishing; publish requires expectedRevision, and archive retires. Blueprints require explicit draft authoring. Undo preserves publication history',
   inputSchema: {
     orgId: orgIdParam,
     action: z
@@ -63,6 +64,9 @@ export const defineTemplateDefinition = {
       .describe(`The team it belongs to. Required when \`scope\` is \`team\`. ${DESCRIPTOR_HINT}`),
     payload: TemplateDraft.optional().describe(
       'What a new item starts with. Required to create; `payload.targetType` sets the kind of work the template creates.',
+    ),
+    blueprint: Blueprint.optional().describe(
+      'Included child work and dependencies. Requires action draft; omitted preserves the saved graph, and empty steps/dependencies clears it. Publication validates the composed graph, capped at 500 total items including its root and nested templates.',
     ),
     labels: z
       .array(z.string())

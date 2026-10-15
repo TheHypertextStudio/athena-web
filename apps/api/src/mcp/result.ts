@@ -9,11 +9,18 @@
  * {@link CapabilityError} (insufficient) decision the RPC layer makes.
  */
 import { type Capability, canActor, type ResourceRef } from '@docket/authz';
-import { db } from '@docket/db';
+import { db, type Database } from '@docket/db';
+import { BlueprintError } from '@docket/work/blueprints';
 import { publicProblemTitle, type FieldIssue } from '../contracts/errors';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 
-import { ApiError, CapabilityError, InsufficientScopeError, NotFoundError } from '../error';
+import {
+  ApiError,
+  CapabilityError,
+  InsufficientScopeError,
+  NotFoundError,
+  toApiError,
+} from '../error';
 import type { McpActor, McpContext } from './auth';
 import { resolveActor } from './auth';
 import { type McpScope, requireScope } from './scope';
@@ -117,6 +124,7 @@ export async function runTool(body: () => Promise<CallToolResult>): Promise<Call
     return await body();
   } catch (err) {
     if (err instanceof ApiError) return errorResult(describeApiError(err));
+    if (err instanceof BlueprintError) return errorResult(describeApiError(toApiError(err)));
     return errorResult('Internal error');
   }
 }
@@ -160,6 +168,7 @@ export async function scopedActor(
  * @param actor - The caller's resolved {@link McpActor} (org + actor id).
  * @param required - The capability the operation needs.
  * @param target - The resource being acted on.
+ * @param database - The enclosing transaction when permission reads must share its snapshot.
  * @throws {NotFoundError} When the actor lacks any viewing capability (existence-hiding).
  * @throws {CapabilityError} When the actor can view but not perform the operation.
  */
@@ -167,8 +176,9 @@ export async function authorize(
   actor: McpActor,
   required: Capability,
   target: ResourceRef,
+  database: Database = db,
 ): Promise<void> {
-  const result = await canActor(actor.actorId, required, target, db);
+  const result = await canActor(actor.actorId, required, target, database);
   if (result.allow) return;
   if (result.effectiveCapability === null) throw new NotFoundError();
   throw new CapabilityError();

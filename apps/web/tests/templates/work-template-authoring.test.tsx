@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
 }));
 vi.mock('@/components/templates/work-template-queries', () => ({
   workTemplateDef: () => ({}),
+  workTemplatesDef: () => ({}),
   workTemplateVersionsDef: () => ({}),
   useWorkTemplateWrites: () => ({
     create: { mutateAsync: mocks.create, isPending: false },
@@ -18,6 +19,10 @@ vi.mock('@/components/templates/work-template-queries', () => ({
     publish: { mutateAsync: mocks.publish, isPending: false },
     archive: { isPending: false },
   }),
+}));
+vi.mock('@/lib/query', async (original) => ({
+  ...(await original()),
+  useApiQuery: () => ({ data: { items: [] }, isError: false, isPending: false }),
 }));
 vi.mock('@/components/settings/use-can-manage-org', () => ({
   useCanManageOrg: () => ({ canManage: mocks.canManage, loading: false }),
@@ -105,6 +110,8 @@ describe('work-template sample authoring', () => {
     (canManage) => {
       mocks.canManage = canManage;
       render(<WorkTemplateForm orgId="org" initial={null} onCreated={vi.fn()} />);
+      fireEvent.click(screen.getByRole('tab', { name: 'Work' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Template settings' }));
       const control = screen.getByRole('button', { name: /Offer to teams/ });
       if (canManage) expect(control).toBeEnabled();
       else expect(control).toBeDisabled();

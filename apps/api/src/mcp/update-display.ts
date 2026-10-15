@@ -2,6 +2,7 @@
  * `@docket/api` — how the `update` report card names a row and shows what moved on it.
  */
 import { fieldDiffs, type FieldDiff } from './catalog-rows';
+import type { RecordedChange } from './change-set';
 
 /**
  * Render one value for comparison, so a report card reads without a type switch.
@@ -45,5 +46,33 @@ export function titleOf(row: Record<string, unknown>, fallback: string): string 
 
 /** The fields that actually moved, as `from → to` pairs a person can check. */
 export function diff(before: Record<string, unknown>, after: Record<string, unknown>): FieldDiff[] {
-  return fieldDiffs(before, after, (_field, value) => display(value));
+  const fields = fieldDiffs(before, after, (field, value) =>
+    field.startsWith('blueprint') ? undefined : display(value),
+  );
+  const previous = before['blueprintDateBindings'],
+    next = after['blueprintDateBindings'];
+  if (JSON.stringify(previous) !== JSON.stringify(next))
+    fields.push({ field: 'Template dates', from: 'Template managed', to: 'Manually set' });
+  return fields;
+}
+
+/** Explain an initiating retained-date pin using owned copy, without exposing private receipts. */
+export function addRetainedManualPinField(
+  fields: FieldDiff[],
+  changes: readonly RecordedChange[],
+  kind: string,
+  id: string,
+): void {
+  if (fields.some((field) => field.field === 'Template dates')) return;
+  const pinned = changes.some(
+    (change) =>
+      !('linked' in change) &&
+      change.kind === 'retained_date_ownership' &&
+      change.before?.['manual'] === false &&
+      change.after?.['manual'] === true &&
+      change.after['workKind'] === kind &&
+      change.after['workId'] === id,
+  );
+  if (pinned)
+    fields.push({ field: 'Template dates', from: 'Template managed', to: 'Manually set' });
 }

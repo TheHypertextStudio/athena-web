@@ -4,7 +4,8 @@ import { z } from 'zod';
 import { WorkTypeId, WorkTypeVersionId } from '../ids';
 import { EntityDisplayGlyph } from './entity-display';
 import { ViewScope } from './saved-view';
-import { TemplateDraft, TemplateTargetType } from './template';
+import { Blueprint, BlueprintPreviewWarning, WorkTemplateOrigin } from './work-template-blueprint';
+import { CanonicalTemplateDraft, TemplateTargetType } from './template';
 
 const offeredTeamIds = z.array(TeamId).refine((ids) => new Set(ids).size === ids.length, {
   message: 'Offer a template to each team only once.',
@@ -19,7 +20,8 @@ export const WorkTemplateDefinition = z.strictObject({
   description: z.string().nullable().default(null),
   icon: EntityDisplayGlyph.nullable().default(null),
   defaultStatusKey: z.string().min(1).nullable().default(null),
-  payload: TemplateDraft,
+  payload: CanonicalTemplateDraft,
+  blueprint: Blueprint.default({ steps: [], dependencies: [] }),
 });
 /** Editable or published work-template definition value. */
 export type WorkTemplateDefinition = z.infer<typeof WorkTemplateDefinition>;
@@ -113,6 +115,7 @@ export const WorkTemplateOut = z.object({
   ownerActorId: ActorId.nullable(),
   teamId: TeamId.nullable(),
   isBase: z.boolean(),
+  origin: WorkTemplateOrigin.nullable().default(null),
   revision: z.number().int().nonnegative(),
   definition: WorkTemplateDefinition,
   draftDefinition: WorkTemplateDefinition.optional(),
@@ -125,6 +128,33 @@ export const WorkTemplateOut = z.object({
 /** Authorized work-template definition projection value. */
 export type WorkTemplateOut = z.infer<typeof WorkTemplateOut>;
 
+/** Authorized independent inline capture for review before creating a private draft. */
+export const WorkTemplateCapturePreview = z.strictObject({
+  sourceSnapshotToken: z.string().regex(/^sha256:[a-f0-9]{64}$/),
+  definition: WorkTemplateDefinition,
+  origin: WorkTemplateOrigin.nullable(),
+  warnings: z.array(BlueprintPreviewWarning).max(100),
+  descendantCount: z.number().int().min(0).max(499),
+});
+/** Reviewed capture of a complete authorized current work tree. */
+export type WorkTemplateCapturePreview = z.infer<typeof WorkTemplateCapturePreview>;
+
+/** Name an independent private draft after reviewing the exact source snapshot and warnings. */
+export const WorkTemplateCaptureRequest = z.strictObject({
+  name: WorkTemplateDefinition.shape.name,
+  sourceSnapshotToken: WorkTemplateCapturePreview.shape.sourceSnapshotToken,
+});
+/** Save-as request; publication and source edits are never implied. */
+export type WorkTemplateCaptureRequest = z.infer<typeof WorkTemplateCaptureRequest>;
+
+/** The newly created author-only draft and the warnings reviewed with its capture. */
+export const WorkTemplateCaptureResult = z.strictObject({
+  template: WorkTemplateOut,
+  warnings: z.array(BlueprintPreviewWarning).max(100),
+});
+/** Independent personal template ready for its existing sample editor. */
+export type WorkTemplateCaptureResult = z.infer<typeof WorkTemplateCaptureResult>;
+
 /** Definition discovery within one kind and optional creation team. */
 export const WorkTemplateListQuery = z.object({
   targetType: TemplateTargetType.optional(),
@@ -134,3 +164,24 @@ export const WorkTemplateListQuery = z.object({
 });
 /** Work-template discovery query value. */
 export type WorkTemplateListQuery = z.infer<typeof WorkTemplateListQuery>;
+
+/** Bounded independent pages of authorized archive references. */
+export const WorkTemplateArchiveImpactQuery = z.strictObject({
+  parentOffset: z.coerce.number().int().min(0).max(1_000_000).default(0),
+  scheduleOffset: z.coerce.number().int().min(0).max(1_000_000).default(0),
+  limit: z.coerce.number().int().min(1).max(50).default(20),
+});
+/** Archive impact pagination input. */
+export type WorkTemplateArchiveImpactQuery = z.infer<typeof WorkTemplateArchiveImpactQuery>;
+const archiveImpactPage = z.strictObject({
+  items: z.array(z.strictObject({ id: z.string().min(1), name: z.string().min(1) })).max(50),
+  total: z.number().int().nonnegative(),
+  nextOffset: z.number().int().nonnegative().nullable(),
+});
+/** Authorized current references; no private invocation or concrete work content. */
+export const WorkTemplateArchiveImpact = z.strictObject({
+  parents: archiveImpactPage,
+  schedules: archiveImpactPage,
+});
+/** Authorized template archive impact projection. */
+export type WorkTemplateArchiveImpact = z.infer<typeof WorkTemplateArchiveImpact>;

@@ -14,6 +14,14 @@
  * `/projects/A/milestones/<a milestone of B>` is a 404 rather than a cross-project edit through a
  * guessed id.
  */
+import {
+  prepareBlueprintReflow,
+  applyBlueprintReflow,
+  finishBlueprintReflow,
+} from '../lib/work-template-blueprints/reflow';
+import { serializableTx } from '../lib/serializable-tx';
+import { originFor } from '../lib/provenance/context';
+import { recordChangeSetInTransaction, trackedFields } from '../mcp/change-set';
 import { db, milestone } from '@docket/db';
 import { MilestoneCreate, MilestoneOut, MilestoneUpdate } from '@docket/work/milestone-contract';
 import { CursorQuery, pageOf } from '../contracts/pagination';
@@ -165,8 +173,36 @@ const milestones = new Hono<AppEnv>()
       const { orgId, actorId } = c.get('actorCtx');
       const { id, milestoneId } = c.req.valid('param');
       const body = c.req.valid('json');
-      await loadMilestone(orgId, id, milestoneId);
-      const row = await updateMilestone(orgId, milestoneId, body);
+      const before = await loadMilestone(orgId, id, milestoneId);
+      const result = await serializableTx(async (tx) => {
+        const blueprint = await prepareBlueprintReflow(
+          tx,
+          c.get('actorCtx'),
+          { kind: 'milestone', id: milestoneId },
+          body,
+        );
+        const row = await updateMilestone(orgId, milestoneId, body, tx);
+        const derived = await applyBlueprintReflow(tx, blueprint);
+        await recordChangeSetInTransaction(tx, {
+          orgId,
+          actorId,
+          origin: originFor('milestone_update'),
+          summary: `Updated "${row.name}"`,
+          changes: [
+            {
+              kind: 'milestone',
+              id: row.id,
+              op: 'update',
+              before: trackedFields('milestone', before),
+              after: trackedFields('milestone', row),
+            },
+            ...derived.changes,
+          ],
+        });
+        return { row, derived };
+      });
+      const { row } = result;
+      await finishBlueprintReflow(orgId, result.derived);
       await enqueueSearchUpsert(orgId, 'milestone', row.id);
       const progress = await visibleMilestoneTaskCounts(orgId, actorId, id);
       return ok(c, MilestoneOut, toMilestoneOut(row, progress.get(row.id)));

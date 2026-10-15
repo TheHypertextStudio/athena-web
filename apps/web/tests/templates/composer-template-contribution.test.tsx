@@ -34,8 +34,8 @@ vi.mock('@/lib/query', () => ({
               entityType: 'task',
               teamId: null,
               statuses: [
-                { key: 'todo', isDefault: true },
-                { key: 'doing', isDefault: false },
+                { key: 'todo', name: 'To do', isDefault: true },
+                { key: 'doing', name: 'Doing', isDefault: false },
               ],
             },
           ],

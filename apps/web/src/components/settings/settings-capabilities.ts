@@ -312,7 +312,7 @@ export const SETTINGS_NODES = {
     'workspace-general',
     'general',
     'Workspace',
-    'Edit the workspace name, purpose, address, logo, and terms.',
+    'Edit the workspace name, purpose, logo, terms, and working weekdays.',
   ),
   workspaceInvite: workspaceNode(
     'workspace-invite',

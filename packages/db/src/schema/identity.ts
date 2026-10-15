@@ -19,6 +19,7 @@
  * import cycle resolves at query time, not module-init time.
  */
 import { sql } from 'drizzle-orm';
+import type { WorkingWeekdays } from '@docket/work/work-template-blueprint';
 import type { AccountExportScope } from '@docket/identity-access/account-contract';
 import { defaultVocabularySkin, type VocabularySkin } from '@docket/work/vocabulary';
 import type { AnyPgColumn } from 'drizzle-orm/pg-core';
@@ -151,6 +152,11 @@ export const organization = pgTable(
       .notNull()
       .default(defaultVocabularySkin),
     agentGuidance: text('agent_guidance'),
+    workingWeekdays: integer('working_weekdays')
+      .array()
+      .$type<WorkingWeekdays>()
+      .notNull()
+      .default([1, 2, 3, 4, 5]),
     workTemplateAuthoring: text('work_template_authoring')
       .$type<'contributors' | 'admins'>()
       .notNull()
@@ -184,6 +190,10 @@ export const organization = pgTable(
   },
   (t) => [
     uniqueIndex('organization_slug_uq').on(t.slug),
+    check(
+      'organization_working_weekdays_valid',
+      sql`cardinality(${t.workingWeekdays}) between 1 and 7 and ${t.workingWeekdays} <@ ARRAY[1,2,3,4,5,6,7] and ${t.workingWeekdays} = docket_sorted_weekdays(${t.workingWeekdays})`,
+    ),
     check(
       'organization_work_template_authoring_valid',
       sql`${t.workTemplateAuthoring} in ('contributors', 'admins')`,

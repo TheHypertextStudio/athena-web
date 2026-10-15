@@ -1,3 +1,4 @@
+import { unchangedSince } from '../../mcp/change-set-values';
 /**
  * `@docket/api` — change sets for task writes made through the REST API.
  *
@@ -38,14 +39,9 @@ type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 /** A change that may have turned out empty. */
 type MaybeChange = RecordedChange | null;
 
-/** A comparable form of one tracked value: dates compare by instant. */
-function comparable(value: unknown): unknown {
-  return value instanceof Date ? value.getTime() : value;
-}
-
-/** Whether two tracked snapshots hold the same values. */
+/** Whether tracked JSON and timestamp values remain equal across database reads. */
 function sameSnapshot(a: Record<string, unknown>, b: Record<string, unknown>): boolean {
-  return Object.keys(a).every((key) => comparable(a[key]) === comparable(b[key]));
+  return unchangedSince(b, a);
 }
 
 /**
@@ -267,6 +263,7 @@ export interface RelatedTaskEdgeChange {
 
 /** Input to {@link recordTaskPatch}. */
 export interface TaskPatchRecord {
+  readonly derived?: readonly RecordedChange[];
   readonly orgId: string;
   readonly actorId: string;
   readonly before: TaskRow;
@@ -294,12 +291,14 @@ export async function recordTaskPatch(tx: Tx, input: TaskPatchRecord): Promise<s
       input.labels,
       ...input.related.map((edge) => relatedTaskLink(input.after.id, edge.taskId, edge.linked)),
       ...input.cascades.map(taskUpdateChange),
+      ...(input.derived ?? []),
     ],
   });
 }
 
 /** Input to {@link recordTaskStateChange}. */
 export interface TaskStateChangeRecord {
+  readonly derived?: readonly RecordedChange[];
   readonly orgId: string;
   readonly actorId: string;
   readonly mutation: TaskStateMutation;
@@ -322,7 +321,10 @@ export async function recordTaskStateChange(
     actorId: input.actorId,
     tool: 'set_task_state',
     summary: `Moved "${input.mutation.after.title}" to ${input.mutation.after.state}`,
-    changes: [input.mutation, ...input.cascades].map(taskUpdateChange),
+    changes: [
+      ...[input.mutation, ...input.cascades].map(taskUpdateChange),
+      ...(input.derived ?? []),
+    ],
   });
 }
 

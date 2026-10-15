@@ -162,8 +162,17 @@ template changes. Explicit label edits clear that record and remain strict.
 
 `list_templates` needs `work:read` and workspace `view` access. It initializes shipped defaults
 on the first template read, following the same rule as the template picker. `define_template`
-authors reusable bodies. `define_process` and `schedule_process` separately define multi-step
-recurring work and its schedule.
+authors the starting body and composed child work. Use `action: "draft"` with `blueprint` to create
+or replace the child definition; omitting it preserves the existing children, and an explicitly
+empty graph clears them. Existing draft edits require the returned `revision` as `expectedRevision`.
+Discover the saved definition with `list_templates`, then use `action: "publish"` and the reviewed
+revision to share an immutable version. Publication and archive calls refuse simultaneous draft
+edits. Legacy writes without `action` retain their existing behavior and cannot author a blueprint.
+
+Creation expands a published template transactionally, including nested work, with a maximum of
+500 new items across the creation. Reusable children can use relative dates and parent-based
+responsibility rules; workspace-specific assignments belong on the actual work. `define_process`
+and `schedule_process` separately define recurring work and its schedule.
 
 ### Labels and templates
 

@@ -9,12 +9,12 @@
  * an edit restores the recorded fields, and only when nobody has edited them since.
  */
 import { label, labelGroup, template } from '@docket/db';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import type { AnyPgColumn, PgTable } from 'drizzle-orm/pg-core';
 
 import { labelInUse } from '../lib/labels';
 import { reconcileTemplateImages } from '../lib/templates/write';
-import { restoreTemplateSnapshot } from '../lib/templates/persistence';
+import { restoreTemplateSnapshot, lockTemplateRestorations } from '../lib/templates/persistence';
 import { enqueueSearchDelete, enqueueSearchUpsert } from '../search/write-through';
 import type { CatalogKind } from './catalog-rows';
 import type { StoredChange, Tx } from './change-set';
@@ -53,6 +53,42 @@ export function isCatalogKind(kind: string): kind is CatalogKind {
 /** Project a row down to the fields a change records for its kind. */
 function tracked(kind: CatalogKind, row: Record<string, unknown>): Record<string, unknown> {
   return Object.fromEntries(CATALOG[kind].fields.map((key) => [key, row[key] ?? null]));
+}
+
+/** Prelock all reversible template closures together before an undo starts locking catalog roots. */
+export async function prelockCatalogTemplates(
+  entries: readonly StoredEntry[],
+  orgId: string,
+  tx: Tx,
+): Promise<void> {
+  const templates = entries.filter((entry) => entry.entityKind === 'template');
+  if (templates.length === 0) return;
+  const rows = await tx
+    .select()
+    .from(template)
+    .where(
+      and(
+        eq(template.organizationId, orgId),
+        inArray(
+          template.id,
+          templates.map((entry) => entry.entityId),
+        ),
+      ),
+    );
+  const byId = new Map(rows.map((row) => [row.id, row]));
+  const eligible = templates.filter((entry) => {
+    const current = byId.get(entry.entityId);
+    return current && (!entry.after || unchanged(current, entry.after));
+  });
+  await lockTemplateRestorations(
+    tx,
+    orgId,
+    eligible.map((entry) => ({
+      id: entry.entityId,
+      operation: entry.op,
+      before: entry.before,
+    })),
+  );
 }
 
 /**

@@ -131,10 +131,7 @@ export default function MyWorkClient(): JSX.Element {
         </div>
         <div className="flex items-center gap-2 self-start">
           <InPageFindButton onClick={openSearch} />
-          <Button type="button" className="gap-1.5" onClick={openTaskComposer}>
-            <Plus aria-hidden="true" className="size-4" />
-            New task
-          </Button>
+          <CreateTaskAction ready={userId !== null} onCreate={openTaskComposer} />
         </div>
       </header>
 
@@ -201,10 +198,7 @@ export default function MyWorkClient(): JSX.Element {
             </span>
             <p className="text-on-surface text-body-medium font-medium">{empty.title}</p>
             {tab === 'mine' ? (
-              <Button type="button" variant="secondary" size="sm" onClick={openTaskComposer}>
-                <Plus aria-hidden="true" className="size-4" />
-                New task
-              </Button>
+              <CreateTaskAction ready={userId !== null} onCreate={openTaskComposer} secondary />
             ) : null}
           </div>
         ) : (
@@ -239,5 +233,30 @@ export default function MyWorkClient(): JSX.Element {
         )}
       </section>
     </div>
+  );
+}
+
+/** Keep the header and empty-state create controls available for the same resolved caller. */
+function CreateTaskAction({
+  ready,
+  onCreate,
+  secondary = false,
+}: {
+  ready: boolean;
+  onCreate: () => void;
+  secondary?: boolean;
+}): JSX.Element {
+  return (
+    <Button
+      type="button"
+      variant={secondary ? 'secondary' : 'default'}
+      size={secondary ? 'sm' : undefined}
+      className={secondary ? undefined : 'gap-1.5'}
+      disabled={!ready}
+      onClick={onCreate}
+    >
+      <Plus aria-hidden="true" className="size-4" />
+      New task
+    </Button>
   );
 }

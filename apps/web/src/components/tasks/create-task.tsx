@@ -1,4 +1,7 @@
 'use client';
+import { useBlueprintCreationReview } from '@/components/composer/use-blueprint-creation-review';
+import { useComposerWorkspaceReset } from '@/components/composer/use-composer-workspace-reset';
+import { ComposerTemplateRow } from '@/components/composer/composer-template-row';
 import type { WorkTemplateDraftFields } from '@/components/composer/work-template-draft';
 
 /**
@@ -39,7 +42,7 @@ import { todayIso } from '@docket/ui/components';
 import { VocabularyProvider, useVocabulary } from '@docket/ui/hooks';
 import { ChevronRight } from '@docket/ui/icons';
 import { useQueryClient } from '@tanstack/react-query';
-import { type JSX, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { type JSX, useCallback, useEffect, useMemo, useState } from 'react';
 
 import { useAppRouter } from '@/lib/interactions/navigation';
 import { api } from '@/lib/api';
@@ -63,7 +66,7 @@ import { templatePatch } from '@/components/templates/queries';
 import { TeamPicker } from '@/components/teams/team-picker';
 import { useSession } from '@/lib/auth-client';
 import { useEstimationScale } from '@/lib/use-estimation-scale';
-import { userErrorMessage, readProblemError } from '@/lib/problem';
+import { userErrorMessage } from '@/lib/problem';
 import { seedTaskRecord } from '@/lib/entity-records';
 import { queryKeys } from '@/lib/query';
 import {
@@ -72,7 +75,7 @@ import {
 } from '@/components/recurrence/repeat-task-control';
 
 import { ComposerTimeEstimate } from './composer-time-estimate';
-import { taskCreateBody } from './task-create-body';
+import { taskCreateBody, taskWorkspaceReset } from './task-create-body';
 import { TaskComposerPickers } from './task-form-pickers';
 import { useTaskDraftPersistence } from './use-task-draft-persistence';
 
@@ -199,7 +202,6 @@ export const CreateTaskDialog = withComposerReset(function CreateTaskComposer({
   const taskNoun = useVocabulary('task');
   const projectNoun = useVocabulary('project');
   const cycleNoun = useVocabulary('cycle');
-  const previousWorkspaceId = useRef(globalCreation?.targetWorkspaceId ?? null);
   const contextualRequestDefaultsApply =
     globalCreation === undefined ||
     globalCreation.targetWorkspaceId === globalCreation.initialWorkspaceId;
@@ -282,35 +284,11 @@ export const CreateTaskDialog = withComposerReset(function CreateTaskComposer({
   // A destination change retains portable text and generic task values, but a reference to a
   // member, team, project, milestone, cycle, or label in the prior workspace is never valid in
   // the next one. The effective team immediately falls back to that workspace's default team.
-  useEffect(() => {
-    if (globalCreation === undefined) return;
-    const previousTargetWorkspaceId = previousWorkspaceId.current;
-    if (previousTargetWorkspaceId === globalCreation.targetWorkspaceId) return;
-    previousWorkspaceId.current = globalCreation.targetWorkspaceId;
-    // Resolving an initially-null shell workspace to its immutable opening destination is not a
-    // retarget. The contextual Project and assignee defaults were already seeded for that same
-    // workspace and must survive this provider-resolution frame.
-    if (
-      previousTargetWorkspaceId === null &&
-      globalCreation.targetWorkspaceId !== null &&
-      globalCreation.targetWorkspaceId === globalCreation.initialWorkspaceId
-    ) {
-      return;
-    }
+  useComposerWorkspaceReset(globalCreation, () => {
     setWorkflowStates([]);
     setError(null);
-    updateDraft(() => ({
-      workTypeId: null,
-      workTypeVersionId: null,
-      teamOverride: null,
-      state: null,
-      assigneeId: null,
-      projectId: null,
-      milestoneId: null,
-      cycleId: null,
-      labelIds: [],
-    }));
-  }, [globalCreation, updateDraft]);
+    updateDraft(taskWorkspaceReset);
+  });
 
   // Load the chosen team's workflow states, defaulting the status to its first (the create
   // default the API would pick) so the status chip is never blank.
@@ -377,6 +355,23 @@ export const CreateTaskDialog = withComposerReset(function CreateTaskComposer({
     (globalCreation?.canContribute ?? true);
 
   /** Create the task with all set properties, optionally continuing into a fresh text draft. */
+  const blueprintReview = useBlueprintCreationReview({
+    orgId,
+    disabled: creating,
+    kind: 'task',
+    request: () =>
+      teamId
+        ? {
+            kind: 'task',
+            body: taskCreateBody(draft, teamId),
+            options: draft.blueprint ?? { optionalChoices: [] },
+            summaryOffset: 0,
+          }
+        : null,
+    selection: draft,
+    setField,
+  });
+
   const submit = useCallback(
     async (continueCreating = false): Promise<void> => {
       if (completedTask !== null) {
@@ -389,6 +384,7 @@ export const CreateTaskDialog = withComposerReset(function CreateTaskComposer({
       setError(null);
       let createdTask: TaskOut | null = null;
       try {
+        if (!(await blueprintReview.ensureReviewed())) return;
         const taskBody = taskCreateBody(draft, teamId);
         const res =
           draft.repeat.kind === 'none'
@@ -406,12 +402,7 @@ export const CreateTaskDialog = withComposerReset(function CreateTaskComposer({
                     : { task: taskBody, schedule: draft.repeat.schedule },
               });
         if (!res.ok) {
-          setError(
-            userErrorMessage(
-              await readProblemError(res, 'Could not create the task.'),
-              'Could not create the task.',
-            ),
-          );
+          setError(await blueprintReview.readFailure(res, 'Could not create the task.'));
           return;
         }
         const created = await res.json();
@@ -445,6 +436,7 @@ export const CreateTaskDialog = withComposerReset(function CreateTaskComposer({
       }
     },
     [
+      blueprintReview,
       canSubmit,
       completedTask,
       continuation,
@@ -463,6 +455,12 @@ export const CreateTaskDialog = withComposerReset(function CreateTaskComposer({
     <ComposerShell
       open={open}
       onOpenChange={onOpenChange}
+      leadingFields={
+        <ComposerTemplateRow
+          selection={templateContribution.selection}
+          review={blueprintReview.dialog}
+        />
+      }
       heading="New task"
       propertyAriaLabel="Task properties"
       contextRow={
@@ -532,7 +530,6 @@ export const CreateTaskDialog = withComposerReset(function CreateTaskComposer({
             : 'Create repeating task'
       }
     >
-      {templateContribution.selection}
       <TaskComposerPickers
         orgId={orgId}
         teamId={teamId}

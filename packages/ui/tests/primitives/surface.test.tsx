@@ -37,6 +37,17 @@ describe('Surface', () => {
     expect(surfaceToneVariable('page')).toBe('--surface');
   });
 
+  it('offers the expressive region shape without changing the default shape', () => {
+    render(
+      <>
+        <Surface shape="extra-large" data-testid="expressive" />
+        <Surface data-testid="ordinary" />
+      </>,
+    );
+    expect(screen.getByTestId('expressive')).toHaveClass('rounded-corner-xl');
+    expect(screen.getByTestId('ordinary')).toHaveClass('rounded-xl');
+  });
+
   it('names the default card role in the rendered output', () => {
     render(<Surface data-testid="default-surface">content</Surface>);
     expect(screen.getByTestId('default-surface')).toHaveAttribute('data-surface-tone', 'card');

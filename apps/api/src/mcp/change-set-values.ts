@@ -6,6 +6,9 @@
  * reversal compares and restores those values, whichever kind of row it is reversing.
  */
 
+import { isDeepStrictEqual } from 'node:util';
+import { comparableTrackedValue } from './change-set-fields';
+
 /**
  * Whether a row still looks the way this change set left it.
  *
@@ -23,10 +26,10 @@ export function unchangedSince(
   after: Record<string, unknown>,
 ): boolean {
   return Object.entries(after).every(([key, value]) => {
-    const now = current[key];
-    // Dates and enums round-trip through JSON as strings; compare on that footing.
-    const normalize = (v: unknown): unknown => (v instanceof Date ? v.toISOString() : v);
-    return normalize(now) === normalize(value);
+    return isDeepStrictEqual(
+      comparableTrackedValue(key, current[key]),
+      comparableTrackedValue(key, value),
+    );
   });
 }
 
@@ -44,4 +47,48 @@ export function restoredDate(value: unknown): Date | null {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) throw new Error('Recorded task timestamp is invalid');
   return date;
+}
+
+/** Decode only known tracked date columns; keep JSON ownership values intact for existing undo. */
+export function restoredWorkSnapshot(
+  snapshot: Record<string, unknown>,
+  current: Record<string, unknown> = {},
+): Record<string, unknown> {
+  const patch = { ...snapshot };
+  for (const field of [
+    'startDate',
+    'dueDate',
+    'targetDate',
+    'completedAt',
+    'canceledAt',
+    'archivedAt',
+    'workTypeAssignedAt',
+  ])
+    if (field in patch) patch[field] = restoredDate(patch[field]);
+  if ('blueprintState' in patch)
+    patch['blueprintState'] = restoredBlueprintState(
+      patch['blueprintState'],
+      current['blueprintState'],
+    );
+  return patch;
+}
+function restoredBlueprintState(before: unknown, current: unknown): unknown {
+  if (
+    isDeepStrictEqual(
+      comparableTrackedValue('blueprintState', before),
+      comparableTrackedValue('blueprintState', current),
+    )
+  )
+    return current;
+  if (!before || typeof before !== 'object' || Array.isArray(before)) return before;
+  const prior = before as Record<string, unknown>;
+  const next =
+    current && typeof current === 'object' && !Array.isArray(current)
+      ? (current as Record<string, unknown>)
+      : {};
+  return {
+    ...prior,
+    revision: Math.max(Number(prior['revision']), Number(next['revision'] ?? 0)) + 1,
+    lastApplicationChangeSetId: null,
+  };
 }

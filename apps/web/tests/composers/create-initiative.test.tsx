@@ -32,7 +32,7 @@ const {
   };
 });
 
-vi.mock('../../src/lib/api', () => ({
+vi.mock('../../src/lib/api', async () => ({
   api: {
     v1: {
       // A composer opening reads the resume preference and the drafts list; neither has anything.
@@ -43,7 +43,10 @@ vi.mock('../../src/lib/api', () => ({
           initiatives: { $post: initiativePost },
           members: { $get: membersGet },
           agents: { $get: agentsGet },
-          templates: { $get: templatesGet },
+          templates: {
+            $get: templatesGet,
+            definitions: (await import('./blank-template-routes')).blankTemplateRoutes,
+          },
           settings: { 'work-structure': { $get: settingsGet } },
         },
       },

@@ -13,21 +13,20 @@
  * convenience is worth. `labelIds` is the exception — labels are org-scoped, long-lived, and the
  * one reference a "Bug report" template genuinely needs.
  *
- * Absolute dates are excluded for the same reason in a different form: a target date baked into a
- * reusable template is wrong the day after it is written. Relative dates ("due three days after
- * creation") would need an expression evaluator and are not in this slice.
+ * Absolute dates are excluded: reusable relative timing belongs to the separate blueprint rules.
  */
 import { z } from 'zod';
 
-const ProjectStatus = z.string().min(1);
-
-import { Health, Visibility } from './capability';
-import { Priority } from '../task-contract';
+import { Health } from './capability';
 import { InitiativePriority, InitiativeStatus, InitiativeUpdateCadence } from './initiative';
 import { ActorId, OrganizationId, TeamId } from '@docket/identity-access/ids';
-import { LabelId, TemplateId, WorkTypeVersionId } from '../ids';
-import { ProgramStatus } from './program';
+import { TemplateId, WorkTypeVersionId } from '../ids';
 import { ViewScope } from './saved-view';
+import {
+  BlueprintTaskFields,
+  BlueprintProjectFields,
+  BlueprintProgramFields,
+} from './work-template-blueprint';
 
 /** The entity kinds a template may pre-fill. */
 export const TemplateTargetType = z
@@ -41,48 +40,30 @@ export type TemplateTargetType = z.infer<typeof TemplateTargetType>;
 /** The pre-filled draft a Task template applies. */
 export const TaskTemplateDraft = z
   .object({
-    targetType: z.literal('task').describe('Discriminant; must equal the template’s `targetType`.'),
-    title: z
-      .string()
-      .optional()
-      .describe(
-        'Pre-filled task title. Optional — a template may leave the title blank so the author types it at create time.',
-      ),
-    description: z
-      .string()
-      .optional()
-      .describe('Pre-filled markdown body, typically a heading outline the author fills in.'),
-    // No workflow state: a state key belongs to one team's workflow and a template is org-wide,
-    // so any key stored here is wrong for most of the teams that would apply it. The composer
-    // already defaults the status to the chosen team's first state, which is the answer a
-    // template would be reaching for anyway.
-    priority: Priority.optional().describe('Pre-filled task priority.'),
-    labelIds: z
-      .array(LabelId)
-      .optional()
-      .describe('Labels applied on create. Ids that no longer exist in the org are dropped.'),
-    // No `estimate` or `estimateMinutes`: a template does not pre-fill either estimate, so the
-    // composer's points and time-estimate chips start empty on every task made from one.
+    targetType: z.literal('task'),
+    ...BlueprintTaskFields.pick({
+      title: true,
+      description: true,
+      priority: true,
+      labelIds: true,
+    }).partial().shape,
+    title: z.string().optional(),
   })
-  .meta({ id: 'TaskTemplateDraft', description: 'The draft a Task template pre-fills.' });
+  .meta({ id: 'TaskTemplateDraft', description: 'The reusable starting draft for Task work.' });
 /** Task template draft value. */
 export type TaskTemplateDraft = z.infer<typeof TaskTemplateDraft>;
 
 /** The pre-filled draft a Project template applies. */
 export const ProjectTemplateDraft = z
   .object({
-    targetType: z
-      .literal('project')
-      .describe('Discriminant; must equal the template’s `targetType`.'),
-    name: z.string().optional().describe('Pre-filled project name.'),
-    summary: z.string().max(280).optional().describe('Pre-filled one-line outcome summary.'),
-    description: z.string().optional().describe('Pre-filled markdown body.'),
-    status: ProjectStatus.optional().describe('Pre-filled lifecycle status.'),
-    health: Health.optional().describe('Pre-filled health verdict.'),
-    // No labels: the project composer links initiatives, not labels, and an initiative is a
-    // reference this payload deliberately does not carry.
+    targetType: z.literal('project'),
+    ...BlueprintProjectFields.omit({ priority: true }).partial().shape,
+    name: z.string().optional(),
   })
-  .meta({ id: 'ProjectTemplateDraft', description: 'The draft a Project template pre-fills.' });
+  .meta({
+    id: 'ProjectTemplateDraft',
+    description: 'The reusable starting draft for Project work.',
+  });
 /** Project template draft value. */
 export type ProjectTemplateDraft = z.infer<typeof ProjectTemplateDraft>;
 
@@ -112,17 +93,14 @@ export type InitiativeTemplateDraft = z.infer<typeof InitiativeTemplateDraft>;
 /** The pre-filled draft a Program template applies. */
 export const ProgramTemplateDraft = z
   .object({
-    targetType: z
-      .literal('program')
-      .describe('Discriminant; must equal the template’s `targetType`.'),
-    name: z.string().optional().describe('Pre-filled program name.'),
-    summary: z.string().max(280).optional().describe('Pre-filled one-line summary.'),
-    description: z.string().optional().describe('Pre-filled markdown body.'),
-    status: ProgramStatus.optional().describe('Pre-filled lifecycle status.'),
-    health: Health.optional().describe('Pre-filled health verdict.'),
-    visibility: Visibility.optional().describe('Pre-filled access scope.'),
+    targetType: z.literal('program'),
+    ...BlueprintProgramFields.partial().shape,
+    name: z.string().optional(),
   })
-  .meta({ id: 'ProgramTemplateDraft', description: 'The draft a Program template pre-fills.' });
+  .meta({
+    id: 'ProgramTemplateDraft',
+    description: 'The reusable starting draft for Program work.',
+  });
 /** Program template draft value. */
 export type ProgramTemplateDraft = z.infer<typeof ProgramTemplateDraft>;
 
@@ -139,6 +117,24 @@ export const TemplateDraft = z
   );
 /** Template draft value. */
 export type TemplateDraft = z.infer<typeof TemplateDraft>;
+
+/** Canonical reusable starting fields reject unsupported literal references; legacy inputs still normalize them. */
+export const CanonicalTemplateDraft = z.discriminatedUnion('targetType', [
+  z.strictObject({
+    targetType: z.literal('task'),
+    ...BlueprintTaskFields.partial().shape,
+    title: z.string().optional(),
+  }),
+  z.strictObject({
+    targetType: z.literal('project'),
+    ...BlueprintProjectFields.partial().shape,
+    name: z.string().optional(),
+  }),
+  InitiativeTemplateDraft.strict(),
+  ProgramTemplateDraft.strict(),
+]);
+/** Strict canonical starting-draft value. */
+export type CanonicalTemplateDraft = z.infer<typeof CanonicalTemplateDraft>;
 
 /** Body for creating a Template (organizationId comes from the path, never the body). */
 export const TemplateCreate = z

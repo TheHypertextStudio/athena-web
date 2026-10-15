@@ -7,20 +7,16 @@
  * the next completion-anchored occurrence. Replaying the same event is intentionally harmless.
  */
 import {
-  milestone,
   processInstance,
-  processInstanceMilestone,
-  processInstanceProject,
   processInstanceTask,
   processOccurrence,
   processStep,
   processTaskSpec,
-  project,
   recurrenceSeriesRevision,
   task,
   type Database,
 } from '@docket/db';
-import { and, desc, eq, inArray, isNull, lte } from 'drizzle-orm';
+import { and, desc, eq, inArray, lte } from 'drizzle-orm';
 
 import {
   addCalendarDays,
@@ -29,12 +25,10 @@ import {
   formatCalendarDate,
   parseCalendarDate,
 } from '@docket/planning/calendar-date';
-import {
-  materializeInstanceSteps,
-  materializeOccurrence,
-  type MaterializedStepDelta,
-} from './materialize';
-import type { TaskStateMutation } from '../task-state';
+import { materializeOccurrence, type MaterializedStepDelta } from './materialize';
+import type { DeferredWorkEffect } from '../work-creation/types';
+import { deferWorkCreationEffects } from '../work-creation/effects';
+import { advanceTemplateOccurrence } from './work-template-advance';
 
 /** Command emitted from an actual task transition into a completed workflow state. */
 export interface AdvanceCompletedProcessTaskCommand {
@@ -85,79 +79,6 @@ function nextCompletionDate(
   });
 }
 
-/** Update already-created all-at-once items whose planning date awaited this completion. */
-async function dateCompletionRelativeItems(
-  tx: Parameters<Parameters<Database['transaction']>[0]>[0],
-  input: {
-    readonly instanceId: string;
-    readonly completedStepId: string;
-    readonly completedOn: string;
-  },
-): Promise<void> {
-  const waiting = await tx
-    .select({ id: processStep.id, offsetDays: processStep.offsetDays, kind: processStep.kind })
-    .from(processStep)
-    .where(eq(processStep.afterStepId, input.completedStepId));
-  for (const step of waiting) {
-    const date = addCalendarDays(input.completedOn, step.offsetDays ?? 0);
-    const timestamp = new Date(`${date}T00:00:00.000Z`);
-    if (step.kind === 'task') {
-      const mapping = await tx
-        .select({ taskId: processInstanceTask.taskId })
-        .from(processInstanceTask)
-        .where(
-          and(
-            eq(processInstanceTask.instanceId, input.instanceId),
-            eq(processInstanceTask.stepId, step.id),
-          ),
-        )
-        .limit(1);
-      if (mapping[0]) {
-        await tx
-          .update(task)
-          .set({ dueDate: timestamp })
-          .where(and(eq(task.id, mapping[0].taskId), isNull(task.dueDate)));
-      }
-    }
-    if (step.kind === 'milestone') {
-      const mapping = await tx
-        .select({ milestoneId: processInstanceMilestone.milestoneId })
-        .from(processInstanceMilestone)
-        .where(
-          and(
-            eq(processInstanceMilestone.instanceId, input.instanceId),
-            eq(processInstanceMilestone.stepId, step.id),
-          ),
-        )
-        .limit(1);
-      if (mapping[0]) {
-        await tx
-          .update(milestone)
-          .set({ targetDate: timestamp })
-          .where(and(eq(milestone.id, mapping[0].milestoneId), isNull(milestone.targetDate)));
-      }
-    }
-    if (step.kind === 'project') {
-      const mapping = await tx
-        .select({ projectId: processInstanceProject.projectId })
-        .from(processInstanceProject)
-        .where(
-          and(
-            eq(processInstanceProject.instanceId, input.instanceId),
-            eq(processInstanceProject.stepId, step.id),
-          ),
-        )
-        .limit(1);
-      if (mapping[0]) {
-        await tx
-          .update(project)
-          .set({ startDate: timestamp })
-          .where(and(eq(project.id, mapping[0].projectId), isNull(project.startDate)));
-      }
-    }
-  }
-}
-
 /** Whether every task specification has one concrete completed Task. */
 async function processTasksComplete(
   tx: Parameters<Parameters<Database['transaction']>[0]>[0],
@@ -187,13 +108,23 @@ async function processTasksComplete(
   );
 }
 
+function retainedReflowEffects(
+  reflow: Awaited<ReturnType<typeof advanceTemplateOccurrence>>['reflow'],
+): DeferredWorkEffect[] {
+  return reflow.rows.map((work) => ({
+    kind: 'search',
+    dedupeKey: `search:${work.kind}:${work.id}`,
+    work,
+  }));
+}
+
 /** Release process work and completion-anchored continuation from one actual task completion. */
 export async function advanceCompletedProcessTask(
   database: Database,
   command: AdvanceCompletedProcessTaskCommand,
 ): Promise<ProcessAdvanceResult> {
   parseCalendarDate(command.completedOn);
-  const postCommitStateTransitions: TaskStateMutation[] = [];
+  const postCommitEffects: DeferredWorkEffect[] = [];
   const transition = await database.transaction(async (tx) => {
     const mappedRows = await tx
       .select({
@@ -243,20 +174,22 @@ export async function advanceCompletedProcessTask(
       return { delta: EMPTY_DELTA, complete: false, next: null };
     }
 
-    await dateCompletionRelativeItems(tx, {
-      instanceId: mapped.instanceId,
-      completedStepId: mapped.completedStepId,
-      completedOn: command.completedOn,
-    });
-    const delta = await materializeInstanceSteps(tx, {
-      organizationId: command.organizationId,
-      actorId: command.actorId,
-      instanceId: mapped.instanceId,
-      revisionId: mapped.revisionId,
-      scheduledFor: mapped.scheduledFor,
-      completionDatesByStepId: new Map([[mapped.completedStepId, command.completedOn]]),
-      postCommitStateTransitions,
-    });
+    const advanced = await advanceTemplateOccurrence(
+      tx,
+      {
+        organizationId: command.organizationId,
+        actorId: command.actorId,
+        instanceId: mapped.instanceId,
+        seriesId: mapped.seriesId,
+        seriesRevisionId: mapped.seriesRevisionId,
+        occurrenceId: mapped.occurrenceId,
+      },
+      command.completedTaskId,
+    );
+    const delta = advanced.delta;
+    postCommitEffects.push(...advanced.effects);
+    postCommitEffects.push(...retainedReflowEffects(advanced.reflow));
+
     const complete = await processTasksComplete(tx, mapped.revisionId, mapped.instanceId);
     if (!complete) return { delta, complete: false, next: null };
 
@@ -316,12 +249,7 @@ export async function advanceCompletedProcessTask(
     };
   });
 
-  if (postCommitStateTransitions.length > 0) {
-    const { finishTaskStateTransition } = await import('../task-state');
-    for (const stateTransition of postCommitStateTransitions) {
-      await finishTaskStateTransition({ actorId: null }, stateTransition);
-    }
-  }
+  deferWorkCreationEffects(postCommitEffects);
 
   let nextOccurrenceId: string | null = null;
   if (transition.next) {

@@ -5,7 +5,7 @@ import { eq } from 'drizzle-orm';
 import { serializeDocumentFigure } from '@docket/markdown-tree';
 import { WorkTemplateDefinition } from '@docket/work/work-template-contract';
 import { createTemplate, updateTemplate } from '../../src/lib/templates/write';
-import { editWorkTemplateDraft } from '../../src/lib/templates/service';
+import { editWorkTemplateDraft, publishWorkTemplate } from '../../src/lib/templates/service';
 import { getDocumentImageReferenceReconciler } from '../../src/content/document-image-reference-registry';
 
 import { createDrizzleDocumentImageReferenceStorage } from '../../src/content/drizzle-document-image-reference-storage';
@@ -81,6 +81,8 @@ describe('Drizzle document image reference storage', () => {
       'template_published_old',
       'template_published_new',
       'template_private_draft',
+      'template_inline_published',
+      'template_inline_draft',
     ] as const;
     for (const id of imageIds) await insertImage(org.orgId, id);
     const prose = (id: string) =>
@@ -110,11 +112,39 @@ describe('Drizzle document image reference storage', () => {
       },
       actor.capabilities,
     );
-    await editWorkTemplateDraft(actor, created.id, {
+    const withInline = (description: string) => ({
+      steps: [
+        {
+          key: 'child',
+          kind: 'task',
+          parentStepKey: null,
+          sort: 0,
+          fields: { title: 'Child', description },
+          template: null,
+          actorRule: 'unassigned',
+          teamRule: 'parent_team',
+          cycleRule: 'none',
+          dates: {},
+          optional: { enabled: false, selectedByDefault: true },
+        },
+      ],
+      dependencies: [],
+    });
+    const pending = await editWorkTemplateDraft(actor, created.id, {
       expectedRevision: after.draftRevision,
+      definition: WorkTemplateDefinition.parse({
+        name: 'Inline images',
+        payload: { targetType: 'task', description: prose(imageIds[1]) },
+        blueprint: withInline(prose(imageIds[3])),
+      }),
+    });
+    const publication = await publishWorkTemplate(actor, created.id, pending.draftRevision);
+    await editWorkTemplateDraft(actor, created.id, {
+      expectedRevision: publication.draftRevision,
       definition: WorkTemplateDefinition.parse({
         name: 'Draft',
         payload: { targetType: 'task', description: prose(imageIds[2]) },
+        blueprint: withInline(prose(imageIds[4])),
       }),
     });
     const storage = createDrizzleDocumentImageReferenceStorage();

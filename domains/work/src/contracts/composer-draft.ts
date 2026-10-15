@@ -1,3 +1,4 @@
+import { BlueprintCreationOptions } from './work-template-blueprint';
 import { WorkTypeId, WorkTypeVersionId } from '../ids';
 /**
  * `domain packages` — Composer draft DTOs.
@@ -111,6 +112,7 @@ export type ComposerRepeatDraft = z.infer<typeof ComposerRepeatDraft>;
 /** The task composer's unsent state. */
 export const TaskDraftPayload = z
   .object({
+    blueprint: BlueprintCreationOptions.optional(),
     workTypeId: WorkTypeId.nullable().optional(),
     workTypeVersionId: WorkTypeVersionId.nullable().optional(),
     kind: z.literal('task').describe('Marks a task composer draft.'),
@@ -162,6 +164,7 @@ export type ComposerMilestoneDraft = z.infer<typeof ComposerMilestoneDraft>;
 /** The project composer's unsent state. */
 export const ProjectDraftPayload = z
   .object({
+    blueprint: BlueprintCreationOptions.optional(),
     workTypeId: WorkTypeId.nullable().optional(),
     workTypeVersionId: WorkTypeVersionId.nullable().optional(),
     kind: z.literal('project').describe('Marks a project composer draft.'),
@@ -191,6 +194,7 @@ export type ProjectDraftPayload = z.infer<typeof ProjectDraftPayload>;
 /** The initiative composer's unsent state. */
 export const InitiativeDraftPayload = z
   .object({
+    blueprint: BlueprintCreationOptions.optional(),
     workTypeId: WorkTypeId.nullable().optional(),
     workTypeVersionId: WorkTypeVersionId.nullable().optional(),
     kind: z.literal('initiative').describe('Marks an initiative composer draft.'),
@@ -211,6 +215,7 @@ export type InitiativeDraftPayload = z.infer<typeof InitiativeDraftPayload>;
 /** The program composer's unsent state. */
 export const ProgramDraftPayload = z
   .object({
+    blueprint: BlueprintCreationOptions.optional(),
     workTypeId: WorkTypeId.nullable().optional(),
     workTypeVersionId: WorkTypeVersionId.nullable().optional(),
     kind: z.literal('program').describe('Marks a program composer draft.'),

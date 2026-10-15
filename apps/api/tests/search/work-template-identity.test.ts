@@ -1,3 +1,4 @@
+import { WorkTemplateDefinition } from '@docket/work/work-template-contract';
 import { and, eq } from 'drizzle-orm';
 import { describe, expect, it } from 'vitest';
 import { SearchQuery } from '../../src/contracts/search';
@@ -174,13 +175,13 @@ describe('work-template search identity', () => {
 });
 
 async function publishProjectTemplate(schema: Awaited<ReturnType<typeof getDb>>, orgId: string) {
-  const definition = {
+  const definition = WorkTemplateDefinition.parse({
     name: 'Event',
     description: null,
     icon: null,
     defaultStatusKey: null,
-    payload: { targetType: 'project' as const, description: 'Template outline' },
-  };
+    payload: { targetType: 'project', description: 'Template outline' },
+  });
   const row = one(
     await schema.db
       .insert(schema.template)

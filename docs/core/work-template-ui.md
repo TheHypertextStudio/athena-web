@@ -1,13 +1,14 @@
 # Template and repeating-work setup
 
-Reader: A Docket contributor who needs to save reusable starting fields or repeat existing work.
+Reader: A Docket contributor defining the kinds of work their organization does or repeating existing work.
 
-Create a template from Workspace Settings → Work templates. Basics holds the template name
-and usage note. New guided drafts are visible only to you until you explicitly publish them. Work holds the fields for the selected work kind and its document.
-Review shows the values before Create template saves them. For example, a project template named
-Client project can supply a project name, description, status, and health.
+Open Workspace Settings → Work templates → New template. Purpose establishes the name, existing
+work kind and when to use it. Work shapes the sample item: its starting fields and document, included
+children, relative dates and responsibility rules. Select a child to refine it without losing the
+outline. Review reads back the definition before sharing it. For example, an Event project can
+include venue preparation, an optional Vendor booking template and a Dinner day milestone.
 
-The saved draft opens in its editor. Save draft keeps your next-version edits separate from the
+Save draft keeps a new definition private and your next-version edits separate from the
 published version. Publish to workspace makes the reviewed body visible to workspace members;
 team offerings control where it is suggested. Existing team-only templates remain team-visible
 drafts until publication. Personal drafts remain author-only. Publishing a next version preserves
@@ -17,25 +18,32 @@ Select a published template in any work composer. Keep current fields changes on
 Apply starting fields appends the outline, fills empty names, and applies the selected defaults.
 Dates remain as authored. A private starting draft is labeled as a draft and uses the kind's blank
 base identity. Each work header shows its saved template/version. Change template previews starting
-field differences, with every optional change off until selected. Dates and children stay unchanged.
+field differences, with every optional change off until selected. Creation reviews optional child
+work before saving the whole tree together, up to 500 items including the root. Update template
+and Change template let you review selected child, date and dependency changes while preserving
+authored work. Explicitly edited or cleared dates stay manual.
 Work lists can filter and group by Template, including archived templates already used by work.
 
-Desktop setup fits its content up to the viewport limit. Phones use the full screen. Labeled
-name and summary fields precede the starting settings and document. The body owns scrolling;
-Back, Continue, and save actions remain visible in the footer.
+The editor uses the full page on desktop and phones. Contained sections distinguish the definition,
+sample work and child outline. Save state stays visible as you work, and Review makes publication
+and its workspace visibility clear. All three sections are directly selectable. Returning to a saved
+definition opens Work; switching sections keeps your selected child, input and editing position.
 
-The following state diagram shows new-template setup.
+The following state diagram shows how a definition can be refined and published.
 
 ```mermaid
 stateDiagram-v2
-    [*] --> Basics
-    Basics --> Work: Required name provided
-    Work --> Review: Continue
-    Review --> Work: Back
-    Work --> Basics: Back
-    Review --> Saved: Create template succeeds
+    [*] --> Purpose: New definition
+    [*] --> Work: Reopen saved definition
+    Purpose --> Work: Define the work
+    Work --> Purpose: Refine purpose
+    Work --> Review: Review definition
+    Review --> Work: Refine work
+    Review --> PrivateDraft: Save draft
+    PrivateDraft --> Review: Review saved draft
+    Review --> Published: Publish to workspace
     Review --> Review: Save fails; draft retained
-    Saved --> [*]
+    Published --> Work: Refine next version
 ```
 
 Use Repeat project from an existing project's actions. Work lists the included tasks and
@@ -52,8 +60,8 @@ route presents the same controls. A future schedule revision retains recorded oc
 Switching sections preserves values. Closing a changed draft requires explicit discard. A failed
 save retains the draft and shows a recoverable error. Unsaved editor changes survive navigation within the signed-in app session. Reloading does not
 recover unsaved changes; save a draft before reloading. Account or permission changes clear private
-unsaved drafts. Guided dialog dismissal requires explicit discard. Blueprint children and Program
-schedule templates follow in separate delivery layers.
+unsaved drafts. Leaving the authoring page with changed work requires explicit discard. Program
+default schedules follow in a separate delivery layer.
 
 Shipped examples include Side project, Client project, Long-term goal, Fundraising campaign, and
 Running a business. They are editable template data rather than product types. The same work

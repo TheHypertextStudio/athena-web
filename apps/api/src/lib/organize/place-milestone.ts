@@ -7,16 +7,12 @@
  * milestones need living here: matching by name within the project, appending to the project's
  * timeline, and attaching tasks a re-run matches.
  */
-import { milestone, task } from '@docket/db';
-import { and, eq, sql } from 'drizzle-orm';
-import { z } from 'zod';
+import { task } from '@docket/db';
+import { and, eq } from 'drizzle-orm';
 
-import { ValidationError } from '../../error';
 import { trackedFields, type ChangeRecord } from '../../mcp/change-set';
 import { resolveMilestone } from '../../mcp/descriptors';
-import { entityHref } from '../../mcp/entity-href';
-import { appendMilestonesInTx } from '../milestone-writes';
-import type { OrganizeItem, PlaceInput, PlaceResult, Tx } from './place';
+import type { OrganizeItem, Tx } from './place';
 
 /**
  * Resolve an item's `milestone`, and the project it implies.
@@ -72,68 +68,5 @@ export async function attachToMilestone(
     op: 'update',
     before: trackedFields('task', row),
     after: trackedFields('task', after),
-  };
-}
-
-/** Refuse a milestone with no project to sit in. */
-function needsProject(item: OrganizeItem): never {
-  throw new ValidationError(
-    new z.ZodError([
-      {
-        code: 'invalid_value',
-        path: ['parent'],
-        message: `Milestone "${item.title}" needs a project: place it under a project item, or name one with \`project\`.`,
-        values: ['project'],
-        input: item.ref,
-      },
-    ]),
-  );
-}
-
-/**
- * Place a milestone: match one of that name in its project, or append a new one.
- *
- * @param tx - The open transaction.
- * @param input - The resolved item.
- * @returns what it became, and the change to record when it was created.
- * @throws {ValidationError} When the item has no project to sit in.
- */
-export async function placeMilestone(tx: Tx, input: PlaceInput): Promise<PlaceResult> {
-  const { item, at, orgId } = input;
-  const projectId = at.projectId;
-  if (projectId === null) needsProject(item);
-  const identity = {
-    ref: item.ref,
-    title: item.title,
-    parent: item.parent,
-    href: entityHref(orgId, 'project', projectId),
-    kind: 'milestone',
-    projectId,
-  } as const;
-  const [existing] = await tx
-    .select({ id: milestone.id })
-    .from(milestone)
-    .where(
-      and(
-        eq(milestone.organizationId, orgId),
-        eq(milestone.projectId, projectId),
-        sql`lower(${milestone.name}) = lower(${item.title})`,
-      ),
-    )
-    .limit(1);
-  if (existing) return { placed: { ...identity, id: existing.id, created: false } };
-
-  const [row] = await appendMilestonesInTx(tx, { orgId, projectId, actorId: input.actorId }, [
-    {
-      name: item.title,
-      ...(item.description === undefined ? {} : { description: item.description }),
-      ...(item.targetDate === undefined ? {} : { targetDate: item.targetDate }),
-    },
-  ]);
-  /* v8 ignore next -- @preserve defensive: insert always returns a row */
-  if (!row) throw new Error('milestone insert returned no row');
-  return {
-    placed: { ...identity, id: row.id, created: true },
-    change: { kind: 'milestone', id: row.id, op: 'create', after: trackedFields('milestone', row) },
   };
 }

@@ -22,6 +22,7 @@ import { currentProvenance } from '../../src/lib/provenance/context';
 import { createPublishedProcessDefinition } from '../../src/lib/recurrence/process-definition';
 import { createRecurrenceSeries } from '../../src/lib/recurrence/series';
 import { materializeRecurrenceSeriesWindow } from '../../src/lib/recurrence/sweep';
+import { grantProcessAuthor } from './work-template-legacy-fixture';
 import { installTestProductFixture } from '../support/db';
 import { openMigratedPglite } from '../support/pglite-template';
 
@@ -51,6 +52,7 @@ beforeAll(async () => {
     .values({ organizationId, kind: 'human', displayName: 'Series owner' })
     .returning();
   ownerActorId = assertDefined(owner).id;
+  await grantProcessAuthor(db, organizationId, ownerActorId);
 });
 
 afterAll(async () => {
@@ -75,7 +77,11 @@ async function dailySeries(name: string, actorId?: string): Promise<{ id: string
     ],
     dependencies: [],
   };
-  const process = await createPublishedProcessDefinition(db, { organizationId, definition });
+  const process = await createPublishedProcessDefinition(db, {
+    organizationId,
+    actorId: ownerActorId,
+    definition,
+  });
   return createRecurrenceSeries(db, {
     organizationId,
     ...(actorId ? { actorId } : {}),

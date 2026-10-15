@@ -125,14 +125,16 @@ function ensureHistoryEntry(): string {
   return entry;
 }
 
-function shellScrollPosition(): ShellScrollPosition {
+/** Read the canonical app-shell scroll owner for route and in-page section restoration. */
+export function shellScrollPosition(): ShellScrollPosition {
   const main = document.getElementById('main-content');
   return main instanceof HTMLElement
     ? { left: main.scrollLeft, top: main.scrollTop }
     : { left: window.scrollX, top: window.scrollY };
 }
 
-function restoreShellScroll(position: ShellScrollPosition): void {
+/** Restore the canonical app-shell scroll owner after the destination layout commits. */
+export function restoreShellScroll(position: ShellScrollPosition): void {
   window.requestAnimationFrame(() => {
     const main = document.getElementById('main-content');
     if (main instanceof HTMLElement) {

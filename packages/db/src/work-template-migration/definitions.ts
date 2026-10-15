@@ -1,4 +1,4 @@
-import { WorkTemplateDefinition } from '@docket/work/work-template-contract';
+import { parseHistoricalTemplateDefinition, type HistoricalTemplateDefinition } from './definition';
 import { and, eq, getTableColumns, sql } from 'drizzle-orm';
 
 import type { Database } from '../client';
@@ -17,7 +17,7 @@ export async function backfillTemplateDefinitions(
       const rows = await transaction
         .select({
           ...getTableColumns(template),
-          draftDefinition: sql<WorkTemplateDefinition | null>`${template.draftDefinition}`,
+          draftDefinition: sql<HistoricalTemplateDefinition | null>`${template.draftDefinition}`,
         })
         .from(template)
         .where(eq(template.publicationState, 'legacy_pending'))
@@ -25,7 +25,7 @@ export async function backfillTemplateDefinitions(
         .limit(batchSize)
         .for('update', { skipLocked: true });
       for (const row of rows) {
-        const definition = WorkTemplateDefinition.parse({
+        const definition = parseHistoricalTemplateDefinition({
           name: row.name,
           description: row.description,
           icon: row.icon,

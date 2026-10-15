@@ -194,3 +194,8 @@ export type WorkPublicationId = z.infer<typeof WorkPublicationId>;
 export const WorkPublicDomainId = genericOwnedId.brand<'WorkPublicDomainId'>();
 /** Public work domain identifier value. */
 export type WorkPublicDomainId = z.infer<typeof WorkPublicDomainId>;
+
+/** Immutable published blueprint step identifier. */
+export const BlueprintStepId = ownedId.brand<'BlueprintStepId'>();
+/** Immutable published blueprint step identifier value. */
+export type BlueprintStepId = z.infer<typeof BlueprintStepId>;

@@ -2,12 +2,64 @@
 import type { JSX } from 'react';
 import { Field, Input, Select } from '@docket/ui/primitives';
 import { LabelsPicker } from '@docket/ui/components';
-import { TemplateDraft } from '@docket/work/template-contract';
+import { CanonicalTemplateDraft } from '@docket/work/template-contract';
 import { useComposerOptions } from '@/components/pickers/use-composer-options';
+import { TemplateDisclosure } from './template-disclosure';
 import type { WorkTemplateFormState } from './use-work-template-form';
 
 /** Edit the same starting values the ordinary work composer already understands. */
 export function WorkTemplateSampleFields({
+  form,
+}: {
+  orgId: string;
+  form: WorkTemplateFormState;
+}): JSX.Element {
+  const payload = form.definition.payload;
+  const disabled = form.pending || !form.canEdit;
+  const change = (patch: Readonly<Record<string, unknown>>): void => {
+    form.setDefinition((value) => ({
+      ...value,
+      payload: CanonicalTemplateDraft.parse({ ...value.payload, ...patch }),
+    }));
+  };
+  const title = payload.targetType === 'task' ? payload.title : payload.name;
+  return (
+    <div className="flex min-w-0 flex-col gap-5">
+      <Field
+        label={payload.targetType === 'task' ? 'Starting title' : 'Starting name'}
+        description={
+          title?.trim() ? undefined : 'Leave empty for the person creating work to supply.'
+        }
+      >
+        <Input
+          variant="plain"
+          className="text-headline-small"
+          value={title ?? ''}
+          disabled={disabled}
+          onChange={(event) => {
+            change({ [payload.targetType === 'task' ? 'title' : 'name']: event.target.value });
+          }}
+        />
+      </Field>
+      {
+        <Field label="Starting summary">
+          <Input
+            variant="plain"
+            value={payload.summary ?? ''}
+            maxLength={payload.targetType === 'task' ? 200 : 280}
+            disabled={disabled}
+            onChange={(event) => {
+              change({ summary: event.target.value });
+            }}
+          />
+        </Field>
+      }
+    </div>
+  );
+}
+
+/** Less frequent starting values reuse the canonical sample payload. */
+export function WorkTemplateSampleProperties({
   orgId,
   form,
 }: {
@@ -19,55 +71,12 @@ export function WorkTemplateSampleFields({
   const change = (patch: Readonly<Record<string, unknown>>): void => {
     form.setDefinition((value) => ({
       ...value,
-      payload: TemplateDraft.parse({ ...value.payload, ...patch }),
+      payload: CanonicalTemplateDraft.parse({ ...value.payload, ...patch }),
     }));
   };
-  const title = payload.targetType === 'task' ? payload.title : payload.name;
   return (
-    <div className="flex min-w-0 flex-col gap-5">
-      <Field
-        label={payload.targetType === 'task' ? 'Starting title' : 'Starting name'}
-        description="Leave empty for the person creating work to supply."
-      >
-        <Input
-          value={title ?? ''}
-          disabled={disabled}
-          onChange={(event) => {
-            change({ [payload.targetType === 'task' ? 'title' : 'name']: event.target.value });
-          }}
-        />
-      </Field>
-      {payload.targetType !== 'task' ? (
-        <Field label="Starting summary">
-          <Input
-            value={payload.summary ?? ''}
-            maxLength={280}
-            disabled={disabled}
-            onChange={(event) => {
-              change({ summary: event.target.value });
-            }}
-          />
-        </Field>
-      ) : null}
-      <SampleProperties orgId={orgId} payload={payload} disabled={disabled} change={change} />
-    </div>
-  );
-}
-
-function SampleProperties({
-  orgId,
-  payload,
-  disabled,
-  change,
-}: {
-  orgId: string;
-  payload: TemplateDraft;
-  disabled: boolean;
-  change: (patch: Readonly<Record<string, unknown>>) => void;
-}): JSX.Element {
-  return (
-    <>
-      {payload.targetType === 'task' || payload.targetType === 'initiative' ? (
+    <TemplateDisclosure title="Starting properties">
+      {payload.targetType !== 'program' ? (
         <Field label="Starting priority">
           <Select
             value={payload.priority ?? ''}
@@ -81,7 +90,7 @@ function SampleProperties({
             <option value="low">Low</option>
             <option value="medium">Medium</option>
             <option value="high">High</option>
-            {payload.targetType === 'task' ? <option value="urgent">Urgent</option> : null}
+            {payload.targetType !== 'initiative' ? <option value="urgent">Urgent</option> : null}
           </Select>
         </Field>
       ) : null}
@@ -108,8 +117,11 @@ function SampleProperties({
           change={change}
         />
       )}
+      {payload.targetType === 'task' ? (
+        <SampleEffort payload={payload} disabled={disabled} change={change} />
+      ) : null}
       <OngoingDefaults payload={payload} disabled={disabled} change={change} />
-    </>
+    </TemplateDisclosure>
   );
 }
 
@@ -146,7 +158,7 @@ function OngoingDefaults({
   disabled,
   change,
 }: {
-  payload: TemplateDraft;
+  payload: CanonicalTemplateDraft;
   disabled: boolean;
   change: (patch: Readonly<Record<string, unknown>>) => void;
 }): JSX.Element {
@@ -186,5 +198,51 @@ function OngoingDefaults({
         </Field>
       ) : null}
     </>
+  );
+}
+
+function SampleEffort({
+  payload,
+  disabled,
+  change,
+}: {
+  payload: Extract<CanonicalTemplateDraft, { targetType: 'task' }>;
+  disabled: boolean;
+  change: (patch: Readonly<Record<string, unknown>>) => void;
+}): JSX.Element {
+  return (
+    <div className="grid gap-3 sm:grid-cols-2">
+      <Field label="Starting point estimate">
+        <Input
+          type="number"
+          min={0}
+          step={1}
+          value={payload.estimate ?? ''}
+          disabled={disabled}
+          onChange={(event) => {
+            const estimate = event.target.value ? Number(event.target.value) : undefined;
+            if (estimate === undefined || (Number.isInteger(estimate) && estimate >= 0))
+              change({ estimate });
+          }}
+        />
+      </Field>
+      <Field label="Starting time estimate (minutes)">
+        <Input
+          type="number"
+          min={0}
+          step={1}
+          value={payload.estimateMinutes ?? ''}
+          disabled={disabled}
+          onChange={(event) => {
+            const estimateMinutes = event.target.value ? Number(event.target.value) : null;
+            if (
+              estimateMinutes === null ||
+              (Number.isInteger(estimateMinutes) && estimateMinutes >= 0)
+            )
+              change({ estimateMinutes });
+          }}
+        />
+      </Field>
+    </div>
   );
 }

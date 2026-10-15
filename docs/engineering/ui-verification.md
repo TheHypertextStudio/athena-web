@@ -146,6 +146,10 @@ For a contextual surface, pass `--click-button="Identity: Sam Rivera"` with a li
 The tool opens that exact accessible button before each frame. This captures the open surface;
 its owning interaction tests must still verify editing and persistence.
 
+For a saved composer draft, use `/drafts --click-row="Draft title"` to reopen its row, then
+`--click-after="Review included work"` to capture the populated child review. Drafts must be seeded
+through the authenticated draft API; each frame reopens the same saved input.
+
 For a full craft review rather than raw captures, use the `design-review` skill
 (`.claude/skills/design-review/`), which consumes exactly this shot set.
 

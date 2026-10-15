@@ -1,3 +1,4 @@
+import { sameTaskTerminalState } from './task-terminal-instants';
 /**
  * `@docket/api` — the shared task state-transition mutation.
  *
@@ -28,12 +29,25 @@ import {
 } from './task-audit';
 import { advanceCompletedProcessTask } from './recurrence/advance';
 import { loadStatusSets } from './work-status';
+import type { BlueprintSnapshotAuthority } from './work-template-blueprints/snapshot-types';
+import type { AutomationActionExecution } from './automation/execution-proof';
+import { resolveTaskStateAuthority } from './task-state-authority';
+import { serializableTx } from './serializable-tx';
+import {
+  prepareBlueprintReflow,
+  applyBlueprintReflow,
+  finishBlueprintReflow,
+} from './work-template-blueprints/reflow';
 
 /** The selected `task` row shape. */
 export type TaskRow = typeof task.$inferSelect;
 
 /** Input to {@link setTaskState}. */
 export interface SetTaskStateInput {
+  /** Exact persisted rule/action execution; resolved inside this mutation transaction. */
+  readonly automationExecution?: AutomationActionExecution;
+  /** Checked internal authority may differ from attribution; public DTOs cannot supply it. */
+  readonly blueprintAuthority?: BlueprintSnapshotAuthority;
   readonly organizationId: string;
   readonly taskId: string;
   /** The target workflow-state key (must exist in the owning team's `workflow_states`). */
@@ -477,6 +491,7 @@ export async function finishTaskStateConsequences(
   mutation: TaskStateMutation,
 ): Promise<void> {
   const { before, after } = mutation;
+  if (sameTaskTerminalState(before, after)) return;
   await (input.strict ? emitEventStrict : emitEvent)({
     organizationId: after.organizationId,
     kind: after.completedAt ? 'completed' : 'status_change',
@@ -546,8 +561,22 @@ export async function setTaskState(input: SetTaskStateInput): Promise<TaskRow | 
   const row = rows[0];
   if (!row) return null;
 
-  const transition = await resolveStateTransition(input.organizationId, row.teamId, input.state);
-  const result = await db.transaction(async (tx) => {
+  const transition = await resolveStateTransition(
+    input.organizationId,
+    row.teamId,
+    input.state,
+    row,
+  );
+  const result = await serializableTx(async (tx) => {
+    const authority = await resolveTaskStateAuthority(tx, input);
+    const blueprint = authority
+      ? await prepareBlueprintReflow(
+          tx,
+          authority,
+          { kind: 'task', id: row.id },
+          { state: input.state },
+        )
+      : null;
     const mutation = await writeTaskStateTransition(tx, {
       before: row,
       statusId: transition.statusId,
@@ -556,14 +585,21 @@ export async function setTaskState(input: SetTaskStateInput): Promise<TaskRow | 
       canceledAt: transition.canceledAt,
     });
     if (!mutation) return null;
+    const cascades = await applySubtaskCompletionPolicy(tx, mutation);
     return {
       mutation,
       timerStops: await closeCompletingUserTaskTimers(tx, input.actorId, mutation),
-      cascades: await applySubtaskCompletionPolicy(tx, mutation),
+      cascades,
+      blueprintResult: await applyBlueprintReflow(
+        tx,
+        blueprint,
+        cascades.map((entry) => entry.after.id),
+      ),
     };
   });
   /* v8 ignore next -- @preserve defensive: the select above proved the row exists + is active */
   if (!result) return null;
+  await finishBlueprintReflow(input.organizationId, result.blueprintResult);
   await finishTaskStateTransition({ actorId: input.actorId }, result.mutation);
   await emitCompletedTaskTimerStops(result.timerStops);
   for (const cascade of result.cascades) {

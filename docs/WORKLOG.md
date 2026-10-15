@@ -1,7 +1,7 @@
 # Project Athena Work Log
 
 > **Purpose**: Comprehensive tracking of all work - past, present, and future.
-> **Last Updated**: 2026-10-14
+> **Last Updated**: 2026-10-15
 
 ---
 
@@ -377,6 +377,101 @@ nested versions, optional prerequisites, rollback at500/501, working dates, miss
 manual edits, concurrent preview acceptance, retained-data PostgreSQL upgrades, and the populated
 Event preparation journey in both themes and phone layouts. No complexity-debt relaxation or
 second data-access, scheduler, migration, or undo path is permitted.
+
+#### Blueprint interface acceptance refinement
+
+Minimize cognitive load with a guided, re-enterable flow for defining the organization's actual
+work primitives: what a kind of work means, when to use it, its outline and children, responsibility
+rules, timing, and publication. Keep the sample work item central, with a compact hierarchy of
+children and readable relative dates. Sections must retain the authored draft and let a returning
+person jump directly to refine the relevant part. Reveal child editing, assignment rules, template
+configuration and publication history only when needed. Keep
+the current editor, shared controls, canonical draft and typed query path; preserve four-kind
+authoring, private drafts, explicit publication, failed-save retention and immutable history.
+Use a focused full-page authoring surface with a clear return to Work templates, rather than a
+long form buried in Settings. Establish substantial MD3 Expressive hierarchy with a prominent
+definition header, contained section navigation, distinct tonal regions for the sample work and
+child outline, a clear selected-child editing surface, and persistent save/state controls in the
+definition header. Make publication an explicit next action in Review.
+Use shared shape, type, surface and motion tokens; containers must communicate relationships and
+priority. Verify first-use comprehension, keyboard operation, readable long
+outlines, unsaved navigation, both themes, desktop, phone, short-phone and 320px layouts. Functional
+checks and screenshots alone do not establish craft acceptance; review the combined workflow.
+
+Complete MCP authoring through the same canonical definition service: accept a composed child
+graph only for explicit draft writes, retain it when omitted, and reject fields that publication
+or legacy writes would otherwise ignore. Keep reviewed revisions, private draft visibility and
+publication validation intact. Correct template guidance to explain child work while preserving
+literal Markdown and the separate schedule contract. Verify real MCP draft, discovery, publication,
+clearing and rejected-write journeys after the UI verification stack releases the shared database.
+
+Resolve the reproduced ordinary Task composer interruption before accepting creation journeys.
+Bind an opening request to its actual browser destination so a delayed route-snapshot reconciliation
+cannot close a composer just opened there. Preserve interruption and draft recovery on subsequent
+real navigation. Prove both behaviors with a focused provider regression and the original browser
+journey, without adding timing waits or retries to conceal the failure.
+Trace the actual first-click boundary as well: My Work must not expose an enabled server-rendered
+Task action before its client session and event handler are available. Keep both its header and
+empty-state entry points consistent, then verify immediate creation in the original journey.
+
+#### Blueprint delivery
+
+Implemented nested published definitions, optional children, dependency and relative-date rules,
+parent-based responsibility, exact origin and per-date manual ownership. One transaction-aware
+work writer now serves ordinary creation, plans, MCP, automation and retained recurrence forests.
+Ordered expansion, conversion and enforcement preserve existing publications, source identities,
+actual generated work and private retained receipts. No process tables are removed in this layer.
+Selective update/change previews retain declined changes and authored content; Save as template
+captures an independent private draft, and archive reviews authorized references without losing
+existing work. MCP draft authoring uses the same definition and publication service.
+
+The full-page Purpose/Work/Review flow now defines organization work with expressive shared
+containers, a compact child outline and one focused editor. Section changes preserve input, child
+selection, focus and scroll. Review exposes starting documents/properties, blockers, cycles and
+nested publication choices. Save failures stay visible beside the persistent action. Phone checks
+corrected touch-row clipping, title crowding and header overlap. The Task entry point also waits
+for its client session, and same-destination route reconciliation preserves newly opened drafts.
+
+Affected migrations and retained-data checks pass through the complete PostgreSQL journal.
+Creation and update tests cover rollback, nested versions, permissions, hidden content, manual/null
+dates, completion and the 500-item boundary. All template browser journeys have passing evidence
+after focused corrections, with 48 current authoring captures across both themes, desktop,
+phone, 320px and short-phone layouts, plus failed-save recovery frames. Independent interface and
+source review pass. The complete web run passes 669 files and 5,185 tests; its five fixture failures
+are resolved in a passing 16-test focused rerun. MCP authoring and compatibility checks pass.
+The affected build/type graph passes all 25 tasks; final web-fixture and explicit E2E types, scoped
+lint, formatting and complexity checks pass without ledger relaxation.
+
+**Files changed**: Work blueprint contracts/planner, database migrations/projections/conversion,
+shared creation and recurrence adapters, template authoring/preview/capture/archive interfaces,
+MCP authoring, shared Surface/editor behavior, related tests and documentation.
+
+**Retrospective**: Review the whole definition a person will publish, including secondary child
+content and dependency policy. Validate actual touch geometry and measured sticky-header offsets.
+Distinguish a valid route-reconciliation regression from a first click delivered before hydration;
+source tests and the original browser journey must both establish the fix. Reuse canonical blank
+template fixtures rather than weakening creation review for older tests. Program schedules, gallery
+and external release/provider acceptance remain separate work.
+
+#### Program schedule implementation plan
+
+Use `docs/engineering/specs/work-template-schedules.md` for the next layer. Keep the current scheduler,
+series revisions, exceptions and calendar keys while replacing its reusable process dependency with
+versioned templates and private location drafts. Extract strict cadence/title-pattern/default-schedule
+contracts first; expand and resumably convert retained data before cutting over authoring, execution,
+completion and compatibility adapters. Add independently owned Program defaults and the typed-query
+Schedules section. Remove process tables only after current source, full-journal PostgreSQL conversion
+and the populated dinner journey prove canonical ownership and preserved history.
+
+#### Gallery and Athena implementation plan
+
+Use `docs/engineering/specs/work-template-gallery-athena.md` after the schedule layer. Finalize the
+approved catalog and bounded transitive-copy planner, then integrate the same canonical authoring,
+publication and undo services for gallery and cross-workspace copies. Add trusted Athena draft/proposal
+handling with current authoring rights and the existing paid capability, followed by actionable Inbox
+review, explicit onboarding starter choices and confirmed label-group conversion. Keep manual template
+features available on every plan, preserve private drafts and existing work, and prove the nonprofit
+Event journey before claiming acceptance.
 
 ### [LEGAL-POLICIES-002] Keep policy versions easy to navigate
 

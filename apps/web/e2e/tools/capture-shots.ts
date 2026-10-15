@@ -31,6 +31,7 @@ import type { BrowserContext, Page } from '@playwright/test';
 import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
+import { visitBlueprintDailyPlanner } from '../helpers/work-template-blueprints';
 import { createMobileAuditFixture } from '../helpers/mobile-audit-fixture';
 import type { MobileAuditFixture } from '../helpers/mobile-audit-fixture';
 import {
@@ -67,6 +68,7 @@ interface CliArgs {
   frameLimit: number | undefined;
   records: string | undefined;
   clickButton: string | undefined;
+  clickRow: string | undefined;
   clickMenuItem: string | undefined;
   clickTab: string | undefined;
   clickAfter: readonly string[];
@@ -111,6 +113,7 @@ function parseArgs(argv: string[]): CliArgs {
       : undefined,
     records: flags.has('records') ? resolve(flags.get('records') ?? '') : undefined,
     clickButton: flags.get('click-button'),
+    clickRow: flags.get('click-row'),
     clickMenuItem: flags.get('click-menu-item'),
     clickTab: flags.get('click-tab'),
     clickAfter: flags.get('click-after')?.split('|') ?? [],
@@ -118,7 +121,11 @@ function parseArgs(argv: string[]): CliArgs {
 }
 
 /** Replace stable local audit fixture tokens in a route case. */
-function resolveAuditRoute(route: string, meta: SessionMeta, sharedOrgId: string): string {
+function resolveAuditRoute(
+  route: string,
+  meta: SessionMeta,
+  sharedOrgId: string | undefined,
+): string {
   const fixture = meta.mobileAuditFixture;
   const values: Record<string, string | undefined> = {
     orgId: meta.orgId,
@@ -211,7 +218,10 @@ async function openReviewRoute(page: Page, url: string, allowSignIn = false): Pr
   if (!allowSignIn && page.url().includes('/sign-in')) {
     throw new Error(`Could not capture ${url}: the saved test session is no longer authenticated`);
   }
-  if (new URL(url).pathname.includes('/settings/')) {
+  if (
+    new URL(url).pathname.includes('/settings/') &&
+    !/\/settings\/templates\/[^/]+\/?$/.test(new URL(url).pathname)
+  ) {
     await page.locator('[role="dialog"]').waitFor({ state: 'visible', timeout: 20_000 });
   }
   await waitForSettledPage(page);
@@ -333,6 +343,7 @@ function captureCases({
   limit,
   routes,
   clickButton,
+  clickRow,
   clickMenuItem,
   clickTab,
   clickAfter,
@@ -342,18 +353,37 @@ function captureCases({
   return routes.map((route) => ({
     id: routeSlug(route),
     route,
-    setup: clickButton
-      ? async (page: Page): Promise<void> => {
-          await page.getByRole('button', { name: clickButton, exact: true }).click();
-          if (clickMenuItem)
-            await page.getByRole('menuitem', { name: clickMenuItem, exact: true }).click();
-          if (clickTab) await page.getByRole('tab', { name: clickTab, exact: true }).click();
-          for (const name of clickAfter)
-            await page.getByRole('button', { name, exact: true }).click();
-          await waitForSettledPage(page);
-        }
-      : undefined,
+    setup:
+      clickButton || clickRow || clickTab || clickAfter.length
+        ? async (page: Page): Promise<void> => {
+            if (clickButton)
+              await page.getByRole('button', { name: clickButton, exact: true }).click();
+            if (clickRow)
+              await page
+                .getByRole('row')
+                .filter({ has: page.getByText(clickRow, { exact: true }) })
+                .click();
+            if (clickMenuItem)
+              await page.getByRole('menuitem', { name: clickMenuItem, exact: true }).click();
+            if (clickTab) await page.getByRole('tab', { name: clickTab, exact: true }).click();
+            for (const name of clickAfter)
+              await page.getByRole('button', { name, exact: true }).click();
+            await waitForSettledPage(page);
+          }
+        : undefined,
   }));
+}
+
+async function prepareAuthoringCapture(
+  context: BrowserContext,
+  baseURL: string,
+  cases: readonly MobileLayoutRouteCase[],
+): Promise<void> {
+  if (!cases.some((entry) => /\/settings\/templates\/[^/]+\/?$/.test(entry.route))) return;
+  const preparation = await context.newPage();
+  await preparation.goto(baseURL, { waitUntil: 'domcontentloaded', timeout: 60_000 });
+  await visitBlueprintDailyPlanner(preparation);
+  await preparation.close();
 }
 
 async function main(): Promise<void> {
@@ -435,6 +465,8 @@ async function main(): Promise<void> {
     // workspace id for ordinary route captures, so dynamic audit routes must select this owner.
     sharedOrgId = meta.mobileAuditFixture.orgId;
   }
+
+  await prepareAuthoringCapture(context, meta.baseURL, selectedCases);
 
   const selectedFrames = VIEWPORTS.flatMap((viewport) =>
     COLOR_SCHEMES.map((colorScheme) => ({ viewport, colorScheme })),

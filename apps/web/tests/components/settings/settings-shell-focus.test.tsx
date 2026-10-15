@@ -15,8 +15,9 @@ vi.mock('@/components/active-org', () => ({
   }),
 }));
 
+const location = vi.hoisted(() => ({ pathname: '/settings/security' }));
 vi.mock('@/lib/app-location', () => ({
-  useAppPathname: () => '/settings/security',
+  useAppPathname: () => location.pathname,
 }));
 
 vi.mock('@/lib/interactions/navigation', () => ({
@@ -29,6 +30,7 @@ vi.mock('@/components/settings/settings-shell-nav', () => ({
 }));
 
 beforeEach(() => {
+  location.pathname = '/settings/security';
   Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
     configurable: true,
     writable: true,
@@ -42,6 +44,17 @@ afterEach(() => {
 });
 
 describe('SettingsShell route-fragment focus', () => {
+  it('keeps nested work definition routes in the full-page app shell', () => {
+    location.pathname = '/orgs/workspace/settings/templates/new';
+    render(
+      <SettingsShell active>
+        <h1>Define an Event</h1>
+      </SettingsShell>,
+    );
+    expect(screen.getByRole('heading', { name: 'Define an Event' })).toBeVisible();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
   it('does not focus the workspace selector while a fragment destination is still mounting', async () => {
     vi.spyOn(window, 'requestAnimationFrame').mockImplementation(() => 1);
     vi.spyOn(window, 'cancelAnimationFrame').mockImplementation(() => undefined);

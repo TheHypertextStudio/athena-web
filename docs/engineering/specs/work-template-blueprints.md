@@ -202,6 +202,28 @@ Extend the existing assignment route/service and typed query definitions. Keep o
 
 UI extends `work-template-change-preview.tsx` and the existing controller/query definitions; no component fetches or separate mutation pipeline. Creation summary reads “Creates 6 tasks and 2 milestones,” expands to dates and optional checkboxes, and clearly states missing anchor/prerequisite/team failures. Sample-item authoring uses relative timing controls and parent-based rules, with existing normal fields and shared primitives. Pinned-child updates appear in Settings. No template sidebar or new kind is added.
 
+Authoring is a guided, re-enterable flow for defining the organization's work primitives. Purpose
+establishes what the work is called, its existing kind, and when it is used. Work keeps the normal
+sample document and compact child hierarchy central, revealing the selected child's fields, timing
+and responsibility only when needed. Review presents the complete definition in human terms before
+an explicit private save or workspace publication. A returning author opens Work directly and can
+jump to any section. Switching sections preserves authored input, selection and editor position;
+failed saves retain the draft, and leaving with unsaved changes offers a clear recovery choice.
+One persistent save state and action area spans the full-page editor, with a clear return to Work
+templates. Guidance must reduce the choices needed at each point without imposing a start-over
+wizard on later edits. Configuration, publication history and engineering identifiers must not
+obscure what the organization actually does.
+
+The full-page flow uses MD3 Expressive containment and hierarchy. A prominent definition header
+establishes name, kind and draft/publication state; contained navigation makes the three sections
+recognizable. Distinct tonal regions separate the primary sample document, included-work outline
+and selected-child editor. Secondary configuration, publication history and the persistent action
+area have their own clear visual roles. Use the shared surface, shape, typography and motion tokens
+to communicate grouping and importance at desktop and phone sizes, with intentional light/dark
+themes. A flat page of equally weighted labels does not satisfy this interface contract.
+These choices follow [Google's Material 3 Expressive principles](https://design.google/library/expressive-material-design-google-research),
+which use containment, shape, type and color to direct attention and group related content.
+
 ## Archive and Save as template
 
 Archive impact preview lists authorized active schedules using the definition and published parents referencing it, with bounded pagination/counts. No inaccessible work names or draft bodies leak. Archive refuses bases, removes new-create discovery, preserves immutable references and existing work/schedule execution. Unpublished unused drafts may follow existing deletion behavior. Any definition with work, child-reference or schedule use is retained/archived. Never cascade version/step deletion except authorized workspace purge.

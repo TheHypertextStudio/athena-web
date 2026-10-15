@@ -8,6 +8,7 @@
  * own entry and relinked in the same transaction as the re-insert, so the reversal never depends
  * on the order undo reads a change set's entries in.
  */
+import { BlueprintDateBindings } from '@docket/work/work-template-blueprint';
 import { db, milestone, project, task } from '@docket/db';
 import { and, eq, inArray, isNull } from 'drizzle-orm';
 
@@ -31,6 +32,7 @@ export interface MilestoneUndoOutcome {
 
 /** The milestone columns a recorded snapshot restores. */
 interface MilestonePatch {
+  readonly blueprintDateBindings?: BlueprintDateBindings;
   readonly name: string;
   readonly description: string | null;
   readonly targetDate: Date | null;
@@ -41,6 +43,9 @@ interface MilestonePatch {
 function patchFromSnapshot(snapshot: Record<string, unknown>): MilestonePatch {
   const description = snapshot['description'];
   return {
+    ...(snapshot['blueprintDateBindings'] === undefined
+      ? {}
+      : { blueprintDateBindings: BlueprintDateBindings.parse(snapshot['blueprintDateBindings']) }),
     name: String(snapshot['name']),
     description: typeof description === 'string' ? description : null,
     targetDate: restoredDate(snapshot['targetDate']),

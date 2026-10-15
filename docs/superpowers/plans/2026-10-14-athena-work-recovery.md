@@ -62,12 +62,15 @@ completion rules follow the four delivery layers. Use linear history and one pus
 
 ## Task 6: Composed blueprints
 
-- [ ] Specify and implement nested/pinned versions, optional steps, dependencies, assignment/team/
+- [x] Specify and implement nested/pinned versions, optional steps, dependencies, assignment/team/
       cycle rules, relative timing, working weekdays, provenance, and manual date markers.
-- [ ] Expand transactionally, rejecting loops and creation beyond 500 items before writes.
-- [ ] Preserve manual dates, fill missing-anchor dates, and recalculate unpinned child dates.
-- [ ] Add publishing, update/change-template previews, Save as template, and safe archiving.
-- [ ] Migrate process definitions/instances without losing work or history.
+- [x] Expand transactionally, rejecting loops and creation beyond 500 items before writes.
+- [x] Preserve manual dates, fill missing-anchor dates, and recalculate unpinned child dates.
+- [x] Add publishing, update/change-template previews, Save as template, and safe archiving.
+- [x] Migrate process definitions/instances without losing work or history.
+
+- [x] Accept the re-enterable Purpose/Work/Review interface, contained MD3 hierarchy,
+      complete publication readback, draft recovery and explicit MCP child-definition authoring.
 
 ## Task 7: Program schedules
 

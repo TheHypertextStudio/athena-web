@@ -341,6 +341,24 @@ describe('automatic daily planning', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Plan now' }));
     expect(state.push).toHaveBeenLastCalledWith('/plan/day?date=2026-10-09');
   });
+  it('keeps a work definition uninterrupted while reading and resumes after leaving it', async () => {
+    const definition = document.createElement('main');
+    definition.dataset['workTemplateAuthoring'] = '';
+    definition.textContent = 'Event preparation and responsibilities';
+    document.body.append(definition);
+    try {
+      mount();
+      await advance(6000);
+      expect(screen.queryByRole('dialog')).toBeNull();
+      expect(state.push).not.toHaveBeenCalled();
+    } finally {
+      definition.remove();
+    }
+    await advance(1000);
+    expect(screen.getByText('Opening planner in 5 seconds.')).toBeVisible();
+    await advance(5000);
+    expect(state.push).toHaveBeenCalledExactlyOnceWith('/plan/day?date=2026-10-02');
+  });
   it('stays quiet while the person edits another surface', () => {
     const input = document.createElement('input');
     document.body.append(input);

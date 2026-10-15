@@ -137,6 +137,7 @@ function assertSomethingToChange(input: DefineTemplateInput): void {
     input.payload,
     input.labels,
     input.defaultStatusKey,
+    input.blueprint,
   ];
   if (fields.every((value) => value === undefined)) {
     invalid('template', 'Name at least one thing to change.');
@@ -160,8 +161,12 @@ async function writeTemplate(
     ? await resolveVisibleTemplate(orgId, actor.actorId, input.template)
     : null;
   if (input.action !== undefined) return writeCanonicalTemplate(actor, input, before);
-  if (input.defaultStatusKey !== undefined || input.expectedRevision !== undefined)
-    invalid('action', 'Choose draft or publish for revision-aware changes.');
+  if (
+    input.defaultStatusKey !== undefined ||
+    input.expectedRevision !== undefined ||
+    input.blueprint !== undefined
+  )
+    invalid('action', 'Choose draft for authoring changes or publish for a reviewed revision.');
   if (before) assertSomethingToChange(input);
   const teamId = await resolveOptional(orgId, 'team', input.team, 'team');
   const payload = await payloadToWrite(input, before, teamId);
@@ -192,6 +197,7 @@ function assertLifecycleInput(input: DefineTemplateInput): void {
     input.payload,
     input.labels,
     input.defaultStatusKey,
+    input.blueprint,
   ];
   if (fields.some((field) => field !== undefined))
     invalid('action', 'Save draft changes before publishing or archiving.');
@@ -210,6 +216,7 @@ async function canonicalDefinition(
     name: input.name ?? previous?.name,
     description: input.description ?? previous?.description,
     payload: payload ?? previous?.payload,
+    blueprint: input.blueprint ?? previous?.blueprint,
     defaultStatusKey:
       input.defaultStatusKey === undefined ? previous?.defaultStatusKey : input.defaultStatusKey,
   });

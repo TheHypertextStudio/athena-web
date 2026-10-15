@@ -7,7 +7,6 @@ import type {
 import { and, asc, eq } from 'drizzle-orm';
 import { ConflictError, NotFoundError } from '../../error';
 import {
-  requireAssignableScope,
   requireTemplateAuthor,
   mayManageTemplateOfferings,
   type TemplateActor,
@@ -25,6 +24,19 @@ import {
   versionsFor,
 } from './persistence';
 import { visibleTemplateWhere } from './visibility';
+import { serializableTx } from '../serializable-tx';
+import { createWorkTemplateInTransaction, reconcileTemplateCreationEffects } from './creation';
+export {
+  createPublishedWorkTemplateInTransaction,
+  createWorkTemplateInTransaction,
+  reconcileTemplateCreationEffects,
+  type TemplateCreationResult,
+  type TemplateCreationEffect,
+} from './creation';
+import {
+  readPublicationDraft,
+  lockPublicationClosure,
+} from '../work-template-blueprints/publication';
 
 /** Load a tenant definition after applying private/team visibility, including retained archives. */
 export async function getWorkTemplate(actor: TemplateActor, id: string): Promise<TemplateRow> {
@@ -86,38 +98,11 @@ export async function createWorkTemplate(
   body: WorkTemplateCreate,
   options: { readonly publish?: boolean; readonly isSeed?: boolean } = {},
 ): Promise<TemplateRow> {
-  await requireTemplateAuthor(actor);
-  const canManageOfferings = await mayManageTemplateOfferings(actor);
-  const ownerActorId = body.ownerActorId ?? actor.actorId;
-  const teamId = body.scope === 'team' ? (body.teamId ?? null) : null;
-  await requireAssignableScope(actor, body.scope, ownerActorId, teamId);
-  if (body.scope === 'organization' && !options.publish) {
-    await requireAssignableScope(actor, 'personal', ownerActorId, null);
-  }
-  const row = await db.transaction(async (tx) => {
-    const [created] = await tx
-      .insert(template)
-      .values({
-        organizationId: actor.orgId,
-        targetType: body.targetType,
-        scope: body.scope,
-        isSeed: options.isSeed ?? false,
-        ownerActorId,
-        teamId,
-        createdBy: actor.actorId,
-        draftDefinition: body.definition,
-        name: body.definition.name,
-        description: body.definition.description,
-        icon: body.definition.icon,
-        payload: body.definition.payload,
-      })
-      .returning();
-    if (!created) throw new Error('Template insert returned no row');
-    await replaceOfferings(tx, actor, created, body.offeredTeamIds, canManageOfferings);
-    return options.publish ? appendPublication(tx, created, actor.actorId) : created;
-  });
-  await reconcileTemplateImages(actor.orgId, row.id, 'upsert');
-  return row;
+  const result = await serializableTx((tx) =>
+    createWorkTemplateInTransaction(tx, actor, body, options),
+  );
+  await reconcileTemplateCreationEffects(result.effects);
+  return result.row;
 }
 
 /** Edit a revision using a row lock; published legacy projections stay on their last snapshot. */
@@ -176,8 +161,10 @@ export async function publishWorkTemplate(
 ): Promise<TemplateRow> {
   await getWorkTemplate(actor, id);
   await requireTemplateAuthor(actor);
-  const row = await db.transaction(async (tx) => {
-    const current = await lockTemplate(tx, actor.orgId, id, actor.actorId);
+  const row = await serializableTx(async (tx) => {
+    const draft = await readPublicationDraft(tx, actor.orgId, id, actor.actorId);
+    requireRevision(draft, expectedRevision);
+    const current = await lockPublicationClosure(tx, draft);
     requireRevision(current, expectedRevision);
     return appendPublication(tx, current, actor.actorId);
   });

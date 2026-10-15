@@ -49,7 +49,7 @@ const {
   draftDelete: vi.fn(),
 }));
 
-vi.mock('../../src/lib/api', () => ({
+vi.mock('../../src/lib/api', async () => ({
   api: {
     v1: {
       orgs: {
@@ -64,7 +64,10 @@ vi.mock('../../src/lib/api', () => ({
           display: { ':subjectType': { $get: displaysGet } },
           cycles: { $get: cyclesGet },
           labels: { $get: labelsGet },
-          templates: { $get: templatesGet },
+          templates: {
+            $get: templatesGet,
+            definitions: (await import('./blank-template-routes')).blankTemplateRoutes,
+          },
           settings: { 'work-structure': { $get: workStructureGet } },
           teams: { ':teamId': { $get: teamGet } },
           mentions: {

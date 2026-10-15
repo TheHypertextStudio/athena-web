@@ -7,6 +7,12 @@ import { mayAuthorTemplates, type TemplateActor } from './authorization';
 import { draftOf, type TemplateRow, type TemplateVersionRow } from './model';
 import { offeringsFor } from './persistence';
 
+function copyOrigin(row: TemplateRow) {
+  return row.originWorkTypeId && row.originWorkTypeVersionId
+    ? { workTypeId: row.originWorkTypeId, workTypeVersionId: row.originWorkTypeVersionId }
+    : null;
+}
+
 /** Validate an immutable publication at the public boundary. */
 export function toWorkTemplateVersion(row: TemplateVersionRow): WorkTemplateVersionOut {
   return WorkTemplateVersionOut.parse({ ...row, publishedAt: row.publishedAt.toISOString() });
@@ -56,6 +62,7 @@ export async function toWorkTemplateOut(
     ownerActorId: row.ownerActorId,
     teamId: row.teamId,
     isBase: row.isBase,
+    origin: copyOrigin(row),
     revision: row.draftRevision,
     definition: { ...(latestVersion?.definition ?? draftOf(row)), ...baseDisplay },
     ...(canEdit ? { draftDefinition: { ...draftOf(row), ...baseDisplay } } : {}),

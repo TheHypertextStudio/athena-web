@@ -1,6 +1,9 @@
+import { originFor } from '../lib/provenance/context';
+import { createWork } from '../lib/work-creation/service';
 import { workTemplateAssignmentRoutes } from './work-template-assignment';
+import { workTemplateCaptureRoutes } from './work-template-capture';
 import { programOut as toOut } from './program-output';
-import { prepareWorkTemplateCreation } from '../lib/work-template-creation';
+
 /** Program routes mounted under an organization. */
 import { actor, cycle, db, program, project, task, update } from '@docket/db';
 import { CursorQuery, pageOf } from '../contracts/pagination';
@@ -33,7 +36,7 @@ import {
   resolveLabelSet,
 } from '../lib/labels';
 import { detailCapabilities } from '../lib/detail-capabilities';
-import { deferAfterResponse } from '../lib/after-response';
+
 import { created, ok } from '../lib/ok';
 import { contentOrigin } from '../lib/provenance/authored-content';
 import { resolveContainerStatus } from '../lib/work-status';
@@ -73,6 +76,7 @@ async function loadProgram(orgId: string, id: string): Promise<ProgramRow> {
 /** Programs router: org-scoped CRUD; `manage` to mutate. */
 const programs = new Hono<AppEnv>()
   .route('/', workTemplateAssignmentRoutes('program'))
+  .route('/', workTemplateCaptureRoutes('program'))
   .get(
     '/',
     apiDoc({
@@ -110,53 +114,15 @@ const programs = new Hono<AppEnv>()
     }),
     zJson(ProgramCreate),
     async (c) => {
-      const { orgId, actorId } = c.get('actorCtx');
-      const body = ProgramCreate.parse(
-        await prepareWorkTemplateCreation(orgId, 'program', c.req.valid('json')),
-      );
-      const status = await resolveContainerStatus(orgId, 'program', body.status ?? 'active');
-      const inserted = await db
-        .insert(program)
-        .values({
-          workTypeId: body.workTypeId,
-          workTypeVersionId: body.workTypeVersionId,
-          organizationId: orgId,
-          name: body.name,
-          summary: body.summary,
-          description: body.description,
-          ownerId: body.ownerId,
-          status: status.status,
-          statusId: status.statusId,
-          health: body.health,
-          visibility: body.visibility ?? 'public',
-          createdBy: actorId,
-        })
-        .returning();
-      const row = inserted[0];
-      /* v8 ignore next -- @preserve defensive: insert/update always returns a row */
-      if (!row) throw new Error('program insert returned no row');
-      await changeSets.recordCreate({ orgId, actorId }, 'program', row);
-      // Stream: record the creation (mirrors projects.ts) so it surfaces to owners/followers.
-      // Post-commit and unread by the response, so it runs after the caller has been answered.
-      // Stamped here rather than inside the deferred callback: `emitEvent` defaults `occurredAt`
-      // to the moment it runs, which is now after the response, so under concurrent creates the
-      // feed could order two entities against the order their rows were actually written. It is
-      // also part of the dedupe key, so it needs to name the domain event, not the drain.
-      const occurredAt = new Date();
-      deferAfterResponse('program-created-event', () =>
-        emitEvent({
-          organizationId: orgId,
-          kind: 'created',
-          actorId,
-          occurredAt,
-          title: row.name,
-          subject: { type: 'program', id: row.id, title: row.name },
-        }),
-      );
-      deferAfterResponse('program-created-search-upsert', () =>
-        enqueueSearchUpsert(orgId, 'program', row.id),
-      );
-      return created(c, ProgramOut, toOut(row));
+      const caller = c.get('actorCtx');
+      const result = await createWork({
+        caller,
+        kind: 'program',
+        body: c.req.valid('json'),
+        invocation: { origin: originFor('program_create') },
+      });
+      if (result.root.kind !== 'program') throw new Error('Work creation returned the wrong kind');
+      return created(c, ProgramOut, toOut(result.root.row));
     },
   )
   .get(

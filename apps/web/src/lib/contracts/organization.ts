@@ -1,4 +1,5 @@
 import { WorkTemplateAuthoringPolicy } from '@docket/work/work-template-contract';
+import { WorkingWeekdays } from '@docket/work/work-template-blueprint';
 /**
  * `domain packages` — Organization slice DTOs.
  */
@@ -254,6 +255,9 @@ export const WorkspaceSettingsOut = z
       .describe(
         'Zero-based month that starts the workspace fiscal year. January is 0 and December is 11.',
       ),
+    workingWeekdays: WorkingWeekdays.describe(
+      'Workspace working calendar as unique ascending ISO weekdays (Monday 1 through Sunday 7). New workspaces use Monday through Friday.',
+    ),
   })
   .meta({ id: 'WorkspaceSettingsOut', description: 'Workspace work-structure settings.' });
 /** Workspace settings representation. */

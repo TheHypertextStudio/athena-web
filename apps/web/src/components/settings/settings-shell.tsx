@@ -152,7 +152,9 @@ export function SettingsShell({ active, children }: SettingsShellProps): JSX.Ele
     [orgs],
   );
 
-  if (!active) return <>{children}</>;
+  // Template authoring is sustained work: its nested route keeps the ordinary full-page shell.
+  // The collection remains in Settings, and the editor owns its explicit return link.
+  if (!active || /\/settings\/templates\/[^/]+\/?$/.test(pathname)) return <>{children}</>;
 
   return (
     <Dialog

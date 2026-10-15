@@ -1,45 +1,23 @@
-/**
- * `@docket/api` — idempotent process occurrence and concrete work materialization.
- *
- * @remarks
- * Every generated Project, Milestone, and Task is an ordinary Docket row. Source mappings retain
- * the immutable revision step that created it, while unique constraints and an instance row lock
- * make scheduler retries converge on the same work instead of manufacturing duplicates.
- */
+/** Idempotent scheduler occurrence identity with work delegated to shared canonical creation. */
 import {
-  milestone,
-  processDependency,
   processInstance,
-  processInstanceMilestone,
-  processInstanceProject,
-  processInstanceTask,
-  processMilestoneSpec,
   processOccurrence,
-  processProjectLabelSpec,
-  processProjectSpec,
-  processRevision,
   processStep,
-  processTaskLabelSpec,
-  processTaskSpec,
-  project,
-  projectLabel,
+  processInstanceProject,
+  processInstanceMilestone,
+  processInstanceTask,
   recurrenceSeries,
   recurrenceSeriesRevision,
-  task,
-  taskDependency,
-  taskLabel,
-  team,
   type Database,
 } from '@docket/db';
-import { and, eq, inArray, isNull } from 'drizzle-orm';
-
+import { and, eq, isNull } from 'drizzle-orm';
+import { parseCalendarDate } from '@docket/work/calendar-date';
 import { ConflictError, NotFoundError } from '../../error';
-import { addCalendarDays, parseCalendarDate } from '@docket/planning/calendar-date';
 import type { TaskStateMutation } from '../task-state';
-import { loadStatusSets } from '../work-status';
-import { recordMaterializedWork } from './record-materialized';
-import { processTaskTemplateIdentity } from './task-template-identity';
-
+import type { DeferredWorkEffect } from '../work-creation/types';
+import { deferWorkCreationEffects } from '../work-creation/effects';
+import { materializeTemplateOccurrence } from './work-template-adapter';
+import { moveRetainedOccurrence } from './work-template-move';
 /** Transaction handle shared with completion advancement. */
 export type ProcessTransaction = Parameters<Parameters<Database['transaction']>[0]>[0];
 
@@ -101,51 +79,8 @@ export interface MaterializeInstanceStepsCommand {
   readonly completionDatesByStepId?: ReadonlyMap<string, string> | undefined;
   /** State changes that the caller must publish after its enclosing transaction commits. */
   readonly postCommitStateTransitions?: TaskStateMutation[] | undefined;
-}
-
-/** Convert a validated calendar date to the timestamp convention used by work rows. */
-function planningTimestamp(value: string | null): Date | undefined {
-  if (value === null) return undefined;
-  parseCalendarDate(value);
-  return new Date(`${value}T00:00:00.000Z`);
-}
-
-/** Apply stable, intentionally small naming tokens to a generated entity title. */
-function renderName(template: string, scheduledFor: string): string {
-  const [year = '', month = ''] = scheduledFor.split('-');
-  const monthName = new Intl.DateTimeFormat('en-US', { month: 'long', timeZone: 'UTC' }).format(
-    new Date(`${year}-${month}-01T00:00:00.000Z`),
-  );
-  return template
-    .replaceAll('{date}', scheduledFor)
-    .replaceAll('{year}', year)
-    .replaceAll('{month}', month)
-    .replaceAll('{monthName}', monthName);
-}
-
-/** Resolve a step's planning date from trigger-relative or completion-relative timing. */
-function stepPlanningDate(
-  step: typeof processStep.$inferSelect,
-  scheduledFor: string,
-  completionDates: ReadonlyMap<string, string>,
-): string | null {
-  if (step.timingKind === 'on_trigger') return scheduledFor;
-  if (step.timingKind === 'relative_to_trigger') {
-    return addCalendarDays(scheduledFor, step.offsetDays ?? 0);
-  }
-  const completedOn = step.afterStepId ? completionDates.get(step.afterStepId) : undefined;
-  return completedOn ? addCalendarDays(completedOn, step.offsetDays ?? 0) : null;
-}
-
-/** Whether completion timing has its required terminal predecessor. */
-function timingReady(
-  step: typeof processStep.$inferSelect,
-  completionDates: ReadonlyMap<string, string>,
-): boolean {
-  return (
-    step.timingKind !== 'after_step_completion' ||
-    (step.afterStepId !== null && completionDates.has(step.afterStepId))
-  );
+  /** Deferred shared creation effects drained by the enclosing transaction owner. */
+  readonly postCommitEffects?: DeferredWorkEffect[];
 }
 
 /** Build public key maps from persisted instance mappings. */
@@ -190,354 +125,45 @@ async function instanceIdentityMap(
   };
 }
 
-/** Require the id returned by a concrete work-row insert. */
-function insertedEntityId(rows: readonly { id: string }[], kind: string): string {
-  const row = rows[0];
-  if (!row) throw new Error(`${kind} insert returned no row`);
-  return row.id;
-}
-
-/**
- * Materialize every currently eligible step in an already-existing process instance.
- *
- * @remarks
- * The caller must hold the instance row lock. `all_at_once` creates the fixed plan immediately;
- * completion-relative dates remain unset until their predecessor completes. `when_ready` creates a
- * step only when timing, dependency, and containment prerequisites are satisfied. The projects and
- * tasks a pass creates are recorded as one `rule` / `recurrence` change set in the same
- * transaction (see `record-materialized.ts`).
- */
+/** Complete all missing selected legacy work once at the approved canonical cutover, preserving existing source maps. */
 export async function materializeInstanceSteps(
   tx: ProcessTransaction,
   command: MaterializeInstanceStepsCommand,
 ): Promise<MaterializedStepDelta> {
-  parseCalendarDate(command.scheduledFor);
-  const [revisionRows, steps, projectSpecs, milestoneSpecs, taskSpecs, dependencies] =
-    await Promise.all([
-      tx
-        .select()
-        .from(processRevision)
-        .where(
-          and(
-            eq(processRevision.id, command.revisionId),
-            eq(processRevision.organizationId, command.organizationId),
-          ),
-        )
-        .limit(1),
-      tx
-        .select()
-        .from(processStep)
-        .where(eq(processStep.revisionId, command.revisionId))
-        .orderBy(processStep.sort),
-      tx
-        .select()
-        .from(processProjectSpec)
-        .where(eq(processProjectSpec.organizationId, command.organizationId)),
-      tx
-        .select()
-        .from(processMilestoneSpec)
-        .where(eq(processMilestoneSpec.organizationId, command.organizationId)),
-      tx
-        .select()
-        .from(processTaskSpec)
-        .where(eq(processTaskSpec.organizationId, command.organizationId)),
-      tx
-        .select()
-        .from(processDependency)
-        .where(eq(processDependency.revisionId, command.revisionId)),
-    ]);
-  const revision = revisionRows[0];
-  if (!revision) throw new NotFoundError('Process revision not found');
-  const stepIds = new Set(steps.map((step) => step.id));
-  const projectsByStep = new Map(
-    projectSpecs.filter((spec) => stepIds.has(spec.stepId)).map((spec) => [spec.stepId, spec]),
-  );
-  const milestonesByStep = new Map(
-    milestoneSpecs.filter((spec) => stepIds.has(spec.stepId)).map((spec) => [spec.stepId, spec]),
-  );
-  const tasksByStep = new Map(
-    taskSpecs.filter((spec) => stepIds.has(spec.stepId)).map((spec) => [spec.stepId, spec]),
-  );
-  const [projectMappings, milestoneMappings, taskMappings, storedTaskLabels, storedProjectLabels] =
-    await Promise.all([
-      tx
-        .select()
-        .from(processInstanceProject)
-        .where(eq(processInstanceProject.instanceId, command.instanceId)),
-      tx
-        .select()
-        .from(processInstanceMilestone)
-        .where(eq(processInstanceMilestone.instanceId, command.instanceId)),
-      tx
-        .select({
-          stepId: processInstanceTask.stepId,
-          taskId: processInstanceTask.taskId,
-          completedAt: task.completedAt,
-        })
-        .from(processInstanceTask)
-        .innerJoin(task, eq(task.id, processInstanceTask.taskId))
-        .where(eq(processInstanceTask.instanceId, command.instanceId)),
-      tx
-        .select()
-        .from(processTaskLabelSpec)
-        .where(eq(processTaskLabelSpec.organizationId, command.organizationId)),
-      tx
-        .select()
-        .from(processProjectLabelSpec)
-        .where(eq(processProjectLabelSpec.organizationId, command.organizationId)),
-    ]);
-
-  const projectIds = new Map(projectMappings.map((row) => [row.stepId, row.projectId]));
-  const milestoneIds = new Map(milestoneMappings.map((row) => [row.stepId, row.milestoneId]));
-  const taskIds = new Map(taskMappings.map((row) => [row.stepId, row.taskId]));
-  const completionDates = new Map(command.completionDatesByStepId ?? []);
-  for (const mapping of taskMappings) {
-    if (mapping.completedAt && !completionDates.has(mapping.stepId)) {
-      completionDates.set(mapping.stepId, mapping.completedAt.toISOString().slice(0, 10));
-    }
-  }
-  const incomingDependencies = new Map<string, string[]>();
-  for (const edge of dependencies) {
-    const blockers = incomingDependencies.get(edge.blockedStepId) ?? [];
-    blockers.push(edge.blockingStepId);
-    incomingDependencies.set(edge.blockedStepId, blockers);
-  }
-  // Every status this materialization might land on, resolved once for the whole run.
-  const statusSets = await loadStatusSets(
-    command.organizationId,
-    { teamIds: taskSpecs.map((spec) => spec.teamId) },
-    // Read through the open transaction: the module-level client would issue this on a connection
-    // the transaction already holds, which stalls rather than returning stale rows.
-    tx,
-  );
-  const allAtOnce = revision.creationMode === 'all_at_once';
-  const createdProjects = new Map<string, string>();
-  const createdMilestones = new Map<string, string>();
-  const createdTasks = new Map<string, string>();
-  const parentTaskIds: (string | null)[] = [];
-
-  for (const step of steps.filter((value) => value.kind === 'project')) {
-    if (projectIds.has(step.id) || (!allAtOnce && !timingReady(step, completionDates))) continue;
-    const spec = projectsByStep.get(step.id);
-    if (!spec) throw new ConflictError('Published project step is missing its specification');
-    // A template stores a status key rather than a status, because a workspace may have reshaped
-    // its statuses since the template was written; the key is resolved now, or the work lands
-    // where new work lands.
-    const projectStatus =
-      statusSets.for('project').find((candidate) => candidate.key === spec.status) ??
-      statusSets.defaultOf('project');
-    if (!projectStatus) throw new ConflictError('This workspace has no project statuses');
-    const insertedId = insertedEntityId(
-      await tx
-        .insert(project)
-        .values({
-          organizationId: command.organizationId,
-          name: renderName(spec.name, command.scheduledFor),
-          summary: spec.summary,
-          description: spec.description,
-          leadId: spec.leadId,
-          teamId: spec.teamId,
-          programId: spec.programId,
-          status: projectStatus.key,
-          statusId: projectStatus.id,
-          health: spec.health,
-          startDate: planningTimestamp(
-            spec.startOffsetDays === null
-              ? stepPlanningDate(step, command.scheduledFor, completionDates)
-              : addCalendarDays(command.scheduledFor, spec.startOffsetDays),
-          ),
-          targetDate: planningTimestamp(
-            spec.targetOffsetDays === null
-              ? null
-              : addCalendarDays(command.scheduledFor, spec.targetOffsetDays),
-          ),
-          createdBy: command.actorId,
-        })
-        .returning({ id: project.id }),
-      'project',
-    );
-    await tx.insert(processInstanceProject).values({
-      organizationId: command.organizationId,
-      instanceId: command.instanceId,
-      stepId: step.id,
-      projectId: insertedId,
-      createdBy: command.actorId,
-    });
-    const labels = storedProjectLabels.filter((value) => value.projectStepId === step.id);
-    if (labels.length > 0) {
-      await tx.insert(projectLabel).values(
-        labels.map((value) => ({
-          organizationId: command.organizationId,
-          projectId: insertedId,
-          labelId: value.labelId,
-        })),
-      );
-    }
-    projectIds.set(step.id, insertedId);
-    createdProjects.set(step.key, insertedId);
-  }
-
-  for (const step of steps.filter((value) => value.kind === 'milestone')) {
-    if (milestoneIds.has(step.id) || (!allAtOnce && !timingReady(step, completionDates))) continue;
-    const spec = milestonesByStep.get(step.id);
-    if (!spec) throw new ConflictError('Published milestone step is missing its specification');
-    const projectId = projectIds.get(spec.projectStepId);
-    if (!projectId) continue;
-    const insertedId = insertedEntityId(
-      await tx
-        .insert(milestone)
-        .values({
-          organizationId: command.organizationId,
-          projectId,
-          name: renderName(spec.name, command.scheduledFor),
-          description: spec.description,
-          targetDate: planningTimestamp(
-            spec.targetOffsetDays === null
-              ? stepPlanningDate(step, command.scheduledFor, completionDates)
-              : addCalendarDays(command.scheduledFor, spec.targetOffsetDays),
-          ),
-          sort: step.sort,
-          createdBy: command.actorId,
-        })
-        .returning({ id: milestone.id }),
-      'milestone',
-    );
-    await tx.insert(processInstanceMilestone).values({
-      organizationId: command.organizationId,
-      instanceId: command.instanceId,
-      stepId: step.id,
-      milestoneId: insertedId,
-      createdBy: command.actorId,
-    });
-    milestoneIds.set(step.id, insertedId);
-    createdMilestones.set(step.key, insertedId);
-  }
-
-  const teamIds = [...new Set([...tasksByStep.values()].map((spec) => spec.teamId))];
-  const teamRows = await tx
-    .select({ id: team.id, workflowStates: team.workflowStates })
-    .from(team)
-    .where(and(eq(team.organizationId, command.organizationId), inArray(team.id, teamIds)));
-  const teamsById = new Map(teamRows.map((row) => [row.id, row]));
-
-  let progress = true;
-  while (progress) {
-    progress = false;
-    for (const step of steps.filter((value) => value.kind === 'task')) {
-      if (taskIds.has(step.id)) continue;
-      const spec = tasksByStep.get(step.id);
-      if (!spec) throw new ConflictError('Published task step is missing its specification');
-      if (!allAtOnce) {
-        if (!timingReady(step, completionDates)) continue;
-        const blockers = incomingDependencies.get(step.id) ?? [];
-        if (blockers.some((blockingStepId) => !completionDates.has(blockingStepId))) continue;
-      }
-      const projectId = spec.projectStepId
-        ? projectIds.get(spec.projectStepId)
-        : (spec.projectId ?? undefined);
-      const milestoneId = spec.milestoneStepId
-        ? milestoneIds.get(spec.milestoneStepId)
-        : (spec.milestoneId ?? undefined);
-      const parentTaskId = spec.parentTaskStepId
-        ? taskIds.get(spec.parentTaskStepId)
-        : (spec.parentTaskId ?? undefined);
-      if (spec.projectStepId && !projectId) continue;
-      if (spec.milestoneStepId && !milestoneId) continue;
-      if (spec.parentTaskStepId && !parentTaskId) continue;
-      const teamRow = teamsById.get(spec.teamId);
-      if (!teamRow) throw new NotFoundError('Generated task team not found');
-      const generated =
-        spec.state === null
-          ? statusSets.defaultOf('task', spec.teamId)
-          : statusSets.for('task', spec.teamId).find((candidate) => candidate.key === spec.state);
-      if (!generated) throw new ConflictError('Generated task state is not available');
-      const state = generated.key;
-      const terminalAt = new Date();
-      const insertedId = insertedEntityId(
-        await tx
-          .insert(task)
-          .values({
-            organizationId: command.organizationId,
-            title: renderName(spec.title, command.scheduledFor),
-            description: spec.description,
-            teamId: spec.teamId,
-            ...processTaskTemplateIdentity(spec),
-            statusId: generated.id,
-            state,
-            priority: spec.priority,
-            assigneeId: spec.assigneeId,
-            projectId,
-            milestoneId,
-            cycleId: spec.cycleId,
-            parentTaskId,
-            estimate: spec.estimate,
-            estimateMinutes: spec.estimateMinutes,
-            startDate: planningTimestamp(
-              spec.startOffsetDays === null
-                ? null
-                : addCalendarDays(command.scheduledFor, spec.startOffsetDays),
-            ),
-            dueDate: planningTimestamp(
-              spec.dueOffsetDays === null
-                ? stepPlanningDate(step, command.scheduledFor, completionDates)
-                : addCalendarDays(command.scheduledFor, spec.dueOffsetDays),
-            ),
-            completedAt: generated.category === 'completed' ? terminalAt : undefined,
-            canceledAt: generated.category === 'canceled' ? terminalAt : undefined,
-            source: 'native',
-            createdBy: command.actorId,
-          })
-          .returning({ id: task.id }),
-        'task',
-      );
-      await tx.insert(processInstanceTask).values({
-        organizationId: command.organizationId,
-        instanceId: command.instanceId,
-        stepId: step.id,
-        taskId: insertedId,
-        createdBy: command.actorId,
-      });
-      const labels = storedTaskLabels.filter((value) => value.taskStepId === step.id);
-      if (labels.length > 0) {
-        await tx.insert(taskLabel).values(
-          labels.map((value) => ({
-            organizationId: command.organizationId,
-            taskId: insertedId,
-            labelId: value.labelId,
-          })),
-        );
-      }
-      taskIds.set(step.id, insertedId);
-      createdTasks.set(step.key, insertedId);
-      parentTaskIds.push(parentTaskId ?? null);
-      progress = true;
-    }
-  }
-
-  for (const edge of dependencies) {
-    const blockingTaskId = taskIds.get(edge.blockingStepId);
-    const blockedTaskId = taskIds.get(edge.blockedStepId);
-    if (!blockingTaskId || !blockedTaskId) continue;
-    await tx
-      .insert(taskDependency)
-      .values({ blockingTaskId, blockedTaskId, organizationId: command.organizationId })
-      .onConflictDoNothing();
-  }
-
-  if (parentTaskIds.length > 0) {
-    const { applySubtaskCompletionPolicyForParents } = await import('../task-state');
-    const cascades = await applySubtaskCompletionPolicyForParents(
-      tx,
-      command.organizationId,
-      parentTaskIds,
-    );
-    command.postCommitStateTransitions?.push(...cascades);
-  }
-
-  const created = { projects: createdProjects, milestones: createdMilestones, tasks: createdTasks };
-  return recordMaterializedWork(tx, command, created);
+  const [binding] = await tx
+    .select({
+      seriesId: processOccurrence.seriesId,
+      seriesRevisionId: processOccurrence.seriesRevisionId,
+      occurrenceId: processOccurrence.id,
+    })
+    .from(processInstance)
+    .innerJoin(
+      processOccurrence,
+      and(
+        eq(processOccurrence.id, processInstance.occurrenceId),
+        eq(processOccurrence.organizationId, command.organizationId),
+      ),
+    )
+    .where(
+      and(
+        eq(processInstance.id, command.instanceId),
+        eq(processInstance.organizationId, command.organizationId),
+        eq(processInstance.revisionId, command.revisionId),
+      ),
+    )
+    .limit(1);
+  if (!binding) throw new NotFoundError('Recurrence instance not found');
+  const result = await materializeTemplateOccurrence(tx, {
+    ...binding,
+    organizationId: command.organizationId,
+    instanceId: command.instanceId,
+    actorId: command.actorId,
+  });
+  if (command.postCommitEffects) command.postCommitEffects.push(...result.effects);
+  else if (result.effects.length)
+    throw new ConflictError('Creation effects require an enclosing transaction owner');
+  return result.delta;
 }
-
 /** Ensure one occurrence, instance, and eligible fixed/stateful work set exactly once. */
 export async function materializeOccurrence(
   database: Database,
@@ -545,7 +171,7 @@ export async function materializeOccurrence(
 ): Promise<MaterializedOccurrence> {
   parseCalendarDate(command.scheduledFor);
   if (command.originalScheduledFor) parseCalendarDate(command.originalScheduledFor);
-  const postCommitStateTransitions: TaskStateMutation[] = [];
+  const postCommitEffects: DeferredWorkEffect[] = [];
   const result = await database.transaction(async (tx) => {
     const seriesRows = await tx
       .select({
@@ -622,13 +248,23 @@ export async function materializeOccurrence(
     const instance = instanceRows[0];
     if (!instance) throw new ConflictError('Process instance could not be ensured');
 
+    if (command.externalOccurrenceKey)
+      postCommitEffects.push(
+        ...(await moveRetainedOccurrence(tx, {
+          ...command,
+          externalOccurrenceKey: command.externalOccurrenceKey,
+          occurrenceId: occurrence.id,
+          instanceId: instance.id,
+        })),
+      );
+
     await materializeInstanceSteps(tx, {
       organizationId: command.organizationId,
       actorId: command.actorId,
       instanceId: instance.id,
       revisionId: series.processRevisionId,
       scheduledFor: command.scheduledFor,
-      postCommitStateTransitions,
+      postCommitEffects,
     });
     await tx
       .update(processOccurrence)
@@ -641,11 +277,6 @@ export async function materializeOccurrence(
       ...identities,
     };
   });
-  if (postCommitStateTransitions.length > 0) {
-    const { finishTaskStateTransition } = await import('../task-state');
-    for (const transition of postCommitStateTransitions) {
-      await finishTaskStateTransition({ actorId: null }, transition);
-    }
-  }
+  deferWorkCreationEffects(postCommitEffects);
   return result;
 }

@@ -1,4 +1,20 @@
 import { serializeWorkTemplateSelection } from '@/components/composer/work-template-draft';
+
+/** Clear destination-owned references while keeping portable Task prose, dates and priority. */
+export function taskWorkspaceReset(): Partial<TaskDraft> {
+  return {
+    workTypeId: null,
+    workTypeVersionId: null,
+    blueprint: undefined,
+    teamOverride: null,
+    state: null,
+    assigneeId: null,
+    projectId: null,
+    milestoneId: null,
+    cycleId: null,
+    labelIds: [],
+  };
+}
 /**
  * `tasks/task-create-body` — the `POST /tasks` body for a task composer draft.
  *

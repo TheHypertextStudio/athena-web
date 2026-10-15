@@ -184,6 +184,7 @@ export interface CreateObjectProviderProps {
 export function CreateObjectProvider({ children }: CreateObjectProviderProps): JSX.Element {
   const { activeOrgId: shellWorkspaceId } = useContextState();
   const [request, setRequest] = useState<CreateObjectRequest | null>(null);
+  const [openingPathname, setOpeningPathname] = useState<string | null>(null);
   const [targetWorkspaceId, setTargetWorkspaceId] = useState<string | null>(null);
   const returnFocusRef = useRef<HTMLElement | null>(null);
   const focusRestoreGenerationRef = useRef(0);
@@ -199,6 +200,7 @@ export function CreateObjectProvider({ children }: CreateObjectProviderProps): J
       // value to follow the shell later. Kind bodies use this immutable snapshot to decide whether
       // contextual defaults remain valid after a destination switch.
       setRequest({ ...nextRequest, initialWorkspaceId });
+      setOpeningPathname(window.location.pathname);
       setTargetWorkspaceId(initialWorkspaceId);
     },
     [shellWorkspaceId],
@@ -210,6 +212,7 @@ export function CreateObjectProvider({ children }: CreateObjectProviderProps): J
     focusRestoreGenerationRef.current = focusRestoreGeneration;
     returnFocusRef.current = null;
     setRequest(null);
+    setOpeningPathname(null);
     setTargetWorkspaceId(null);
     const restoreUnclaimedFocus = (): void => {
       const active = document.activeElement;
@@ -247,7 +250,7 @@ export function CreateObjectProvider({ children }: CreateObjectProviderProps): J
   }, [request, shellWorkspaceId, targetWorkspaceId]);
 
   // Navigating away closes the composer; the draft it was writing is pointed at for next time.
-  const setActiveDraftId = useComposerInterruption(request, closeCreate);
+  const setActiveDraftId = useComposerInterruption(request, closeCreate, openingPathname);
 
   const value = useMemo<CreateObjectStateValue>(
     () => ({

@@ -1,7 +1,8 @@
-import { cleanup, render, screen } from '@testing-library/react';
+import { act, cleanup, render, screen } from '@testing-library/react';
 import type { ReactElement } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import type { Editor } from '@tiptap/core';
 import { FreeformText, FreeformTextEditor } from '../../../src/components/editor/freeform-text';
 import { makeQueryWrapper } from '../../support/query';
 
@@ -32,6 +33,30 @@ describe('FreeformTextEditor', () => {
     expect(writing.getAttribute('aria-multiline')).toBe('true');
     expect(screen.queryByText(/markdown/i)).toBeNull();
     expect(screen.queryByRole('toolbar')).toBeNull();
+  });
+
+  it('changes editability without reporting content edits, while real text transactions still emit', () => {
+    const onChange = vi.fn();
+    const { wrapper } = makeQueryWrapper();
+    const props = {
+      value: '## Preparation\nKeep the original spacing.',
+      onChange,
+      placeholder: 'Write',
+      ariaLabel: 'Description',
+    };
+    const view = render(<FreeformTextEditor {...props} />, { wrapper });
+    expect(onChange).not.toHaveBeenCalled();
+    view.rerender(<FreeformTextEditor {...props} disabled />);
+    expect(screen.getByLabelText('Description')).toHaveAttribute('contenteditable', 'false');
+    view.rerender(<FreeformTextEditor {...props} readOnly />);
+    view.rerender(<FreeformTextEditor {...props} />);
+    expect(onChange).not.toHaveBeenCalled();
+    const textbox = screen.getByRole('textbox', { name: 'Description' });
+    const editor = (textbox as HTMLElement & { editor: Editor }).editor;
+    act(() => {
+      editor.commands.insertContent('Updated ');
+    });
+    expect(onChange).toHaveBeenCalledExactlyOnceWith(expect.stringContaining('Updated'));
   });
 
   it('marks the empty paragraph for the placeholder to actually render from', () => {

@@ -112,7 +112,7 @@ export async function selectedVersion(
   kind: TemplateTargetType,
   selection: WorkTemplateChangeRequest,
   teamId: string | null,
-): Promise<{ id: string; definition: WorkTemplateDefinition }> {
+): Promise<{ id: string; versionNumber: number; definition: WorkTemplateDefinition }> {
   // Definition edits, archive and offering changes acquire this same row lock.
   const [definition] = await tx
     .select({ latestVersionId: template.latestPublishedVersionId })
@@ -130,7 +130,11 @@ export async function selectedVersion(
     .for('update');
   if (!definition?.latestVersionId) throw new NotFoundError('Template not found');
   const [version] = await tx
-    .select({ id: workTypeVersion.id, definition: workTypeVersion.definition })
+    .select({
+      id: workTypeVersion.id,
+      versionNumber: workTypeVersion.number,
+      definition: workTypeVersion.definition,
+    })
     .from(workTypeVersion)
     .where(
       and(
@@ -154,5 +158,9 @@ export async function selectedVersion(
     throw new ValidationError([
       { path: ['workTypeId'], message: 'Choose a template offered for this team.' },
     ]);
-  return { id: version.id, definition: WorkTemplateDefinition.parse(version.definition) };
+  return {
+    id: version.id,
+    versionNumber: version.versionNumber,
+    definition: WorkTemplateDefinition.parse(version.definition),
+  };
 }

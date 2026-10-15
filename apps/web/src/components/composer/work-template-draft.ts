@@ -1,9 +1,11 @@
 import { WorkTemplateSelection } from '@docket/work/work-template-reference';
+import type { BlueprintCreationOptions } from '@docket/work/work-template-blueprint';
 
 /** Optional identity in a composer; old saved drafts select the workspace base. */
 export interface WorkTemplateDraftFields {
   workTypeId?: string | null | undefined;
   workTypeVersionId?: string | null | undefined;
+  blueprint?: BlueprintCreationOptions | undefined;
 }
 
 /** Preserve an explicit published snapshot in both saved drafts and create requests. */
@@ -13,6 +15,7 @@ export function serializeWorkTemplateSelection(
   return WorkTemplateSelection.parse({
     ...(draft.workTypeId ? { workTypeId: draft.workTypeId } : {}),
     ...(draft.workTypeVersionId ? { workTypeVersionId: draft.workTypeVersionId } : {}),
+    ...(draft.blueprint ? { blueprint: draft.blueprint } : {}),
   });
 }
 
@@ -24,5 +27,6 @@ export function hydrateWorkTemplateSelection(
   return {
     workTypeId: draft.workTypeId ?? null,
     workTypeVersionId: draft.workTypeVersionId ?? null,
+    ...(draft.blueprint ? { blueprint: draft.blueprint } : {}),
   };
 }

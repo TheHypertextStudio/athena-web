@@ -86,7 +86,23 @@ export function workTemplateChangePreviewDef(
   );
 }
 
+function update(orgId: string, kind: TemplateTargetType, id: string, json: WorkTemplateAssignment) {
+  const resources = api.v1.orgs[':orgId'];
+  const input = { param: { orgId, id }, json };
+  switch (kind) {
+    case 'task':
+      return resources.tasks[':id'].template.update.$post(input);
+    case 'project':
+      return resources.projects[':id'].template.update.$post(input);
+    case 'initiative':
+      return resources.initiatives[':id'].template.update.$post(input);
+    case 'program':
+      return resources.programs[':id'].template.update.$post(input);
+  }
+}
+
 function assign(orgId: string, kind: TemplateTargetType, id: string, json: WorkTemplateAssignment) {
+  if (json.mode === 'update') return update(orgId, kind, id, json);
   const resources = api.v1.orgs[':orgId'];
   const input = { param: { orgId, id }, json };
   switch (kind) {

@@ -1,6 +1,6 @@
 /** Published work-template identities through the MCP creation boundary. */
 import type * as DbModule from '@docket/db';
-import { WorkTemplateCreate } from '@docket/work/work-template-contract';
+import { WorkTemplateCreate, WorkTemplateDefinition } from '@docket/work/work-template-contract';
 import { and, eq } from 'drizzle-orm';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import type { registerTools as RegisterTools } from '../../src/mcp/tools';
@@ -44,20 +44,24 @@ describe('MCP published template identity', () => {
   it.each(['task', 'project', 'initiative', 'program'] as const)(
     'pins the selected %s publication and preserves it after republishing',
     async (kind) => {
-      const seed = await seedMcpUpdateOrg(schema.db, schema, ['view', 'contribute']);
+      const seed = await seedMcpUpdateOrg(
+        schema.db,
+        schema,
+        kind === 'program' ? ['view', 'manage'] : ['view', 'contribute'],
+      );
       const first = await published(seed, kind);
       const { editWorkTemplateDraft, publishWorkTemplate } =
         await import('../../src/lib/templates/service');
       const actor = { orgId: seed.orgId, actorId: seed.actorId };
       const edited = await editWorkTemplateDraft(actor, first.id, {
         expectedRevision: first.draftRevision,
-        definition: {
+        definition: WorkTemplateDefinition.parse({
           name: `Revised ${kind}`,
           description: null,
           icon: null,
           defaultStatusKey: null,
           payload: { targetType: kind, description: '## New outline' },
-        },
+        }),
       });
       await publishWorkTemplate(actor, first.id, edited.draftRevision);
       const client = await connectCatalog(registerTools, seed.ctx);
@@ -157,13 +161,13 @@ describe('MCP published template identity', () => {
       const actor = { orgId: seed.orgId, actorId: seed.actorId };
       const edited = await editWorkTemplateDraft(actor, saved.id, {
         expectedRevision: saved.draftRevision,
-        definition: {
+        definition: WorkTemplateDefinition.parse({
           name: 'Later initiative',
           description: null,
           icon: null,
           defaultStatusKey: null,
           payload: { targetType: 'initiative', description: '## Later outline' },
-        },
+        }),
       });
       await publishWorkTemplate(actor, saved.id, edited.draftRevision);
       if (selection === 'explicit') {
@@ -289,13 +293,13 @@ describe('MCP published template identity', () => {
       const actor = { orgId: seed.orgId, actorId: seed.actorId };
       const edited = await editWorkTemplateDraft(actor, saved.id, {
         expectedRevision: saved.draftRevision,
-        definition: {
+        definition: WorkTemplateDefinition.parse({
           name: 'New review',
           description: null,
           icon: null,
           defaultStatusKey: null,
           payload: { targetType: 'task', description: '## Later outline' },
-        },
+        }),
       });
       await publishWorkTemplate(actor, saved.id, edited.draftRevision);
       await schema.db

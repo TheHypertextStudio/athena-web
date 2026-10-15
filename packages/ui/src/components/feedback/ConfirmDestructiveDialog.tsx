@@ -66,6 +66,10 @@ export interface ConfirmDestructiveDialogProps {
   confirmLabel: string;
   /** Whether the delete is in flight; disables both buttons and blocks dismissal. */
   pending?: boolean;
+  /** Disable only confirmation while a prerequisite review loads or needs correction. */
+  confirmDisabled?: boolean;
+  /** Optional review content using the shared dialog body. */
+  children?: ReactNode;
   /**
    * Message for a failed delete, surfaced inside the dialog as a `role="alert"` line above the
    * actions. Pass application-owned copy — never raw exception/provider text. The caller keeps the
@@ -84,6 +88,8 @@ export function ConfirmDestructiveDialog({
   description,
   confirmLabel,
   pending = false,
+  confirmDisabled = false,
+  children,
   error,
   onConfirm,
 }: ConfirmDestructiveDialogProps): JSX.Element {
@@ -102,11 +108,14 @@ export function ConfirmDestructiveDialog({
         </DialogHeader>
         {/* Only when there is something to say: an always-rendered body would put 32px of empty
             content region between the description and the buttons of every clean confirm. */}
-        {error ? (
+        {error || children ? (
           <DialogBody>
-            <p role="alert" className="text-body-medium text-error">
-              {error}
-            </p>
+            {children}
+            {error ? (
+              <p role="alert" className="text-body-medium text-error">
+                {error}
+              </p>
+            ) : null}
           </DialogBody>
         ) : null}
         <DialogFooter>
@@ -120,7 +129,12 @@ export function ConfirmDestructiveDialog({
           >
             Cancel
           </Button>
-          <Button type="button" variant="destructive" disabled={pending} onClick={onConfirm}>
+          <Button
+            type="button"
+            variant="destructive"
+            disabled={pending || confirmDisabled}
+            onClick={onConfirm}
+          >
             {confirmLabel}
           </Button>
         </DialogFooter>

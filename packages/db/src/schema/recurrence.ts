@@ -39,11 +39,16 @@ import {
   recurrenceSeriesStatus,
   taskPriority,
 } from '../enums';
-import { calendarLayer } from './calendar';
 import { label } from './crosscutting';
 import { actor, auditColumns, organization, team } from './identity';
 import { cycle, milestone, program, project, task } from './work';
 import { taskTemplateColumns, taskSpecConstraints } from './recurrence-template';
+import {
+  seriesBlueprintColumns,
+  seriesBlueprintConstraints,
+  occurrenceBlueprintColumns,
+  occurrenceBlueprintConstraints,
+} from './recurrence-blueprint-reference';
 
 /** A named reusable process whose immutable revisions describe generated work. */
 export const processDefinition = pgTable(
@@ -342,6 +347,7 @@ export const recurrenceSeriesRevision = pgTable(
   'recurrence_series_revision',
   {
     ...auditColumns(),
+    ...seriesBlueprintColumns(),
     seriesId: text('series_id')
       .notNull()
       .references(() => recurrenceSeries.id, { onDelete: 'cascade' }),
@@ -375,6 +381,7 @@ export const recurrenceSeriesRevision = pgTable(
     eventEntityKind: text('event_entity_kind'),
   },
   (t) => [
+    ...seriesBlueprintConstraints(t),
     uniqueIndex('recurrence_series_revision_series_number_uq').on(t.seriesId, t.number),
     uniqueIndex('recurrence_series_revision_series_effective_uq').on(t.seriesId, t.effectiveFrom),
     index('recurrence_series_revision_org_series_idx').on(t.organizationId, t.seriesId),
@@ -455,6 +462,7 @@ export const processOccurrence = pgTable(
   'process_occurrence',
   {
     ...auditColumns(),
+    ...occurrenceBlueprintColumns(),
     seriesId: text('series_id')
       .notNull()
       .references(() => recurrenceSeries.id, { onDelete: 'cascade' }),
@@ -468,6 +476,7 @@ export const processOccurrence = pgTable(
     resolvedAt: timestamp('resolved_at'),
   },
   (t) => [
+    ...occurrenceBlueprintConstraints(t),
     uniqueIndex('process_occurrence_revision_date_uq')
       .on(t.seriesId, t.seriesRevisionId, t.scheduledFor)
       .where(sql`${t.externalOccurrenceKey} is null`),
@@ -476,7 +485,7 @@ export const processOccurrence = pgTable(
       .where(sql`${t.externalOccurrenceKey} is not null`),
     index('process_occurrence_org_status_date_idx').on(t.organizationId, t.status, t.scheduledFor),
   ],
-);
+).enableRLS();
 
 /** One concrete execution of a process revision. */
 export const processInstance = pgTable(
@@ -572,32 +581,4 @@ export const processInstanceTask = pgTable(
   ],
 );
 
-/** Stable binding from one external calendar event series to one Docket process series. */
-export const calendarProcessBinding = pgTable(
-  'calendar_process_binding',
-  {
-    ...auditColumns(),
-    calendarLayerId: text('calendar_layer_id')
-      .notNull()
-      .references(() => calendarLayer.id, { onDelete: 'cascade' }),
-    externalSeriesId: text('external_series_id').notNull(),
-    definitionId: text('definition_id')
-      .notNull()
-      .references(() => processDefinition.id, { onDelete: 'restrict' }),
-    seriesId: text('series_id')
-      .notNull()
-      .references(() => recurrenceSeries.id, { onDelete: 'cascade' }),
-  },
-  (t) => [
-    uniqueIndex('calendar_process_binding_series_uq').on(
-      t.organizationId,
-      t.calendarLayerId,
-      t.externalSeriesId,
-    ),
-    uniqueIndex('calendar_process_binding_recurrence_series_uq').on(t.seriesId),
-    check(
-      'calendar_process_binding_external_series_not_blank',
-      sql`length(btrim(${t.externalSeriesId})) > 0`,
-    ),
-  ],
-);
+export { calendarProcessBinding } from './recurrence-calendar-binding';

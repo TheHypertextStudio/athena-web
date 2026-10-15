@@ -26,23 +26,25 @@ import {
   OrganizeItem,
   type ItemRefs,
   type Placed,
+  type Tx,
   assertPriorities,
   inParentOrder,
-  placeItem,
   placementUnder,
 } from '../lib/organize/place';
 import { originFor } from '../lib/provenance/context';
 import { resolveLandingTarget } from '../lib/task-landing';
 import { serializableTx } from '../lib/serializable-tx';
-import {
-  applySubtaskCompletionPolicyForParents,
-  finishTaskStateTransition,
-} from '../lib/task-state';
-import { enqueueSearchUpsert } from '../search/write-through';
 import type { McpContext } from './auth';
 import type { McpRegistrar } from './catalog';
-import { type ChangeRecord, type LinkRecord } from './change-set';
-import { recordToolChangeSet } from './tool-activity';
+import { recordChangeSetInTransaction, type RecordedChange, type LinkRecord } from './change-set';
+import { deferWorkCreationEffects } from '../lib/work-creation/effects';
+import { settleCreationParents } from '../lib/work-creation/service';
+import {
+  createPlacementForest,
+  prepareForestItem,
+  applyPlacementForest,
+} from '../lib/organize/forest';
+import { rememberBlueprintReceipt } from '../lib/work-template-blueprints/receipt';
 import { WIDGET, widgetMeta } from './apps';
 import { placedOutputSchema, placedWithContainers } from './organize-containers';
 import { authorize, jsonResult, runTool, scopedActor } from './result';
@@ -72,6 +74,32 @@ function refsByItem(
   return new Map(prepared.map(({ item, refs }) => [item.ref, refs]));
 }
 
+/** Record one receipt for the complete placement forest, its links, and completion changes. */
+function recordOrganizeReceipt(
+  tx: Tx,
+  input: {
+    orgId: string;
+    actorId: string;
+    placed: readonly Placed[];
+    changes: readonly RecordedChange[];
+    links: readonly LinkRecord[];
+    firstTitle: string | undefined;
+    createdCount: number;
+  },
+): Promise<string | null> {
+  const created = input.createdCount;
+  const changed = input.changes.filter((change) =>
+    ['task', 'project', 'program', 'initiative', 'milestone'].includes(change.kind),
+  ).length;
+  return recordChangeSetInTransaction(tx, {
+    orgId: input.orgId,
+    actorId: input.actorId,
+    origin: originFor('organize'),
+    summary: summaryOf(created, changed, input.firstTitle),
+    changes: [...input.changes, ...input.links],
+  });
+}
+
 /** Register `organize` on `server`. */
 export function registerOrganizeTool(server: McpRegistrar, ctx: McpContext): void {
   server.registerTool(
@@ -79,7 +107,7 @@ export function registerOrganizeTool(server: McpRegistrar, ctx: McpContext): voi
     {
       title: 'Organize work',
       description:
-        'Create or match a plan of initiatives, programs, projects, milestones, and tasks in one transaction. For tasks, projects, initiatives, or programs, call list_templates first: read literal Markdown in payload.description, retain its structure, and fill its sections instead of inventing a format. Select template by ID/name or workTypeId with optional workTypeVersionId. Omitted fields copy defaults; explicit fields win. Results include saved bodies for update. Use withoutTemplateReason for freeform work; undecided calls return choices without writes. Milestones have no templates, and templates create no children. Give each item a local ref; children name their parent ref. Existing project/program/initiative fields attach to saved work. Repeated names in the same placement match existing items. Use capture for a single task',
+        'Create or match a plan of initiatives, programs, projects, milestones, and tasks in one transaction. For tasks, projects, initiatives, or programs, call list_templates first: read literal Markdown in payload.description, retain its structure, and fill its sections instead of inventing a format. Select template by ID/name or workTypeId with optional workTypeVersionId. Omitted fields copy defaults; explicit fields win. Results include saved bodies for update. Use withoutTemplateReason for freeform work; undecided calls return choices without writes. Milestones have no templates. Published blueprints may create children. Give each item a local ref; children name their parent ref. Existing project/program/initiative fields attach to saved work. Repeated names in the same placement match existing items. Use capture for a single task',
       inputSchema: {
         orgId: orgIdParam,
         items: z
@@ -132,63 +160,55 @@ export function registerOrganizeTool(server: McpRegistrar, ctx: McpContext): voi
         if (!Array.isArray(prepared)) return prepared;
         assertPriorities(prepared.map(({ item }) => item));
 
-        const placed: Placed[] = [];
-        const byRef = new Map<string, Placed>();
-        const changes: ChangeRecord[] = [];
-        const links: LinkRecord[] = [];
-
-        const cascades = await serializableTx(async (tx) => {
-          const parentTaskIds: (string | null)[] = [];
+        const result = await serializableTx(async (tx) => {
+          const forest = await createPlacementForest(tx, input.orgId, actorCtx.actorId);
           for (const { item, refs, state, templateId } of prepared) {
-            /** The already-placed parent from this call, if the item named one. */
-            const local = item.parent === undefined ? undefined : byRef.get(item.parent);
-
-            const at = placementUnder(local, refs);
-
-            const result = await placeItem(tx, {
+            const local = item.parent === undefined ? undefined : forest.byRef.get(item.parent);
+            await prepareForestItem(tx, forest, {
               orgId: input.orgId,
               actorId: actorCtx.actorId,
               item,
               templateId,
-              at,
+              at: placementUnder(local, refs),
               teamId: refs.teamId ?? landing.teamId,
               state,
               assigneeId: refs.assigneeId,
               ownerId: refs.ownerId,
               leadId: refs.leadId,
             });
-
-            placed.push({
-              ...result.placed,
-              ...(result.placed.created && templateId ? { templateId } : {}),
-            });
-            byRef.set(item.ref, result.placed);
-            if (result.change) changes.push(result.change);
-            if (result.link) links.push(result.link);
-            if (result.placed.kind === 'task' && result.placed.created) {
-              parentTaskIds.push(at.parentTaskId);
-            }
           }
-          return applySubtaskCompletionPolicyForParents(tx, input.orgId, parentTaskIds);
+          const mutation = await applyPlacementForest(tx, forest);
+          const settled = await settleCreationParents(tx, input.orgId, mutation.parentTaskIds);
+          const changes = [...mutation.changes, ...settled.changes];
+          const changeSetId = await recordOrganizeReceipt(tx, {
+            orgId: input.orgId,
+            actorId: actorCtx.actorId,
+            placed: mutation.placed,
+            changes,
+            links: [],
+            firstTitle: ordered[0]?.title,
+            createdCount: mutation.created.length,
+          });
+          await rememberBlueprintReceipt(tx, mutation.created, changeSetId);
+          return {
+            placed: [...mutation.placed],
+            changes,
+            effects: [...mutation.effects, ...settled.effects],
+            changeSetId,
+          };
         });
-
-        // Search indexing and change recording both happen after commit: a rolled-back plan must
-        // not leave an index entry pointing at a row that never existed, or an undo for it.
-        // Every recorded change: the rows created, and matched tasks a re-run attached to a milestone.
-        for (const change of changes) {
-          await enqueueSearchUpsert(input.orgId, change.kind, change.id);
-        }
-        for (const cascade of cascades) {
-          await finishTaskStateTransition({ actorId: null }, cascade);
-        }
+        const { placed, changes, changeSetId } = result;
+        deferWorkCreationEffects([
+          ...result.effects,
+          {
+            kind: 'tool-activity',
+            dedupeKey: `activity:${changeSetId ?? 'empty'}`,
+            orgId: input.orgId,
+            actorId: actorCtx.actorId,
+            changes,
+          },
+        ]);
         const created = placed.filter((row) => row.created).length;
-        const changeSetId = await recordToolChangeSet({
-          orgId: input.orgId,
-          actorId: actorCtx.actorId,
-          origin: originFor('organize'),
-          summary: summaryOf(created, changes.length, ordered[0]?.title),
-          changes: [...changes, ...links],
-        });
 
         return jsonResult({
           placed: await placedWithContainers(input.orgId, placed, refsByItem(prepared)),

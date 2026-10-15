@@ -76,6 +76,7 @@ export function useTemplateApplication<T extends object>({
           : {}),
         workTypeId: chosen.workTypeId,
         workTypeVersionId: chosen.workTypeVersionId,
+        blueprint: undefined,
       };
     });
     setStartingDraft(chosen.workTypeId ? null : chosen.name);

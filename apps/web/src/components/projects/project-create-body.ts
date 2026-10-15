@@ -41,6 +41,18 @@ export interface ProjectDraft extends WorkTemplateDraftFields {
   milestones: readonly DraftMilestone[];
 }
 
+/** Toggle one Initiative association without replacing the rest of the drafted selection. */
+export function toggleProjectInitiative(
+  draft: ProjectDraft,
+  id: string,
+): Pick<ProjectDraft, 'initiativeIds'> {
+  return {
+    initiativeIds: draft.initiativeIds.includes(id)
+      ? draft.initiativeIds.filter((value) => value !== id)
+      : [...draft.initiativeIds, id],
+  };
+}
+
 /** Clear destination-owned references while retaining portable authored dates. */
 export function projectWorkspaceReset(
   startTimeframe: PlanningTimeframe | null,
@@ -49,6 +61,7 @@ export function projectWorkspaceReset(
   return {
     workTypeId: null,
     workTypeVersionId: null,
+    blueprint: undefined,
     teamOverride: null,
     leadId: null,
     programId: null,
@@ -160,5 +173,27 @@ function projectPlanningFields(
     ...(draft.initiativeIds.length > 0
       ? { initiativeIds: draft.initiativeIds.map((id) => InitiativeId.parse(id)) }
       : {}),
+  };
+}
+
+/** Seed contextual destinations once while retaining portable blank composer fields. */
+export function initialProjectDraft(
+  applies: boolean,
+  defaultProgramId: string | null | undefined,
+  defaultInitiativeIds: readonly string[] | null | undefined,
+): ProjectDraft {
+  return {
+    name: '',
+    summary: '',
+    description: '',
+    teamOverride: null,
+    leadId: null,
+    programId: applies ? (defaultProgramId ?? null) : null,
+    status: 'planned',
+    health: null,
+    startTimeframe: null,
+    targetTimeframe: null,
+    initiativeIds: seededInitiativeIds(applies, defaultInitiativeIds),
+    milestones: [],
   };
 }

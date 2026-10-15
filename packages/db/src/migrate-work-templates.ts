@@ -1,3 +1,7 @@
+import {
+  backfillRetainedDateOwnership,
+  type RetainedDateBackfillOptions,
+} from './retained-date-ownership-backfill';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -5,6 +9,10 @@ import { gte } from 'drizzle-orm';
 import { bigint, pgSchema } from 'drizzle-orm/pg-core';
 
 import type { Database } from './client';
+import {
+  backfillWorkTemplateBlueprints,
+  type BlueprintBackfillOptions,
+} from './work-template-blueprint-backfill';
 import { withMigrationPrefix } from './migration-prefix';
 import {
   backfillWorkTemplateIdentity,
@@ -16,7 +24,8 @@ const migrationJournal = pgSchema('drizzle').table('__drizzle_migrations', {
 });
 
 /** SQL migration boundary around the resumable work-template data checkpoint. */
-export interface WorkTemplateMigrationOptions extends WorkTemplateBackfillOptions {
+export interface WorkTemplateMigrationOptions
+  extends WorkTemplateBackfillOptions, BlueprintBackfillOptions, RetainedDateBackfillOptions {
   readonly migrationsFolder: string;
   readonly applySqlMigrations: (folder: string) => Promise<void>;
 }
@@ -47,5 +56,26 @@ export async function migrateWithWorkTemplateCheckpoint(
     .where(gte(migrationJournal.createdAt, enforcement.when))
     .limit(1);
   if (applied.length === 0) await backfillWorkTemplateIdentity(database, options);
+  await withMigrationPrefix(
+    options.migrationsFolder,
+    '0153_process_task_template_identity',
+    options.applySqlMigrations,
+  );
+  await withMigrationPrefix(
+    options.migrationsFolder,
+    '0154_work_template_blueprints_expand',
+    options.applySqlMigrations,
+  );
+  const blueprintEnforcement = journal.entries.find(
+    (entry) => entry.tag === '0155_work_template_blueprints_enforce',
+  );
+  if (!blueprintEnforcement) throw new Error('Blueprint enforcement checkpoint is missing.');
+  const blueprintApplied = await database
+    .select({ createdAt: migrationJournal.createdAt })
+    .from(migrationJournal)
+    .where(gte(migrationJournal.createdAt, blueprintEnforcement.when))
+    .limit(1);
+  if (blueprintApplied.length === 0) await backfillWorkTemplateBlueprints(database, options);
   await options.applySqlMigrations(options.migrationsFolder);
+  await backfillRetainedDateOwnership(database, options);
 }

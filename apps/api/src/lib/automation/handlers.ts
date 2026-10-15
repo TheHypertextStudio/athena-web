@@ -16,12 +16,12 @@ import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { attachLabels, resolveAttachedLabels, resolveLabelSet } from '../labels';
-import { setTaskState } from '../task-state';
 import { acceptSuggestionFromEmail } from '../email-to-task/accept';
 import { emitEvent } from '../../routes/event-emit';
 import { enqueueSearchUpsert } from '../../search/write-through';
 import type { ActionContext } from './engine';
 import { createRegistry, type Registry } from './registry';
+import { registerTaskStatusAction } from './handlers-task-state';
 import { eventOf, taskOf } from './handler-context';
 import { registerCycleAssignAction } from './handlers-cycle';
 import { RouteTaskParams, routeInboundItemToTask } from './route-task';
@@ -115,8 +115,6 @@ const MAIL_ACTIONS: { readonly type: string; readonly build: MailActionBuilder }
   { type: 'mail.removeLabel', build: labelBuilder('removeLabel') },
 ];
 
-/** `task.setStatus` params. */
-const SetStatusParams = z.object({ state: z.string().min(1) });
 /** `task.assign` params. */
 const AssignParams = z.object({ assigneeId: z.string().min(1) });
 /** `task.setPriority` params. */
@@ -210,30 +208,7 @@ export function buildAutomationRegistry(deps: HandlerDeps): Registry {
     },
   });
 
-  // task.setStatus — move the firing task to a workflow state (shared transition lib).
-  registry.register({
-    type: 'task.setStatus',
-    run: async (ctx, params): Promise<void> => {
-      const event = eventOf(ctx);
-      const parsed = SetStatusParams.safeParse(params);
-      if (!parsed.success || event.subjectType !== 'task' || !event.subjectId) return;
-      try {
-        await setTaskState({
-          organizationId: event.organizationId,
-          taskId: event.subjectId,
-          state: parsed.data.state,
-          actorId: event.actorId ?? null,
-        });
-      } catch (error) {
-        // Unknown state key for the task's team — a rule-config problem, not a throw.
-        console.warn('[automation] task.setStatus skipped', {
-          taskId: event.subjectId,
-          state: parsed.data.state,
-          error,
-        });
-      }
-    },
-  });
+  registerTaskStatusAction(registry);
 
   // task.assign — assign the firing task to an org actor.
   registry.register({

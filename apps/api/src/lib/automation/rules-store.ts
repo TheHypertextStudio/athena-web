@@ -12,6 +12,7 @@ import type { ActionSpec, AutomationEventMatch, Predicate } from '@docket/automa
 import { and, eq, isNull } from 'drizzle-orm';
 
 import type { EngineRule } from './engine';
+import { registerAutomationRuleExecution } from './execution-proof';
 
 type RuleRow = typeof automationRule.$inferSelect;
 
@@ -19,6 +20,7 @@ type RuleRow = typeof automationRule.$inferSelect;
 export function rowToEngineRule(r: RuleRow): EngineRule {
   return {
     id: r.id,
+    execution: registerAutomationRuleExecution(r),
     enabled: r.enabled,
     on: r.eventMatch as AutomationEventMatch,
     when: r.condition as Predicate,

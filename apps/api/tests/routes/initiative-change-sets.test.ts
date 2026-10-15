@@ -17,7 +17,7 @@ import {
   appWithAuthenticatedActor,
   getDb,
   one,
-  seedBaseOrg,
+  seedTaskAccessOrg as seedBaseOrg,
   seedInitiative,
   seedProgram,
   seedProject,

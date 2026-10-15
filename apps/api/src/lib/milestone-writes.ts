@@ -12,7 +12,7 @@
  *
  * Positions are assigned here too, because appending is a read of rows the caller cannot see.
  */
-import { db, milestone, project, task } from '@docket/db';
+import { db, genId, milestone, project, task } from '@docket/db';
 import type {
   MilestoneCreate,
   MilestoneOut,
@@ -24,6 +24,7 @@ import type { z } from 'zod';
 
 import { NotFoundError } from '../error';
 import { one } from './one';
+import { explicitBlueprintDatePatch } from './work-template-blueprints/date-ownership';
 import { assertProjectInOrg } from './project-guard';
 
 /** A transaction handle, as `db.transaction` hands one to its callback. */
@@ -144,10 +145,18 @@ export async function updateMilestone(
   orgId: string,
   milestoneId: string,
   patch: MilestoneUpdate,
+  database: typeof db | Tx = db,
 ): Promise<MilestoneRow> {
-  const [row] = await db
+  const [current] = await database
+    .select()
+    .from(milestone)
+    .where(and(eq(milestone.id, milestoneId), eq(milestone.organizationId, orgId)))
+    .limit(1);
+  if (!current) throw new NotFoundError('Milestone not found');
+  const [row] = await database
     .update(milestone)
     .set({
+      ...explicitBlueprintDatePatch(current, patch),
       ...(patch.name !== undefined ? { name: patch.name } : {}),
       ...(patch.description !== undefined ? { description: patch.description } : {}),
       ...(patch.targetDate !== undefined
@@ -205,7 +214,7 @@ export interface MilestoneWriteContext {
   /** The Project the milestones belong to. */
   readonly projectId: string;
   /** The actor to record as the creator. */
-  readonly actorId: string;
+  readonly actorId: string | null;
 }
 
 /**
@@ -275,19 +284,51 @@ export async function insertMilestones(
   firstSort: number,
 ): Promise<MilestoneRow[]> {
   if (entries.length === 0) return [];
+  return insertPreparedMilestoneRows(tx, prepareMilestoneRows(context, entries, firstSort));
+}
+
+/** A validated checkpoint insert with its real identity allocated before a forest is written. */
+export type PreparedMilestoneRow = typeof milestone.$inferInsert & { readonly id: string };
+
+/** Share the ordinary checkpoint mapping while reserving identities for read-first placement. */
+export function prepareMilestoneRows(
+  context: MilestoneWriteContext,
+  entries: readonly MilestoneCreate[],
+  firstSort: number,
+): PreparedMilestoneRow[] {
+  return entries.map((entry, index) => ({
+    id: genId(),
+    organizationId: context.orgId,
+    projectId: context.projectId,
+    name: entry.name,
+    description: entry.description ?? null,
+    targetDate: entry.targetDate ? new Date(entry.targetDate) : undefined,
+    sort: entry.sort ?? firstSort + index,
+    createdBy: context.actorId,
+  }));
+}
+
+/** Append a reserved checkpoint identity using the same Project lock and position rule as ordinary appends. */
+export async function appendReservedMilestone(
+  tx: Tx,
+  row: PreparedMilestoneRow,
+): Promise<MilestoneRow> {
+  await lockProjectForAppend(tx, row.organizationId, row.projectId);
+  const sort = await appendSort(tx, row.organizationId, row.projectId);
+  const [inserted] = await insertPreparedMilestoneRows(tx, [{ ...row, sort }]);
+  if (!inserted) throw new Error('Milestone insert returned no row');
+  return inserted;
+}
+
+/** Insert already validated milestone rows in the caller's transaction, including blueprint origin. */
+export async function insertPreparedMilestoneRows(
+  tx: Tx,
+  rows: readonly (typeof milestone.$inferInsert)[],
+): Promise<MilestoneRow[]> {
+  if (rows.length === 0) return [];
   return tx
     .insert(milestone)
-    .values(
-      entries.map((entry, index) => ({
-        organizationId: context.orgId,
-        projectId: context.projectId,
-        name: entry.name,
-        description: entry.description ?? null,
-        targetDate: entry.targetDate ? new Date(entry.targetDate) : undefined,
-        sort: entry.sort ?? firstSort + index,
-        createdBy: context.actorId,
-      })),
-    )
+    .values([...rows])
     .returning();
 }
 

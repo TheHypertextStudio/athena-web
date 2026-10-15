@@ -46,6 +46,10 @@ import {
 import { materializeOccurrence } from '../../src/lib/recurrence/materialize';
 import { advanceCompletedProcessTask } from '../../src/lib/recurrence/advance';
 import { loadGeneratedWorkRecurrence } from '../../src/lib/recurrence/series';
+import { recurrenceBlueprintBinding } from '../../src/lib/recurrence/work-template-series-binding';
+import { bookClubProcess } from './work-template-book-club-fixture';
+import { grantProcessAuthor } from './work-template-legacy-fixture';
+import { installTestProductFixture } from '../support/db';
 import { openMigratedPglite } from '../support/pglite-template';
 import { seedStatuses, type StatusIdLookup } from '../support/routes-harness';
 import { assertDefined } from '@docket/test-utils';
@@ -64,69 +68,9 @@ let statusId!: StatusIdLookup;
 let promotionLabelId!: LabelIdBrand;
 let reportingLabelId!: LabelIdBrand;
 
-/** A representative fixed project process with hierarchy, dates, labels, and dependencies. */
-function bookClubDefinition(title = 'Create summary report'): ProcessDefinitionCreate {
-  return {
-    name: 'Book Club Season',
-    description: 'One book and its event follow-up.',
-    creationMode: 'all_at_once',
-    project: {
-      key: 'season',
-      name: 'Book Club · {date}',
-      summary: 'Read and discuss one urbanism book.',
-      teamId,
-      status: 'planned',
-      startOffsetDays: -7,
-      targetOffsetDays: 45,
-      labelIds: [promotionLabelId],
-      timing: { kind: 'on_trigger' },
-    },
-    milestones: [
-      {
-        key: 'event',
-        projectKey: 'season',
-        name: 'Book club event',
-        sort: 1,
-        targetOffsetDays: 32,
-        timing: { kind: 'relative_to_trigger', offsetDays: 30 },
-      },
-    ],
-    tasks: [
-      {
-        key: 'announce',
-        title: 'Announce this month’s book',
-        teamId,
-        projectKey: 'season',
-        priority: 'medium',
-        estimateMinutes: 30,
-        labelIds: [promotionLabelId],
-        timing: { kind: 'relative_to_trigger', offsetDays: -14 },
-      },
-      {
-        key: 'story',
-        title: 'Make story post for book club',
-        teamId,
-        projectKey: 'season',
-        parentTaskKey: 'announce',
-        state: 'todo',
-        priority: 'low',
-        estimate: 2,
-        labelIds: [promotionLabelId],
-        timing: { kind: 'on_trigger' },
-      },
-      {
-        key: 'report',
-        title,
-        teamId,
-        projectKey: 'season',
-        milestoneKey: 'event',
-        priority: 'none',
-        labelIds: [reportingLabelId],
-        timing: { kind: 'relative_to_trigger', offsetDays: 31 },
-      },
-    ],
-    dependencies: [{ blockingStepKey: 'story', blockedStepKey: 'report' }],
-  };
+/** The fixed process with this workspace's real team and labels. */
+function bookClubDefinition(title?: string): ProcessDefinitionCreate {
+  return bookClubProcess(teamId, promotionLabelId, reportingLabelId, title);
 }
 
 /** Create a calendar series over a published definition revision. */
@@ -156,6 +100,9 @@ async function calendarSeries(
           organizationId,
           seriesId: series.id,
           processRevisionId: revisionId,
+          ...(await db.transaction((tx) =>
+            recurrenceBlueprintBinding(tx, organizationId, revisionId),
+          )),
           number: 1,
           effectiveFrom: startDate,
           triggerKind: 'calendar',
@@ -182,6 +129,7 @@ describe('process materialization', () => {
   beforeAll(async () => {
     client = await openMigratedPglite();
     db = drizzle(client, { schema: fullSchema });
+    await installTestProductFixture(db);
     dbmod = await import('@docket/db');
     organizationId = assertDefined(
       (
@@ -209,6 +157,7 @@ describe('process materialization', () => {
           .returning()
       )[0],
     ).id;
+    await grantProcessAuthor(db, organizationId, actorId);
     const labels = await db
       .insert(label)
       .values([
@@ -905,7 +854,7 @@ describe('process materialization', () => {
       ...series,
       scheduledFor: '2026-09-05',
     });
-    expect(Object.keys(initial.taskIdsByKey)).toEqual(['interest-email']);
+    expect(Object.keys(initial.taskIdsByKey).sort()).toEqual(['interest-email', 'interview']);
 
     const rootTaskId = assertDefined(initial.taskIdsByKey['interest-email']);
     await db
@@ -929,12 +878,12 @@ describe('process materialization', () => {
       completedOn: '2026-09-08',
     });
 
-    expect(advanced.createdTaskIdsByKey).toHaveProperty('interview');
+    expect(advanced.createdTaskIdsByKey).toEqual({});
     expect(retried.createdTaskIdsByKey).toEqual({});
     const [interview] = await db
       .select()
       .from(task)
-      .where(eq(task.id, assertDefined(advanced.createdTaskIdsByKey['interview'])));
+      .where(eq(task.id, assertDefined(initial.taskIdsByKey['interview'])));
     expect(interview?.dueDate?.toISOString()).toBe('2026-09-10T00:00:00.000Z');
     expect(
       await db
@@ -1183,6 +1132,9 @@ describe('process materialization', () => {
             organizationId,
             seriesId: series.id,
             processRevisionId: authored.revisionId,
+            ...(await db.transaction((tx) =>
+              recurrenceBlueprintBinding(tx, organizationId, authored.revisionId),
+            )),
             number: 1,
             effectiveFrom: '2026-09-01',
             triggerKind: 'after_completion',

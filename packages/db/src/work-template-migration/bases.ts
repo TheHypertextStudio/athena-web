@@ -1,5 +1,5 @@
 import type { TemplateTargetType } from '@docket/work/template-contract';
-import { WorkTemplateDefinition } from '@docket/work/work-template-contract';
+import { parseHistoricalTemplateDefinition } from './definition';
 import { and, eq } from 'drizzle-orm';
 
 import type { Database } from '../client';
@@ -22,7 +22,7 @@ async function provisionBase(
   organizationId: string,
   kind: TemplateTargetType,
 ): Promise<{ workTypeId: string; workTypeVersionId: string }> {
-  const definition = WorkTemplateDefinition.parse({
+  const definition = parseHistoricalTemplateDefinition({
     name: `Blank ${kind}`,
     payload: { targetType: kind },
   });
@@ -55,7 +55,7 @@ async function provisionBase(
   if (!base) throw new Error('Base template provisioning did not produce a definition.');
   if (base.latestPublishedVersionId)
     return { workTypeId: base.id, workTypeVersionId: base.latestPublishedVersionId };
-  const publication = WorkTemplateDefinition.parse({
+  const publication = parseHistoricalTemplateDefinition({
     name: base.name,
     description: base.description,
     icon: base.icon,

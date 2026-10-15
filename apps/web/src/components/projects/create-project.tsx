@@ -1,4 +1,7 @@
 'use client';
+import { ComposerTemplateRow } from '@/components/composer/composer-template-row';
+import { useBlueprintCreationReview } from '@/components/composer/use-blueprint-creation-review';
+import { useComposerWorkspaceReset } from '@/components/composer/use-composer-workspace-reset';
 import { usesInitialWorkspace } from '@/components/composer/uses-initial-workspace';
 
 /**
@@ -30,7 +33,7 @@ import { EntityPicker } from '@docket/ui/components';
 import { VocabularyProvider, useVocabulary } from '@docket/ui/hooks';
 import { ChevronRight, Layers } from '@docket/ui/icons';
 import { useQueryClient } from '@tanstack/react-query';
-import { type JSX, useCallback, useEffect, useRef, useState } from 'react';
+import { type JSX, useCallback, useState } from 'react';
 
 import { useAppRouter } from '@/lib/interactions/navigation';
 import { api } from '@/lib/api';
@@ -55,7 +58,7 @@ import { EntityMetadataItem } from '@/components/views/entity-detail-layout';
 import { useComposerOptions } from '@/components/pickers/use-composer-options';
 import { templatePatch } from '@/components/templates/queries';
 import { useSession } from '@/lib/auth-client';
-import { userErrorMessage, readProblemError } from '@/lib/problem';
+import { userErrorMessage } from '@/lib/problem';
 import { seedProjectRecord } from '@/lib/entity-records';
 import { queryKeys } from '@/lib/query';
 import { useFiscalYearStartMonth } from '@/lib/use-fiscal-year-start-month';
@@ -66,8 +69,9 @@ import { projectMilestonesSection } from '@/components/projects/project-mileston
 import {
   type ProjectDraft,
   projectCreateBody,
+  toggleProjectInitiative,
   projectWorkspaceReset,
-  seededInitiativeIds,
+  initialProjectDraft,
 } from '@/components/projects/project-create-body';
 import { useProjectDraftPersistence } from './use-project-draft-persistence';
 
@@ -164,26 +168,14 @@ export const CreateProjectDialog = withComposerReset(function CreateProjectCompo
 }: CreateProjectDialogProps): JSX.Element {
   const projectNounLower = projectNoun.toLowerCase();
   const programNoun = useVocabulary('program');
-  const previousWorkspaceId = useRef(globalCreation?.targetWorkspaceId ?? null);
   const contextualRequestDefaultsApply = usesInitialWorkspace(globalCreation);
   const destinationReady = globalCreation?.ready ?? true;
 
   const options = useComposerOptions(orgId, COMPOSER_INCLUDE, open && destinationReady);
   const planningCalendar = useFiscalYearStartMonth(orgId, open && destinationReady);
-  const { draft, setField, updateDraft } = useComposerDraft<ProjectDraft>({
-    name: '',
-    summary: '',
-    description: '',
-    teamOverride: null,
-    leadId: null,
-    programId: contextualRequestDefaultsApply ? (defaultProgramId ?? null) : null,
-    status: 'planned',
-    health: null,
-    startTimeframe: null,
-    targetTimeframe: null,
-    initiativeIds: seededInitiativeIds(contextualRequestDefaultsApply, defaultInitiativeIds),
-    milestones: [],
-  });
+  const { draft, setField, updateDraft } = useComposerDraft<ProjectDraft>(
+    initialProjectDraft(contextualRequestDefaultsApply, defaultProgramId, defaultInitiativeIds),
+  );
 
   useDefaultedStatus('project', draft.status, (key) => {
     setField('status', key);
@@ -228,32 +220,15 @@ export const CreateProjectDialog = withComposerReset(function CreateProjectCompo
 
   // Keep portable copy, dates, and generic enum choices when the destination changes, but never
   // carry a Team, person, Program, or Initiative id into a workspace that cannot own that row.
-  useEffect(() => {
-    if (globalCreation === undefined) return;
-    const previousTargetWorkspaceId = previousWorkspaceId.current;
-    if (previousTargetWorkspaceId === globalCreation.targetWorkspaceId) return;
-    previousWorkspaceId.current = globalCreation.targetWorkspaceId;
-    // A null-to-opening transition is the shell resolving its immutable workspace, not a retarget.
-    // Preserve contextual defaults that are valid only in that opening workspace.
-    if (
-      previousTargetWorkspaceId === null &&
-      globalCreation.targetWorkspaceId !== null &&
-      globalCreation.targetWorkspaceId === globalCreation.initialWorkspaceId
-    ) {
-      return;
-    }
+  useComposerWorkspaceReset(globalCreation, () => {
     setError(null);
     updateDraft(() => projectWorkspaceReset(draft.startTimeframe, draft.targetTimeframe));
-  }, [draft.startTimeframe, draft.targetTimeframe, globalCreation, updateDraft]);
+  });
 
   /** Toggle an initiative id in/out of the selected set. */
   const toggleInitiative = useCallback(
     (id: string): void => {
-      updateDraft((current) => ({
-        initiativeIds: current.initiativeIds.includes(id)
-          ? current.initiativeIds.filter((value) => value !== id)
-          : [...current.initiativeIds, id],
-      }));
+      updateDraft((current) => toggleProjectInitiative(current, id));
     },
     [updateDraft],
   );
@@ -304,6 +279,18 @@ export const CreateProjectDialog = withComposerReset(function CreateProjectCompo
   );
 
   /** Create the project with all set properties and its milestones, then hand it to the parent. */
+  const blueprintReview = useBlueprintCreationReview({
+    orgId,
+    disabled: creating,
+    kind: 'project',
+    request: () => ({
+      kind: 'project',
+      body: projectCreateBody(draft, draft.name.trim(), teamId),
+    }),
+    selection: draft,
+    setField,
+  });
+
   const submit = useCallback(
     async (continueCreating = false): Promise<void> => {
       const trimmed = draft.name.trim();
@@ -311,6 +298,7 @@ export const CreateProjectDialog = withComposerReset(function CreateProjectCompo
       setCreating(true);
       setError(null);
       try {
+        if (!(await blueprintReview.ensureReviewed())) return;
         const res = await api.v1.orgs[':orgId'].projects.$post({
           param: { orgId },
           json: projectCreateBody(draft, trimmed, teamId),
@@ -323,7 +311,7 @@ export const CreateProjectDialog = withComposerReset(function CreateProjectCompo
             draft.milestones.length > 0
               ? `Could not create the ${projectNounLower}. Check its fields and its milestones.`
               : `Could not create the ${projectNounLower}.`;
-          setError(userErrorMessage(await readProblemError(res, fallback), fallback));
+          setError(await blueprintReview.readFailure(res, fallback));
           return;
         }
         const created = await res.json();
@@ -338,13 +326,29 @@ export const CreateProjectDialog = withComposerReset(function CreateProjectCompo
         setCreating(false);
       }
     },
-    [canSubmit, continuation, draft, finishCreate, persistence, teamId, orgId, projectNounLower],
+    [
+      blueprintReview,
+      canSubmit,
+      continuation,
+      draft,
+      finishCreate,
+      persistence,
+      teamId,
+      orgId,
+      projectNounLower,
+    ],
   );
 
   return (
     <ComposerShell
       open={open}
       onOpenChange={onOpenChange}
+      leadingFields={
+        <ComposerTemplateRow
+          selection={templateContribution.selection}
+          review={blueprintReview.dialog}
+        />
+      }
       heading={`New ${projectNounLower}`}
       propertyAriaLabel={`${projectNoun} properties`}
       contextRow={
@@ -413,7 +417,6 @@ export const CreateProjectDialog = withComposerReset(function CreateProjectCompo
       onSubmit={() => void submit(continuation.createMore)}
       submitLabel={`Create ${projectNoun}`}
     >
-      {templateContribution.selection}
       <ProjectComposerPickers
         orgId={orgId}
         status={draft.status}

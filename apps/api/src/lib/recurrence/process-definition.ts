@@ -44,6 +44,11 @@ import { listActiveProcessDefinitionRows } from './list-store';
 import { prepareProcessTemplates, type PreparedProcessDefinition } from './task-template-identity';
 import { projectProcessTasks, timingFromRow } from './process-task-projection';
 
+import { bindPublishedProcessBlueprint } from './work-template-authoring';
+import {
+  reconcileTemplateCreationEffects,
+  type TemplateCreationEffect,
+} from '../templates/service';
 type Transaction = Parameters<Parameters<Database['transaction']>[0]>[0];
 
 /** Command for creating and immediately publishing a reusable process. */
@@ -350,7 +355,9 @@ async function persistRevision(
     readonly revisionNumber: number;
     readonly definition: PreparedProcessDefinition;
   },
-): Promise<PublishedProcessRevision> {
+): Promise<
+  PublishedProcessRevision & { readonly templateEffects: readonly TemplateCreationEffect[] }
+> {
   const { organizationId, actorId, definitionId, revisionNumber, definition } = input;
   const revisionId = genId();
   const allSteps = [
@@ -470,7 +477,14 @@ async function persistRevision(
     );
   }
 
+  const templateEffects = await bindPublishedProcessBlueprint(tx, {
+    organizationId,
+    actorId,
+    revisionId,
+    name: definition.name,
+  });
   return {
+    templateEffects,
     definitionId,
     revisionId,
     revisionNumber,
@@ -489,7 +503,7 @@ export async function createPublishedProcessDefinition(
     command.definition,
   );
   validateProcessDefinitionGraph(definition);
-  return database.transaction(async (tx) => {
+  const result = await database.transaction(async (tx) => {
     await validateReferenceOwnership(tx, command.organizationId, definition);
     const definitionId = genId();
     await tx.insert(processDefinition).values({
@@ -508,6 +522,9 @@ export async function createPublishedProcessDefinition(
       definition,
     });
   });
+  const { templateEffects, ...published } = result;
+  await reconcileTemplateCreationEffects(templateEffects);
+  return published;
 }
 
 /** Snapshot one ordinary project's hierarchy, dates, labels, and dependencies as a process. */
@@ -663,7 +680,7 @@ export async function appendPublishedProcessRevision(
     command.revision,
   );
   validateProcessDefinitionGraph(definition);
-  return database.transaction(async (tx) => {
+  const result = await database.transaction(async (tx) => {
     const existing = await tx
       .select({ id: processDefinition.id, status: processDefinition.status })
       .from(processDefinition)
@@ -698,6 +715,9 @@ export async function appendPublishedProcessRevision(
       definition,
     });
   });
+  const { templateEffects, ...published } = result;
+  await reconcileTemplateCreationEffects(templateEffects);
+  return published;
 }
 
 /** Load one org-scoped process and reconstruct its latest immutable revision. */

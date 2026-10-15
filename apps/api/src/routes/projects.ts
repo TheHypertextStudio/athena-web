@@ -1,5 +1,17 @@
+import { workspacePlanningCalendar } from '../lib/workspace-planning-calendar';
+import {
+  prepareBlueprintReflow,
+  applyBlueprintReflow,
+  finishBlueprintReflow,
+} from '../lib/work-template-blueprints/reflow';
+import { explicitBlueprintDatePatch } from '../lib/work-template-blueprints/date-ownership';
+import { serializableTx } from '../lib/serializable-tx';
+import { validatedInitiativeIds } from '../lib/work-creation/ordinary-references';
+import { originFor } from '../lib/provenance/context';
+import { createWork } from '../lib/work-creation/service';
 import { workTemplateAssignmentRoutes } from './work-template-assignment';
-import { prepareWorkTemplateCreation } from '../lib/work-template-creation';
+import { workTemplateCaptureRoutes } from './work-template-capture';
+
 import { toProjectOut as toOut, projectTeamId, loadProjectAggregateRow } from './project-read';
 import {
   detachEditedSourcePeople,
@@ -16,7 +28,6 @@ import {
   initiative,
   initiativeProject,
   milestone,
-  organization,
   program,
   project,
   projectDependency,
@@ -38,22 +49,21 @@ import {
 import { ProjectDetailAggregate } from '../contracts/detail-aggregate';
 import { ProjectId } from '@docket/work/ids';
 import type { ProgramOut } from '@docket/work/program-contract';
-import { and, asc, count, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
+import { and, asc, count, desc, eq, isNull, sql } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
 
 import type { AppEnv } from '../context';
 import { NotFoundError } from '../error';
-import { deferAfterResponse } from '../lib/after-response';
+
 import { clearableTextPatch } from '../lib/clearable-text';
 import { detailCapabilities } from '../lib/detail-capabilities';
 import { storedEntityDisplayOut } from '../lib/entity-display-output';
-import { guardsInOrder } from '../lib/guards-in-order';
+
 import { assertPlanningDateRange, planningDatePatch } from '../lib/planning-timeframe';
 import {
   attachLabels,
   labelsForSubject,
-  replaceLabels,
   resolveAttachedLabels,
   resolveLabelSet,
 } from '../lib/labels';
@@ -66,15 +76,10 @@ import { capabilityGuard } from '../permissions/capability-guard';
 import { zJson, zParam, zQuery } from '../lib/validate';
 import { enqueueSearchDelete, enqueueSearchUpsert } from '../search/write-through';
 import { emitEvent } from './event-emit';
-import { insertMilestones } from '../lib/milestone-writes';
+
 import milestones from './milestones';
 import { projectDependencyRoutes } from './project-dependency-routes';
-import {
-  recordProjectCreate,
-  recordProjectLabels,
-  recordProjectUpdate,
-  recordRemoval,
-} from './container-change-sets';
+import { recordProjectLabels, recordProjectUpdate, recordRemoval } from './container-change-sets';
 import { replaceProjectLinks } from './project-link-writes';
 import {
   buildTaskViewCondition,
@@ -144,39 +149,6 @@ async function assertRefInOrg(
 }
 
 /**
- * Validate that every requested Initiative association lives in the caller's org, or 404.
- *
- * @remarks
- * `ProjectCreate.initiativeIds` writes `initiative_project` join rows. The join keeps a
- * frozen `organization_id`, but the bare FK to `initiative.id` does not constrain the
- * tenant, so without this check a CREATE could link the new project to another tenant's
- * Initiative. We re-read each id scoped by `eq(initiative.organizationId, orgId)` and 404
- * (existence-hiding) on any miss. Duplicate ids in the request are de-duplicated so the
- * join's composite PK never collides within a single create.
- *
- * @param orgId - The tenant the initiatives must belong to.
- * @param initiativeIds - The requested association ids (may be empty/undefined).
- * @returns the de-duplicated, validated initiative ids to link.
- * @throws {NotFoundError} When any id is missing or owned by another org.
- */
-async function validatedInitiativeIds(
-  orgId: string,
-  initiativeIds: readonly string[] | undefined,
-): Promise<string[]> {
-  if (!initiativeIds || initiativeIds.length === 0) return [];
-  const unique = [...new Set(initiativeIds)];
-  const rows = await db
-    .select({ id: initiative.id })
-    .from(initiative)
-    .where(and(inArray(initiative.id, unique), eq(initiative.organizationId, orgId)));
-  const found = new Set(rows.map((r) => r.id));
-  for (const id of unique) {
-    if (!found.has(id)) throw new NotFoundError('Initiative not found');
-  }
-  return unique;
-}
-
-/**
  * Compute a Project's weighted completion roll-up from its Tasks.
  *
  * @remarks
@@ -239,6 +211,7 @@ function progressFromAggregate(row: {
 /** Projects router: org-scoped CRUD + weighted-progress; `contribute` to edit, `manage` to delete. */
 const projects = new Hono<AppEnv>()
   .route('/', workTemplateAssignmentRoutes('project'))
+  .route('/', workTemplateCaptureRoutes('project'))
   .post(
     '/',
     capabilityGuard('contribute'),
@@ -252,160 +225,15 @@ const projects = new Hono<AppEnv>()
     }),
     zJson(ProjectCreate),
     async (c) => {
-      const { orgId, actorId } = c.get('actorCtx');
-      const body = ProjectCreate.parse(
-        await prepareWorkTemplateCreation(orgId, 'project', c.req.valid('json')),
-      );
-
-      // Tenant isolation: a body-provided lead/team/program must live in the caller's org.
-      // The bare FK references each table's global PK, so without this a CREATE could attach
-      // another tenant's actor/team/program to this project — exactly the gap PATCH already
-      // closes. Omitted fields are no-ops inside the helper.
-      //
-      // Independent reads, so they run together rather than as three serial round trips;
-      // `guardsInOrder` keeps the reported failure the earliest-listed one either way.
-      await guardsInOrder([
-        assertRefInOrg(actor, orgId, body.leadId, 'Lead not found'),
-        assertRefInOrg(team, orgId, body.teamId, 'Team not found'),
-        assertRefInOrg(program, orgId, body.programId, 'Program not found'),
-      ]);
-
-      // `initiativeIds` writes `initiative_project` association rows; validate each lives in
-      // the caller's org BEFORE the transaction so a bad id rejects the whole create.
-      // A Project's status is a key into the workspace's own Project statuses, resolved here so
-      // an unknown key is a 422 naming the keys that would work.
-      const status = await resolveContainerStatus(orgId, 'project', body.status ?? 'planned');
-      const [initiativeIds, labels] = await Promise.all([
-        validatedInitiativeIds(orgId, body.initiativeIds),
-        // Through the shared resolver, so a project obeys label-group exclusivity exactly as a
-        // task does. Resolved against the project's own team, so a team-limited label applies.
-        resolveLabelSet(orgId, body.labelIds, { teamId: body.teamId }),
-      ]);
-
-      // Filled inside the transaction and read after it commits, so the search index learns about
-      // the new checkpoints without the response waiting on it.
-      let milestoneIds: readonly string[] = [];
-
-      const row = await db.transaction(async (tx) => {
-        const [settings] = await tx
-          .select({ fiscalYearStartMonth: organization.fiscalYearStartMonth })
-          .from(organization)
-          .where(eq(organization.id, orgId))
-          .limit(1);
-        /* v8 ignore next -- @preserve actor context proves the workspace exists */
-        if (!settings) throw new NotFoundError('Organization not found');
-        const start = planningDatePatch(
-          { date: body.startDate, resolution: body.startDateResolution },
-          settings.fiscalYearStartMonth,
-          'start',
-          'startDate',
-          'startDateResolution',
-        );
-        const target = planningDatePatch(
-          { date: body.targetDate, resolution: body.targetDateResolution },
-          settings.fiscalYearStartMonth,
-          'target',
-          'targetDate',
-          'targetDateResolution',
-        );
-        assertPlanningDateRange(start?.date ?? null, target?.date ?? null);
-        const inserted = await tx
-          .insert(project)
-          .values({
-            workTypeId: body.workTypeId,
-            workTypeVersionId: body.workTypeVersionId,
-            organizationId: orgId,
-            name: body.name,
-            summary: body.summary,
-            description: body.description,
-            leadId: body.leadId,
-            teamId: body.teamId,
-            programId: body.programId,
-            status: status.status,
-            statusId: status.statusId,
-            health: body.health,
-            priority: body.priority,
-            ...(start === undefined
-              ? {}
-              : {
-                  startDate: start.date,
-                  startDateResolution: start.resolution,
-                  startDateFiscalYearStartMonth: start.fiscalYearStartMonth,
-                }),
-            ...(target === undefined
-              ? {}
-              : {
-                  targetDate: target.date,
-                  targetDateResolution: target.resolution,
-                  targetDateFiscalYearStartMonth: target.fiscalYearStartMonth,
-                }),
-            createdBy: actorId,
-          })
-          .returning();
-        const created = inserted[0];
-        /* v8 ignore next -- @preserve defensive: insert/update always returns a row */
-        if (!created) throw new Error('project insert returned no row');
-
-        // Persist the m2m Initiative links inside the same transaction so a partial create
-        // (project saved, links lost) is impossible.
-        if (initiativeIds.length > 0) {
-          await tx.insert(initiativeProject).values(
-            initiativeIds.map((initiativeId) => ({
-              initiativeId,
-              projectId: created.id,
-              organizationId: orgId,
-            })),
-          );
-        }
-        if (labels.length > 0) {
-          await replaceLabels(tx, 'project', created.id, orgId, labels);
-        }
-
-        // The project's checkpoints, in the same transaction and for the same reason as the links
-        // above: a create that saved the project and lost its milestones is not a create anyone
-        // asked for, and the client cannot repair it without risking a second project. Through the
-        // shared writer, so a milestone created here is the same row the milestones router would
-        // have written. A fresh project has nothing to append after, so the first position is 0.
-        const checkpoints = await insertMilestones(
-          tx,
-          { orgId, projectId: created.id, actorId },
-          body.milestones ?? [],
-          0,
-        );
-        milestoneIds = checkpoints.map((row) => row.id);
-        return recordProjectCreate({ tx, orgId, actorId }, created, initiativeIds, labels);
+      const caller = c.get('actorCtx');
+      const result = await createWork({
+        caller,
+        kind: 'project',
+        body: c.req.valid('json'),
+        invocation: { origin: originFor('project_create') },
       });
-
-      // Both effects run after the row is committed and neither contributes to the response, so
-      // the caller does not wait for them. That matters here more than anywhere: emitting an
-      // event opens its own transaction and fans out to recipients, automations and indexing
-      // jobs, which is most of what a create used to cost. A brand-new project also has no
-      // inbound mentions to reconcile and no search row anyone is about to read, so there is
-      // nothing for deferring to race — unlike an edit to existing prose, which stays awaited.
-      // Stamped here rather than inside the deferred callback: `emitEvent` defaults `occurredAt`
-      // to the moment it runs, which is now after the response, so under concurrent creates the
-      // feed could order two entities against the order their rows were actually written. It is
-      // also part of the dedupe key, so it needs to name the domain event, not the drain.
-      const occurredAt = new Date();
-      deferAfterResponse('project-created-event', () =>
-        emitEvent({
-          organizationId: orgId,
-          kind: 'created',
-          actorId,
-          occurredAt,
-          title: row.name,
-          subject: { type: 'project', id: row.id, title: row.name },
-        }),
-      );
-      deferAfterResponse('project-created-search-upsert', () =>
-        enqueueSearchUpsert(orgId, 'project', row.id),
-      );
-      for (const milestoneId of milestoneIds) {
-        deferAfterResponse('project-created-milestone-search-upsert', () =>
-          enqueueSearchUpsert(orgId, 'milestone', milestoneId),
-        );
-      }
-      return created(c, ProjectOut, toOut(row));
+      if (result.root.kind !== 'project') throw new Error('Work creation returned the wrong kind');
+      return created(c, ProjectOut, toOut(result.root.row));
     },
   )
   .get(
@@ -742,20 +570,24 @@ const projects = new Hono<AppEnv>()
         isNull(project.archivedAt),
       );
 
-      const row = await db.transaction(async (tx) => {
+      let blueprintResult: Awaited<ReturnType<typeof applyBlueprintReflow>> = {
+        changes: [],
+        rows: [],
+      };
+      const row = await serializableTx(async (tx) => {
+        const blueprint = await prepareBlueprintReflow(
+          tx,
+          c.get('actorCtx'),
+          { kind: 'project', id },
+          body,
+        );
         await detachEditedSourcePeople(
           { orgId, subjectType: 'project', subjectId: id, field: 'lead', value: body.leadId },
           tx,
         );
         const [current] = await tx.select().from(project).where(where).limit(1).for('update');
         if (!current) return undefined;
-        const [settings] = await tx
-          .select({ fiscalYearStartMonth: organization.fiscalYearStartMonth })
-          .from(organization)
-          .where(eq(organization.id, orgId))
-          .limit(1);
-        /* v8 ignore next -- @preserve the Project's organization FK proves this row exists */
-        if (!settings) throw new NotFoundError('Organization not found');
+        const settings = await workspacePlanningCalendar(tx, orgId);
         const start = planningDatePatch(
           { date: body.startDate, resolution: body.startDateResolution },
           settings.fiscalYearStartMonth,
@@ -775,6 +607,7 @@ const projects = new Hono<AppEnv>()
           target === undefined ? current.targetDate : target.date,
         );
         const patch: Partial<typeof project.$inferInsert> = {
+          ...explicitBlueprintDatePatch(current, body),
           ...(body.name !== undefined ? { name: body.name } : {}),
           ...clearableTextPatch('summary', body.summary),
           ...clearableTextPatch('description', body.description),
@@ -814,7 +647,14 @@ const projects = new Hono<AppEnv>()
           labels,
           initiativeIds,
         });
-        return recordProjectUpdate({ tx, orgId, actorId }, current, changed, body, links);
+        blueprintResult = await applyBlueprintReflow(tx, blueprint);
+        return recordProjectUpdate(
+          { tx, orgId, actorId, derived: blueprintResult.changes },
+          current,
+          changed,
+          body,
+          links,
+        );
       });
       if (!row) throw new NotFoundError('Project not found');
 
@@ -828,6 +668,7 @@ const projects = new Hono<AppEnv>()
           detail: { schema: 'docket.state_change', fromState: null, toState: row.status },
         });
       }
+      await finishBlueprintReflow(orgId, blueprintResult);
       await enqueueSearchUpsert(orgId, 'project', row.id);
       return ok(c, ProjectOut, toOut(row, await sourcePeopleForSubject(orgId, 'project', row.id)));
     },

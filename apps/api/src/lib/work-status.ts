@@ -387,7 +387,8 @@ export async function landingStatus(
 export async function landingTaskTransition(
   orgId: string,
   teamId: string,
+  reader: StatusReader = db,
 ): Promise<TaskStatusTransition> {
-  const status = await landingStatus(orgId, 'task', teamId);
+  const status = await landingStatus(orgId, 'task', teamId, reader);
   return { statusId: status.id, state: status.key, ...terminalStampsFor(status.category) };
 }

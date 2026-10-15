@@ -1,10 +1,11 @@
-import { readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import type { Page } from '@playwright/test';
 import type { WorkTemplateOut } from '@docket/work/work-template-contract';
 import { signUpAndOnboard } from './helpers/app';
 import { TIMEOUTS } from './helpers/constants';
 import { expect, test } from './helpers/fixtures';
 import { apiJson, waitForApiResponse } from './helpers/net';
+import { blueprintWorkspace } from './helpers/work-template-blueprints';
 import { renderedContrastRatio } from './helpers/calendar-ui';
 
 const sessionPath = process.env['E2E_WORK_TEMPLATE_SESSION'];
@@ -13,11 +14,7 @@ if (sessionPath) test.use({ storageState: sessionPath });
 async function workspace(page: Page): Promise<string> {
   page.setDefaultTimeout(TIMEOUTS.ui);
   if (!sessionPath) return (await signUpAndOnboard(page, 'TemplateIdentity')).orgId;
-  const metadata = JSON.parse(readFileSync(`${sessionPath}.meta.json`, 'utf8')) as {
-    orgId: string;
-  };
-  await page.goto('/', { waitUntil: 'commit', timeout: TIMEOUTS.pageReady });
-  return metadata.orgId;
+  return (await blueprintWorkspace(page)).orgId;
 }
 
 async function createDraft(
@@ -35,6 +32,7 @@ async function createDraft(
   await page
     .getByRole('textbox', { name: 'When to use it', exact: true })
     .fill('A community event with a clear preparation plan.');
+  await page.getByRole('button', { name: 'Define the work', exact: true }).click();
   await page
     .getByRole('textbox', {
       name: kind === 'task' ? 'Starting title' : 'Starting name',
@@ -49,13 +47,15 @@ async function createDraft(
   expect((await response).ok()).toBe(true);
   const draft = (await (await response).json()) as WorkTemplateOut;
   await expect(page).toHaveURL(new RegExp(`/templates/${draft.id}$`));
-  await expect(
-    page.getByRole('button', { name: 'Publish to workspace', exact: true }),
-  ).toBeEnabled();
+  await expect(page.getByRole('tab', { name: 'Work', exact: true })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  );
   return draft;
 }
 
 async function publish(page: Page): Promise<WorkTemplateOut> {
+  await page.getByRole('tab', { name: 'Review', exact: true }).click();
   const response = waitForApiResponse(page, /\/templates\/definitions\/[^/]+\/publish$/, {
     method: 'POST',
   });
@@ -86,6 +86,7 @@ for (const kind of ['initiative', 'program', 'project', 'task']) {
     const published = await publish(page);
     expect(published.scope).toBe('organization');
     expect(published.latestVersion?.number).toBe(1);
+    await page.getByRole('button', { name: 'Published history', exact: true }).click();
     await expect(page.getByRole('button', { name: 'Version 1', exact: true })).toBeVisible();
   });
 }
@@ -98,6 +99,7 @@ test.describe('canonical template editor accessibility and recovery', () => {
     const orgId = await workspace(page);
     const draft = await createDraft(page, orgId, 'project', `Recoverable event ${Date.now()}`);
     await page.setViewportSize({ width: 320, height: 600 });
+    await page.getByRole('tab', { name: 'Purpose', exact: true }).click();
     const name = page.getByRole('textbox', { name: 'Template name', exact: true });
     await name.focus();
     await page.keyboard.press('Tab');
@@ -133,6 +135,22 @@ test.describe('canonical template editor accessibility and recovery', () => {
     await save.click();
     await expect(page.getByText('Template could not be saved', { exact: true })).toBeVisible();
     await expect(name).toHaveValue('Retained after a failed save');
+    const captureOut = process.env['E2E_WORK_TEMPLATE_REVIEW_OUT'];
+    if (captureOut) {
+      mkdirSync(captureOut, { recursive: true });
+      for (const colorScheme of ['light', 'dark'] as const) {
+        await page.emulateMedia({ colorScheme });
+        await expect(save).toBeInViewport();
+        await expect
+          .poll(() => renderedContrastRatio(page.getByRole('heading', { level: 1 })))
+          .toBeGreaterThanOrEqual(4.5);
+        await page.screenshot({
+          path: `${captureOut}/failed-save-320x600-${colorScheme}.png`,
+          fullPage: false,
+          animations: 'disabled',
+        });
+      }
+    }
     await expect(
       page.getByText('Provider internals must stay hidden', { exact: true }),
     ).toHaveCount(0);
@@ -140,6 +158,7 @@ test.describe('canonical template editor accessibility and recovery', () => {
     await save.click();
     expect((await saved).ok()).toBe(true);
     await page.reload({ waitUntil: 'commit' });
+    await page.getByRole('tab', { name: 'Purpose', exact: true }).click();
     await expect(name).toHaveValue('Retained after a failed save');
   });
 });
@@ -194,10 +213,12 @@ test('Event project retains its publication, then changes identity without repla
     .getByRole('button', { name: `Change template: ${name}, Version 1`, exact: true })
     .click();
   await page.getByRole('menuitem', { name: `${name} · Version 2`, exact: true }).click();
-  const preview = page.getByRole('dialog', { name: 'Change template', exact: true });
-  await expect(preview).toContainText('Your description, dates and child work stay unchanged.');
-  const changed = waitForApiResponse(page, /\/template$/, { method: 'POST' });
-  await preview.getByRole('button', { name: 'Change template', exact: true }).click();
+  const preview = page.getByRole('dialog', { name: 'Update template', exact: true });
+  await expect(preview).toContainText(
+    'Your outline stays unchanged. Choose each work change to adopt.',
+  );
+  const changed = waitForApiResponse(page, /\/template\/update$/, { method: 'POST' });
+  await preview.getByRole('button', { name: 'Update template', exact: true }).click();
   expect((await changed).ok()).toBe(true);
   const reopened = await apiJson<{ workTypeVersionId: string; description: string }>(
     page,
@@ -221,6 +242,11 @@ test('Event project retains its publication, then changes identity without repla
   }).toPass({ timeout: TIMEOUTS.pageReady });
   await grouping.selectOption('workTypeId');
   await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: 'Display', exact: true }).click();
+  await display.getByRole('button', { name: 'Find in this view', exact: true }).click();
+  await page
+    .getByRole('searchbox', { name: 'Search Projects', exact: true })
+    .fill('Neighborhood dinner');
   await expect(page.getByText(name, { exact: true }).first()).toBeVisible();
   await expect(page.getByText('Neighborhood dinner', { exact: true }).first()).toBeVisible();
   const evidencePath = process.env['E2E_WORK_TEMPLATE_EVIDENCE'];

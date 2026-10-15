@@ -1,3 +1,5 @@
+import { triggerStorage } from './series-trigger-storage';
+import { recurrenceBlueprintBinding } from './work-template-series-binding';
 /** Recurrence authoring with immutable revisions and explicit occurrence exceptions. */
 import {
   processDefinition,
@@ -62,15 +64,6 @@ export interface GeneratedProjectLookup {
 /** Any ordinary generated entity that may link back to its recurrence series. */
 export type GeneratedWorkLookup = GeneratedTaskLookup | GeneratedProjectLookup;
 
-const WEEKDAY_NUMBER = {
-  monday: 1,
-  tuesday: 2,
-  wednesday: 3,
-  thursday: 4,
-  friday: 5,
-  saturday: 6,
-  sunday: 7,
-} as const;
 const NUMBER_WEEKDAY = {
   1: 'monday',
   2: 'tuesday',
@@ -80,21 +73,6 @@ const NUMBER_WEEKDAY = {
   6: 'saturday',
   7: 'sunday',
 } as const;
-
-/** Fields and selected weekdays persisted for one trigger revision. */
-interface TriggerStorage {
-  readonly values: Omit<
-    typeof recurrenceSeriesRevision.$inferInsert,
-    | 'id'
-    | 'organizationId'
-    | 'seriesId'
-    | 'processRevisionId'
-    | 'number'
-    | 'effectiveFrom'
-    | 'createdBy'
-  >;
-  readonly weekdays: readonly number[];
-}
 
 /** Command for creating a series over a process's latest published revision. */
 export interface CreateRecurrenceSeriesCommand {
@@ -123,90 +101,6 @@ export interface MaterializeSeriesCommand {
 /** Convert a clock instant to a stable UTC civil date for non-calendar trigger defaults. */
 export function utcCalendarDate(now = new Date()): string {
   return now.toISOString().slice(0, 10);
-}
-
-/** Normalize a trigger union into relational columns and selected weekday rows. */
-function triggerStorage(trigger: ProcessTriggerValue): TriggerStorage {
-  const parsed = ProcessTrigger.parse(trigger);
-  if (parsed.kind === 'manual') return { values: { triggerKind: 'manual' }, weekdays: [] };
-  if (parsed.kind === 'after_completion') {
-    return {
-      values: {
-        triggerKind: 'after_completion',
-        interval: parsed.interval,
-        intervalUnit: parsed.unit,
-      },
-      weekdays: [],
-    };
-  }
-  if (parsed.kind === 'event') {
-    return {
-      values: {
-        triggerKind: 'event',
-        eventKind: parsed.event.kind,
-        eventSubjectType: parsed.event.subjectType,
-        eventSource: parsed.event.source,
-        eventEntityKind: parsed.event.entityKind,
-      },
-      weekdays: [],
-    };
-  }
-
-  const schedule = parsed.schedule;
-  const endValues =
-    schedule.end.kind === 'never'
-      ? { endKind: 'never' as const }
-      : schedule.end.kind === 'on_date'
-        ? { endKind: 'on_date' as const, endDate: schedule.end.date }
-        : { endKind: 'after_count' as const, endCount: schedule.end.count };
-  const common = {
-    triggerKind: 'calendar' as const,
-    scheduleKind: schedule.kind,
-    interval: schedule.interval,
-    startDate: schedule.startDate,
-    timezone: schedule.timezone,
-    ...endValues,
-    missedPolicy: parsed.missedPolicy,
-    horizonDays: parsed.materialization.horizonDays,
-    minimumOccurrences: parsed.materialization.minimumOccurrences,
-  };
-  if (schedule.kind === 'daily') return { values: common, weekdays: [] };
-  if (schedule.kind === 'weekly') {
-    return {
-      values: common,
-      weekdays: schedule.weekdays.map((weekday) => WEEKDAY_NUMBER[weekday]),
-    };
-  }
-  if (schedule.kind === 'monthly') {
-    return schedule.pattern.kind === 'day_of_month'
-      ? {
-          values: {
-            ...common,
-            monthlyPatternKind: 'day_of_month',
-            monthDay: schedule.pattern.day,
-            overflow: schedule.pattern.overflow,
-          },
-          weekdays: [],
-        }
-      : {
-          values: {
-            ...common,
-            monthlyPatternKind: 'nth_weekday',
-            nthWeekdayOrdinal: schedule.pattern.ordinal,
-            nthWeekday: WEEKDAY_NUMBER[schedule.pattern.weekday],
-          },
-          weekdays: [],
-        };
-  }
-  return {
-    values: {
-      ...common,
-      yearMonth: schedule.month,
-      yearDay: schedule.day,
-      overflow: schedule.overflow,
-    },
-    weekdays: [],
-  };
 }
 
 /** Reconstruct a canonical trigger union from one normalized revision. */
@@ -355,6 +249,11 @@ async function persistSeriesRevision(
   },
 ): Promise<SeriesRevisionRow> {
   const storage = triggerStorage(input.trigger);
+  const blueprintBinding = await recurrenceBlueprintBinding(
+    tx,
+    input.organizationId,
+    input.processRevisionId,
+  );
   const rows = await tx
     .insert(recurrenceSeriesRevision)
     .values({
@@ -364,6 +263,7 @@ async function persistSeriesRevision(
       number: input.number,
       effectiveFrom: input.effectiveFrom,
       ...storage.values,
+      ...blueprintBinding,
       createdBy: input.actorId,
     })
     .returning();

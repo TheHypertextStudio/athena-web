@@ -2,9 +2,18 @@ import { z } from 'zod';
 
 import { WorkTypeId, WorkTypeVersionId } from '../ids';
 import { EntityDisplayGlyph } from './entity-display';
+import {
+  BlueprintCreationOptions,
+  BlueprintCivilDate,
+  BlueprintDateRule,
+  BlueprintPreviewSummary,
+  BlueprintPreviewWarning,
+  StepKey,
+} from './work-template-blueprint';
 
 /** Optional creation identity; omitted fields select the workspace's base template. */
 export const workTemplateCreationFields = {
+  blueprint: BlueprintCreationOptions.optional(),
   workTypeId: WorkTypeId.optional(),
   workTypeVersionId: WorkTypeVersionId.optional(),
 };
@@ -96,9 +105,12 @@ const previewToken = z.string().regex(/^sha256:[a-f0-9]{64}$/);
 export const WorkTemplateChangeRequest = z.strictObject({
   workTypeId: WorkTypeId,
   workTypeVersionId: WorkTypeVersionId.optional(),
+  mode: z.enum(['change', 'update']).default('change'),
 });
 /** A published template selected for a resource-authorized change preview. */
-export type WorkTemplateChangeRequest = z.infer<typeof WorkTemplateChangeRequest>;
+export type WorkTemplateChangeRequest = Omit<z.infer<typeof WorkTemplateChangeRequest>, 'mode'> & {
+  readonly mode?: 'change' | 'update';
+};
 
 /** One optional difference between existing work and its selected published starting values. */
 export const WorkTemplateFieldChange = z.strictObject({
@@ -110,12 +122,62 @@ export const WorkTemplateFieldChange = z.strictObject({
 /** An optional, default-off starting-field difference. */
 export type WorkTemplateFieldChange = z.infer<typeof WorkTemplateFieldChange>;
 
+/** Opaque display-choice identity; never a concrete work ID or a client write payload. */
+export const WorkTemplateChildChangeId = z.string().regex(/^bp_[a-f0-9]{16}$/);
+/** Opaque reviewed child-change identity. */
+export type WorkTemplateChildChangeId = z.infer<typeof WorkTemplateChildChangeId>;
+const childPath = z.array(StepKey).max(499);
+const childChange = { changeId: WorkTemplateChildChangeId, selectedByDefault: z.boolean() };
+/** Bounded independently selectable child differences, omitting private bodies and insert values. */
+export const WorkTemplateChildChange = z.discriminatedUnion('kind', [
+  z.strictObject({
+    ...childChange,
+    kind: z.literal('add_child'),
+    path: childPath,
+    count: z.number().int().positive().max(499),
+    children: z.array(BlueprintPreviewSummary).min(1).max(499),
+  }),
+  z.strictObject({
+    ...childChange,
+    kind: z.literal('set_derived_date'),
+    path: childPath,
+    title: z.string().max(256),
+    field: z.enum(['startDate', 'dueDate', 'targetDate']),
+    previous: BlueprintCivilDate.nullable(),
+    value: BlueprintCivilDate.nullable(),
+    rule: BlueprintDateRule,
+    selectedByDefault: z.literal(false),
+  }),
+  z.strictObject({
+    ...childChange,
+    kind: z.enum(['add_dependency', 'remove_dependency']),
+    blockerPath: childPath,
+    blockedPath: childPath,
+    blockerTitle: z.string().max(256),
+    blockedTitle: z.string().max(256),
+    selectedByDefault: z.literal(false),
+  }),
+  z.strictObject({
+    ...childChange,
+    kind: z.literal('cancel_removed_child'),
+    path: childPath,
+    title: z.string().max(256),
+    selectedByDefault: z.literal(false),
+  }),
+]);
+/** Authorized child difference display value. */
+export type WorkTemplateChildChange = z.infer<typeof WorkTemplateChildChange>;
+
 /** Bounded publication-specific differences, with a token that refuses a changed work snapshot. */
 export const WorkTemplateChangePreview = z.strictObject({
+  warnings: z.array(BlueprintPreviewWarning).max(100).default([]),
+  versionNumber: z.number().int().positive().optional(),
   workTypeId: WorkTypeId,
   workTypeVersionId: WorkTypeVersionId,
   previewToken,
   changes: z.array(WorkTemplateFieldChange).max(10),
+  mode: z.enum(['change', 'update']).default('change'),
+  childChanges: z.array(WorkTemplateChildChange).max(4000).default([]),
 });
 /** Authorized differences for exactly one item and selected publication. */
 export type WorkTemplateChangePreview = z.infer<typeof WorkTemplateChangePreview>;
@@ -124,6 +186,7 @@ export type WorkTemplateChangePreview = z.infer<typeof WorkTemplateChangePreview
 export const WorkTemplateAssignment = WorkTemplateChangeRequest.extend({
   previewToken: previewToken.optional(),
   applyFields: z.array(WorkTemplateChangeField).max(10).default([]),
+  acceptChildChanges: z.array(WorkTemplateChildChangeId).max(4000).default([]),
 }).superRefine((selection, context) => {
   if (new Set(selection.applyFields).size !== selection.applyFields.length) {
     context.addIssue({
@@ -132,7 +195,16 @@ export const WorkTemplateAssignment = WorkTemplateChangeRequest.extend({
       message: 'Choose each change once.',
     });
   }
-  if (selection.applyFields.length > 0 && selection.previewToken === undefined) {
+  if (new Set(selection.acceptChildChanges).size !== selection.acceptChildChanges.length)
+    context.addIssue({
+      code: 'custom',
+      path: ['acceptChildChanges'],
+      message: 'Choose each change once.',
+    });
+  if (
+    (selection.applyFields.length > 0 || selection.acceptChildChanges.length > 0) &&
+    selection.previewToken === undefined
+  ) {
     context.addIssue({
       code: 'custom',
       path: ['previewToken'],
@@ -141,6 +213,11 @@ export const WorkTemplateAssignment = WorkTemplateChangeRequest.extend({
   }
 });
 /** Reviewed reassignment input; omitted choices retain the existing identity-only behavior. */
-export type WorkTemplateAssignment = Omit<z.infer<typeof WorkTemplateAssignment>, 'applyFields'> & {
+export type WorkTemplateAssignment = Omit<
+  z.infer<typeof WorkTemplateAssignment>,
+  'applyFields' | 'acceptChildChanges' | 'mode'
+> & {
+  readonly mode?: 'change' | 'update';
+  readonly acceptChildChanges?: WorkTemplateChildChangeId[] | undefined;
   readonly applyFields?: WorkTemplateChangeField[] | undefined;
 };

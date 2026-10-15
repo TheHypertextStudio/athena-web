@@ -7,6 +7,7 @@
  */
 import type { StandardSchemaV1 } from '@standard-schema/spec';
 import { LatticeUnavailableError } from '@docket/integrations';
+import { BlueprintError } from '@docket/work/blueprints';
 import {
   publicProblemTitle,
   type FieldIssue,
@@ -463,8 +464,10 @@ function authenticationChallenge(error: ApiError, context: Context<AppEnv>): str
 }
 
 /** Map expected provider and schema failures before the public problem renderer. */
-function toApiError(err: Error): ApiError {
+export function toApiError(err: Error): ApiError {
   if (err instanceof ApiError) return err;
+  if (err instanceof BlueprintError)
+    return new ApiError(422, err.code, 'Template blueprint could not be accepted');
   if (err instanceof LatticeUnavailableError) {
     return new ApiError(503, 'lattice_unavailable', 'Selected Lattice runtime unavailable');
   }
@@ -502,7 +505,11 @@ export function onError<E extends Env>(err: Error, c: Context<E>): Response {
   const appContext = c as unknown as Context<AppEnv>;
   const apiErr = toApiError(err);
 
-  if (!(err instanceof ApiError) && !(err instanceof LatticeUnavailableError)) {
+  if (
+    !(err instanceof ApiError) &&
+    !(err instanceof LatticeUnavailableError) &&
+    !(err instanceof BlueprintError)
+  ) {
     console.error(
       JSON.stringify({
         level: 'error',

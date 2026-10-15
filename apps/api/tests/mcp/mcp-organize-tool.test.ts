@@ -34,7 +34,7 @@ interface Seed {
 }
 
 /** Seed an org whose caller can contribute org-wide, with one team to land in. */
-async function seedOrg(): Promise<Seed> {
+async function seedOrg(capability: 'contribute' | 'manage' = 'contribute'): Promise<Seed> {
   const slug = `og-${Math.random().toString(36).slice(2, 10)}`;
   const [org] = await db
     .insert(schema.organization)
@@ -50,7 +50,7 @@ async function seedOrg(): Promise<Seed> {
       organizationId: orgId,
       key: 'seeded',
       name: 'Seeded',
-      capabilities: ['contribute'],
+      capabilities: [capability],
     })
     .returning({ id: schema.role.id });
 
@@ -77,7 +77,7 @@ async function seedOrg(): Promise<Seed> {
     subjectId: assertDefined(role).id,
     resourceKind: 'organization',
     resourceId: orgId,
-    capabilities: ['contribute'],
+    capabilities: [capability],
     effect: 'allow',
   });
 
@@ -291,7 +291,7 @@ describe('organize', () => {
   });
 
   it('treats two projects of the same name under different programs as two projects', async () => {
-    const s = await seedOrg();
+    const s = await seedOrg('manage');
     const client = await connect(s.ctx);
     const res = (await client.callTool({
       name: 'organize',

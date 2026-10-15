@@ -9,20 +9,29 @@
  * are injected. An action with no registered handler is a logged no-op, never a throw. See
  * `docs/engineering/specs/automations.md`.
  */
-import type { AutomationRule } from '@docket/automation/contracts';
+import type { AutomationRule, ActionSpec } from '@docket/automation/contracts';
 import { evaluatePredicate, matchesAutomationEvent } from '@docket/automation/evaluation';
 
 import { type ProvenanceBase, ruleProvenance, runWithProvenance } from '../provenance/context';
 import type { Registry } from './registry';
+import {
+  bindAutomationActionExecution,
+  type AutomationRuleExecution,
+  type AutomationActionExecution,
+} from './execution-proof';
 
 /** Context handed to every action handler (handlers close over their own services). */
 export interface ActionContext {
   readonly event: unknown;
+  /** Checked exact persisted action; absent for pure recording registries. */
+  readonly execution?: AutomationActionExecution;
 }
 
 /** A rule as held by the engine: a stored rule plus its enabled flag. */
 export interface EngineRule extends AutomationRule {
   readonly enabled: boolean;
+  /** Persisted source snapshot, supplied only by the runtime rule store. */
+  readonly execution?: AutomationRuleExecution;
   /** The stored rule's id, recorded as the cause of every change its actions make. */
   readonly id?: string;
 }
@@ -56,6 +65,20 @@ export interface DispatchedAction {
  */
 export { matchesAutomationEvent as matches } from '@docket/automation/evaluation';
 
+function actionContext(
+  rule: EngineRule,
+  event: unknown,
+  index: number,
+  action: ActionSpec,
+): ActionContext {
+  return {
+    event,
+    ...(rule.execution
+      ? { execution: bindAutomationActionExecution(rule.execution, event, index, action) }
+      : {}),
+  };
+}
+
 /**
  * Run all matching, enabled, satisfied rules against one event.
  *
@@ -70,18 +93,18 @@ export async function runAutomations(
   registry: Registry,
 ): Promise<DispatchedAction[]> {
   const dispatched: DispatchedAction[] = [];
-  const context: ActionContext = { event };
   for (const rule of rules) {
     if (!rule.enabled) continue;
     if (!matchesAutomationEvent(rule.on, event)) continue;
     if (!evaluatePredicate(rule.when, event)) continue;
-    for (const action of rule.then) {
+    for (const [index, action] of rule.then.entries()) {
       const handler = registry.get(action.type);
       if (!handler) {
         dispatched.push({ type: action.type, ran: false });
         continue;
       }
       try {
+        const context = actionContext(rule, event, index, action);
         await runWithProvenance(ruleScope(rule), () => handler.run(context, action.params));
         dispatched.push({ type: action.type, ran: true });
       } catch (error) {

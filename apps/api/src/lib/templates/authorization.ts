@@ -1,5 +1,5 @@
 import { canActor, satisfies, type Capability } from '@docket/authz';
-import { db, organization, teamMember } from '@docket/db';
+import { db, organization, teamMember, type Database } from '@docket/db';
 import { and, eq } from 'drizzle-orm';
 import { CapabilityError, NotFoundError, ValidationError } from '../../error';
 import type { TemplateRow } from './model';
@@ -12,40 +12,52 @@ export interface TemplateActor {
 }
 
 /** Check authoring rights against the live workspace policy, including MCP callers. */
-export async function mayAuthorTemplates(actor: TemplateActor): Promise<boolean> {
-  const [org] = await db
+export async function mayAuthorTemplates(
+  actor: TemplateActor,
+  client: Database = db,
+): Promise<boolean> {
+  const [org] = await client
     .select({ policy: organization.workTemplateAuthoring })
     .from(organization)
     .where(eq(organization.id, actor.orgId))
     .limit(1);
   if (!org) return false;
   const required = org.policy === 'admins' ? 'manage' : 'contribute';
-  return hasTemplateCapability(actor, required);
+  return hasTemplateCapability(actor, required, client);
 }
 
 /** Determine current workspace authority without trusting an actor-supplied role label. */
-async function hasTemplateCapability(actor: TemplateActor, required: Capability): Promise<boolean> {
-  if (actor.capabilities !== undefined) {
-    return actor.capabilities.some((capability) => satisfies(capability as Capability, required));
-  }
+async function hasTemplateCapability(
+  actor: TemplateActor,
+  required: Capability,
+  client: Database,
+): Promise<boolean> {
+  if (actor.capabilities?.some((capability) => satisfies(capability as Capability, required)))
+    return true;
   return (
     await canActor(
       actor.actorId,
       required,
       { kind: 'organization', id: actor.orgId, orgId: actor.orgId },
-      db,
+      client,
     )
   ).allow;
 }
 
 /** Team offering changes are reserved for workspace administrators. */
-export function mayManageTemplateOfferings(actor: TemplateActor): Promise<boolean> {
-  return hasTemplateCapability(actor, 'manage');
+export function mayManageTemplateOfferings(
+  actor: TemplateActor,
+  client: Database = db,
+): Promise<boolean> {
+  return hasTemplateCapability(actor, 'manage', client);
 }
 
 /** Require current contribution rights and the configured workspace authoring policy. */
-export async function requireTemplateAuthor(actor: TemplateActor): Promise<void> {
-  if (!(await mayAuthorTemplates(actor))) throw new CapabilityError();
+export async function requireTemplateAuthor(
+  actor: TemplateActor,
+  client: Database = db,
+): Promise<void> {
+  if (!(await mayAuthorTemplates(actor, client))) throw new CapabilityError();
 }
 
 /** Require membership in a tenant-consistent team without exposing other teams. */

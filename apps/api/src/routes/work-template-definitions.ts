@@ -1,4 +1,7 @@
+import { previewWorkTemplateArchive } from '../lib/templates/archive-impact';
 import {
+  WorkTemplateArchiveImpact,
+  WorkTemplateArchiveImpactQuery,
   WorkTemplateCreate,
   WorkTemplateDraftUpdate,
   WorkTemplateListQuery,
@@ -25,6 +28,7 @@ import {
 import { zJson, zParam, zQuery } from '../lib/validate';
 import { capabilityGuard } from '../permissions/capability-guard';
 import identities from './work-template-identities';
+import blueprints from './work-template-blueprints';
 
 const idParam = z.object({ id: z.string() });
 const doc = (summary: string, response: z.ZodType, status: 200 | 201 = 200) =>
@@ -38,6 +42,7 @@ const doc = (summary: string, response: z.ZodType, status: 200 | 201 = 200) =>
 /** Revision-aware work-template definition and immutable publication routes. */
 const definitions = new Hono<AppEnv>()
   .route('/', identities)
+  .route('/', blueprints)
   .get(
     '/',
     doc('List work-template definitions', pageOf(WorkTemplateOut)),
@@ -124,6 +129,23 @@ const definitions = new Hono<AppEnv>()
       const rows = await listWorkTemplateVersions(c.get('actorCtx'), c.req.valid('param').id);
       return ok(c, pageOf(WorkTemplateVersionOut), { items: rows.map(toWorkTemplateVersion) });
     },
+  )
+  .get(
+    '/:id/archive-impact',
+    capabilityGuard('contribute'),
+    doc('Preview authorized template archive impact', WorkTemplateArchiveImpact),
+    zParam(idParam),
+    zQuery(WorkTemplateArchiveImpactQuery),
+    async (c) =>
+      ok(
+        c,
+        WorkTemplateArchiveImpact,
+        await previewWorkTemplateArchive(
+          c.get('actorCtx'),
+          c.req.valid('param').id,
+          c.req.valid('query'),
+        ),
+      ),
   )
   .post(
     '/:id/archive',

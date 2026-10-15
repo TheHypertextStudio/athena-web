@@ -35,25 +35,29 @@ export type SetActiveDraftId = (draftId: string | null) => void;
  *
  * @param request - The open create request, or null when none is open.
  * @param closeCreate - The provider's close.
+ * @param openingPathname - The browser destination where this request was opened.
  * @returns the setter the open composer reports its draft id through.
  */
 export function useComposerInterruption(
   request: InterruptibleRequest | null,
   closeCreate: () => void,
+  openingPathname: string | null,
 ): SetActiveDraftId {
   const pathname = useAppPathname();
   const draftIdRef = useRef<string | null>(null);
   const seenPathnameRef = useRef(pathname);
   // Read at navigation time rather than listed as dependencies: the effect must fire on the
   // pathname alone, never because a request opened or the close callback was rebuilt.
-  const latestRef = useRef({ request, closeCreate });
-  latestRef.current = { request, closeCreate };
+  const latestRef = useRef({ request, closeCreate, openingPathname });
+  latestRef.current = { request, closeCreate, openingPathname };
 
   useEffect(() => {
     if (seenPathnameRef.current === pathname) return;
     seenPathnameRef.current = pathname;
-    const { request: open, closeCreate: close } = latestRef.current;
-    if (open === null) return;
+    const { request: open, closeCreate: close, openingPathname: origin } = latestRef.current;
+    // Hydration can reconcile a stale shell snapshot after a destination's create button works.
+    // That is the request's own page catching up, not navigation away from its draft.
+    if (open === null || origin === pathname) return;
     writeInterruptedDraft(open.kind, draftIdRef.current);
     close();
   }, [pathname]);

@@ -12,6 +12,27 @@ import type {
   DocumentImageSubjectType,
 } from './document-image-references';
 import { DOCUMENT_IMAGE_FIELDS } from './document-image-references';
+import type { Database } from '@docket/db';
+
+/** Reuse the same tenant-owned image filter for derived references and transactional capture. */
+export async function ownedDocumentImageIds(
+  client: Pick<Database, 'select'>,
+  organizationId: string,
+  imageIds: readonly string[],
+): Promise<ReadonlySet<string>> {
+  if (imageIds.length === 0) return new Set();
+  const schema = await import('@docket/db');
+  const rows = await client
+    .select({ id: schema.documentImage.id })
+    .from(schema.documentImage)
+    .where(
+      and(
+        eq(schema.documentImage.organizationId, organizationId),
+        inArray(schema.documentImage.id, [...new Set(imageIds)]),
+      ),
+    );
+  return new Set(rows.map((row) => row.id));
+}
 
 /** Read a string property from an unknown row without accepting coerced values. */
 function stringProperty(row: Readonly<Record<string, unknown>>, field: string): string | undefined {
@@ -19,12 +40,32 @@ function stringProperty(row: Readonly<Record<string, unknown>>, field: string): 
   return typeof value === 'string' ? value : undefined;
 }
 
-/** Read a published or editable definition's starting-draft Markdown. */
-function definitionDescription(definition: unknown): string | undefined {
-  if (typeof definition !== 'object' || definition === null) return undefined;
+function description(value: unknown): string | undefined {
+  if (typeof value !== 'object' || value === null) return undefined;
+  return stringProperty(value as Readonly<Record<string, unknown>>, 'description');
+}
+
+/** Read every authored inline body's Markdown without resolving or exposing nested templates. */
+function inlineDescriptions(blueprint: unknown): string[] {
+  if (typeof blueprint !== 'object' || blueprint === null) return [];
+  const steps: unknown = Reflect.get(blueprint, 'steps');
+  if (!Array.isArray(steps)) return [];
+  return (steps as readonly unknown[]).flatMap((step) => {
+    if (typeof step !== 'object' || step === null) return [];
+    const body = description(Reflect.get(step, 'fields'));
+    return body === undefined ? [] : [body];
+  });
+}
+
+/** Read a published or editable definition's starting and inline child Markdown. */
+function definitionDescriptions(definition: unknown): string[] {
+  if (typeof definition !== 'object' || definition === null) return [];
   const payload: unknown = Reflect.get(definition, 'payload');
-  if (typeof payload !== 'object' || payload === null) return undefined;
-  return stringProperty(payload as Readonly<Record<string, unknown>>, 'description');
+  const root = description(payload);
+  return [
+    ...(root === undefined ? [] : [root]),
+    ...inlineDescriptions(Reflect.get(definition, 'blueprint')),
+  ];
 }
 
 /** Retain image references across the editable draft and every immutable publication. */
@@ -33,10 +74,10 @@ function templateDescription(
   publications: readonly unknown[],
 ): string | undefined {
   const bodies = [
-    definitionDescription(row),
-    definitionDescription(row['draftDefinition']),
-    ...publications.map(definitionDescription),
-  ].filter((body): body is string => body !== undefined);
+    ...definitionDescriptions(row),
+    ...definitionDescriptions(row['draftDefinition']),
+    ...publications.flatMap(definitionDescriptions),
+  ];
   return bodies.length === 0 ? undefined : [...new Set(bodies)].join('\n\n');
 }
 
@@ -208,18 +249,8 @@ export function createDrizzleDocumentImageReferenceStorage(): DocumentImageRefer
 
   const images: DocumentImageRepository = {
     async filterOwnedImageIds(organizationId, imageIds): Promise<ReadonlySet<string>> {
-      if (imageIds.length === 0) return new Set();
       const schema = await import('@docket/db');
-      const rows = await schema.db
-        .select({ id: schema.documentImage.id })
-        .from(schema.documentImage)
-        .where(
-          and(
-            eq(schema.documentImage.organizationId, organizationId),
-            inArray(schema.documentImage.id, [...new Set(imageIds)]),
-          ),
-        );
-      return new Set(rows.map((row) => row.id));
+      return ownedDocumentImageIds(schema.db, organizationId, imageIds);
     },
   };
 

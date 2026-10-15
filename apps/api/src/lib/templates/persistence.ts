@@ -1,12 +1,25 @@
 import { isDeepStrictEqual } from 'node:util';
-import { db, task, team, template, workTypeTeam, workTypeVersion } from '@docket/db';
+import {
+  db,
+  task,
+  team,
+  template,
+  workTypeTeam,
+  workTypeVersion,
+  persistBlueprintProjection,
+} from '@docket/db';
 import { WorkTemplateDefinition } from '@docket/work/work-template-contract';
-import { TemplateOut } from '@docket/work/template-contract';
 import { and, asc, desc, eq, inArray } from 'drizzle-orm';
 import { CapabilityError, ConflictError, NotFoundError, ValidationError } from '../../error';
 import { type TemplateActor } from './authorization';
 import type { TemplateRow, TemplateVersionRow } from './model';
 import { visibleTemplateWhere } from './visibility';
+import { resolveBlueprintClosure } from '../work-template-blueprints/resolve';
+import {
+  lockPublicationClosure,
+  publicationDefinitionIds,
+} from '../work-template-blueprints/publication';
+import { loadTemplateRestoration } from './restoration';
 
 /** The existing database transaction type; definitions have no parallel data-access layer. */
 export type TemplateTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
@@ -97,12 +110,14 @@ export async function legacyTemplateDefinition(
     )
     .limit(1);
   if (!version) throw new NotFoundError('Template version not found');
-  if (!isDeepStrictEqual(row.draftDefinition, version.definition)) {
+  // New read-time defaults must not turn an unchanged historical snapshot into a pending draft.
+  const published = WorkTemplateDefinition.parse(version.definition);
+  if (!isDeepStrictEqual(WorkTemplateDefinition.parse(row.draftDefinition), published)) {
     throw new ConflictError(
       'Publish or resolve the pending template draft before editing this starting point',
     );
   }
-  return version.definition;
+  return published;
 }
 
 /** Append a publication while the caller holds the definition row lock. */
@@ -110,7 +125,9 @@ export async function appendPublication(
   tx: TemplateTransaction,
   row: TemplateRow,
   actorId: string | null,
+  retainedVersionId: string | null = row.latestPublishedVersionId,
 ): Promise<TemplateRow> {
+  await lockPublicationClosure(tx, row, row.draftDefinition, retainedVersionId);
   if (row.scope !== 'organization') {
     await tx
       .update(template)
@@ -134,11 +151,27 @@ export async function appendPublication(
       organizationId: row.organizationId,
       workTypeId: row.id,
       number: (latest?.number ?? 0) + 1,
-      definition: row.draftDefinition,
+      definition: WorkTemplateDefinition.parse(row.draftDefinition),
       publishedByActorId: actorId,
     })
     .returning();
   if (!version) throw new Error('Template publication returned no row');
+  await persistBlueprintProjection(tx, {
+    organizationId: row.organizationId,
+    versionId: version.id,
+    blueprint: version.definition.blueprint,
+  });
+  await resolveBlueprintClosure(
+    tx,
+    {
+      organizationId: row.organizationId,
+      kind: row.targetType,
+      workTypeId: row.id,
+      workTypeVersionId: version.id,
+    },
+    'publish',
+    retainedVersionId,
+  );
   const [published] = await tx
     .update(template)
     .set({
@@ -217,6 +250,52 @@ async function removeTemplateCreation(
   return 'restored';
 }
 
+/** Lock the complete union of trusted undo publication closures before any catalog root is locked. */
+export async function lockTemplateRestorations(
+  tx: TemplateTransaction,
+  orgId: string,
+  entries: readonly {
+    readonly id: string;
+    readonly operation: string;
+    readonly before: Record<string, unknown> | null;
+  }[],
+): Promise<void> {
+  if (entries.length === 0) return;
+  const roots = await tx
+    .select()
+    .from(template)
+    .where(
+      and(
+        eq(template.organizationId, orgId),
+        inArray(
+          template.id,
+          entries.map((entry) => entry.id),
+        ),
+      ),
+    );
+  const byId = new Map(roots.map((row) => [row.id, row]));
+  const ids = new Set(roots.map((row) => row.id));
+  for (const entry of entries) {
+    const current = byId.get(entry.id);
+    if (!current || current.isBase || entry.operation !== 'update' || !entry.before) continue;
+    const prepared = await loadTemplateRestoration(tx, current, entry.before);
+    if (!prepared?.changedPublication) continue;
+    for (const id of await publicationDefinitionIds(
+      tx,
+      current,
+      prepared.definition,
+      prepared.retainedVersionId,
+    ))
+      ids.add(id);
+  }
+  await tx
+    .select({ id: template.id })
+    .from(template)
+    .where(and(eq(template.organizationId, orgId), inArray(template.id, [...ids].sort())))
+    .orderBy(asc(template.id))
+    .for('update');
+}
+
 /** Restore a compatible undo snapshot without rewriting or removing published history. */
 export async function restoreTemplateSnapshot(
   tx: TemplateTransaction,
@@ -225,6 +304,7 @@ export async function restoreTemplateSnapshot(
   operation: string,
   before: Record<string, unknown> | null,
 ): Promise<'restored' | 'in_use' | 'no_prior_state'> {
+  await lockTemplateRestorations(tx, orgId, [{ id, operation, before }]);
   const [current] = await tx
     .select()
     .from(template)
@@ -254,35 +334,9 @@ async function restoreTemplateEdit(
   current: TemplateRow,
   before: Record<string, unknown>,
 ): Promise<'restored' | 'in_use'> {
-  const prior = TemplateOut.pick({
-    name: true,
-    description: true,
-    scope: true,
-    ownerActorId: true,
-    teamId: true,
-    payload: true,
-  }).parse(before);
-  if (current.latestPublishedVersionId && prior.scope !== 'organization') return 'in_use';
-  const priorDraft = WorkTemplateDefinition.parse(
-    before['draftDefinition'] ?? {
-      ...current.draftDefinition,
-      name: prior.name,
-      description: prior.description,
-      payload: prior.payload,
-    },
-  );
-  const changedPublication =
-    current.latestPublishedVersionId !== null &&
-    before['latestPublishedVersionId'] !== current.latestPublishedVersionId;
-  const definition = changedPublication
-    ? WorkTemplateDefinition.parse({
-        ...priorDraft,
-        name: prior.name,
-        description: prior.description,
-        icon: before['icon'] ?? null,
-        payload: prior.payload,
-      })
-    : priorDraft;
+  const prepared = await loadTemplateRestoration(tx, current, before);
+  if (!prepared) return 'in_use';
+  const { prior, priorDraft, definition, changedPublication, retainedVersionId } = prepared;
   const [draft] = await tx
     .update(template)
     .set({
@@ -303,7 +357,7 @@ async function restoreTemplateEdit(
     .returning();
   if (!draft) throw new NotFoundError('Template not found');
   if (changedPublication) {
-    await appendPublication(tx, draft, null);
+    await appendPublication(tx, draft, null, retainedVersionId);
     await tx
       .update(template)
       .set({ draftDefinition: priorDraft })

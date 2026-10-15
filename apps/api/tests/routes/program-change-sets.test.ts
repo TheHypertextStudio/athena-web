@@ -11,7 +11,13 @@ import type * as DbModule from '@docket/db';
 
 import type programsRouter from '../../src/routes/programs';
 import { entriesFor, recordedEntries } from '../support/change-set-reads';
-import { appWithActor, getDb, one, seedBaseOrg, seedProgram } from '../support/routes-harness';
+import {
+  appWithActor,
+  getDb,
+  one,
+  seedTaskAccessOrg as seedBaseOrg,
+  seedProgram,
+} from '../support/routes-harness';
 
 let schema!: typeof DbModule;
 let programs!: typeof programsRouter;
@@ -23,7 +29,7 @@ beforeAll(async () => {
 
 /** Seed an org, one program, and a writer app bound to the org's human actor. */
 async function setup() {
-  const base = await seedBaseOrg(schema.db, schema);
+  const base = await seedBaseOrg(schema.db, schema, 'manage');
   const app = appWithActor(programs, base.orgId, ['contribute', 'manage'], base.humanActorId);
   const row = await seedProgram(schema.db, schema, base.statusId, {
     organizationId: base.orgId,

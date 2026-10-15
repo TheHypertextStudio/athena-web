@@ -44,3 +44,22 @@ export {
 /** Canonical engineering alias for the existing template definition table. */
 export { template as workType } from './schema/work-template';
 export { seedBaseWorkTemplates, type SeededWorkTemplates } from './seed-work-templates';
+
+export * from './blueprint-invocation';
+export {
+  persistBlueprintProjection,
+  type BlueprintProjectionInput,
+  type BlueprintProjectionTransaction,
+} from './work-template-blueprint-projection';
+
+export {
+  registerRetainedDateOwnership,
+  markRetainedDatesManual,
+  type RetainedDateSourceScope,
+  type RetainedDateRegistration,
+  type RetainedDateOwnershipMutation,
+} from './retained-date-ownership';
+export {
+  recoverRetainedRootResolution,
+  type RetainedRootResolutionScope,
+} from './retained-root-resolution';

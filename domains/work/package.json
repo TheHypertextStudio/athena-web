@@ -43,7 +43,12 @@
     "./provenance-contract": "./src/contracts/provenance.ts",
     "./workflow": "./src/workflow.ts",
     "./work-template-contract": "./src/contracts/work-template.ts",
-    "./work-template-reference": "./src/contracts/work-template-reference.ts"
+    "./work-template-reference": "./src/contracts/work-template-reference.ts",
+    "./work-template-blueprint": "./src/contracts/work-template-blueprint.ts",
+    "./work-template-blueprint-contract": "./src/contracts/work-template-blueprint.ts",
+    "./blueprints": "./src/blueprints/index.ts",
+    "./calendar-date": "./src/calendar-date.ts",
+    "./template-merge": "./src/template-merge.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

@@ -451,7 +451,9 @@ export function FreeformTextEditor({
 
   useEffect(() => {
     if (!editor) return;
-    editor.setEditable(isEditingEnabled);
+    // Editability changes are not authored transactions; emitting here rewrites untouched
+    // Markdown and marks reopened drafts dirty before the person has changed anything.
+    editor.setEditable(isEditingEnabled, false);
     if (isEditingEnabled) editor.view.dom.setAttribute('aria-keyshortcuts', 'Alt+F10');
     else editor.view.dom.removeAttribute('aria-keyshortcuts');
   }, [editor, isEditingEnabled]);

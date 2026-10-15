@@ -193,7 +193,7 @@ export async function renderedContrastRatio(locator: Locator): Promise<number> {
       node = node.parentElement;
     }
     const resolvedBackground = background ?? ([255, 255, 255, 1] as const);
-    const luminance = ([red, green, blue]: readonly number[]): number => {
+    const luminance = ([red, green, blue]: readonly [number, number, number, number]): number => {
       const linear = [red, green, blue].map((channel) => {
         const normalized = channel / 255;
         return normalized <= 0.04045 ? normalized / 12.92 : ((normalized + 0.055) / 1.055) ** 2.4;

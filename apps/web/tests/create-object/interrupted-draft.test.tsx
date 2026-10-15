@@ -73,6 +73,7 @@ function storedPointer(): unknown {
 beforeEach(() => {
   window.sessionStorage.clear();
   location.pathname = '/orgs/alpha/tasks';
+  window.history.replaceState(null, '', location.pathname);
 });
 
 afterEach(() => {
@@ -80,6 +81,27 @@ afterEach(() => {
 });
 
 describe('CreateObjectProvider — navigation closes the composer', () => {
+  it('keeps a composer opened on the browser destination while the route snapshot catches up', () => {
+    const { rerender } = render(<Tree />);
+    // The destination has painted before the shell location subscription reconciles.
+    window.history.replaceState(null, '', '/orgs/alpha/my-work');
+    fireEvent.click(screen.getByRole('button', { name: 'Open task' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Report draft' }));
+
+    location.pathname = '/orgs/alpha/my-work';
+    rerender(<Tree />);
+
+    expect(screen.getByTestId('request-kind')).toHaveTextContent('task');
+    expect(storedPointer()).toBeNull();
+
+    // Actual later navigation still interrupts and retains the same draft pointer.
+    window.history.replaceState(null, '', '/orgs/alpha/projects');
+    location.pathname = '/orgs/alpha/projects';
+    rerender(<Tree />);
+    expect(screen.getByTestId('request-kind')).toHaveTextContent('closed');
+    expect(storedPointer()).toEqual({ kind: 'task', draftId: 'draft_9' });
+  });
+
   it('writes the interrupted pointer and closes when the pathname changes', () => {
     const { rerender } = render(<Tree />);
     fireEvent.click(screen.getByRole('button', { name: 'Open task' }));

@@ -1,3 +1,5 @@
+import { authorizeRecordedIdentities } from './change-set-identity';
+import { restoreRecordedContainer } from './change-set-work-restore';
 /**
  * `@docket/api` — recording and reversing MCP change sets.
  *
@@ -38,9 +40,10 @@ import type { RecordedOrigin } from '@docket/work/provenance-contract';
 
 import { ConflictError, NotFoundError } from '../error';
 import { isCompanionKind, revertCompanion, revertCompanionIn } from './change-set-companions';
+import { prelockCatalogTemplates } from './change-set-catalog';
 import { TRACKED } from './change-set-fields';
 export { trackedFields } from './change-set-fields';
-import { restoredDate, unchangedSince } from './change-set-values';
+import { restoredDate, unchangedSince, restoredWorkSnapshot } from './change-set-values';
 import { revertMilestone } from './milestone-undo';
 import { serializableTx } from '../lib/serializable-tx';
 import {
@@ -383,7 +386,11 @@ function endpointValues(kind: RelationKind, from: string, to: string): Record<st
 }
 
 /** Turn a tracked task snapshot back into a Drizzle task patch. */
-function taskPatchFromSnapshot(snapshot: Record<string, unknown>): Record<string, unknown> {
+function taskPatchFromSnapshot(
+  snapshot: Record<string, unknown>,
+  current: Record<string, unknown>,
+): Record<string, unknown> {
+  snapshot = restoredWorkSnapshot(snapshot, current);
   return {
     title: snapshot['title'],
     description: snapshot['description'],
@@ -408,6 +415,17 @@ function taskPatchFromSnapshot(snapshot: Record<string, unknown>): Record<string
     canceledAt: restoredDate(snapshot['canceledAt']),
     autoCompletedBySubtasks: snapshot['autoCompletedBySubtasks'] === true,
     archivedAt: restoredDate(snapshot['archivedAt']),
+    ...(snapshot['blueprintDateBindings'] === undefined
+      ? {}
+      : { blueprintDateBindings: snapshot['blueprintDateBindings'] }),
+    ...Object.fromEntries(
+      ['workTypeId', 'workTypeVersionId', 'workTypeAssignmentSource', 'blueprintState']
+        .filter((key) => snapshot[key] !== undefined)
+        .map((key) => [key, snapshot[key]]),
+    ),
+    ...(snapshot['workTypeAssignedAt'] === undefined
+      ? {}
+      : { workTypeAssignedAt: restoredDate(snapshot['workTypeAssignedAt']) }),
   };
 }
 
@@ -490,9 +508,10 @@ async function revertTask(
         )
         .map((key) => [key, prior[key]]),
     );
+    await authorizeRecordedIdentities(tx, orgId, [{ entityKind: 'task', before: prior }]);
     await tx
       .update(task)
-      .set({ ...metadata, archivedAt })
+      .set({ ...restoredWorkSnapshot(metadata, row), archivedAt })
       .where(and(eq(task.id, row.id), eq(task.organizationId, orgId)));
     if (archivedAt !== null) {
       return {
@@ -572,8 +591,16 @@ async function revertEntry(
       return { ...ref, reverted: true };
     case 'update':
       if (!entry.before) return { ...ref, reverted: false, reason: 'no_prior_state' };
-      await db.update(table).set(entry.before).where(where);
-      return { ...ref, reverted: true };
+      return {
+        ...ref,
+        reverted: await restoreRecordedContainer({
+          orgId,
+          kind,
+          id: entry.entityId,
+          before: entry.before,
+          after: entry.after,
+        }),
+      };
     default:
       return { ...ref, reverted: false, reason: 'unsupported_op' };
   }
@@ -651,6 +678,7 @@ export async function undoChangeSetAtomically(
       .select()
       .from(changeSetEntry)
       .where(eq(changeSetEntry.changeSetId, changeSetId));
+    await prelockCatalogTemplates(entries, orgId, tx);
     const taskEntries = entries.filter((entry) => entry.entityKind === 'task');
     const taskIds = [...new Set(taskEntries.map((entry) => entry.entityId))].sort();
     const rows =
@@ -670,6 +698,7 @@ export async function undoChangeSetAtomically(
         throw new ConflictError('Expansion can no longer be undone');
       }
     }
+    await authorizeRecordedIdentities(tx, orgId, taskEntries);
     const outcomes: UndoOutcome[] = [];
     const cascades: TaskStateMutation[] = [];
     const settles: (() => Promise<void>)[] = [];
@@ -688,7 +717,7 @@ export async function undoChangeSetAtomically(
         } else if (entry.op === 'update' && entry.before) {
           await tx
             .update(task)
-            .set(taskPatchFromSnapshot(entry.before))
+            .set(taskPatchFromSnapshot(entry.before, row))
             .where(and(eq(task.id, row.id), eq(task.organizationId, orgId)));
         } else {
           throw new ConflictError('Expansion can no longer be undone');

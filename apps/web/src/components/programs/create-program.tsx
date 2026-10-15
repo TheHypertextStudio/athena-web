@@ -1,4 +1,8 @@
 'use client';
+import { ComposerTemplateRow } from '@/components/composer/composer-template-row';
+import { useBlueprintCreationReview } from '@/components/composer/use-blueprint-creation-review';
+import { useProgramWorkspaceReset } from './use-program-workspace-reset';
+import { completeNamedWork } from '@/components/composer/complete-named-work';
 import { programCreateBody } from './program-create-body';
 import type { WorkTemplateDraftFields } from '@/components/composer/work-template-draft';
 import { usesInitialWorkspace } from '@/components/composer/uses-initial-workspace';
@@ -30,7 +34,7 @@ import { type ProgramOut, type ProgramStatus } from '@docket/work/program-contra
 import { VocabularyProvider, useVocabulary } from '@docket/ui/hooks';
 import { ChevronRight } from '@docket/ui/icons';
 import { useQueryClient } from '@tanstack/react-query';
-import { type JSX, useCallback, useEffect, useRef, useState } from 'react';
+import { type JSX, useCallback, useState } from 'react';
 
 import { useAppRouter } from '@/lib/interactions/navigation';
 import { api } from '@/lib/api';
@@ -40,10 +44,7 @@ import { useComposerDraft } from '@/components/composer/use-composer-draft';
 import { useComposerTemplateContribution } from '@/components/composer/use-template-contribution';
 import { withComposerReset } from '@/components/composer/reset-on-open';
 import { useResumeDraft } from '@/components/create-object/use-resume-draft';
-import {
-  completeCreateObject,
-  runConfirmedCreateCallback,
-} from '@/components/create-object/create-object-completion';
+import { completeCreateObject } from '@/components/create-object/create-object-completion';
 import {
   type CreateProgramRequest,
   useCreateObject,
@@ -55,7 +56,7 @@ import { useDefaultedStatus } from '@/components/entity-display/use-work-status'
 import { useComposerOptions } from '@/components/pickers/use-composer-options';
 import { templatePatch } from '@/components/templates/queries';
 import { useSession } from '@/lib/auth-client';
-import { userErrorMessage, readProblemError } from '@/lib/problem';
+import { userErrorMessage } from '@/lib/problem';
 import { seedProgramRecord } from '@/lib/entity-records';
 import { invalidateWorkTargetQueries } from '@/lib/work-target-invalidation';
 
@@ -134,7 +135,6 @@ export const CreateProgramDialog = withComposerReset(function CreateProgramCompo
   globalCreation,
 }: CreateProgramDialogProps): JSX.Element {
   const programNounLower = programNoun.toLowerCase();
-  const previousWorkspaceId = useRef(globalCreation?.targetWorkspaceId ?? null);
   const contextualRequestDefaultsApply = usesInitialWorkspace(globalCreation);
   const destinationReady = globalCreation?.ready ?? true;
 
@@ -188,18 +188,24 @@ export const CreateProgramDialog = withComposerReset(function CreateProgramCompo
   });
 
   // Keep copy and generic enum choices portable while dropping the prior workspace's person id.
-  useEffect(() => {
-    if (globalCreation === undefined) return;
-    if (previousWorkspaceId.current === globalCreation.targetWorkspaceId) return;
-    previousWorkspaceId.current = globalCreation.targetWorkspaceId;
-    setError(null);
-    updateDraft(() => ({ ownerId: null, workTypeId: null, workTypeVersionId: null }));
-  }, [globalCreation, updateDraft]);
+  useProgramWorkspaceReset(globalCreation, setError, updateDraft);
 
   const canSubmit =
     draft.name.trim().length > 0 && destinationReady && (globalCreation?.canManage ?? true);
 
   /** Create the program with all set properties, then hand it to the parent. */
+  const blueprintReview = useBlueprintCreationReview({
+    orgId,
+    disabled: creating,
+    kind: 'program',
+    request: () => ({
+      kind: 'program',
+      body: programCreateBody(draft, draft.name.trim()),
+    }),
+    selection: draft,
+    setField,
+  });
+
   const submit = useCallback(
     async (continueCreating = false): Promise<void> => {
       const trimmed = draft.name.trim();
@@ -207,35 +213,32 @@ export const CreateProgramDialog = withComposerReset(function CreateProgramCompo
       setCreating(true);
       setError(null);
       try {
+        if (!(await blueprintReview.ensureReviewed())) return;
         const res = await api.v1.orgs[':orgId'].programs.$post({
           param: { orgId },
           json: programCreateBody(draft, trimmed),
         });
         if (!res.ok) {
           setError(
-            userErrorMessage(
-              await readProblemError(res, `Could not create the ${programNounLower}.`),
-              `Could not create the ${programNounLower}.`,
-            ),
+            await blueprintReview.readFailure(res, `Could not create the ${programNounLower}.`),
           );
           return;
         }
         const created = await res.json();
         await persistence.commit();
-        if (globalCreation !== undefined) {
-          globalCreation.onCreated(created, continueCreating);
-        } else {
-          runConfirmedCreateCallback(() => {
-            onCreated(created);
-          });
-        }
-        if (continueCreating) {
-          continuation.completeContinuation(() => {
+        completeNamedWork({
+          created,
+          continueCreating,
+          hosted: globalCreation?.onCreated,
+          onCreated,
+          onClose: () => {
+            onOpenChange(false);
+          },
+          continueWith: continuation.completeContinuation,
+          reset: () => {
             updateDraft(() => ({ name: '', summary: '', description: '' }));
-          });
-          return;
-        }
-        onOpenChange(false);
+          },
+        });
       } catch (caught) {
         setError(
           userErrorMessage(caught, `Something went wrong creating the ${programNounLower}.`),
@@ -246,6 +249,7 @@ export const CreateProgramDialog = withComposerReset(function CreateProgramCompo
       }
     },
     [
+      blueprintReview,
       canSubmit,
       continuation,
       draft,
@@ -263,6 +267,12 @@ export const CreateProgramDialog = withComposerReset(function CreateProgramCompo
     <ComposerShell
       open={open}
       onOpenChange={onOpenChange}
+      leadingFields={
+        <ComposerTemplateRow
+          selection={templateContribution.selection}
+          review={blueprintReview.dialog}
+        />
+      }
       heading={`New ${programNounLower}`}
       propertyAriaLabel={`${programNoun} properties`}
       contextRow={
@@ -325,7 +335,6 @@ export const CreateProgramDialog = withComposerReset(function CreateProgramCompo
       onSubmit={() => void submit(continuation.createMore)}
       submitLabel={`Create ${programNoun}`}
     >
-      {templateContribution.selection}
       <ProgramComposerPickers
         orgId={orgId}
         actorOptions={options.actorOptions}

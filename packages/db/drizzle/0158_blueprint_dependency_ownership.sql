@@ -1,0 +1,26 @@
+-- Optional concrete accepted dependency ownership; original seven-member states remain valid.
+CREATE OR REPLACE FUNCTION docket_validate_blueprint_state(state jsonb,tenant text) RETURNS void LANGUAGE plpgsql AS $$
+DECLARE entry jsonb; weekdays integer[];
+BEGIN
+  IF state IS NULL OR state='null'::jsonb THEN RETURN; END IF;
+  IF jsonb_typeof(state)<>'object' OR EXISTS(select 1 from jsonb_object_keys(state) AS state_member(key) where state_member.key NOT IN('revision','generationKey','resolvedManifest','optionalChoices','creationTimezone','workingWeekdays','lastApplicationChangeSetId','managedDependencies')) OR NOT (state ?& ARRAY['revision','generationKey','resolvedManifest','optionalChoices','creationTimezone','workingWeekdays','lastApplicationChangeSetId']) OR coalesce(state->>'revision','') !~ '^[0-9]+$' OR jsonb_typeof(state->'generationKey')<>'string' OR jsonb_typeof(state->'creationTimezone')<>'string' OR coalesce(length(state->>'generationKey'),0)=0 OR coalesce(length(state->>'creationTimezone'),0)=0 OR jsonb_typeof(state->'resolvedManifest')<>'array' OR jsonb_typeof(state->'optionalChoices')<>'array' OR jsonb_typeof(state->'workingWeekdays')<>'array' THEN RAISE EXCEPTION 'Malformed blueprint root state' USING ERRCODE='23514',CONSTRAINT='blueprint_state'; END IF;
+  IF state ? 'managedDependencies' THEN
+    IF jsonb_typeof(state->'managedDependencies')<>'array' THEN RAISE EXCEPTION 'Invalid accepted blueprint dependency ownership' USING ERRCODE='23514',CONSTRAINT='blueprint_state'; END IF;
+    IF jsonb_array_length(state->'managedDependencies')>2000 THEN RAISE EXCEPTION 'Blueprint dependency ownership exceeds its bound' USING ERRCODE='23514',CONSTRAINT='blueprint_state'; END IF;
+    FOR entry IN SELECT dependency_item.value FROM jsonb_array_elements(state->'managedDependencies') AS dependency_item(value) LOOP
+      IF jsonb_typeof(entry)<>'object' THEN RAISE EXCEPTION 'Invalid accepted blueprint dependency ownership' USING ERRCODE='23514',CONSTRAINT='blueprint_state'; END IF;
+      IF (select count(*) from jsonb_object_keys(entry))<>2 OR NOT (entry ?& ARRAY['blockerId','blockedId']) OR jsonb_typeof(entry->'blockerId')<>'string' OR jsonb_typeof(entry->'blockedId')<>'string' OR length(entry->>'blockerId')=0 OR length(entry->>'blockedId')=0 THEN RAISE EXCEPTION 'Invalid accepted blueprint dependency ownership' USING ERRCODE='23514',CONSTRAINT='blueprint_state'; END IF;
+    END LOOP;
+  END IF;
+  IF jsonb_array_length(state->'resolvedManifest')>500 OR jsonb_array_length(state->'optionalChoices')>499 OR EXISTS(select 1 from jsonb_array_elements(state->'workingWeekdays') AS weekday(value) where weekday.value::text !~ '^[1-7]$') THEN RAISE EXCEPTION 'Blueprint state exceeds its bounds' USING ERRCODE='23514',CONSTRAINT='blueprint_state'; END IF;
+  SELECT array_agg(weekday.value::integer ORDER BY weekday.ord) INTO weekdays FROM jsonb_array_elements_text(state->'workingWeekdays') WITH ORDINALITY AS weekday(value,ord);
+  IF cardinality(weekdays) NOT BETWEEN 1 AND 7 OR weekdays IS DISTINCT FROM docket_sorted_weekdays(weekdays) THEN RAISE EXCEPTION 'Invalid blueprint weekday snapshot' USING ERRCODE='23514',CONSTRAINT='blueprint_state'; END IF;
+  FOR entry IN SELECT json_item.value FROM jsonb_array_elements(state->'resolvedManifest') AS json_item(value) LOOP
+    IF NOT (entry ?& ARRAY['path','workTypeId','versionId']) OR jsonb_typeof(entry->'path')<>'array' OR jsonb_array_length(entry->'path')>499 OR (select count(*) from jsonb_object_keys(entry))<>3 OR NOT EXISTS(select 1 from work_type_version v where v.id=entry->>'versionId' and v.work_type_id=entry->>'workTypeId' and v.organization_id=tenant) THEN RAISE EXCEPTION 'Blueprint resolved version is invalid' USING ERRCODE='23514',CONSTRAINT='blueprint_state'; END IF;
+  END LOOP;
+  IF (select count(distinct resolved_member.value->'path') from jsonb_array_elements(state->'resolvedManifest') AS resolved_member(value))<>jsonb_array_length(state->'resolvedManifest') OR (select count(distinct optional_member.value->'path') from jsonb_array_elements(state->'optionalChoices') AS optional_member(value))<>jsonb_array_length(state->'optionalChoices') THEN RAISE EXCEPTION 'Blueprint state paths must be unique' USING ERRCODE='23514',CONSTRAINT='blueprint_state'; END IF;
+  FOR entry IN SELECT json_item.value FROM jsonb_array_elements(state->'optionalChoices') AS json_item(value) LOOP
+    IF NOT (entry ?& ARRAY['path','selected']) OR jsonb_typeof(entry->'path')<>'array' OR jsonb_array_length(entry->'path') NOT BETWEEN 1 AND 499 OR jsonb_typeof(entry->'selected')<>'boolean' OR (select count(*) from jsonb_object_keys(entry))<>2 THEN RAISE EXCEPTION 'Invalid blueprint optional selection' USING ERRCODE='23514',CONSTRAINT='blueprint_state'; END IF;
+  END LOOP;
+  IF EXISTS(select 1 from jsonb_array_elements((state->'resolvedManifest')||(state->'optionalChoices')) AS path_row(value) cross join lateral jsonb_array_elements(path_row.value->'path') AS path_key(value) where jsonb_typeof(path_key.value)<>'string' or trim(both '"' from path_key.value::text) !~ '^[a-z][a-z0-9_-]{0,63}$') OR jsonb_typeof(state->'lastApplicationChangeSetId') NOT IN('null','string') THEN RAISE EXCEPTION 'Invalid blueprint state member' USING ERRCODE='23514',CONSTRAINT='blueprint_state'; END IF;
+END $$;

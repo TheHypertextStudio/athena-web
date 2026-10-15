@@ -96,6 +96,7 @@ const surfaceVariants = cva('min-w-0', {
       small: 'rounded-lg',
       medium: 'rounded-xl',
       large: 'rounded-corner-lg',
+      'extra-large': 'rounded-corner-xl',
     },
     /** Internal inset. Kept to three steps so surfaces do not each invent their own padding. */
     pad: {

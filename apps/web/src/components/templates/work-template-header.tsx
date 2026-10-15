@@ -2,6 +2,7 @@
 import type { TemplateTargetType } from '@docket/work/template-contract';
 import type { JSX } from 'react';
 import { WorkTemplateIdentityControl } from './work-template-identity-control';
+import { WorkTemplateCaptureAction } from './work-template-capture-action';
 
 interface HeaderWork {
   readonly id: string;
@@ -24,14 +25,22 @@ export function WorkTemplateHeader({
   readonly canEdit: boolean;
 }): JSX.Element {
   return (
-    <WorkTemplateIdentityControl
-      orgId={orgId}
-      kind={kind}
-      workId={work.id}
-      teamId={work.teamId ?? work.leadTeamId ?? null}
-      workTypeId={work.workTypeId}
-      workTypeVersionId={work.workTypeVersionId}
-      canEdit={canEdit}
-    />
+    <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
+      <WorkTemplateIdentityControl
+        orgId={orgId}
+        kind={kind}
+        workId={work.id}
+        teamId={work.teamId ?? work.leadTeamId ?? null}
+        workTypeId={work.workTypeId}
+        workTypeVersionId={work.workTypeVersionId}
+        canEdit={canEdit}
+      />
+      <WorkTemplateCaptureAction
+        key={`${orgId}:${kind}:${work.id}`}
+        orgId={orgId}
+        kind={kind}
+        workId={work.id}
+      />
+    </div>
   );
 }

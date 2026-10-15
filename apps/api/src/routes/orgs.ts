@@ -329,7 +329,7 @@ Every new organization includes the Owner, Admin, Member, and Guest roles plus a
       tag: 'Orgs',
       summary: 'Get workspace work-structure settings',
       description:
-        'Returns the workspace-owned structural constraints that govern strategic work: the maximum total depth permitted for Initiative hierarchies, the task-estimation scale, and the zero-based month that begins the fiscal year for new broad planning dates.',
+        'Returns workspace-owned work settings: Initiative hierarchy depth, parent Task completion, task estimates, the fiscal-year start, and the working weekdays used for template date offsets.',
       response: WorkspaceSettingsOut,
     }),
     async (c) => {
@@ -340,6 +340,7 @@ Every new organization includes the Owner, Admin, Member, and Guest roles plus a
           autoCompleteParentTasks: organization.autoCompleteParentTasks,
           estimationScale: organization.estimationScale,
           fiscalYearStartMonth: organization.fiscalYearStartMonth,
+          workingWeekdays: organization.workingWeekdays,
         })
         .from(organization)
         .where(eq(organization.id, orgId))
@@ -358,7 +359,7 @@ Every new organization includes the Owner, Admin, Member, and Guest roles plus a
       tag: 'Orgs',
       summary: 'Update workspace work-structure settings',
       description:
-        'Updates workspace-owned structural constraints. Reducing Initiative depth is rejected when an existing hierarchy would exceed the requested maximum, so no links are silently discarded. Changing the estimation scale re-interprets existing task estimates under the new scale rather than clearing them. Changing the fiscal-year start affects only broad planning dates selected afterward because each saved period keeps its original fiscal snapshot.',
+        'Updates workspace-owned work settings. Reducing Initiative depth is rejected when an existing hierarchy would exceed it. Estimation changes re-interpret existing estimates. Fiscal-year changes affect new broad planning dates; saved periods retain their fiscal snapshot. Working weekdays must be nonempty, unique and sorted ISO days 1–7. Calendar changes affect future template resolution and date reflow without immediately rewriting saved work dates.',
       capability: 'manage',
       response: WorkspaceSettingsOut,
     }),
@@ -393,6 +394,7 @@ Every new organization includes the Owner, Admin, Member, and Guest roles plus a
             autoCompleteParentTasks: organization.autoCompleteParentTasks,
             estimationScale: organization.estimationScale,
             fiscalYearStartMonth: organization.fiscalYearStartMonth,
+            workingWeekdays: organization.workingWeekdays,
           });
         return rows[0];
       });

@@ -1,3 +1,5 @@
+import type { RecordedOrigin } from '@docket/work/provenance-contract';
+import type { OrdinaryWorkMutation } from '../work-creation/types';
 /**
  * `@docket/api` — placing a plan's items into the workspace, one node at a time.
  *
@@ -8,28 +10,17 @@
  * Both callers open their own serializable transaction and hand it in; this module never opens
  * one itself.
  */
-import {
-  initiative,
-  initiativeProgram,
-  initiativeProject,
-  program,
-  project,
-  task,
-} from '@docket/db';
+import { initiativeProgram, initiativeProject } from '@docket/db';
 import { Priority } from '@docket/work/task-contract';
 import { InitiativePriority } from '@docket/work/initiative-contract';
-import { replaceLabels, resolveLabelSet } from '../labels';
-import { and, eq, isNull, sql } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { ValidationError } from '../../error';
-import { trackedFields, type ChangeRecord, type LinkRecord } from '../../mcp/change-set';
+import { type ChangeRecord, type LinkRecord } from '../../mcp/change-set';
 import { resolveOptional } from '../../mcp/descriptors';
-import { entityHref } from '../../mcp/entity-href';
 import type { serializableTx } from '../serializable-tx';
-import { attachToMilestone, placeMilestone, resolveItemMilestone } from './place-milestone';
-import { resolveContainerStatus } from '../work-status';
-import { labelTeamForItem, type OrganizeItem, type Kind } from './item';
+import { resolveItemMilestone } from './place-milestone';
+import { type OrganizeItem, type Kind } from './item';
 export { KINDS, OrganizeItem, MAX_ITEMS, type Kind } from './item';
 
 /** Which parent kinds each kind may sit under, in this call or already in the workspace. */
@@ -40,19 +31,6 @@ const ALLOWED_PARENTS: Record<Kind, readonly Kind[]> = {
   milestone: ['project'],
   task: ['project', 'milestone', 'program', 'task'],
 };
-
-/**
- * What every placement reports identically: the handle, the name, the parent, and the route.
- *
- * @param item - The item being placed.
- * @param href - Where it shows in the product app.
- */
-function identityOf(
-  item: OrganizeItem,
-  href: string,
-): Pick<Placed, 'ref' | 'title' | 'parent' | 'href'> {
-  return { ref: item.ref, title: item.title, parent: item.parent, href };
-}
 
 /** What happened to one item. */
 export interface Placed {
@@ -253,6 +231,7 @@ export function placementUnder(local: Placed | undefined, refs: ItemRefs): Place
 
 /** Everything one item needs to be placed, with parents and descriptors already resolved. */
 export interface PlaceInput {
+  readonly origin?: RecordedOrigin;
   readonly orgId: string;
   readonly actorId: string;
   readonly item: OrganizeItem;
@@ -277,6 +256,8 @@ export type Tx = Parameters<Parameters<typeof serializableTx>[0]>[0];
 
 /** What one placement produced: the item's identity and, for a new row, the change to record. */
 export interface PlaceResult {
+  /** Complete unrecorded creation for the enclosing single receipt and post-commit drain. */
+  readonly creation?: OrdinaryWorkMutation;
   readonly placed: Placed;
   readonly change?: ChangeRecord;
   /** The initiative link the placement added, so undo can take it back. */
@@ -291,7 +272,7 @@ export interface PlaceResult {
  * existing work attaches it rather than doing nothing. Only a link this call added is recorded: one
  * that already stood is not this call's to take back.
  */
-async function linkToInitiative(
+export async function linkToInitiative(
   tx: Tx,
   kind: 'project' | 'program',
   orgId: string,
@@ -313,322 +294,4 @@ async function linkToInitiative(
           .returning({ id: initiativeProgram.programId });
   if (inserted.length === 0) return {};
   return { link: { kind: `${kind}_contributes_to`, from: id, to: initiativeId, linked: true } };
-}
-
-/** The status columns a new container row starts with. */
-async function containerStatus(
-  tx: Tx,
-  orgId: string,
-  kind: 'initiative' | 'program' | 'project',
-  fallback: string,
-): Promise<{ statusId: string; status: string }> {
-  const resolved = await resolveContainerStatus(orgId, kind, fallback, 'status', tx);
-  return { statusId: resolved.statusId, status: resolved.status };
-}
-
-/** An initiative is matched org-wide by name; there is no narrower scope for one. */
-async function placeInitiative(tx: Tx, input: PlaceInput): Promise<PlaceResult> {
-  const { item, orgId } = input;
-  const existing = await tx
-    .select({ id: initiative.id })
-    .from(initiative)
-    .where(
-      and(
-        eq(initiative.organizationId, orgId),
-        isNull(initiative.archivedAt),
-        sql`lower(${initiative.name}) = lower(${item.title})`,
-      ),
-    )
-    .limit(1);
-  if (existing[0]) {
-    return {
-      placed: {
-        ...identityOf(item, entityHref(orgId, 'initiative', existing[0].id)),
-        kind: 'initiative',
-        id: existing[0].id,
-        created: false,
-      },
-    };
-  }
-  const inserted = await tx
-    .insert(initiative)
-    .values({
-      organizationId: orgId,
-      workTypeId: item.workTypeId,
-      workTypeVersionId: item.workTypeVersionId,
-      ...(await containerStatus(tx, orgId, 'initiative', item.status ?? 'active')),
-      name: item.title,
-      description: item.description,
-      summary: item.summary,
-      health: item.health,
-      priority: InitiativePriority.default('none').parse(item.priority),
-      updateCadence: item.updateCadence,
-      ownerId: input.ownerId,
-      targetDate: item.targetDate ? new Date(item.targetDate) : undefined,
-      createdBy: input.actorId,
-    })
-    .returning();
-  const row = inserted[0];
-  /* v8 ignore next -- @preserve defensive: insert always returns a row */
-  if (!row) throw new Error('initiative insert returned no row');
-  return {
-    placed: {
-      ...identityOf(item, entityHref(orgId, 'initiative', row.id)),
-      kind: 'initiative',
-      id: row.id,
-      created: true,
-      description: row.description,
-      workTypeId: row.workTypeId,
-      workTypeVersionId: row.workTypeVersionId,
-    },
-    change: {
-      kind: 'initiative',
-      id: row.id,
-      op: 'create',
-      after: trackedFields('initiative', row),
-    },
-  };
-}
-
-/** A program is matched org-wide by name and linked to its initiative either way. */
-async function placeProgram(tx: Tx, input: PlaceInput): Promise<PlaceResult> {
-  const { item, at, orgId } = input;
-  const existing = await tx
-    .select({ id: program.id })
-    .from(program)
-    .where(
-      and(
-        eq(program.organizationId, orgId),
-        isNull(program.archivedAt),
-        sql`lower(${program.name}) = lower(${item.title})`,
-      ),
-    )
-    .limit(1);
-  const inserted = existing[0]
-    ? []
-    : await tx
-        .insert(program)
-        .values({
-          organizationId: orgId,
-          workTypeId: item.workTypeId,
-          workTypeVersionId: item.workTypeVersionId,
-          ...(await containerStatus(tx, orgId, 'program', item.status ?? 'active')),
-          name: item.title,
-          description: item.description,
-          summary: item.summary,
-          health: item.health,
-          visibility: item.visibility,
-          ownerId: input.ownerId,
-          createdBy: input.actorId,
-        })
-        .returning();
-  const id = existing[0]?.id ?? inserted[0]?.id;
-  /* v8 ignore next -- @preserve defensive: insert always returns a row */
-  if (!id) throw new Error('program insert returned no row');
-  const linked = await linkToInitiative(tx, 'program', orgId, at.initiativeId, id);
-  const row = inserted[0];
-  return {
-    ...linked,
-    placed: {
-      ...identityOf(item, entityHref(orgId, 'program', id)),
-      kind: 'program',
-      id,
-      created: row !== undefined,
-      ...(row
-        ? {
-            description: row.description,
-            workTypeId: row.workTypeId,
-            workTypeVersionId: row.workTypeVersionId,
-          }
-        : {}),
-    },
-    ...(row
-      ? { change: { kind: 'program', id, op: 'create', after: trackedFields('program', row) } }
-      : {}),
-  };
-}
-
-/** A project is matched by name within its program, and linked to its initiative either way. */
-async function placeProject(tx: Tx, input: PlaceInput): Promise<PlaceResult> {
-  const { item, at, orgId } = input;
-  const existing = await tx
-    .select({ id: project.id })
-    .from(project)
-    .where(
-      and(
-        eq(project.organizationId, orgId),
-        isNull(project.archivedAt),
-        sql`lower(${project.name}) = lower(${item.title})`,
-        at.programId ? eq(project.programId, at.programId) : isNull(project.programId),
-      ),
-    )
-    .limit(1);
-  const inserted = existing[0]
-    ? []
-    : await tx
-        .insert(project)
-        .values({
-          organizationId: orgId,
-          workTypeId: item.workTypeId,
-          workTypeVersionId: item.workTypeVersionId,
-          ...(await containerStatus(tx, orgId, 'project', item.status ?? 'planned')),
-          name: item.title,
-          description: item.description,
-          summary: item.summary,
-          health: item.health,
-          priority: Priority.default('none').parse(item.priority),
-          visibility: item.visibility,
-          leadId: input.leadId,
-          teamId: input.teamId,
-          programId: at.programId,
-          targetDate: item.targetDate ? new Date(item.targetDate) : undefined,
-          createdBy: input.actorId,
-        })
-        .returning();
-  const id = existing[0]?.id ?? inserted[0]?.id;
-  /* v8 ignore next -- @preserve defensive: insert always returns a row */
-  if (!id) throw new Error('project insert returned no row');
-  const linked = await linkToInitiative(tx, 'project', orgId, at.initiativeId, id);
-  const row = inserted[0];
-  return {
-    ...linked,
-    placed: {
-      ...identityOf(item, entityHref(orgId, 'project', id)),
-      kind: 'project',
-      id,
-      created: row !== undefined,
-      ...(row
-        ? {
-            description: row.description,
-            workTypeId: row.workTypeId,
-            workTypeVersionId: row.workTypeVersionId,
-          }
-        : {}),
-    },
-    ...(row
-      ? { change: { kind: 'project', id, op: 'create', after: trackedFields('project', row) } }
-      : {}),
-  };
-}
-
-/**
- * Where a task is matched: its parent task, then its project, then its program; an orphan matches
- * org-wide because there is nowhere narrower to look.
- */
-function taskScope(at: Placement) {
-  if (at.parentTaskId) return eq(task.parentTaskId, at.parentTaskId);
-  if (at.projectId) return eq(task.projectId, at.projectId);
-  if (at.programId) return eq(task.programId, at.programId);
-  return and(isNull(task.projectId), isNull(task.programId), isNull(task.parentTaskId));
-}
-
-/** A task is matched by title within its scope. */
-async function placeTask(tx: Tx, input: PlaceInput): Promise<PlaceResult> {
-  const { item, at, orgId } = input;
-  const existing = await tx
-    .select()
-    .from(task)
-    .where(
-      and(
-        eq(task.organizationId, orgId),
-        isNull(task.archivedAt),
-        sql`lower(${task.title}) = lower(${item.title})`,
-        taskScope(at),
-      ),
-    )
-    .limit(1);
-  if (existing[0]) {
-    const change = await attachToMilestone(tx, existing[0], at.milestoneId);
-    return {
-      placed: {
-        ...identityOf(item, entityHref(orgId, 'task', existing[0].id)),
-        kind: 'task',
-        id: existing[0].id,
-        created: false,
-      },
-      ...(change ? { change } : {}),
-    };
-  }
-  const inserted = await tx
-    .insert(task)
-    .values({
-      organizationId: orgId,
-      title: item.title,
-      description: item.description,
-      summary: item.summary,
-      templateId: input.templateId,
-      workTypeId: item.workTypeId,
-      workTypeVersionId: item.workTypeVersionId,
-      teamId: input.teamId,
-      statusId: input.state.statusId,
-      state: input.state.state,
-      completedAt: input.state.completedAt,
-      canceledAt: input.state.canceledAt,
-      assigneeId: input.assigneeId,
-      projectId: at.projectId,
-      programId: at.programId,
-      milestoneId: at.milestoneId,
-      parentTaskId: at.parentTaskId,
-      priority: Priority.default('none').parse(item.priority),
-      dueDate: item.dueDate ? new Date(item.dueDate) : undefined,
-      source: 'native',
-      createdBy: input.actorId,
-    })
-    .returning();
-  const row = inserted[0];
-  /* v8 ignore next -- @preserve defensive: insert always returns a row */
-  if (!row) throw new Error('task insert returned no row');
-  return {
-    placed: {
-      ...identityOf(item, entityHref(orgId, 'task', row.id)),
-      kind: 'task',
-      id: row.id,
-      created: true,
-      description: row.description,
-      workTypeId: row.workTypeId,
-      workTypeVersionId: row.workTypeVersionId,
-    },
-    change: { kind: 'task', id: row.id, op: 'create', after: trackedFields('task', row) },
-  };
-}
-
-/**
- * Place one item: match what is already there, or create it.
- *
- * @remarks
- * Matching is scoped to where the item would go, not to the whole organization — two projects
- * called "Rollout" under different programs are two projects, and treating them as one would
- * quietly merge unrelated work. Only a task with no parent at all falls back to an org-wide
- * title match, because there is nowhere narrower to look.
- *
- * @param tx - The open transaction.
- * @param input - The resolved item.
- * @returns what it became, and the change to record when it was created.
- */
-export async function placeItem(tx: Tx, input: PlaceInput): Promise<PlaceResult> {
-  const result = await placeByKind(tx, input);
-  if (result.placed.created && input.item.kind !== 'milestone' && input.item.labelIds?.length) {
-    const labels = await resolveLabelSet(input.orgId, input.item.labelIds, {
-      teamId: labelTeamForItem(input.item.kind, input.teamId),
-      dbh: tx,
-    });
-    await replaceLabels(tx, input.item.kind, result.placed.id, input.orgId, labels);
-  }
-  return result;
-}
-
-/** Dispatch placement while keeping template label writes inside the same transaction. */
-async function placeByKind(tx: Tx, input: PlaceInput): Promise<PlaceResult> {
-  switch (input.item.kind) {
-    case 'initiative':
-      return placeInitiative(tx, input);
-    case 'program':
-      return placeProgram(tx, input);
-    case 'project':
-      return placeProject(tx, input);
-    case 'milestone':
-      return placeMilestone(tx, input);
-    case 'task':
-      return placeTask(tx, input);
-  }
 }

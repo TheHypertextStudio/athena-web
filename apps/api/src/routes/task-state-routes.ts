@@ -1,9 +1,14 @@
 /** Focused task state-transition route mounted inside the task router. */
-import { db } from '@docket/db';
 import { TaskOut, TaskStateUpdate } from '@docket/work/task-model';
 import { Hono } from 'hono';
 
-import type { AppEnv } from '../context';
+import {
+  prepareBlueprintReflow,
+  applyBlueprintReflow,
+  finishBlueprintReflow,
+} from '../lib/work-template-blueprints/reflow';
+import { serializableTx } from '../lib/serializable-tx';
+import type { ActorCtx, AppEnv } from '../context';
 import { NotFoundError } from '../error';
 import { labelsForSubject } from '../lib/labels';
 import { ok } from '../lib/ok';
@@ -29,6 +34,7 @@ import {
 
 /** Input to {@link setTaskStateRecorded}. */
 interface RecordedStateChangeInput {
+  readonly caller: ActorCtx;
   readonly orgId: string;
   readonly actorId: string;
   /** The active task as the caller loaded it. */
@@ -49,8 +55,14 @@ interface RecordedStateChangeInput {
  */
 async function setTaskStateRecorded(input: RecordedStateChangeInput): Promise<TaskRow | null> {
   const { orgId, actorId, before } = input;
-  const transition = await resolveStateTransition(orgId, before.teamId, input.state);
-  const result = await db.transaction(async (tx) => {
+  const transition = await resolveStateTransition(orgId, before.teamId, input.state, before);
+  const result = await serializableTx(async (tx) => {
+    const blueprint = await prepareBlueprintReflow(
+      tx,
+      input.caller,
+      { kind: 'task', id: before.id },
+      { state: input.state },
+    );
     const mutation = await writeTaskStateTransition(tx, {
       before,
       statusId: transition.statusId,
@@ -62,11 +74,23 @@ async function setTaskStateRecorded(input: RecordedStateChangeInput): Promise<Ta
     if (!mutation) return null;
     const timerStops = await closeCompletingUserTaskTimers(tx, actorId, mutation);
     const cascades = await applySubtaskCompletionPolicy(tx, mutation);
-    await recordTaskStateChange(tx, { orgId, actorId, mutation, cascades });
-    return { mutation, timerStops, cascades };
+    const blueprintResult = await applyBlueprintReflow(
+      tx,
+      blueprint,
+      cascades.map((entry) => entry.after.id),
+    );
+    await recordTaskStateChange(tx, {
+      orgId,
+      actorId,
+      mutation,
+      cascades,
+      derived: blueprintResult.changes,
+    });
+    return { mutation, timerStops, cascades, blueprintResult };
   });
   /* v8 ignore next -- @preserve defensive: the caller just loaded the task as active */
   if (!result) return null;
+  await finishBlueprintReflow(orgId, result.blueprintResult);
   await finishTaskStateTransition({ actorId }, result.mutation);
   await emitCompletedTaskTimerStops(result.timerStops);
   for (const cascade of result.cascades) {
@@ -95,7 +119,13 @@ The transition is resolved server-side: entering a terminal state derives \`comp
     const { state } = c.req.valid('json');
     const before = await loadTask(orgId, id);
     await assertTaskCapability(orgId, actorId, before, 'contribute');
-    const next = await setTaskStateRecorded({ orgId, actorId, before, state });
+    const next = await setTaskStateRecorded({
+      caller: c.get('actorCtx'),
+      orgId,
+      actorId,
+      before,
+      state,
+    });
     if (!next) throw new NotFoundError('Task not found');
     return ok(c, TaskOut, toOut(next, await labelsForSubject('task', orgId, next.id)));
   },

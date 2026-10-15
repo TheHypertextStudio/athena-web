@@ -1,5 +1,15 @@
+import { sameTaskTerminalState } from '../lib/task-terminal-instants';
+import {
+  prepareBlueprintReflow,
+  applyBlueprintReflow,
+  finishBlueprintReflow,
+} from '../lib/work-template-blueprints/reflow';
+import { explicitBlueprintDatePatch } from '../lib/work-template-blueprints/date-ownership';
+import { assertTaskTemplate } from '../lib/work-creation/ordinary-references';
+import { createWork } from '../lib/work-creation/service';
 import { workTemplateAssignmentRoutes } from './work-template-assignment';
-import { prepareWorkTemplateCreation } from '../lib/work-template-creation';
+import { workTemplateCaptureRoutes } from './work-template-capture';
+
 import { loadTaskDetailRow } from './task-detail-row';
 import { assertTaskAssignmentEdit, detachTaskAssigneeEdit } from './task-person-edit';
 import { taskListOutput } from './task-list-output';
@@ -16,7 +26,6 @@ import {
   taskDependency,
   taskLabel,
   taskRelatedTask,
-  team,
   template,
 } from '@docket/db';
 import { pageOf } from '../contracts/pagination';
@@ -40,7 +49,7 @@ import { z } from 'zod';
 
 import type { AppEnv } from '../context';
 import { ConflictError, NotFoundError, ValidationError } from '../error';
-import { deferAfterResponse } from '../lib/after-response';
+
 import { detailCapabilities } from '../lib/detail-capabilities';
 import { guardsInOrder } from '../lib/guards-in-order';
 import { originFor } from '../lib/provenance/context';
@@ -50,7 +59,6 @@ import {
   recordTaskReparents,
   replaceTaskLabelSet,
   settleTaskArchive,
-  settleTaskCreation,
 } from '../lib/provenance/task-change-sets';
 import {
   applyExclusivity,
@@ -74,7 +82,7 @@ import {
   finishTaskStateTransition,
 } from '../lib/task-state';
 import { encodeListCursor, pageResult, seekAfter } from '../lib/list-cursor';
-import { landingStatus, landingTaskTransition } from '../lib/work-status';
+import { landingStatus } from '../lib/work-status';
 import { apiDoc } from '../lib/openapi-route';
 import { serializableTx } from '../lib/serializable-tx';
 import { assertTaskWindowOrdered, dayOf } from '../lib/task-window';
@@ -114,29 +122,6 @@ import { taskDependencyRoutes } from './task-dependency-routes';
 import { taskStateRoutes } from './task-state-routes';
 import { closePatchTimers, finishTaskPatch } from './task-update-effects';
 import { relatedTaskPair, replaceRelatedTasks } from './task-related-replace';
-
-/** Require a caller-visible task template that can originate a task. */
-async function assertTaskTemplate(
-  orgId: string,
-  actorId: string,
-  templateId: string | null | undefined,
-): Promise<void> {
-  if (templateId === null || templateId === undefined) return;
-  // This endpoint retains a template id on work. It must use the same visibility boundary as
-  // `/templates`: a foreign personal or team template is hidden rather than merely invalid.
-  // The database foreign key cannot encode the organization or membership predicates, so this
-  // route owns the tenant and caller boundary before it writes the reference.
-  const rows = await db
-    .select({ targetType: template.targetType })
-    .from(template)
-    .where(visibleTemplateWhere(orgId, actorId, { id: templateId }))
-    .limit(1);
-  const row = rows[0];
-  if (!row) throw new NotFoundError('Template not found');
-  if (row.targetType !== 'task') {
-    throw new ValidationError([{ message: 'Template must create tasks', path: ['templateId'] }]);
-  }
-}
 
 /**
  * Read the Task content needed by both the legacy detail route and the local-first aggregate.
@@ -386,6 +371,7 @@ async function loadTaskDetail(
 /** Tasks router: lifecycle (create/list/detail/update/archive/state) + subtasks + dependencies. */
 const tasks = new Hono<AppEnv>()
   .route('/', workTemplateAssignmentRoutes('task'))
+  .route('/', workTemplateCaptureRoutes('task'))
   .post(
     '/',
     capabilityGuard('contribute'),
@@ -403,185 +389,19 @@ The new task appears in the organization's activity stream. An assigned task als
     }),
     zJson(TaskCreate),
     async (c) => {
-      const { orgId, actorId } = c.get('actorCtx');
-      const body = TaskCreate.parse(
-        await prepareWorkTemplateCreation(orgId, 'task', c.req.valid('json')),
-      );
-
-      const teamRows = await db
-        .select()
-        .from(team)
-        .where(and(eq(team.id, body.teamId), eq(team.organizationId, orgId)))
-        .limit(1);
-      const teamRow = teamRows[0];
-      if (!teamRow) throw new NotFoundError('Team not found');
-
-      // Tenant isolation: every body-provided reference must live in the caller's org. These are
-      // independent reads, so they go out together instead of as five serial round trips;
-      // `guardsInOrder` keeps the reported failure the earliest-listed one regardless of timing.
-      const parentTaskRead =
-        body.parentTaskId === undefined ? undefined : loadTask(orgId, body.parentTaskId);
-      // Every related endpoint is read, locked, and written in the same order. Two concurrent
-      // creates can otherwise present the same endpoints in reverse order and wait on each other.
-      const relatedTaskIds = [...(body.relatedTaskIds ?? [])].sort();
-      const relatedTaskReads = relatedTaskIds.map((relatedTaskId) =>
-        loadTask(orgId, relatedTaskId),
-      );
-      await guardsInOrder([
-        assertRefInOrg(actor, orgId, body.assigneeId, 'Assignee not found'),
-        assertRefInOrg(project, orgId, body.projectId, 'Project not found'),
-        assertMilestoneInOrg(orgId, body.milestoneId, body.projectId),
-        assertTaskTemplate(orgId, actorId, body.templateId),
-        ...(parentTaskRead ? [parentTaskRead] : []),
-        ...relatedTaskReads,
-      ]);
-      if (parentTaskRead) {
-        await assertTaskCapability(orgId, actorId, await parentTaskRead, 'contribute');
-      }
-      const relatedTasks = await Promise.all(relatedTaskReads);
-      await guardsInOrder(
-        relatedTasks.map((relatedTask) =>
-          assertTaskCapability(orgId, actorId, relatedTask, 'contribute'),
-        ),
-      );
-
-      // resolveStateTransition validates the state key and derives terminal timestamps so
-      // a task created directly in a `completed`/`canceled` state lands with correct fields.
-      // Labels were accepted by the DTO and silently dropped here until now; resolved against the
-      // task's own team so a team-limited label is offerable, and left for the shared write path
-      // to collapse any exclusive-group collision. Neither read depends on the other, so they go
-      // out together — but both can reject, and a plain `Promise.all` would answer with whichever
-      // lost the race, so a body carrying an invalid state *and* an unknown label would report a
-      // different error from run to run. Settled in declaration order for the same reason the
-      // tenant guards above are.
-      const transitionRead =
-        body.state === undefined
-          ? landingTaskTransition(orgId, body.teamId)
-          : resolveStateTransition(orgId, body.teamId, body.state);
-      const labelsRead = resolveLabelSet(orgId, body.labels, { teamId: body.teamId });
-      await guardsInOrder([transitionRead, labelsRead]);
-      const [{ statusId, state, completedAt, canceledAt }, resolvedLabels] = await Promise.all([
-        transitionRead,
-        labelsRead,
-      ]);
-
-      const result = await db.transaction(async (tx) => {
-        await assertTeamCycle(tx, orgId, body.cycleId, body.teamId);
-        // A row lock makes a concurrent hard delete wait until this mutation commits. The
-        // subsequent relation insert therefore cannot strand a newly-created task when one of its
-        // requested endpoints disappears between the preflight read and the write.
-        if (relatedTasks.length > 0) {
-          const lockedRelatedTasks = await tx
-            .select()
-            .from(task)
-            .where(
-              and(
-                eq(task.organizationId, orgId),
-                isNull(task.archivedAt),
-                inArray(task.id, relatedTaskIds),
-              ),
-            )
-            .orderBy(asc(task.id))
-            .for('update');
-          if (lockedRelatedTasks.length !== relatedTasks.length)
-            throw new NotFoundError('Task not found');
-          await guardsInOrder(
-            lockedRelatedTasks.map((relatedTask) =>
-              assertTaskCapability(orgId, actorId, relatedTask, 'contribute', tx),
-            ),
-          );
-        }
-
-        const inserted = await tx
-          .insert(task)
-          .values({
-            workTypeId: body.workTypeId,
-            workTypeVersionId: body.workTypeVersionId,
-            organizationId: orgId,
-            title: body.title,
-            description: body.description,
-            summary: body.summary ?? null,
-            teamId: body.teamId,
-            statusId,
-            state,
-            completedAt,
-            canceledAt,
-            priority: body.priority ?? 'none',
-            assigneeId: body.assigneeId,
-            projectId: body.projectId,
-            milestoneId: body.milestoneId,
-            cycleId: body.cycleId,
-            templateId: body.templateId,
-            parentTaskId: body.parentTaskId,
-            estimate: body.estimate,
-            estimateMinutes: body.estimateMinutes,
-            startDate: body.startDate ? new Date(body.startDate) : undefined,
-            dueDate: body.dueDate ? new Date(body.dueDate) : undefined,
-            source: 'native',
-            createdBy: actorId,
-          })
-          .returning();
-        const row = inserted[0];
-        /* v8 ignore next -- @preserve defensive: insert always returns a row */
-        if (!row) throw new Error('task insert returned no row');
-
-        if (relatedTasks.length > 0) {
-          await tx.insert(taskRelatedTask).values(
-            relatedTasks.map((relatedTask) => ({
-              organizationId: orgId,
-              ...relatedTaskPair(row.id, relatedTask.id),
-            })),
-          );
-        }
-        await replaceLabels(tx, 'task', row.id, orgId, resolvedLabels);
-        return settleTaskCreation(tx, {
-          orgId,
-          actorId,
-          row,
-          relatedTaskIds,
-          labels: resolvedLabels,
-        });
+      const caller = c.get('actorCtx');
+      const result = await createWork({
+        caller,
+        kind: 'task',
+        body: c.req.valid('json'),
+        invocation: { origin: originFor('create_task') },
       });
-      const { row, cascades } = result;
-
-      // Stream: record the creation, plus an assignment event when it lands on someone. Both are
-      // post-commit effects the response does not read, and emitting an event is itself a
-      // transaction plus recipient routing, automations and indexing — the bulk of what creating
-      // a task used to cost the person waiting on it. Deferred as one unit so `created` still
-      // lands before `assignment`; the feed's order is part of its meaning.
-      // Stamped here rather than inside the deferred callback: `emitEvent` defaults `occurredAt`
-      // to the moment it runs, which is now after the response, so under concurrent creates the
-      // feed could order two entities against the order their rows were actually written. It is
-      // also part of the dedupe key, so it needs to name the domain event, not the drain.
-      const subject = { type: 'task', id: row.id, title: row.title };
-      const occurredAt = new Date();
-      deferAfterResponse('task-created-events', async () => {
-        await emitEvent({
-          organizationId: orgId,
-          kind: 'created',
-          actorId,
-          occurredAt,
-          title: row.title,
-          subject,
-        });
-        if (row.assigneeId) {
-          await emitEvent({
-            organizationId: orgId,
-            kind: 'assignment',
-            actorId,
-            occurredAt,
-            title: row.title,
-            subject,
-          });
-        }
-      });
-      // No creation entry is written: the row's own `createdAt`/`createdBy` are that record, and
-      // the activity endpoint projects the entry from them (see `lib/task-audit.ts`).
-      deferAfterResponse('task-created-search-index', () => enqueueTaskSearchIndex(orgId, row.id));
-      for (const cascade of cascades) {
-        await finishTaskStateTransition({ actorId: null }, cascade);
-      }
-      return created(c, TaskOut, toOut(row, await labelsForSubject('task', orgId, row.id)));
+      if (result.root.kind !== 'task') throw new Error('Work creation returned the wrong kind');
+      return created(
+        c,
+        TaskOut,
+        toOut(result.root.row, await labelsForSubject('task', caller.orgId, result.root.id)),
+      );
     },
   )
   .post(
@@ -1422,7 +1242,7 @@ Changing \`assigneeId\` or \`delegateId\` requires \`assign\`; other changes req
       // resolveStateTransition validates + derives timestamps; bypassing it would corrupt progress.
       const statePatch =
         body.state !== undefined
-          ? await resolveStateTransition(orgId, before.teamId, body.state)
+          ? await resolveStateTransition(orgId, before.teamId, body.state, before)
           : undefined;
 
       const patch = {
@@ -1489,6 +1309,7 @@ Changing \`assigneeId\` or \`delegateId\` requires \`assign\`; other changes req
       // reparenting guarantee. Related-link replacement reads its own snapshot, so a link added
       // after that snapshot cannot be deleted without being authorized on a retry.
       const result = await serializableTx(async (tx) => {
+        const blueprint = await prepareBlueprintReflow(tx, ctx, { kind: 'task', id }, body);
         await assertTeamCycle(tx, orgId, body.cycleId, before.teamId, body.cycleCadenceRevision);
         // Both sides of a replacement are locked before reading its edge snapshot. The same
         // canonical order for `A → B` and `B → A` prevents each request from holding one endpoint
@@ -1523,10 +1344,11 @@ Changing \`assigneeId\` or \`delegateId\` requires \`assign\`; other changes req
           planTaskReparents(activeTasks, [{ taskId: id, parentTaskId: newParentId }], false);
         }
 
+        const ownedPatch = { ...patch, ...explicitBlueprintDatePatch(current, body) };
         const updated =
-          Object.keys(patch).length === 0
+          Object.keys(ownedPatch).length === 0
             ? current
-            : (await tx.update(task).set(patch).where(where).returning())[0];
+            : (await tx.update(task).set(ownedPatch).where(where).returning())[0];
         if (!updated) throw new NotFoundError('Task not found');
         const timerStops = await closePatchTimers(tx, ctx.actorId, statePatch, current, updated);
 
@@ -1542,6 +1364,11 @@ Changing \`assigneeId\` or \`delegateId\` requires \`assign\`; other changes req
           ...(body.parentTaskId === undefined ? [] : [current.parentTaskId, updated.parentTaskId]),
         ];
         const cascades = await applySubtaskCompletionPolicyForParents(tx, orgId, parentTaskIds);
+        const blueprintResult = await applyBlueprintReflow(
+          tx,
+          blueprint,
+          cascades.map((mutation) => mutation.after.id),
+        );
         await recordTaskPatch(tx, {
           orgId,
           actorId: ctx.actorId,
@@ -1550,17 +1377,19 @@ Changing \`assigneeId\` or \`delegateId\` requires \`assign\`; other changes req
           cascades,
           related: relatedActivity,
           labels,
+          derived: blueprintResult.changes,
         });
-        return { row: updated, cascades, relatedActivity, timerStops };
+        return { row: updated, cascades, relatedActivity, timerStops, blueprintResult };
       });
       const { row, cascades, relatedActivity, timerStops } = result;
+      await finishBlueprintReflow(orgId, result.blueprintResult);
 
       // Stream: a state transition (completed when it landed terminal) and/or a reassignment.
       const subject = { type: 'task', id: row.id, title: row.title };
-      if (statePatch !== undefined) {
+      if (!sameTaskTerminalState(before, row)) {
         await emitEvent({
           organizationId: orgId,
-          kind: statePatch.completedAt ? 'completed' : 'status_change',
+          kind: row.completedAt ? 'completed' : 'status_change',
           actorId: ctx.actorId,
           title: row.title,
           subject,

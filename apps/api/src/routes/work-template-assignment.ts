@@ -41,6 +41,29 @@ export function workTemplateAssignmentRoutes(kind: TemplateTargetType) {
         ),
     )
     .post(
+      '/:id/template/update',
+      apiDoc({
+        tag: 'Templates',
+        summary: 'Apply reviewed changes from the current template',
+        response: WorkTemplateIdentity,
+        capability: kind === 'program' ? 'manage' : 'contribute',
+      }),
+      zParam(z.object({ id: z.string() })),
+      zJson(WorkTemplateAssignment),
+      async (c) => {
+        const caller = c.get('actorCtx');
+        const id = c.req.valid('param').id;
+        const identity = await assignWorkTemplate(caller, kind, id, {
+          ...c.req.valid('json'),
+          mode: 'update',
+        });
+        deferAfterResponse('work-template-assignment-search', () =>
+          enqueueSearchUpsert(caller.orgId, kind, id),
+        );
+        return ok(c, WorkTemplateIdentity, identity);
+      },
+    )
+    .post(
       '/:id/template',
       apiDoc({
         tag: 'Templates',
@@ -48,7 +71,7 @@ export function workTemplateAssignmentRoutes(kind: TemplateTargetType) {
         response: WorkTemplateIdentity,
         capability: kind === 'program' ? 'manage' : 'contribute',
         description:
-          'Pin a published template of the same workspace and kind. Starting values change only when explicitly selected from a current preview. Authored dates and children remain unchanged. Live resource access is checked before template selection; unavailable work returns 404.',
+          'Pin a published template of the same workspace and kind. Starting values change only when explicitly selected from a current preview. Existing dates and child work change only through individually accepted child choices from the same preview. Live resource access is checked before template selection; unavailable work returns 404.',
       }),
       zParam(z.object({ id: z.string() })),
       zJson(WorkTemplateAssignment),

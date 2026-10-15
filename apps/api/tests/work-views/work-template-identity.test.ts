@@ -279,13 +279,13 @@ describe('published template work views', () => {
       scope: 'personal',
       ownerActorId: fixture.humanActorId,
       payload: { targetType: 'initiative' },
-      draftDefinition: {
+      draftDefinition: WorkTemplateDefinition.parse({
         name: 'PRIVATE DRAFT',
         defaultStatusKey: null,
         description: null,
         icon: null,
         payload: { targetType: 'initiative', description: 'PRIVATE DRAFT BODY' },
-      },
+      }),
     });
     await schema.db
       .update(schema.organization)

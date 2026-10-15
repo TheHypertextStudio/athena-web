@@ -1,6 +1,7 @@
+import { preserveTaskTerminalInstants } from '../lib/task-terminal-instants';
 import { workTemplateIdentityOut } from '../lib/work-template-creation';
 import { canActor, type Capability } from '@docket/authz';
-import type { cycle, program } from '@docket/db';
+import type { cycle, program, team } from '@docket/db';
 import { actor, db, grant, milestone, project, role, task, type Database } from '@docket/db';
 import type { GrantResourceKind } from '@docket/identity-access/grants';
 import type { TaskOut, TaskRef } from '@docket/work/task-model';
@@ -91,13 +92,14 @@ export const depParam = z.object({ id: z.string(), depId: z.string() });
  * (existence-hiding) when absent. A `null`/`undefined` `refId` is a no-op.
  */
 export async function assertRefInOrg(
-  table: typeof actor | typeof project | typeof program | typeof cycle,
+  table: typeof actor | typeof project | typeof program | typeof cycle | typeof team,
   orgId: string,
   refId: string | null | undefined,
   notFoundMessage: string,
+  database: Database = db,
 ): Promise<void> {
   if (refId === null || refId === undefined) return;
-  const rows = await db
+  const rows = await database
     .select({ id: table.id })
     .from(table)
     .where(
@@ -129,9 +131,10 @@ export async function assertMilestoneInOrg(
   orgId: string,
   milestoneId: string | null | undefined,
   projectId: string | null | undefined,
+  database: Database = db,
 ): Promise<void> {
   if (milestoneId === null || milestoneId === undefined) return;
-  const rows = await db
+  const rows = await database
     .select({ id: milestone.id, projectId: milestone.projectId })
     .from(milestone)
     .innerJoin(project, eq(milestone.projectId, project.id))
@@ -378,8 +381,12 @@ export async function loadNeighborhood(
 }
 
 /** Load a single active task scoped to the org, or throw {@link NotFoundError}. */
-export async function loadTask(orgId: string, id: string): Promise<TaskRow> {
-  const rows = await db
+export async function loadTask(
+  orgId: string,
+  id: string,
+  database: Database = db,
+): Promise<TaskRow> {
+  const rows = await database
     .select()
     .from(task)
     .where(and(eq(task.id, id), eq(task.organizationId, orgId), isNull(task.archivedAt)))
@@ -445,8 +452,10 @@ export async function resolveStateTransition(
   orgId: string,
   teamId: string,
   state: string,
+  before?: Readonly<Record<string, unknown>>,
 ): Promise<TaskStatusTransition> {
-  return resolveTaskStatus(orgId, teamId, state);
+  const transition = await resolveTaskStatus(orgId, teamId, state);
+  return before ? preserveTaskTerminalInstants(before, transition) : transition;
 }
 
 /**

@@ -1,7 +1,6 @@
 /** Frozen 0151 SQL projections: historical replay must not depend on the live application schema. */
-import type { EntityDisplayGlyph } from '@docket/work/entity-display-contract';
-import type { TemplateDraft, TemplateTargetType } from '@docket/work/template-contract';
-import type { WorkTemplateDefinition } from '@docket/work/work-template-contract';
+import type { HistoricalTemplateDefinition, HistoricalTemplatePayload } from './definition';
+type TemplateTargetType = HistoricalTemplatePayload['targetType'];
 import { boolean, integer, jsonb, pgTable, text, timestamp } from 'drizzle-orm/pg-core';
 
 /** Workspace identity available at the expansion checkpoint. */
@@ -17,11 +16,11 @@ export const template = pgTable('template', {
   name: text('name').notNull(),
   description: text('description'),
   scope: text('scope').$type<'personal' | 'team' | 'organization'>().notNull(),
-  payload: jsonb('payload').$type<TemplateDraft>().notNull(),
+  payload: jsonb('payload').$type<HistoricalTemplatePayload>().notNull(),
   isBase: boolean('is_base').notNull().default(false),
   publicationState: text('publication_state').notNull(),
-  icon: jsonb('icon').$type<EntityDisplayGlyph>(),
-  draftDefinition: jsonb('draft_definition').$type<WorkTemplateDefinition>(),
+  icon: jsonb('icon').$type<HistoricalTemplateDefinition['icon']>(),
+  draftDefinition: jsonb('draft_definition').$type<HistoricalTemplateDefinition>(),
   latestPublishedVersionId: text('latest_published_version_id'),
 });
 
@@ -31,7 +30,7 @@ export const workTypeVersion = pgTable('work_type_version', {
   organizationId: text('organization_id').notNull(),
   workTypeId: text('work_type_id').notNull(),
   number: integer('number').notNull(),
-  definition: jsonb('definition').$type<WorkTemplateDefinition>().notNull(),
+  definition: jsonb('definition').$type<HistoricalTemplateDefinition>().notNull(),
   publishedByActorId: text('published_by_actor_id'),
 });
 

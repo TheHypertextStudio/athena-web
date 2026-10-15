@@ -1,3 +1,6 @@
+import { settleCreationParents } from '../work-creation/service';
+import { deferWorkCreationEffects } from '../work-creation/effects';
+import type { DeferredWorkEffect } from '../work-creation/types';
 /**
  * `@docket/api` — confirming plan draft nodes into real work.
  *
@@ -14,14 +17,7 @@
  * Both doors — the canvas's own commit route and Athena's `plan_commit` tool — call
  * {@link commitPlanNodes} with an actor they have already authorized.
  */
-import {
-  db,
-  initiativeProject,
-  planDraft,
-  projectDependency,
-  task,
-  taskDependency,
-} from '@docket/db';
+import { db, planDraft, task } from '@docket/db';
 import type { RecordedOrigin } from '@docket/work/provenance-contract';
 import { canActor } from '@docket/authz';
 import type {
@@ -33,12 +29,11 @@ import type {
 import { planCommitCounts, planCounts, planNodeClosure } from '@docket/work/plan-draft';
 import { and, eq, inArray } from 'drizzle-orm';
 
-import { CapabilityError, CycleError, NotFoundError, ValidationError } from '../../error';
+import { CapabilityError, NotFoundError, ValidationError } from '../../error';
 import { recordChangeSetInTx, type RecordedChange } from '../../mcp/change-set';
 import {
   assertPriorities,
   inParentOrder,
-  placeItem,
   resolveItem,
   type OrganizeItem,
   type Placed,
@@ -48,14 +43,18 @@ import {
 import { originFor } from '../provenance/context';
 import { resolveLandingTarget } from '../task-landing';
 import { serializableTx } from '../serializable-tx';
-import { applySubtaskCompletionPolicyForParents, finishTaskStateTransition } from '../task-state';
 import { resolveStateTransition } from '../../mcp/tools-shared';
-import { wouldCreateProjectCycle } from '../../routes/project-dependency-routes';
-import { wouldCreateCycle as wouldCreateTaskCycle } from '../../routes/task-helpers';
-import { enqueueSearchUpsert } from '../../search/write-through';
 import { loadOwnedPlan, ownerActorInOrg, type PlanDraftRow } from './store';
 import { preparePlanTemplate } from './template-defaults';
 import { authorizePlanCommit } from './commit-authorization';
+import {
+  createPlacementForest,
+  prepareForestItem,
+  applyPlacementForest,
+  type PreparedPlacementForest,
+} from '../organize/forest';
+import { preparePlanLinks, planLinkDependencies, applyPlanLinks } from './commit-links';
+import { rememberBlueprintReceipt } from '../work-template-blueprints/receipt';
 
 /** What a commit produced. */
 export interface CommitPlanResult {
@@ -206,92 +205,6 @@ function toOrganizeItem(
   };
 }
 
-/** The real id a ref resolves to after this commit, from the document or the placements. */
-function realId(
-  ref: string,
-  byRef: ReadonlyMap<string, PlanNode>,
-  placedByRef: ReadonlyMap<string, Placed>,
-): string | null {
-  return placedByRef.get(ref)?.id ?? byRef.get(ref)?.objectId ?? null;
-}
-
-/** Write the many-to-many initiative links every placed project declares. */
-async function linkInitiatives(context: CommitContext): Promise<void> {
-  const { tx, orgId, document, byRef, placedByRef, changes } = context;
-  for (const node of document.nodes) {
-    if (node.kind !== 'project' || !placedByRef.has(node.ref)) continue;
-    const projectId = placedByRef.get(node.ref)?.id ?? '';
-    const initiativeIds = [
-      ...node.initiativeIds,
-      ...node.initiativeRefs
-        .map((ref) => realId(ref, byRef, placedByRef))
-        .filter((id): id is string => id !== null),
-    ];
-    for (const initiativeId of new Set(initiativeIds)) {
-      const inserted = await tx
-        .insert(initiativeProject)
-        .values({ organizationId: orgId, initiativeId, projectId })
-        .onConflictDoNothing()
-        .returning({ projectId: initiativeProject.projectId });
-      if (inserted.length > 0) {
-        changes.push({
-          kind: 'project_contributes_to',
-          from: projectId,
-          to: initiativeId,
-          linked: true,
-        });
-      }
-    }
-  }
-}
-
-/** Write one project edge, refusing one that closes a cycle with the workspace's graph. */
-async function linkProjects(context: CommitContext, from: string, to: string): Promise<void> {
-  const { tx, orgId, changes } = context;
-  if (await wouldCreateProjectCycle(tx, orgId, from, to)) throw new CycleError();
-  const inserted = await tx
-    .insert(projectDependency)
-    .values({ organizationId: orgId, blockingProjectId: from, blockedProjectId: to })
-    .onConflictDoNothing()
-    .returning({ id: projectDependency.blockedProjectId });
-  if (inserted.length > 0) changes.push({ kind: 'project_blocks', from, to, linked: true });
-}
-
-/** Write one task edge, refusing one that closes a cycle with the workspace's graph. */
-async function linkTasks(context: CommitContext, from: string, to: string): Promise<void> {
-  const { tx, orgId, changes } = context;
-  if (await wouldCreateTaskCycle(tx, orgId, from, to)) throw new CycleError();
-  const inserted = await tx
-    .insert(taskDependency)
-    .values({ organizationId: orgId, blockingTaskId: from, blockedTaskId: to })
-    .onConflictDoNothing()
-    .returning({ id: taskDependency.blockedTaskId });
-  if (inserted.length > 0) changes.push({ kind: 'blocks', from, to, linked: true });
-}
-
-/**
- * Write every dependency edge whose two ends are real after this commit.
- *
- * @remarks
- * The document refuses a cycle among its own edges, but an edge into existing work can close one
- * through dependencies the document never saw. Each edge is checked against the workspace graph
- * inside the commit's SERIALIZABLE transaction, and a cycle refuses the whole commit.
- *
- * @throws {CycleError} When an edge would close a dependency cycle.
- */
-async function linkDependencies(context: CommitContext): Promise<void> {
-  const { document, byRef, placedByRef } = context;
-  for (const edge of document.edges) {
-    if (!placedByRef.has(edge.fromRef) && !placedByRef.has(edge.toRef)) continue;
-    const from = realId(edge.fromRef, byRef, placedByRef);
-    const to = realId(edge.toRef, byRef, placedByRef);
-    const kind = byRef.get(edge.fromRef)?.kind;
-    if (from === null || to === null || from === to) continue;
-    if (kind === 'project') await linkProjects(context, from, to);
-    else if (kind === 'task') await linkTasks(context, from, to);
-  }
-}
-
 /** The document with every placed node marked confirmed and carrying its real id. */
 function confirmDocument(
   document: PlanDocument,
@@ -308,6 +221,7 @@ function confirmDocument(
 
 /** What the placement walk builds up as it goes, and what the steps after it read. */
 interface PlacementLedger {
+  readonly effects: DeferredWorkEffect[];
   /** Every node placed, in the order it was placed. */
   readonly placed: Placed[];
   /** The same placements by plan ref. */
@@ -320,8 +234,19 @@ interface PlacementLedger {
   readonly parentTaskIds: (string | null)[];
 }
 
+/** Clear attempt-local state before a serializable transaction retries the whole forest. */
+function resetPlacementLedger(ledger: PlacementLedger): void {
+  ledger.placed.length = 0;
+  ledger.placedByRef.clear();
+  ledger.projectByRef.clear();
+  ledger.changes.length = 0;
+  ledger.parentTaskIds.length = 0;
+  ledger.effects.length = 0;
+}
+
 /** Where a commit lands work by default, when the item names nothing narrower. */
 interface CommitLanding {
+  readonly origin: RecordedOrigin;
   readonly orgId: string;
   readonly actorId: string;
   readonly landingTeamId: string;
@@ -334,10 +259,12 @@ async function placePrepared(
   prepared: readonly PreparedItem[],
   confirmedParents: ReadonlyMap<string, ConfirmedParentTask>,
   ledger: PlacementLedger,
-): Promise<void> {
+): Promise<PreparedPlacementForest> {
+  const forest = await createPlacementForest(tx, landing.orgId, landing.actorId);
   for (const entry of prepared) {
     const at = placementFor(entry.item, entry.refs, { ...ledger, confirmedParents });
-    const result = await placeItem(tx, {
+    const placed = await prepareForestItem(tx, forest, {
+      origin: landing.origin,
       orgId: landing.orgId,
       actorId: landing.actorId,
       item: entry.item,
@@ -349,15 +276,11 @@ async function placePrepared(
       ownerId: entry.refs.ownerId,
       leadId: entry.refs.leadId,
     });
-    ledger.placed.push(result.placed);
-    ledger.placedByRef.set(entry.item.ref, result.placed);
-    if (result.placed.kind === 'task') ledger.projectByRef.set(entry.item.ref, at.projectId);
-    if (result.change) ledger.changes.push(result.change);
-    if (result.link) ledger.changes.push(result.link);
-    if (result.placed.kind === 'task' && result.placed.created) {
-      ledger.parentTaskIds.push(at.parentTaskId);
-    }
+    ledger.placed.push(placed);
+    ledger.placedByRef.set(entry.item.ref, placed);
+    if (placed.kind === 'task') ledger.projectByRef.set(entry.item.ref, at.projectId);
   }
+  return forest;
 }
 
 /**
@@ -391,6 +314,7 @@ export async function commitPlanNodes(input: CommitPlanInput): Promise<CommitPla
   const confirmedParents = await loadConfirmedParentTasks(orgId, closureRefs, byRef, closure);
 
   const ledger: PlacementLedger = {
+    effects: [],
     placed: [],
     placedByRef: new Map(),
     projectByRef: new Map(),
@@ -400,11 +324,13 @@ export async function commitPlanNodes(input: CommitPlanInput): Promise<CommitPla
   const { placed, placedByRef, changes } = ledger;
   let outcome: { readonly row: PlanDraftRow; readonly changeSetId: string | null } | undefined;
 
-  const cascades = await serializableTx(async (tx) => {
+  await serializableTx(async (tx) => {
+    resetPlacementLedger(ledger);
+    outcome = undefined;
     await authorizePlanCommit({ document: row.document, closure, orgId, actorId }, tx);
-    await placePrepared(
+    const forest = await placePrepared(
       tx,
-      { orgId, actorId, landingTeamId: landing.teamId },
+      { orgId, actorId, landingTeamId: landing.teamId, origin: planOrigin(input.origin, row) },
       prepared,
       confirmedParents,
       ledger,
@@ -417,20 +343,23 @@ export async function commitPlanNodes(input: CommitPlanInput): Promise<CommitPla
       placedByRef,
       changes,
     };
-    await linkInitiatives(context);
-    await linkDependencies(context);
+    const links = await preparePlanLinks(context, forest);
+    const mutation = await applyPlacementForest(tx, forest, planLinkDependencies(links));
+    ledger.changes.push(...mutation.changes, ...(await applyPlanLinks(tx, orgId, links)));
+    ledger.effects.push(...mutation.effects);
+    ledger.parentTaskIds.push(...mutation.parentTaskIds);
+    const settled = await settleCreationParents(tx, orgId, ledger.parentTaskIds);
+    ledger.changes.push(...settled.changes);
+    ledger.effects.push(...settled.effects);
     outcome = await finalizeCommit(
       context,
       { row, actorId, origin: planOrigin(input.origin, row), firstTitle: ordered[0]?.title },
       placed,
     );
-    return applySubtaskCompletionPolicyForParents(tx, orgId, ledger.parentTaskIds);
+    await rememberBlueprintReceipt(tx, mutation.created, outcome.changeSetId);
   });
 
-  for (const entry of placed) {
-    if (entry.created) await enqueueSearchUpsert(orgId, entry.kind, entry.id);
-  }
-  for (const cascade of cascades) await finishTaskStateTransition({ actorId: null }, cascade);
+  deferWorkCreationEffects(ledger.effects);
 
   /* v8 ignore next -- @preserve defensive: the transaction always sets the outcome */
   if (!outcome) throw new Error('plan commit produced no outcome');

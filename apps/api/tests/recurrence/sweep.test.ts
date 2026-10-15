@@ -30,11 +30,13 @@ import {
   sweepRecurrenceMaterialization,
 } from '../../src/lib/recurrence/sweep';
 import { assertDefined } from '@docket/test-utils';
+import { seedProcessAuthor } from './work-template-legacy-fixture';
 import { openMigratedPglite } from '../support/pglite-template';
 
 let client!: PGlite;
 let db!: Database;
 let organizationId!: string;
+let processAuthorId!: string;
 let teamId!: ReturnType<typeof TeamId.parse>;
 
 beforeAll(async () => {
@@ -49,6 +51,7 @@ beforeAll(async () => {
         .returning()
     )[0],
   ).id;
+  processAuthorId = await seedProcessAuthor(db, organizationId);
   // Statuses come before any work: every Task this sweep materializes stores both its state key
   // and the id of the workspace status carrying it.
   await seedWorkspaceStatuses(db, organizationId);
@@ -83,7 +86,11 @@ async function taskProcess(name: string): Promise<{ definitionId: string; revisi
     ],
     dependencies: [],
   };
-  const created = await createPublishedProcessDefinition(db, { organizationId, definition });
+  const created = await createPublishedProcessDefinition(db, {
+    organizationId,
+    actorId: processAuthorId,
+    definition,
+  });
   return { definitionId: created.definitionId, revisionId: created.revisionId };
 }
 

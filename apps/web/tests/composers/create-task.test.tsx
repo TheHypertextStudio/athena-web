@@ -1,20 +1,5 @@
-/**
- * Behavior tests for the robust task-create composer.
- *
- * @remarks
- * The directive's promise: the create modal is a Linear-grade composer, not a single name field —
- * a title + description body plus an inline strip of property pickers, all wired through the real
- * `TaskCreate` DTO. These tests pin that contract by driving the composer and asserting the shape
- * of the `tasks.$post` body it sends:
- *
- * - the title + description flow through, and a sensible default priority is always present;
- * - opening the assignee / project / label pickers and choosing options threads those ids into the
- *   create body (proving the pickers are wired, not decorative);
- * - the busy/disabled rules hold (no double-submit, no empty-title submit).
- *
- * The RPC client is mocked so the flow is asserted without a live API. The option rosters are fed
- * through the mocked `$get`s; the per-team workflow read seeds the status default.
- */
+/** Behavior tests for the ordinary Task composer and its shared creation contract. */
+import { taskTemplate } from './create-task-fixtures';
 import { OrganizationId, TeamId } from '@docket/identity-access/ids';
 import { type TeamOut } from '../../src/lib/contracts/team';
 import { QueryClientProvider } from '@tanstack/react-query';
@@ -63,7 +48,7 @@ const {
   };
 });
 
-vi.mock('../../src/lib/api', () => ({
+vi.mock('../../src/lib/api', async () => ({
   api: {
     v1: {
       orgs: {
@@ -77,7 +62,10 @@ vi.mock('../../src/lib/api', () => ({
             { ':id': { milestones: { $get: milestonesGet } } },
           ),
           labels: { $get: labelsGet },
-          templates: { $get: templatesGet },
+          templates: {
+            $get: templatesGet,
+            definitions: (await import('./blank-template-routes')).blankTemplateRoutes,
+          },
           settings: { 'work-structure': { $get: workStructureGet } },
           teams: { ':teamId': { $get: teamGet } },
         },
@@ -485,33 +473,20 @@ function renderDelayedOpeningTaskDefaults() {
   );
 }
 
-/** Make one task template row without coupling tests to DTO implementation details. */
-function taskTemplate(
-  name: string,
-  scope: 'organization' | 'personal' | 'team',
-  ownerActorId: string | null,
-  teamId: string | null,
-) {
-  return {
-    id: `${name.replaceAll(' ', '_')}_id`,
-    organizationId: ORG_ID,
-    targetType: 'task',
-    name,
-    description: null,
-    scope,
-    ownerActorId,
-    teamId,
-    payload: { targetType: 'task' },
-    isSeed: false,
-    createdAt: '2026-01-01T00:00:00Z',
-  };
-}
-
 describe('CreateTaskDialog — robust composer', () => {
   it('opens a suggested title for review before creating a task', () => {
     renderGlobalTask({ request: { initialTitle: 'Prepare release checklist' } });
     expect(screen.getByLabelText('Task title')).toHaveValue('Prepare release checklist');
     expect(taskPost).not.toHaveBeenCalled();
+  });
+
+  it('keeps template identity before the title instead of inside overflowing properties', async () => {
+    renderComposer();
+    const picker = await screen.findByRole('button', {
+      name: /^(Blank work|Templates unavailable · Retry)$/,
+    });
+    const title = screen.getByLabelText('Task title');
+    expect(picker.compareDocumentPosition(title) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it('states empty task properties as current values', async () => {
@@ -534,7 +509,7 @@ describe('CreateTaskDialog — robust composer', () => {
   it('renders Start from template inside the empty editor after the task title', async () => {
     templatesGet.mockResolvedValue(
       jsonResponse(true, {
-        items: [taskTemplate('My template', 'personal', ADA_ID, null)],
+        items: [taskTemplate(ORG_ID, 'My template', 'personal', ADA_ID, null)],
       }),
     );
     renderGlobalTask();
@@ -554,7 +529,7 @@ describe('CreateTaskDialog — robust composer', () => {
   it('omits the team control from the global context row when one team is implied', async () => {
     templatesGet.mockResolvedValue(
       jsonResponse(true, {
-        items: [taskTemplate('My template', 'personal', ADA_ID, null)],
+        items: [taskTemplate(ORG_ID, 'My template', 'personal', ADA_ID, null)],
       }),
     );
     renderGlobalTask({ teams: TEAMS });
@@ -593,7 +568,7 @@ describe('CreateTaskDialog — robust composer', () => {
   it('does not add a legacy context row to a template-only composer', async () => {
     templatesGet.mockResolvedValue(
       jsonResponse(true, {
-        items: [taskTemplate('My template', 'personal', ADA_ID, null)],
+        items: [taskTemplate(ORG_ID, 'My template', 'personal', ADA_ID, null)],
       }),
     );
     renderComposer();
@@ -678,7 +653,7 @@ describe('CreateTaskDialog — robust composer', () => {
   it('closes the global composer before navigating to template settings', async () => {
     templatesGet.mockResolvedValue(
       jsonResponse(true, {
-        items: [taskTemplate('Shared template', 'organization', null, null)],
+        items: [taskTemplate(ORG_ID, 'Shared template', 'organization', null, null)],
       }),
     );
     const { closeCreate } = renderGlobalTask();
@@ -695,7 +670,7 @@ describe('CreateTaskDialog — robust composer', () => {
   it('lists a sole personal template without a scope heading', async () => {
     templatesGet.mockResolvedValue(
       jsonResponse(true, {
-        items: [taskTemplate('My template', 'personal', ADA_ID, null)],
+        items: [taskTemplate(ORG_ID, 'My template', 'personal', ADA_ID, null)],
       }),
     );
     renderGlobalTask();
@@ -804,11 +779,11 @@ describe('CreateTaskDialog — robust composer', () => {
     templatesGet.mockResolvedValue(
       jsonResponse(true, {
         items: [
-          taskTemplate('Workspace template', 'organization', null, null),
-          taskTemplate('My template', 'personal', ADA_ID, null),
-          taskTemplate('Someone else template', 'personal', APOLLO_ID, null),
-          taskTemplate('General template', 'team', APOLLO_ID, TEAM_ID),
-          taskTemplate('Platform template', 'team', APOLLO_ID, SECOND_TEAM_ID),
+          taskTemplate(ORG_ID, 'Workspace template', 'organization', null, null),
+          taskTemplate(ORG_ID, 'My template', 'personal', ADA_ID, null),
+          taskTemplate(ORG_ID, 'Someone else template', 'personal', APOLLO_ID, null),
+          taskTemplate(ORG_ID, 'General template', 'team', APOLLO_ID, TEAM_ID),
+          taskTemplate(ORG_ID, 'Platform template', 'team', APOLLO_ID, SECOND_TEAM_ID),
         ],
       }),
     );

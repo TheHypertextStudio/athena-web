@@ -29,6 +29,8 @@ import {
 } from '../../src/lib/recurrence/calendar-binding';
 import { createPublishedProcessDefinition } from '../../src/lib/recurrence/process-definition';
 import { openMigratedPglite } from '../support/pglite-template';
+import { grantProcessAuthor } from './work-template-legacy-fixture';
+import { installTestProductFixture } from '../support/db';
 import { one } from '../support/routes-harness';
 import { assertDefined } from '@docket/test-utils';
 
@@ -39,6 +41,7 @@ describe('calendar process bindings', () => {
   beforeAll(async () => {
     client = await openMigratedPglite();
     db = drizzle(client, { schema: fullSchema });
+    await installTestProductFixture(db);
   });
 
   afterAll(async () => {
@@ -72,6 +75,7 @@ describe('calendar process bindings', () => {
         displayName: 'Meetup coordinator',
       })
       .returning();
+    await grantProcessAuthor(db, workspace.id, assertDefined(coordinator).id);
     await db.insert(account).values({
       userId: assertDefined(identity).id,
       providerId: 'google',

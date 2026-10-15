@@ -240,7 +240,12 @@
         "./provenance-contract",
         "./workflow",
         "./work-template-contract",
-        "./work-template-reference"
+        "./work-template-reference",
+        "./work-template-blueprint",
+        "./work-template-blueprint-contract",
+        "./blueprints",
+        "./calendar-date",
+        "./template-merge"
       ],
       "allowedRuntimeDependencies": ["@docket/identity-access", "zod"],
       "supportedDeployableRuntimes": ["api", "web", "admin", "runner", "desktop"]

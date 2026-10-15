@@ -50,17 +50,26 @@ on demand, and creates or links work without leaving the page. Quick-add keeps f
 name and retains failed entries for retry. A Program's existing-project suggestions preserve that
 Program's placement; the object's Move action handles placement changes.
 
-Template setup separates metadata, work defaults, and review in a dialog that fits its content on
-desktop and fills phones. Guided creation saves a private draft; its editor publishes an immutable workspace-visible version. Project repetition
+Work templates define the kinds of work an organization does. Their full-page editor separates
+Purpose, Work, and Review: name the work, shape its starting outline and children, then review it
+before sharing. Return to any section without starting over. Save draft keeps the definition private;
+explicit publication creates an immutable workspace-visible version. Project repetition
 shows its cadence controls in the setup step. Generated work opens its schedule and occurrence
 history in a management overlay.
 See [template and repeating-work setup](docs/core/work-template-ui.md) for the saved behavior and
 draft boundaries. Every Initiative, Program, Project, and Task retains its chosen template and
 published version, including work created by connectors or imports through a blank base template.
-Work views filter and group by template; Change template previews optional starting fields without
-changing dates or children. Workspace administrators manage team offerings and authoring policy.
-See the [identity engineering specification](docs/engineering/specs/work-template-identity.md) for
-migration ordering, private-draft preservation, and REST/MCP compatibility.
+Work views filter and group by template. Creation reviews optional and nested child work before
+saving the whole tree together, with a maximum of 500 new work items. Managed child dates follow
+parent anchors and completion facts; explicit date edits, including clearing a date, stay manual.
+Change template and Update template preview individually accepted starting fields, children, dates
+and dependencies while preserving authored work. Save as template captures a private draft for
+review before publication. Workspace administrators manage team offerings, authoring policy and
+working weekdays. Archive review shows authorized parent-template and schedule usage; existing
+accepted schedules continue to run from their retained versions.
+See the [identity engineering specification](docs/engineering/specs/work-template-identity.md) and
+[blueprint specification](docs/engineering/specs/work-template-blueprints.md) for migration ordering,
+private-draft preservation, transactional creation and REST/MCP compatibility.
 For Codex connections that repeatedly request sign-in with several chats open, see
 [refresh coordination troubleshooting](apps/docs/developers/connect-an-agent-mcp.mdx#codex-asks-you-to-reconnect-when-several-chats-are-open).
 

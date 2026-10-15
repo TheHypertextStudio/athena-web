@@ -47,6 +47,10 @@ import { actor, auditColumns, organization, team } from './identity';
 import { integration, template } from './crosscutting';
 import { workStatus } from './work-status';
 import { workTemplateColumns, workTemplateConstraints } from './work-template-reference';
+import {
+  workBlueprintColumns,
+  workBlueprintConstraints,
+} from './work-template-blueprint-reference';
 
 /**
  * How every table on this island points at its status.
@@ -150,6 +154,7 @@ export const initiative = pgTable(
   {
     ...auditColumns(),
     ...workTemplateColumns(),
+    ...workBlueprintColumns(),
     name: text('name').notNull(),
     summary: text('summary'),
     description: text('description'),
@@ -166,6 +171,7 @@ export const initiative = pgTable(
   },
   (t) => [
     ...workTemplateConstraints(t, 'initiative'),
+    ...workBlueprintConstraints(t, 'initiative'),
     index('initiative_org_idx').on(t.organizationId),
     index('initiative_status_idx').on(t.statusId),
     foreignKey({
@@ -200,6 +206,7 @@ export const program = pgTable(
   {
     ...auditColumns(),
     ...workTemplateColumns(),
+    ...workBlueprintColumns(),
     name: text('name').notNull(),
     description: text('description'),
     summary: text('summary'),
@@ -215,6 +222,7 @@ export const program = pgTable(
   },
   (t) => [
     ...workTemplateConstraints(t, 'program'),
+    ...workBlueprintConstraints(t, 'program'),
     index('program_org_idx').on(t.organizationId),
     index('program_status_idx').on(t.statusId),
     index('program_ancestor_path_gin').using('gin', t.ancestorPath),
@@ -280,6 +288,7 @@ export const project = pgTable(
   {
     ...auditColumns(),
     ...workTemplateColumns(),
+    ...workBlueprintColumns(),
     name: text('name').notNull(),
     summary: text('summary'),
     description: text('description'),
@@ -313,6 +322,7 @@ export const project = pgTable(
   },
   (t) => [
     ...workTemplateConstraints(t, 'project'),
+    ...workBlueprintConstraints(t, 'project'),
     index('project_org_idx').on(t.organizationId),
     index('project_status_idx').on(t.statusId),
     index('project_program_idx').on(t.programId),
@@ -365,6 +375,7 @@ export const milestone = pgTable(
   'milestone',
   {
     ...auditColumns(),
+    ...workBlueprintColumns(),
     projectId: text('project_id')
       .notNull()
       .references(() => project.id, { onDelete: 'cascade' }),
@@ -374,6 +385,7 @@ export const milestone = pgTable(
     sort: integer('sort').notNull().default(0),
   },
   (t) => [
+    ...workBlueprintConstraints(t, 'milestone'),
     index('milestone_project_idx').on(t.projectId),
     notBlank('milestone_name_not_blank', t.name),
     dateInRange('milestone_target_date_range', t.targetDate),
@@ -429,6 +441,7 @@ export const task = pgTable(
   {
     ...auditColumns(),
     ...workTemplateColumns(),
+    ...workBlueprintColumns(),
     title: text('title').notNull(),
     description: text('description'),
     /**
@@ -490,6 +503,7 @@ export const task = pgTable(
   },
   (t) => [
     ...workTemplateConstraints(t, 'task'),
+    ...workBlueprintConstraints(t, 'task'),
     index('task_org_idx').on(t.organizationId),
     index('task_team_state_idx').on(t.teamId, t.state),
     index('task_status_idx').on(t.statusId),

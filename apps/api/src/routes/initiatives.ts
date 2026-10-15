@@ -1,6 +1,21 @@
-import { deferInitiativeCreated } from './initiative-create-effects';
+import { readBlueprintWork } from '../lib/work-template-blueprints/snapshot-rows';
+import {
+  workspacePlanningCalendar,
+  workspaceTargetDatePatch,
+} from '../lib/workspace-planning-calendar';
+import {
+  prepareBlueprintReflow,
+  applyBlueprintReflow,
+  finishBlueprintReflow,
+} from '../lib/work-template-blueprints/reflow';
+import { explicitBlueprintDatePatch } from '../lib/work-template-blueprints/date-ownership';
+import { serializableTx } from '../lib/serializable-tx';
+import { originFor } from '../lib/provenance/context';
+import { createWork } from '../lib/work-creation/service';
+
 import { workTemplateAssignmentRoutes } from './work-template-assignment';
-import { prepareWorkTemplateCreation } from '../lib/work-template-creation';
+import { workTemplateCaptureRoutes } from './work-template-capture';
+
 /** Initiative routes mounted under an organization. */
 import {
   db,
@@ -37,7 +52,6 @@ import type { z } from 'zod';
 import type { AppEnv } from '../context';
 import { ConflictError, NotFoundError } from '../error';
 import { clearableTextPatch } from '../lib/clearable-text';
-import { planningDatePatch } from '../lib/planning-timeframe';
 import {
   attachLabels,
   labelsForSubject,
@@ -77,7 +91,6 @@ import {
 import initiativeResources from './initiative-resources';
 import { accessibleInitiativeWorkKeys } from './initiative-work-access';
 import {
-  recordCreate,
   recordLabelUpdate,
   recordLink,
   recordRemoval,
@@ -87,6 +100,7 @@ import {
 /** Initiatives router: org-scoped CRUD + child associations + roadmap roll-up. */
 const initiatives = new Hono<AppEnv>()
   .route('/', workTemplateAssignmentRoutes('initiative'))
+  .route('/', workTemplateCaptureRoutes('initiative'))
   .get(
     '/',
     apiDoc({
@@ -127,70 +141,16 @@ const initiatives = new Hono<AppEnv>()
     }),
     zJson(InitiativeCreate),
     async (c) => {
-      const { orgId, actorId } = c.get('actorCtx');
-      const body = InitiativeCreate.parse(
-        await prepareWorkTemplateCreation(orgId, 'initiative', c.req.valid('json')),
-      );
-      await assertOwnerInOrg(orgId, body.ownerId);
-      // Through the shared resolver, so an initiative obeys label-group exclusivity exactly as a
-      // task does. Initiatives have no team, so only workspace-wide labels are offerable.
-      const labels = await resolveLabelSet(orgId, body.labelIds);
-      const status = await resolveContainerStatus(orgId, 'initiative', body.status ?? 'active');
-      const row = await db.transaction(async (tx) => {
-        const [settings] = await tx
-          .select({ fiscalYearStartMonth: organization.fiscalYearStartMonth })
-          .from(organization)
-          .where(eq(organization.id, orgId))
-          .limit(1);
-        /* v8 ignore next -- @preserve actor context proves the workspace exists */
-        if (!settings) throw new NotFoundError('Organization not found');
-        const target = planningDatePatch(
-          { date: body.targetDate, resolution: body.targetDateResolution },
-          settings.fiscalYearStartMonth,
-          'target',
-          'targetDate',
-          'targetDateResolution',
-        );
-        const inserted = await tx
-          .insert(initiative)
-          .values({
-            workTypeId: body.workTypeId,
-            workTypeVersionId: body.workTypeVersionId,
-            organizationId: orgId,
-            name: body.name,
-            summary: body.summary,
-            description: body.description,
-            ownerId: body.ownerId,
-            status: status.status,
-            statusId: status.statusId,
-            priority: body.priority ?? 'none',
-            updateCadence: body.updateCadence ?? 'monthly',
-            ...(target === undefined
-              ? {}
-              : {
-                  targetDate: target.date,
-                  targetDateResolution: target.resolution,
-                  targetDateFiscalYearStartMonth: target.fiscalYearStartMonth,
-                }),
-            health: body.health,
-            createdBy: actorId,
-          })
-          .returning();
-        const created = inserted[0];
-        /* v8 ignore next -- @preserve defensive: insert always returns one row */
-        if (!created) throw new Error('initiative insert returned no row');
-        if (labels.length > 0) {
-          await replaceLabels(tx, 'initiative', created.id, orgId, labels);
-        }
-        return recordCreate({ tx, orgId, actorId }, 'initiative', created);
+      const caller = c.get('actorCtx');
+      const result = await createWork({
+        caller,
+        kind: 'initiative',
+        body: c.req.valid('json'),
+        invocation: { origin: originFor('initiative_create') },
       });
-      // Post-commit and unread by the response, so it runs after the caller has been answered.
-      // Stamped here rather than inside the deferred callback: `emitEvent` defaults `occurredAt`
-      // to the moment it runs, which is now after the response, so under concurrent creates the
-      // feed could order two entities against the order their rows were actually written. It is
-      // also part of the dedupe key, so it needs to name the domain event, not the drain.
-      deferInitiativeCreated(row, actorId);
-      return created(c, InitiativeOut, toOut(row));
+      if (result.root.kind !== 'initiative')
+        throw new Error('Work creation returned the wrong kind');
+      return created(c, InitiativeOut, toOut(result.root.row));
     },
   )
   .get(
@@ -307,30 +267,23 @@ const initiatives = new Hono<AppEnv>()
         body.status === undefined
           ? undefined
           : await resolveContainerStatus(orgId, 'initiative', body.status);
-      const row = await db.transaction(async (tx) => {
-        const currentRows = await tx
-          .select()
-          .from(initiative)
-          .where(and(eq(initiative.id, id), eq(initiative.organizationId, orgId)))
-          .limit(1)
-          .for('update');
-        const current = currentRows[0];
-        if (!current) return undefined;
-        const [settings] = await tx
-          .select({ fiscalYearStartMonth: organization.fiscalYearStartMonth })
-          .from(organization)
-          .where(eq(organization.id, orgId))
-          .limit(1);
-        /* v8 ignore next -- @preserve the Initiative's organization FK proves this row exists */
-        if (!settings) throw new NotFoundError('Organization not found');
-        const target = planningDatePatch(
-          { date: body.targetDate, resolution: body.targetDateResolution },
-          settings.fiscalYearStartMonth,
-          'target',
-          'targetDate',
-          'targetDateResolution',
+      let blueprintResult: Awaited<ReturnType<typeof applyBlueprintReflow>> = {
+        changes: [],
+        rows: [],
+      };
+      const row = await serializableTx(async (tx) => {
+        const blueprint = await prepareBlueprintReflow(
+          tx,
+          c.get('actorCtx'),
+          { kind: 'initiative', id },
+          body,
         );
+        const locked = await readBlueprintWork(tx, orgId, { kind: 'initiative', id }, true);
+        if (locked.kind !== 'initiative') throw new NotFoundError('Initiative not found');
+        const current = locked.row;
+        const settings = await workspacePlanningCalendar(tx, orgId);
         const values: Partial<typeof initiative.$inferInsert> = {
+          ...explicitBlueprintDatePatch(current, body),
           ...(body.name !== undefined ? { name: body.name } : {}),
           ...clearableTextPatch('summary', body.summary),
           ...clearableTextPatch('description', body.description),
@@ -341,13 +294,10 @@ const initiatives = new Hono<AppEnv>()
             : { status: nextStatus.status, statusId: nextStatus.statusId }),
           ...(body.priority !== undefined ? { priority: body.priority } : {}),
           ...(body.updateCadence !== undefined ? { updateCadence: body.updateCadence } : {}),
-          ...(target === undefined
-            ? {}
-            : {
-                targetDate: target.date,
-                targetDateResolution: target.resolution,
-                targetDateFiscalYearStartMonth: target.fiscalYearStartMonth,
-              }),
+          ...workspaceTargetDatePatch(
+            { date: body.targetDate, resolution: body.targetDateResolution },
+            settings.fiscalYearStartMonth,
+          ),
           ...(body.health !== undefined ? { health: body.health } : {}),
         };
         const updated =
@@ -363,7 +313,14 @@ const initiatives = new Hono<AppEnv>()
         if (body.labelIds !== undefined) {
           await replaceLabels(tx, 'initiative', id, orgId, labels);
         }
-        return recordUpdate({ tx, orgId, actorId }, 'initiative', current, changed, body);
+        blueprintResult = await applyBlueprintReflow(tx, blueprint);
+        return recordUpdate(
+          { tx, orgId, actorId, derived: blueprintResult.changes },
+          'initiative',
+          current,
+          changed,
+          body,
+        );
       });
       if (!row) throw new NotFoundError('Initiative not found');
       if (body.status !== undefined) {
@@ -390,6 +347,7 @@ const initiatives = new Hono<AppEnv>()
           },
         });
       }
+      await finishBlueprintReflow(orgId, blueprintResult);
       await enqueueSearchUpsert(orgId, 'initiative', row.id);
       return ok(c, InitiativeOut, toOut(row));
     },

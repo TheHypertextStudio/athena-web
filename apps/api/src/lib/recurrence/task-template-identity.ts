@@ -20,8 +20,15 @@ export async function prepareProcessTemplates(
     definition.tasks.map(async (step) => {
       const prepared = await prepareWorkTemplateCreation(orgId, 'task', step, database);
       const { labels, ...fields } = prepared;
+      const ordinaryFields: Readonly<Record<string, unknown>> = fields;
       return ProcessTaskSpec.parse({
-        ...fields,
+        ...Object.fromEntries(
+          Object.entries(ordinaryFields).filter(
+            ([key, value]) =>
+              Object.hasOwn(ProcessTaskSpec.shape, key) &&
+              !(key === 'estimateMinutes' && value === null),
+          ),
+        ),
         labelIds: step.labelIds ?? labels,
         ...processTaskTemplateIdentity(prepared),
       });

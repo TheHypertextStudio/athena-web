@@ -16,6 +16,11 @@ import {
 } from './persistence';
 import { archiveWorkTemplate, createWorkTemplate } from './service';
 import { visibleTemplateWhere } from './visibility';
+import { serializableTx } from '../serializable-tx';
+import {
+  readPublicationDraft,
+  lockPublicationClosure,
+} from '../work-template-blueprints/publication';
 
 export { reconcileTemplateImages } from './images';
 export { toTemplateOut, type TemplateRow, type TemplateUpdateResult } from './model';
@@ -92,8 +97,8 @@ export async function updateTemplate(
   const actor: TemplateActor = { orgId, actorId, ...(capabilities ? { capabilities } : {}) };
   await requireVisibleTemplate(orgId, actorId, id);
   await requireTemplateAuthor(actor);
-  const result = await db.transaction(async (tx) => {
-    const before = await lockTemplate(tx, orgId, id, actorId);
+  const result = await serializableTx(async (tx) => {
+    const before = await readPublicationDraft(tx, orgId, id, actorId);
     const scope = await nextScope(actor, before, body, tx);
     const previous = await legacyTemplateDefinition(tx, before);
     const definition = WorkTemplateDefinition.parse({
@@ -110,6 +115,12 @@ export async function updateTemplate(
       ]);
     }
     requireDefinitionKind(before, definition);
+    const locked =
+      scope.scope === 'organization'
+        ? await lockPublicationClosure(tx, before, definition)
+        : await lockTemplate(tx, orgId, id, actorId);
+    if (locked.draftRevision !== before.draftRevision)
+      throw new ConflictError('Template draft changed');
     const [draft] = await tx
       .update(template)
       .set({

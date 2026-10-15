@@ -29,6 +29,8 @@ export type RouteTx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 /** The workspace, member, and optional open transaction a REST change is recorded under. */
 export interface ChangeScope {
+  /** Derived changes committed and undone with this same ordinary mutation. */
+  readonly derived?: readonly RecordedChange[];
   readonly orgId: string;
   readonly actorId: string;
   /** Record inside this transaction; without one the change set gets its own. */
@@ -195,7 +197,10 @@ export async function recordProjectUpdate<T extends typeof project.$inferSelect>
   const entries: RecordedChange[] = requestedFieldChange('project', request)
     ? [updateEntry('project', before, after), ...links]
     : [...links];
-  await write(scope, 'project_update', `Updated "${after.name}"`, entries);
+  await write(scope, 'project_update', `Updated "${after.name}"`, [
+    ...entries,
+    ...(scope.derived ?? []),
+  ]);
   return after;
 }
 
@@ -219,6 +224,7 @@ export async function recordUpdate<T extends ContainerRow>(
   if (!after || !requestedFieldChange(kind, request)) return after;
   await write(scope, `${kind}_update`, `Updated "${after.name}"`, [
     updateEntry(kind, before, after),
+    ...(scope.derived ?? []),
   ]);
   return after;
 }

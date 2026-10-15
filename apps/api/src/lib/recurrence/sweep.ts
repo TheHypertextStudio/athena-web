@@ -85,6 +85,37 @@ function blocksReplacement(status: typeof processOccurrence.$inferSelect.status)
   return status !== 'superseded';
 }
 
+/** Cache a materialized date for this sweep's duplicate suppression; no reusable binding is inferred. */
+function materializedMarker(
+  input: {
+    organizationId: string;
+    actorId?: string | undefined;
+    seriesId: string;
+    seriesRevisionId: string;
+    scheduledFor: string;
+  },
+  now: Date,
+): typeof processOccurrence.$inferSelect {
+  return {
+    id: '',
+    organizationId: input.organizationId,
+    createdBy: input.actorId ?? null,
+    createdAt: now,
+    updatedAt: now,
+    archivedAt: null,
+    seriesId: input.seriesId,
+    seriesRevisionId: input.seriesRevisionId,
+    scheduledFor: input.scheduledFor,
+    originalScheduledFor: null,
+    status: 'materialized',
+    blueprintInvocationId: null,
+    blueprintRootRefs: null,
+    blueprintAppliedAt: null,
+    externalOccurrenceKey: null,
+    resolvedAt: null,
+  };
+}
+
 /** Apply one missed occurrence policy without duplicating prior durable decisions. */
 async function applyMissedDate(
   database: Database,
@@ -112,21 +143,7 @@ async function applyMissedDate(
     });
     input.existingByDate.set(input.scheduledFor, [
       ...existing,
-      {
-        id: '',
-        organizationId: input.organizationId,
-        createdBy: input.actorId ?? null,
-        createdAt: input.now,
-        updatedAt: input.now,
-        archivedAt: null,
-        seriesId: input.seriesId,
-        seriesRevisionId: input.seriesRevisionId,
-        scheduledFor: input.scheduledFor,
-        originalScheduledFor: null,
-        status: 'materialized',
-        externalOccurrenceKey: null,
-        resolvedAt: null,
-      },
+      materializedMarker(input, input.now),
     ]);
     return 'carry';
   }
@@ -309,21 +326,7 @@ export async function materializeRecurrenceSeriesWindow(
       });
       existingByDate.set(scheduledFor, [
         ...existing,
-        {
-          id: '',
-          organizationId: input.organizationId,
-          createdBy: input.actorId ?? null,
-          createdAt: now,
-          updatedAt: now,
-          archivedAt: null,
-          seriesId: input.seriesId,
-          seriesRevisionId: revision.id,
-          scheduledFor,
-          originalScheduledFor: null,
-          status: 'materialized',
-          externalOccurrenceKey: null,
-          resolvedAt: null,
-        },
+        materializedMarker({ ...input, seriesRevisionId: revision.id, scheduledFor }, now),
       ]);
       materialized += 1;
     }

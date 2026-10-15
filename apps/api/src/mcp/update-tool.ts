@@ -27,51 +27,25 @@ import { and, eq, inArray } from 'drizzle-orm';
 import type { PgTable } from 'drizzle-orm/pg-core';
 import { z } from 'zod';
 
-import { ApiError, CapabilityError, ValidationError } from '../error';
+import { ApiError, ValidationError } from '../error';
+import { preserveTaskTerminalInstants } from '../lib/task-terminal-instants';
 import { clearableMarkdownPatch } from '../lib/clearable-text';
-import { originFor } from '../lib/provenance/context';
 import { assertPlanningDateRange, planningDatePatch } from '../lib/planning-timeframe';
-import {
-  applySubtaskCompletionPolicy,
-  closeCompletingUserTaskTimers,
-  emitCompletedTaskTimerStops,
-  finishTaskStateTransition,
-  writeTaskStateTransition,
-} from '../lib/task-state';
-import { resolveContainerStatus } from '../lib/work-status';
+import { resolveContainerStatus, resolveTaskStatus } from '../lib/work-status';
 import { buildTaskViewFilter } from '../routes/task-helpers';
-import { enqueueSearchUpsert } from '../search/write-through';
 import type { McpContext } from './auth';
 import type { McpRegistrar } from './catalog';
-import type { FieldDiff } from './catalog-rows';
-import { diff, titleOf } from './update-display';
-import type { RowContext, RowOutcome, RowReport, RowSkip } from './update-row-contract';
-import {
-  recordChangeSet,
-  trackedFields,
-  type ChangeRecord,
-  type RecordedChange,
-  type Tx,
-} from './change-set';
-import { recordUpdatedRowActivity } from './tool-activity';
-import {
-  applyLabelEdit,
-  labelsFitRow,
-  resolveLabelEdit,
-  type RowLabelResult,
-} from './update-labels';
-import { applyInitiativeEdit, cycleFitsRow } from './update-relations';
-import {
-  referencePatch,
-  resolveReferences,
-  resolveRelations,
-  type ResolvedRefs,
-} from './update-refs';
+import { titleOf } from './update-display';
+import { executeUpdateBatch, type UpdateRowPatch } from './update-batch';
+import type { RowContext } from './update-row-contract';
+import type { ChangeRecord, Tx } from './change-set';
+import { labelsFitRow, resolveLabelEdit } from './update-labels';
+import { cycleFitsRow } from './update-relations';
+import { referencePatch, resolveReferences, resolveRelations } from './update-refs';
 import { isTaskRowVisible, listWork, listWorkFilters, type WorkEntity } from './list-work';
 import { updateReportResult } from './apps/change-render';
 import { authorize, runTool, scopedActor } from './result';
-import { resolveStateTransition } from './tools-shared';
-import { entityHref, entityListHref } from './entity-href';
+import { entityListHref } from './entity-href';
 import { taskMilestoneDecisions } from './task-milestone';
 import { updateSetFields, updateToolDefinition } from './update-tool-contract';
 
@@ -210,22 +184,17 @@ function datePatch(key: string, value: string | null | undefined): Record<string
  * Per-row rather than once, because `state` resolves against the row's own team: a scope spanning
  * two teams that both call something "In Review" must write each team's own key.
  *
- * @param entity - What is being updated.
- * @param orgId - The organization.
+ * @param rc - The resolved caller, scope and ordinary patch.
  * @param row - The row as it stands.
- * @param set - The caller's patch.
- * @param refs - The already-resolved descriptor ids.
+ * @param database - The transaction that owns these edits.
  * @returns the Drizzle `.set()` object.
  */
 async function buildPatch(
-  entity: WorkEntity,
-  orgId: string,
+  rc: RowContext,
   row: Record<string, unknown>,
-  set: UpdateSet,
-  refs: ResolvedRefs,
-  fiscalYearStartMonth: number,
-  containerStatus?: { statusId: string; status: string },
+  database: Tx,
 ): Promise<Record<string, unknown>> {
+  const { entity, orgId, set, refs, fiscalYearStartMonth, containerStatus } = rc;
   const patch: Record<string, unknown> = {
     // `title` is the caller's word for it; the column is `name` on everything but a task.
     ...(set.title !== undefined ? { [entity === 'task' ? 'title' : 'name']: set.title } : {}),
@@ -284,7 +253,10 @@ async function buildPatch(
     }
   }
   if (set.state !== undefined) {
-    const transition = await resolveStateTransition(orgId, String(row['teamId']), set.state);
+    const transition = preserveTaskTerminalInstants(
+      row,
+      await resolveTaskStatus(orgId, String(row['teamId']), set.state, 'state', database),
+    );
     // The key and the status it names move together; the composite foreign key refuses a row
     // where they disagree.
     patch['statusId'] = transition.statusId;
@@ -303,78 +275,18 @@ async function buildPatch(
  * everything else on this tool is `contribute`. A denial is data, not a failure: the caller asked
  * about a set, and the answer is that part of it was theirs to change and part was not.
  */
-async function permitted(rc: RowContext, id: string): Promise<boolean> {
+async function permitted(rc: RowContext, id: string, database: Tx): Promise<boolean> {
   const target = { kind: rc.entity, id, orgId: rc.orgId };
   const needsAssign =
     rc.entity === 'task' && (rc.set.assignee !== undefined || rc.set.delegate !== undefined);
   try {
-    await authorize(rc.actorCtx, 'contribute', target);
-    if (needsAssign) await authorize(rc.actorCtx, 'assign', target);
+    await authorize(rc.actorCtx, 'contribute', target, database);
+    if (needsAssign) await authorize(rc.actorCtx, 'assign', target, database);
     return true;
   } catch (err) {
     if (!(err instanceof ApiError)) throw err;
     return false;
   }
-}
-
-/** Move a task to a new workflow state, with its timers and parent completion, then its fields. */
-async function writeTaskState(
-  rc: RowContext,
-  id: string,
-  patch: Record<string, unknown>,
-): Promise<Record<string, unknown> | null> {
-  const { statusId, state, completedAt, canceledAt, ...remainingPatch } = patch;
-  const where = and(eq(task.id, id), eq(task.organizationId, rc.orgId));
-  const result = await db.transaction(async (tx) => {
-    const [current] = await tx.select().from(task).where(where).for('update').limit(1);
-    if (!current) return null;
-    const mutation = await writeTaskStateTransition(tx, {
-      before: current,
-      statusId: String(statusId),
-      state: String(state),
-      completedAt: completedAt as Date | null,
-      canceledAt: canceledAt as Date | null,
-    });
-    if (!mutation) return null;
-    const timerStops = await closeCompletingUserTaskTimers(tx, rc.actorCtx.actorId, mutation);
-    const [after] =
-      Object.keys(remainingPatch).length === 0
-        ? [mutation.after]
-        : await tx.update(task).set(remainingPatch).where(where).returning();
-    if (!after) return null;
-    const finalMutation = { before: current, after };
-    const cascades = await applySubtaskCompletionPolicy(tx, finalMutation);
-    return { after, mutation: finalMutation, timerStops, cascades };
-  });
-  if (!result) return null;
-  await finishTaskStateTransition({ actorId: rc.actorCtx.actorId }, result.mutation);
-  await emitCompletedTaskTimerStops(result.timerStops);
-  for (const cascade of result.cascades)
-    await finishTaskStateTransition({ actorId: null }, cascade);
-  return result.after;
-}
-
-/** Write a row's column patch and return the row as it now is. */
-async function writeColumns(
-  rc: RowContext,
-  row: Record<string, unknown>,
-  patch: Record<string, unknown>,
-  database: Tx | typeof db = db,
-): Promise<Record<string, unknown> | null> {
-  const id = String(row['id']);
-  if (rc.entity === 'task' && rc.set.state !== undefined) return writeTaskState(rc, id, patch);
-  // A labels-only call has no columns to write, and Drizzle refuses an empty `set`.
-  if (Object.keys(patch).length === 0) return row;
-  const table = TABLES[rc.entity] as PgTable & {
-    id: typeof task.id;
-    organizationId: typeof task.organizationId;
-  };
-  const [updated] = await database
-    .update(table)
-    .set(patch)
-    .where(and(eq(table.id, id), eq(table.organizationId, rc.orgId)))
-    .returning();
-  return updated ?? null;
 }
 
 /** The team a row belongs to once this call's `team` change, if any, has landed. */
@@ -390,108 +302,36 @@ function teamAfter(rc: RowContext, row: Record<string, unknown>): string | null 
  * Every check runs before any write, so a row that cannot take part of the patch is skipped whole
  * rather than half-updated.
  */
-async function skipReason(rc: RowContext, row: Record<string, unknown>): Promise<string | null> {
-  if (!(await permitted(rc, String(row['id'])))) return 'not_permitted';
+async function skipReason(
+  rc: RowContext,
+  row: Record<string, unknown>,
+  database: Tx,
+): Promise<string | null> {
+  if (!(await permitted(rc, String(row['id']), database))) return 'not_permitted';
   const team = teamAfter(rc, row);
   if (rc.labelEdit && !labelsFitRow(rc.labelEdit, team)) return 'label_out_of_scope';
   if (!cycleFitsRow(rc.cycle, team)) return 'cycle_out_of_team';
   return null;
 }
 
-/** Edit a row's label set and initiative membership, adding each diff line and recorded change. */
-async function applyEdgeEdits(
-  rc: RowContext,
-  id: string,
-  report: { fields: FieldDiff[]; changes: RecordedChange[] },
-  database?: Tx,
-): Promise<RowLabelResult | null> {
-  const { entity, orgId } = rc;
-  const labels = rc.labelEdit
-    ? await applyLabelEdit(entity, orgId, id, rc.labelEdit, database)
-    : null;
-  if (labels) {
-    report.fields.push(labels.field);
-    report.changes.push(labels.change);
-  }
-  const member = entity === 'project' || entity === 'program' ? entity : null;
-  const initiatives =
-    member && rc.initiativeEdit && database
-      ? await applyInitiativeEdit(
-          { member, orgId, subjectId: id, edit: rc.initiativeEdit, actorId: rc.actorCtx.actorId },
-          database,
-        )
-      : null;
-  if (initiatives) {
-    report.fields.push(initiatives.field);
-    report.changes.push(...initiatives.changes);
-  }
-  return labels;
-}
-
-/** Write columns and edges together when initiative permissions can refuse the row. */
-async function writeRowChanges(
+/** Prepare one permitted ordinary patch before any bulk write. */
+async function prepareUpdateRow(
   rc: RowContext,
   row: Record<string, unknown>,
-  patch: Record<string, unknown>,
-  database?: Tx,
-) {
-  const before = trackedFields(rc.entity, row);
-  const next = await writeColumns(rc, row, patch, database);
-  if (!next) return null;
-  const fields = diff(before, trackedFields(rc.entity, next));
-  const changes: RecordedChange[] =
-    fields.length > 0
-      ? [
-          {
-            kind: rc.entity,
-            id: String(row['id']),
-            op: 'update',
-            before,
-            after: trackedFields(rc.entity, next),
-          },
-        ]
-      : [];
-  const labels = await applyEdgeEdits(rc, String(row['id']), { fields, changes }, database);
-  return { next, fields, changes, labels };
-}
-
-/** Apply the whole patch to one row: its columns, then its labels and initiatives. */
-async function updateRow(rc: RowContext, row: Record<string, unknown>): Promise<RowOutcome> {
+  database: Tx,
+): Promise<UpdateRowPatch> {
   const id = String(row['id']);
   const title = titleOf(row, id);
-  const reason = await skipReason(rc, row);
+  const reason = await skipReason(rc, row, database);
   if (reason !== null) return { skipped: { id, title, reason } };
   const milestonePatch = rc.milestoneFor(id);
   if (typeof milestonePatch === 'string') return { skipped: { id, title, reason: milestonePatch } };
-  const { entity, orgId } = rc;
-  const patch = {
-    ...(await buildPatch(
-      entity,
-      orgId,
-      row,
-      rc.set,
-      rc.refs,
-      rc.fiscalYearStartMonth,
-      rc.containerStatus,
-    )),
-    ...milestonePatch,
+  return {
+    patch: {
+      ...(await buildPatch(rc, row, database)),
+      ...milestonePatch,
+    },
   };
-  let written: Awaited<ReturnType<typeof writeRowChanges>>;
-  try {
-    written = rc.initiativeEdit
-      ? await db.transaction((tx) => writeRowChanges(rc, row, patch, tx))
-      : await writeRowChanges(rc, row, patch);
-  } catch (error) {
-    if (error instanceof CapabilityError)
-      return { skipped: { id, title, reason: 'not_permitted' } };
-    throw error;
-  }
-  if (!written) return null;
-  const { next, fields, changes, labels } = written;
-  await recordUpdatedRowActivity(rc, row, next, labels);
-  if (changes.length > 0) await enqueueSearchUpsert(orgId, entity, id);
-  const href = entityHref(orgId, entity, id);
-  return { report: { id, title: titleOf(next, id), href, fields }, changes };
 }
 
 /** Register `update` on `server`. */
@@ -591,30 +431,12 @@ export function registerUpdateTool(server: McpRegistrar, ctx: McpContext): void 
         initiativeEdit: relations.initiatives,
         milestoneFor: await taskMilestoneDecisions(input.orgId, set, refs, visibleRows),
       };
-      const changes: RecordedChange[] = [];
-      const report: RowReport[] = [];
-      const skipped: RowSkip[] = [];
-      for (const row of visibleRows) {
-        const outcome = await updateRow(rowContext, row);
-        if (outcome === null) continue;
-        if ('skipped' in outcome) skipped.push(outcome.skipped);
-        else {
-          report.push(outcome.report);
-          changes.push(...outcome.changes);
-        }
-      }
+      const { changes, report, skipped, changeSetId } = await executeUpdateBatch(
+        rowContext,
+        visibleRows,
+        prepareUpdateRow,
+      );
       const changedRows = report.filter((row) => row.fields.length > 0);
-
-      const changeSetId = await recordChangeSet({
-        orgId: input.orgId,
-        actorId: actorCtx.actorId,
-        origin: originFor('update'),
-        summary:
-          changedRows.length === 1 && changedRows[0]
-            ? `Updated "${changedRows[0].title}"`
-            : `Updated ${changedRows.length} ${entity}s`,
-        changes,
-      });
 
       return updateReportResult(
         input.orgId,

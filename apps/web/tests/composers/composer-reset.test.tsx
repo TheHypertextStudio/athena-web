@@ -30,7 +30,7 @@ const { projectPost, membersGet, agentsGet, initiativesGet } = vi.hoisted(() => 
   initiativesGet: vi.fn(),
 }));
 
-vi.mock('../../src/lib/api', () => ({
+vi.mock('../../src/lib/api', async () => ({
   api: {
     v1: {
       orgs: {
@@ -39,6 +39,10 @@ vi.mock('../../src/lib/api', () => ({
           members: { $get: membersGet },
           agents: { $get: agentsGet },
           initiatives: { $get: initiativesGet },
+          templates: {
+            $get: async () => Response.json({ items: [] }),
+            definitions: (await import('./blank-template-routes')).blankTemplateRoutes,
+          },
         },
       },
     },

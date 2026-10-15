@@ -1,4 +1,7 @@
 'use client';
+import { ComposerTemplateRow } from '@/components/composer/composer-template-row';
+import { useBlueprintCreationReview } from '@/components/composer/use-blueprint-creation-review';
+import { useComposerWorkspaceReset } from '@/components/composer/use-composer-workspace-reset';
 import { initiativeCreateBody } from './initiative-create-body';
 import type { WorkTemplateDraftFields } from '@/components/composer/work-template-draft';
 import { usesInitialWorkspace } from '@/components/composer/uses-initial-workspace';
@@ -40,7 +43,7 @@ import type { PlanningTimeframe } from '@docket/work/planning-timeframe';
 import { VocabularyProvider, useVocabulary } from '@docket/ui/hooks';
 import { ChevronRight } from '@docket/ui/icons';
 import { useQueryClient } from '@tanstack/react-query';
-import { type JSX, useCallback, useEffect, useRef, useState } from 'react';
+import { type JSX, useCallback, useState } from 'react';
 
 import { useAppRouter } from '@/lib/interactions/navigation';
 import { api } from '@/lib/api';
@@ -65,7 +68,7 @@ import { useDefaultedStatus } from '@/components/entity-display/use-work-status'
 import { useComposerOptions } from '@/components/pickers/use-composer-options';
 import { templatePatch } from '@/components/templates/queries';
 import { useSession } from '@/lib/auth-client';
-import { userErrorMessage, readProblemError } from '@/lib/problem';
+import { userErrorMessage } from '@/lib/problem';
 import { seedInitiativeRecord } from '@/lib/entity-records';
 import { useFiscalYearStartMonth } from '@/lib/use-fiscal-year-start-month';
 import { invalidateWorkTargetQueries } from '@/lib/work-target-invalidation';
@@ -160,7 +163,6 @@ export const CreateInitiativeDialog = withComposerReset(function CreateInitiativ
   globalCreation,
 }: CreateInitiativeDialogProps): JSX.Element {
   const initiativeNounLower = initiativeNoun.toLowerCase();
-  const previousWorkspaceId = useRef(globalCreation?.targetWorkspaceId ?? null);
   const contextualRequestDefaultsApply = usesInitialWorkspace(globalCreation);
   const destinationReady = globalCreation?.ready ?? true;
 
@@ -209,31 +211,33 @@ export const CreateInitiativeDialog = withComposerReset(function CreateInitiativ
 
   // Exact days are portable. Broad periods are not because their fiscal basis belongs to the
   // previous workspace, so a retarget clears those along with the prior workspace's person id.
-  useEffect(() => {
-    if (globalCreation === undefined) return;
-    const previousTargetWorkspaceId = previousWorkspaceId.current;
-    if (previousTargetWorkspaceId === globalCreation.targetWorkspaceId) return;
-    previousWorkspaceId.current = globalCreation.targetWorkspaceId;
-    if (
-      previousTargetWorkspaceId === null &&
-      globalCreation.targetWorkspaceId !== null &&
-      globalCreation.targetWorkspaceId === globalCreation.initialWorkspaceId
-    ) {
-      return;
-    }
+  useComposerWorkspaceReset(globalCreation, () => {
     setError(null);
     updateDraft(() => ({
       workTypeId: null,
       workTypeVersionId: null,
+      blueprint: undefined,
       ownerId: null,
       targetTimeframe: draft.targetTimeframe?.resolution ? null : draft.targetTimeframe,
     }));
-  }, [draft.targetTimeframe, globalCreation, updateDraft]);
+  });
 
   const canSubmit =
     draft.name.trim().length > 0 && destinationReady && (globalCreation?.canContribute ?? true);
 
   /** Create the theme with all set properties, then hand it to the parent. */
+  const blueprintReview = useBlueprintCreationReview({
+    orgId,
+    disabled: creating,
+    kind: 'initiative',
+    request: () => ({
+      kind: 'initiative',
+      body: initiativeCreateBody(draft, draft.name.trim()),
+    }),
+    selection: draft,
+    setField,
+  });
+
   const submit = useCallback(
     async (continueCreating = false): Promise<void> => {
       const trimmed = draft.name.trim();
@@ -241,16 +245,14 @@ export const CreateInitiativeDialog = withComposerReset(function CreateInitiativ
       setCreating(true);
       setError(null);
       try {
+        if (!(await blueprintReview.ensureReviewed())) return;
         const res = await api.v1.orgs[':orgId'].initiatives.$post({
           param: { orgId },
           json: initiativeCreateBody(draft, trimmed),
         });
         if (!res.ok) {
           setError(
-            userErrorMessage(
-              await readProblemError(res, `Could not create the ${initiativeNounLower}.`),
-              `Could not create the ${initiativeNounLower}.`,
-            ),
+            await blueprintReview.readFailure(res, `Could not create the ${initiativeNounLower}.`),
           );
           return;
         }
@@ -280,6 +282,7 @@ export const CreateInitiativeDialog = withComposerReset(function CreateInitiativ
       }
     },
     [
+      blueprintReview,
       canSubmit,
       continuation,
       draft,
@@ -297,6 +300,12 @@ export const CreateInitiativeDialog = withComposerReset(function CreateInitiativ
     <ComposerShell
       open={open}
       onOpenChange={onOpenChange}
+      leadingFields={
+        <ComposerTemplateRow
+          selection={templateContribution.selection}
+          review={blueprintReview.dialog}
+        />
+      }
       heading={`New ${initiativeNounLower}`}
       propertyAriaLabel={`${initiativeNoun} properties`}
       contextRow={
@@ -359,7 +368,6 @@ export const CreateInitiativeDialog = withComposerReset(function CreateInitiativ
       onSubmit={() => void submit(continuation.createMore)}
       submitLabel={`Create ${initiativeNoun}`}
     >
-      {templateContribution.selection}
       <InitiativeComposerPickers
         orgId={orgId}
         actorOptions={options.actorOptions}

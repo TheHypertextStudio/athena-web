@@ -73,6 +73,21 @@ describe('ConfirmDestructiveDialog', () => {
     expect(screen.getByRole('alert')).toHaveTextContent('Could not delete the project. Try again.');
   });
 
+  it('keeps cancellation available while confirmation waits for an impact review', () => {
+    const props = baseProps();
+    render(
+      <ConfirmDestructiveDialog {...props} confirmDisabled>
+        <p>Two dependent schedules</p>
+      </ConfirmDestructiveDialog>,
+    );
+    expect(screen.getByText('Two dependent schedules')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Delete project' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Cancel' })).toBeEnabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Delete project' }));
+    expect(props.onConfirm).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(props.onOpenChange).toHaveBeenCalledWith(false);
+  });
   it('renders no alert when there is no failure', () => {
     render(<ConfirmDestructiveDialog {...baseProps()} />);
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();

@@ -11,7 +11,14 @@ describe('persistent composer work-template selection', () => {
   it.each(['task', 'project', 'initiative', 'program'] as const)(
     'keeps a %s published snapshot across draft save and reopen',
     (kind) => {
-      const selected = { workTypeId, workTypeVersionId };
+      const selected = {
+        workTypeId,
+        workTypeVersionId,
+        blueprint: {
+          previewToken: `sha256:${'a'.repeat(64)}`,
+          optionalChoices: [{ path: ['prepare'], selected: false }],
+        },
+      };
       const wire = ComposerDraftPayload.parse({
         kind,
         ...serializeWorkTemplateSelection(selected),

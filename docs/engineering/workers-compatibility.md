@@ -32,6 +32,18 @@ and cookies host-only through the same-origin Worker gateway. See
 [deployment](deployment.md#lattice-staging-boundary) for OAuth, Lattice,
 data-isolation and credential-reenrollment requirements.
 
+Keep the staging host protected by the Studio staff Access policy. Create a
+separate self-hosted Access application for
+`docket-staging.hypertext.studio/.well-known/lattice-client.json`, with a Bypass
+policy including Everyone, so Lovelace can discover this public client document.
+Use that file path without a wildcard. Access paths also cover descendants,
+so protect `docket-staging.hypertext.studio/.well-known/lattice-client.json/*`
+with a second application using the existing staff policy. Verify anonymous
+metadata returns JSON with the staging client ID and staging API callback,
+while the root, sign-in, adjacent paths and metadata descendants require
+Access. Reversal removes these two metadata applications; retain the main
+staff application and its policy.
+
 The manual **Deploy Workers staging** workflow requires successful ordinary CI
 for the exact main commit, a protected staging environment and a fresh main-ref
 check immediately before deployment. Jobs are serialized. It builds fresh

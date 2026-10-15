@@ -87,7 +87,8 @@
   - [x] Read the deployed public origin in existing staging operations instead of hardcoding Vercel.
   - [x] Validate the affected tooling and standardize staging operation documentation.
   - [ ] Accept the deployed Workers frontend's auth/cookies, isolated data and recovery.
-  - [ ] Verify public client metadata and enabled OAuth/Lattice registrations before switching identity.
+  - [x] Publish the exact public client metadata path while retaining staff protection elsewhere.
+  - [ ] Verify enabled OAuth/Lattice registrations and preserve the previous identity before switching.
 
 ### [LEGAL-POLICIES-008] Keep published policies clear and evidence-supported
 

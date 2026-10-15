@@ -339,6 +339,13 @@ const MINTED_CREDENTIAL_RESPONSES: ReadonlySet<string> = new Set([
   // one operation so a `credentialId` on any other route still fails.
   'DELETE /v1/me/passkeys/{id} 200 → credentialId',
   'POST /v1/orgs/{orgId}/tasks/{id}/expand/undo 200 → undoToken',
+  // Template previews return a SHA-256 snapshot fingerprint for stale-review detection.
+  // Preview and apply both recheck the caller's resource access; this hash grants no access.
+  // Keep the exemption tied to each exact operation, never to the bare previewToken name.
+  'POST /v1/orgs/{orgId}/projects/{id}/template/preview 200 → previewToken',
+  'POST /v1/orgs/{orgId}/tasks/{id}/template/preview 200 → previewToken',
+  'POST /v1/orgs/{orgId}/initiatives/{id}/template/preview 200 → previewToken',
+  'POST /v1/orgs/{orgId}/programs/{id}/template/preview 200 → previewToken',
   // Starting a voice session mints an EPHEMERAL client secret (minutes, one session) so the
   // browser can hold its own audio link to the speech model. Returning it is the entire point of
   // the operation, and it is deliberately not Docket's provider key — that never leaves the

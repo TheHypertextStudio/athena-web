@@ -48,7 +48,13 @@ export interface DetailHeaderCollapse {
  * @param options - Header geometry selected by the presence of a cover.
  * @returns the scroller and header refs to attach.
  */
-export function useDetailHeaderCollapse({ hasCover }: { hasCover: boolean }): DetailHeaderCollapse {
+export function useDetailHeaderCollapse({
+  hasCover,
+  layoutKey = 'full',
+}: {
+  hasCover: boolean;
+  layoutKey?: string;
+}): DetailHeaderCollapse {
   const scrollRef = useRef<HTMLDivElement>(null);
   const headerRef = useRef<HTMLElement>(null);
 
@@ -109,7 +115,7 @@ export function useDetailHeaderCollapse({ hasCover }: { hasCover: boolean }): De
       reducedMotion.removeEventListener('change', queueProgress);
       if (frame !== null) window.cancelAnimationFrame(frame);
     };
-  }, [hasCover]);
+  }, [hasCover, layoutKey]);
 
   return { scrollRef, headerRef };
 }

@@ -14,9 +14,6 @@
   "apps/web/src/app/(app)/orgs/[orgId]/my-work/my-work-client.tsx": {
     "raw-type-utility": 2
   },
-  "apps/web/src/app/(app)/orgs/[orgId]/programs/[programId]/program-detail-client.tsx": {
-    "raw-type-utility": 2
-  },
   "apps/web/src/app/(app)/orgs/[orgId]/sessions/[sessionId]/page.tsx": {
     "raw-radius-utility": 1,
     "raw-type-utility": 3
@@ -490,9 +487,6 @@
   },
   "apps/web/src/components/views/detail-print-summary.tsx": {
     "ad-hoc-border": 1
-  },
-  "apps/web/src/components/views/entity-detail-layout.tsx": {
-    "raw-type-utility": 1
   },
   "apps/web/src/components/views/filter-toolbar.tsx": {
     "ad-hoc-border": 2,

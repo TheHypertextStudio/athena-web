@@ -42,6 +42,22 @@ import {
 import { label } from './crosscutting';
 import { actor, auditColumns, organization, team } from './identity';
 import { cycle, milestone, program, project, task } from './work';
+import {
+  scheduleRevisionColumns,
+  scheduleSeriesColumns,
+  scheduleOccurrenceColumns,
+  scheduleOccurrenceConstraints,
+} from './work-schedule-storage';
+import {
+  scheduleSeriesIdentityConstraints,
+  scheduleOccurrenceIdentityConstraints,
+  scheduleRevisionIdentityConstraints,
+} from './work-schedule-reference';
+import { nativeScheduleOccurrenceConstraints } from './work-schedule-date-ownership';
+import {
+  scheduleSeriesPrivatePolicy,
+  scheduleRevisionPrivatePolicy,
+} from './work-schedule-privacy';
 import { taskTemplateColumns, taskSpecConstraints } from './recurrence-template';
 import {
   seriesBlueprintColumns,
@@ -320,15 +336,15 @@ export const recurrenceSeries = pgTable(
   'recurrence_series',
   {
     ...auditColumns(),
-    definitionId: text('definition_id')
-      .notNull()
-      .references(() => processDefinition.id, { onDelete: 'cascade' }),
+    ...scheduleSeriesColumns(processDefinition.id),
     name: text('name').notNull(),
     status: recurrenceSeriesStatus('status').notNull().default('active'),
     pausedAt: timestamp('paused_at'),
     endedAt: timestamp('ended_at'),
   },
   (t) => [
+    ...scheduleSeriesIdentityConstraints(t, program),
+    scheduleSeriesPrivatePolicy(t),
     index('recurrence_series_org_status_idx').on(t.organizationId, t.status),
     check('recurrence_series_name_not_blank', sql`length(btrim(${t.name})) > 0`),
     check(
@@ -340,7 +356,7 @@ export const recurrenceSeries = pgTable(
       )`,
     ),
   ],
-);
+).enableRLS();
 
 /** One immutable trigger/schedule version for a recurrence series. */
 export const recurrenceSeriesRevision = pgTable(
@@ -348,12 +364,13 @@ export const recurrenceSeriesRevision = pgTable(
   {
     ...auditColumns(),
     ...seriesBlueprintColumns(),
+    ...scheduleRevisionColumns(),
     seriesId: text('series_id')
       .notNull()
       .references(() => recurrenceSeries.id, { onDelete: 'cascade' }),
-    processRevisionId: text('process_revision_id')
-      .notNull()
-      .references(() => processRevision.id, { onDelete: 'restrict' }),
+    processRevisionId: text('process_revision_id').references(() => processRevision.id, {
+      onDelete: 'restrict',
+    }),
     number: integer('number').notNull(),
     effectiveFrom: date('effective_from').notNull(),
     triggerKind: processTriggerKind('trigger_kind').notNull(),
@@ -382,6 +399,8 @@ export const recurrenceSeriesRevision = pgTable(
   },
   (t) => [
     ...seriesBlueprintConstraints(t),
+    scheduleRevisionPrivatePolicy(t),
+    ...scheduleRevisionIdentityConstraints(t, recurrenceSeries),
     uniqueIndex('recurrence_series_revision_series_number_uq').on(t.seriesId, t.number),
     uniqueIndex('recurrence_series_revision_series_effective_uq').on(t.seriesId, t.effectiveFrom),
     index('recurrence_series_revision_org_series_idx').on(t.organizationId, t.seriesId),
@@ -415,7 +434,7 @@ export const recurrenceSeriesRevision = pgTable(
       )`,
     ),
   ],
-);
+).enableRLS();
 
 /** A selected weekday for one weekly series revision (`1` Monday through `7` Sunday). */
 export const recurrenceSeriesWeekday = pgTable(
@@ -463,12 +482,11 @@ export const processOccurrence = pgTable(
   {
     ...auditColumns(),
     ...occurrenceBlueprintColumns(),
-    seriesId: text('series_id')
-      .notNull()
-      .references(() => recurrenceSeries.id, { onDelete: 'cascade' }),
-    seriesRevisionId: text('series_revision_id')
-      .notNull()
-      .references(() => recurrenceSeriesRevision.id, { onDelete: 'restrict' }),
+    ...scheduleOccurrenceColumns(),
+    seriesId: text('series_id').references(() => recurrenceSeries.id, { onDelete: 'cascade' }),
+    seriesRevisionId: text('series_revision_id').references(() => recurrenceSeriesRevision.id, {
+      onDelete: 'restrict',
+    }),
     scheduledFor: date('scheduled_for').notNull(),
     originalScheduledFor: date('original_scheduled_for'),
     status: processOccurrenceStatus('status').notNull().default('expected'),
@@ -477,12 +495,9 @@ export const processOccurrence = pgTable(
   },
   (t) => [
     ...occurrenceBlueprintConstraints(t),
-    uniqueIndex('process_occurrence_revision_date_uq')
-      .on(t.seriesId, t.seriesRevisionId, t.scheduledFor)
-      .where(sql`${t.externalOccurrenceKey} is null`),
-    uniqueIndex('process_occurrence_series_external_uq')
-      .on(t.seriesId, t.externalOccurrenceKey)
-      .where(sql`${t.externalOccurrenceKey} is not null`),
+    ...scheduleOccurrenceConstraints(t),
+    ...scheduleOccurrenceIdentityConstraints(t, recurrenceSeriesRevision),
+    ...nativeScheduleOccurrenceConstraints(t),
     index('process_occurrence_org_status_date_idx').on(t.organizationId, t.status, t.scheduledFor),
   ],
 ).enableRLS();

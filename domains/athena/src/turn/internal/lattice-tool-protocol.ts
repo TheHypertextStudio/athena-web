@@ -7,6 +7,11 @@
  * person's workspace from a hypothetical example.
  */
 import type { TurnToolDef } from '../turn';
+import {
+  schemaNeedsIsolation,
+  shareLargeSchemaFragments,
+  toolSchemaInRegistry,
+} from './lattice-schema-registry';
 
 /** Fence language used for tool-call envelopes. */
 const FENCE_TAG = 'json';
@@ -163,14 +168,29 @@ function leadParagraph(description: string): string {
 export function renderToolInstructions(tools: readonly TurnToolDef[]): string {
   if (tools.length === 0) return '';
 
-  const renderedTools = tools
+  const prepared = tools.map((tool) => ({ ...tool, schema: compactToolSchema(tool.inputSchema) }));
+  const isolated = prepared.filter((tool) => schemaNeedsIsolation(tool.schema));
+  const pooled = prepared.filter((tool) => !schemaNeedsIsolation(tool.schema));
+  const headings = prepared
+    .map((tool) => `### ${tool.name}\n${leadParagraph(tool.description)}`)
+    .join('\n\n');
+  const registry = shareLargeSchemaFragments({
+    type: 'object',
+    properties: Object.fromEntries(
+      pooled.map((tool) => [tool.name, toolSchemaInRegistry(tool.name, tool.schema)]),
+    ),
+    additionalProperties: false,
+  });
+  const pooledDocs = pooled.length
+    ? `Input JSON Schema registry: find each tool's arguments under properties[tool name]. Resolve $refs within this one document.\n\n\`\`\`json\n${JSON.stringify(registry)}\n\`\`\``
+    : '';
+  const isolatedDocs = isolated
     .map(
       (tool) =>
-        `### ${tool.name}\n${leadParagraph(tool.description)}\n\nInput JSON Schema:\n\`\`\`json\n${JSON.stringify(
-          compactToolSchema(tool.inputSchema),
-        )}\n\`\`\``,
+        `### ${tool.name} input (separate schema document)\n\n\`\`\`json\n${JSON.stringify(tool.schema)}\n\`\`\``,
     )
     .join('\n\n');
+  const renderedTools = [headings, pooledDocs, isolatedDocs].filter(Boolean).join('\n\n');
 
   return [
     '',

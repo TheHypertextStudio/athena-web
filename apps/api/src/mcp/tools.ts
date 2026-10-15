@@ -43,6 +43,7 @@ import { registerAthenaAssignmentTools } from './athena-assignment-tools';
 import { registerWorkspacesTool } from './workspaces-tool';
 import { registerWriteTools } from './write-tools';
 import { registerWorkDestinationReviewTool } from './work-destination-review-tool';
+import { registerWorkScheduleTools } from './work-schedule-tools';
 
 /**
  * Register every Docket mutation tool on `server`, bound to the calling user.
@@ -86,6 +87,7 @@ export function registerTools(
   registerPlanDraftTools(server, ctx, sessionId);
   registerRetrospectTools(server, ctx);
   registerRepeatingWorkTools(server, ctx);
+  registerWorkScheduleTools(server, ctx);
   registerDirectiveTools(server, ctx);
   registerWorkspacesTool(server, ctx);
   registerAthenaAssignmentTools(server, ctx);

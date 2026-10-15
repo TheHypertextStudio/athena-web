@@ -15,6 +15,7 @@ import { useCallback } from 'react';
 import { api } from './api';
 import { queryKeys, unwrap, useApiMutation } from './query';
 import { invalidateWorkTargetQueries } from './work-target-invalidation';
+import { removeProgram } from './program-removal';
 
 /** ProgramPatch describes the use program mutations data contract shared by the hook or component. */
 export interface ProgramPatch {
@@ -197,11 +198,7 @@ export function useProgramDeleteMutation(
 ): ProgramDeleteMutation {
   const queryClient = useQueryClient();
   const deletion = useApiMutation({
-    mutationFn: () =>
-      unwrap(
-        () => api.v1.orgs[':orgId'].programs[':id'].$delete({ param: { orgId, id: programId } }),
-        `Could not delete this ${programLabel.toLowerCase()}.`,
-      ),
+    mutationFn: () => removeProgram(orgId, programId, programLabel),
     onSuccess: onDeleted,
     onSettled: () => {
       void invalidateWorkTargetQueries(queryClient, {

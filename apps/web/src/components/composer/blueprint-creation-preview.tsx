@@ -1,5 +1,5 @@
 'use client';
-import type { JSX } from 'react';
+import type { JSX, ReactNode } from 'react';
 import { InlineBanner } from '@docket/ui/components';
 import { useVocabulary } from '@docket/ui/hooks';
 import {
@@ -22,6 +22,8 @@ import type {
 } from '@docket/work/work-template-blueprint';
 import { TeamId } from '@docket/identity-access/ids';
 import type { TeamOut } from '@/lib/contracts/team';
+import { BlueprintPreviewConsequences } from './blueprint-preview-consequences';
+import { BlueprintDefaultScheduleReview } from './blueprint-default-schedule-review';
 
 const previewDateFormatter = new Intl.DateTimeFormat('en', {
   month: 'short',
@@ -164,37 +166,47 @@ function CreationTeamField({
   );
 }
 
-function BlueprintReviewBody({
+/** Shared included-work review, with an optional location-specific child editor. */
+export function BlueprintReviewBody({
   preview,
   options,
   pending,
   onChange,
   onPage,
+  renderChildDetails,
+  rootContextLabel = 'including the item you are creating',
+  showSelectionSummary = true,
+  assignmentLocation,
 }: Pick<PreviewProps, 'options' | 'pending' | 'onChange' | 'onPage'> & {
   preview: BlueprintCreationPreview;
+  renderChildDetails?: (node: BlueprintPreviewSummary) => ReactNode;
+  rootContextLabel?: string;
+  showSelectionSummary?: boolean;
+  assignmentLocation?: 'Work';
 }): JSX.Element {
   return (
     <div className="flex min-h-0 min-w-0 flex-col gap-3">
-      <p>
-        {preview.selectedCount} work items selected
-        {preview.additionalMilestoneCount
-          ? `, including ${preview.additionalMilestoneCount} drafted checkpoints`
-          : ''}
-        , including the item you are creating.
-      </p>
+      {showSelectionSummary ? (
+        <p>
+          {preview.selectedCount} work items selected
+          {preview.additionalMilestoneCount
+            ? `, including ${preview.additionalMilestoneCount} drafted checkpoints`
+            : ''}
+          , {rootContextLabel}.
+        </p>
+      ) : null}
       <BlueprintChildRows
         preview={preview}
         options={options}
         pending={pending}
         onChange={onChange}
+        renderChildDetails={renderChildDetails}
       />
-      {preview.warnings.length ? (
-        <p role="status">
-          Some assignments or dates need attention.{' '}
-          {preview.warnings.reduce((count, warning) => count + warning.count, 0)} affected fields or
-          children.
-        </p>
-      ) : null}
+      <BlueprintDefaultScheduleReview schedules={preview.defaultSchedules} />
+      <BlueprintPreviewConsequences
+        warnings={preview.warnings}
+        assignmentLocation={assignmentLocation}
+      />
       <div className="flex gap-2">
         {preview.summaryOffset > 0 ? (
           <Button
@@ -228,8 +240,10 @@ function BlueprintChildRows({
   options,
   pending,
   onChange,
+  renderChildDetails,
 }: Pick<PreviewProps, 'options' | 'pending' | 'onChange'> & {
   preview: BlueprintCreationPreview;
+  renderChildDetails?: ((node: BlueprintPreviewSummary) => ReactNode) | undefined;
 }): JSX.Element {
   const labels = {
     program: useVocabulary('program'),
@@ -240,7 +254,11 @@ function BlueprintChildRows({
   return (
     <ul className="flex min-w-0 flex-col gap-3">
       {preview.descendants.map((node) => (
-        <li key={JSON.stringify(node.path)} className="flex min-w-0 items-start gap-3">
+        <li
+          key={JSON.stringify(node.path)}
+          className="flex min-w-0 items-start gap-3"
+          style={{ paddingInlineStart: Math.min(node.parentPath.length, 3) * 24 }}
+        >
           {node.optional ? (
             <Checkbox
               aria-label={`Include ${node.title}`}
@@ -263,13 +281,16 @@ function BlueprintChildRows({
                 });
               }}
             />
-          ) : null}
-          <span className="min-w-0 break-words">
+          ) : (
+            <span className="size-4 shrink-0" aria-hidden="true" />
+          )}
+          <div className="min-w-0 flex-1 break-words">
             <span className="block">{node.title}</span>
             <span className="text-body-small text-on-surface-variant">
               {labels[node.kind]} · {node.selected ? timing(node) : 'Not selected'}
             </span>
-          </span>
+            {renderChildDetails?.(node)}
+          </div>
         </li>
       ))}
     </ul>

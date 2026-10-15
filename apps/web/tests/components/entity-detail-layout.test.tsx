@@ -46,6 +46,36 @@ describe('EntityDetailLayout', () => {
     expect(within(assertDefined(header)).getByRole('heading', { name: 'Launch' })).toBeVisible();
   });
 
+  it('keeps collection identity and actions visible in a compact header, then restores full context', () => {
+    const action = vi.fn();
+    const content = (density: 'compact' | 'full') => (
+      <EntityDetailLayout
+        headerDensity={density}
+        icon={<span>icon</span>}
+        title="Community gatherings"
+        subtitle={<p>Program overview context</p>}
+        metadata={<p>Program details</p>}
+        actions={
+          <button type="button" onClick={action}>
+            More actions
+          </button>
+        }
+        tabs={<div>Schedules</div>}
+      >
+        <p>November Dinner</p>
+      </EntityDetailLayout>
+    );
+    const view = render(content('compact'));
+    expect(screen.getByRole('heading', { name: 'Community gatherings' })).toBeVisible();
+    expect(screen.queryByText('Program overview context')).not.toBeInTheDocument();
+    expect(screen.getByText('Schedules')).toBeVisible();
+    expect(screen.getByText('November Dinner')).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'More actions' }));
+    expect(action).toHaveBeenCalledOnce();
+    view.rerender(content('full'));
+    expect(screen.getByText('Program overview context')).toBeVisible();
+    expect(screen.getByText('November Dinner')).toBeVisible();
+  });
   it('bleeds the cover to the header/main edges rather than the gutter-inset measure track', () => {
     render(
       <EntityDetailLayout

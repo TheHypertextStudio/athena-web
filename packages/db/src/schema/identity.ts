@@ -261,6 +261,7 @@ export const actor = pgTable(
   },
   (t) => [
     index('actor_org_idx').on(t.organizationId),
+    uniqueIndex('schedule_actor_identity_unique').on(t.id, t.organizationId),
     uniqueIndex('actor_org_user_uq')
       .on(t.organizationId, t.userId)
       .where(sql`${t.userId} is not null`),

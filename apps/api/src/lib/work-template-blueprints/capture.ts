@@ -22,6 +22,7 @@ import type { TemplateTransaction } from '../templates/persistence';
 import { serializableTx } from '../serializable-tx';
 import { loadBlueprintSnapshot, type AuthorizedBlueprintSnapshot } from './snapshot';
 import { blueprintFingerprint } from './fingerprint';
+import { captureProgramDefaultSchedules } from '../work-template-default-schedules/capture';
 
 /** Real initiating author, same-tenant root and exactly reviewed source for an independent draft. */
 export interface CaptureWorkTemplateCommand {
@@ -75,7 +76,7 @@ async function reviewedCapture(
   const root = snapshot.rowsByRef.get(`${kind}:${id}`);
   if (!root || root.kind === 'milestone') throw new NotFoundError('Work not found');
   const name = root.kind === 'task' ? root.row.title : root.row.name;
-  const captured = captureBlueprint({
+  const blueprint = captureBlueprint({
     name,
     root: snapshot.root,
     nodes: snapshot.nodes,
@@ -83,6 +84,12 @@ async function reviewedCapture(
     context: snapshot.context,
     complete: true,
   });
+  const schedules = await captureProgramDefaultSchedules(tx, live, snapshot);
+  const captured = {
+    ...blueprint,
+    definition: { ...blueprint.definition, defaultSchedules: schedules.defaults },
+    warnings: [...blueprint.warnings, ...schedules.warnings],
+  };
   return WorkTemplateCapturePreview.parse({
     ...captured,
     descendantCount: snapshot.nodes.length - 1,
@@ -94,6 +101,7 @@ async function reviewedCapture(
       source: snapshot.fingerprint,
       captured,
       images,
+      scheduleSource: schedules.sourceFingerprint,
     }),
   });
 }

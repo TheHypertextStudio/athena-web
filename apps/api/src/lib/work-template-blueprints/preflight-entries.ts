@@ -1,4 +1,4 @@
-import { BlueprintError } from '@docket/work/blueprints';
+import { BlueprintError, type PlannedWorkNode } from '@docket/work/blueprints';
 import { MilestoneCreate } from '@docket/work/milestone-contract';
 import {
   createOrdinaryPreparationContext,
@@ -106,6 +106,26 @@ interface EntryPreparation {
   existing: ReadonlyMap<string, RetainedBlueprintEntry> | undefined;
 }
 
+/** Restore explicit trusted nullable fields after public DTO validation and publication defaults. */
+function applyPlannedNullableClears(node: PlannedWorkNode, prepared: PreparedOrdinaryWork): void {
+  if (node.kind !== prepared.insert.kind)
+    throw new BlueprintError('blueprint_invalid', 'Prepared work must match its planned kind.');
+  if (
+    'summary' in node.fields &&
+    node.fields.summary === null &&
+    prepared.insert.kind !== 'milestone'
+  )
+    prepared.insert.values.summary = null;
+  if (
+    'health' in node.fields &&
+    node.fields.health === null &&
+    (prepared.insert.kind === 'project' ||
+      prepared.insert.kind === 'program' ||
+      prepared.insert.kind === 'initiative')
+  )
+    prepared.insert.values.health = null;
+}
+
 /** Authorize every selected node and reserve its checkpoint rows before any insert. */
 export async function prepareBlueprintEntries(
   tx: TemplateTransaction,
@@ -168,6 +188,7 @@ export async function prepareBlueprintEntries(
             commandForBlueprintNode(selected, row, visibility),
             preparedContext,
           );
+    applyPlannedNullableClears(row.node, prepared);
     Object.assign(prepared.insert.values, originColumns(row));
     const withCheckpoints =
       prepared.insert.kind === 'project'

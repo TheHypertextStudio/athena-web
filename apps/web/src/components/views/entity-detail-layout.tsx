@@ -44,6 +44,7 @@ import {
 
 import { OBJECT_PAGE_ATTRIBUTE, objectTargetProps, type ObjectRef } from '@/lib/actions/object';
 
+import { CompactDetailHeader, FullDetailMasthead } from './entity-detail-header-content';
 import { useDetailHeaderCollapse } from './entity-detail-collapse';
 import {
   EntityDetailObjectContext,
@@ -56,6 +57,8 @@ import { useElementWidth } from './use-element-width';
 
 /** Props for {@link EntityDetailLayout}. */
 export interface EntityDetailLayoutProps {
+  /** Keep a collection-focused section's identity compact while preserving the full Overview masthead. */
+  headerDensity?: 'full' | 'compact';
   /**
    * A full-bleed banner across the very top of the page, behind everything else.
    *
@@ -153,9 +156,17 @@ function useAsideDocked(scrollRef: RefObject<HTMLDivElement | null>, enabled: bo
 }
 
 /** Props for {@link DetailHeader}: the layout's masthead slots, plus the collapse hook's ref. */
-type DetailHeaderProps = Pick<
+export type DetailHeaderProps = Pick<
   EntityDetailLayoutProps,
-  'cover' | 'eyebrow' | 'icon' | 'title' | 'subtitle' | 'metadata' | 'actions' | 'tabs'
+  | 'cover'
+  | 'eyebrow'
+  | 'icon'
+  | 'title'
+  | 'subtitle'
+  | 'metadata'
+  | 'actions'
+  | 'tabs'
+  | 'headerDensity'
 > & {
   readonly headerRef: RefObject<HTMLElement | null>;
   readonly object: ObjectRef | undefined;
@@ -169,6 +180,7 @@ type DetailHeaderProps = Pick<
  * @returns the header element.
  */
 function DetailHeader({
+  headerDensity,
   headerRef,
   cover,
   eyebrow,
@@ -181,6 +193,12 @@ function DetailHeader({
   object,
   hasPrintSummary,
 }: DetailHeaderProps): JSX.Element {
+  if (headerDensity === 'compact')
+    return (
+      <CompactDetailHeader
+        {...{ headerRef, icon, title, metadata, actions, tabs, object, hasPrintSummary }}
+      />
+    );
   return (
     <header
       ref={headerRef}
@@ -214,66 +232,7 @@ function DetailHeader({
           for it to cross, not a z-index or an opaque backing standing in for one. `page-bleed` +
           `page-grid` bleed the wrapper itself edge to edge and then re-open the measure track for
           `eyebrow`/`detail-masthead`, mirroring how `header` does the same thing one level up. */}
-      <div className="masthead-band page-bleed page-grid relative isolate gap-y-0">
-        {/* The backdrop is a layer of this band, not a section above it. `isolate` (on the band,
-            not the header) traps it in the band's own stacking context, so it cannot paint over
-            anything outside the band — including `detail-tabs`, which sits outside it entirely.
-            It has no height of its own: it is whatever the band is, so collapsing the header
-            collapses the artwork with it.
-
-            `page-bleed`: without it this div is still a `.page-grid` child like any other, so the
-            blanket `.page-grid > *` rule silently placed it on the gutter-inset `measure` track —
-            `inset-0` was flush with that track, not with the band, so the cover sat inside a
-            margin on both sides no matter how full-bleed the band itself was. `rounded-t-xl`
-            matches `<main>`'s own corner radius exactly, so the now-genuinely-flush cover
-            terminates at the panel's real top corners on purpose instead of getting clipped to
-            them by accident. */}
-        {cover ? (
-          <div className="page-bleed absolute inset-0 -z-10 overflow-hidden rounded-t-xl">
-            {cover}
-          </div>
-        ) : null}
-
-        {/* `.masthead-content` carries the indent that used to sit on `.detail-header` itself
-            (`padding-block-start`). It has to live here, as a sibling of the cover rather than an
-            ancestor of it — the cover is `inset-0` against `.masthead-band`, so any padding on
-            *that* element would push the cover down with it and reopen the exact gap this whole
-            restructuring exists to close. */}
-        <div className="masthead-content">
-          {eyebrow ? <div className="mb-3 min-w-0">{eyebrow}</div> : null}
-
-          {cover ? <div aria-hidden="true" className="detail-backdrop-space" /> : null}
-
-          <div className="detail-masthead">
-            <div className="detail-primary">
-              <div className="detail-identity">
-                <div className="detail-glyph">{icon}</div>
-                <h1 className="detail-title text-on-surface text-headline-medium min-w-0 font-medium">
-                  {title}
-                </h1>
-              </div>
-              {actions ? (
-                <div
-                  aria-label="Entity actions"
-                  className="detail-actions flex shrink-0 items-center gap-1"
-                  role="group"
-                >
-                  {actions}
-                </div>
-              ) : null}
-            </div>
-
-            <div className="detail-secondary">
-              <div className="flex min-w-0 flex-col gap-3">
-                {subtitle ? (
-                  <div className="text-on-surface-variant text-body-large min-w-0">{subtitle}</div>
-                ) : null}
-                {metadata}
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
+      <FullDetailMasthead {...{ cover, eyebrow, icon, title, subtitle, metadata, actions }} />
 
       <div className="detail-tabs min-w-0">{tabs}</div>
     </header>
@@ -338,6 +297,7 @@ function DetailBody({ printSummary, aside, docked, children }: DetailBodyProps):
  * @returns the composed detail page.
  */
 export function EntityDetailLayout({
+  headerDensity = 'full',
   cover,
   eyebrow,
   icon,
@@ -359,7 +319,10 @@ export function EntityDetailLayout({
   // can reach the pane's edge. Owning the scroll additionally gives the header something to pin to
   // and a timeline to collapse against, which every detail page benefits from equally.
   useOwnPageScroll();
-  const { scrollRef, headerRef } = useDetailHeaderCollapse({ hasCover: Boolean(cover) });
+  const { scrollRef, headerRef } = useDetailHeaderCollapse({
+    hasCover: Boolean(cover),
+    layoutKey: headerDensity,
+  });
   const docked = useAsideDocked(scrollRef, aside !== undefined);
   const asideState = useMemo<EntityDetailAsideState>(() => ({ docked }), [docked]);
 
@@ -384,6 +347,7 @@ export function EntityDetailLayout({
             children through the nested grid, so nothing inside has to know it sits in a bleeding
             section. */}
           <DetailHeader
+            headerDensity={headerDensity}
             headerRef={headerRef}
             cover={cover}
             eyebrow={eyebrow}

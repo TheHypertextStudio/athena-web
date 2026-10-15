@@ -94,6 +94,7 @@ export const TOOL_SCOPE: Readonly<Record<string, McpScope>> = {
   archive: 'work:write',
   define_labels: 'work:write',
   define_template: 'work:write',
+  manage_work_schedule: 'work:write',
   plan_day: 'work:write',
   view_workload: 'work:read',
   plan_start: 'work:read',
@@ -119,6 +120,7 @@ export const TOOL_SCOPE: Readonly<Record<string, McpScope>> = {
   // work:read — reads exposed as tools
   list_work: 'work:read',
   list_templates: 'work:read',
+  list_work_schedules: 'work:read',
   find: 'work:read',
   get: 'work:read',
   brief: 'work:read',

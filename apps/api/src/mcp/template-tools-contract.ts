@@ -7,6 +7,7 @@
 import { ViewScope } from '@docket/work/saved-view-contract';
 import { TemplateDraft } from '@docket/work/template-contract';
 import { Blueprint } from '@docket/work/work-template-blueprint';
+import { ProgramDefaultSchedules } from '@docket/work/work-schedule-defaults';
 import { z } from 'zod';
 
 import { WIDGET, widgetMeta } from './apps';
@@ -18,7 +19,7 @@ import { orgIdParam } from './tools-shared';
 export const defineTemplateDefinition = {
   title: 'Define template',
   description:
-    'Create or edit reusable work templates. Put literal Markdown in payload.description; description summarizes usage. Omit template to create with name and payload; otherwise edit by ID/name. payload replaces the draft. Legacy workspace writes publish immediately. action draft saves included child work in blueprint without publishing; publish requires expectedRevision, and archive retires. Blueprints require explicit draft authoring. Undo preserves publication history',
+    'Create or edit reusable work templates.\n\nPut literal Markdown in payload.description; description summarizes usage. Omit template to create with name and payload; otherwise edit by ID/name. payload replaces the draft. Legacy workspace writes publish immediately. action draft saves included child work in blueprint without publishing; publish requires expectedRevision, and archive retires. Blueprints require explicit draft authoring. Undo preserves publication history',
   inputSchema: {
     orgId: orgIdParam,
     action: z
@@ -67,6 +68,9 @@ export const defineTemplateDefinition = {
     ),
     blueprint: Blueprint.optional().describe(
       'Included child work and dependencies. Requires action draft; omitted preserves the saved graph, and empty steps/dependencies clears it. Publication validates the composed graph, capped at 500 total items including its root and nested templates.',
+    ),
+    defaultSchedules: ProgramDefaultSchedules.optional().describe(
+      'Program templates only, action draft: up to 20 reusable recurring-work outlines. Omission preserves saved defaults; [] clears them. Each new Program gets independent copies. Use relative cadence and parent assignment rules; no people, teams, locations or provider IDs.',
     ),
     labels: z
       .array(z.string())

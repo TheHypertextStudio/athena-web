@@ -8,8 +8,6 @@
  */
 import { z } from 'zod';
 
-import { AutomationEventMatch } from '@docket/automation/contracts';
-
 import { ActorId, OrganizationId, TeamId } from '@docket/identity-access/ids';
 import { CalendarItemId, CalendarLayerId } from '@docket/planning/ids';
 import {
@@ -33,169 +31,34 @@ import { TaskCreate, TaskOut } from '@docket/work/task-model';
 import { workTemplateCreationFields } from '@docket/work/work-template-reference';
 import { validateProcessTaskSelection } from './recurrence-task-validation';
 
-/** A weekday in an explicit, locale-independent recurrence rule. */
-export const RecurrenceWeekday = z.enum([
-  'monday',
-  'tuesday',
-  'wednesday',
-  'thursday',
-  'friday',
-  'saturday',
-  'sunday',
-]);
-/** Recurrence weekday value. */
-export type RecurrenceWeekday = z.infer<typeof RecurrenceWeekday>;
+import {
+  CalendarRecurrenceSchedule,
+  AfterCompletionSchedule,
+  MissedOccurrencePolicy,
+  MaterializationPolicy,
+} from '@docket/work/recurrence';
 
-/** A series with no configured end. */
-export const NeverEnd = z.object({ kind: z.literal('never') }).strict();
-/** Never-ending recurrence value. */
-export type NeverEnd = z.infer<typeof NeverEnd>;
-
-/** A series ending on an inclusive calendar date. */
-export const OnDateEnd = z.object({ kind: z.literal('on_date'), date: z.iso.date() }).strict();
-/** Date-ending recurrence value. */
-export type OnDateEnd = z.infer<typeof OnDateEnd>;
-
-/** A series ending after a fixed number of expected occurrences. */
-export const AfterCountEnd = z
-  .object({ kind: z.literal('after_count'), count: z.number().int().positive() })
-  .strict();
-/** Count-ending recurrence value. */
-export type AfterCountEnd = z.infer<typeof AfterCountEnd>;
-
-/** How a calendar recurrence stops. */
-export const RecurrenceEnd = z.discriminatedUnion('kind', [NeverEnd, OnDateEnd, AfterCountEnd]);
-/** Recurrence end value. */
-export type RecurrenceEnd = z.infer<typeof RecurrenceEnd>;
-
-const CalendarScheduleFields = {
-  interval: z.number().int().positive().default(1),
-  startDate: z.iso.date(),
-  timezone: z.string().min(1),
-  end: RecurrenceEnd.default({ kind: 'never' }),
-} as const;
-
-/** A calendar schedule occurring every N days. */
-export const DailySchedule = z
-  .object({ kind: z.literal('daily'), ...CalendarScheduleFields })
-  .strict();
-/** Daily schedule value. */
-export type DailySchedule = z.infer<typeof DailySchedule>;
-
-/** A calendar schedule occurring on one or more weekdays every N weeks. */
-export const WeeklySchedule = z
-  .object({
-    kind: z.literal('weekly'),
-    ...CalendarScheduleFields,
-    weekdays: z.array(RecurrenceWeekday).min(1),
-  })
-  .strict()
-  .superRefine((value, ctx) => {
-    if (new Set(value.weekdays).size === value.weekdays.length) return;
-    ctx.addIssue({ code: 'custom', path: ['weekdays'], message: 'Weekdays must be unique' });
-  });
-/** Weekly schedule value. */
-export type WeeklySchedule = z.infer<typeof WeeklySchedule>;
-
-/** What to do when a numbered day does not exist in a month or year. */
-export const CalendarOverflow = z.enum(['skip', 'last_day']);
-/** Calendar overflow value. */
-export type CalendarOverflow = z.infer<typeof CalendarOverflow>;
-
-/** A monthly pattern targeting a numbered day. */
-export const DayOfMonthPattern = z
-  .object({
-    kind: z.literal('day_of_month'),
-    day: z.number().int().min(1).max(31),
-    overflow: CalendarOverflow.default('skip'),
-  })
-  .strict();
-/** Day-of-month pattern value. */
-export type DayOfMonthPattern = z.infer<typeof DayOfMonthPattern>;
-
-/** A monthly pattern targeting the first-through-fifth or last weekday. */
-export const NthWeekdayPattern = z
-  .object({
-    kind: z.literal('nth_weekday'),
-    ordinal: z.union([
-      z.literal(1),
-      z.literal(2),
-      z.literal(3),
-      z.literal(4),
-      z.literal(5),
-      z.literal(-1),
-    ]),
-    weekday: RecurrenceWeekday,
-  })
-  .strict();
-/** Nth-weekday pattern value. */
-export type NthWeekdayPattern = z.infer<typeof NthWeekdayPattern>;
-
-/** The calendar pattern within a monthly schedule. */
-export const MonthlyPattern = z.discriminatedUnion('kind', [DayOfMonthPattern, NthWeekdayPattern]);
-/** Monthly pattern value. */
-export type MonthlyPattern = z.infer<typeof MonthlyPattern>;
-
-/** A calendar schedule occurring every N months. */
-export const MonthlySchedule = z
-  .object({ kind: z.literal('monthly'), ...CalendarScheduleFields, pattern: MonthlyPattern })
-  .strict();
-/** Monthly schedule value. */
-export type MonthlySchedule = z.infer<typeof MonthlySchedule>;
-
-/** A calendar schedule occurring every N years on a month and day. */
-export const YearlySchedule = z
-  .object({
-    kind: z.literal('yearly'),
-    ...CalendarScheduleFields,
-    month: z.number().int().min(1).max(12),
-    day: z.number().int().min(1).max(31),
-    overflow: CalendarOverflow.default('skip'),
-  })
-  .strict();
-/** Yearly schedule value. */
-export type YearlySchedule = z.infer<typeof YearlySchedule>;
-
-/** A schedule whose next occurrence is anchored to the prior task's actual completion. */
-export const AfterCompletionSchedule = z
-  .object({
-    kind: z.literal('after_completion'),
-    interval: z.number().int().positive(),
-    unit: z.enum(['day', 'week', 'month']),
-  })
-  .strict();
-/** Completion-anchored schedule value. */
-export type AfterCompletionSchedule = z.infer<typeof AfterCompletionSchedule>;
-
-/** Calendar-driven schedule arms. */
-export const CalendarRecurrenceSchedule = z.discriminatedUnion('kind', [
+/** Canonical browser-independent cadence contracts shared with Program schedule defaults. */
+export {
+  RecurrenceWeekday,
+  NeverEnd,
+  OnDateEnd,
+  AfterCountEnd,
+  RecurrenceEnd,
   DailySchedule,
   WeeklySchedule,
+  CalendarOverflow,
+  DayOfMonthPattern,
+  NthWeekdayPattern,
+  MonthlyPattern,
   MonthlySchedule,
   YearlySchedule,
-]);
-/** Calendar recurrence schedule value. */
-export type CalendarRecurrenceSchedule = z.infer<typeof CalendarRecurrenceSchedule>;
-
-/** Any schedule Docket can execute, discriminated by `kind`. */
-export const RecurrenceSchedule = z.union([CalendarRecurrenceSchedule, AfterCompletionSchedule]);
-/** Recurrence schedule value. */
-export type RecurrenceSchedule = z.infer<typeof RecurrenceSchedule>;
-
-/** Calendar behavior when an expected occurrence passes unfinished. */
-export const MissedOccurrencePolicy = z.enum(['skip', 'carry', 'resolve']);
-/** Missed-occurrence policy value. */
-export type MissedOccurrencePolicy = z.infer<typeof MissedOccurrencePolicy>;
-
-/** Rolling materialization policy used to make scheduled work visible to planning. */
-export const MaterializationPolicy = z
-  .object({
-    horizonDays: z.number().int().min(1).max(366).default(28),
-    minimumOccurrences: z.number().int().min(1).max(100).default(2),
-  })
-  .strict();
-/** Materialization policy value. */
-export type MaterializationPolicy = z.infer<typeof MaterializationPolicy>;
+  AfterCompletionSchedule,
+  CalendarRecurrenceSchedule,
+  RecurrenceSchedule,
+  MissedOccurrencePolicy,
+  MaterializationPolicy,
+} from '@docket/work/recurrence';
 
 /** Create a calendar-driven one-step process from an ordinary task draft. */
 export const CalendarRecurringTaskCreate = z
@@ -286,58 +149,15 @@ export const ProcessStepTiming = z.discriminatedUnion('kind', [
 /** Process-step timing value. */
 export type ProcessStepTiming = z.infer<typeof ProcessStepTiming>;
 
-/** A process started explicitly by a person, Athena, or an automation action. */
-export const ManualProcessTrigger = z.object({ kind: z.literal('manual') }).strict();
-/** Manual process trigger value. */
-export type ManualProcessTrigger = z.infer<typeof ManualProcessTrigger>;
-
-/** A process started from a calendar recurrence and rolling materialization policy. */
-export const CalendarProcessTrigger = z
-  .object({
-    kind: z.literal('calendar'),
-    schedule: CalendarRecurrenceSchedule,
-    missedPolicy: MissedOccurrencePolicy.default('skip'),
-    materialization: MaterializationPolicy.default({ horizonDays: 28, minimumOccurrences: 2 }),
-  })
-  .strict();
-/** Calendar process trigger value. */
-export type CalendarProcessTrigger = z.infer<typeof CalendarProcessTrigger>;
-
-/** A process started a duration after the preceding instance completes. */
-export const AfterCompletionProcessTrigger = z
-  .object({
-    kind: z.literal('after_completion'),
-    interval: z.number().int().positive(),
-    unit: z.enum(['day', 'week', 'month']),
-  })
-  .strict();
-/** After-completion process trigger value. */
-export type AfterCompletionProcessTrigger = z.infer<typeof AfterCompletionProcessTrigger>;
-
-/** A process started when a matching Docket or integration event is observed. */
-export const EventProcessTrigger = z
-  .object({ kind: z.literal('event'), event: AutomationEventMatch })
-  .strict()
-  .superRefine((value, ctx) => {
-    if (Object.keys(value.event).length > 0) return;
-    ctx.addIssue({
-      code: 'custom',
-      path: ['event'],
-      message: 'An event trigger must match at least one stable event field',
-    });
-  });
-/** Event process trigger value. */
-export type EventProcessTrigger = z.infer<typeof EventProcessTrigger>;
-
-/** How a process instance is triggered, as named behavior-bearing arms. */
-export const ProcessTrigger = z.union([
-  ManualProcessTrigger,
-  CalendarProcessTrigger,
-  AfterCompletionProcessTrigger,
-  EventProcessTrigger,
-]);
-/** Process trigger value. */
-export type ProcessTrigger = z.infer<typeof ProcessTrigger>;
+import { WorkScheduleTrigger as ProcessTrigger } from '@docket/work/work-schedule-trigger';
+/** Compatibility names for the shared retained scheduler triggers. */
+export {
+  ManualScheduleTrigger as ManualProcessTrigger,
+  CalendarScheduleTrigger as CalendarProcessTrigger,
+  CompletionScheduleTrigger as AfterCompletionProcessTrigger,
+  EventScheduleTrigger as EventProcessTrigger,
+  WorkScheduleTrigger as ProcessTrigger,
+} from '@docket/work/work-schedule-trigger';
 
 /** Whether a process creates its full fixed plan or releases steps only when ready. */
 export const ProcessCreationMode = z.enum(['all_at_once', 'when_ready']);
@@ -707,6 +527,7 @@ export const OccurrenceStatus = z.enum([
   'canceled',
   'needs_resolution',
   'superseded',
+  'failed',
 ]);
 /** Occurrence status value. */
 export type OccurrenceStatus = z.infer<typeof OccurrenceStatus>;

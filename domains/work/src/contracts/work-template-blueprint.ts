@@ -300,6 +300,10 @@ export const BlueprintWarningCode = z.enum([
   'capture_team',
   'capture_cycle',
   'capture_dependency',
+  'capture_schedule_assignment',
+  'capture_schedule_provider',
+  'capture_schedule_cadence',
+  'capture_schedule_draft',
   'warning_overflow',
 ]);
 /** Stable preview warning code. */
@@ -336,6 +340,24 @@ export const BlueprintPreviewWarning = z.strictObject({
 });
 /** Public planning warning value. */
 export type BlueprintPreviewWarning = z.infer<typeof BlueprintPreviewWarning>;
+/** An independent default schedule installed on a selected Program in this creation. */
+export const ProgramDefaultSchedulePreview = z.strictObject({
+  programPath: previewPath,
+  programName: z.string(),
+  key: StepKey,
+  name: z.string().min(1).max(120),
+  targetType: z.enum(['task', 'project']),
+  workTypeId: WorkTypeId,
+  selection: z.enum(['latest', 'pinned']),
+  workTypeVersionId: WorkTypeVersionId.nullable(),
+  titlePattern: z.string().min(1).max(256),
+  cadenceKind: z.enum(['daily', 'weekly', 'monthly', 'yearly']),
+  interval: z.number().int().positive(),
+  firstRunDate: BlueprintCivilDate,
+  timezone: z.string().min(1),
+});
+/** Public creation summary with destination and first run, without private assignments. */
+export type ProgramDefaultSchedulePreview = z.infer<typeof ProgramDefaultSchedulePreview>;
 /** Read-only creation review; pagination never changes the whole-tree acceptance token. */
 export const BlueprintCreationPreview = z.strictObject({
   workTypeId: WorkTypeId,
@@ -349,6 +371,7 @@ export const BlueprintCreationPreview = z.strictObject({
   summaryOffset: z.number().int().min(0).max(10000),
   nextSummaryOffset: z.number().int().min(0).max(10000).nullable(),
   warnings: z.array(BlueprintPreviewWarning).max(100),
+  defaultSchedules: z.array(ProgramDefaultSchedulePreview).max(10000).default([]),
 });
 /** Public reviewed creation value. */
 export type BlueprintCreationPreview = z.infer<typeof BlueprintCreationPreview>;

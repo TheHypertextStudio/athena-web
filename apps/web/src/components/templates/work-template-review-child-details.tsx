@@ -35,7 +35,9 @@ export function WorkTemplateReviewChildDetails({
           Blocked by {blockers.join(' and ')}
         </p>
       ) : null}
-      <p className="text-body-small text-on-surface-variant">{cycles[step.cycleRule]}</p>
+      {step.cycleRule !== 'none' ? (
+        <p className="text-body-small text-on-surface-variant">{cycles[step.cycleRule]}</p>
+      ) : null}
     </>
   );
 }

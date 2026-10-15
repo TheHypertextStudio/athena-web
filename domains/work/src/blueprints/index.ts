@@ -13,4 +13,5 @@ export {
 } from './dates';
 export { diffBlueprint } from './diff';
 export { captureBlueprint } from './capture';
+export { discoverPublicationReferences } from './publication-references';
 export { matchedBlueprintRow, type BlueprintMatchIndex } from './diff-matching';

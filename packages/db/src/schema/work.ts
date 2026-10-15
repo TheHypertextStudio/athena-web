@@ -221,6 +221,7 @@ export const program = pgTable(
       .default(sql`'{}'`),
   },
   (t) => [
+    uniqueIndex('schedule_program_identity_unique').on(t.id, t.organizationId),
     ...workTemplateConstraints(t, 'program'),
     ...workBlueprintConstraints(t, 'program'),
     index('program_org_idx').on(t.organizationId),

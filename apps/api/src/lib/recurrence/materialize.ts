@@ -18,6 +18,7 @@ import type { DeferredWorkEffect } from '../work-creation/types';
 import { deferWorkCreationEffects } from '../work-creation/effects';
 import { materializeTemplateOccurrence } from './work-template-adapter';
 import { moveRetainedOccurrence } from './work-template-move';
+import { materializeCanonicalSchedule } from './schedule-materialize-adapter';
 /** Transaction handle shared with completion advancement. */
 export type ProcessTransaction = Parameters<Parameters<Database['transaction']>[0]>[0];
 
@@ -43,7 +44,7 @@ export interface MaterializeOccurrenceCommand {
 export interface MaterializedOccurrence {
   /** Durable expected occurrence id. */
   readonly occurrenceId: string;
-  /** Concrete process execution id. */
+  /** Legacy process execution id, or the canonical run's stable opaque compatibility alias. */
   readonly instanceId: string;
   /** Generated Projects keyed by authored step key. */
   readonly projectIdsByKey: Readonly<Record<string, string>>;
@@ -152,9 +153,12 @@ export async function materializeInstanceSteps(
       ),
     )
     .limit(1);
-  if (!binding) throw new NotFoundError('Recurrence instance not found');
+  if (!binding?.seriesId || !binding.seriesRevisionId)
+    throw new NotFoundError('Recurrence instance not found');
   const result = await materializeTemplateOccurrence(tx, {
     ...binding,
+    seriesId: binding.seriesId,
+    seriesRevisionId: binding.seriesRevisionId,
     organizationId: command.organizationId,
     instanceId: command.instanceId,
     actorId: command.actorId,
@@ -171,6 +175,8 @@ export async function materializeOccurrence(
 ): Promise<MaterializedOccurrence> {
   parseCalendarDate(command.scheduledFor);
   if (command.originalScheduledFor) parseCalendarDate(command.originalScheduledFor);
+  const canonical = await materializeCanonicalSchedule(database, command);
+  if (canonical) return canonical;
   const postCommitEffects: DeferredWorkEffect[] = [];
   const result = await database.transaction(async (tx) => {
     const seriesRows = await tx
@@ -193,7 +199,8 @@ export async function materializeOccurrence(
       )
       .limit(1);
     const series = seriesRows[0];
-    if (!series) throw new NotFoundError('Recurrence series revision not found');
+    if (!series?.definitionId || !series.processRevisionId)
+      throw new NotFoundError('Recurrence series revision not found');
 
     await tx
       .insert(processOccurrence)

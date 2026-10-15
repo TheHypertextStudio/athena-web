@@ -2,12 +2,16 @@ import type { ProgramDetailAggregate } from '../../src/lib/contracts/detail-aggr
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { postUpdate, patchProgram, deleteProgram, invalidateWorkTargetQueries } = vi.hoisted(() => ({
-  postUpdate: vi.fn(),
-  patchProgram: vi.fn(),
-  deleteProgram: vi.fn(),
-  invalidateWorkTargetQueries: vi.fn(() => Promise.resolve()),
-}));
+const { postUpdate, patchProgram, deleteProgram, invalidateWorkTargetQueries, presentFailure } =
+  vi.hoisted(() => ({
+    postUpdate: vi.fn(),
+    patchProgram: vi.fn(),
+    deleteProgram: vi.fn(),
+    invalidateWorkTargetQueries: vi.fn(() => Promise.resolve()),
+    presentFailure: vi.fn(),
+  }));
+
+vi.mock('../../src/components/feedback/failure-toast', () => ({ presentFailure }));
 
 vi.mock('../../src/lib/api', () => ({
   api: {
@@ -29,7 +33,7 @@ import {
   useProgramDeleteMutation,
   useProgramMutations,
 } from '../../src/lib/use-program-mutations';
-import { makeQueryWrapper, okResponse } from '../support/query';
+import { makeQueryWrapper, okResponse, problemResponse } from '../support/query';
 
 const ORGANIZATION_ID = '01ARZ3NDEKTSV4RRFFQ69G5FAV';
 const PROGRAM_ID = '01ARZ3NDEKTSV4RRFFQ69G5FAW';
@@ -73,6 +77,33 @@ beforeEach(() => {
 });
 
 describe('Program mutation invalidation', () => {
+  it('explains how to retain recurring work when deletion is blocked and keeps the page open', async () => {
+    deleteProgram.mockResolvedValueOnce(
+      problemResponse('Private database diagnostic', 409, 'conflict'),
+    );
+    const onDeleted = vi.fn();
+    const { wrapper } = makeQueryWrapper();
+    const { result } = renderHook(
+      () => useProgramDeleteMutation(ORGANIZATION_ID, PROGRAM_ID, 'Program', onDeleted),
+      { wrapper },
+    );
+    act(() => {
+      result.current.deleteProgram();
+    });
+    await waitFor(() => {
+      expect(presentFailure).toHaveBeenCalledWith(
+        expect.objectContaining({
+          message: 'Archive this program to keep its recurring work and run history.',
+          status: 409,
+        }),
+        expect.anything(),
+        expect.anything(),
+      );
+    });
+    expect(onDeleted).not.toHaveBeenCalled();
+    expect(invalidateWorkTargetQueries).toHaveBeenCalledOnce();
+  });
+
   it('refreshes cross-workspace Program projections after deletion', async () => {
     const onDeleted = vi.fn();
     const { client, wrapper } = makeQueryWrapper();

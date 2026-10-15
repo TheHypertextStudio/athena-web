@@ -19,6 +19,17 @@ import { workTemplatesDef } from '@/components/templates/work-template-queries';
 import { sectionHref } from '@/components/settings/settings-registry';
 import { useApiQuery } from '@/lib/query';
 
+interface WorkTemplatePickerProps {
+  orgId: string;
+  kind: TemplateTargetType;
+  teamId: string | null;
+  selectedId?: string | null | undefined;
+  selectedVersionId?: string | null | undefined;
+  /** Keep an authorized saved selection identifiable when discovery excludes archived templates. */
+  selectedLabel?: string | undefined;
+  onSelect: (template: WorkTemplateOut, startingStatus?: string) => void;
+  disabled: boolean;
+}
 /** Creation identity remains visible after a starting document has been filled in. */
 export function WorkTemplatePicker({
   orgId,
@@ -26,17 +37,10 @@ export function WorkTemplatePicker({
   teamId,
   selectedId,
   selectedVersionId,
+  selectedLabel,
   onSelect,
   disabled,
-}: {
-  orgId: string;
-  kind: TemplateTargetType;
-  teamId: string | null;
-  selectedId?: string | null | undefined;
-  selectedVersionId?: string | null | undefined;
-  onSelect: (template: WorkTemplateOut, startingStatus?: string) => void;
-  disabled: boolean;
-}): JSX.Element {
+}: WorkTemplatePickerProps): JSX.Element {
   const query = useApiQuery(workTemplatesDef(orgId, { targetType: kind }));
   const statusQuery = useApiQuery(
     statusSetsDef(orgId, kind === 'task' ? (teamId ?? undefined) : undefined),
@@ -71,7 +75,7 @@ export function WorkTemplatePicker({
         >
           <LayoutTemplate className="size-4 shrink-0" />
           <span className="truncate">
-            {label}
+            {selectedLabel ?? label}
             {earlier ? ' · Earlier version' : ''}
           </span>
           <ChevronDown className="size-4 shrink-0" />

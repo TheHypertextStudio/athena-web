@@ -13,6 +13,7 @@ import { TemplateDisclosure } from './template-disclosure';
 import {
   WorkTemplateSampleFields,
   WorkTemplateSampleProperties,
+  WorkTemplateSampleSummary,
 } from './work-template-sample-fields';
 import { WorkTemplateBlueprintFields } from './work-template-blueprint-fields';
 import type { useWorkTemplateForm } from './use-work-template-form';
@@ -36,12 +37,12 @@ export function WorkTemplateFields({
   const set = form.setDefinition;
   return (
     <div className="flex min-w-0 flex-col gap-5">
-      <div className="grid min-w-0 items-start gap-5 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
-        <TemplateSampleWork orgId={orgId} form={form} />
-        <WorkTemplateBlueprintFields orgId={orgId} form={form} />
-      </div>
-      <div className="grid min-w-0 items-start gap-4 sm:grid-cols-2">
-        <WorkTemplateSampleProperties orgId={orgId} form={form} />
+      <WorkTemplateBlueprintFields
+        orgId={orgId}
+        form={form}
+        rootEditor={<TemplateSampleWork orgId={orgId} form={form} />}
+      />
+      <div className="min-w-0">
         <TemplateDisclosure title="Template settings">
           <Field
             label="Starting status"
@@ -80,11 +81,7 @@ function TemplateSampleWork({ orgId, form }: { orgId: string; form: Form }): JSX
   const disabled = form.pending || !form.canEdit;
   const set = form.setDefinition;
   return (
-    <Surface
-      as="section"
-      tone="floating"
-      shape="extra-large"
-      pad="roomy"
+    <section
       aria-label="Sample work"
       id="template-outline"
       tabIndex={-1}
@@ -92,14 +89,11 @@ function TemplateSampleWork({ orgId, form }: { orgId: string; form: Form }): JSX
     >
       <div>
         <h2 tabIndex={-1} className="text-title-large">
-          Sample work
+          Starting {form.definition.name.trim() || 'work'}
         </h2>
-        <p className="text-body-small text-on-surface-variant">
-          The starting outline for every new item.
-        </p>
       </div>
       <WorkTemplateSampleFields orgId={orgId} form={form} />
-      <Surface tone="well" shape="large" pad="roomy">
+      <Surface tone="well" shape="medium" pad="roomy">
         <Field label="Starting document">
           <FreeformTextEditor
             value={form.definition.payload.description ?? ''}
@@ -119,7 +113,9 @@ function TemplateSampleWork({ orgId, form }: { orgId: string; form: Form }): JSX
           />
         </Field>
       </Surface>
-    </Surface>
+      <WorkTemplateSampleSummary form={form} />
+      <WorkTemplateSampleProperties orgId={orgId} form={form} />
+    </section>
   );
 }
 

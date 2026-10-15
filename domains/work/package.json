@@ -48,7 +48,17 @@
     "./work-template-blueprint-contract": "./src/contracts/work-template-blueprint.ts",
     "./blueprints": "./src/blueprints/index.ts",
     "./calendar-date": "./src/calendar-date.ts",
-    "./template-merge": "./src/template-merge.ts"
+    "./template-merge": "./src/template-merge.ts",
+    "./recurrence": "./src/contracts/recurrence.ts",
+    "./work-schedule": "./src/contracts/work-schedule.ts",
+    "./work-schedule-fields": "./src/contracts/work-schedule-fields.ts",
+    "./work-schedule-defaults": "./src/contracts/work-schedule-defaults.ts",
+    "./work-schedule-claim": "./src/contracts/work-schedule-claim.ts",
+    "./work-schedule-forest": "./src/contracts/work-schedule-forest.ts",
+    "./work-schedule-fallback": "./src/contracts/work-schedule-fallback.ts",
+    "./schedule-title-pattern": "./src/schedule-title-pattern.ts",
+    "./work-schedule-management": "./src/contracts/work-schedule-management.ts",
+    "./work-schedule-trigger": "./src/contracts/work-schedule-trigger.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
@@ -61,7 +71,8 @@
   },
   "dependencies": {
     "@docket/identity-access": "workspace:*",
-    "zod": "catalog:"
+    "zod": "catalog:",
+    "@docket/automation": "workspace:*"
   },
   "devDependencies": {
     "@docket/eslint-config": "workspace:*",

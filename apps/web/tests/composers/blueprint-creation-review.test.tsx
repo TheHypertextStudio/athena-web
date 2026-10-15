@@ -26,6 +26,7 @@ function fixture(): BlueprintCreationPreview {
     workTypeVersionId: WorkTypeVersionId.parse(id),
     previewToken: `sha256:${'a'.repeat(64)}`,
     resolvedManifest: [],
+    defaultSchedules: [],
     selectedCount: 2,
     additionalMilestoneCount: 0,
     descendantCount: 1,

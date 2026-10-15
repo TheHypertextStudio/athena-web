@@ -227,13 +227,13 @@
         "./label-contract",
         "./comment-contract",
         "./attachment-contract",
-        "./plan-draft-contract",
-        "./plan-draft",
-        "./composer-draft-contract",
         "./document-image-contract",
         "./update-contract",
         "./saved-view-contract",
         "./template-contract",
+        "./plan-draft-contract",
+        "./plan-draft",
+        "./composer-draft-contract",
         "./subject-ref-contract",
         "./slug-contract",
         "./publish-contract",
@@ -245,9 +245,19 @@
         "./work-template-blueprint-contract",
         "./blueprints",
         "./calendar-date",
-        "./template-merge"
+        "./template-merge",
+        "./recurrence",
+        "./work-schedule",
+        "./work-schedule-fields",
+        "./work-schedule-defaults",
+        "./work-schedule-claim",
+        "./work-schedule-forest",
+        "./work-schedule-fallback",
+        "./schedule-title-pattern",
+        "./work-schedule-management",
+        "./work-schedule-trigger"
       ],
-      "allowedRuntimeDependencies": ["@docket/identity-access", "zod"],
+      "allowedRuntimeDependencies": ["@docket/automation", "@docket/identity-access", "zod"],
       "supportedDeployableRuntimes": ["api", "web", "admin", "runner", "desktop"]
     }
   ]

@@ -38,13 +38,13 @@ const processDefinitions = new Hono<AppEnv>()
       summary: 'List process definitions',
       response: pageOf(ProcessDefinitionSummaryOut),
       description:
-        'List reusable process blueprints in stable definition-id order. Pages default to 50 items, accept at most 100, and omit nextCursor at exhaustion. Each item reports its latest immutable revision number. Archived processes are excluded. Requires workspace membership.',
+        'List reusable process blueprints in stable definition-id order. Pages default to 50 items, accept at most 100, and omit nextCursor at exhaustion. Each item reports its latest immutable revision number. Archived processes are excluded. Requires current workspace View and definition ownership or workspace Manage.',
     }),
     zQuery(CursorQuery),
     async (c) => {
-      const { orgId } = c.get('actorCtx');
+      const { orgId, actorId } = c.get('actorCtx');
       const { cursor, limit } = c.req.valid('query');
-      const items = await listProcessDefinitions(db, orgId, { cursor, limit });
+      const items = await listProcessDefinitions(db, orgId, { cursor, limit }, actorId);
       return ok(c, pageOf(ProcessDefinitionSummaryOut), pageResultById(items, limit));
     },
   )
@@ -57,7 +57,7 @@ const processDefinitions = new Hono<AppEnv>()
       capability: 'contribute',
       response: ProcessDefinitionDetailOut,
       description:
-        'Snapshot one ordinary project, its milestones, tasks, labels, hierarchy, dependencies, and relative dates into a published reusable process revision.',
+        'Snapshot one fully readable project tree, its milestones, tasks, labels, hierarchy, dependencies, and relative dates into a private published process revision.',
     }),
     zJson(ProcessDefinitionFromProjectCreate),
     async (c) => {
@@ -67,7 +67,7 @@ const processDefinitions = new Hono<AppEnv>()
         actorId,
         input: c.req.valid('json'),
       });
-      const detail = await loadProcessDefinitionDetail(db, orgId, created.definitionId);
+      const detail = await loadProcessDefinitionDetail(db, orgId, created.definitionId, actorId);
       return ok(c, ProcessDefinitionDetailOut, detail);
     },
   )
@@ -91,7 +91,7 @@ const processDefinitions = new Hono<AppEnv>()
         actorId,
         definition: c.req.valid('json'),
       });
-      const detail = await loadProcessDefinitionDetail(db, orgId, published.definitionId);
+      const detail = await loadProcessDefinitionDetail(db, orgId, published.definitionId, actorId);
       return created(c, ProcessDefinitionDetailOut, detail);
     },
   )
@@ -102,12 +102,12 @@ const processDefinitions = new Hono<AppEnv>()
       summary: 'Get a process definition',
       response: ProcessDefinitionDetailOut,
       description:
-        'Get one workspace-scoped reusable process and reconstruct its latest immutable revision as named project, milestone, task, timing, and dependency specifications.',
+        'Get one private process you own or manage at workspace scope and reconstruct its latest immutable revision as named project, milestone, task, timing, and dependency specifications.',
     }),
     zParam(idParam),
     async (c) => {
-      const { orgId } = c.get('actorCtx');
-      const detail = await loadProcessDefinitionDetail(db, orgId, c.req.valid('param').id);
+      const { orgId, actorId } = c.get('actorCtx');
+      const detail = await loadProcessDefinitionDetail(db, orgId, c.req.valid('param').id, actorId);
       return ok(c, ProcessDefinitionDetailOut, detail);
     },
   )
@@ -125,9 +125,10 @@ const processDefinitions = new Hono<AppEnv>()
     zParam(idParam),
     zJson(ProcessDefinitionUpdate),
     async (c) => {
-      const { orgId } = c.get('actorCtx');
+      const { orgId, actorId } = c.get('actorCtx');
       const detail = await updateProcessDefinitionMetadata(db, {
         organizationId: orgId,
+        actorId,
         definitionId: c.req.valid('param').id,
         patch: c.req.valid('json'),
       });
@@ -156,7 +157,7 @@ const processDefinitions = new Hono<AppEnv>()
         definitionId: id,
         revision: c.req.valid('json'),
       });
-      const detail = await loadProcessDefinitionDetail(db, orgId, id);
+      const detail = await loadProcessDefinitionDetail(db, orgId, id, actorId);
       return ok(c, ProcessDefinitionDetailOut, detail);
     },
   )
@@ -173,8 +174,8 @@ const processDefinitions = new Hono<AppEnv>()
     }),
     zParam(idParam),
     async (c) => {
-      const { orgId } = c.get('actorCtx');
-      const archived = await archiveProcessDefinition(db, orgId, c.req.valid('param').id);
+      const { orgId, actorId } = c.get('actorCtx');
+      const archived = await archiveProcessDefinition(db, orgId, c.req.valid('param').id, actorId);
       return ok(c, ProcessDefinitionSummaryOut, archived);
     },
   );

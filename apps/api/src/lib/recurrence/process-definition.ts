@@ -17,7 +17,6 @@ import {
   program,
   project,
   projectLabel,
-  recurrenceSeries,
   task,
   taskDependency,
   taskLabel,
@@ -35,7 +34,7 @@ import {
   type ProcessDefinitionFromProjectCreate,
   type ProcessStepTiming,
 } from '../../contracts/recurrence';
-import { and, desc, eq, inArray, isNull, ne } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNull } from 'drizzle-orm';
 import type { z } from 'zod';
 
 import { ConflictError, CycleError, NotFoundError } from '../../error';
@@ -45,6 +44,9 @@ import { prepareProcessTemplates, type PreparedProcessDefinition } from './task-
 import { projectProcessTasks, timingFromRow } from './process-task-projection';
 
 import { bindPublishedProcessBlueprint } from './work-template-authoring';
+import { requireLegacyActor, requireLegacyDefinitionAccess } from './legacy-definition-access';
+import { archiveLegacyDefinition } from './legacy-definition-archive';
+import { captureLegacyProjectSource } from './legacy-source-capture';
 import {
   reconcileTemplateCreationEffects,
   type TemplateCreationEffect,
@@ -532,6 +534,21 @@ export async function createProcessDefinitionFromProject(
   database: Database,
   command: CreateProcessDefinitionFromProjectCommand,
 ): Promise<PublishedProcessRevision> {
+  const definition = await captureLegacyProjectSource(
+    database,
+    { ...command, projectId: command.input.projectId },
+    (tx) => captureProcessDefinitionFromProject(tx, command),
+  );
+  return createPublishedProcessDefinition(database, {
+    organizationId: command.organizationId,
+    actorId: command.actorId,
+    definition,
+  });
+}
+async function captureProcessDefinitionFromProject(
+  database: Database,
+  command: CreateProcessDefinitionFromProjectCommand,
+): Promise<ProcessDefinitionCreateValue> {
   const source = await database
     .select()
     .from(project)
@@ -662,11 +679,7 @@ export async function createProcessDefinitionFromProject(
       return blockingStepKey && blockedStepKey ? [{ blockingStepKey, blockedStepKey }] : [];
     }),
   };
-  return createPublishedProcessDefinition(database, {
-    organizationId: command.organizationId,
-    actorId: command.actorId,
-    definition,
-  });
+  return definition;
 }
 
 /** Append and publish a new revision without mutating any prior revision or instance. */
@@ -674,6 +687,7 @@ export async function appendPublishedProcessRevision(
   database: Database,
   command: AppendPublishedProcessRevisionCommand,
 ): Promise<PublishedProcessRevision> {
+  await requireLegacyDefinitionAccess(database, command, 'manage');
   const definition = await prepareProcessTemplates(
     database,
     command.organizationId,
@@ -725,7 +739,9 @@ export async function loadProcessDefinitionDetail(
   database: Database,
   organizationId: string,
   definitionId: string,
+  actorId: string | undefined,
 ): Promise<z.input<typeof ProcessDefinitionDetailOut>> {
+  await requireLegacyDefinitionAccess(database, { organizationId, actorId, definitionId });
   const definitions = await database
     .select()
     .from(processDefinition)
@@ -877,8 +893,14 @@ export async function listProcessDefinitions(
   database: Database,
   organizationId: string,
   pagination: { readonly cursor?: string | undefined; readonly limit: number },
+  actorId: string | undefined,
 ): Promise<z.input<typeof ProcessDefinitionSummaryOut>[]> {
-  const definitions = await listActiveProcessDefinitionRows(database, organizationId, pagination);
+  const definitions = await listActiveProcessDefinitionRows(
+    database,
+    organizationId,
+    actorId,
+    pagination,
+  );
   return Promise.all(
     definitions.map(async (definition) => {
       const latest = await database
@@ -908,10 +930,12 @@ export async function updateProcessDefinitionMetadata(
   database: Database,
   command: {
     readonly organizationId: string;
+    readonly actorId: string | undefined;
     readonly definitionId: string;
     readonly patch: z.input<typeof ProcessDefinitionUpdate>;
   },
 ): Promise<z.input<typeof ProcessDefinitionDetailOut>> {
+  await requireLegacyDefinitionAccess(database, command, 'manage');
   const patch = ProcessDefinitionUpdate.parse(command.patch);
   const updated = await database
     .update(processDefinition)
@@ -928,7 +952,12 @@ export async function updateProcessDefinitionMetadata(
     )
     .returning({ id: processDefinition.id });
   if (!updated[0]) throw new NotFoundError('Process definition not found');
-  return loadProcessDefinitionDetail(database, command.organizationId, command.definitionId);
+  return loadProcessDefinitionDetail(
+    database,
+    command.organizationId,
+    command.definitionId,
+    command.actorId,
+  );
 }
 
 /** Archive a process definition and end active series without deleting historical work. */
@@ -936,28 +965,16 @@ export async function archiveProcessDefinition(
   database: Database,
   organizationId: string,
   definitionId: string,
+  actorId: string | undefined,
 ): Promise<z.input<typeof ProcessDefinitionSummaryOut>> {
-  const before = await loadProcessDefinitionDetail(database, organizationId, definitionId);
+  const actualActorId = requireLegacyActor(actorId);
+  const before = await loadProcessDefinitionDetail(database, organizationId, definitionId, actorId);
   const now = new Date();
-  await database
-    .update(processDefinition)
-    .set({ status: 'archived', archivedAt: now })
-    .where(
-      and(
-        eq(processDefinition.id, definitionId),
-        eq(processDefinition.organizationId, organizationId),
-      ),
-    );
-  await database
-    .update(recurrenceSeries)
-    .set({ status: 'ended', endedAt: now })
-    .where(
-      and(
-        eq(recurrenceSeries.definitionId, definitionId),
-        eq(recurrenceSeries.organizationId, organizationId),
-        ne(recurrenceSeries.status, 'ended'),
-      ),
-    );
+  await archiveLegacyDefinition(
+    database,
+    { organizationId, actorId: actualActorId, definitionId },
+    now,
+  );
   return ProcessDefinitionSummaryOut.parse({
     id: before.id,
     organizationId: before.organizationId,

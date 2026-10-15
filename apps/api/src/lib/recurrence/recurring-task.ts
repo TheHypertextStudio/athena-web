@@ -105,12 +105,13 @@ export async function createRecurringTask(
   database: Database,
   command: CreateRecurringTaskCommand,
 ): Promise<z.input<typeof RecurringTaskCreated>> {
+  const { organizationId, actorId } = command;
   const body = await preparedRecurringTask(database, command);
   const today = utcCalendarDate(command.now);
   const anchor = firstAnchor(body, today);
   const process = await createPublishedProcessDefinition(database, {
-    organizationId: command.organizationId,
-    actorId: command.actorId,
+    organizationId,
+    actorId,
     definition: oneTaskProcess(body, anchor),
   });
   const materialization = body.materialization ?? { horizonDays: 28, minimumOccurrences: 2 };
@@ -128,8 +129,8 @@ export async function createRecurringTask(
           materialization,
         };
   const series = await createRecurrenceSeries(database, {
-    organizationId: command.organizationId,
-    actorId: command.actorId,
+    organizationId,
+    actorId,
     series: {
       processDefinitionId: ProcessDefinitionId.parse(process.definitionId),
       name: body.task.title,
@@ -153,13 +154,13 @@ export async function createRecurringTask(
   }
   for (const scheduledFor of dates) {
     await materializeSeriesOccurrence(database, {
-      organizationId: command.organizationId,
-      actorId: command.actorId,
+      organizationId,
+      actorId,
       seriesId: series.id,
       scheduledFor,
     });
   }
-  const detail = await loadRecurrenceSeriesDetail(database, command.organizationId, series.id);
+  const detail = await loadRecurrenceSeriesDetail(database, organizationId, series.id, actorId);
   const firstOccurrence = detail.occurrences.find(
     (occurrence) => occurrence.scheduledFor === dates[0],
   );
@@ -171,7 +172,7 @@ export async function createRecurringTask(
     .limit(1);
   const firstTask = rows[0];
   if (!firstTask) throw new ConflictError('Materialized recurring task was not found');
-  const labels = await labelsForSubject('task', command.organizationId, firstTask.id, database);
+  const labels = await labelsForSubject('task', organizationId, firstTask.id, database);
   return RecurringTaskCreated.parse({
     series,
     firstTask: toOut(firstTask, labels),

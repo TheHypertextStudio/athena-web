@@ -89,7 +89,12 @@ describe('process work-template starting defaults', () => {
           definitionId: created.definitionId,
           revision: definition,
         });
-      const detail = await loadProcessDefinitionDetail(schema.db, seed.orgId, created.definitionId);
+      const detail = await loadProcessDefinitionDetail(
+        schema.db,
+        seed.orgId,
+        created.definitionId,
+        seed.actorId,
+      );
       expect(detail.revision.tasks[0]).toMatchObject({
         priority: 'high',
         labelIds: [labelId],

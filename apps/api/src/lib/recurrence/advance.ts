@@ -29,6 +29,7 @@ import { materializeOccurrence, type MaterializedStepDelta } from './materialize
 import type { DeferredWorkEffect } from '../work-creation/types';
 import { deferWorkCreationEffects } from '../work-creation/effects';
 import { advanceTemplateOccurrence } from './work-template-advance';
+import { advanceNativeScheduleWork } from './schedule-native-completion';
 
 /** Command emitted from an actual task transition into a completed workflow state. */
 export interface AdvanceCompletedProcessTaskCommand {
@@ -120,6 +121,23 @@ function retainedReflowEffects(
 
 /** Release process work and completion-anchored continuation from one actual task completion. */
 export async function advanceCompletedProcessTask(
+  database: Database,
+  command: AdvanceCompletedProcessTaskCommand,
+): Promise<ProcessAdvanceResult> {
+  const native = await advanceNativeScheduleWork(database, {
+    organizationId: command.organizationId,
+    actorId: command.actorId,
+    work: { kind: 'task', id: command.completedTaskId },
+  });
+  if (native)
+    return {
+      ...EMPTY_DELTA,
+      instanceCompleted: native.completed,
+      nextOccurrenceId: native.nextOccurrenceId,
+    };
+  return advanceLegacyCompletedProcessTask(database, command);
+}
+async function advanceLegacyCompletedProcessTask(
   database: Database,
   command: AdvanceCompletedProcessTaskCommand,
 ): Promise<ProcessAdvanceResult> {

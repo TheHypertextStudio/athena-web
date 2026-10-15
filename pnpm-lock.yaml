@@ -956,6 +956,9 @@ importers:
 
   domains/work:
     dependencies:
+      '@docket/automation':
+        specifier: workspace:*
+        version: link:../automation
       '@docket/identity-access':
         specifier: workspace:*
         version: link:../identity-access

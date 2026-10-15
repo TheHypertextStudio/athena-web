@@ -10,6 +10,8 @@ import {
 } from '../work-creation/retained-authority';
 import { readBlueprintWork } from './snapshot-rows';
 import type { BlueprintSelection } from './resolve';
+import { requireScheduleRootBinding } from '../recurrence/schedule-authority';
+import type { OrdinaryWorkCommand } from '../work-creation/types';
 
 /** Opaque occurrence/root capability; only the checked actual mapped root can freeze a manifest. */
 export interface RetainedBlueprintResolutionProof {
@@ -17,11 +19,34 @@ export interface RetainedBlueprintResolutionProof {
 }
 interface CheckedResolution {
   readonly tx: TemplateTransaction;
-  readonly binding: RetainedRootBinding;
+  readonly binding?: RetainedRootBinding;
+  readonly scheduleCommand?: OrdinaryWorkCommand;
   readonly selection: BlueprintSelection;
   readonly manifest: readonly ResolvedVersionAtPath[];
 }
 const checked = new WeakMap<RetainedBlueprintResolutionProof, CheckedResolution>();
+
+/** Convert an exact persisted native occurrence capability into this resolver's transaction proof. */
+export function loadScheduleBlueprintResolutionProof(
+  tx: TemplateTransaction,
+  command: OrdinaryWorkCommand,
+): RetainedBlueprintResolutionProof | undefined {
+  const root = requireScheduleRootBinding(tx, command);
+  if (!root) return undefined;
+  const proof = Object.freeze({ proof: {} });
+  checked.set(proof, {
+    tx,
+    scheduleCommand: command,
+    selection: {
+      organizationId: command.caller.orgId,
+      kind: root.kind,
+      workTypeId: root.workTypeId,
+      workTypeVersionId: root.versionId,
+    },
+    manifest: root.resolvedManifest,
+  });
+  return proof;
+}
 
 async function originalAcceptedManifest(
   tx: TemplateTransaction,
@@ -102,6 +127,8 @@ export function retainedResolutionManifest(
     facts.selection.workTypeVersionId !== selection.workTypeVersionId
   )
     throw new CapabilityError();
-  requireRetainedOccurrenceAuthority(tx, facts.binding.authority);
+  if (facts.scheduleCommand) requireScheduleRootBinding(tx, facts.scheduleCommand);
+  else if (facts.binding) requireRetainedOccurrenceAuthority(tx, facts.binding.authority);
+  else throw new CapabilityError();
   return facts.manifest;
 }

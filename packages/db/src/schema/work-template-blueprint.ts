@@ -18,6 +18,7 @@ import type {
   BlueprintInvocationManifest,
   BlueprintInvocationOverride,
 } from '../blueprint-invocation';
+import type { ScheduleSourceArchive } from './work-schedule-storage';
 import { genId } from '../id';
 import { actor, organization } from './identity';
 import { workTypeVersion } from './work-template';
@@ -88,7 +89,7 @@ export const blueprintDependency = pgTable(
   ],
 ).enableRLS();
 
-const privateContext = sql`organization_id = nullif(current_setting('docket.organization_id', true),'') and exists(select 1 from actor a left join role r on r.id=a.role_id and r.organization_id=a.organization_id where a.id=nullif(current_setting('docket.actor_id', true),'') and a.organization_id=work_template_blueprint_invocation.organization_id and a.status='active' and a.archived_at is null and (a.id=work_template_blueprint_invocation.owner_actor_id or r.base_capability='manage' or r.capabilities @> '["manage"]'::jsonb))`;
+const privateContext = sql`docket_schedule_private_scope(organization_id,NULL,owner_actor_id)`;
 
 /** Restricted immutable schedule/legacy invocation context with literal destinations and actors. */
 export const blueprintInvocation = pgTable(
@@ -124,6 +125,9 @@ export const blueprintConversion = pgTable(
     legacyProcessRevisionId: text('legacy_process_revision_id').primaryKey(),
     invocationId: text('invocation_id').notNull(),
     sourceFingerprint: text('source_fingerprint').notNull(),
+    sourceArchive: jsonb('source_archive').$type<ScheduleSourceArchive>(),
+    sourceArchiveHash: text('source_archive_hash'),
+    sourceArchiveHashVersion: integer('source_archive_hash_version'),
     convertedAt: timestamp('converted_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [

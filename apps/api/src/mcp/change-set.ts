@@ -39,7 +39,17 @@ import type { AnyPgColumn, PgTable } from 'drizzle-orm/pg-core';
 import type { RecordedOrigin } from '@docket/work/provenance-contract';
 
 import { ConflictError, NotFoundError } from '../error';
-import { isCompanionKind, revertCompanion, revertCompanionIn } from './change-set-companions';
+import {
+  isCompanionKind,
+  revertCompanion,
+  revertCompanionIn,
+  type StoredEntry,
+} from './change-set-companions';
+import {
+  isAtomicContainerKind,
+  revertAtomicContainer,
+  orderedAtomicUndoEntries,
+} from './change-set-container-atomic';
 import { prelockCatalogTemplates } from './change-set-catalog';
 import { TRACKED } from './change-set-fields';
 export { trackedFields } from './change-set-fields';
@@ -606,12 +616,16 @@ async function revertEntry(
   }
 }
 
+/** Recheck authenticated undo permissions on persisted entries before any atomic reversal writes. */
+export type UndoAccessCheck = (tx: Tx, entries: readonly StoredEntry[]) => Promise<void>;
+
 /**
  * Reverse a change set, reporting what it could not take back.
  *
  * @remarks
- * Entries revert in reverse insertion order so a call that created a project and then filed tasks
- * into it unwinds children-first. A partial undo is a normal outcome, not an error: the caller
+ * Ordinary entries reverse the query-returned order; no insertion sequence is stored. Native
+ * ownership and installed-routine companions use the atomic path, which also reverses created
+ * Milestones after their Tasks. A partial ordinary undo is a normal outcome: the caller
  * gets a per-entity account and decides what to do about the remainder.
  *
  * @param orgId - The organization the change happened in.
@@ -622,6 +636,7 @@ async function revertEntry(
 export async function undoChangeSet(
   orgId: string,
   changeSetId: string,
+  guard?: UndoAccessCheck,
 ): Promise<{ summary: string; outcomes: UndoOutcome[] }> {
   const sets = await db
     .select({ id: changeSet.id, summary: changeSet.summary })
@@ -642,6 +657,16 @@ export async function undoChangeSet(
     .from(changeSetEntry)
     .where(eq(changeSetEntry.changeSetId, changeSetId));
 
+  if (
+    entries.some(
+      (entry) =>
+        entry.entityKind === 'native_schedule_date_ownership' ||
+        entry.entityKind === 'retained_date_ownership' ||
+        entry.entityKind === 'program_default_schedule',
+    )
+  )
+    return undoChangeSetAtomically(orgId, changeSetId, undefined, guard);
+
   const outcomes: UndoOutcome[] = [];
   for (const entry of [...entries].reverse()) {
     outcomes.push(await revertEntry(entry, orgId));
@@ -650,7 +675,7 @@ export async function undoChangeSet(
   return { summary: set.summary, outcomes };
 }
 
-/** Reverse one change set only when every tracked task still matches its recorded after-state. */
+/** Reverse work and companion state atomically only while all recorded after-values still match. */
 export async function undoChangeSetAtomically(
   orgId: string,
   changeSetId: string,
@@ -659,6 +684,7 @@ export async function undoChangeSetAtomically(
     readonly entries: readonly (typeof changeSetEntry.$inferSelect)[];
     readonly outcomes: readonly UndoOutcome[];
   }) => Promise<void>,
+  guard?: UndoAccessCheck,
 ): Promise<{ summary: string; outcomes: UndoOutcome[] }> {
   const result = await serializableTx(async (tx) => {
     const [set] = await tx
@@ -678,6 +704,7 @@ export async function undoChangeSetAtomically(
       .select()
       .from(changeSetEntry)
       .where(eq(changeSetEntry.changeSetId, changeSetId));
+    if (guard) await guard(tx, entries);
     await prelockCatalogTemplates(entries, orgId, tx);
     const taskEntries = entries.filter((entry) => entry.entityKind === 'task');
     const taskIds = [...new Set(taskEntries.map((entry) => entry.entityId))].sort();
@@ -702,7 +729,7 @@ export async function undoChangeSetAtomically(
     const outcomes: UndoOutcome[] = [];
     const cascades: TaskStateMutation[] = [];
     const settles: (() => Promise<void>)[] = [];
-    for (const entry of [...entries].reverse()) {
+    for (const entry of orderedAtomicUndoEntries(entries)) {
       if (entry.entityKind === 'task') {
         const row = rowById.get(entry.entityId);
         if (!row) throw new ConflictError('Expansion can no longer be undone');
@@ -731,6 +758,12 @@ export async function undoChangeSetAtomically(
         if (!outcome.reverted) throw new ConflictError('Expansion can no longer be undone');
         outcomes.push(outcome);
         if (settle) settles.push(settle);
+        continue;
+      }
+      if (isAtomicContainerKind(entry.entityKind)) {
+        const outcome = await revertAtomicContainer(entry, orgId, tx);
+        if (!outcome.reverted) throw new ConflictError('Expansion can no longer be undone');
+        outcomes.push(outcome);
         continue;
       }
       if (!isRelation(entry.entityKind))

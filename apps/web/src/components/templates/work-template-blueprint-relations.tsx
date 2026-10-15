@@ -20,35 +20,13 @@ export function WorkTemplateBlueprintRules({
   if (step.kind === 'milestone') return null;
   return (
     <div className="grid gap-3 sm:grid-cols-2">
-      <Field label="Responsible person">
-        <Select
-          disabled={disabled}
-          value={step.actorRule}
-          onChange={(event) => {
-            onChange({ ...step, actorRule: event.target.value as BlueprintStep['actorRule'] });
-          }}
-        >
-          <option value="unassigned">Unassigned</option>
-          <option value="parent_responsible">Parent's responsible person</option>
-          <option value="creator">Person creating the work</option>
-          <option value="athena">Athena</option>
-        </Select>
-      </Field>
-      <Field label={`${team} rule`}>
-        <Select
-          disabled={disabled}
-          value={step.teamRule}
-          onChange={(event) => {
-            onChange({ ...step, teamRule: event.target.value as BlueprintStep['teamRule'] });
-          }}
-        >
-          <option value="parent_team">
-            Parent's {team.toLocaleLowerCase()}, otherwise creation {team.toLocaleLowerCase()}
-          </option>
-          <option value="creation_team">Creation {team.toLocaleLowerCase()}</option>
-          <option value="none">No inherited {team.toLocaleLowerCase()}</option>
-        </Select>
-      </Field>
+      <WorkTemplateAssignmentRules
+        value={step}
+        disabled={disabled}
+        onChange={(patch) => {
+          onChange({ ...step, ...patch });
+        }}
+      />
       {step.kind === 'task' ? (
         <Field label={`${cycle} rule`}>
           <Select
@@ -72,6 +50,57 @@ export function WorkTemplateBlueprintRules({
         </Field>
       ) : null}
     </div>
+  );
+}
+/** Reusable parent-relative assignment controls without literal people or team identifiers. */
+export function WorkTemplateAssignmentRules({
+  value,
+  onChange,
+  disabled,
+  parentLabel = 'Parent',
+}: {
+  readonly value: Pick<Exclude<BlueprintStep, { kind: 'milestone' }>, 'actorRule' | 'teamRule'>;
+  readonly onChange: (
+    patch: Partial<Pick<Exclude<BlueprintStep, { kind: 'milestone' }>, 'actorRule' | 'teamRule'>>,
+  ) => void;
+  readonly disabled: boolean;
+  readonly parentLabel?: string;
+}): JSX.Element {
+  const team = useVocabulary('team');
+  return (
+    <>
+      {' '}
+      <Field label="Responsible person">
+        <Select
+          disabled={disabled}
+          value={value.actorRule}
+          onChange={(event) => {
+            onChange({ actorRule: event.target.value as typeof value.actorRule });
+          }}
+        >
+          <option value="unassigned">Unassigned</option>
+          <option value="parent_responsible">{parentLabel}'s responsible person</option>
+          <option value="creator">Person creating the work</option>
+          <option value="athena">Athena</option>
+        </Select>
+      </Field>
+      <Field label={`${team} rule`}>
+        <Select
+          disabled={disabled}
+          value={value.teamRule}
+          onChange={(event) => {
+            onChange({ teamRule: event.target.value as typeof value.teamRule });
+          }}
+        >
+          <option value="parent_team">
+            {parentLabel}'s {team.toLocaleLowerCase()}, otherwise creation{' '}
+            {team.toLocaleLowerCase()}
+          </option>
+          <option value="creation_team">Creation {team.toLocaleLowerCase()}</option>
+          <option value="none">No inherited {team.toLocaleLowerCase()}</option>
+        </Select>
+      </Field>
+    </>
   );
 }
 /** Dependencies remain explicit between authored sibling Tasks. */

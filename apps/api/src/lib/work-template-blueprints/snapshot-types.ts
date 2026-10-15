@@ -6,6 +6,7 @@ import type {
 import type { ActorCtx } from '../../context';
 import type { InsertedWork } from '../work-creation/writers';
 import type { RetainedOccurrenceAuthority } from '../work-creation/retained-authority';
+import type { NativeScheduleSnapshotAuthority } from '../recurrence/schedule-native-facts';
 
 /** Exact physical identity; a logical template path never grants access to it. */
 export interface BlueprintWorkRef {
@@ -15,7 +16,8 @@ export interface BlueprintWorkRef {
 /** Existing kind-correlated database work, reusing the ordinary writer's row union. */
 export type BlueprintStoredWork = InsertedWork;
 /** Foreground actor or an exact transaction-registered retained occurrence capability. */
-export type BlueprintSnapshotAuthority = ActorCtx | RetainedOccurrenceAuthority;
+export type BlueprintSnapshotAuthority =
+  ActorCtx | RetainedOccurrenceAuthority | NativeScheduleSnapshotAuthority;
 /** Bounded complete tree capture; write callers request sorted row locks and live edit access. */
 export interface BlueprintSnapshotOptions {
   readonly scope: 'tree' | 'retained' | 'affected' | 'reference';

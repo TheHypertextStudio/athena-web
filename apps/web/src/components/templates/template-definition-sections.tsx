@@ -30,7 +30,7 @@ export function TemplateDefinitionSections({
         as="header"
         data-template-definition-header=""
         tone="prominent"
-        shape="extra-large"
+        shape="large"
         pad="roomy"
         className="sticky top-2 z-10 flex min-w-0 flex-col gap-2 sm:p-5"
       >
@@ -108,14 +108,6 @@ function DefinitionWork({
       onFocusCapture={onFocusCapture}
       className="scroll-mt-48"
     >
-      <div className="mb-4 flex flex-wrap gap-2 xl:hidden">
-        <Button asChild type="button" variant="secondary" size="sm">
-          <a href="#template-outline">Outline</a>
-        </Button>
-        <Button asChild type="button" variant="secondary" size="sm">
-          <a href="#template-children">Child work · {form.definition.blueprint.steps.length}</a>
-        </Button>
-      </div>
       <WorkTemplateFields orgId={orgId} form={form} isBase={initial?.isBase ?? false} />
       <Button
         type="button"
@@ -155,7 +147,7 @@ function DefinitionPurpose({
       className="scroll-mt-48"
       aria-labelledby="tab-purpose"
     >
-      <Surface tone="card" shape="extra-large" pad="roomy" className="sm:p-6">
+      <Surface tone="card" shape="large" pad="roomy" className="sm:p-6">
         <WorkTemplatePurposeFields
           orgId={orgId}
           form={form}

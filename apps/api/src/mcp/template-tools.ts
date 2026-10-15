@@ -138,6 +138,7 @@ function assertSomethingToChange(input: DefineTemplateInput): void {
     input.labels,
     input.defaultStatusKey,
     input.blueprint,
+    input.defaultSchedules,
   ];
   if (fields.every((value) => value === undefined)) {
     invalid('template', 'Name at least one thing to change.');
@@ -164,7 +165,8 @@ async function writeTemplate(
   if (
     input.defaultStatusKey !== undefined ||
     input.expectedRevision !== undefined ||
-    input.blueprint !== undefined
+    input.blueprint !== undefined ||
+    input.defaultSchedules !== undefined
   )
     invalid('action', 'Choose draft for authoring changes or publish for a reviewed revision.');
   if (before) assertSomethingToChange(input);
@@ -198,6 +200,7 @@ function assertLifecycleInput(input: DefineTemplateInput): void {
     input.labels,
     input.defaultStatusKey,
     input.blueprint,
+    input.defaultSchedules,
   ];
   if (fields.some((field) => field !== undefined))
     invalid('action', 'Save draft changes before publishing or archiving.');
@@ -210,15 +213,16 @@ async function canonicalDefinition(
   teamId: string | undefined,
 ): Promise<WorkTemplateDefinition> {
   const payload = await payloadToWrite(input, before, teamId);
-  const previous = before ? draftOf(before) : undefined;
+  const previous: Partial<WorkTemplateDefinition> = before ? draftOf(before) : {};
   return parsed(WorkTemplateDefinition, {
     ...previous,
-    name: input.name ?? previous?.name,
-    description: input.description ?? previous?.description,
-    payload: payload ?? previous?.payload,
-    blueprint: input.blueprint ?? previous?.blueprint,
+    name: input.name ?? previous.name,
+    description: input.description ?? previous.description,
+    payload: payload ?? previous.payload,
+    blueprint: input.blueprint ?? previous.blueprint,
+    defaultSchedules: input.defaultSchedules ?? previous.defaultSchedules,
     defaultStatusKey:
-      input.defaultStatusKey === undefined ? previous?.defaultStatusKey : input.defaultStatusKey,
+      input.defaultStatusKey === undefined ? previous.defaultStatusKey : input.defaultStatusKey,
   });
 }
 
@@ -286,6 +290,7 @@ function snapshot(
           revision: row.draftRevision,
           version: row.latestPublishedVersionId,
           defaultStatusKey: draftOf(row).defaultStatusKey,
+          defaultSchedules: draftOf(row).defaultSchedules,
         }
       : {}),
     scope: row.scope,

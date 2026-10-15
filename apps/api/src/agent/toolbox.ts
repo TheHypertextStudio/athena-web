@@ -40,6 +40,7 @@ import { athenaProvenance, type ProvenanceBase } from '../lib/provenance/context
 import { internalAgentContext, internalUserContext } from '../mcp/internal-session';
 import { buildServer } from '../mcp/server';
 import type { ToolAnnotationHints, ToolAnnotationSource } from './approval-policy';
+import { listConnectedMcpTools } from './list-mcp-tools';
 
 /** The toolbox connection key for Docket's own in-process tools. */
 export const DOCKET_CONNECTION = 'docket';
@@ -327,11 +328,11 @@ export async function openToolbox(
   const client = new Client({ name: 'athena-loop', version: '1.0.0' });
   await client.connect(clientTransport);
 
-  const listed = await client.listTools();
+  const listed = await listConnectedMcpTools(client, server);
   const annotationsByName = new Map<string, ToolAnnotationHints>();
   const defs: TurnToolDef[] = [];
   const docketNames = new Set<string>();
-  for (const tool of listed.tools) {
+  for (const tool of listed) {
     docketNames.add(tool.name);
     const hints = firstPartyHints(tool);
     if (hints) annotationsByName.set(tool.name, hints);

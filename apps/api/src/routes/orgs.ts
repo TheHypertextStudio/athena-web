@@ -92,6 +92,7 @@ import { entityMentionRoutes } from './entity-mentions';
 import mentions from './mentions';
 import references from './references';
 import recurrenceSeries, { recurringTaskRoutes } from './recurrence-series';
+import workSchedules from './work-schedules';
 import search from './search';
 import tasks from './tasks';
 import teams from './teams';
@@ -490,6 +491,7 @@ Every new organization includes the Owner, Admin, Member, and Guest roles plus a
   .route('/:orgId/templates', templates)
   .route('/:orgId/process-definitions', processDefinitions)
   .route('/:orgId/recurrence-series', recurrenceSeries)
+  .route('/:orgId/work-schedules', workSchedules)
   .route('/:orgId/recurring-tasks', recurringTaskRoutes)
   .route('/:orgId/search', search)
   .route('/:orgId/mentions', mentions)

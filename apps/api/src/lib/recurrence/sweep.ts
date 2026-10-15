@@ -24,6 +24,7 @@ import {
 } from './expand';
 import { materializeOccurrence } from './materialize';
 import { triggerFromStorage, utcCalendarDate } from './series';
+import { recoverNativeScheduleContinuations } from './schedule-native-recovery';
 
 /** Counts from one series rolling-window pass. */
 export interface RecurrenceSeriesSweepResult {
@@ -113,6 +114,20 @@ function materializedMarker(
     blueprintAppliedAt: null,
     externalOccurrenceKey: null,
     resolvedAt: null,
+    runKind: 'scheduled',
+    legacyInstanceId: null,
+    acceptedClaim: null,
+    acceptedAt: null,
+    acceptanceOrdinal: null,
+    attempt: 0,
+    failedAt: null,
+    failureCode: null,
+    retryAvailableAt: null,
+    completedAt: null,
+    historicalArchive: null,
+    historicalArchiveHash: null,
+    scheduleDateOwnership: null,
+    continuedFromOccurrenceId: null,
   };
 }
 
@@ -123,7 +138,6 @@ async function applyMissedDate(
     readonly organizationId: string;
     readonly seriesId: string;
     readonly seriesRevisionId: string;
-    readonly processRevisionId: string;
     readonly scheduledFor: string;
     readonly missedPolicy: 'skip' | 'carry' | 'resolve';
     readonly actorId?: string | undefined;
@@ -205,6 +219,7 @@ export async function materializeRecurrenceSeriesWindow(
       carried: 0,
     };
   }
+  const continued = await recoverNativeScheduleContinuations(database, input);
   const revisions = await database
     .select()
     .from(recurrenceSeriesRevision)
@@ -253,7 +268,7 @@ export async function materializeRecurrenceSeriesWindow(
     existingByDate.set(occurrence.scheduledFor, current);
   }
 
-  let materialized = 0;
+  let materialized = continued;
   let skipped = 0;
   let needsResolution = 0;
   let carried = 0;
@@ -278,7 +293,6 @@ export async function materializeRecurrenceSeriesWindow(
           organizationId: input.organizationId,
           seriesId: input.seriesId,
           seriesRevisionId: revision.id,
-          processRevisionId: revision.processRevisionId,
           scheduledFor,
           missedPolicy: trigger.missedPolicy,
           actorId: input.actorId,

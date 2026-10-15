@@ -1,6 +1,6 @@
 ---
-title: "MCP tools and resources"
-description: "Registered MCP tool names, read resources, prompts, and authority limits."
+title: 'MCP tools and resources'
+description: 'Registered MCP tool names, read resources, prompts, and authority limits.'
 ---
 
 Docket returns only the tools that the caller's current scopes and grants allow. Tool availability
@@ -11,7 +11,7 @@ can change after consent or grant changes, so handle `notifications/tools/list_c
 The work and planning tools are `workspaces`, `find`, `list_work`, `brief`, `capture`, `organize`,
 `update`, `milestones`, `comment`, `report_status`, `link`, `archive`, `plan_day`, `undo`,
 `retrospect`, `view_workload`, `define_process`, `schedule_process`, `repeat_task`, `define_labels`,
-`define_template`, `list_templates`, `plan_start`, `plan_read`, `plan_draft`, `plan_commit`, and `track`.
+`define_template`, `list_templates`, `list_work_schedules`, `manage_work_schedule`, `plan_start`, `plan_read`, `plan_draft`, `plan_commit`, and `track`.
 
 The agent, session, connector, and directive tools are `run_agent`, `manage_session`,
 `link_external`, `acknowledge_directive`, `pause_athena_assignment_trigger`, and
@@ -51,7 +51,7 @@ availability.
     | `plan_day` | Creates the day's plan. |
     | `undo` | Reverses a change set. |
 
-    **Every write records an undoable change set.** Call `undo` once and Docket reverses forty
+    **Work edits in this table record an undoable change set.** Call `undo` once and Docket reverses forty
     edits.
 
 ### Time and reflection
@@ -68,6 +68,31 @@ availability.
     | `define_process` | Defines a process. |
     | `schedule_process` | Schedules a process to run. |
     | `repeat_task` | Makes a task recur. |
+
+### Work schedules
+
+Use `list_work_schedules` with `orgId` and `query.action: "list"` to discover visible recurring
+work. Filter by `ownerProgramId` when reviewing a Program. `query.action: "detail"` with
+`scheduleId` reopens its current private draft; `"history"` returns a bounded run page. Pass
+`nextCursor` back with the same query to continue. Results are under `data`.
+
+`manage_work_schedule` accepts one `command` intent. `"create"` supplies a `schedule` with a
+published Task/Project template, private location draft, trigger and effective date. `"revise"`
+supplies `scheduleId` and a `revision` with the exact `expectedRevisionId` just reviewed. Revisions
+apply only from their future boundary; existing work and run history retain their identities.
+`"pause"`, `"resume"` and `"end"` need `scheduleId`; ending is permanent.
+
+`"run"` supplies `scheduleId` and `run.scheduledFor` as a civil `YYYY-MM-DD` date. Calendar and
+completion schedules use their saved date identity, so omit `occurrenceKey`. Manual/event runs
+may carry a stable key. `"retry"` supplies the schedule and `occurrenceId` from history. A failed
+run returns an application-owned `failureCode`; `canRetry` indicates whether retry is available.
+Retries keep their accepted template versions and do not duplicate work. Results are under `data`.
+
+A Program template can define up to 20 `defaultSchedules` through `define_template` with
+`action: "draft"`. Each outline uses relative cadence and parent assignment rules, without literal
+people, teams, destinations or provider identifiers. Omission preserves existing defaults; `[]`
+clears them. New Programs receive independent schedule copies. Editing an outline leaves existing
+Programs' schedules alone; use `manage_work_schedule` to revise those copies.
 
 ### Create work from a template body
 
@@ -173,6 +198,10 @@ Creation expands a published template transactionally, including nested work, wi
 500 new items across the creation. Reusable children can use relative dates and parent-based
 responsibility rules; workspace-specific assignments belong on the actual work. `define_process`
 and `schedule_process` separately define recurring work and its schedule.
+
+Legacy process definitions are private to their author and current workspace managers. A manager
+of a Program can manage its schedules without gaining access to another author's private process
+body. Schedule history and generated-work links also respect current work visibility.
 
 ### Labels and templates
 

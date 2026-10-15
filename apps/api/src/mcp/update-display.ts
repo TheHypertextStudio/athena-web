@@ -67,7 +67,8 @@ export function addRetainedManualPinField(
   const pinned = changes.some(
     (change) =>
       !('linked' in change) &&
-      change.kind === 'retained_date_ownership' &&
+      (change.kind === 'retained_date_ownership' ||
+        change.kind === 'native_schedule_date_ownership') &&
       change.before?.['manual'] === false &&
       change.after?.['manual'] === true &&
       change.after['workKind'] === kind &&

@@ -39,8 +39,12 @@ export function WorkTemplateBlueprintStepFields({
         />
       </Field>
       {step.kind !== 'milestone' ? (
-        <Field label="Child summary">
+        <TemplateDisclosure
+          title={step.fields.summary ? 'Child summary' : 'Add a summary'}
+          defaultOpen={Boolean(step.fields.summary?.trim())}
+        >
           <Input
+            aria-label="Child summary"
             disabled={disabled}
             value={step.fields.summary ?? ''}
             maxLength={step.kind === 'task' ? 200 : 280}
@@ -48,7 +52,7 @@ export function WorkTemplateBlueprintStepFields({
               patch({ summary: event.target.value });
             }}
           />
-        </Field>
+        </TemplateDisclosure>
       ) : null}
       <Field label="Child document">
         <FreeformTextEditor
@@ -64,10 +68,16 @@ export function WorkTemplateBlueprintStepFields({
           className={`${fieldSurface({ variant: 'plain', controlSize: 'md', multiline: true, ringOn: 'within' })} min-h-24 max-w-none`}
         />
       </Field>
-      <TemplateDisclosure title="Child properties">
-        <ChildProperties orgId={orgId} step={step} disabled={disabled} onChange={onChange} />
-      </TemplateDisclosure>
     </>
+  );
+}
+/** Less frequent starting properties follow inclusion, timing and responsibility. */
+export function WorkTemplateBlueprintStartingProperties(props: StepProps): JSX.Element | null {
+  if (props.step.kind === 'milestone') return null;
+  return (
+    <TemplateDisclosure title="Starting properties">
+      <ChildProperties {...props} />
+    </TemplateDisclosure>
   );
 }
 function ChildProperties({ orgId, step, disabled, onChange }: StepProps): JSX.Element | null {

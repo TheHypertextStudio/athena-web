@@ -239,6 +239,7 @@ describe('process materialization', () => {
       db,
       organizationId,
       minimal.definitionId,
+      actorId,
     );
     expect(minimalDetail.revision.project).toBeUndefined();
     expect(minimalDetail.revision.milestones).toEqual([]);
@@ -285,7 +286,12 @@ describe('process materialization', () => {
       actorId,
       definition: qualified,
     });
-    const fullDetail = await loadProcessDefinitionDetail(db, organizationId, full.definitionId);
+    const fullDetail = await loadProcessDefinitionDetail(
+      db,
+      organizationId,
+      full.definitionId,
+      actorId,
+    );
     expect(fullDetail.revision.project).toMatchObject({
       description: 'A complete reusable season for one book.',
       leadId: actorId,
@@ -365,7 +371,12 @@ describe('process materialization', () => {
         creationMode: 'all_at_once',
       },
     });
-    const detail = await loadProcessDefinitionDetail(db, organizationId, created.definitionId);
+    const detail = await loadProcessDefinitionDetail(
+      db,
+      organizationId,
+      created.definitionId,
+      actorId,
+    );
 
     expect(detail.name).toBe('Intro to Urbanism Workshop series');
     expect(detail.revision.project).toMatchObject({ startOffsetDays: 0, targetOffsetDays: 10 });
@@ -406,7 +417,12 @@ describe('process materialization', () => {
         creationMode: 'all_at_once',
       },
     });
-    const detail = await loadProcessDefinitionDetail(db, organizationId, created.definitionId);
+    const detail = await loadProcessDefinitionDetail(
+      db,
+      organizationId,
+      created.definitionId,
+      actorId,
+    );
 
     expect(detail.name).toBe('Transit meetup process');
     expect(detail.description).toBeNull();
@@ -528,13 +544,14 @@ describe('process materialization', () => {
     });
     const updated = await updateProcessDefinitionMetadata(db, {
       organizationId,
+      actorId,
       definitionId: authored.definitionId,
       patch: { description: 'A revised explanation without changing execution.' },
     });
     expect(updated.name).toBe('Book Club Season');
     expect(updated.description).toBe('A revised explanation without changing execution.');
 
-    await archiveProcessDefinition(db, organizationId, authored.definitionId);
+    await archiveProcessDefinition(db, organizationId, authored.definitionId, actorId);
     await expect(
       appendPublishedProcessRevision(db, {
         organizationId,
@@ -546,6 +563,7 @@ describe('process materialization', () => {
     await expect(
       updateProcessDefinitionMetadata(db, {
         organizationId,
+        actorId,
         definitionId: authored.definitionId,
         patch: { name: 'Hidden update' },
       }),
@@ -629,6 +647,7 @@ describe('process materialization', () => {
       await loadGeneratedWorkRecurrence(db, {
         kind: 'task',
         organizationId,
+        actorId,
         taskId: assertDefined(report).id,
       }),
     ).toMatchObject({
@@ -640,6 +659,7 @@ describe('process materialization', () => {
       await loadGeneratedWorkRecurrence(db, {
         kind: 'project',
         organizationId,
+        actorId,
         projectId: assertDefined(createdProject).id,
       }),
     ).toMatchObject({
@@ -762,7 +782,12 @@ describe('process materialization', () => {
       actorId,
       definition,
     });
-    const detail = await loadProcessDefinitionDetail(db, organizationId, authored.definitionId);
+    const detail = await loadProcessDefinitionDetail(
+      db,
+      organizationId,
+      authored.definitionId,
+      actorId,
+    );
     expect(detail.revision.tasks[0]).toMatchObject({
       projectId: fixedProject.id,
       milestoneId: fixedMilestone.id,
@@ -1177,7 +1202,11 @@ describe('process materialization', () => {
 
     expect(advanced.nextOccurrenceId).not.toBeNull();
     expect(
-      await db.select().from(processOccurrence).where(eq(processOccurrence.seriesId, series.id)),
+      await db
+        .select()
+        .from(processOccurrence)
+        .where(eq(processOccurrence.seriesId, series.id))
+        .orderBy(processOccurrence.scheduledFor),
     ).toEqual([
       expect.objectContaining({ scheduledFor: '2026-09-01', status: 'completed' }),
       expect.objectContaining({ scheduledFor: '2026-10-30', status: 'materialized' }),

@@ -15,12 +15,18 @@ import {
   type AuthorizedRetainedOccurrence,
 } from '../work-creation/retained-authority';
 import type { BlueprintSnapshotAuthority, BlueprintSnapshotRow } from './snapshot-types';
+import {
+  requireNativeScheduleFacts,
+  nativeScheduleSnapshotFilter,
+  type NativeScheduleFacts,
+} from '../recurrence/schedule-native-facts';
 
 /** Verified live caller and optional exact persisted occurrence, never an unregistered nullable actor. */
 export interface BlueprintSnapshotCaller {
   readonly orgId: string;
   readonly actor: ActorCtx | null;
   readonly retained: AuthorizedRetainedOccurrence | null;
+  readonly native?: NativeScheduleFacts;
 }
 /** Resolve only foreground authority or an exact transaction-bound retained capability. */
 export function snapshotCaller(
@@ -28,6 +34,10 @@ export function snapshotCaller(
   authority: BlueprintSnapshotAuthority,
 ): BlueprintSnapshotCaller {
   if ('kind' in authority) {
+    if (authority.kind === 'native-schedule-occurrence') {
+      const native = requireNativeScheduleFacts(tx, authority);
+      return { orgId: native.organizationId, actor: native.caller, retained: null, native };
+    }
     const retained = requireRetainedOccurrenceAuthority(tx, authority);
     return {
       orgId: retained.organizationId,
@@ -42,8 +52,10 @@ function assertRetainedRows(
   rows: readonly BlueprintSnapshotRow[],
 ): void {
   const facts = caller.retained;
-  if (!facts) throw new CapabilityError();
-  const accept = retainedSnapshotFilter(caller);
+  if (!facts && !caller.native) throw new CapabilityError();
+  const accept = caller.native
+    ? nativeScheduleSnapshotFilter(caller.native)
+    : retainedSnapshotFilter(caller);
   for (const row of rows) if (!accept(row)) throw new NotFoundError('Work not found');
 }
 /** Check every required row before returning prose; Milestones inherit their actual Project's authority. */

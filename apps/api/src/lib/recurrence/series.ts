@@ -32,14 +32,18 @@ import {
   type RecurrenceSeriesLifecycle as RecurrenceSeriesLifecycleValue,
   type SeriesEdit as SeriesEditValue,
 } from '../../contracts/recurrence';
-import { and, desc, eq, gte, inArray, isNull, lte } from 'drizzle-orm';
+import { and, desc, eq, gte, inArray, isNull, lte, sql } from 'drizzle-orm';
 import type { z } from 'zod';
 
-import { ConflictError, NotFoundError } from '../../error';
+import { ApiError, ConflictError, NotFoundError } from '../../error';
 import { compareCalendarDates } from '@docket/planning/calendar-date';
 import { materializeOccurrence, type MaterializedOccurrence } from './materialize';
 import type { TaskStateMutation } from '../task-state';
 import { listRecurrenceSeriesIds } from './list-store';
+import { loadNativeGeneratedWorkRecurrence } from './schedule-native-backlinks';
+import { requireLegacyActor, requireLegacyDefinitionAccess } from './legacy-definition-access';
+import { requireScheduleAccess } from './schedule-access';
+import { readableLegacyWork, visibleLegacyWorkReference } from './legacy-work-visibility';
 
 /** Database transaction surface shared by atomic recurrence authoring operations. */
 export type RecurrenceTransaction = Parameters<Parameters<Database['transaction']>[0]>[0];
@@ -52,6 +56,7 @@ export interface GeneratedTaskLookup {
   readonly kind: 'task';
   readonly organizationId: string;
   readonly taskId: string;
+  readonly actorId?: string | undefined;
 }
 
 /** Lookup for recurrence provenance of one generated project. */
@@ -59,6 +64,7 @@ export interface GeneratedProjectLookup {
   readonly kind: 'project';
   readonly organizationId: string;
   readonly projectId: string;
+  readonly actorId?: string | undefined;
 }
 
 /** Any ordinary generated entity that may link back to its recurrence series. */
@@ -300,6 +306,11 @@ export async function createRecurrenceSeriesInTransaction(
   command: CreateRecurrenceSeriesCommand,
 ): Promise<string> {
   const body = RecurrenceSeriesCreate.parse(command.series);
+  await requireLegacyDefinitionAccess(tx, {
+    organizationId: command.organizationId,
+    actorId: command.actorId,
+    definitionId: body.processDefinitionId,
+  });
   const revision = await latestProcessRevision(
     tx,
     command.organizationId,
@@ -379,8 +390,8 @@ export async function loadRecurrenceSeries(
   return RecurrenceSeriesOut.parse({
     id: series.id,
     organizationId: series.organizationId,
-    processDefinitionId: series.definitionId,
-    processRevisionId: revision.processRevisionId,
+    processDefinitionId: series.definitionId ?? series.id,
+    processRevisionId: revision.processRevisionId ?? revision.id,
     name: series.name,
     status: series.status,
     trigger: triggerFromStorage(revision, weekdays),
@@ -406,11 +417,18 @@ async function occurrenceOutputs(
   database: Database,
   organizationId: string,
   seriesId: string,
+  actorId: string,
 ): Promise<z.input<typeof OccurrenceOut>[]> {
   const rows = await database
     .select({ occurrence: processOccurrence, instanceId: processInstance.id })
     .from(processOccurrence)
-    .leftJoin(processInstance, eq(processInstance.occurrenceId, processOccurrence.id))
+    .leftJoin(
+      processInstance,
+      and(
+        eq(processInstance.occurrenceId, processOccurrence.id),
+        eq(processInstance.organizationId, organizationId),
+      ),
+    )
     .where(
       and(
         eq(processOccurrence.organizationId, organizationId),
@@ -428,10 +446,20 @@ async function occurrenceOutputs(
             taskId: processInstanceTask.taskId,
           })
           .from(processInstanceTask)
-          .where(inArray(processInstanceTask.instanceId, instanceIds));
+          .where(
+            and(
+              eq(processInstanceTask.organizationId, organizationId),
+              inArray(processInstanceTask.instanceId, instanceIds),
+            ),
+          );
+  const visible = await readableLegacyWork(
+    database,
+    { organizationId, actorId },
+    taskRows.map(({ taskId }) => ({ kind: 'task' as const, id: taskId })),
+  );
   const firstTaskByInstance = new Map<string, string>();
   for (const row of taskRows) {
-    if (!firstTaskByInstance.has(row.instanceId))
+    if (visible.has(`task:${row.taskId}`) && !firstTaskByInstance.has(row.instanceId))
       firstTaskByInstance.set(row.instanceId, row.taskId);
   }
   return rows.map((row) =>
@@ -482,7 +510,7 @@ async function seriesRevisionOutputs(
     RecurrenceSeriesRevisionOut.parse({
       id: revision.id,
       seriesId: revision.seriesId,
-      processRevisionId: revision.processRevisionId,
+      processRevisionId: revision.processRevisionId ?? revision.id,
       number: revision.number,
       effectiveFrom: revision.effectiveFrom,
       trigger: triggerFromStorage(
@@ -499,11 +527,14 @@ export async function loadRecurrenceSeriesDetail(
   database: Database,
   organizationId: string,
   seriesId: string,
+  actorId: string | undefined,
 ): Promise<z.input<typeof RecurrenceSeriesDetailOut>> {
+  const actualActorId = requireLegacyActor(actorId);
+  await requireScheduleAccess(database, { organizationId, actorId: actualActorId, seriesId });
   const [series, revisions, occurrences] = await Promise.all([
     loadRecurrenceSeries(database, organizationId, seriesId),
     seriesRevisionOutputs(database, organizationId, seriesId),
-    occurrenceOutputs(database, organizationId, seriesId),
+    occurrenceOutputs(database, organizationId, seriesId, actualActorId),
   ]);
   return RecurrenceSeriesDetailOut.parse({ ...series, revisions, occurrences });
 }
@@ -514,7 +545,13 @@ export async function transitionRecurrenceSeries(
   organizationId: string,
   seriesId: string,
   command: RecurrenceSeriesLifecycleValue,
+  actorId: string | undefined,
 ): Promise<z.input<typeof RecurrenceSeriesOut>> {
+  await requireScheduleAccess(
+    database,
+    { organizationId, actorId: requireLegacyActor(actorId), seriesId },
+    'manage',
+  );
   const transition = RecurrenceSeriesLifecycle.parse(command);
   const current = await loadSeriesRecord(database, organizationId, seriesId);
   if (current.series.status === 'ended' && transition.action !== 'end') {
@@ -591,6 +628,18 @@ export async function loadGeneratedWorkRecurrence(
   database: Database,
   lookup: GeneratedWorkLookup,
 ): Promise<z.input<typeof GeneratedWorkRecurrenceOut> | null> {
+  const reference = {
+    kind: lookup.kind,
+    id: lookup.kind === 'task' ? lookup.taskId : lookup.projectId,
+  };
+  if (!(await visibleLegacyWorkReference(database, lookup, reference))) return null;
+  const native = await loadNativeGeneratedWorkRecurrence(database, {
+    organizationId: lookup.organizationId,
+    kind: lookup.kind,
+    id: lookup.kind === 'task' ? lookup.taskId : lookup.projectId,
+    ...(lookup.actorId ? { actorId: lookup.actorId } : {}),
+  });
+  if (native) return native;
   const selected = {
     seriesId: recurrenceSeries.id,
     seriesName: recurrenceSeries.name,
@@ -615,7 +664,7 @@ export async function loadGeneratedWorkRecurrence(
         ),
       )
       .limit(1);
-    return rows[0]
+    return rows[0] && (await visibleLegacyBacklink(database, lookup, rows[0].seriesId))
       ? GeneratedWorkRecurrenceOut.parse({ kind: 'task', taskId: lookup.taskId, ...rows[0] })
       : null;
   }
@@ -632,9 +681,26 @@ export async function loadGeneratedWorkRecurrence(
       ),
     )
     .limit(1);
-  return rows[0]
+  return rows[0] && (await visibleLegacyBacklink(database, lookup, rows[0].seriesId))
     ? GeneratedWorkRecurrenceOut.parse({ kind: 'project', projectId: lookup.projectId, ...rows[0] })
     : null;
+}
+async function visibleLegacyBacklink(
+  database: Database,
+  lookup: GeneratedWorkLookup,
+  seriesId: string,
+): Promise<boolean> {
+  try {
+    await requireScheduleAccess(database, {
+      organizationId: lookup.organizationId,
+      actorId: requireLegacyActor(lookup.actorId),
+      seriesId,
+    });
+    return true;
+  } catch (error) {
+    if (error instanceof ApiError && (error.status === 403 || error.status === 404)) return false;
+    throw error;
+  }
 }
 
 /** Append a future trigger revision without changing any prior occurrence or instance. */
@@ -682,6 +748,13 @@ async function appendFutureSeriesRevision(
     if (latest[0] && compareCalendarDates(input.effectiveFrom, latest[0].effectiveFrom) <= 0) {
       throw new ConflictError('Future schedule changes must follow the latest schedule version');
     }
+    if (!series.definitionId)
+      throw new ConflictError('Edit this work schedule through its template revision');
+    await requireLegacyDefinitionAccess(tx, {
+      organizationId: input.organizationId,
+      actorId: input.actorId,
+      definitionId: series.definitionId,
+    });
     const process = await latestProcessRevision(tx, input.organizationId, series.definitionId);
     await persistSeriesRevision(tx, {
       organizationId: input.organizationId,
@@ -840,26 +913,24 @@ export async function editRecurrenceSeries(
     readonly onRetired?: ((work: RetiredFutureWork) => Promise<void>) | undefined;
   },
 ): Promise<z.input<typeof RecurrenceSeriesDetailOut>> {
+  const { organizationId, actorId, seriesId } = input;
+  const authority = { ...input, actorId: requireLegacyActor(actorId) };
+  await requireScheduleAccess(database, authority, 'manage');
   const edit = SeriesEdit.parse(input.edit);
   if (edit.scope === 'future') {
     await appendFutureSeriesRevision(database, {
-      organizationId: input.organizationId,
-      actorId: input.actorId,
-      seriesId: input.seriesId,
+      organizationId,
+      actorId,
+      seriesId,
       effectiveFrom: edit.effectiveFrom,
       asOf: input.asOf,
       trigger: edit.trigger,
       onRetired: input.onRetired,
     });
-    return loadRecurrenceSeriesDetail(database, input.organizationId, input.seriesId);
+    return loadRecurrenceSeriesDetail(database, organizationId, seriesId, actorId);
   }
 
-  const revision = await seriesRevisionAt(
-    database,
-    input.organizationId,
-    input.seriesId,
-    edit.scheduledFor,
-  );
+  const revision = await seriesRevisionAt(database, organizationId, seriesId, edit.scheduledFor);
   const now = new Date();
   if (edit.resolution.kind === 'complete') {
     const updated = await database
@@ -867,8 +938,8 @@ export async function editRecurrenceSeries(
       .set({ status: 'completed', resolvedAt: now })
       .where(
         and(
-          eq(processOccurrence.organizationId, input.organizationId),
-          eq(processOccurrence.seriesId, input.seriesId),
+          eq(processOccurrence.organizationId, organizationId),
+          eq(processOccurrence.seriesId, seriesId),
           eq(processOccurrence.scheduledFor, edit.scheduledFor),
         ),
       )
@@ -883,31 +954,26 @@ export async function editRecurrenceSeries(
         .leftJoin(processInstance, eq(processInstance.occurrenceId, processOccurrence.id))
         .where(
           and(
-            eq(processOccurrence.organizationId, input.organizationId),
-            eq(processOccurrence.seriesId, input.seriesId),
+            eq(processOccurrence.organizationId, organizationId),
+            eq(processOccurrence.seriesId, seriesId),
             eq(processOccurrence.scheduledFor, edit.scheduledFor),
             inArray(processOccurrence.status, ['expected', 'materialized', 'needs_resolution']),
           ),
         );
-      const retirement = await retireGeneratedOccurrenceWork(
-        tx,
-        input.organizationId,
-        candidates,
-        now,
-      );
+      const retirement = await retireGeneratedOccurrenceWork(tx, organizationId, candidates, now);
       if (retirement.completedOccurrenceIds.length > 0) {
         throw new ConflictError('Completed occurrence work cannot be skipped or moved');
       }
       await tx
         .insert(recurrenceException)
         .values({
-          organizationId: input.organizationId,
+          organizationId,
           seriesRevisionId: revision.id,
           kind,
           scheduledFor: edit.scheduledFor,
           replacementDate:
             edit.resolution.kind === 'reschedule' ? edit.resolution.scheduledFor : undefined,
-          createdBy: input.actorId,
+          createdBy: actorId,
         })
         .onConflictDoUpdate({
           target: [recurrenceException.seriesRevisionId, recurrenceException.scheduledFor],
@@ -920,13 +986,13 @@ export async function editRecurrenceSeries(
       await tx
         .insert(processOccurrence)
         .values({
-          organizationId: input.organizationId,
-          seriesId: input.seriesId,
+          organizationId,
+          seriesId,
           seriesRevisionId: revision.id,
           scheduledFor: edit.scheduledFor,
           status: edit.resolution.kind === 'skip' ? 'skipped' : 'canceled',
           resolvedAt: now,
-          createdBy: input.actorId,
+          createdBy: actorId,
         })
         .onConflictDoUpdate({
           target: [
@@ -934,7 +1000,7 @@ export async function editRecurrenceSeries(
             processOccurrence.seriesRevisionId,
             processOccurrence.scheduledFor,
           ],
-          targetWhere: isNull(processOccurrence.externalOccurrenceKey),
+          targetWhere: sql<boolean>`${processOccurrence.externalOccurrenceKey} is null and ${processOccurrence.continuedFromOccurrenceId} is null`,
           set: {
             status: edit.resolution.kind === 'skip' ? 'skipped' : 'canceled',
             resolvedAt: now,
@@ -950,14 +1016,14 @@ export async function editRecurrenceSeries(
     await input.onRetired?.({ taskIds: retired.taskIds, projectIds: retired.projectIds });
     if (edit.resolution.kind === 'reschedule') {
       await materializeOccurrence(database, {
-        organizationId: input.organizationId,
-        actorId: input.actorId,
-        seriesId: input.seriesId,
+        organizationId,
+        actorId,
+        seriesId,
         seriesRevisionId: revision.id,
         scheduledFor: edit.resolution.scheduledFor,
         originalScheduledFor: edit.scheduledFor,
       });
     }
   }
-  return loadRecurrenceSeriesDetail(database, input.organizationId, input.seriesId);
+  return loadRecurrenceSeriesDetail(database, organizationId, seriesId, actorId);
 }

@@ -313,14 +313,19 @@ describe('renderToolInstructions', () => {
   it('renders each schema compactly, with only the lead paragraph of the description', () => {
     const rendered = renderToolInstructions([tool(1)]);
 
-    expect(rendered).toContain('### tool_1\nDoes thing 1.\n\nInput JSON Schema:');
+    expect(rendered).toContain('### tool_1\nDoes thing 1.');
+    expect(rendered).toContain('Input JSON Schema registry:');
     expect(rendered).not.toContain('Usage notes');
     // The first fenced block in the instructions is the call template; the tool's own
     // schema is the block that follows its heading.
     const afterHeading = rendered.slice(rendered.indexOf('### tool_1'));
     const fenced = afterHeading.split('```json\n')[1]?.split('\n```')[0] ?? '';
     expect(fenced).not.toContain('\n');
-    expect(JSON.parse(fenced)).toEqual(compactToolSchema(annotatedSchema(1)));
+    expect(JSON.parse(fenced)).toEqual({
+      type: 'object',
+      properties: { tool_1: compactToolSchema(annotatedSchema(1)) },
+      additionalProperties: false,
+    });
   });
 
   it('keeps a realistic toolbox inside a local model’s budget', () => {

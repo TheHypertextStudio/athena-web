@@ -2,32 +2,82 @@
 import { processDefinition, recurrenceSeries, type Database } from '@docket/db';
 import { and, asc, eq, isNull, ne } from 'drizzle-orm';
 
-import { seekAfterId } from '../list-cursor';
+import { encodeIdCursor, seekAfterId } from '../list-cursor';
+import { NotFoundError } from '../../error';
+import { requireLegacyActor, requireLegacyDefinitionAccess } from './legacy-definition-access';
 
 interface ListPage {
   readonly cursor?: string | undefined;
   readonly limit: number;
 }
 
-/** Read one page of active process definitions. */
+/** Fill a page using only live-authorized private definitions, before reading their prose. */
 export async function listActiveProcessDefinitionRows(
   database: Database,
   organizationId: string,
+  actorId: string | undefined,
   page: ListPage,
 ): Promise<(typeof processDefinition.$inferSelect)[]> {
+  requireLegacyActor(actorId);
+  const visible: (typeof processDefinition.$inferSelect)[] = [];
+  let cursor = page.cursor;
+  while (visible.length <= page.limit) {
+    const ids = await activeDefinitionIds(database, organizationId, cursor);
+    for (const { id } of ids) {
+      const row = await visibleDefinition(database, { organizationId, actorId, definitionId: id });
+      if (row) visible.push(row);
+      if (visible.length > page.limit) break;
+    }
+    const last = ids.at(-1);
+    if (ids.length < 100 || !last || visible.length > page.limit) break;
+    cursor = encodeIdCursor(last.id);
+  }
+  return visible;
+}
+async function visibleDefinition(
+  database: Database,
+  identity: {
+    readonly organizationId: string;
+    readonly actorId: string | undefined;
+    readonly definitionId: string;
+  },
+): Promise<typeof processDefinition.$inferSelect | undefined> {
+  try {
+    await requireLegacyDefinitionAccess(database, identity);
+    const [row] = await database
+      .select()
+      .from(processDefinition)
+      .where(
+        and(
+          eq(processDefinition.organizationId, identity.organizationId),
+          eq(processDefinition.id, identity.definitionId),
+        ),
+      )
+      .limit(1);
+    return row;
+  } catch (error) {
+    if (error instanceof NotFoundError) return undefined;
+    throw error;
+  }
+}
+async function activeDefinitionIds(
+  database: Database,
+  organizationId: string,
+  cursor: string | undefined,
+): Promise<{ id: string }[]> {
   return database
-    .select()
+    .select({ id: processDefinition.id })
     .from(processDefinition)
     .where(
       and(
         eq(processDefinition.organizationId, organizationId),
         isNull(processDefinition.archivedAt),
         ne(processDefinition.status, 'archived'),
-        seekAfterId(processDefinition.id, page.cursor, 'asc'),
+        seekAfterId(processDefinition.id, cursor, 'asc'),
       ),
     )
     .orderBy(asc(processDefinition.id))
-    .limit(page.limit + 1);
+    .limit(100);
 }
 
 /** Read one page of active recurrence-series identifiers. */

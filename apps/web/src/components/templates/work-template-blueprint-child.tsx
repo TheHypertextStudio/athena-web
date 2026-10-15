@@ -15,7 +15,10 @@ import {
   withBlueprintStepDates,
 } from './work-template-blueprint-edit';
 import { TemplateDisclosure } from './template-disclosure';
-import { WorkTemplateBlueprintStepFields } from './work-template-blueprint-step-fields';
+import {
+  WorkTemplateBlueprintStepFields,
+  WorkTemplateBlueprintStartingProperties,
+} from './work-template-blueprint-step-fields';
 import { WorkTemplateBlueprintReferenceFields } from './work-template-blueprint-reference-fields';
 import { WorkTemplateBlueprintDateFields } from './work-template-blueprint-date-fields';
 import {
@@ -94,38 +97,31 @@ export function BlueprintChildCard(
   return (
     <Surface
       tone="prominent"
-      shape="extra-large"
+      shape="medium"
       pad="roomy"
       id={`blueprint-child-${step.key}`}
       role="group"
       aria-label={`Child work: ${blueprintStepName(step)}`}
       className="flex scroll-mt-48 flex-col gap-4"
     >
-      <div className="flex min-w-0 items-center justify-between gap-2">
-        <h3 className="text-title-large min-w-0 break-words">{blueprintStepName(step)}</h3>
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          onClick={() => {
-            props.onOpenChange(false);
-          }}
-        >
-          Done editing
-        </Button>
-      </div>
+      <ChildEditorHeading
+        step={step}
+        onClose={() => {
+          props.onOpenChange(false);
+        }}
+      />
       <WorkTemplateBlueprintStepFields
         orgId={props.orgId}
         step={step}
         disabled={disabled}
         onChange={update}
       />
-      <OptionalFields step={step} disabled={disabled} onChange={update} />
+      <section className="flex flex-col gap-2" aria-label="Child inclusion">
+        <h4 className="text-label-large">Inclusion</h4>
+        <OptionalFields step={step} disabled={disabled} onChange={update} />
+      </section>
       <TemplateDisclosure title="Dates">
         <ChildDates step={step} siblings={siblings} disabled={disabled} onChange={update} />
-      </TemplateDisclosure>
-      <TemplateDisclosure title="Assignment and defaults">
-        <WorkTemplateBlueprintRules step={step} disabled={disabled} onChange={update} />
         <WorkTemplateBlueprintDependencies
           blueprint={blueprint}
           step={step}
@@ -133,6 +129,15 @@ export function BlueprintChildCard(
           onChange={onChange}
         />
       </TemplateDisclosure>
+      <TemplateDisclosure title="Responsibility">
+        <WorkTemplateBlueprintRules step={step} disabled={disabled} onChange={update} />
+      </TemplateDisclosure>
+      <WorkTemplateBlueprintStartingProperties
+        orgId={props.orgId}
+        step={step}
+        disabled={disabled}
+        onChange={update}
+      />
       <TemplateDisclosure title="Template and placement">
         <WorkTemplateBlueprintReferenceFields
           orgId={props.orgId}
@@ -148,6 +153,22 @@ export function BlueprintChildCard(
   );
 }
 
+function ChildEditorHeading({
+  step,
+  onClose,
+}: {
+  readonly step: BlueprintStep;
+  readonly onClose: () => void;
+}): JSX.Element {
+  return (
+    <div className="flex min-w-0 items-center justify-between gap-2">
+      <h3 className="text-title-large min-w-0 break-words">{blueprintStepName(step)}</h3>
+      <Button type="button" variant="ghost" size="sm" onClick={onClose}>
+        Back to outline
+      </Button>
+    </div>
+  );
+}
 function OptionalFields({
   step,
   disabled,

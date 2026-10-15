@@ -13,13 +13,15 @@ import {
 export function TemplateDisclosure({
   title,
   children,
+  defaultOpen = false,
 }: {
   title: string;
   children: ReactNode;
+  defaultOpen?: boolean;
 }): JSX.Element {
   return (
     <Surface tone="card" shape="large" pad="tight">
-      <Collapsible className="min-w-0">
+      <Collapsible className="min-w-0" defaultOpen={defaultOpen}>
         <CollapsibleTrigger asChild>
           <Button
             type="button"

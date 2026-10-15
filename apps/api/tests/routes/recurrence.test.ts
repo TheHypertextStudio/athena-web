@@ -14,7 +14,7 @@ import { eq } from 'drizzle-orm';
 import type processDefinitionsRouter from '../../src/routes/process-definitions';
 import type recurrenceSeriesRouter from '../../src/routes/recurrence-series';
 import type { recurringTaskRoutes as RecurringTaskRouter } from '../../src/routes/recurrence-series';
-import { appWithActor, getDb, seedBaseOrg } from '../support/routes-harness';
+import { appWithActor, getDb, seedTaskAccessOrg } from '../support/routes-harness';
 import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
@@ -80,7 +80,7 @@ function workshopDefinition(teamId: string, followUp = 'Send follow-ups to atten
 
 describe('process definitions routes', () => {
   it('creates, lists, reconstructs, revises, renames, and archives one process', async () => {
-    const org = await seedBaseOrg(db, schema);
+    const org = await seedTaskAccessOrg(db, schema);
     const app = appWithActor(processDefinitions, org.orgId, ['contribute'], org.humanActorId);
 
     const createResponse = await app.request('/', {
@@ -131,7 +131,7 @@ describe('process definitions routes', () => {
   });
 
   it('enforces contribute capability and tenant isolation', async () => {
-    const first = await seedBaseOrg(db, schema);
+    const first = await seedTaskAccessOrg(db, schema);
     const writer = appWithActor(
       processDefinitions,
       first.orgId,
@@ -156,7 +156,7 @@ describe('process definitions routes', () => {
       ).status,
     ).toBe(403);
 
-    const second = await seedBaseOrg(db, schema);
+    const second = await seedTaskAccessOrg(db, schema);
     const foreign = appWithActor(
       processDefinitions,
       second.orgId,
@@ -170,7 +170,7 @@ describe('process definitions routes', () => {
 
 describe('recurrence series routes', () => {
   it('creates, materializes, edits future behavior, pauses, resumes, and ends a series', async () => {
-    const org = await seedBaseOrg(db, schema);
+    const org = await seedTaskAccessOrg(db, schema);
     const processes = appWithActor(processDefinitions, org.orgId, ['contribute'], org.humanActorId);
     const definition = await body<ProcessDefinitionDetailOut>(
       await processes.request('/', {
@@ -421,7 +421,7 @@ describe('recurrence series routes', () => {
   });
 
   it('round-trips every persisted trigger shape through series creation and detail reads', async () => {
-    const org = await seedBaseOrg(db, schema);
+    const org = await seedTaskAccessOrg(db, schema);
     const processes = appWithActor(processDefinitions, org.orgId, ['contribute'], org.humanActorId);
     const definition = await body<ProcessDefinitionDetailOut>(
       await processes.request('/', {
@@ -575,7 +575,7 @@ describe('recurrence series routes', () => {
   });
 
   it('rejects a series whose process definition is unavailable in the workspace', async () => {
-    const org = await seedBaseOrg(db, schema);
+    const org = await seedTaskAccessOrg(db, schema);
     const app = appWithActor(recurrenceSeries, org.orgId, ['contribute'], org.humanActorId);
     const response = await app.request('/', {
       method: 'POST',
@@ -604,7 +604,7 @@ describe('recurrence series routes', () => {
   });
 
   it('returns null backlinks for ordinary task and project identifiers', async () => {
-    const org = await seedBaseOrg(db, schema);
+    const org = await seedTaskAccessOrg(db, schema);
     const app = appWithActor(recurrenceSeries, org.orgId, ['view'], org.humanActorId);
     expect(await body(await app.request('/for-task/01J00000000000000000000000'))).toBeNull();
     expect(await body(await app.request('/for-project/01J00000000000000000000000'))).toBeNull();
@@ -613,7 +613,7 @@ describe('recurrence series routes', () => {
 
 describe('recurring task route', () => {
   it('creates the rolling task window and preserves the ordinary task draft', async () => {
-    const org = await seedBaseOrg(db, schema);
+    const org = await seedTaskAccessOrg(db, schema);
     const project = assertDefined(
       (
         await db
@@ -673,7 +673,7 @@ describe('recurring task route', () => {
   });
 
   it('anchors completion schedules to due date, start date, or today in that order', async () => {
-    const org = await seedBaseOrg(db, schema);
+    const org = await seedTaskAccessOrg(db, schema);
     const app = appWithActor(recurringTasks, org.orgId, ['contribute'], org.humanActorId);
     const today = new Date().toISOString().slice(0, 10);
     const cases = [
@@ -716,7 +716,7 @@ describe('recurring task route', () => {
   });
 
   it('rejects a finite calendar rule whose complete series is already in the past', async () => {
-    const org = await seedBaseOrg(db, schema);
+    const org = await seedTaskAccessOrg(db, schema);
     const app = appWithActor(recurringTasks, org.orgId, ['contribute'], org.humanActorId);
     const response = await app.request('/', {
       method: 'POST',

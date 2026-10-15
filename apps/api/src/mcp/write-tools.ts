@@ -1,4 +1,5 @@
 import type { task } from '@docket/db';
+import type { ActorCtx } from '../context';
 /**
  * `@docket/api` — the intent-shaped write tools, and the undo that makes them safe.
  *
@@ -15,6 +16,7 @@ import { TaskId } from '@docket/work/ids';
 import { z } from 'zod';
 
 import { requireTemplateUndoAuthor } from '../lib/templates/service';
+import { workScheduleUndoAccess } from '../lib/recurrence/work-schedule-undo-access';
 import { NotFoundError } from '../error';
 import { createCapturedTasks } from './capture-template-tasks';
 import { templateDecisionFields, requireTemplateDecisions } from './template-selection';
@@ -32,6 +34,11 @@ import { authorize, jsonResult, runTool, scopedActor } from './result';
 import { orgIdParam } from './tools-shared';
 import { latestOwnChangeSet } from './undo-target';
 import { entityHref, entityListHref } from './entity-href';
+
+/** Keep the authenticated caller's protected-receipt guard on the existing undo transaction. */
+function undoWithAccess(caller: Pick<ActorCtx, 'orgId' | 'actorId'>, changeSetId: string) {
+  return undoChangeSet(caller.orgId, changeSetId, workScheduleUndoAccess(caller));
+}
 
 /**
  * The most tasks one capture call may create.
@@ -260,7 +267,7 @@ export function registerWriteTools(server: McpRegistrar, ctx: McpContext): void 
           { orgId: input.orgId, actorId: actorCtx.actorId },
           targetId,
         );
-        const { summary, outcomes } = await undoChangeSet(input.orgId, targetId);
+        const { summary, outcomes } = await undoWithAccess(actorCtx, targetId);
         for (const outcome of outcomes) {
           if (reindexes(outcome)) await enqueueSearchUpsert(input.orgId, outcome.kind, outcome.id);
         }

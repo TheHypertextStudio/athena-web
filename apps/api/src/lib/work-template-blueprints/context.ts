@@ -60,6 +60,16 @@ interface ParentSnapshot {
   readonly parents: readonly ParentRef[];
   readonly access: ParentRef | null;
 }
+function scheduleTeamIds(command: OrdinaryWorkCommand): TeamId[] {
+  return (command.invocation.scheduleContext?.draft.stepOverrides ?? []).flatMap((entry) =>
+    'teamId' in entry && entry.teamId ? [entry.teamId] : [],
+  );
+}
+function scheduleActorIds(command: OrdinaryWorkCommand): string[] {
+  return (command.invocation.scheduleContext?.draft.stepOverrides ?? []).flatMap((entry) =>
+    'responsibleActorId' in entry && entry.responsibleActorId ? [entry.responsibleActorId] : [],
+  );
+}
 
 /**
  * Freeze live tenant, authority, calendar and relative-rule facts on the caller's transaction.
@@ -93,15 +103,22 @@ export async function loadBlueprintCreationContext(
   const creationTeamId =
     command.blueprint?.creationTeamId ?? command.body.blueprint?.creationTeamId ?? root.teamId;
   const teamIds = [
-    ...new Set([root.teamId, creationTeamId].filter((id): id is TeamId => id !== null)),
+    ...new Set(
+      [root.teamId, creationTeamId, ...scheduleTeamIds(command)].filter(
+        (id): id is TeamId => id !== null,
+      ),
+    ),
   ];
   const teamRefs = await liveTeamRefs(tx, orgId, teamIds);
   const placement = await loadPlacement(tx, command, root, prospective);
   await assertContextAccess(tx, orgId, creator, placement.access, teamRefs);
   const timezone = validTimezone(creator?.timezone);
-  const ids = [command.caller.actorId, root.responsibleActorId, athenaActorId].filter(
-    (id): id is string => id !== null,
-  );
+  const ids = [
+    command.caller.actorId,
+    root.responsibleActorId,
+    athenaActorId,
+    ...scheduleActorIds(command),
+  ].filter((id): id is string => id !== null);
   return {
     organizationId: OrganizationId.parse(orgId),
     initiatingActorId:

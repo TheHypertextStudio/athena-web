@@ -12,6 +12,7 @@ import {
 import type { TemplateTransaction } from '../templates/persistence';
 import type { OrdinaryWorkCommand } from '../work-creation/types';
 import { reviewBlueprintCreation } from './preflight';
+import { previewProgramDefaultSchedules } from '../work-template-default-schedules/preview';
 
 function summaryTitle(node: ExpandedBlueprintNode, planned: PlannedWorkNode | undefined): string {
   const fields = planned?.fields ?? node.step?.fields ?? node.definition?.payload;
@@ -67,6 +68,12 @@ export async function previewBlueprintCreation(
     additionalMilestoneCount: review.rowCount - review.tree.nodes.length,
     summaryOffset,
     nextSummaryOffset: next < descendants.length ? next : null,
+    defaultSchedules: await previewProgramDefaultSchedules(
+      tx,
+      command,
+      review.tree,
+      review.context,
+    ),
     warnings: review.tree.warnings
       .slice(0, 100)
       .map((warning) => ({ ...warning, paths: warning.paths.slice(0, 100) })),

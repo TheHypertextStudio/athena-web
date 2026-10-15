@@ -72,6 +72,6 @@ export async function createScheduledProcess(
     });
   }
   return RecurrenceSeriesDetailOut.parse(
-    await loadRecurrenceSeriesDetail(database, command.organizationId, series.id),
+    await loadRecurrenceSeriesDetail(database, command.organizationId, series.id, command.actorId),
   );
 }

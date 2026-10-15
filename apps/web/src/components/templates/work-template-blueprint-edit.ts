@@ -34,11 +34,13 @@ export function addBlueprintChild(
   name?: string,
 ): Blueprint {
   const key = `child_${crypto.randomUUID().replaceAll('-', '')}`;
+  const siblings = blueprint.steps.filter((step) => step.parentStepKey === parent);
+  const sort = Math.max(0, ...siblings.map((step) => step.sort + 1));
   const child = BlueprintStep.parse({
     key,
     kind,
     parentStepKey: parent,
-    sort: blueprint.steps.length,
+    sort,
     optional: { enabled: false, selectedByDefault: true },
     template: null,
     fields: kind === 'task' ? { title: name ?? 'New task' } : { name: name ?? `New ${kind}` },
@@ -209,4 +211,24 @@ export function orderedBlueprintChildren(blueprint: Blueprint): BlueprintStep[] 
     pending.push(...children(step.key).reverse());
   }
   return [...ordered, ...blueprint.steps.filter((step) => !seen.has(step.key))];
+}
+
+/** One authored parent and its ordered direct descendants, shared by editing and review. */
+export interface BlueprintOutlineNode {
+  readonly step: BlueprintStep;
+  readonly children: BlueprintOutlineNode[];
+}
+
+/** Project stable sibling order and parentage while keeping malformed orphan drafts visible. */
+export function blueprintOutlineNodes(blueprint: Blueprint): BlueprintOutlineNode[] {
+  const roots: BlueprintOutlineNode[] = [];
+  const byKey = new Map<string, BlueprintOutlineNode>();
+  for (const step of orderedBlueprintChildren(blueprint)) {
+    const node: BlueprintOutlineNode = { step, children: [] };
+    const parent = step.parentStepKey ? byKey.get(step.parentStepKey) : undefined;
+    if (parent) parent.children.push(node);
+    else roots.push(node);
+    byKey.set(step.key, node);
+  }
+  return roots;
 }

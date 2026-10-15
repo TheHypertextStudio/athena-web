@@ -84,6 +84,10 @@ function snapshotCompletions(
       : [],
   );
 }
+function snapshotRunDate(caller: BlueprintSnapshotCaller): { readonly runDate?: string } {
+  const runDate = caller.retained?.runDate ?? caller.native?.occurrence.scheduledFor;
+  return runDate ? { runDate } : {};
+}
 async function snapshotActors(
   tx: TemplateTransaction,
   caller: BlueprintSnapshotCaller,
@@ -168,7 +172,7 @@ export async function snapshotContext(
     creationDate: completionCivilDate(now.toISOString(), zone),
     timezone: zone,
     workingWeekdays: WorkingWeekdays.parse(org.days),
-    ...(caller.retained ? { runDate: caller.retained.runDate } : {}),
+    ...snapshotRunDate(caller),
     cycles: await snapshotCycles(tx, caller.orgId, nodes),
     completions: snapshotCompletions(rows, nodes),
   };

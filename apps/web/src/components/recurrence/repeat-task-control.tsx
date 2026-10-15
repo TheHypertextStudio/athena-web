@@ -24,7 +24,10 @@ import {
 } from '@docket/ui/primitives';
 import { type JSX, useState } from 'react';
 
+import type { RelativeCalendarRecurrenceSchedule } from '@docket/work/work-schedule-defaults';
 import { DatePicker } from '@/components/date-picker';
+import { RepeatWeekdaySelection } from './repeat-weekday-selection';
+import { RepeatCalendarPattern, monthlyPatternSummary } from './repeat-calendar-pattern';
 
 /** A task that will be created once. */
 export interface NonRepeatingTaskDraft {
@@ -138,6 +141,12 @@ export function taskRepeatSummary(value: TaskRepeatDraft): string {
     const unit = schedule.interval === 1 ? schedule.unit : `${schedule.unit}s`;
     return `${schedule.interval} ${unit} after completion`;
   }
+  return calendarRecurrenceSummary(schedule);
+}
+/** Describe a calendar cadence independently of its absolute or relative starting context. */
+export function calendarRecurrenceSummary(
+  schedule: CalendarRecurrenceSchedule | RelativeCalendarRecurrenceSchedule,
+): string {
   const interval = schedule.interval;
   if (schedule.kind === 'daily') return interval === 1 ? 'Every day' : `Every ${interval} days`;
   if (schedule.kind === 'weekly') {
@@ -148,9 +157,7 @@ export function taskRepeatSummary(value: TaskRepeatDraft): string {
   }
   if (schedule.kind === 'monthly') {
     const cadence = interval === 1 ? 'Every month' : `Every ${interval} months`;
-    return schedule.pattern.kind === 'day_of_month'
-      ? `${cadence} on day ${schedule.pattern.day}`
-      : cadence;
+    return `${cadence} on ${monthlyPatternSummary(schedule.pattern)}`;
   }
   const date = new Intl.DateTimeFormat('en', {
     month: 'short',
@@ -311,6 +318,8 @@ function RepeatFields({
             />
           ) : null}
 
+          <RepeatCalendarPattern schedule={value.schedule} onChange={updateCalendar} />
+
           <RepeatEnd value={value} updateCalendar={updateCalendar} disabled={disabled} />
 
           {showOptions ? <RepeatOptions value={value} onChange={onChange} /> : null}
@@ -389,40 +398,15 @@ function RepeatWeekdays({
   readonly value: CalendarTaskRepeatDraft & {
     readonly schedule: Extract<CalendarRecurrenceSchedule, { kind: 'weekly' }>;
   };
-  readonly updateCalendar: (next: CalendarRecurrenceSchedule) => void;
+  readonly updateCalendar: (value: CalendarRecurrenceSchedule) => void;
 }): JSX.Element {
   return (
-    <fieldset className="flex flex-col gap-1.5">
-      <legend className="text-label-medium text-on-surface">On</legend>
-      <div className="flex justify-between gap-1">
-        {WEEKDAYS.map((day) => {
-          const selected = value.schedule.weekdays.includes(day.value);
-          return (
-            <Button
-              key={day.value}
-              type="button"
-              variant={selected ? 'secondary' : 'ghost'}
-              size="sm"
-              aria-label={day.label}
-              aria-pressed={selected}
-              className="size-9 px-0"
-              onClick={() => {
-                const exists = value.schedule.weekdays.includes(day.value);
-                if (exists && value.schedule.weekdays.length === 1) return;
-                const weekdays = exists
-                  ? value.schedule.weekdays.filter((item) => item !== day.value)
-                  : WEEKDAYS.filter((candidate) =>
-                      [...value.schedule.weekdays, day.value].includes(candidate.value),
-                    ).map((candidate) => candidate.value);
-                updateCalendar({ ...value.schedule, weekdays });
-              }}
-            >
-              {day.short}
-            </Button>
-          );
-        })}
-      </div>
-    </fieldset>
+    <RepeatWeekdaySelection
+      value={value.schedule.weekdays}
+      onChange={(weekdays) => {
+        updateCalendar({ ...value.schedule, weekdays });
+      }}
+    />
   );
 }
 

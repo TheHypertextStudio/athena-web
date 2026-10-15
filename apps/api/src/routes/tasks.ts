@@ -99,6 +99,7 @@ import {
   type RecordedChange,
 } from '../mcp/change-set';
 import { labelSetChange } from '../mcp/change-set-labels';
+import { workScheduleUndoAccess } from '../lib/recurrence/work-schedule-undo-access';
 
 import { emitEvent } from './event-emit';
 import { loadTaskExpansionResources } from './task-expansion-resources';
@@ -985,6 +986,7 @@ The new task appears in the organization's activity stream. An assigned task als
           );
           undoActivityChanges = changes;
         },
+        workScheduleUndoAccess(c.get('actorCtx')),
       );
       const restored = await loadTask(orgId, id);
       await announceTaskChanges({

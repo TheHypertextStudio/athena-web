@@ -6,6 +6,7 @@ import {
 } from '../work-template-creation';
 import { prospectiveWorkReference } from './ordinary-prospective';
 import { retainedRootBinding } from './retained-authority';
+import { requireScheduleRootBinding } from '../recurrence/schedule-authority';
 import type {
   OrdinaryPreparationContext,
   OrdinaryWorkCommand,
@@ -22,7 +23,7 @@ export async function ordinaryCreationDefaults(
   const id = command.invocation.prospectiveWorkId;
   if (id && !prospectiveWorkReference(tx, command, context, command.kind, id))
     throw new CapabilityError();
-  if (retainedRootBinding(tx, command))
+  if (retainedRootBinding(tx, command) || requireScheduleRootBinding(tx, command))
     return prepareBlueprintChildTemplateCreation(
       command.caller.orgId,
       command.kind,

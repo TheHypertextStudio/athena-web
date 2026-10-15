@@ -103,6 +103,7 @@ async function dailySeries(
   const process = await taskProcess(name);
   return createRecurrenceSeries(db, {
     organizationId,
+    actorId: processAuthorId,
     series: {
       processDefinitionId: ProcessDefinitionId.parse(process.definitionId),
       name,
@@ -194,7 +195,13 @@ describe('rolling recurrence sweep', () => {
 
   it('does not create work while a series is paused', async () => {
     const series = await dailySeries('Paused cadence', 'skip', '2026-09-01');
-    await transitionRecurrenceSeries(db, organizationId, series.id, { action: 'pause' });
+    await transitionRecurrenceSeries(
+      db,
+      organizationId,
+      series.id,
+      { action: 'pause' },
+      processAuthorId,
+    );
 
     const result = await materializeRecurrenceSeriesWindow(db, {
       organizationId,
@@ -228,6 +235,7 @@ describe('rolling recurrence sweep', () => {
 
     await editRecurrenceSeries(db, {
       organizationId,
+      actorId: processAuthorId,
       seriesId: series.id,
       asOf: '2026-10-01',
       edit: {
@@ -308,6 +316,7 @@ describe('rolling recurrence sweep', () => {
     await expect(
       editRecurrenceSeries(db, {
         organizationId,
+        actorId: processAuthorId,
         seriesId: series.id,
         asOf: '2026-10-02',
         edit: {
@@ -331,6 +340,7 @@ describe('rolling recurrence sweep', () => {
 
     await editRecurrenceSeries(db, {
       organizationId,
+      actorId: processAuthorId,
       seriesId: series.id,
       asOf: '2026-10-01',
       edit: {
@@ -354,6 +364,7 @@ describe('rolling recurrence sweep', () => {
     await expect(
       editRecurrenceSeries(db, {
         organizationId,
+        actorId: processAuthorId,
         seriesId: series.id,
         asOf: '2026-10-01',
         edit: {
@@ -404,6 +415,7 @@ describe('rolling recurrence sweep', () => {
 
     await editRecurrenceSeries(db, {
       organizationId,
+      actorId: processAuthorId,
       seriesId: series.id,
       edit: {
         scope: 'occurrence',

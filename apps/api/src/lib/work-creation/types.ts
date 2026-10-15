@@ -1,4 +1,8 @@
 import type { RetainedRootBinding } from './retained-authority';
+import type { ScheduleRootBinding } from '../recurrence/schedule-authority';
+import type { WorkScheduleDraft } from '@docket/work/work-schedule';
+import type { WorkScheduleForest } from '@docket/work/work-schedule-forest';
+import type { BlueprintNodeOverride } from '@docket/work/blueprints';
 import type { TaskCreate } from '@docket/work/task-model';
 import type { InitiativeCreate } from '@docket/work/initiative-contract';
 import type { ProgramCreate } from '@docket/work/program-contract';
@@ -38,6 +42,13 @@ export interface TrustedCreationInvocation {
   };
   readonly labelIds?: readonly string[];
   readonly retainedBinding?: RetainedRootBinding;
+  /** Private server-authored schedule context; it never grants archive or retained execution rights. */
+  readonly scheduleContext?: {
+    readonly draft: WorkScheduleDraft;
+    readonly runDate: string;
+    readonly timingOverrides?: readonly BlueprintNodeOverride[];
+  };
+  readonly scheduleBinding?: ScheduleRootBinding;
 }
 
 /** An authenticated ordinary create command, correlated with its existing request body. */
@@ -152,6 +163,8 @@ export interface WorkCreationBatchCommand {
   readonly roots: readonly { readonly key: string; readonly command: OrdinaryWorkCommand }[];
   readonly edges: readonly ResolvedInvocationEdge[];
   readonly invocation: TrustedCreationInvocation;
+  /** Private qualified timing remains outside reusable definitions and public create DTOs. */
+  readonly scheduleTiming?: WorkScheduleForest['timing'];
 }
 
 /** A validated ordinary dependency joining roots in an existing trusted forest. */

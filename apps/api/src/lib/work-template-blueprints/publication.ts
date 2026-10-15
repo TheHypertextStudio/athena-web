@@ -1,7 +1,7 @@
 import { isDeepStrictEqual } from 'node:util';
 import { template, workTypeVersion } from '@docket/db';
 import {
-  BlueprintError,
+  discoverPublicationReferences,
   type PublishedBlueprintSnapshot,
   type WorkKind,
 } from '@docket/work/blueprints';
@@ -17,10 +17,8 @@ import { readBlueprintPublication } from './publication-read';
 interface Discovery {
   readonly tx: TemplateTransaction;
   readonly row: TemplateRow;
-  readonly ids: Set<string>;
   readonly retained: ReadonlyMap<string, BlueprintStep>;
   readonly cache: Map<string, Promise<PublishedBlueprintSnapshot>>;
-  count: number;
 }
 
 /** Read the authorized draft before acquiring globally ordered publication locks. */
@@ -94,38 +92,6 @@ function readDraftChild(
   return pending;
 }
 
-async function visitDraftScope(
-  state: Discovery,
-  definition: WorkTemplateDefinition,
-  path: readonly string[],
-  ancestors: readonly string[],
-): Promise<void> {
-  for (const step of definition.blueprint.steps) {
-    if (++state.count > 500)
-      throw new BlueprintError(
-        'blueprint_limit',
-        'Blueprint limit is 500 work rows including the root and Milestones.',
-      );
-    if (step.kind === 'milestone') continue;
-    const child = await readDraftChild(
-      state,
-      step.kind,
-      step.template,
-      path.length > 0 || retainedStep(state, step),
-    );
-    state.ids.add(child.workTypeId);
-    if (!step.template) continue;
-    const childPath = [...path, step.key];
-    if (ancestors.includes(child.workTypeId))
-      throw new BlueprintError(
-        'blueprint_loop',
-        'A nested template references its own template identity.',
-        [childPath],
-      );
-    await visitDraftScope(state, child.definition, childPath, [...ancestors, child.workTypeId]);
-  }
-}
-
 /** Discover real immutable references from a draft without inventing a prospective version ID. */
 export async function publicationDefinitionIds(
   tx: TemplateTransaction,
@@ -136,13 +102,19 @@ export async function publicationDefinitionIds(
   const state: Discovery = {
     tx,
     row,
-    ids: new Set([row.id]),
     retained: await previousSteps(tx, row, retainedVersionId),
     cache: new Map(),
-    count: 1,
   };
-  await visitDraftScope(state, WorkTemplateDefinition.parse(definition), [], [row.id]);
-  return [...state.ids].sort();
+  return discoverPublicationReferences(
+    row.id,
+    WorkTemplateDefinition.parse(definition),
+    (kind, reference, path, scheduleRoot) => {
+      const step = definition.blueprint.steps.find((entry) => entry.key === path[0]);
+      const archived =
+        !scheduleRoot && (path.length > 1 || (step ? retainedStep(state, step) : false));
+      return readDraftChild(state, kind, reference, archived);
+    },
+  );
 }
 
 /** Lock the proposed root and existing closure globally sorted, before draft/version mutation. */

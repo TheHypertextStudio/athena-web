@@ -24,6 +24,7 @@ import { z } from 'zod';
 import type { AppEnv } from '../context';
 import { AuthError, NotFoundError } from '../error';
 import { requireTemplateUndoAuthor } from '../lib/templates/service';
+import { workScheduleUndoAccess } from '../lib/recurrence/work-schedule-undo-access';
 import { ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
 import { reopenUndoneNodes } from '../lib/plan-draft/reopen';
@@ -118,14 +119,13 @@ const meAthenaChanges = new Hono<AppEnv>().post(
     const { changeSetId } = c.req.valid('param');
     const { organizationId, planId } = await loadOwnedChangeSet(owner, changeSetId);
     await requireTemplateUndoAuthor({ orgId: organizationId, userId: owner }, changeSetId);
-    // A plan commit creates initiatives and projects as well as tasks, and the atomic reversal
-    // understands only tasks and the edges between them — it refuses a container outright. The
-    // reporting reversal is the one Athena's own `undo` tool already runs for `organize`, which
-    // produces the same mixed shape, so a plan commit unwinds through the same path.
+    // Protected schedule companions use the existing atomic work/container reversal.
+    // Ordinary plan receipts retain their reporting undo and reopen only reverted nodes.
+    const guard = workScheduleUndoAccess({ orgId: organizationId, userId: owner });
     if (planId === null) {
-      await undoChangeSetAtomically(organizationId, changeSetId);
+      await undoChangeSetAtomically(organizationId, changeSetId, undefined, guard);
     } else {
-      const { outcomes } = await undoChangeSet(organizationId, changeSetId);
+      const { outcomes } = await undoChangeSet(organizationId, changeSetId, guard);
       await reopenUndoneNodes(planId, outcomes);
     }
     return ok(c, AthenaUndoOut, { changeSetId, undone: true });

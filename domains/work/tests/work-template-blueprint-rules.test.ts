@@ -9,6 +9,24 @@ import { graph, publication, resolution, step, ulid } from './blueprint-fixtures
 import { actor, team, context, input, existing } from './blueprint-fixtures';
 
 describe('pure blueprint relative rules and field ownership', () => {
+  it.each([actor, null])(
+    'reports only the chosen responsibility when an explicit override replaces an unavailable default',
+    (responsibleActorId) => {
+      const base = publication(9, 'task');
+      const root = publication(2, 'project', [step('child', 'task', { actorRule: 'athena' })]);
+      const planned = planBlueprint(
+        input({
+          graph: graph(root, [base], [resolution(['child'], base)]),
+          context: context({
+            athenaActorId: null,
+            overrides: [{ path: ['child'], responsibleActorId }],
+          }),
+        }),
+      );
+      expect(planned.nodes[1]?.responsibleActorId).toBe(responsibleActorId);
+      expect(planned.warnings).toEqual([]);
+    },
+  );
   it('keeps a checked schedule anchor override while retaining the actual run date context', () => {
     const planned = planBlueprint(
       input({

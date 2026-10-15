@@ -16,6 +16,8 @@ import type { z } from 'zod';
 
 import { ConflictError, NotFoundError } from '../../error';
 import { createRecurrenceSeriesInTransaction, materializeSeriesOccurrence } from './series';
+import { requireLegacyActor, requireLegacyDefinitionAccess } from './legacy-definition-access';
+import { requireScheduleAccess } from './schedule-access';
 
 /** Command for binding one user-owned calendar item to an org-owned process definition. */
 export interface BindProcessToCalendarItemCommand {
@@ -110,6 +112,7 @@ export async function bindProcessToCalendarItem(
     processDefinitionId: rawCommand.processDefinitionId,
   }) satisfies CalendarProcessBindingCreateValue;
   const bound = await database.transaction(async (tx) => {
+    await authorizeCalendarDefinition(tx, rawCommand);
     const rows = await tx
       .select({ item: calendarItem, layer: calendarLayer })
       .from(calendarItem)
@@ -141,9 +144,7 @@ export async function bindProcessToCalendarItem(
       )
       .limit(1);
     const current = existing[0];
-    if (current && current.binding.definitionId !== selected.processDefinitionId) {
-      throw new ConflictError('This calendar series already uses a different process');
-    }
+    await authorizeExistingCalendarBinding(tx, rawCommand, current);
     if (current) {
       return { ...current, item: row.item, layer: row.layer, scope, externalSeriesId };
     }
@@ -201,6 +202,40 @@ export async function bindProcessToCalendarItem(
     seriesName: bound.series.name,
     createdAt: bound.binding.createdAt.toISOString(),
   });
+}
+
+async function authorizeCalendarDefinition(
+  database: Database,
+  command: BindProcessToCalendarItemCommand,
+): Promise<void> {
+  await requireLegacyDefinitionAccess(database, {
+    ...command,
+    definitionId: command.processDefinitionId,
+  });
+}
+
+async function authorizeExistingCalendarBinding(
+  database: Database,
+  command: BindProcessToCalendarItemCommand,
+  current:
+    | {
+        readonly binding: { readonly definitionId: string | null };
+        readonly series: { readonly id: string };
+      }
+    | undefined,
+): Promise<void> {
+  if (!current) return;
+  await requireScheduleAccess(
+    database,
+    {
+      organizationId: command.organizationId,
+      actorId: requireLegacyActor(command.actorId),
+      seriesId: current.series.id,
+    },
+    'manage',
+  );
+  if (current.binding.definitionId !== command.processDefinitionId)
+    throw new ConflictError('This calendar series already uses a different process');
 }
 
 /**

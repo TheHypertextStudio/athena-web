@@ -14,7 +14,11 @@ export function WorkTemplateReviewChildStartingDetails({
 }: {
   orgId: string;
   step: BlueprintStep;
-}): JSX.Element {
+}): JSX.Element | null {
+  const meaningful = Object.entries(step.fields).some(
+    ([key, value]) => key !== 'title' && key !== 'name' && value !== undefined,
+  );
+  if (!meaningful) return null;
   return (
     <TemplateDisclosure title={`Starting details for ${blueprintStepName(step)}`}>
       {step.template ? (

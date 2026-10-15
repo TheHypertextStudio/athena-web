@@ -27,7 +27,6 @@ import { bindProcessToCalendarItem } from '../lib/recurrence/calendar-binding';
 import { createRecurringTask } from '../lib/recurrence/recurring-task';
 import {
   editRecurrenceSeries,
-  listRecurrenceSeries,
   loadGeneratedWorkRecurrence,
   loadRecurrenceSeriesDetail,
   materializeSeriesOccurrence,
@@ -38,6 +37,8 @@ import { materializeRecurrenceSeriesWindow } from '../lib/recurrence/sweep';
 import { zJson, zParam, zQuery } from '../lib/validate';
 import { capabilityGuard } from '../permissions/capability-guard';
 import { enqueueSearchDelete } from '../search/write-through';
+import { listCompatibleRecurrenceSeries } from '../lib/recurrence/schedule-compatibility-access';
+import { canonicalRecurrenceAccess } from './recurrence-schedule-access';
 
 const idParam = z.object({ id: z.string() });
 const taskParam = z.object({ taskId: z.string() });
@@ -56,9 +57,14 @@ const recurrenceSeriesRoutes = new Hono<AppEnv>()
     }),
     zQuery(CursorQuery),
     async (c) => {
-      const { orgId } = c.get('actorCtx');
+      const { orgId, actorId } = c.get('actorCtx');
       const { cursor, limit } = c.req.valid('query');
-      const items = await listRecurrenceSeries(db, orgId, { cursor, limit });
+      const items = await listCompatibleRecurrenceSeries(db, {
+        organizationId: orgId,
+        actorId,
+        cursor,
+        limit,
+      });
       return ok(c, pageOf(RecurrenceSeriesOut), pageResultById(items, limit));
     },
   )
@@ -125,10 +131,11 @@ const recurrenceSeriesRoutes = new Hono<AppEnv>()
     }),
     zParam(taskParam),
     async (c) => {
-      const { orgId } = c.get('actorCtx');
+      const { orgId, actorId } = c.get('actorCtx');
       const context = await loadGeneratedWorkRecurrence(db, {
         kind: 'task',
         organizationId: orgId,
+        actorId,
         taskId: c.req.valid('param').taskId,
       });
       return ok(c, GeneratedWorkRecurrenceOut.nullable(), context);
@@ -145,10 +152,11 @@ const recurrenceSeriesRoutes = new Hono<AppEnv>()
     }),
     zParam(projectParam),
     async (c) => {
-      const { orgId } = c.get('actorCtx');
+      const { orgId, actorId } = c.get('actorCtx');
       const context = await loadGeneratedWorkRecurrence(db, {
         kind: 'project',
         organizationId: orgId,
+        actorId,
         projectId: c.req.valid('param').projectId,
       });
       return ok(c, GeneratedWorkRecurrenceOut.nullable(), context);
@@ -156,6 +164,7 @@ const recurrenceSeriesRoutes = new Hono<AppEnv>()
   )
   .get(
     '/:id',
+    canonicalRecurrenceAccess,
     apiDoc({
       tag: 'Recurrence',
       summary: 'Get recurrence series',
@@ -165,13 +174,14 @@ const recurrenceSeriesRoutes = new Hono<AppEnv>()
     }),
     zParam(idParam),
     async (c) => {
-      const { orgId } = c.get('actorCtx');
-      const detail = await loadRecurrenceSeriesDetail(db, orgId, c.req.valid('param').id);
+      const { orgId, actorId } = c.get('actorCtx');
+      const detail = await loadRecurrenceSeriesDetail(db, orgId, c.req.valid('param').id, actorId);
       return ok(c, RecurrenceSeriesDetailOut, detail);
     },
   )
   .post(
     '/:id/lifecycle',
+    canonicalRecurrenceAccess,
     capabilityGuard('contribute'),
     apiDoc({
       tag: 'Recurrence',
@@ -184,18 +194,20 @@ const recurrenceSeriesRoutes = new Hono<AppEnv>()
     zParam(idParam),
     zJson(RecurrenceSeriesLifecycle),
     async (c) => {
-      const { orgId } = c.get('actorCtx');
+      const { orgId, actorId } = c.get('actorCtx');
       const series = await transitionRecurrenceSeries(
         db,
         orgId,
         c.req.valid('param').id,
         c.req.valid('json'),
+        actorId,
       );
       return ok(c, RecurrenceSeriesOut, series);
     },
   )
   .post(
     '/:id/materialize',
+    canonicalRecurrenceAccess,
     capabilityGuard('contribute'),
     apiDoc({
       tag: 'Recurrence',
@@ -218,12 +230,13 @@ const recurrenceSeriesRoutes = new Hono<AppEnv>()
         scheduledFor: body.scheduledFor ?? utcCalendarDate(),
         occurrenceKey: body.occurrenceKey,
       });
-      const detail = await loadRecurrenceSeriesDetail(db, orgId, id);
+      const detail = await loadRecurrenceSeriesDetail(db, orgId, id, actorId);
       return ok(c, RecurrenceSeriesDetailOut, detail);
     },
   )
   .post(
     '/:id/edits',
+    canonicalRecurrenceAccess,
     capabilityGuard('contribute'),
     apiDoc({
       tag: 'Recurrence',
@@ -257,7 +270,7 @@ const recurrenceSeriesRoutes = new Hono<AppEnv>()
           actorId,
           asOf: utcCalendarDate(),
         });
-        detail = await loadRecurrenceSeriesDetail(db, orgId, c.req.valid('param').id);
+        detail = await loadRecurrenceSeriesDetail(db, orgId, c.req.valid('param').id, actorId);
       }
       return ok(c, RecurrenceSeriesDetailOut, detail);
     },

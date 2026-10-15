@@ -4,12 +4,18 @@ import type { BlueprintDateBindings } from '@docket/work/work-template-blueprint
 import { and, eq } from 'drizzle-orm';
 import { trackedFields, type RecordedChange } from '../../mcp/change-set';
 import type { TemplateTransaction } from '../templates/persistence';
-import type { BlueprintStoredWork } from './snapshot-types';
+import type { BlueprintStoredWork, BlueprintWorkRef } from './snapshot-types';
 
 /** Existing receipt entries and deferred row projections; caller owns transaction and receipt. */
 export interface BlueprintReflowResult {
   readonly changes: readonly RecordedChange[];
   readonly rows: readonly BlueprintStoredWork[];
+  /** Native occurrence completion is reconciled only after the enclosing ordinary mutation commits. */
+  readonly nativeCompletions?: readonly {
+    readonly occurrenceId: string;
+    readonly actorId: string;
+    readonly initiatingWork: BlueprintWorkRef;
+  }[];
 }
 /** Exact authorized relative date writes; public and private ownership remain separate. */
 export interface BlueprintDerivedDateWrite {

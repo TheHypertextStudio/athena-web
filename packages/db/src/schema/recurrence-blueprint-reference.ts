@@ -1,15 +1,8 @@
 import { sql } from 'drizzle-orm';
-import {
-  check,
-  foreignKey,
-  jsonb,
-  pgPolicy,
-  text,
-  timestamp,
-  type AnyPgColumn,
-} from 'drizzle-orm/pg-core';
+import { check, foreignKey, jsonb, text, timestamp, type AnyPgColumn } from 'drizzle-orm/pg-core';
 import type { BlueprintOccurrenceRoot } from '../blueprint-invocation';
 import { blueprintInvocation } from './work-template-blueprint';
+import { scheduleOccurrencePrivatePolicy } from './work-schedule-privacy';
 import { workTypeVersion } from './work-template';
 
 /** Nullable canonical selection and restricted context pointer beside retained process revisions. */
@@ -68,10 +61,7 @@ export function invocationConstraint(
 export function occurrenceBlueprintConstraints(t: {
   organizationId: AnyPgColumn;
   blueprintInvocationId: AnyPgColumn;
+  seriesId: AnyPgColumn;
 }) {
-  const visible = sql`${t.organizationId}=nullif(current_setting('docket.organization_id',true),'') and (${t.blueprintInvocationId} is null or exists(select 1 from work_template_blueprint_invocation i where i.id=${t.blueprintInvocationId} and i.organization_id=${t.organizationId}))`;
-  return [
-    invocationConstraint(t, 'occurrence'),
-    pgPolicy('blueprint_occurrence_private', { for: 'all', using: visible, withCheck: visible }),
-  ];
+  return [invocationConstraint(t, 'occurrence'), scheduleOccurrencePrivatePolicy(t)];
 }

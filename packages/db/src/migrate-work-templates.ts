@@ -1,3 +1,4 @@
+import { backfillWorkScheduleArchives, type ScheduleArchiveOptions } from './work-schedule-archive';
 import {
   backfillRetainedDateOwnership,
   type RetainedDateBackfillOptions,
@@ -25,7 +26,11 @@ const migrationJournal = pgSchema('drizzle').table('__drizzle_migrations', {
 
 /** SQL migration boundary around the resumable work-template data checkpoint. */
 export interface WorkTemplateMigrationOptions
-  extends WorkTemplateBackfillOptions, BlueprintBackfillOptions, RetainedDateBackfillOptions {
+  extends
+    WorkTemplateBackfillOptions,
+    BlueprintBackfillOptions,
+    RetainedDateBackfillOptions,
+    ScheduleArchiveOptions {
   readonly migrationsFolder: string;
   readonly applySqlMigrations: (folder: string) => Promise<void>;
 }
@@ -78,4 +83,14 @@ export async function migrateWithWorkTemplateCheckpoint(
   if (blueprintApplied.length === 0) await backfillWorkTemplateBlueprints(database, options);
   await options.applySqlMigrations(options.migrationsFolder);
   await backfillRetainedDateOwnership(database, options);
+  if (journal.entries.some((entry) => entry.tag === '0160_schedule_invocation_heads_expand')) {
+    const progress = await backfillWorkScheduleArchives(database, {
+      ...options,
+      verification: 'checkpoint',
+    });
+    if (progress.deferredRevisions)
+      console.warn(
+        `Schedule source proof deferred for ${progress.deferredRevisions} revisions; legacy sources remain retained until explicit retirement verification.`,
+      );
+  }
 }

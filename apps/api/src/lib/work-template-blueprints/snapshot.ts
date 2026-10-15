@@ -18,6 +18,7 @@ import type {
   BlueprintSnapshotRow,
   BlueprintWorkRef,
 } from './snapshot-types';
+import { nativeScheduleSnapshotFilter } from '../recurrence/schedule-native-facts';
 export type {
   AuthorizedBlueprintSnapshot,
   BlueprintStoredWork,
@@ -75,9 +76,11 @@ async function discoverSnapshotRows(
     options.scope === 'reference'
       ? [{ work: await readBlueprintWork(tx, caller.orgId, reference), parent: null }]
       : await discoverBlueprintRows(tx, caller.orgId, reference, {
-          ...(options.scope === 'retained' || (caller.retained && !caller.actor)
-            ? { include: retainedSnapshotFilter(caller) }
-            : {}),
+          ...(caller.native && !caller.actor
+            ? { include: nativeScheduleSnapshotFilter(caller.native) }
+            : options.scope === 'retained' || (caller.retained && !caller.actor)
+              ? { include: retainedSnapshotFilter(caller) }
+              : {}),
           affected: options.scope === 'affected',
           ids: new Set([
             ...(options.ancestorIds ?? []),

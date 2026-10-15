@@ -67,6 +67,15 @@ and dependencies while preserving authored work. Save as template captures a pri
 review before publication. Workspace administrators manage team offerings, authoring policy and
 working weekdays. Archive review shows authorized parent-template and schedule usage; existing
 accepted schedules continue to run from their retained versions.
+Programs can own recurring Task or Project work with a title pattern, responsibility, calendar
+rhythm and visible run history. Failed runs can be retried without creating duplicate work.
+Missed runs awaiting a decision offer Create work for their original scheduled date.
+A Program definition can include reusable routines; each new Program receives independent schedule
+copies, and later definition edits leave existing copies intact. The authoring outline separates
+included work from recurring work and keeps one editor in focus. Undoing Program creation ends its
+unchanged installed routines while preserving already generated work and run history. See the
+[Program schedule specification](docs/engineering/specs/work-template-schedules.md) for retained
+history, private drafts and the staged legacy migration.
 See the [identity engineering specification](docs/engineering/specs/work-template-identity.md) and
 [blueprint specification](docs/engineering/specs/work-template-blueprints.md) for migration ordering,
 private-draft preservation, transactional creation and REST/MCP compatibility.

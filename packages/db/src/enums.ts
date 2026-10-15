@@ -177,16 +177,7 @@ export const recurrenceSeriesStatus = pgEnum('recurrence_series_status', [
   'paused',
   'ended',
 ]);
-/** Durable outcome of one expected recurrence occurrence. */
-export const processOccurrenceStatus = pgEnum('process_occurrence_status', [
-  'expected',
-  'materialized',
-  'completed',
-  'skipped',
-  'canceled',
-  'needs_resolution',
-  'superseded',
-]);
+export { processOccurrenceStatus } from './schedule-enums';
 /** Execution lifecycle of one materialized process instance. */
 export const processInstanceStatus = pgEnum('process_instance_status', [
   'pending',

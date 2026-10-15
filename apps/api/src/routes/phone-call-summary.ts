@@ -5,6 +5,7 @@ import { and, asc, eq, sql } from 'drizzle-orm';
 
 import { NotFoundError } from '../error';
 import { undoChangeSetAtomically } from '../mcp/change-set';
+import { workScheduleUndoAccess } from '../lib/recurrence/work-schedule-undo-access';
 
 type PhoneCallSummary = PhoneCallSummaryOut;
 
@@ -122,5 +123,10 @@ export async function undoPhoneCallChange(
     .where(and(eq(voiceSession.id, voiceSessionId), eq(voiceSession.userId, userId)))
     .limit(1);
   if (!session?.organizationId) throw new NotFoundError('Phone call change not found');
-  await undoChangeSetAtomically(session.organizationId, changeSetId);
+  await undoChangeSetAtomically(
+    session.organizationId,
+    changeSetId,
+    undefined,
+    workScheduleUndoAccess({ orgId: session.organizationId, userId }),
+  );
 }

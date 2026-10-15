@@ -22,6 +22,8 @@ function stored(overrides: Partial<StoredRevision> = {}): StoredRevision {
     workTypeId: null,
     workTypeVersionId: null,
     blueprintInvocationId: null,
+    scheduleDraft: null,
+    authoringFallback: null,
     number: 1,
     effectiveFrom: '2026-08-12',
     triggerKind: 'manual',

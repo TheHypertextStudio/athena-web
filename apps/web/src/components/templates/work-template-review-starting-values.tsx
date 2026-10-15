@@ -1,6 +1,7 @@
 'use client';
-import type { JSX } from 'react';
+import type { JSX, ReactNode } from 'react';
 import type { CanonicalTemplateDraft } from '@docket/work/template-contract';
+import { TemplateDisclosure } from './template-disclosure';
 import { useStatusRegistry } from '@/components/statuses/status-registry';
 import { useComposerOptions } from '@/components/pickers/use-composer-options';
 
@@ -9,11 +10,49 @@ export function WorkTemplateReviewStartingValues({
   orgId,
   payload,
   defaultStatusKey,
+  heading = 'Each item starts with',
+  compactProperties = false,
+  children,
 }: {
   orgId: string;
   payload: CanonicalTemplateDraft;
   defaultStatusKey?: string | null;
+  heading?: string | false;
+  compactProperties?: boolean;
+  children?: ReactNode;
 }): JSX.Element {
+  const { title, defaults } = useTemplateStartingValues(orgId, payload, defaultStatusKey);
+  return (
+    <div className="flex min-w-0 flex-col gap-4">
+      {heading ? <h3 className="text-title-medium">{heading}</h3> : null}
+      <p className="text-title-large break-words">
+        {title?.trim() ? title : 'A name supplied when creating work'}
+      </p>
+      {payload.summary ? <p className="text-body-medium break-words">{payload.summary}</p> : null}
+      {payload.targetType === 'program' && payload.visibility === 'private' ? (
+        <p className="text-body-small">Private work — access must be granted explicitly.</p>
+      ) : null}
+      {children}
+      {compactProperties ? (
+        defaults.length ? (
+          <TemplateDisclosure title="Starting properties">
+            <p className="text-body-small text-on-surface-variant">{defaults.join(' · ')}</p>
+          </TemplateDisclosure>
+        ) : null
+      ) : (
+        <p className="text-body-small text-on-surface-variant">
+          {defaults.length ? defaults.join(' · ') : 'Workspace starting defaults'}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function useTemplateStartingValues(
+  orgId: string,
+  payload: CanonicalTemplateDraft,
+  defaultStatusKey?: string | null,
+) {
   const registry = useStatusRegistry();
   const options = useComposerOptions(orgId, ['labels'], payload.targetType === 'task');
   const title = payload.targetType === 'task' ? payload.title : payload.name;
@@ -26,18 +65,7 @@ export function WorkTemplateReviewStartingValues({
   if (statusKey) defaults.push(`${status ?? 'Unavailable starting status'} status`);
   const labels = startingLabels(payload, options.labelOptions);
   if (labels) defaults.push(labels);
-  return (
-    <div className="flex min-w-0 flex-col gap-1">
-      <h3 className="text-title-medium">Each item starts with</h3>
-      <p className="text-title-large break-words">
-        {title?.trim() ? title : 'A name supplied when creating work'}
-      </p>
-      {payload.summary ? <p className="text-body-medium break-words">{payload.summary}</p> : null}
-      <p className="text-body-small text-on-surface-variant">
-        {defaults.length ? defaults.join(' · ') : 'Workspace starting defaults'}
-      </p>
-    </div>
-  );
+  return { title, defaults };
 }
 
 function startingProperties(payload: CanonicalTemplateDraft): string[] {

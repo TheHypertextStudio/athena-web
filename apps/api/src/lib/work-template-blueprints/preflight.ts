@@ -1,5 +1,5 @@
 import { genId } from '@docket/db';
-import { BlueprintError, planBlueprint } from '@docket/work/blueprints';
+import { BlueprintError } from '@docket/work/blueprints';
 import type { BlueprintCreationContext, PlannedWorkTree } from '@docket/work/blueprints';
 import {
   BlueprintCreationOptions,
@@ -25,7 +25,16 @@ import { prepareBlueprintEntries } from './preflight-entries';
 import { prepareGenerationMetadata } from './generation';
 import { retainedRootBinding } from '../work-creation/retained-authority';
 import { loadRetainedBlueprintRoot, type RetainedBlueprintRoot } from './retained';
-import { loadRetainedBlueprintResolutionProof } from './resolution-retained';
+import {
+  loadRetainedBlueprintResolutionProof,
+  loadScheduleBlueprintResolutionProof,
+} from './resolution-retained';
+import { planScheduleBlueprint } from '../recurrence/schedule-compiler';
+import { assertSchedulePlanBinding } from '../recurrence/schedule-authority';
+import {
+  validateSchedulePlacement,
+  applyScheduleRootClears,
+} from '../recurrence/schedule-placement';
 import { resolveBlueprintLabelDefaults } from './labels';
 import {
   readBlueprintClosure,
@@ -190,7 +199,7 @@ async function resolveCreationPlan(
       workTypeId: command.body.workTypeId,
       workTypeVersionId: command.body.workTypeVersionId,
     },
-    binding ? 'retained_schedule' : 'create',
+    binding || resolutionProof ? 'retained_schedule' : 'create',
     undefined,
     resolutionProof,
   );
@@ -202,11 +211,14 @@ async function resolveCreationPlan(
     preparationContext,
   });
   const options = creationOptions(command, reviewOptions);
-  const tree = await resolveBlueprintLabelDefaults(
-    tx,
-    selected.caller.orgId,
-    planBlueprint({ graph, root: rootDraft, context, choices: options.optionalChoices }),
-  );
+  const planned = planScheduleBlueprint(command, {
+    graph,
+    root: rootDraft,
+    context,
+    choices: options.optionalChoices,
+  });
+  assertSchedulePlanBinding(tx, command, planned.tree);
+  const tree = await resolveBlueprintLabelDefaults(tx, selected.caller.orgId, planned.tree);
   if (tree.nodes.length + (root?.milestones.length ?? 0) > 500)
     throw new BlueprintError(
       'blueprint_limit',
@@ -222,14 +234,14 @@ async function resolveCreationPlan(
   });
   if (!reviewOptions && options.previewToken && options.previewToken !== previewToken)
     throw new ConflictError('The creation preview changed.', 'blueprint_preview_stale');
-  return { selected, root, graph, context, options, tree, previewToken, retained };
+  return { selected, root, graph, context: planned.context, options, tree, previewToken, retained };
 }
 
 async function retainedPreparation(tx: TemplateTransaction, command: OrdinaryWorkCommand) {
   const binding = retainedRootBinding(tx, command);
   const resolutionProof = command.invocation.retainedBinding
     ? await loadRetainedBlueprintResolutionProof(tx, command.invocation.retainedBinding)
-    : undefined;
+    : loadScheduleBlueprintResolutionProof(tx, command);
   const retained =
     binding && command.invocation.retainedBinding
       ? await loadRetainedBlueprintRoot(tx, command.invocation.retainedBinding)
@@ -247,8 +259,12 @@ async function resolveCreationRoot(
   },
 ) {
   const { selected, retained, binding, preparationContext } = input;
+  await validateSchedulePlacement(tx, selected);
   const root = retained?.root ? null : await prepareOrdinaryWork(tx, selected, preparationContext);
-  if (root) await authorizeRootAssociations(tx, root, preparationContext);
+  if (root) {
+    applyScheduleRootClears(selected, root);
+    await authorizeRootAssociations(tx, root, preparationContext);
+  }
   const rootDraft = retained?.root ?? preparedBlueprintRoot(requirePreparedRoot(root));
   const loadedContext = retained?.context
     ? { ...retained.context, visibility: retained.visibility }
@@ -299,10 +315,13 @@ function creationOptions(
   command: OrdinaryWorkCommand,
   reviewOptions: BlueprintPreviewOptions | undefined,
 ): BlueprintPreviewOptions {
-  return (
-    reviewOptions ??
-    BlueprintCreationOptions.parse(command.blueprint ?? command.body.blueprint ?? {})
-  );
+  if (reviewOptions) return reviewOptions;
+  const options = command.blueprint ?? command.body.blueprint ?? {};
+  // Server-authored private schedules re-preflight choices at each run date. Public creation's
+  // one-off preview token is not their authority; persisted claims and live checks still apply.
+  return command.invocation.scheduleContext
+    ? BlueprintPreviewOptions.parse(options)
+    : BlueprintCreationOptions.parse(options);
 }
 
 function previewBody(command: OrdinaryWorkCommand): Omit<OrdinaryWorkCommand['body'], 'blueprint'> {

@@ -35,6 +35,11 @@ A Program template may carry at most 20 default schedules. Each contains a stabl
 
 ## Run state and retained authority
 
+An owning Program cannot be permanently deleted while any schedule refers to it, including ended
+or archived schedules. Return a controlled conflict and preserve its run history; the existing
+Program archive action remains available. Check this under the Program row lock so concurrent
+schedule installation cannot turn removal into an unhandled foreign-key failure.
+
 Keep occurrences as the durable run records. Extend their state with exact resolved invocation, generated root identities, attempt/failure code and time, next retry information where the current engine already supplies it, and completion facts. Use application-owned failure codes/copy; never display provider or exception text. An attempt ledger must be bounded/paginated and must not contain credentials, private draft documents or external error dumps. Expected, created, skipped, canceled and completed history remains readable; failed runs are additionally explicit and retryable.
 
 All new runs call `createWorkBatchInTransaction`. They share its root/child permissions, status rules, optional choices, concrete dates, assignment triggers, search effects, aggregate receipt and 500-new-work-row cap. Program default schedules count separately against their limit, never hide additional work rows outside the shared cap. Attribution stays the real initiating/registered owner actor, including historically nullable attribution. Execution authority is an opaque transaction-registered persisted series/revision/occurrence capability. A caller-supplied manifest, fabricated actor, ordinary work creator, null actor or archived flag grants no execution rights.
@@ -45,17 +50,58 @@ Existing roots are located through the occurrence's actual root references and e
 
 Completion follows the recorded generated roots and actual descendant statuses using the existing terminal-state policy. It does not depend on a process instance's independent state. Completion-anchored schedules use the saved timezone and concrete completion facts. The same shared reflow engine handles foreground edits, completion changes, MCP edits, automation actions and provider calendar moves; managed run-date movement is a checked internal mutation, not an explicit user pin.
 
+## Reversal and foreground work
+
+Record installed Program default copies as companions of the same work-creation receipt. Undo uses
+one existing atomic change-set transaction for the Program, its original included work and unchanged
+installed copies. End those copies without deleting revisions, accepted runs or subsequently generated
+work. An independently edited copy or work row refuses the whole reversal, retaining an actionable
+receipt. Do not depend on change-set query order; delete created Milestones after their recorded Tasks
+are archived.
+
+Record native managed-date ownership before/after values with their ordinary work changes. Reversal
+restores both atomically, including manual/null pins and last-derived dates. Only an exact persisted,
+same-tenant receipt proof may clear a native manual pin; ordinary date writes cannot unpin it. Append
+the guard migration without modifying earlier migration bytes.
+
+If reflow discovers a date that already diverged from its last derived value, recognize its prior
+manual intent without changing the public work row. That inferred recognition remains pinned when
+the later anchor action is undone; it is not an action-owned companion to reverse. Explicit date,
+null and same-value pins remain recorded and reversible with the ordinary current work permission.
+Terminal and inferred-manual consumers do not become write seeds or consume the affected-write cap.
+
+Foreground changes use the current editor's live work permissions. Authorize only affected writes;
+read-only prerequisites and unrelated existing descendants do not require edit rights or consume the
+500-write limit. Future execution still checks the saved schedule owner's current authority. Revoking
+that owner must not strand another authorized person's existing generated work.
+
+All public undo entrypoints pass the verified current principal into an authorization callback
+inside the existing atomic reversal transaction. A stored receipt is provenance, not enduring
+permission. For Program defaults require current private schedule management and current Program
+management; check every other affected work row with its ordinary edit policy. Native/retained date
+companions require current work edit rights without granting private schedule visibility. Resolve
+personal Athena and phone users to their real active actor in the receipt's tenant; never use the
+original creator as substitute authority.
+
+A missed calendar occurrence awaiting a decision offers an explicit Create work action. It requires a
+current authorized manager and resolves the exact stored occurrence/date/revision; background sweeping
+cannot silently approve it. Failed attempts retain the separate Retry action and accepted closure.
+
 ## Migration and compatibility
 
 Use an append-only expand → resumable conversion → enforce → remove sequence. Preserve all existing migration bytes. Test the complete historical journal on PostgreSQL, including populated team/private templates, archived sources, pending process drafts, nullable creators, partial executions, deleted work, calendar bindings and interrupted conversion. No `DROP ... CASCADE` retirement and no destructive rebuild of retained work.
 
+Frozen 0154 retained child ordering in publications but not root or pending-source sort. Before the first archive, a changed original whole-source MD5 blocks retirement wherever original root or pending-source ordering cannot be independently proved, including suspected header-only edits. Keep legacy sources and reconcile independent original evidence; never infer ordering from retained arrays or replace the original fingerprint.
+
 1. Expand series/revisions/occurrences with canonical schedule draft, ownership, run state and versioned invocation fields. Add same-tenant exact-publication references, bounded JSON guards and RLS. Add a manifest discriminant for native schedules while continuing to parse historical immutable invocation JSON unchanged. Historical source revision/step identifiers become opaque private lineage, not live foreign keys to soon-retired tables.
 2. Convert every definition/revision to its existing canonical template publication or restricted unpublished draft. A single Task process becomes a schedule on the base Task with its private draft; multi-step definitions retain their converted template and forest without a fabricated visible wrapper. Preserve source key translation, specific assignments, dependencies, run/provider IDs, original/current dates and revision boundaries. Capture immutable source integrity facts needed for later retained proofs before retiring the source tables.
-3. Convert instance completion/failure and exact generated-work references into the owning occurrence's run receipt. Verify one-to-one roots, descendant origins or restricted historical refs, retained date ownership and no changes to physical work. Ad hoc historical instances without a series get a non-running historical receipt; never manufacture an active schedule. Record resumable conversion receipts with source fingerprints and fail closed if source changes.
+3. Convert instance completion/failure and exact generated-work references into the owning occurrence's run receipt. Verify one-to-one roots, descendant origins or restricted historical refs, retained date ownership and no changes to physical work. Ad hoc historical instances without a series get a non-running historical receipt; never manufacture an active schedule. Record resumable conversion receipts with source fingerprints. Ordinary migration verifies immutable archive integrity while deferring sources whose original ordering cannot be proved; strict retirement verification still fails closed on source drift. Never rewrite fingerprints to bless mutable source changes.
 4. Switch the existing scheduler/materializer, completion advancement, recurrence backlinks, calendar synchronization and series editing to canonical records. Keep existing public REST/MCP shapes as explicit adapters over templates/schedules, preserving historical IDs as opaque aliases. Compatibility process creation/publish/edit maps to canonical template drafting/publication and private schedule drafts; it must not recreate retired SQL tables.
 5. Verify no live source query, FK, trigger, RLS policy, search job, export, purge path or public adapter still requires process definitions/revisions/steps/specs/instances/maps. Verify exact old/new execution equivalence and source counts/checksums in PostgreSQL. Only then append the removal migration for those tables, after moving all restrictive FKs/guards to canonical schedule/invocation ownership. Keep occurrence/series/trigger/exception/weekday tables and calendar provider keys.
 
 Legacy `define_process`, `schedule_process`, `repeat_task`, REST process routes and generated recurrence backlinks remain usable. Their adapters validate through the canonical domain contracts and use the same service/DAO path. Legacy response fields such as process/instance IDs are stable opaque aliases backed by migration receipts, not permission shortcuts. List/detail reads apply current visibility to the owning Program and private schedule draft; unauthorized callers cannot learn schedule names, assignments, hidden template bodies or historical private keys.
+
+Private definition bodies require live workspace View and either the actual definition-head owner or workspace Manage; a Program manager does not acquire workspace source-authoring rights. An explicit null head owner never falls back to old creator attribution. If row-level security can hide a head, an absent visible head fails closed before any legacy fallback. Every legacy schedule alias uses the same actual Program or workspace scope policy as native schedules. Source capture checks the complete ordinary-work tree on its capture transaction, and generated backlinks/history omit currently unreadable work. Archiving a definition checks every affected schedule before committing any lifecycle changes.
 
 ## Interfaces and delivery plan
 

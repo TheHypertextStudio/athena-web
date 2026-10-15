@@ -17,6 +17,9 @@ import type {
   WorkCreationBatchCommand,
 } from './types';
 import type { ResolvedWorkInsert } from './writers';
+import { compileScheduleTiming } from '../recurrence/schedule-timing';
+import { planScheduleBlueprint } from '../recurrence/schedule-compiler';
+import { preparedBlueprintRoot } from '../work-template-blueprints/root';
 
 function rootVisibility(command: OrdinaryWorkCommand): 'public' | 'private' {
   return command.invocation.placement?.visibility ?? 'public';
@@ -99,6 +102,31 @@ function rememberPreparedReferences(
 
 /** Preflight parent-ordered forest roots against only earlier authorized prospective work. */
 export async function prepareCreationForest(
+  tx: TemplateTransaction,
+  input: WorkCreationBatchCommand,
+): Promise<PreparedBlueprintCreation[]> {
+  const prepared = await prepareUntimedForest(tx, input);
+  if (!input.scheduleTiming?.length) return prepared;
+  const timed = compileScheduleTiming(
+    input,
+    prepared.map((plan) => ({
+      tree: plan.tree,
+      replan: (command) => {
+        const root = plan.entries[0];
+        if (root?.kind !== 'ordinary')
+          throw new CycleError('Private timing requires a new canonical root.');
+        return planScheduleBlueprint(command, {
+          graph: plan.graph,
+          root: preparedBlueprintRoot(root.prepared),
+          context: plan.context,
+          choices: command.blueprint?.optionalChoices ?? [],
+        }).tree;
+      },
+    })),
+  );
+  return prepareUntimedForest(tx, timed);
+}
+async function prepareUntimedForest(
   tx: TemplateTransaction,
   input: WorkCreationBatchCommand,
 ): Promise<PreparedBlueprintCreation[]> {

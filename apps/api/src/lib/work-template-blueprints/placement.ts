@@ -86,7 +86,12 @@ export function commandForBlueprintNode(
 ): OrdinaryWorkCommand {
   const { node, id, placement } = allocated;
   const effectiveVisibility = blueprintNodeVisibility(allocated, visibility);
-  const { retainedBinding: _rootBinding, ...sourceInvocation } = source.invocation;
+  const {
+    retainedBinding: _rootBinding,
+    scheduleBinding: _scheduleBinding,
+    scheduleContext: _scheduleContext,
+    ...sourceInvocation
+  } = source.invocation;
   const invocation = {
     ...sourceInvocation,
     prospectiveWorkId: id,
@@ -98,7 +103,11 @@ export function commandForBlueprintNode(
     labelIds: [],
   };
   const body = {
-    ...node.fields,
+    // Nullable private summaries remain on the trusted planned node until ordinary defaults finish.
+    // Public create DTOs continue accepting only string/omitted summaries.
+    ...Object.fromEntries(
+      Object.entries(node.fields).filter(([key, value]) => key !== 'summary' || value !== null),
+    ),
     ...Object.fromEntries(Object.entries(node.dates).filter(([, value]) => value !== null)),
     workTypeId: node.workTypeId,
     workTypeVersionId: node.workTypeVersionId,

@@ -10,7 +10,7 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import userEvent from '@testing-library/user-event';
 import { VocabularyProvider } from '@docket/ui/hooks';
 import { describe, expect, it, vi } from 'vitest';
-import { type WorkTemplateDraftUpdate } from '@docket/work/work-template-contract';
+import { WorkTemplateOut, type WorkTemplateDraftUpdate } from '@docket/work/work-template-contract';
 import {
   WorkTemplateAuthoring,
   WorkTemplateForm,
@@ -39,9 +39,7 @@ describe('blueprint sample authoring', () => {
     change('Responsible person', 'parent_responsible', child);
     fireEvent.click(screen.getByRole('tab', { name: 'Review' }));
     expect(
-      screen.getByText(
-        'Assigned to Vendor booking’s responsible person · Vendor booking’s team, otherwise creation team',
-      ),
+      screen.getByText('Parent assignee · Parent team, otherwise selected team'),
     ).toBeVisible();
   });
   it('inherits responsibility through milestones while keeping their date context', () => {
@@ -56,9 +54,7 @@ describe('blueprint sample authoring', () => {
     fireEvent.click(screen.getByRole('tab', { name: 'Review' }));
     const review = screen.getByRole('region', { name: 'Work definition review' });
     expect(
-      within(review).getByText(
-        'Assigned to Community dinner’s responsible person · Community dinner’s team, otherwise creation team',
-      ),
+      within(review).getByText('Project lead · Project team, otherwise selected team'),
     ).toBeVisible();
     expect(within(review).getByText('Due on Dinner day')).toBeVisible();
     expect(within(review).queryByText('Unassigned')).not.toBeInTheDocument();
@@ -74,7 +70,7 @@ describe('blueprint sample authoring', () => {
     fireEvent.click(screen.getByRole('tab', { name: 'Review' }));
     expect(
       within(screen.getByRole('region', { name: 'Work definition review' })).getByRole('heading', {
-        name: 'Event',
+        name: 'Starting work',
       }),
     ).toBeVisible();
     expect(
@@ -89,7 +85,7 @@ describe('blueprint sample authoring', () => {
     fireEvent.click(screen.getByRole('tab', { name: 'Work' }));
     expect(screen.getByLabelText('Child title')).toHaveValue('Book venue');
   });
-  it('keeps the outline first, hides configuration, and edits only the selected child', () => {
+  it('keeps the outline first, hides configuration, and edits only the selected child', async () => {
     render(<WorkTemplateForm orgId="org" initial={template()} onCreated={vi.fn()} />);
     expect(screen.getByLabelText('Starting document')).toBeVisible();
     expect(screen.queryByLabelText('Starting priority')).not.toBeInTheDocument();
@@ -105,10 +101,12 @@ describe('blueprint sample authoring', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Dates' }));
     change('Due date rule', 'parent');
     change('Due offset days', '-21');
-    fireEvent.click(screen.getByRole('button', { name: 'Done editing' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Back to outline' }));
     expect(screen.queryByLabelText('Child title')).not.toBeInTheDocument();
     expect(screen.getByText('Due 21 days before Community dinner date')).toBeVisible();
-    expect(screen.getByRole('button', { name: 'Edit Book venue' })).toHaveFocus();
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Edit Book venue' })).toHaveFocus();
+    });
   });
   it('uses custom child, team and cycle nouns with compact disclosure actions', () => {
     render(
@@ -125,16 +123,15 @@ describe('blueprint sample authoring', () => {
         <WorkTemplateForm orgId="org" initial={template()} onCreated={vi.fn()} />
       </VocabularyProvider>,
     );
-    expect(screen.getByText(/completed sibling Actions/)).toBeVisible();
     const child = add('action');
     expect(within(child).getByLabelText('Child title')).toHaveValue('New action');
     expect(
       within(screen.getByRole('list', { name: 'Child work outline' })).getByText('Action'),
     ).toBeVisible();
-    fireEvent.click(within(child).getByRole('button', { name: 'Assignment and defaults' }));
+    fireEvent.click(within(child).getByRole('button', { name: 'Responsibility' }));
     expect(within(child).getByLabelText('Squad rule')).toBeVisible();
     expect(within(child).getByLabelText('Sprint rule')).toBeVisible();
-    expect(within(child).getByRole('button', { name: 'Done editing' })).toBeVisible();
+    expect(within(child).getByRole('button', { name: 'Back to outline' })).toBeVisible();
   });
   it.each(['task', 'project'] as const)(
     'roundtrips canonical %s starting fields while editing children',
@@ -158,6 +155,36 @@ describe('blueprint sample authoring', () => {
       });
     },
   );
+  it('preserves saved Program recurring-work defaults while editing its parent document', async () => {
+    const initial = template('program');
+    const defaults = [
+      {
+        key: 'monthly-dinner',
+        name: 'Community dinner',
+        template: { targetType: 'task', workTypeId: nestedId, selection: { kind: 'latest' } },
+        titlePattern: '{month} Dinner',
+        cadence: {
+          kind: 'monthly',
+          interval: 1,
+          startOffsetDays: 0,
+          end: { kind: 'never' },
+          pattern: { kind: 'nth_weekday', ordinal: 2, weekday: 'thursday' },
+        },
+        teamRule: 'parent_team',
+        actorRule: 'creator',
+      },
+    ];
+    const saved = { ...initial, definition: { ...initial.definition, defaultSchedules: defaults } };
+    render(
+      <WorkTemplateForm orgId="org" initial={WorkTemplateOut.parse(saved)} onCreated={vi.fn()} />,
+    );
+    change('Starting name', 'Community gatherings');
+    fireEvent.click(screen.getByRole('button', { name: 'Save draft' }));
+    await waitFor(() => {
+      expect(mocks.draft).toHaveBeenCalled();
+    });
+    expect(mocks.draft.mock.calls[0]?.[0].definition.defaultSchedules).toEqual(defaults);
+  });
   it('saves and reopens hierarchy, optional choices, rules and relative working dates with the root outline', async () => {
     const initial = template();
     let saved = initial;
@@ -223,7 +250,7 @@ describe('blueprint sample authoring', () => {
     change('Pinned version', versionId, first);
     const second = add('task');
     change('Child title', 'Pay deposit', second);
-    fireEvent.click(within(second).getByRole('button', { name: 'Assignment and defaults' }));
+    fireEvent.click(within(second).getByRole('button', { name: 'Dates' }));
     fireEvent.click(within(second).getByLabelText('Blocked by Gather quotes'));
     change('Due date rule', 'after_completion', second);
     fireEvent.click(within(second).getByLabelText('Due after Gather quotes completes'));
@@ -259,6 +286,14 @@ describe('blueprint sample authoring', () => {
     expect(
       within(screen.getByRole('list', { name: 'Child work outline' })).getAllByRole('listitem'),
     ).toHaveLength(2);
+    expect(screen.getByRole('heading', { name: 'Work outline' })).toBeVisible();
+    const descendants = screen.getByRole('list', { name: 'Included under Parent task' });
+    expect(within(descendants).getByRole('button', { name: 'Edit New task' })).toBeVisible();
+    fireEvent.click(within(descendants).getByRole('button', { name: 'Edit New task' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Back to outline' }));
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Edit New task' })).toHaveFocus(),
+    );
     fireEvent.click(screen.getByRole('button', { name: 'Edit Parent task' }));
     fireEvent.click(
       within(screen.getByRole('group', { name: 'Child work: Parent task' })).getByRole('button', {

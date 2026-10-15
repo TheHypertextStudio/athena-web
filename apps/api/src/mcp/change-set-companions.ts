@@ -20,12 +20,17 @@ import {
   revertRetainedDateOwnership,
 } from './change-set-retained-dates';
 import { serializableTx } from '../lib/serializable-tx';
+import { isNativeScheduleDateKind, revertNativeScheduleDate } from './change-set-native-dates';
+import {
+  isProgramDefaultScheduleKind,
+  revertProgramDefaultSchedule,
+} from './change-set-program-schedules';
 
 /** A stored change-set entry, as undo reads it back; `op` is widened to match `revertEntry`. */
 export type StoredEntry = Pick<
   typeof changeSetEntry.$inferSelect,
   'entityKind' | 'entityId' | 'before' | 'after'
-> & { readonly op: string };
+> & { readonly op: string; readonly changeSetId?: string };
 
 /**
  * What a companion revert did, plus the projection work to run once its transaction commits.
@@ -46,7 +51,9 @@ export function isCompanionKind(kind: string): boolean {
     isLabelSetKind(kind) ||
     isCatalogKind(kind) ||
     isInitiativeParentKind(kind) ||
-    isRetainedDateOwnershipKind(kind)
+    isRetainedDateOwnershipKind(kind) ||
+    isNativeScheduleDateKind(kind) ||
+    isProgramDefaultScheduleKind(kind)
   );
 }
 
@@ -60,6 +67,9 @@ export function revertCompanionIn(
   orgId: string,
   tx: Tx,
 ): Promise<RevertResult> {
+  if (isNativeScheduleDateKind(entry.entityKind)) return revertNativeScheduleDate(entry, orgId, tx);
+  if (isProgramDefaultScheduleKind(entry.entityKind))
+    return revertProgramDefaultSchedule(entry, orgId, tx);
   if (isRetainedDateOwnershipKind(entry.entityKind))
     return revertRetainedDateOwnership(entry, orgId, tx);
   if (isCatalogKind(entry.entityKind))

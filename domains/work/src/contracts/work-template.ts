@@ -6,23 +6,34 @@ import { EntityDisplayGlyph } from './entity-display';
 import { ViewScope } from './saved-view';
 import { Blueprint, BlueprintPreviewWarning, WorkTemplateOrigin } from './work-template-blueprint';
 import { CanonicalTemplateDraft, TemplateTargetType } from './template';
+import { ProgramDefaultSchedules } from './work-schedule-defaults';
 
 const offeredTeamIds = z.array(TeamId).refine((ids) => new Set(ids).size === ids.length, {
   message: 'Offer a template to each team only once.',
 });
 
 /** The editable definition copied unchanged into each publication. */
-export const WorkTemplateDefinition = z.strictObject({
-  name: z
-    .string()
-    .min(1)
-    .refine((name) => name.trim().length > 0, 'Name the template.'),
-  description: z.string().nullable().default(null),
-  icon: EntityDisplayGlyph.nullable().default(null),
-  defaultStatusKey: z.string().min(1).nullable().default(null),
-  payload: CanonicalTemplateDraft,
-  blueprint: Blueprint.default({ steps: [], dependencies: [] }),
-});
+export const WorkTemplateDefinition = z
+  .strictObject({
+    name: z
+      .string()
+      .min(1)
+      .refine((name) => name.trim().length > 0, 'Name the template.'),
+    description: z.string().nullable().default(null),
+    icon: EntityDisplayGlyph.nullable().default(null),
+    defaultStatusKey: z.string().min(1).nullable().default(null),
+    payload: CanonicalTemplateDraft,
+    blueprint: Blueprint.default({ steps: [], dependencies: [] }),
+    defaultSchedules: ProgramDefaultSchedules.default([]),
+  })
+  .superRefine((definition, context) => {
+    if (definition.payload.targetType !== 'program' && definition.defaultSchedules.length)
+      context.addIssue({
+        code: 'custom',
+        path: ['defaultSchedules'],
+        message: 'Only Program templates have default schedules.',
+      });
+  });
 /** Editable or published work-template definition value. */
 export type WorkTemplateDefinition = z.infer<typeof WorkTemplateDefinition>;
 

@@ -127,13 +127,16 @@ beforeEach(() => {
 });
 export function change(label: string, value: string, scope: HTMLElement = document.body): void {
   if (!within(scope).queryByLabelText(label)) {
-    const disclosure = label.startsWith('Starting ')
-      ? 'Starting properties'
-      : /^(Due|Start|Target) /.test(label)
-        ? 'Dates'
-        : /^(Nested template|Template version|Pinned version|Child parent)$/.test(label)
-          ? 'Template and placement'
-          : 'Assignment and defaults';
+    const disclosure =
+      label === 'Starting summary'
+        ? 'Add a starting summary'
+        : label.startsWith('Starting ')
+          ? 'Starting properties'
+          : /^(Due|Start|Target) /.test(label)
+            ? 'Dates'
+            : /^(Nested template|Template version|Pinned version|Child parent)$/.test(label)
+              ? 'Template and placement'
+              : 'Responsibility';
     fireEvent.click(within(scope).getByRole('button', { name: disclosure }));
   }
   fireEvent.change(within(scope).getByLabelText(label), { target: { value } });

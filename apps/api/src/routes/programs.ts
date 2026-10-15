@@ -1,5 +1,6 @@
 import { originFor } from '../lib/provenance/context';
 import { createWork } from '../lib/work-creation/service';
+import { deleteProgramPreservingScheduleHistory } from '../lib/program-removal';
 import { workTemplateAssignmentRoutes } from './work-template-assignment';
 import { workTemplateCaptureRoutes } from './work-template-capture';
 import { programOut as toOut } from './program-output';
@@ -350,17 +351,14 @@ const programs = new Hono<AppEnv>()
       summary: 'Delete a program',
       capability: 'manage',
       response: ProgramOut,
-      description: `Permanently delete a program. The program must belong to the organization, and the caller needs the \`manage\` capability. Projects and tasks are not deleted, but they no longer belong to the program. Initiative links are removed. To preserve the program and its history, update its \`status\` to \`archived\` instead. Returns the deleted {@link ProgramOut}.`,
+      description: `Permanently delete a program. The program must belong to the organization, and the caller needs the \`manage\` capability. Projects and tasks are not deleted, but they no longer belong to the program. Initiative links are removed. A Program owning recurring work returns 409, including ended schedules, so its run history remains intact. To preserve the program and its history, update its \`status\` to \`archived\` instead. Returns the deleted {@link ProgramOut}.`,
     }),
     zParam(idParam),
     async (c) => {
       const { orgId } = c.get('actorCtx');
       const { id } = c.req.valid('param');
-      const deleted = await db
-        .delete(program)
-        .where(and(eq(program.id, id), eq(program.organizationId, orgId)))
-        .returning();
-      const row = await changeSets.recordRemoval(c.get('actorCtx'), 'program', deleted[0]);
+      const deleted = await deleteProgramPreservingScheduleHistory(db, orgId, id);
+      const row = await changeSets.recordRemoval(c.get('actorCtx'), 'program', deleted);
       if (!row) throw new NotFoundError('Program not found');
       await enqueueSearchDelete(orgId, 'program', row.id);
       return ok(c, ProgramOut, toOut(row));

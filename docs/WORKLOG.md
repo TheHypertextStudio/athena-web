@@ -463,6 +463,148 @@ completion and compatibility adapters. Add independently owned Program defaults 
 Schedules section. Remove process tables only after current source, full-journal PostgreSQL conversion
 and the populated dinner journey prove canonical ownership and preserved history.
 
+Keep private schedule drafts visible to their live owner or a manager of the owning Program (or
+workspace for standalone schedules), with current Program visibility checked independently.
+A public Program alone does not disclose another person's private location overrides. Future
+revision writes use the same scope check and retain the owning Program. Native authoring accepts
+ordinary schedule drafts; historical forests and accepted claims stay server-controlled. Share
+cadence and trigger schemas across the API and browser, while event matching stays in automation.
+Review uses the identical scheduled creation preflight, including actual dates and child overrides.
+
+Shared cadence, event-trigger and native schedule contracts now serve API and browser consumers.
+Canonical authoring, read-only creation/revision previews, private history, failure/retry and lifecycle
+routes use the retained engine. Claims accept complete version closures before work starts;
+failed work rolls back while accepted versions survive. Native dispatch uses the existing shared
+creation writer. Source and historical-instance archives preserve original immutable data and
+separately hashed retirement facts. The expansion and privacy migrations pass the complete
+PostgreSQL journal, including resumable conversion, native receipts and revoked Program visibility.
+Focused native execution, route privacy, lifecycle, calendar and old recurrence checks pass.
+Older route fixtures now persist the contribution grant their injected actor context already claimed.
+
+The API declaration build keeps organization routes as a named schema island, preserving exact RPC
+shapes while avoiding compiler serialization limits as template definitions grow. Program defaults,
+calendar movement/completion and final legacy cutover remain in progress. The UI receives another
+information-architecture pass: one ordered main-work/children outline beside the selected editor,
+contextual timing/responsibility, restrained corner shapes, and a concise consequence review.
+Fresh authenticated, populated craft acceptance is still required for this revised flow.
+
+The structural pass orders decisions around the organization's work: identify the primitive,
+arrange its included work, edit one selected item, then set contextual timing and responsibility.
+Phone navigation preserves the selected item and provides a clear return to the outline. Program
+schedules lead with the next actual work title and date; infrequent actions belong in a menu.
+Version selection and optional summaries are disclosed when needed. Validate filled documents,
+empty and long states, keyboard navigation, both themes and short-phone layouts before acceptance.
+
+Live review exposed stale responsibility warnings generated before an explicit assignment was
+applied. The shared planner now validates the selected override before evaluating default rules;
+the regression covers both a chosen active person and an explicit unassigned choice. Future edits
+also reject ended schedules, historical dates and non-increasing revision boundaries using the
+saved revision's timezone. Source archival must reject ordering changes and retain old tables when
+the original root ordering cannot be independently proved. Restricted-role privacy and actual
+database regressions remain required before delivery.
+
+Canonical MCP scheduling uses two bounded tools: `list_work_schedules` for discovery/detail/history
+and `manage_work_schedule` for explicit create, checked future revision, lifecycle, run and retry
+intents. Both retain live OAuth/actor gates and delegate to the canonical services. REST and MCP
+share the public run-key and owning-run checks. Program draft authoring accepts reusable default
+schedules with omission-preserves and explicit-empty-clears semantics; publishing and archive
+cannot silently accept authoring fields. Protocol mocks and contract checks precede the queued
+real MCP/database acceptance; the existing local-model toolbox ceiling remains enforced.
+First-party tool discovery follows every catalog page before mapping definitions and authorization
+hints, so a larger template/gallery catalog cannot silently lose tools. Repeated cursors and later
+page failures refuse a partial toolbox; failed discovery closes both owned transport endpoints.
+
+#### Program schedule integration and organization refinement
+
+The full 164-entry PostgreSQL journal passes fresh and populated upgrades, interrupted conversion,
+retained private access, native date ownership and immutable continuation checks. Six isolated
+database regressions prove original ordering changes fail closed. The real schedule/MCP integration
+batch passes its native execution, provider movement, private clearing, route and MCP cases. Program
+default creation passes after its fixtures supply the actual required creation team. Archive impact
+now includes independently owned schedules and reusable Program defaults. Fourteen archive-impact
+cases and the real optional nested-choice, frozen-retry and ordinary preview-token cases pass.
+
+Organize the definition around one Work outline with a distinct root, Included work and Recurring
+work branches. Preserve authored parent/sibling order and show actual nested children; do not sort
+by kind or date merely to create visual groups. Focus the editor on content, inclusion, timing and
+responsibility, then disclose version and placement settings. Relative routine starts use On
+creation, After or Before with a positive day count rather than asking people to interpret signed
+numbers. Validate nested navigation, retained drafts, independent Program schedule copies and the
+new ordering in the standard authenticated stack before accepting this refinement.
+
+First-party toolbox discovery now follows every MCP catalog page and closes owned connections on
+listing failure. Focused pagination regressions pass, preserving annotations and the existing schema
+conversion; the next delivery must keep the complete typed-work catalog within its prompt budget.
+Program deletion returns an owned conflict while any schedule history remains, and the browser
+explains that archiving preserves recurring work and history. The real Program removal and complete
+workspace purge cases pass. Optional schedule choices use their persistent reviewed draft without
+weakening ordinary creation's preview-token requirement.
+
+The final organization pass verifies author/save/reopen/publish, composer consequences and independent
+Program copies through real authenticated APIs. Forty refreshed frames cover the outline, collapsed
+children, routine editor, Review and composer across both themes and four viewport sizes. The long
+document and twenty-four-child case proves desktop sticky navigation and phone branch collapse.
+Review groups Starting work, Included work and Recurring work, retains actual nesting, removes empty
+metadata and uses contextual responsibility. Focused web tests, typecheck and lint pass. The explicit
+whole-E2E typecheck exposed unrelated existing fixture errors and a missing JSX compiler option; a
+scoped compile of the new journey and its imported helpers passes without changing those fixtures.
+
+Legacy compatibility checks now enforce unpublished definition ownership at REST, MCP, recurrence
+backlinks and history boundaries. Actual PostgreSQL restricted-role checks prove that an invisible
+canonical privacy head cannot fall back to a broader legacy creator grant. Final privacy source
+checks, builds and full legacy conversion/retirement remain open; this milestone has not been delivered.
+
+The production API/web build graph passes. Source-policy checks exposed a missing declared Work →
+Automation public-contract dependency and typography overrides carried into the extracted header.
+The domain registry now names the actual schedule exports and dependency; headers use existing MD3
+roles and obsolete design-token debt entries are removed. The focused policy rerun passes all 79
+cases, without relaxed rules. The lockfile retains only the intended workspace dependency; unrelated
+peer-resolution churn is preserved privately and excluded from delivery. Frozen scoped dependency
+installation restores the canonical dev-stack preflight. Independent final review identified routine
+return visibility with an expanded long outline and sibling-add ordering after deletion; these
+interaction regressions are being verified before source integration.
+
+Final runtime review requires six corrections before this delivery: ordinary resumable migration
+must distinguish immutable archive integrity from strict source-retirement proof; native date ownership
+must undo atomically with its work date; foreground reflow must authorize only affected writes and
+use the current editor; Program creation receipts must also end their unchanged installed routines
+without deleting run history; and missed occurrences awaiting a decision need an actual authorized
+Create work transition. Use the existing atomic undo engine for work plus companion state, preserve
+conflicting independent edits, append any guard migration after the frozen journal, and prove each
+regression before refreshing final checks.
+
+The final organization navigation/order cases and five real Program undo cases now pass, including
+accepted-history preservation, nested Project/Milestone reversal and refusal when later active work
+uses a checkpoint. Native undo, creator revocation, affected-write permissions and the complete
+165-entry PostgreSQL journal pass with an append-only receipt-bound unpin guard. Terminal, deleted and manually diverged consumers are now classified before write authorization
+or descendant expansion; three real regressions pass, including a read-only consumer with 510
+unaffected descendants. Recognizing a prior manual date is not attributed to a later anchor action,
+so undo preserves that earlier decision. Explicit same-value and null date edits remain reversible.
+All four public undo entrypoints recheck the live caller inside the atomic transaction. Five actual
+permission bypasses failed against the former wiring, then all fifteen new access cases and twenty-six
+historical entrypoint cases passed. Program copies require current Program and schedule management;
+foreground work edits do not require private schedule visibility. Independent source review found
+no remaining concrete issue in this implemented checkpoint.
+
+Ordinary resumable upgrades preserve and verify immutable archives while deferring strict source
+proof failures; the complete retirement verifier still refuses unproven ordering or source drift.
+The thirty-four archive regressions and actual PostgreSQL checkpoint/resume cases pass. Missed runs
+now offer an authorized Create work transition on the same saved run, date and revision. Twenty-four
+runtime cases, four UI cases and the authenticated browser action pass; four additional responsive
+captures in both themes preserve the other pending decision and show the saved result after reload.
+The final navigation pass also proves all exits return to the selected routine in a long outline,
+and newly appended siblings remain after existing work even after deletion. Thirty-seven focused
+unit cases and the full creation and long-navigation browser journeys pass. Affected typechecks,
+scoped lint and the unchanged complexity ratchet pass. The frozen-source production API/web build
+graph passes both tasks, and the final scoped E2E compile and affected-file formatting pass.
+Integration is the next step; full legacy conversion/retirement and provider release are separate.
+
+**Retrospective**: Containers alone did not establish information hierarchy. The accepted structure
+uses one authored work outline, distinct included and recurring branches, a focused editor and the
+same grouped Review. Interaction acceptance must include returning to an offscreen selection and
+editing a partially reordered tree. Persisted undo receipts also need current permission checks;
+historical ownership alone cannot authorize a later reversal.
+
 #### Gallery and Athena implementation plan
 
 Use `docs/engineering/specs/work-template-gallery-athena.md` after the schedule layer. Finalize the
@@ -2225,9 +2367,9 @@ chunk, and back or forward all swap instantly.
 - **Subtasks**:
   - [x] Brainstorm the product model with the owner and record the decisions
   - [x] Write the overview design
-  - [ ] Confirm the three decisions in §15 of the design
-  - [ ] Layer 1: identity — spec, plan, build
-  - [ ] Layer 2: blueprints — spec, plan, build
+  - [x] Confirm the three decisions in §15 of the design
+  - [x] Layer 1: identity — spec, plan, build
+  - [x] Layer 2: blueprints — spec, plan, build
   - [ ] Layer 3: Program schedules — spec, plan, build
   - [ ] Layer 4: Athena and the gallery — spec, plan, build
 - **Blockers**: None.

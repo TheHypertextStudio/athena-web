@@ -50,14 +50,48 @@ describe('work definition publication review', () => {
     fireEvent.click(screen.getByRole('tab', { name: 'Review' }));
     const review = screen.getByRole('region', { name: 'Work definition review' });
     expect(
-      within(review).getByText(
-        `${kind[0]?.toLocaleUpperCase()}${kind.slice(1)} · Under Community dinner`,
-      ),
+      within(review).getByText(`${kind.charAt(0).toLocaleUpperCase()}${kind.slice(1)}`),
     ).toBeVisible();
     fireEvent.click(
       within(review).getByRole('button', { name: `Starting details for Sample ${kind}` }),
     );
     expect(within(review).getByText(body)).toBeVisible();
+  });
+
+  it('groups starting work and real nested responsibilities without repeating empty decisions', () => {
+    const initial = template('program');
+    initial.definition.payload = {
+      targetType: 'program',
+      name: 'Neighborhood gatherings',
+      description: 'Welcome the neighborhood.',
+    };
+    render(<WorkTemplateForm orgId="org" initial={initial} onCreated={vi.fn()} />);
+    const parent = add('task');
+    change('Child title', 'Prepare host handover', parent);
+    change('Responsible person', 'parent_responsible', parent);
+    fireEvent.click(within(parent).getByRole('button', { name: 'Add subtask' }));
+    const child = screen.getByRole('group', { name: 'Child work: New task' });
+    change('Child title', 'Confirm the next host', child);
+    change('Responsible person', 'parent_responsible', child);
+    fireEvent.click(screen.getByRole('tab', { name: 'Review' }));
+    const review = screen.getByRole('region', { name: 'Work definition review' });
+    const starting = within(review).getByRole('region', { name: 'Starting work' });
+    expect(within(starting).getByText('Neighborhood gatherings')).toBeVisible();
+    expect(
+      within(review).queryByRole('heading', { name: 'Community dinner' }),
+    ).not.toBeInTheDocument();
+    const nested = within(review).getByRole('list', {
+      name: 'Included under Prepare host handover',
+    });
+    expect(within(nested).getByText('Confirm the next host')).toBeVisible();
+    expect(
+      within(review).getByText('Program owner · Program team, otherwise selected team'),
+    ).toBeVisible();
+    expect(
+      within(nested).getByText('Parent assignee · Parent team, otherwise selected team'),
+    ).toBeVisible();
+    expect(within(review).queryByText('No cycle')).not.toBeInTheDocument();
+    expect(within(review).queryByText('No dates set')).not.toBeInTheDocument();
   });
 
   it('reviews actual starting values, blockers, cycles and pinned nested publications', () => {
@@ -73,13 +107,15 @@ describe('work definition publication review', () => {
     render(<WorkTemplateForm orgId="org" initial={initial} onCreated={vi.fn()} />);
     const first = add('task');
     change('Child title', 'Book venue', first);
+    fireEvent.click(within(first).getByRole('button', { name: 'Add a summary' }));
     change('Child summary', 'Confirm capacity and access', first);
     change('Child document', '## Venue terms', first);
-    fireEvent.click(within(first).getByRole('button', { name: 'Child properties' }));
+    fireEvent.click(within(first).getByRole('button', { name: 'Starting properties' }));
     change('Child priority', 'high', first);
     const second = add('task');
     change('Child title', 'Confirm accessibility', second);
     change('Cycle rule', 'current_cycle', second);
+    fireEvent.click(within(second).getByRole('button', { name: 'Dates' }));
     fireEvent.click(within(second).getByLabelText('Blocked by Book venue'));
     change('Nested template', nestedId, second);
     change('Template version', 'pinned', second);
@@ -88,6 +124,7 @@ describe('work definition publication review', () => {
     const review = screen.getByRole('region', { name: 'Work definition review' });
     expect(within(review).getByText('Community dinner sample')).toBeVisible();
     expect(within(review).getByText('An accessible neighborhood meal')).toBeVisible();
+    fireEvent.click(within(review).getByRole('button', { name: 'Starting properties' }));
     expect(within(review).getByText(/High priority.*At risk.*Backlog/)).toBeVisible();
     expect(within(review).getByText('Blocked by Book venue')).toBeVisible();
     fireEvent.click(

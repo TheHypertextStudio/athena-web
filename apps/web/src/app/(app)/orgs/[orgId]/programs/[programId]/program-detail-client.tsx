@@ -3,18 +3,8 @@
 import type { UpdateOut } from '@docket/work/update-contract';
 import { ActorAvatar, type PickerOption } from '@docket/ui/components';
 import { useVocabulary } from '@docket/ui/hooks';
-import { Ellipsis, Trash2 } from '@docket/ui/icons';
 import { useQueryClient } from '@tanstack/react-query';
-import {
-  Button,
-  ControlGroup,
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-  Tabs,
-  type TabsItem,
-} from '@docket/ui/primitives';
+import { Button, Tabs, type TabsItem } from '@docket/ui/primitives';
 import { useTypedRoute } from '@/lib/app-location';
 import { type JSX, useEffect, useMemo, useState } from 'react';
 
@@ -38,10 +28,11 @@ import { FlowSnapshot } from '@/components/programs/flow-snapshot';
 import { programFlowMetrics } from '@/components/programs/flow-metrics';
 import { ProgramPropertiesPanel } from '@/components/programs/properties-panel';
 import { ProgramWorkView } from '@/components/programs/program-work-view';
+import { ProgramHeaderActions } from '@/components/programs/program-detail-header-actions';
+import { ProgramSchedules } from '@/components/work-schedules/program-schedules';
 import { DetailUnavailable } from '@/components/entity-detail/detail-unavailable';
 import { type ResolveActor, UpdatesPanel } from '@/components/entity-detail/updates-panel';
 import { memberActorOptions } from '@/components/pickers/options';
-import { PublishAction } from '@/components/publishing/publish-action';
 import { useDocumentTitle } from '@/components/tabs/use-document-title';
 import { useRegisterTabTitle } from '@/components/tabs/use-register-tab-title';
 import { api } from '@/lib/api';
@@ -61,9 +52,28 @@ import {
 import { useAppRouter } from '@/lib/interactions/navigation';
 import { openProjectRecord } from '@/lib/local-first-navigation';
 
-type TabId = 'overview' | 'projects' | 'work' | 'updates';
-const PROGRAM_TABS = ['overview', 'projects', 'work', 'updates'] as const;
+type TabId = 'overview' | 'projects' | 'work' | 'schedules' | 'updates';
+const PROGRAM_TABS = ['overview', 'projects', 'work', 'schedules', 'updates'] as const;
 
+const PROGRAM_TAB_ITEMS: readonly TabsItem[] = [
+  { value: 'overview', label: 'Overview', priority: 0 },
+  { value: 'projects', label: 'Projects', priority: 1 },
+  { value: 'work', label: 'Work', priority: 2 },
+  { value: 'schedules', label: 'Schedules', priority: 3 },
+  { value: 'updates', label: 'Updates', priority: 4 },
+];
+
+const PROGRAM_HEADER_DENSITY = {
+  overview: 'full',
+  projects: 'full',
+  work: 'full',
+  schedules: 'compact',
+  updates: 'full',
+} as const;
+const PROGRAM_HEADER_PRESENTATION = {
+  full: { iconSize: 48, titleClass: 'text-headline-medium text-on-surface' },
+  compact: { iconSize: 32, titleClass: 'text-title-large text-on-surface' },
+} as const;
 /** ProgramDetailPage renders the authenticated program page. */
 export default function ProgramDetailPage(): JSX.Element {
   const router = useAppRouter();
@@ -83,6 +93,8 @@ export default function ProgramDetailPage(): JSX.Element {
   const updatesKey = useMemo(() => [...detailKey, 'updates'] as const, [detailKey]);
 
   const { tab, setTab } = useDetailTab<TabId>(PROGRAM_TABS);
+  const headerDensity = PROGRAM_HEADER_DENSITY[tab];
+  const headerPresentation = PROGRAM_HEADER_PRESENTATION[headerDensity];
   const [ownerPickerOpen, setOwnerPickerOpen] = useState(false);
 
   const [aggregateEnabled, setAggregateEnabled] = useState(true);
@@ -206,13 +218,6 @@ export default function ProgramDetailPage(): JSX.Element {
     ];
   }, [aggregate?.references.owner, members]);
 
-  const tabs: readonly TabsItem[] = [
-    { value: 'overview', label: 'Overview', priority: 0 },
-    { value: 'projects', label: 'Projects', priority: 1 },
-    { value: 'work', label: 'Work', priority: 2 },
-    { value: 'updates', label: 'Updates', priority: 3 },
-  ];
-
   if (terminalState !== null) {
     return (
       <DetailUnavailable
@@ -236,7 +241,7 @@ export default function ProgramDetailPage(): JSX.Element {
           target="program"
           id={programId}
           entityName={programLabel}
-          tabCount={4}
+          tabCount={5}
           snapshot={navigationSnapshot}
         />
         {aggregateQ.isError ? (
@@ -270,6 +275,7 @@ export default function ProgramDetailPage(): JSX.Element {
 
   return (
     <EntityDetailLayout
+      headerDensity={headerDensity}
       object={{
         kind: 'program',
         id: programId,
@@ -291,7 +297,7 @@ export default function ProgramDetailPage(): JSX.Element {
           editable={canCustomizeIdentity}
           pending={entityDisplay.mutation.isPending}
           loading={entityDisplay.loading}
-          size={48}
+          size={headerPresentation.iconSize}
           onChange={(glyph, colorKey, customColor) => {
             entityDisplay.mutation.mutate({ glyph, colorKey, customColor });
           }}
@@ -305,85 +311,74 @@ export default function ProgramDetailPage(): JSX.Element {
           }}
           canEdit={canEdit}
           ariaLabel={`${programLabel} name`}
-          className="text-headline-medium text-on-surface font-medium"
+          className={headerPresentation.titleClass}
         />
       }
       subtitle={
-        <EditableSubtitle
-          value={program.summary}
-          placeholder="Add a concise summary…"
-          canEdit={canEdit}
-          ariaLabel={`${programLabel} summary`}
-          onSave={(summary) => {
-            // Optional-not-nullable on the wire: an empty draft clears by sending '' (never null).
-            patchProgram({ summary: summary ?? '' });
-          }}
-          className="text-on-surface-variant text-body-large font-normal"
-        />
+        tab === 'schedules' ? undefined : (
+          <EditableSubtitle
+            value={program.summary}
+            placeholder="Add a concise summary…"
+            canEdit={canEdit}
+            ariaLabel={`${programLabel} summary`}
+            onSave={(summary) => {
+              // Optional-not-nullable on the wire: an empty draft clears by sending '' (never null).
+              patchProgram({ summary: summary ?? '' });
+            }}
+            className="text-on-surface-variant text-body-large"
+          />
+        )
       }
       metadata={
-        <div className="flex flex-col gap-2">
-          <WorkTemplateHeader orgId={orgId} kind="program" work={program} canEdit={canEdit} />
-          <EntityMetadataRow ariaLabel={`${programLabel} properties`}>
-            <ProgramPropertiesPanel
-              ownerId={program.ownerId ?? null}
-              memberOptions={memberOptions}
-              ownerLoading={membersQ.isPending}
-              onOwnerPickerOpenChange={setOwnerPickerOpen}
-              status={program.status}
-              health={health}
-              visibility={program.visibility}
-              canEdit={canEdit}
-              onOwnerChange={(ownerId) => {
-                patchProgram({ ownerId });
-              }}
-              onStatusChange={(status) => {
-                patchProgram({ status });
-              }}
-              onHealthChange={(next) => {
-                patchProgram({ health: next });
-              }}
-              onVisibilityChange={(visibility) => {
-                patchProgram({ visibility });
-              }}
-            />
-          </EntityMetadataRow>
-        </div>
+        tab === 'schedules' ? (
+          <ProgramScheduleContext
+            label={programLabel}
+            onDetails={() => {
+              setTab('overview');
+            }}
+          />
+        ) : (
+          <div className="flex flex-col gap-2">
+            <WorkTemplateHeader orgId={orgId} kind="program" work={program} canEdit={canEdit} />
+            <EntityMetadataRow ariaLabel={`${programLabel} properties`}>
+              <ProgramPropertiesPanel
+                ownerId={program.ownerId ?? null}
+                memberOptions={memberOptions}
+                ownerLoading={membersQ.isPending}
+                onOwnerPickerOpenChange={setOwnerPickerOpen}
+                status={program.status}
+                health={health}
+                visibility={program.visibility}
+                canEdit={canEdit}
+                onOwnerChange={(ownerId) => {
+                  patchProgram({ ownerId });
+                }}
+                onStatusChange={(status) => {
+                  patchProgram({ status });
+                }}
+                onHealthChange={(next) => {
+                  patchProgram({ health: next });
+                }}
+                onVisibilityChange={(visibility) => {
+                  patchProgram({ visibility });
+                }}
+              />
+            </EntityMetadataRow>
+          </div>
+        )
       }
       actions={
-        // One ControlGroup at the row level, and no control inside it declares a height. That is
-        // what makes the publish icon and the overflow icon provably the same size
-        // rather than the same size until someone edits one of them.
-        <ControlGroup controlSize="xl">
-          <PublishAction
-            orgId={orgId}
-            subjectKind="program"
-            subjectId={programId}
-            title={program.name}
-            noun={programLabel}
-            canPublish={canEdit}
-          />
-          {canEdit ? (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" iconOnly aria-label={`${programLabel} actions`}>
-                  <Ellipsis />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" width="sm">
-                <DropdownMenuItem
-                  destructive
-                  onSelect={() => {
-                    setConfirmDeleteOpen(true);
-                  }}
-                >
-                  <Trash2 className="h-4 w-4" />
-                  Delete {programLabel.toLowerCase()}
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          ) : null}
-        </ControlGroup>
+        <ProgramHeaderActions
+          orgId={orgId}
+          programId={programId}
+          programName={program.name}
+          programLabel={programLabel}
+          canEdit={canEdit}
+          compact={tab === 'schedules'}
+          onDelete={() => {
+            setConfirmDeleteOpen(true);
+          }}
+        />
       }
       tabs={
         <Tabs
@@ -394,7 +389,7 @@ export default function ProgramDetailPage(): JSX.Element {
           }}
           label={`${programLabel} sections`}
           overflow={{ menuLabel: `More ${programLabel} sections` }}
-          items={tabs}
+          items={PROGRAM_TAB_ITEMS}
         />
       }
     >
@@ -477,6 +472,14 @@ export default function ProgramDetailPage(): JSX.Element {
         </div>
       ) : null}
 
+      <ProgramSchedulePanel
+        orgId={orgId}
+        programId={programId}
+        programName={program.name}
+        canEdit={canEdit}
+        active={tab === 'schedules'}
+      />
+
       <ConfirmDestructiveDialog
         open={confirmDeleteOpen}
         onOpenChange={setConfirmDeleteOpen}
@@ -491,5 +494,48 @@ export default function ProgramDetailPage(): JSX.Element {
         }}
       />
     </EntityDetailLayout>
+  );
+}
+
+function ProgramSchedulePanel({
+  orgId,
+  programId,
+  programName,
+  canEdit,
+  active,
+}: {
+  readonly orgId: string;
+  readonly programId: string;
+  readonly programName: string;
+  readonly canEdit: boolean;
+  readonly active: boolean;
+}): JSX.Element {
+  return (
+    <div role="tabpanel" id="tabpanel-schedules" aria-labelledby="tab-schedules" hidden={!active}>
+      <ProgramSchedules
+        orgId={orgId}
+        programId={programId}
+        programName={programName}
+        canEdit={canEdit}
+        enabled={active}
+      />
+    </div>
+  );
+}
+
+function ProgramScheduleContext({
+  label,
+  onDetails,
+}: {
+  readonly label: string;
+  readonly onDetails: () => void;
+}): JSX.Element {
+  return (
+    <div className="flex min-w-0 items-center justify-between gap-3">
+      <p className="text-body-small text-on-surface-variant">{label}</p>
+      <Button type="button" variant="ghost" size="sm" onClick={onDetails}>
+        Program details
+      </Button>
+    </div>
   );
 }

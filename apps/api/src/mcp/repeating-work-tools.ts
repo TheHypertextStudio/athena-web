@@ -45,7 +45,7 @@ export function registerRepeatingWorkTools(server: McpRegistrar, ctx: McpContext
     {
       title: 'Define process',
       description:
-        'Save a reusable multi-step Docket process. Use this for a workshop, book-club season, recruiting pipeline, or other collection of related work that should be instantiated more than once. Step keys express dependencies and relative timing; Docket validates and publishes the immutable revision.',
+        'Save a private reusable Docket process. Its owner or a current workspace manager can read or schedule it. Step keys express dependencies and relative timing for related work that repeats; Docket validates and publishes the immutable revision.',
       inputSchema: {
         orgId: orgIdParam,
         definition: ProcessDefinitionCreate.describe(
@@ -85,7 +85,7 @@ export function registerRepeatingWorkTools(server: McpRegistrar, ctx: McpContext
     {
       title: 'Schedule process',
       description:
-        'Schedule a published Docket process from a calendar rule, actual completion, an event, or a manual trigger. Docket owns rolling-window materialization and missed-work behavior; pass the typed trigger without calculating occurrences yourself.',
+        'Schedule a private process you own or manage at workspace scope. Use a calendar rule, actual completion, event, or manual trigger. Docket owns rolling windows and missed work; pass the typed trigger without calculating occurrences yourself.',
       inputSchema: {
         orgId: orgIdParam,
         series: RecurrenceSeriesCreate.describe(

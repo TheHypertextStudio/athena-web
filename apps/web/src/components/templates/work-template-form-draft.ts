@@ -47,6 +47,7 @@ function freshDraft(initial: WorkTemplateOut | null): TemplateFormDraft {
           defaultStatusKey: null,
           payload: { targetType: 'project' },
           blueprint: { steps: [], dependencies: [] },
+          defaultSchedules: [],
         },
         kind: 'project',
         scope: 'personal',

@@ -5,11 +5,75 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   createDefaultTaskRepeat,
   RepeatTaskControl,
+  taskRepeatSummary,
 } from '../../src/components/recurrence/repeat-task-control';
 
 afterEach(cleanup);
 
 describe('RepeatTaskControl', () => {
+  it('authors the second Thursday of each month and describes the exact weekday', () => {
+    const onChange = vi.fn();
+    const initial = createDefaultTaskRepeat('monthly', '2026-10-15', 'America/Los_Angeles');
+    const { rerender } = render(
+      <RepeatTaskControl
+        presentation="inline"
+        value={initial}
+        onChange={onChange}
+        today="2026-10-15"
+        timezone="America/Los_Angeles"
+      />,
+    );
+    fireEvent.change(screen.getByLabelText('Monthly repeat pattern'), {
+      target: { value: 'nth_weekday' },
+    });
+    const changed = onChange.mock.calls.at(-1)?.[0];
+    expect(changed).toMatchObject({
+      kind: 'calendar',
+      schedule: {
+        kind: 'monthly',
+        pattern: { kind: 'nth_weekday', ordinal: 2, weekday: 'thursday' },
+      },
+    });
+    expect(taskRepeatSummary(changed)).toBe('Every month on the second Thursday');
+    rerender(
+      <RepeatTaskControl
+        presentation="inline"
+        value={changed}
+        onChange={onChange}
+        today="2026-10-15"
+        timezone="America/Los_Angeles"
+      />,
+    );
+    fireEvent.change(screen.getByLabelText('Monthly weekday position'), {
+      target: { value: '-1' },
+    });
+    expect(onChange.mock.calls.at(-1)?.[0].schedule.pattern).toEqual({
+      kind: 'nth_weekday',
+      ordinal: -1,
+      weekday: 'thursday',
+    });
+  });
+
+  it('lets a yearly schedule keep a leap-day rule with explicit overflow behavior', () => {
+    const onChange = vi.fn();
+    render(
+      <RepeatTaskControl
+        presentation="inline"
+        value={createDefaultTaskRepeat('yearly', '2028-02-29', 'UTC')}
+        onChange={onChange}
+        today="2028-02-29"
+        timezone="UTC"
+      />,
+    );
+    expect(screen.getByLabelText('Repeat month')).toHaveValue('2');
+    expect(screen.getByLabelText('Repeat day')).toHaveValue(29);
+    fireEvent.change(screen.getByLabelText('Short month behavior'), { target: { value: 'skip' } });
+    expect(onChange.mock.calls.at(-1)?.[0].schedule).toMatchObject({
+      month: 2,
+      day: 29,
+      overflow: 'skip',
+    });
+  });
   it.each(['none', 'daily', 'weekly', 'monthly', 'yearly', 'after_completion'])(
     'authors %s directly in inline setup without a second editor',
     (cadence) => {

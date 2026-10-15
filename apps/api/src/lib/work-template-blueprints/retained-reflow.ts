@@ -69,11 +69,13 @@ export async function prepareRetainedDateReflow(
     )
     .limit(1)
     .for('update', { of: processOccurrence });
-  if (!bound) return null;
+  if (!bound?.seriesId || !bound.seriesRevisionId) return null;
   const facts = await authorizeRetainedOccurrence(tx, {
     organizationId: caller.orgId,
     actorId: caller.actorId,
     ...bound,
+    seriesId: bound.seriesId,
+    seriesRevisionId: bound.seriesRevisionId,
   });
   const sourceIds = new Set(
     [...facts.mappedWork.values()]

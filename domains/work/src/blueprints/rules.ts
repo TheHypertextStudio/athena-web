@@ -50,7 +50,15 @@ function resolveActor(
   parent: PlannedWorkNode,
   context: BlueprintCreationContext,
   warnings: BlueprintWarning[],
+  override: BlueprintNodeOverride | undefined,
 ): ActorId | null {
+  if (override?.responsibleActorId !== undefined) {
+    if (override.responsibleActorId !== null && !activeActor(override.responsibleActorId, context))
+      throw new BlueprintError('blueprint_invalid', 'Explicit responsible actor is unavailable.', [
+        node.path,
+      ]);
+    return override.responsibleActorId;
+  }
   if (node.kind === 'milestone') return parent.responsibleActorId;
   const rule = requireBlueprintValue(node.step).actorRule;
   if (rule === 'unassigned') return null;
@@ -296,14 +304,7 @@ function planNode(state: PlanState, key: string): PlannedWorkNode {
   const override = state.input.context.overrides?.find((entry) => pathKey(entry.path) === key);
   const context = state.input.context;
   const teamId = resolveTeam(node, parent, context, override);
-  let responsibleActorId = resolveActor(node, parent, context, state.warnings);
-  if (override?.responsibleActorId !== undefined) {
-    if (override.responsibleActorId !== null && !activeActor(override.responsibleActorId, context))
-      throw new BlueprintError('blueprint_invalid', 'Explicit responsible actor is unavailable.', [
-        node.path,
-      ]);
-    responsibleActorId = override.responsibleActorId;
-  }
+  const responsibleActorId = resolveActor(node, parent, context, state.warnings, override);
   const cycleId = resolveCycle({
     node,
     parent,

@@ -11,14 +11,16 @@ import { meInbound } from './routes/me-inbound';
  *   `apps/admin` via `hc<AdminAppType>` and `@docket/api/rpc-contract`. Kept off `/v1` so it is
  *   neither in the public RPC type nor the public Scalar spec.
  *
- * Each method chain must never be broken — `*AppType = typeof routes` is what the Next apps
- * consume. Cross-cutting concerns (CORS, session, `/api/auth/*`, `/internal/*` machine edges,
+ * Each route island retains its method chain; the public type combines their exact named schemas
+ * without expanding the entire organization island into another declaration. The Next apps consume
+ * that type. Cross-cutting concerns (CORS, session, `/api/auth/*`, `/internal/*` machine edges,
  * health, openapi, docs) live in `server.ts` OUTSIDE these `routes` consts so they don't
  * pollute the typed client contracts.
  */
 import { db } from '@docket/db';
 import { Hono } from 'hono';
 import type { MiddlewareHandler } from 'hono';
+import type { ExtractSchema, MergeSchemaPath } from 'hono/types';
 
 import agenda from './routes/agenda';
 import athenaMail from './routes/athena-mail';
@@ -228,11 +230,14 @@ function verificationAvailability(identity: {
   }
 }
 
-/** The chained route tree; its type is the public RPC contract (consumed only via `typeof`). */
+// Keep the organization island named in the public contract instead of serializing its full
+// nested template/schedule shape into every remaining route. This mounts the same router once.
+app.route('/orgs', orgs);
+
+/** The remaining chained route tree; each island retains its exact public RPC schema. */
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const routes = app
   .route('/config', config)
-  .route('/orgs', orgs)
   .route('/daily-plan', dailyPlan)
   .route('/daily-plan', dailyPlanReview)
   .route('/daily-plan', dailyPlanAssessment)
@@ -289,7 +294,11 @@ const routes = app
   .route('/oauth/clients', oauthClients);
 
 /** The public Hono RPC contract exported through `@docket/api/rpc-contract`. */
-export type AppType = typeof routes;
+export type AppType = Hono<
+  AppEnv,
+  ExtractSchema<typeof routes> | MergeSchemaPath<ExtractSchema<typeof orgs>, '/v1/orgs'>,
+  '/v1'
+>;
 
 /**
  * The internal staff back-office app, mounted at `/admin` (NOT `/v1`). It is gated by the

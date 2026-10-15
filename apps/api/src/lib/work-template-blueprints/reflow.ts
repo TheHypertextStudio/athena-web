@@ -1,4 +1,4 @@
-import { markRetainedDatesManual, initiativeProgram, initiativeProject } from '@docket/db';
+import { db, markRetainedDatesManual, initiativeProgram, initiativeProject } from '@docket/db';
 import { and, eq } from 'drizzle-orm';
 import {
   BlueprintError,
@@ -31,6 +31,12 @@ import {
   managedRetainedCompletionReferences,
 } from './retained-reflow';
 import type { AuthorizedRetainedOccurrence } from '../work-creation/retained-authority';
+import {
+  prepareNativeScheduleReflow,
+  applyNativeScheduleReflow,
+  type PreparedNativeScheduleReflow,
+} from '../recurrence/schedule-native-reflow';
+import { advanceNativeScheduleOccurrence } from '../recurrence/schedule-native-completion';
 export type { BlueprintReflowResult } from './reflow-write';
 /** Authorized original snapshot retained across one enclosing ordinary mutation. */
 export interface PreparedBlueprintReflow {
@@ -41,6 +47,7 @@ export interface PreparedBlueprintReflow {
   readonly explicitDates: readonly BlueprintDateField[];
   readonly anchorIds: ReadonlySet<string>;
   readonly affectedWorkIds: ReadonlySet<string>;
+  readonly native?: PreparedNativeScheduleReflow | null;
 }
 function taskParent(work: Extract<BlueprintStoredWork, { kind: 'task' }>): BlueprintWorkRef | null {
   const parents = [
@@ -164,9 +171,13 @@ export async function prepareBlueprintReflow(
 ): Promise<PreparedBlueprintReflow | null> {
   if (!requestsBlueprintReflow(request)) return null;
   const caller = snapshotCaller(tx, authority);
-  const retained =
-    caller.retained ??
-    (caller.actor ? await prepareRetainedDateReflow(tx, caller.actor, reference) : null);
+  const native = caller.actor
+    ? await prepareNativeScheduleReflow(tx, caller.actor, reference, request)
+    : null;
+  const retained = native
+    ? null
+    : (caller.retained ??
+      (caller.actor ? await prepareRetainedDateReflow(tx, caller.actor, reference) : null));
   const generation = await generationRoot(tx, caller.orgId, reference, retained);
   const snapshot = await loadBlueprintSnapshot(tx, authority, generation.root, {
     scope: 'affected',
@@ -187,10 +198,20 @@ export async function prepareBlueprintReflow(
   const affectedWorkIds = new Set([
     ...affectedBlueprintNodes(snapshot.nodes, new Set([reference.id]), anchorIds),
     ...(await privateCompletionFootprint(tx, retained, reference)),
+    ...(native?.affectedWorkIds ?? []),
   ]);
   if (affectedWorkIds.size > 500)
     throw new BlueprintError('blueprint_limit', 'Reflow at most 500 affected work items.');
-  return { snapshot, authority, retained, reference, explicitDates, anchorIds, affectedWorkIds };
+  return {
+    snapshot,
+    authority,
+    retained,
+    native,
+    reference,
+    explicitDates,
+    anchorIds,
+    affectedWorkIds,
+  };
 }
 function currentNode(
   node: ExistingBlueprintNode,
@@ -263,6 +284,14 @@ export async function applyBlueprintReflow(
   changedIds: readonly string[] = [],
 ): Promise<BlueprintReflowResult> {
   if (!prepared) return { changes: [], rows: [] };
+  if (prepared.native) return applyNativeScheduleReflow(tx, prepared.native);
+  return applyNonNativeBlueprintReflow(tx, prepared, changedIds);
+}
+async function applyNonNativeBlueprintReflow(
+  tx: TemplateTransaction,
+  prepared: PreparedBlueprintReflow,
+  changedIds: readonly string[],
+): Promise<BlueprintReflowResult> {
   const { snapshot, reference } = prepared;
   const privateManual =
     reference.kind === 'task' || reference.kind === 'project' || reference.kind === 'milestone'
@@ -323,6 +352,10 @@ export async function finishBlueprintReflow(
   result: BlueprintReflowResult,
 ): Promise<void> {
   for (const work of result.rows) await enqueueSearchUpsert(orgId, work.kind, work.id);
+  for (const completion of new Map(
+    (result.nativeCompletions ?? []).map((entry) => [entry.occurrenceId, entry]),
+  ).values())
+    await advanceNativeScheduleOccurrence(db, { organizationId: orgId, ...completion });
 }
 
 /** Reflow public descendants of trusted managed anchors without turning those accepted anchors into manual edits. */
@@ -342,14 +375,24 @@ export async function reflowManagedBlueprintAnchors(
     for (const id of value.affectedWorkIds) affected.add(id);
     if (affected.size > 500)
       throw new BlueprintError('blueprint_limit', 'Reflow at most 500 affected work items.');
-    prepared.push({ ...value, explicitDates: [] });
+    prepared.push({
+      ...value,
+      explicitDates: [],
+      native: value.native ? { ...value.native, explicitDates: [] } : null,
+    });
   }
   const changes: BlueprintReflowResult['changes'][number][] = [];
   const rows: BlueprintStoredWork[] = [];
+  const nativeCompletions: NonNullable<BlueprintReflowResult['nativeCompletions']>[number][] = [];
   for (const value of prepared) {
     const result = await applyBlueprintReflow(tx, value);
     changes.push(...result.changes);
     rows.push(...result.rows);
+    nativeCompletions.push(...(result.nativeCompletions ?? []));
   }
-  return { changes: selectiveReceiptChanges(changes), rows };
+  return {
+    changes: selectiveReceiptChanges(changes),
+    rows,
+    nativeCompletions,
+  };
 }

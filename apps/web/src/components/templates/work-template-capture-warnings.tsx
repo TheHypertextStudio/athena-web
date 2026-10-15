@@ -10,6 +10,14 @@ const COPY: Record<BlueprintWarningCode, string> = {
   waiting_completion: 'Timing waits for other work to finish. Review its completion rule.',
   capture_actor: 'A specific person becomes unassigned. Choose a reusable responsibility rule.',
   capture_team: 'A specific team was removed. Choose how future work finds its team.',
+  capture_schedule_assignment:
+    'Specific schedule assignments were removed. Choose reusable responsibility rules.',
+  capture_schedule_provider:
+    'Calendar provider bindings were removed. Connect each new Program schedule separately.',
+  capture_schedule_cadence:
+    'A schedule cadence or fixed end date could not be reused. Review the default schedules.',
+  capture_schedule_draft:
+    'Private schedule overrides were removed. Review each new Program schedule before it runs.',
   capture_cycle: 'A specific cycle was removed. Review how future work joins a cycle.',
   capture_dependency:
     'A dependency outside a captured sibling group was excluded. Review the work order.',

@@ -67,5 +67,5 @@ export function blueprintStepTiming(
       ? [`${labels[field]} ${describeRule(rule, blueprint, parentDate).replace(/^On /, 'on ')}`]
       : [],
   );
-  return dates.length ? dates.join(' · ') : 'No managed dates';
+  return dates.length ? dates.join(' · ') : 'No dates set';
 }

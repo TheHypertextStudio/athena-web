@@ -4,10 +4,9 @@ import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 const root = resolve(import.meta.dirname, '../../../../');
-const layout = readFileSync(
-  join(root, 'apps/web/src/components/views/entity-detail-layout.tsx'),
-  'utf8',
-);
+const layout = ['entity-detail-layout.tsx', 'entity-detail-header-content.tsx']
+  .map((file) => readFileSync(join(root, 'apps/web/src/components/views', file), 'utf8'))
+  .join('\n');
 const collapseBehavior = readFileSync(
   join(root, 'apps/web/src/components/views/entity-detail-collapse.ts'),
   'utf8',
@@ -21,7 +20,7 @@ function literalClassToken(token: string): RegExp {
 describe('entity detail collapse contract', () => {
   it('derives covered and coverless geometry in the shared layout', () => {
     expect(layout).toContain("data-detail-cover={cover ? 'present' : 'absent'}");
-    expect(layout).toContain('useDetailHeaderCollapse({ hasCover: Boolean(cover) })');
+    expect(layout).toContain('layoutKey: headerDensity');
     expect(css).toContain("[data-detail-cover='absent']");
     expect(css).toContain("[data-detail-cover='present']");
     expect(css).toContain('--detail-collapse-range: 4rem');

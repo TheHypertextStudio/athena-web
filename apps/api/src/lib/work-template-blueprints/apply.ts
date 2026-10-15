@@ -8,6 +8,7 @@ import type { InsertedWork } from '../work-creation/writers';
 import type { OrdinaryWorkMutation } from '../work-creation/types';
 import type { TemplateTransaction } from '../templates/persistence';
 import type { PreparedBlueprintCreation } from './preflight';
+import { installProgramDefaultSchedules } from '../work-template-default-schedules/install';
 
 /** Insert a completely preflighted tree and its edges with no nested expansion or receipt. */
 export async function applyPreparedBlueprintCreation(
@@ -35,6 +36,11 @@ export async function applyPreparedBlueprintCreation(
     inserted.set(JSON.stringify(entry.allocated.node.path), mutation.root);
     mutations.push(mutation);
   }
+  const scheduleChanges = await installProgramDefaultSchedules(
+    tx,
+    prepared,
+    mutations.flatMap((mutation) => mutation.created),
+  );
   const dependencyChanges = await insertBlueprintDependencies(tx, prepared, inserted);
   const first = mutations[0];
   if (!first)
@@ -42,7 +48,11 @@ export async function applyPreparedBlueprintCreation(
   return {
     root: first.root,
     created: mutations.flatMap((mutation) => mutation.created),
-    changes: [...mutations.flatMap((mutation) => mutation.changes), ...dependencyChanges],
+    changes: [
+      ...mutations.flatMap((mutation) => mutation.changes),
+      ...scheduleChanges,
+      ...dependencyChanges,
+    ],
     effects: mutations.flatMap((mutation) => mutation.effects),
     parentTaskIds: settlementParents(prepared, mutations),
   };

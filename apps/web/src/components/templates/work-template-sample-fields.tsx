@@ -41,20 +41,39 @@ export function WorkTemplateSampleFields({
           }}
         />
       </Field>
-      {
-        <Field label="Starting summary">
-          <Input
-            variant="plain"
-            value={payload.summary ?? ''}
-            maxLength={payload.targetType === 'task' ? 200 : 280}
-            disabled={disabled}
-            onChange={(event) => {
-              change({ summary: event.target.value });
-            }}
-          />
-        </Field>
-      }
     </div>
+  );
+}
+
+/** An optional summary follows the main starting document without competing with it. */
+export function WorkTemplateSampleSummary({
+  form,
+}: {
+  readonly form: WorkTemplateFormState;
+}): JSX.Element {
+  const payload = form.definition.payload;
+  return (
+    <TemplateDisclosure
+      title={payload.summary ? 'Starting summary' : 'Add a starting summary'}
+      defaultOpen={Boolean(payload.summary?.trim())}
+    >
+      <Input
+        aria-label="Starting summary"
+        variant="plain"
+        value={payload.summary ?? ''}
+        maxLength={payload.targetType === 'task' ? 200 : 280}
+        disabled={form.pending || !form.canEdit}
+        onChange={(event) => {
+          form.setDefinition((value) => ({
+            ...value,
+            payload: CanonicalTemplateDraft.parse({
+              ...value.payload,
+              summary: event.target.value,
+            }),
+          }));
+        }}
+      />
+    </TemplateDisclosure>
   );
 }
 

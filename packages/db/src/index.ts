@@ -63,3 +63,8 @@ export {
   recoverRetainedRootResolution,
   type RetainedRootResolutionScope,
 } from './retained-root-resolution';
+
+export * from './work-schedule-storage';
+export * from './work-schedule-history';
+export type { NativeScheduleDateOwnership } from './schema/work-schedule-date-ownership';
+export { hashScheduleArchive } from './work-schedule-archive';

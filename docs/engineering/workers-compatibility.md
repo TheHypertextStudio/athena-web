@@ -1,85 +1,89 @@
-# Docket Workers compatibility
+# Docket Workers operations
 
-## Current commands and source
+## Setup and native commands
 
-Use the pinned native Next/OpenNext/Wrangler packages through the scripts in
-[the web README](../../apps/web/README.md):
+Use `./bootstrap worktree prepare` and the pinned Node, pnpm, Next, OpenNext
+and Wrangler packages. See the [web README](../../apps/web/README.md) for the
+public build inputs and environment configuration.
 
 ```sh
-pnpm exec turbo run build:worker --filter=@docket/web
+pnpm exec turbo run build:worker --filter=@docket/web --concurrency=1
 pnpm --dir apps/web preview:worker --env staging
 ```
 
-The Turbo task preserves monorepo prerequisite builds; the application script builds Next with
-webpack, its existing service worker and OpenNext. Native preview populates local cache and starts
-Wrangler. Native `deploy:worker` and `upload:worker` accept `--env staging` or `--env production`;
-both write remote cache and provider state, and deploy serves the new version. Production requires
-explicit approval and complete configuration/recovery acceptance. No automatic provider deployment
-or custom candidate/promote workflow is enabled. The conventional manual staging workflow described
-in the web README requires exact-main successful CI, a main-only staging environment restriction and a live main-ref
-freshness check; its provider/auth prerequisites must be established before dispatch.
+Turbo owns the monorepo prerequisites. The application builds Next with
+webpack, its existing service worker and official OpenNext output. Native
+preview populates its local cache and starts Wrangler. Keep backend-dependent
+local acceptance separate from provider staging.
 
-`wrangler.jsonc` directly bundles the application-owned Worker around `.open-next/worker.js` with
-native assets, Images and environment-specific R2 cache. It preserves the API/auth gateway,
-request-local host configuration, dynamic health, native streaming/cookies and the four-hour image
-TTL. There is no flat-module artifact assembly, duplicate prebuilt configuration, shared Python
-lifecycle, shipping-input wrapper or custom release-identity protocol.
+`apps/web/wrangler.jsonc` is the source for each environment's assets, Images,
+R2 cache, self-reference and public routing inputs. OpenNext owns `.open-next`
+modules, assets and cache seeds. The application Worker preserves API/auth
+forwarding, request-local host configuration, streaming/cookies and image TTL.
+Use `cf` for Cloudflare account/resource administration.
 
-Shared company config, genuine private package lock and Mintlify configuration generation remain.
-Ordinary Node/Vercel behavior, backend/native publisher triggers, mandatory CI checks and existing
-source policies remain. Completed one-off lock generation, metadata-only audit and branch-specific
-manual CI plumbing have been removed. Temporary source publication holds and the proposed Vercel
-main-build exclusion have also been removed. Source was integrated at `2a5ab95f` after the
-authenticated production backend baseline and explicit approval of the existing automatic
-backend rollout. Frontend production traffic approval remains separate.
+## Protected staging
 
-Staging uses native OpenNext `--rclone` with S3 credentials restricted to its existing cache bucket,
-`RCLONE_S3_NO_CHECK_BUCKET=true` and Wrangler `--no-x-provision`. The Worker token needs only its
-staging Worker. See the web README for exact secret names, clean-checkout requirements and the
-optional peer's executable-download limitation. This changes deployment authentication, not the
-OpenNext cache adapters or application cache format; live upload/deployment remains pending.
+The frontend is `https://docket-staging.hypertext.studio`, using
+`docket-web-staging` and `docket-web-staging-cache`. Its API remains the separate
+`docket-api-staging` Cloud Run service. Match the API's web origin, trusted
+origins/hosts and passkey RP to the frontend; keep the API/auth origin unchanged
+and cookies host-only through the same-origin Worker gateway. See
+[deployment](deployment.md#lattice-staging-boundary) for OAuth, Lattice,
+data-isolation and credential-reenrollment requirements.
 
-## Compatibility evidence and limits
+The manual **Deploy Workers staging** workflow requires successful ordinary CI
+for the exact main commit, a protected staging environment and a fresh main-ref
+check immediately before deployment. Jobs are serialized. It builds fresh
+staging output from public inputs declared in Wrangler; source publication
+does not directly deploy this frontend.
 
-The original unchanged Next 16.2.7/OpenNext 1.19.0 experiment reached native Next compilation,
-TypeScript and route generation, then failed with `Node.js middleware is not currently supported`.
-The supported pair now uses Next 16.3.8/OpenNext 1.20.10, React 19.2.7 and Wrangler 4.148.0 with
-Docket's existing Node Proxy. Installed peers and native packaging passed earlier. OpenNext's Node
-middleware bundler is experimental and not officially maintained; no Edge rewrite or peer-range
-relaxation was introduced.
+Its Worker credential is limited to the staging Worker, and its S3 object
+credentials are limited to the staging cache bucket. The native command is:
 
-Earlier local packaging/dry-run receipts and successful source CI (`38134002339`) predate this
-command simplification. They do not prove the new native preview/deploy path, live Worker journeys
-or provider readiness. The source cleanup permits static checks and normal mandatory commit hooks;
-no new/manual tests, native build, installation or provider operations are included.
+```sh
+pnpm --dir apps/web deploy:worker --env staging --rclone --no-x-provision --env-file /dev/null
+```
 
-For the disposable backend/database/browser stack, use:
+The protected environment supplies `CLOUDFLARE_API_TOKEN`, `CF_ACCOUNT_ID`,
+`CLOUDFLARE_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` and
+`RCLONE_S3_NO_CHECK_BUCKET=true`. OpenNext populates the selected cache before
+invoking native Wrangler. `--no-x-provision` requires resources to exist.
+The optional `rclone.js` peer downloads its native executable separately from
+the npm lock. Keep deployment dotenv files absent; OpenNext reads them
+independently of Wrangler's final `--env-file` setting.
+
+## Local application acceptance
+
+Use the existing disposable backend/database/browser runner:
 
 ```sh
 RELEASE_WEB_RUNTIME=workers RELEASE_ENV_FILE=/dev/null pnpm test:release
 ```
 
-The existing runner uses exact local application/API/brief hosts and an explicit local opt-in;
-only its CLI compatibility override permits loopback fetches. Provider configs keep
-`global_fetch_strictly_public`. Native preview now seeds its own local R2 cache. Existing product
-checks, migrations and cleanup are retained, while the removed custom release-marker case is
-retired with its endpoint. The default Node acceptance branch remains the reference.
+It owns PostgreSQL, migrations, synthetic accounts, processes and cleanup.
+Its explicit local opt-in and compatibility override permit only the declared
+loopback topology. Provider configs retain `global_fetch_strictly_public`.
+The ordinary Node branch remains the reference. Do not introduce a second
+stack, archive, lifecycle runner, identity endpoint or cache uploader.
 
-## Staging and production acceptance
+## Production and recovery
 
-The intended staging frontend is `https://docket-staging.hypertext.studio` against the existing
-isolated API `https://docket-api-staging-770668668034.us-central1.run.app`. Authenticated Google
-Console inspection on October 11 confirmed revision `docket-api-staging-00008-4qv` serving all
-traffic at that API URL. Source binds the intended Workers frontend RP, but the backend's web URL,
-trusted origin and RP still name `docket-staging-gilt.vercel.app`. Reconcile actual
-server trusted origins/hosts/RP/cookies, OAuth and Lattice registrations before synthetic browser
-auth acceptance; no new backend is required. See the web README for exact runtime bindings and
-compile inputs. Do not infer provisioning or auth readiness from checked-in values.
+Vercel remains the production frontend until the independently approved
+Workers cutover. The source declares the production app/API, passkey and
+Publishing identities. Confirm actual route ownership, TLS, bindings,
+credentials and prior deployment/alias reversal before applying routes.
+Use a fresh production build with matching public inputs, never staging output.
 
-Retain current Vercel production until actual upload/startup/CPU, native Images/cache, streaming and
-abort, private-viewer/logout, authenticated and public/docs/MCP/Publishing journeys all pass on the
-intended provider. Current production Worker API/RP/brief values are incomplete and fail closed.
-Before production approval, verify actual bindings/domain authority, canonical/association/docs
-identity and complete prior deployment/alias recovery. Record exact build/source/version identities
-using native deployment metadata; no custom release endpoint is required. Provider plan limits and
-runtime budgets must be checked at that time rather than inferred from old dry-run sizes.
+Native OpenNext `deploy:worker` and `upload:worker` both write remote cache and
+provider state. `deploy` serves the new version; `upload` alone does not accept
+the application. Use native version/deployment history for code rollback and
+retain independent DNS/route reversal steps. Keep prior hosting through the
+agreed observation and recovery window.
+
+Accept real startup/runtime behavior, Images/cache and invalidation,
+streaming/abort, private-viewer/logout, auth, docs/MCP and Publishing journeys
+against the selected provider. The Node Proxy middleware adapter remains
+experimental, so builds and dry runs cannot establish runtime parity. Keep
+native/backend publishing and ordinary CI gates; frontend cutover approval
+does not replace their existing release conditions.

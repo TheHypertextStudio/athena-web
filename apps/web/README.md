@@ -203,19 +203,24 @@ The staging configuration names `docket-web-staging` and `docket-web-staging-cac
 | `API_URL`                   | `https://docket-api-staging-770668668034.us-central1.run.app` |
 | `BETTER_AUTH_PASSKEY_RP_ID` | `docket-staging.hypertext.studio`                             |
 
-These are intended frontend bindings, not proof that server auth has transitioned. Authenticated
-Google Console inspection on October 11 confirmed revision `docket-api-staging-00008-4qv` at 100%
-traffic and the API URL above. Its web URL, trusted origin and RP still name
-`docket-staging-gilt.vercel.app`, and its allowed hosts contain that frontend and the native API.
-Coordinate its
-`WEB_URL`, trusted origins, allowed hosts, RP, cookie domain, enabled OAuth callbacks and Lattice
-metadata/callback identity before browser acceptance; retain isolated data and secret references.
-Keep the prior frontend/API configuration for recovery. Old-stage passkeys need not work under a
-new RP, and competing stage publication must be reconciled after the Workers frontend is ready.
+Match the staging API's `WEB_URL` and passkey RP to these frontend bindings.
+Place the frontend first in trusted origins and include the frontend and native
+API in the allowed hosts. Keep its API/auth origin unchanged and cookies
+host-only; the Worker supplies the existing same-origin auth gateway. Retain
+isolated data and secret references and the prior public configuration for
+reversal. Passkeys enrolled under a previous RP need recovery and reenrollment.
+
+Configure each enabled OAuth provider's exact frontend callback before enabling
+it. Publish and verify the staging Lattice client metadata before changing its
+client ID, preserving the previous identity for existing grants. The preview's
+staff Access challenge must not replace the public metadata document needed by
+the provider. Neither source bindings nor a successful config response establish
+passkey, session, Lattice or data-isolation acceptance.
 
 Vercel remains the active production host. Native Node Proxy middleware is experimental in this
 OpenNext version. Actual upload/startup/CPU, Images/cache, abort/streaming, private-viewer/logout,
 authenticated journeys and isolated staging auth/data remain required. Production cutover also
 requires verified canonical/association/docs identity, complete production routing/bindings and a
-reviewed restoration of the prior Vercel deployment and aliases. No provider changes, automatic
-deployment, publication hold or main integration are part of this cleanup.
+reviewed restoration of the prior Vercel deployment and aliases. The ordinary
+backend release pipeline remains separate from the manual frontend staging
+workflow and the separately approved frontend production cutover.

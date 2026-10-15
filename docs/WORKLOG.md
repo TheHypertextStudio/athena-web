@@ -7,6 +7,24 @@
 
 ## Active Tasks
 
+### [WEBSITE-STAGING-AUTH] Align the protected Workers frontend and staging API
+
+- **Status**: IN PROGRESS
+- **Priority**: P1
+- **Description**: Use one explicit frontend origin and passkey RP across the protected Workers
+  site and its existing isolated Cloud Run API. Preserve host-only cookies through the same-origin
+  auth gateway, separate staging data and secrets, and the existing production release system.
+- **Context**: The staging frontend is `https://docket-staging.hypertext.studio`. OAuth callbacks
+  and Lattice's public metadata identity must match that environment before application acceptance.
+  Keep the prior public configuration for reversal and preserve existing client grant identities
+  during the Lattice transition. See `docs/engineering/deployment.md`.
+- **Subtasks**:
+  - [x] Align the staging API's web origin, trusted origins/hosts and passkey RP.
+  - [x] Read the deployed public origin in existing staging operations instead of hardcoding Vercel.
+  - [x] Validate the affected tooling and standardize staging operation documentation.
+  - [ ] Accept the deployed Workers frontend's auth/cookies, isolated data and recovery.
+  - [ ] Verify public client metadata and enabled OAuth/Lattice registrations before switching identity.
+
 ### [LEGAL-POLICIES-008] Keep published policies clear and evidence-supported
 
 - **Status**: REVIEW

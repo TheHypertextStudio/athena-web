@@ -3,7 +3,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import postgres from 'postgres';
-import { boundSecret, gcloud, runtime } from './lattice-runtime-inspection';
+import { boundSecret, gcloud, runtime, runtimeWebOrigin } from './lattice-runtime-inspection';
 import {
   assertStagingBindings,
   assertStagingFixture,
@@ -175,7 +175,7 @@ function configureStagingOperator(stage: ReturnType<typeof runtime>): string {
     process.env[name] = boundSecret(stage, name);
   }
   // Approval imports Auth and MCP configuration, but rejection sends neither mail nor tool calls.
-  process.env['WEB_URL'] = 'https://docket-staging-gilt.vercel.app';
+  process.env['WEB_URL'] = runtimeWebOrigin(stage.revision);
   process.env['API_URL'] = stage.url;
   process.env['BETTER_AUTH_URL'] = stage.url;
   process.env['SKIP_ENV_VALIDATION'] = '1';

@@ -30,16 +30,28 @@ do not depend on a cold start.
 
 ### Lattice staging boundary
 
-`docket-staging` is a separate Vercel project whose public origin is
-`https://docket-staging-gilt.vercel.app`. Its passkey RP ID is that exact hostname. The staging API
+The protected Workers frontend is `https://docket-staging.hypertext.studio`.
+Its passkey RP ID is that exact hostname. The staging API
 must run as a separate `docket-api-staging` Cloud Run service with `APP_MODE=staging`, its own
 Neon schema-only branch, and separate `DATABASE_URL`, `BETTER_AUTH_SECRET`, `CRON_SECRET`, and
 `CREDENTIALS_ENCRYPTION_KEY` secrets. Never copy production Docket account or grant rows into
-that branch. Do not point the staging web project at `api.clearthedocket.com`.
+that branch. Do not point the staging frontend at `api.clearthedocket.com`.
+
+Set the API's `WEB_URL` to the Workers origin, place that origin first in
+`BETTER_AUTH_TRUSTED_ORIGINS`, and include the exact frontend and native API
+hostnames in `BETTER_AUTH_ALLOWED_HOSTS`. Keep `BETTER_AUTH_URL` at the staging
+API origin. Leave `BETTER_AUTH_COOKIE_DOMAIN` unset: the existing same-origin
+Worker gateway forwards `/api/auth`, so the browser receives host-only frontend
+cookies. Retain the prior public configuration for reversal. Passkeys enrolled
+on the old Vercel RP require the existing recovery/sign-in path and reenrollment;
+changing configuration does not migrate their credentials.
 
 Staging uses real OAuth, Lattice, and mail adapters. The `local` and `test` modes use mocks and
 cannot establish a staging round trip. Set its public Lovelace client ID to
-`https://docket-staging-gilt.vercel.app/.well-known/lattice-client.json`; the metadata document must
+`https://docket-staging.hypertext.studio/.well-known/lattice-client.json` only
+after Lovelace can fetch and verify that public document without a staff login.
+Keep the rest of the preview protected. Preserve the previous actual identity
+in `LATTICE_LEGACY_CLIENT_ID` before switching. The metadata document must
 publish the staging API callback. Lovelace's issuer, gateway, and the existing Studio daemon may
 be shared as the external device under test; their grant in staging belongs only to the staging
 Docket account. Disable optional Docket integrations unless their staging credentials and callback

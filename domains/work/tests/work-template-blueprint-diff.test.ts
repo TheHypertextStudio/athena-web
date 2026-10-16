@@ -230,3 +230,181 @@ it('refuses previews whose combined existing and new work exceed 500 nodes', () 
     diffBlueprint({ mode: 'update', selected: input(), current, currentDependencies: [] }),
   ).toThrow(/500|limit/i);
 });
+
+describe('selective dependency ownership and terminal protection', () => {
+  const base = publication(9, 'task');
+  const root = publication(
+    2,
+    'project',
+    [step('a'), step('b')],
+    [{ blockerStepKey: 'a', blockedStepKey: 'b' }],
+  );
+  const selected = input({
+    graph: graph(root, [base], [resolution(['a'], base), resolution(['b'], base)]),
+  });
+  const edge = { blockerPath: ['a'], blockedPath: ['b'], serviceOwned: true };
+
+  it('offers a new dependency unchecked and retains an already present edge', () => {
+    const current = existing(planBlueprint(selected));
+    expect(
+      diffBlueprint({ mode: 'update', selected, current, currentDependencies: [] }),
+    ).toMatchObject([
+      { kind: 'add_dependency', blockerPath: ['a'], blockedPath: ['b'], selectedByDefault: false },
+    ]);
+    expect(
+      diffBlueprint({ mode: 'update', selected, current, currentDependencies: [edge] }),
+    ).toEqual([]);
+  });
+
+  it.each([
+    { endpoint: 'a', state: 'completed' as const },
+    { endpoint: 'a', state: 'canceled' as const },
+    { endpoint: 'b', state: 'completed' as const },
+    { endpoint: 'b', state: 'canceled' as const },
+  ])('does not add dependencies involving $state endpoint $endpoint', ({ endpoint, state }) => {
+    const current = existing(planBlueprint(selected)).map((node) =>
+      node.path[0] === endpoint ? { ...node, state, everStarted: true } : node,
+    );
+    expect(diffBlueprint({ mode: 'update', selected, current, currentDependencies: [] })).toEqual(
+      [],
+    );
+  });
+
+  it('removes only a service-owned generated edge during Update, never during Change', () => {
+    const withoutEdges = {
+      ...root,
+      definition: {
+        ...root.definition,
+        blueprint: { ...root.definition.blueprint, dependencies: [] },
+      },
+    };
+    const next = {
+      ...selected,
+      graph: graph(withoutEdges, [base], [resolution(['a'], base), resolution(['b'], base)]),
+    };
+    const current = existing(planBlueprint(selected));
+    expect(
+      diffBlueprint({ mode: 'update', selected: next, current, currentDependencies: [edge] }),
+    ).toMatchObject([
+      {
+        kind: 'remove_dependency',
+        blockerPath: ['a'],
+        blockedPath: ['b'],
+        selectedByDefault: false,
+      },
+    ]);
+    expect(
+      diffBlueprint({ mode: 'change', selected: next, current, currentDependencies: [edge] }),
+    ).toEqual([]);
+    expect(
+      diffBlueprint({
+        mode: 'update',
+        selected: next,
+        current,
+        currentDependencies: [{ ...edge, serviceOwned: false }],
+      }),
+    ).toEqual([]);
+    const manual = current.map((node) =>
+      node.path[0] === 'a' ? { ...node, sourceStepId: null, sourceWorkTypeId: null } : node,
+    );
+    expect(
+      diffBlueprint({
+        mode: 'update',
+        selected: next,
+        current: manual,
+        currentDependencies: [edge],
+      }).some((change) => change.kind === 'remove_dependency'),
+    ).toBe(false);
+  });
+
+  it.each(['a', 'b'])('preserves an old edge involving terminal endpoint %s', (endpoint) => {
+    const withoutEdges = {
+      ...root,
+      definition: {
+        ...root.definition,
+        blueprint: { ...root.definition.blueprint, dependencies: [] },
+      },
+    };
+    const current = existing(planBlueprint(selected)).map((node) =>
+      node.path[0] === endpoint ? { ...node, state: 'completed' as const } : node,
+    );
+    expect(
+      diffBlueprint({
+        mode: 'update',
+        selected: {
+          ...selected,
+          graph: graph(withoutEdges, [base], [resolution(['a'], base), resolution(['b'], base)]),
+        },
+        current,
+        currentDependencies: [edge],
+      }),
+    ).toEqual([]);
+  });
+});
+
+describe('explicit per-field timing adoption', () => {
+  it('offers a changed rule even when its currently derived date is unchanged', () => {
+    const base = publication(9, 'task');
+    const root = publication(2, 'project', [
+      step('child', 'task', {
+        actorRule: 'parent_responsible',
+        dates: {
+          dueDate: {
+            kind: 'anchor',
+            anchor: { kind: 'parent' },
+            offset: { days: -21, unit: 'calendar' },
+            snap: { direction: 'next', weekday: 4, inclusive: true },
+          },
+        },
+      }),
+    ]);
+    const selected = input({ graph: graph(root, [base], [resolution(['child'], base)]) });
+    expect(
+      diffBlueprint({ mode: 'update', selected, current: existing(), currentDependencies: [] }),
+    ).toMatchObject([
+      {
+        kind: 'set_derived_date',
+        field: 'dueDate',
+        previous: '2026-09-17',
+        value: '2026-09-17',
+        selectedByDefault: false,
+      },
+    ]);
+  });
+  it('preserves a manual clear and offers a binding for a genuinely absent field', () => {
+    const current = existing();
+    const child = present(current[1]);
+    const base = { mode: 'update' as const, selected: input(), currentDependencies: [] };
+    expect(
+      diffBlueprint({
+        ...base,
+        current: [present(current[0]), { ...child, dates: { dueDate: null }, dateBindings: {} }],
+      }),
+    ).toEqual([]);
+    expect(
+      diffBlueprint({
+        ...base,
+        current: [present(current[0]), { ...child, dates: {}, dateBindings: {} }],
+      }),
+    ).toMatchObject([
+      { kind: 'set_derived_date', field: 'dueDate', previous: null, value: '2026-09-17' },
+    ]);
+  });
+  it.each(['completed', 'canceled'] as const)(
+    'does not offer changed derived dates on %s work',
+    (state) => {
+      const current = existing();
+      expect(
+        diffBlueprint({
+          mode: 'update',
+          selected: input(),
+          current: [
+            present(current[0]),
+            { ...present(current[1]), state, dates: { dueDate: '2026-09-01' } },
+          ],
+          currentDependencies: [],
+        }),
+      ).toEqual([]);
+    },
+  );
+});

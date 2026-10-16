@@ -7,6 +7,22 @@
 
 ## Active Tasks
 
+### [WEBSITE-CI-WORK-COVERAGE] Cover work-planning boundaries through ordinary domain tests
+
+- **Status**: COMPLETE
+- **Priority**: P1
+- **Description**: Preserve the ordinary work-package coverage gate by exercising cycle arithmetic,
+  civil-date limits, portable captures, selective changes and planner rules against the real pure
+  domain implementation.
+- **Approach**: Extend existing domain test files with meaningful boundary and refusal cases. Keep
+  production code, coverage requirements and test inclusion intact.
+- **Files**: Existing cadence, blueprint dates/capture/diff/preview tests and this worklog.
+- **Subtasks**:
+  - [x] Cover calendar/cycle limits and fallback planning contexts.
+  - [x] Cover capture portability and refusals, selective dependencies/dates and explicit overrides.
+  - [x] Pass the ordinary package coverage gate and affected lint/type/format checks.
+  - [x] Independently review the added assertions and unchanged production/gate scope.
+
 ### [WEBSITE-CI-ROUTE-AUTHORITY] Keep writer fixtures aligned with persisted creation authority
 
 - **Status**: COMPLETE

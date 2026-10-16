@@ -54,7 +54,7 @@ function dryBuild(filter: string): DryRun {
       maxBuffer: 64 * 1024 * 1024,
       // The dry run only reads the task graph, never a package's env contract; pinning this
       // keeps the plan identical whether or not a shell happens to export production values.
-      env: { ...process.env, SKIP_ENV_VALIDATION: '1' },
+      env: { ...process.env, SKIP_ENV_VALIDATION: '1', TURBO_CACHE: 'local:rw' },
     },
   );
   return JSON.parse(stdout) as DryRun;

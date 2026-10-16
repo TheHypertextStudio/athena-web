@@ -27,6 +27,19 @@ function cacheAction(): CacheAction {
 }
 
 describe('signed Cloud Run Turbo cache authentication', () => {
+  it('defaults local Turbo runs to the signed Studio cache endpoint and namespace', () => {
+    const source = readFileSync(join(REPO_ROOT, 'turbo.json'), 'utf8');
+    const remoteCache = JSON.parse(
+      assertDefined(/"remoteCache"\s*:\s*(\{[^}]*\})/.exec(source)?.[1]),
+    ) as unknown;
+
+    expect(remoteCache).toEqual({
+      apiUrl: 'https://docket-turbo-cache-mdchlo736a-uc.a.run.app',
+      teamSlug: 'docket',
+      signature: true,
+    });
+  });
+
   it.each(['ci', 'e2e'])('keeps %s local-only until a cache identity is minted', (name) => {
     const source = readFileSync(join(REPO_ROOT, `.github/workflows/${name}.yml`), 'utf8');
     const workflow = parseYaml(source) as { env: Record<string, string> };

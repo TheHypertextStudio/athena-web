@@ -9,7 +9,7 @@
 
 ### [STUDIO-PROVIDER-EXIT] Preserve storage and shared caching without Vercel
 
-- **Status**: VALIDATED
+- **Status**: DONE
 - **Description**: Replace Docket's Vercel Blob and Turbo cache providers while retaining exports,
   authenticated artifact access, avatars, deletion behavior, signed caching and local development.
 - **Approach**: Use private Google Cloud Storage through runtime identity and the maintained Turbo
@@ -19,8 +19,10 @@
   bundling succeeds. Actual cache upload and remote restoration match; invalid signing keys miss,
   anonymous requests fail and a 40 MiB HTTP/2 round trip preserves bytes. Retained object hashes
   match the destination. Studio's Pages-filtered provider inventory is empty.
-- **Outcome**: Source and private storage/cache foundation are ready for production integration.
-  Retained avatar reference updates and legacy credential/store retirement follow the API rollout.
+- **Outcome**: The production API serves private GCS artifacts and both retained avatars match
+  their original bytes through stable API URLs. The legacy store, dedicated Vercel cache token,
+  obsolete GitHub credential and Blob Secret Manager credential are removed. GitHub WIF cache
+  authentication succeeds. Native Turbo defaults select the Studio endpoint for local runs too.
 
 ### [HOST-ONLY-ACCEPTANCE] Keep test acceptance independent of local cookie scope
 

@@ -279,7 +279,10 @@ That service account has `roles/run.invoker` only on the cache service. The shar
 mints an audience-bound ID token immediately before each cacheable task after installation.
 Pull requests, other refs, other repositories and incomplete configuration keep `TURBO_CACHE=local:rw`;
 they receive neither a cache token nor the HMAC signing secret. An unset `TURBO_API` cannot select
-Vercel's default remote endpoint in these workflows. `TURBO_TEAM=docket` selects an object namespace;
+Vercel's default remote endpoint in these workflows. Root `turbo.json` also defaults local runs to
+`https://docket-turbo-cache-mdchlo736a-uc.a.run.app` and namespace `docket`, including when a machine
+has global Turbo authentication. `TURBO_API` and `TURBO_TEAM` override those native defaults for
+another bootstrapped project. `TURBO_TEAM=docket` selects an object namespace;
 the dedicated endpoint, identities and bucket enforce the repository boundary.
 
 The server receives `TURBO_REMOTE_CACHE_SIGNATURE_KEY` from its pinned version of

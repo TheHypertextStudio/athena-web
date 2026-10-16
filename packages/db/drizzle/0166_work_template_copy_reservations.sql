@@ -84,10 +84,26 @@ CREATE POLICY copy_entry_acceptor_private ON work_template_copy_entry FOR ALL TO
 --> statement-breakpoint
 -- Non-login helper owner has no source/receipt-body access and is never granted to an application role.
 --> statement-breakpoint
+-- Only the bootstrap superuser may retain an ADMIN-only grant to this migration creator.
 DO $$ BEGIN
  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='docket_template_copy_integrity') THEN
   IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='docket_template_copy_integrity' AND (rolcanlogin OR rolsuper OR rolbypassrls OR rolcreaterole OR rolcreatedb OR rolreplication OR rolinherit))
-    OR EXISTS(SELECT 1 FROM pg_auth_members m JOIN pg_roles r ON r.oid=m.roleid OR r.oid=m.member WHERE r.rolname='docket_template_copy_integrity')
+    OR EXISTS(
+      SELECT 1 FROM pg_auth_members m
+      JOIN pg_roles r ON r.oid=m.roleid OR r.oid=m.member
+      WHERE r.rolname='docket_template_copy_integrity'
+      AND NOT COALESCE(
+        current_setting('server_version_num')::integer >= 160000
+        AND m.roleid=r.oid
+        AND m.member=(SELECT oid FROM pg_roles WHERE rolname=CURRENT_USER AND rolcreaterole AND NOT rolsuper)
+        AND m.grantor=10
+        AND EXISTS(SELECT 1 FROM pg_roles WHERE oid=m.grantor AND rolsuper)
+        AND m.admin_option
+        AND ((to_jsonb(m)->>'inherit_option')::boolean IS FALSE)
+        AND ((to_jsonb(m)->>'set_option')::boolean IS FALSE),
+        false
+      )
+    )
     OR EXISTS(SELECT 1 FROM pg_roles r JOIN pg_class c ON c.relowner=r.oid JOIN pg_namespace n ON n.oid=c.relnamespace WHERE r.rolname='docket_template_copy_integrity' AND n.nspname='public')
     OR EXISTS(SELECT 1 FROM pg_roles r JOIN pg_proc p ON p.proowner=r.oid JOIN pg_namespace n ON n.oid=p.pronamespace WHERE r.rolname='docket_template_copy_integrity' AND n.nspname='public')
     OR EXISTS(SELECT 1 FROM pg_roles r JOIN pg_namespace n ON n.nspowner=r.oid WHERE r.rolname='docket_template_copy_integrity' AND n.nspname='public')
@@ -99,7 +115,7 @@ END $$;
 --> statement-breakpoint
 GRANT USAGE,CREATE ON SCHEMA public TO docket_template_copy_integrity;
 --> statement-breakpoint
-GRANT docket_template_copy_integrity TO CURRENT_USER;
+GRANT docket_template_copy_integrity TO CURRENT_USER GRANTED BY CURRENT_USER;
 --> statement-breakpoint
 GRANT SELECT(id,organization_id,accepting_actor_key,accepting_actor_id,mode,root_entry_keys,receipt_key,receipt_id,state,installation_transaction_id,installed_at,undone_at,undo_outcomes) ON work_template_copy_bundle TO docket_template_copy_integrity;
 --> statement-breakpoint
@@ -441,4 +457,26 @@ GRANT EXECUTE ON FUNCTION docket_template_has_copy_reservation(text,text) TO CUR
 --> statement-breakpoint
 REVOKE CREATE ON SCHEMA public FROM docket_template_copy_integrity;
 --> statement-breakpoint
-REVOKE docket_template_copy_integrity FROM CURRENT_USER;
+REVOKE docket_template_copy_integrity FROM CURRENT_USER GRANTED BY CURRENT_USER;
+--> statement-breakpoint
+-- PostgreSQL 16+ retains its bootstrap ADMIN-only creator grant, never runtime access.
+DO $$ BEGIN
+ IF NOT EXISTS(SELECT 1 FROM pg_roles WHERE rolname='docket_template_copy_integrity' AND NOT rolcanlogin AND NOT rolsuper AND NOT rolbypassrls AND NOT rolcreaterole AND NOT rolcreatedb AND NOT rolreplication AND NOT rolinherit)
+ OR EXISTS(
+      SELECT 1 FROM pg_auth_members m
+      JOIN pg_roles r ON r.oid=m.roleid OR r.oid=m.member
+      WHERE r.rolname='docket_template_copy_integrity'
+      AND NOT COALESCE(
+        current_setting('server_version_num')::integer >= 160000
+        AND m.roleid=r.oid
+        AND m.member=(SELECT oid FROM pg_roles WHERE rolname=CURRENT_USER AND rolcreaterole AND NOT rolsuper)
+        AND m.grantor=10
+        AND EXISTS(SELECT 1 FROM pg_roles WHERE oid=m.grantor AND rolsuper)
+        AND m.admin_option
+        AND ((to_jsonb(m)->>'inherit_option')::boolean IS FALSE)
+        AND ((to_jsonb(m)->>'set_option')::boolean IS FALSE),
+        false
+      )
+    ) THEN
+  RAISE EXCEPTION 'Copy integrity role cleanup is not satisfied'; END IF;
+END $$;

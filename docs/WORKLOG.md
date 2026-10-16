@@ -7,6 +7,25 @@
 
 ## Active Tasks
 
+### [COPY-MIGRATION-CREATOR-ROLE] Preserve managed PostgreSQL creator membership safely
+
+- **Status**: REVIEW
+- **Description**: Let the canonical copy-integrity migrations run as a non-superuser role creator
+  while preserving the helper's isolation, narrow privileges and integrity constraints.
+- **Approach**: Permit only PostgreSQL's bootstrap-superuser administrative grant to the exact
+  migration principal, with inheritance and role switching disabled. Explicitly pair temporary
+  grants and revocations by grantor, then enforce the final role boundary.
+- **Files**: Copy reservation and reference-integrity migrations, existing canonical migration
+  checks and this worklog.
+- **Validation**: The affected checks execute the shipped role SQL in isolated PGlite as a
+  non-superuser creator and reject unsafe role or membership changes. Keep the ordinary release
+  checks and production migration workflow as the deployment owner.
+- **Outcome**: Nine affected checks, database types, lint, formatting and independent review pass.
+  The correction is ready for the ordinary deployment workflow; production acceptance remains
+  pending. The existing shared PostgreSQL fixture was preserved rather than reset without ownership.
+- **Learnings**: Administrative ownership of a created role is distinct from inheriting or switching
+  into it. Migration guards must account for the provider's mandatory ownership relationship.
+
 ### [WEBSITE-WWW-CANONICAL] Preserve the frontend's canonical www redirect on Workers
 
 - **Status**: COMPLETE

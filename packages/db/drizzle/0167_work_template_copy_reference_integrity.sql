@@ -3,15 +3,31 @@ ALTER TABLE "work_template_copy_entry" ADD CONSTRAINT "copy_entry_reference_epoc
 --> statement-breakpoint
 -- Revalidate the narrow preexisting owner before any privilege extension.
 --> statement-breakpoint
+-- Only the bootstrap superuser may retain an ADMIN-only grant to this migration creator.
 DO $$ BEGIN
  IF NOT EXISTS(SELECT 1 FROM pg_roles WHERE rolname='docket_template_copy_integrity' AND NOT rolcanlogin AND NOT rolsuper AND NOT rolbypassrls AND NOT rolcreaterole AND NOT rolcreatedb AND NOT rolreplication AND NOT rolinherit)
- OR EXISTS(SELECT 1 FROM pg_auth_members m JOIN pg_roles r ON r.oid=m.roleid OR r.oid=m.member WHERE r.rolname='docket_template_copy_integrity') THEN
+ OR EXISTS(
+      SELECT 1 FROM pg_auth_members m
+      JOIN pg_roles r ON r.oid=m.roleid OR r.oid=m.member
+      WHERE r.rolname='docket_template_copy_integrity'
+      AND NOT COALESCE(
+        current_setting('server_version_num')::integer >= 160000
+        AND m.roleid=r.oid
+        AND m.member=(SELECT oid FROM pg_roles WHERE rolname=CURRENT_USER AND rolcreaterole AND NOT rolsuper)
+        AND m.grantor=10
+        AND EXISTS(SELECT 1 FROM pg_roles WHERE oid=m.grantor AND rolsuper)
+        AND m.admin_option
+        AND ((to_jsonb(m)->>'inherit_option')::boolean IS FALSE)
+        AND ((to_jsonb(m)->>'set_option')::boolean IS FALSE),
+        false
+      )
+    ) THEN
  RAISE EXCEPTION 'Copy integrity role prerequisites are not satisfied'; END IF;
 END $$;
 --> statement-breakpoint
 GRANT USAGE,CREATE ON SCHEMA public TO docket_template_copy_integrity;
 --> statement-breakpoint
-GRANT docket_template_copy_integrity TO CURRENT_USER;
+GRANT docket_template_copy_integrity TO CURRENT_USER GRANTED BY CURRENT_USER;
 --> statement-breakpoint
 GRANT SELECT(reference_epoch),UPDATE(reference_epoch) ON work_template_copy_entry TO docket_template_copy_integrity;
 --> statement-breakpoint
@@ -284,4 +300,26 @@ GRANT EXECUTE ON FUNCTION docket_change_set_has_copy_bundle(text,text) TO CURREN
 --> statement-breakpoint
 REVOKE CREATE ON SCHEMA public FROM docket_template_copy_integrity;
 --> statement-breakpoint
-REVOKE docket_template_copy_integrity FROM CURRENT_USER;
+REVOKE docket_template_copy_integrity FROM CURRENT_USER GRANTED BY CURRENT_USER;
+--> statement-breakpoint
+-- PostgreSQL 16+ retains its bootstrap ADMIN-only creator grant, never runtime access.
+DO $$ BEGIN
+ IF NOT EXISTS(SELECT 1 FROM pg_roles WHERE rolname='docket_template_copy_integrity' AND NOT rolcanlogin AND NOT rolsuper AND NOT rolbypassrls AND NOT rolcreaterole AND NOT rolcreatedb AND NOT rolreplication AND NOT rolinherit)
+ OR EXISTS(
+      SELECT 1 FROM pg_auth_members m
+      JOIN pg_roles r ON r.oid=m.roleid OR r.oid=m.member
+      WHERE r.rolname='docket_template_copy_integrity'
+      AND NOT COALESCE(
+        current_setting('server_version_num')::integer >= 160000
+        AND m.roleid=r.oid
+        AND m.member=(SELECT oid FROM pg_roles WHERE rolname=CURRENT_USER AND rolcreaterole AND NOT rolsuper)
+        AND m.grantor=10
+        AND EXISTS(SELECT 1 FROM pg_roles WHERE oid=m.grantor AND rolsuper)
+        AND m.admin_option
+        AND ((to_jsonb(m)->>'inherit_option')::boolean IS FALSE)
+        AND ((to_jsonb(m)->>'set_option')::boolean IS FALSE),
+        false
+      )
+    ) THEN
+  RAISE EXCEPTION 'Copy integrity role cleanup is not satisfied'; END IF;
+END $$;

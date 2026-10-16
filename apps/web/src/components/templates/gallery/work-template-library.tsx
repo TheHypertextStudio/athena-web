@@ -14,72 +14,17 @@ import {
   Surface,
   Text,
 } from '@docket/ui/primitives';
-import { ChevronRight } from '@docket/ui/icons';
+import { libraryHasDraft } from './work-template-library-order';
 import {
-  libraryDefinition,
-  libraryHasDraft,
-  libraryWorkOrder,
-  type LibraryWorkView,
-} from './work-template-library-order';
+  LibraryDraftDefinitions,
+  LibraryPublishedDefinitions,
+} from './work-template-library-definitions';
+import { LibraryDefineEntry } from './work-template-library-entry';
 import { useVocabulary } from '@docket/ui/hooks';
-import { SettingRow } from '@/components/settings/setting-row';
-import { sectionHref } from '@/components/settings/settings-registry';
+import Link from '@/components/docket-link';
+import { workTemplateHref } from '../work-template-navigation';
 
 const kinds = ['initiative', 'program', 'project', 'task'] as const;
-function WorkDefinitionRows({
-  items,
-  orgId,
-  view,
-}: {
-  readonly items: readonly WorkTemplateOut[];
-  readonly orgId: string;
-  readonly view: LibraryWorkView;
-}): JSX.Element {
-  return (
-    <>
-      {libraryWorkOrder(items, view).map((row) => (
-        <div key={row.key} className={row.depth ? 'ml-4' : ''}>
-          <WorkDefinitionRow
-            item={row.item}
-            orgId={orgId}
-            view={view}
-            relationship={row.relationship}
-          />
-        </div>
-      ))}
-    </>
-  );
-}
-function WorkDefinitionRow({
-  item,
-  orgId,
-  view,
-  relationship,
-}: {
-  readonly item: WorkTemplateOut;
-  readonly orgId: string;
-  readonly view: LibraryWorkView;
-  readonly relationship: string | null;
-}): JSX.Element {
-  const noun = useVocabulary(item.targetType),
-    definition = libraryDefinition(item, view);
-  return (
-    <SettingRow
-      href={`${sectionHref(orgId, 'templates')}/${item.id}`}
-      label={definition.name}
-      description={[
-        relationship,
-        noun,
-        view === 'authoring' && item.status === 'published' ? 'Unpublished edits' : '',
-        view === 'published' && item.latestVersion ? `Version ${item.latestVersion.number}` : '',
-        definition.description,
-      ]
-        .filter(Boolean)
-        .join(' · ')}
-      trailing={<ChevronRight aria-hidden="true" className="text-on-surface-variant size-4" />}
-    />
-  );
-}
 function LibraryGroup({
   title,
   items,
@@ -93,35 +38,16 @@ function LibraryGroup({
 }): JSX.Element | null {
   if (!items.length && !empty) return null;
   return (
-    <Surface as="section" shape="large" pad="none" aria-label={title}>
-      <Text as="h2" token="title-large" className="px-4 pt-4 pb-2">
+    <Surface as="section" shape="large" pad="roomy" aria-label={title}>
+      <Text as="h2" token="title-large" className="mb-5">
         {title}
       </Text>
       {items.length ? (
-        <WorkDefinitionRows items={items} orgId={orgId} view="published" />
+        <LibraryPublishedDefinitions items={items} orgId={orgId} />
       ) : (
         <p className="text-body-medium text-on-surface-variant p-4">{empty}</p>
       )}
     </Surface>
-  );
-}
-function DraftOwnership({
-  title,
-  items,
-  orgId,
-}: {
-  readonly title: string;
-  readonly items: readonly WorkTemplateOut[];
-  readonly orgId: string;
-}): JSX.Element | null {
-  if (!items.length) return null;
-  return (
-    <section aria-label={title}>
-      <Text as="h3" token="title-medium" className="px-4 pt-3">
-        {title}
-      </Text>
-      <WorkDefinitionRows items={items} orgId={orgId} view="authoring" />
-    </section>
   );
 }
 function ContinueDefining({
@@ -133,20 +59,26 @@ function ContinueDefining({
 }): JSX.Element | null {
   if (!drafts.length) return null;
   return (
-    <Surface as="section" shape="large" pad="none" aria-label="Continue defining">
-      <Text as="h2" token="title-large" className="px-4 pt-4">
-        Continue defining
-      </Text>
-      <DraftOwnership
-        title="Your drafts"
-        orgId={orgId}
-        items={drafts.filter((item) => item.scope !== 'team')}
-      />
-      <DraftOwnership
-        title="Team drafts"
-        orgId={orgId}
-        items={drafts.filter((item) => item.scope === 'team')}
-      />
+    <Surface
+      as="section"
+      shape="large"
+      pad="roomy"
+      aria-label="Continue defining"
+      className="flex flex-col gap-6"
+    >
+      <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
+        <Text as="h2" token="title-large">
+          Continue defining
+        </Text>
+        <Button
+          asChild
+          variant="ghost"
+          className="coarse:h-auto h-auto min-h-10 max-w-full py-2 whitespace-normal"
+        >
+          <Link href={workTemplateHref(orgId, '/new')}>Define another kind</Link>
+        </Button>
+      </div>
+      <LibraryDraftDefinitions items={drafts} orgId={orgId} />
     </Surface>
   );
 }
@@ -253,14 +185,22 @@ export function WorkTemplateLibrary({
         .toLowerCase()
         .includes(search.toLowerCase()),
   );
-  const ready = visible.filter((item) => item.status === 'published' && !item.isBase);
+  const ready = visible.filter(
+    (item) => item.status === 'published' && !item.isBase && !libraryHasDraft(item),
+  );
   const drafts = visible.filter(libraryHasDraft);
   const defaults = visible.filter((item) => item.isBase && item.status !== 'archived');
   const archived = visible.filter((item) => item.status === 'archived');
   return (
     <ControlGroup controlSize="xl" orientation="vertical" className="gap-5">
+      {items.some((item) => !item.isBase) ? (
+        <LibrarySearch search={search} kind={kind} setSearch={setSearch} setKind={setKind} />
+      ) : null}
       <ContinueDefining drafts={drafts} orgId={orgId} />
-      <LibrarySearch search={search} kind={kind} setSearch={setSearch} setKind={setKind} />
+      <LibraryDefineEntry
+        orgId={orgId}
+        continuing={items.some((item) => !item.isBase && item.status !== 'archived')}
+      />
       {search || kind ? (
         <p className="text-body-small text-on-surface-variant">
           {visible.length} matching definitions{' '}
@@ -277,16 +217,21 @@ export function WorkTemplateLibrary({
           </Button>
         </p>
       ) : null}
-      <LibraryGroup
-        title="Ready to use"
-        orgId={orgId}
-        items={ready}
-        empty={
-          search || kind
-            ? 'No published definitions match these filters.'
-            : 'Define the work your workspace repeats, or choose starting work from the gallery.'
-        }
-      />
+      {ready.length ||
+      search ||
+      kind ||
+      !visible.some((item) => libraryHasDraft(item) && item.latestVersion) ? (
+        <LibraryGroup
+          title="Ready to use"
+          orgId={orgId}
+          items={ready}
+          empty={
+            search || kind
+              ? 'No published definitions match these filters.'
+              : 'Published definitions appear here. Your drafts stay private until you publish them.'
+          }
+        />
+      ) : null}
       <LibraryManagement
         title="Defaults"
         expandedTitle="Default work"

@@ -72,6 +72,7 @@ describe('capability catalog integrity', () => {
       'workspace:triage',
       'workspace:tasks',
       'workspace:stream',
+      'workspace:work-templates',
       'workspace:library',
       'workspace:initiatives',
       'workspace:programs',
@@ -123,6 +124,7 @@ describe('resolveCapabilities', () => {
 
     expect(ids).not.toContain('settings:workspace:members');
     expect(ids).not.toContain('settings:workspace:publishing');
+    expect(ids).not.toContain('settings:workspace:template-permissions');
     expect(ids).not.toContain('panel:agenda');
     expect(ids).toContain('settings:personal:security');
   });

@@ -65,7 +65,7 @@ it('keeps the exact reserved pin and names its authorized unpublished draft with
   const change = vi.fn();
   render(
     <WorkTemplateBlueprintReferenceFields
-      orgId="org"
+      orgId="01ARZ3NDEKTSV4RRFFQ69G5FAX"
       step={step()}
       templates={[pending]}
       disabled={false}
@@ -80,7 +80,7 @@ it('keeps the exact reserved pin and names its authorized unpublished draft with
   expect(screen.queryByRole('combobox', { name: 'Template version' })).not.toBeInTheDocument();
   expect(screen.getByRole('link', { name: 'Review Vendor booking' })).toHaveAttribute(
     'href',
-    `/orgs/org/settings/templates/${pending.id}?section=review`,
+    `/orgs/01ARZ3NDEKTSV4RRFFQ69G5FAX/work-templates/${pending.id}?section=review`,
   );
   expect(reads.query.mock.calls[0]?.[0].enabled).toBe(false);
   expect(change).not.toHaveBeenCalled();
@@ -90,7 +90,7 @@ it('reviews actual pending draft identity without calling it a fixed publication
   if (!reference) throw new Error('Missing actual reference fixture.');
   render(
     <WorkTemplateReviewNestedVersion
-      orgId="org"
+      orgId="01ARZ3NDEKTSV4RRFFQ69G5FAX"
       template={reference}
       selected={pending}
       name="Book venue"
@@ -104,7 +104,7 @@ it('does not match another reserved identity or offer unrelated private drafts f
   const other = WorkTemplateOut.parse({ ...pending, id: '01ARZ3NDEKTSV4RRFFQ69G5FAW' });
   render(
     <WorkTemplateBlueprintReferenceFields
-      orgId="org"
+      orgId="01ARZ3NDEKTSV4RRFFQ69G5FAX"
       step={step()}
       templates={[other]}
       disabled={false}
@@ -127,7 +127,11 @@ it('shows a numbered publication only when the exact returned version exists', (
     },
   ];
   render(
-    <WorkTemplateReviewNestedVersion orgId="org" template={reference} name="Vendor booking" />,
+    <WorkTemplateReviewNestedVersion
+      orgId="01ARZ3NDEKTSV4RRFFQ69G5FAX"
+      template={reference}
+      name="Vendor booking"
+    />,
   );
   expect(screen.getByText('Vendor booking · Fixed at Version 2')).toBeVisible();
 });

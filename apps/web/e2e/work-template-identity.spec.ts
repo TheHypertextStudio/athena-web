@@ -23,7 +23,7 @@ async function createDraft(
   kind: string,
   name: string,
 ): Promise<WorkTemplateOut> {
-  await page.goto(`/orgs/${orgId}/settings/templates/new`, {
+  await page.goto(`/orgs/${orgId}/work-templates/new`, {
     waitUntil: 'commit',
     timeout: TIMEOUTS.pageReady,
   });
@@ -46,7 +46,7 @@ async function createDraft(
   await page.getByRole('button', { name: 'Save draft', exact: true }).click();
   expect((await response).ok()).toBe(true);
   const draft = (await (await response).json()) as WorkTemplateOut;
-  await expect(page).toHaveURL(new RegExp(`/templates/${draft.id}$`));
+  await expect(page).toHaveURL(new RegExp(`/work-templates/${draft.id}$`));
   await expect(page.getByRole('tab', { name: 'Work', exact: true })).toHaveAttribute(
     'aria-selected',
     'true',
@@ -200,7 +200,7 @@ test('Event project retains its publication, then changes identity without repla
   await expect(
     page.getByRole('button', { name: `Change template: ${name}, Version 1`, exact: true }),
   ).toBeVisible();
-  await page.goto(`/orgs/${orgId}/settings/templates/${draft.id}`, { waitUntil: 'commit' });
+  await page.goto(`/orgs/${orgId}/work-templates/${draft.id}`, { waitUntil: 'commit' });
   await page
     .getByRole('textbox', { name: 'Starting document', exact: true })
     .fill('A revised starting document for future dinners.');

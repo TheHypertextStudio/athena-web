@@ -45,6 +45,20 @@ describe('railAsideFor', () => {
 });
 
 describe('athenaRailUnavailable', () => {
+  it('gives sustained template definition and review the full workspace width', () => {
+    for (const suffix of [
+      '',
+      '/new',
+      '/template-1',
+      '/gallery',
+      '/gallery/review',
+      '/gallery/copies/bundle-1',
+    ]) {
+      expect(athenaRailUnavailable(`/orgs/org_1/work-templates${suffix}`, false, false)).toBe(true);
+    }
+    expect(athenaRailUnavailable('/orgs/org_1/work-templates-other', false, false)).toBe(false);
+  });
+
   it('is true on settings, the calendar, and /athena, and false elsewhere', () => {
     expect(athenaRailUnavailable('/athena', false, false)).toBe(true);
     expect(athenaRailUnavailable('/settings', true, false)).toBe(true);

@@ -51,7 +51,7 @@ A clearly named **Choose starting work** path may select a smaller subset. It st
 
 ## Navigation
 
-1. **Settings → Work templates** remains the durable workspace library. **Continue defining** brings unfinished drafts back into the flow. **Choose starting work** opens the gallery; **Define work** starts the canonical editor. Preserve current private/team/published distinctions and exact version links.
+1. **Work templates** is a dedicated full-page workspace destination beside the work destinations. Unfinished work comes first, with explicit continuation and current prerequisite links. Each work definition retains its available publication beside its unpublished edits. Compact Define another kind and Find controls remain reachable without promoting the gallery over returning work. Authoring permissions alone remain in Settings. **Continue defining** brings unfinished drafts back into the flow. **Choose starting work** opens the gallery; **Define work** starts the canonical editor. Preserve current private/team/published distinctions and exact version links.
 2. **Choose starting work** is a discoverable entry from the created workspace's first-use surface and Work templates. It deep-links into the same gallery, carrying an explicit fork context. Skipping it leads to usable ordinary work; it stays reachable later.
 3. **Gallery** has Suggested and Browse all views. Suggested is contextual and small. Browse all is a grouped searchable list, not a second home dashboard. Selection survives both views.
 4. A real link opens **Gallery / Event** detail. Browser Back returns to the same query, group expansion, selected roots, scroll position and focused row. A detail page supports copying its URL without carrying private source bodies or permission-bearing tokens.
@@ -60,13 +60,13 @@ A clearly named **Choose starting work** path may select a smaller subset. It st
 
 Proposed route map under the existing settings area:
 
-| Destination       | Route shape                                                  | Persisted/URL context                                                                     |
-| ----------------- | ------------------------------------------------------------ | ----------------------------------------------------------------------------------------- |
-| Workspace library | `/orgs/[orgId]/settings/templates`                           | Existing authorized workspace scope                                                       |
-| Gallery browse    | `/orgs/[orgId]/settings/templates/gallery`                   | `view`, `fork`, `category`, `targetType`, `search` and current cursor/filter-bound paging |
-| Catalog detail    | `/orgs/[orgId]/settings/templates/gallery/[slug]`            | Actual release namespace and slug; return query retained                                  |
-| Copy review       | `/orgs/[orgId]/settings/templates/gallery/review`            | Owner-scoped review state; actual server preview fingerprint, never authority             |
-| Saved bundle      | `/orgs/[orgId]/settings/templates/gallery/copies/[bundleId]` | Authorized persisted copy bundle/entries, not a fabricated template publication           |
+| Destination       | Route shape                                              | Persisted/URL context                                                                     |
+| ----------------- | -------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| Workspace library | `/orgs/[orgId]/work-templates`                           | Existing authorized workspace scope                                                       |
+| Gallery browse    | `/orgs/[orgId]/work-templates/gallery`                   | `view`, `fork`, `category`, `targetType`, `search` and current cursor/filter-bound paging |
+| Catalog detail    | `/orgs/[orgId]/work-templates/gallery/[slug]`            | Actual release namespace and slug; return query retained                                  |
+| Copy review       | `/orgs/[orgId]/work-templates/gallery/review`            | Owner-scoped review state; actual server preview fingerprint, never authority             |
+| Saved bundle      | `/orgs/[orgId]/work-templates/gallery/copies/[bundleId]` | Authorized persisted copy bundle/entries, not a fabricated template publication           |
 
 Register these in the existing typed route/query/navigation system. Literal gallery/copies routes take precedence over the existing `[templateId]` route. The URL may retain public catalog filters. Private draft content, source workspace identifiers and accepting principal metadata stay out of shareable query strings.
 

@@ -18,10 +18,10 @@ import {
 describe('blueprint sample authoring', () => {
   it('waits for the canonical session owner before accepting new definition input', () => {
     mocks.sessionPending = true;
-    const view = render(<WorkTemplateAuthoring orgId="org" id={null} />);
+    const view = render(<WorkTemplateAuthoring orgId="01ARZ3NDEKTSV4RRFFQ69G5FAX" id={null} />);
     expect(screen.queryByLabelText('Template name')).not.toBeInTheDocument();
     mocks.sessionPending = false;
-    view.rerender(<WorkTemplateAuthoring orgId="org" id={null} />);
+    view.rerender(<WorkTemplateAuthoring orgId="01ARZ3NDEKTSV4RRFFQ69G5FAX" id={null} />);
     change('Template name', 'Event');
     change('When to use it', 'Community gatherings');
     fireEvent.click(screen.getByRole('button', { name: 'Define the work' }));

@@ -51,7 +51,7 @@ async function authorRoutine(
   orgId: string,
   eventName: string,
 ): Promise<WorkTemplateOut> {
-  await page.goto(`/orgs/${orgId}/settings/templates/new`, {
+  await page.goto(`/orgs/${orgId}/work-templates/new`, {
     waitUntil: 'commit',
     timeout: TIMEOUTS.pageReady,
   });
@@ -181,7 +181,7 @@ async function verifyIndependentCopies(
   expect(left).toHaveLength(1);
   expect(right).toHaveLength(1);
   expect(left[0]?.id).not.toBe(right[0]?.id);
-  await page.goto(`/orgs/${path.split('/').at(-1)}/settings/templates/${templateId}`, {
+  await page.goto(`/orgs/${path.split('/').at(-1)}/work-templates/${templateId}`, {
     waitUntil: 'commit',
     timeout: TIMEOUTS.pageReady,
   });
@@ -306,7 +306,7 @@ test('keeps recurring work and the work outline reachable while reading a long P
       },
     },
   });
-  await page.goto(`/orgs/${workspace.orgId}/settings/templates/${draft.id}`, {
+  await page.goto(`/orgs/${workspace.orgId}/work-templates/${draft.id}`, {
     waitUntil: 'commit',
     timeout: TIMEOUTS.pageReady,
   });

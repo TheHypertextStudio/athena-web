@@ -56,7 +56,7 @@ export type HomeNavKey =
  * Each key maps 1:1 to its route segment under `/orgs/[orgId]/…`, so the host's navigation
  * table and active-key resolution stay in lockstep with the real route tree. The destinations are
  * `my-work`, `triage`, `tasks`, `stream`, `initiatives`, `programs`, `projects`, `cycles`,
- * `library`, `teams`, `people`, `views`, `graph`, and `settings`.
+ * `work-templates`, `library`, `teams`, `people`, `views`, `graph`, and `settings`.
  *
  * `library` is the workspace's material — the documents, files, and external pages its work
  * refers back to — as opposed to the work objects that surround it. It is not vocabulary-skinned,
@@ -76,6 +76,7 @@ export type WorkspaceNavKey =
   | 'programs'
   | 'projects'
   | 'cycles'
+  | 'work-templates'
   | 'library'
   | 'teams'
   | 'people'

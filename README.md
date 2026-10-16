@@ -50,6 +50,13 @@ on demand, and creates or links work without leaving the page. Quick-add keeps f
 name and retains failed entries for retry. A Program's existing-project suggestions preserve that
 Program's placement; the object's Move action handles placement changes.
 
+Work templates has its own workspace destination at `/orgs/[orgId]/work-templates`, available
+from workspace navigation. The library, gallery and saved-copy review share that full-page flow;
+only authoring permissions remain in Settings. Each definition shows its purpose, included work and
+next action. A live publication and its unpublished changes stay together; known unpublished linked
+definitions appear before publication, with a direct return to the parent review. Old Settings
+template links retain their destination, review section and focus when reopening here.
+
 Work templates define the kinds of work an organization does. Their full-page editor separates
 Purpose, Work, and Review: name the work, shape its starting outline and children, then review it
 before sharing. Return to any section without starting over. Save draft keeps the definition private;
@@ -76,7 +83,7 @@ included work from recurring work and keeps one editor in focus. Undoing Program
 unchanged installed routines while preserving already generated work and run history. See the
 [Program schedule specification](docs/engineering/specs/work-template-schedules.md) for retained
 history, private drafts and the staged legacy migration.
-The Work templates library puts unfinished definitions and unpublished edits under Continue defining,
+The Work templates workspace puts unfinished definitions and unpublished edits under Continue defining,
 ahead of ready-to-use work. Required definitions stay beside the work that needs them; a published
 version stays available while its next revision is being shaped. Choose starting work opens the
 gallery by organizational context and outcomes. Review the real

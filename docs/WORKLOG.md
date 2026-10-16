@@ -7,6 +7,53 @@
 
 ## Active Tasks
 
+### [WORK-TEMPLATES-WORKSPACE] Give work definitions a dedicated workspace
+
+- **Status**: REVIEW
+- **Priority**: P1
+- **Description**: Let people define and revisit their organization’s work primitives in a full-page
+  Work templates destination. Keep the library, guided authoring, gallery and saved-copy review
+  together, with authoring permissions alone in Settings.
+- **Approach**: Reuse existing typed queries, page primitives and local-first navigation. Add canonical
+  workspace routes and replacement redirects that retain old links’ identities, review section and
+  focus. Preserve account-scoped drafts, publication privacy and existing copy/Undo behavior.
+- **Files**: Workspace navigation, template route leaves and page composition, settings registry,
+  template entry links, affected route and behavior tests, interface audit and this worklog.
+- **Validation**: Exercise canonical and legacy navigation, both workspace kinds, offline route
+  composition and saved review reentry. Verify populated desktop and narrow-phone journeys in both
+  themes, keyboard interaction, no settings dialog, and affected tests, types, lint and build.
+- **Subtasks**:
+  - [x] Organize the dedicated overview around real work definitions, their current state and next action.
+  - [x] Surface actual publication prerequisites before inviting publication.
+  - [x] Move every sustained template flow into the dedicated workspace.
+  - [x] Retain legacy entry links without Back loops or lost review context.
+  - [x] Verify actual full-page navigation and rendered responsive hierarchy.
+  - [x] Document the fresh local acceptance and prepare the validated slice for linear delivery.
+
+#### Decisions and verification
+
+- Treat organizational work definitions as the primary objects. Place unfinished work and actual
+  prerequisites before gallery entry and maintenance. Keep a publication and its edits under one
+  identity, and group current relationships before draft ownership so cross-scope links remain clear.
+- Keep sustained authoring outside Settings. Client replacement leaves preserve old route identity,
+  query and focus for both ordinary and local-first navigation. Settings owns authoring policy.
+- Put checked first-publication prerequisites beside the publication action; retain historical pinned
+  versions and authorized visibility. Carry validated same-workspace parent navigation through the
+  prerequisite review, while normal reads and writes continue to authorize every operation.
+- Actual populated browser journeys verify draft preservation, section/focus/scroll return, private
+  copying, reload, Undo, full fork selection, sidebar visibility, phone entry and prerequisite-first
+  publication. Responsive review uses the canonical capture tool in both themes at four sizes.
+- Preserve one shell landmark and the server hydration frame. Ensure selected navigation is visible
+  by adjusting only the sidebar’s own scroll region on destination or available-size changes.
+- Final evidence: affected template/editor/gallery tests and navigation/readiness regressions pass;
+  seven final browser journeys and three unchanged gallery cases pass. Web, API and UI typechecks,
+  affected lint/format, the unchanged complexity ratchet, and API/web production builds pass. The
+  independent [workspace audit](design/audits/2026-10-15-work-template-workspace.md) verifies 72
+  actual responsive frames and distinguishes local UI acceptance from owner and production approval.
+- Learnings: relocating a settings list did not establish a useful work-definition experience. Review
+  actual return and publication decisions with populated records. Correct DOM ordering alone cannot
+  prove visual ordering; verify rendered bounds as well as focus and current screenshots.
+
 ### [WEBSITE-HOSTING-RETIREMENT] Retire superseded hosting after cutover acceptance
 
 - **Status**: COMPLETE

@@ -17,9 +17,9 @@ import { makeQueryWrapper } from '../support/query';
 import { installProseMirrorLayoutShims } from './prosemirror-jsdom';
 
 vi.mock('@/components/active-org', () => ({
-  useOptionalActiveOrg: () => ({ activeOrgId: 'org_1' }),
-  useActiveOrgIdOptional: () => 'org_1',
-  useActiveOrg: () => ({ activeOrgId: 'org_1' }),
+  useOptionalActiveOrg: () => ({ activeOrgId: '01J00000000000000000000000' }),
+  useActiveOrgIdOptional: () => '01J00000000000000000000000',
+  useActiveOrg: () => ({ activeOrgId: '01J00000000000000000000000' }),
 }));
 
 vi.stubGlobal(
@@ -60,7 +60,7 @@ afterEach(cleanup);
 /** A persisted Initiative template with a body that can be inserted into an editor. */
 const STRATEGIC_INITIATIVE = {
   id: 'template_1',
-  organizationId: 'org_1',
+  organizationId: '01J00000000000000000000000',
   targetType: 'initiative',
   name: 'Strategic Initiative',
   description: 'A direction with a way to tell if it worked.',
@@ -101,7 +101,7 @@ function renderTemplateEditor(value: string, onChange = vi.fn()) {
   const contribution = createDescriptionTemplateContribution({
     kind: 'initiative',
     templates: [STRATEGIC_INITIATIVE],
-    manageHref: '/orgs/org_1/settings/templates',
+    manageHref: '/orgs/01J00000000000000000000000/work-templates',
   });
   return {
     ...render(
@@ -131,12 +131,14 @@ function renderTemplateAwareTaskEditor({
 }) {
   const { client, wrapper: Wrapper } = makeQueryWrapper();
   const onSave = vi.fn();
-  client.setQueryData(queryKeys.templatesOfKind('org_1', 'task'), { items: templates });
+  client.setQueryData(queryKeys.templatesOfKind('01J00000000000000000000000', 'task'), {
+    items: templates,
+  });
   return {
     ...render(
       <Wrapper>
         <TemplateAwareEntityDocument
-          orgId="org_1"
+          orgId="01J00000000000000000000000"
           kind="task"
           currentActorId="actor_current"
           teamId="team_current"

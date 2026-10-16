@@ -6,8 +6,8 @@ import {
 } from '@docket/work/template-gallery-contract';
 import { useApiQuery } from '@/lib/query';
 import { useAppRouter } from '@/lib/interactions/navigation';
-import { SettingsSectionPage } from '@/components/settings/settings-section-page';
-import { sectionHref } from '@/components/settings/settings-registry';
+import { WorkTemplateWorkspaceFrame } from '../work-template-workspace-frame';
+import { workTemplateHref } from '../work-template-navigation';
 import { QueryLoadFailure } from '@/components/feedback';
 import type { QueryFailureSource } from '@/components/feedback/query-load-failure';
 import { Button } from '@docket/ui/primitives';
@@ -30,7 +30,7 @@ export function GalleryBrowsePage(): JSX.Element {
     ...templateGalleryForkDef(state.scope.orgId, filters.fork ?? 'startup'),
     enabled: Boolean(filters.fork),
   });
-  const base = `${sectionHref(state.scope.orgId, 'templates')}/gallery`;
+  const base = workTemplateHref(state.scope.orgId, '/gallery');
   const fork = forkMembership(filters.fork, query);
   const search = filters.search?.toLowerCase() ?? '';
   const items = catalog.items.filter(
@@ -41,12 +41,12 @@ export function GalleryBrowsePage(): JSX.Element {
       `${item.name} ${item.use}`.toLowerCase().includes(search),
   );
   return (
-    <SettingsSectionPage
-      headingSize="expressive"
+    <WorkTemplateWorkspaceFrame
+      orgId={state.scope.orgId}
       title="Choose starting work"
       description="Start with an outcome, then review the actual work and routines your workspace needs."
       loading={catalog.pending || fork.pending}
-      parent={{ label: 'Work templates', href: sectionHref(state.scope.orgId, 'templates') }}
+      parent={{ label: 'Work templates' }}
     >
       {catalog.failed ? (
         <QueryLoadFailure title="Work gallery" query={catalog.failure} />
@@ -90,7 +90,7 @@ export function GalleryBrowsePage(): JSX.Element {
           />
         </div>
       )}
-    </SettingsSectionPage>
+    </WorkTemplateWorkspaceFrame>
   );
 }
 

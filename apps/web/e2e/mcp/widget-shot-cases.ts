@@ -73,14 +73,14 @@ export const CATALOG_CASES: readonly WidgetCase[] = [
     result: {
       structuredContent: {
         changed: 1,
-        listHref: '/orgs/org_1/settings/templates',
+        listHref: '/orgs/org_1/work-templates',
         changeSetId: 'cs_8',
         changes: [
           {
             kind: 'template',
             id: 'tpl_1',
             title: 'Bug report',
-            href: '/orgs/org_1/settings/templates',
+            href: '/orgs/org_1/work-templates',
             note: 'Task template · Workspace',
             matched: false,
             fields: [

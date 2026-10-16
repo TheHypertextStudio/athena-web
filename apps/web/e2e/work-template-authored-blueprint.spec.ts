@@ -48,7 +48,7 @@ test('authors a private Project child outline and relative due date, reopens it,
   page,
 }) => {
   const { orgId } = await blueprintWorkspace(page);
-  await page.goto(`/orgs/${orgId}/settings/templates/new`, {
+  await page.goto(`/orgs/${orgId}/work-templates/new`, {
     waitUntil: 'commit',
     timeout: TIMEOUTS.pageReady,
   });
@@ -85,7 +85,7 @@ test('authors a private Project child outline and relative due date, reopens it,
   const draft = (await response.json()) as WorkTemplateOut;
   expect(draft.scope).toBe('personal');
   expect(draft.latestVersion).toBeNull();
-  await expect(page).toHaveURL(new RegExp(`/templates/${draft.id}$`));
+  await expect(page).toHaveURL(new RegExp(`/work-templates/${draft.id}$`));
   await page.reload({ waitUntil: 'commit' });
   await expect(page.getByRole('status').filter({ hasText: /^Saved draft$/ })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Review definition', exact: true })).toBeEnabled();

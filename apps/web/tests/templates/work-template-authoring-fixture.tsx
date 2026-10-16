@@ -7,6 +7,10 @@ const mocks = vi.hoisted(() => ({
   publish: vi.fn(),
   owner: 0,
   sessionPending: false,
+  catalog: null as readonly WorkTemplateOut[] | null,
+  versions: null as readonly { id: string; number: number }[] | null,
+  catalogState: 'ready',
+  refetch: vi.fn(),
 }));
 const id = '01ARZ3NDEKTSV4RRFFQ69G5FAV';
 export const nestedId = '01ARZ3NDEKTSV4RRFFQ69G5FAW';
@@ -56,10 +60,14 @@ vi.mock('@/lib/query', async (original) => ({
       definition.enabled === false
         ? undefined
         : {
-            items: definition.reviewKind === 'versions' ? [{ id: versionId, number: 2 }] : [nested],
+            items:
+              definition.reviewKind === 'versions'
+                ? (mocks.versions ?? [{ id: versionId, number: 2 }])
+                : (mocks.catalog ?? [nested]),
           },
-    isError: false,
-    isPending: false,
+    isError: definition.reviewKind === 'catalog' && mocks.catalogState === 'error',
+    isPending: definition.reviewKind === 'catalog' && mocks.catalogState === 'loading',
+    refetch: mocks.refetch,
   }),
 }));
 vi.mock('@/components/templates/work-template-queries', () => ({
@@ -120,6 +128,9 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.owner += 1;
   mocks.sessionPending = false;
+  mocks.catalog = null;
+  mocks.versions = null;
+  mocks.catalogState = 'ready';
   Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
     configurable: true,
     value: vi.fn(),

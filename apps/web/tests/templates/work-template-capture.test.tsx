@@ -90,7 +90,12 @@ beforeEach(() => {
   mocks.permissionPending = false;
 });
 const header = () => (
-  <WorkTemplateHeader orgId="org" kind="project" work={{ id: 'source' }} canEdit={false} />
+  <WorkTemplateHeader
+    orgId="01J00000000000000000000000"
+    kind="project"
+    work={{ id: 'source' }}
+    canEdit={false}
+  />
 );
 function openCapture() {
   fireEvent.click(screen.getByRole('button', { name: 'Save as template' }));
@@ -101,7 +106,12 @@ describe('Save as template from visible work', () => {
     'offers independent capture from a visible %s without source edit permission',
     (kind) => {
       render(
-        <WorkTemplateHeader orgId="org" kind={kind} work={{ id: 'source' }} canEdit={false} />,
+        <WorkTemplateHeader
+          orgId="01J00000000000000000000000"
+          kind={kind}
+          work={{ id: 'source' }}
+          canEdit={false}
+        />,
       );
       expect(screen.getByRole('button', { name: 'Save as template' })).toBeVisible();
     },
@@ -125,7 +135,9 @@ describe('Save as template from visible work', () => {
       });
     });
     await waitFor(() => {
-      expect(mocks.navigate).toHaveBeenCalledWith('/orgs/org/settings/templates/private-draft');
+      expect(mocks.navigate).toHaveBeenCalledWith(
+        '/orgs/01J00000000000000000000000/work-templates/private-draft',
+      );
     });
   });
 

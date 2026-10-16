@@ -1,6 +1,6 @@
 'use client';
 import { WorkTemplateArchiveAction } from './work-template-archive-action';
-import { useState, type JSX } from 'react';
+import { useState, useSyncExternalStore, type JSX } from 'react';
 import { Button, Skeleton, Badge } from '@docket/ui/primitives';
 import { useVocabulary } from '@docket/ui/hooks';
 import { InlineBanner } from '@docket/ui/components';
@@ -10,9 +10,10 @@ import {
 } from './template-definition-action';
 import { WorkTemplateBlueprintSummary } from './work-template-blueprint-summary';
 import type { WorkTemplateOut } from '@docket/work/work-template-contract';
-import { SettingsBackLink } from '@/components/settings/settings-back';
+import { WorkTemplateWorkspaceFrame } from './work-template-workspace-frame';
+import { workTemplateReturnHref } from './work-template-return-context';
 import { TemplateDisclosure } from './template-disclosure';
-import { sectionHref } from '@/components/settings/settings-registry';
+import { workTemplateHref } from './work-template-navigation';
 import { QueryLoadFailure } from '@/components/feedback';
 import { StaticMarkdown } from '@/components/editor/static-markdown';
 import { useSession } from '@/lib/auth-client';
@@ -23,6 +24,28 @@ import { useAppRouter } from '@/lib/interactions/navigation';
 import { type WorkTemplateFormState, useWorkTemplateForm } from './use-work-template-form';
 import { TemplateDefinitionSections } from './template-definition-sections';
 import { workTemplateDef, workTemplateVersionsDef } from './work-template-queries';
+import {
+  TemplatePublicationReadiness,
+  useTemplatePublicationReadiness,
+} from './work-template-publication-readiness';
+
+const subscribeToHydration = (): (() => void) => () => undefined;
+
+function useAuthoringSessionReady(): boolean {
+  // Match the server loading frame even when the client session cache is already populated.
+  const hydrated = useSyncExternalStore(
+    subscribeToHydration,
+    () => true,
+    () => false,
+  );
+  const session = useSession();
+  return hydrated && Boolean(session.data);
+}
+
+function templateAuthoringParent(orgId: string, id: string | null, candidate: string | null) {
+  const href = workTemplateReturnHref(orgId, id, candidate);
+  return href ? { label: 'Back to parent definition', href } : { label: 'Work templates' };
+}
 
 /** Routed editor for an editable draft and the template's immutable publication history. */
 export function WorkTemplateAuthoring({
@@ -32,40 +55,40 @@ export function WorkTemplateAuthoring({
   orgId: string;
   id: string | null;
 }): JSX.Element {
-  const session = useSession();
-  const requestedSection = useAppSearchParams().get('section');
+  const sessionReady = useAuthoringSessionReady();
+  const searchParams = useAppSearchParams();
+  const requestedSection = searchParams.get('section');
+  const parent = templateAuthoringParent(orgId, id, searchParams.get('returnTo'));
   const query = useApiQuery({ ...workTemplateDef(orgId, id ?? ''), enabled: id !== null });
   const router = useAppRouter();
-  const href = sectionHref(orgId, 'templates');
-  const loading = !session.data || (id !== null && query.isPending);
+  const href = workTemplateHref(orgId);
+  const loading = !sessionReady || (id !== null && query.isPending);
   const failed = id !== null && query.isError;
   return (
-    <div
-      data-work-template-authoring=""
-      className="mx-auto flex w-full max-w-6xl min-w-0 flex-col gap-4 px-4 py-4 sm:gap-6 sm:px-8 sm:py-6"
-    >
-      <SettingsBackLink href={href} label="Work templates" />
-      {loading ? <Skeleton className="h-64" /> : null}
-      {failed ? (
-        <QueryLoadFailure title="Template" query={query} />
-      ) : loading ? null : (
-        <WorkTemplateForm
-          key={id ?? 'new'}
+    <WorkTemplateWorkspaceFrame orgId={orgId} parent={parent}>
+      <div data-work-template-authoring="" className="flex min-w-0 flex-col gap-6">
+        {loading ? <Skeleton className="h-64" /> : null}
+        {failed ? (
+          <QueryLoadFailure title="Template" query={query} />
+        ) : loading ? null : (
+          <WorkTemplateForm
+            key={id ?? 'new'}
+            orgId={orgId}
+            initial={query.data ?? null}
+            initialSection={requestedSection === 'review' ? 'review' : undefined}
+            onCreated={(createdId, section) =>
+              router.replace(`${href}/${createdId}${section === 'review' ? '?section=review' : ''}`)
+            }
+          />
+        )}
+        <TemplatePublishedHistory
           orgId={orgId}
-          initial={query.data ?? null}
-          initialSection={requestedSection === 'review' ? 'review' : undefined}
-          onCreated={(createdId, section) =>
-            router.replace(`${href}/${createdId}${section === 'review' ? '?section=review' : ''}`)
-          }
+          id={id}
+          template={query.data}
+          visible={!loading && !failed}
         />
-      )}
-      <TemplatePublishedHistory
-        orgId={orgId}
-        id={id}
-        template={query.data}
-        visible={!loading && !failed}
-      />
-    </div>
+      </div>
+    </WorkTemplateWorkspaceFrame>
   );
 }
 
@@ -104,30 +127,12 @@ export function WorkTemplateForm({
         form={form}
         navigation={navigation}
         header={
-          <>
-            <div className="flex min-w-0 items-start justify-between gap-3">
-              <TemplateDefinitionIdentity form={form} />
-              <TemplateDefinitionAction
-                form={form}
-                initial={initial}
-                section={navigation.section}
-                onReview={() => {
-                  navigation.selectSection('review');
-                }}
-              />
-            </div>
-            <TemplateDraftHeader initial={initial} form={form} />
-            <TemplatePublicationConsequence
-              form={form}
-              initial={initial}
-              section={navigation.section}
-            />
-            {form.error ? (
-              <InlineBanner tone="critical" title="Template could not be saved">
-                {form.error}
-              </InlineBanner>
-            ) : null}
-          </>
+          <TemplateAuthoringHeader
+            orgId={orgId}
+            initial={initial}
+            form={form}
+            navigation={navigation}
+          />
         }
       >
         {initial ? (
@@ -140,6 +145,51 @@ export function WorkTemplateForm({
         )}
       </TemplateDefinitionSections>
     </div>
+  );
+}
+
+function TemplateAuthoringHeader({
+  orgId,
+  initial,
+  form,
+  navigation,
+}: {
+  orgId: string;
+  initial: WorkTemplateOut | null;
+  form: WorkTemplateFormState;
+  navigation: ReturnType<typeof useTemplateSectionNavigation>;
+}): JSX.Element {
+  const readiness = useTemplatePublicationReadiness(orgId, form.definition);
+  return (
+    <>
+      <div className="flex min-w-0 items-start justify-between gap-3">
+        <TemplateDefinitionIdentity form={form} />
+        <TemplateDefinitionAction
+          form={form}
+          initial={initial}
+          section={navigation.section}
+          publicationBlocked={readiness.loading || readiness.failed || readiness.pending.length > 0}
+          onReview={() => {
+            navigation.selectSection('review');
+          }}
+        />
+      </div>
+      <TemplateDraftHeader initial={initial} form={form} />
+      {navigation.section === 'review' ? (
+        <TemplatePublicationReadiness
+          orgId={orgId}
+          name={form.definition.name}
+          parentId={initial?.id}
+          readiness={readiness}
+        />
+      ) : null}
+      <TemplatePublicationConsequence form={form} initial={initial} section={navigation.section} />
+      {form.error ? (
+        <InlineBanner tone="critical" title="Template could not be saved">
+          {form.error}
+        </InlineBanner>
+      ) : null}
+    </>
   );
 }
 

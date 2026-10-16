@@ -220,7 +220,7 @@ async function openReviewRoute(page: Page, url: string, allowSignIn = false): Pr
   }
   if (
     new URL(url).pathname.includes('/settings/') &&
-    !/\/settings\/templates\/[^/]+\/?$/.test(new URL(url).pathname)
+    !/\/(?:settings\/templates|work-templates)\/[^/]+\/?$/.test(new URL(url).pathname)
   ) {
     await page.locator('[role="dialog"]').waitFor({ state: 'visible', timeout: 20_000 });
   }
@@ -379,7 +379,14 @@ async function prepareAuthoringCapture(
   baseURL: string,
   cases: readonly MobileLayoutRouteCase[],
 ): Promise<void> {
-  if (!cases.some((entry) => /\/settings\/templates\/[^/]+\/?$/.test(entry.route))) return;
+  if (
+    !cases.some((entry) =>
+      /\/(?:settings\/templates|work-templates)\/[^/]+\/?$/.test(
+        entry.route.split(/[?#]/)[0] ?? '',
+      ),
+    )
+  )
+    return;
   const preparation = await context.newPage();
   await preparation.goto(baseURL, { waitUntil: 'domcontentloaded', timeout: 60_000 });
   await visitBlueprintDailyPlanner(preparation);

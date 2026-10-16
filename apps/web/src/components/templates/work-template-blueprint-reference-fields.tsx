@@ -6,7 +6,7 @@ import type { WorkTemplateOut } from '@docket/work/work-template-contract';
 import { useApiQuery } from '@/lib/query';
 import { QueryLoadFailure } from '@/components/feedback';
 import Link from '@/components/docket-link';
-import { sectionHref } from '@/components/settings/settings-registry';
+import { workTemplateHref } from './work-template-navigation';
 import { pendingTemplateReference } from './work-template-pending-reference';
 import { workTemplateVersionsDef } from './work-template-queries';
 
@@ -250,7 +250,7 @@ function PendingReference({
       </p>
       {draft.canEdit ? (
         <Button asChild variant="ghost" className="min-h-10 self-start">
-          <Link href={`${sectionHref(orgId, 'templates')}/${draft.id}?section=review`}>
+          <Link href={`${workTemplateHref(orgId)}/${draft.id}?section=review`}>
             Review {draft.definition.name}
           </Link>
         </Button>

@@ -30,7 +30,7 @@ describe('persistent work-template picker', () => {
     const onSelect = vi.fn();
     render(
       <WorkTemplatePicker
-        orgId="org"
+        orgId="01J00000000000000000000000"
         kind="project"
         teamId={null}
         selectedId="event"
@@ -51,7 +51,7 @@ describe('persistent work-template picker', () => {
     mocks.query.data.items = [base];
     render(
       <WorkTemplatePicker
-        orgId="org"
+        orgId="01J00000000000000000000000"
         kind="project"
         teamId={null}
         selectedId="removed"

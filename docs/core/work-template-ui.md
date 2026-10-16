@@ -2,8 +2,14 @@
 
 Reader: A Docket contributor defining the kinds of work their organization does or repeating existing work.
 
-Open Workspace Settings → Work templates → New template. Purpose establishes the name, existing
-work kind and when to use it. Work shapes the sample item: its starting fields and document, included
+Open Work templates in workspace navigation, then choose Define work. The library, gallery and
+saved-copy review share this full-page workspace. Settings contains only Template permissions.
+
+Return visits lead with unfinished definitions and their current included work. Published versions
+and unpublished edits of one definition stay together. Checked unpublished dependencies appear
+before publishing; review them and return directly to their parent definition.
+
+Purpose establishes the name, existing work kind and when to use it. Work shapes the sample item: its starting fields and document, included
 children, relative dates and responsibility rules. Select a child to refine it without losing the
 outline. Review reads back the definition before sharing it. For example, an Event project can
 include venue preparation, an optional Vendor booking template and a Dinner day milestone.

@@ -7,7 +7,8 @@ import { InlineBanner } from '@docket/ui/components';
 import { useActiveOrg } from '@/components/active-org';
 import { useComposerOptions } from '@/components/pickers/use-composer-options';
 import { useCanManageOrg } from '@/components/settings/use-can-manage-org';
-import { sectionHref } from '@/components/settings/settings-registry';
+import { workTemplateHref } from '../work-template-navigation';
+import { WorkTemplateWorkspaceFrame } from '../work-template-workspace-frame';
 import { useAppRouter } from '@/lib/interactions/navigation';
 import { UserFacingError } from '@/lib/problem';
 import {
@@ -178,7 +179,7 @@ function useReviewDestination(orgId: string): {
 } {
   const router = useAppRouter(),
     { orgName } = useActiveOrg();
-  const base = `${sectionHref(orgId, 'templates')}/gallery`;
+  const base = workTemplateHref(orgId, '/gallery');
   return {
     base,
     workspaceName: orgName(orgId),
@@ -189,6 +190,14 @@ function useReviewDestination(orgId: string): {
 }
 /** Review actual checked rewrites and visibility, then accept through the canonical copy service. */
 export function GalleryReviewPage(): JSX.Element {
+  const state = useGalleryWorkspace();
+  return (
+    <WorkTemplateWorkspaceFrame orgId={state.scope.orgId}>
+      <GalleryReviewContent />
+    </WorkTemplateWorkspaceFrame>
+  );
+}
+function GalleryReviewContent(): JSX.Element {
   const state = useGalleryWorkspace();
   const { base, back, workspaceName } = useReviewDestination(state.scope.orgId);
   const acceptance = useActualAcceptance();

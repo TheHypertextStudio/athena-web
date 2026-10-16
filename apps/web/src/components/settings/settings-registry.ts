@@ -222,11 +222,12 @@ const WORK_CONFIGURATION_SECTIONS: readonly SettingsSection[] = [
     href: 'labels',
   },
   {
-    key: 'templates',
-    label: 'Work templates',
-    description: 'Reusable work definitions and their published versions.',
+    key: 'template-permissions',
+    label: 'Template permissions',
+    description: 'Choose who can define and publish work templates.',
     icon: LayoutTemplate,
-    href: 'templates',
+    href: 'template-permissions',
+    requiresManage: true,
   },
   {
     key: 'import',

@@ -22,6 +22,7 @@ interface ReviewContext {
   readonly rootKind: WorkTemplateFormState['kind'];
   readonly orgId: string;
   readonly templates: readonly WorkTemplateOut[];
+  readonly rootId?: string | undefined;
 }
 /** Read the same authored hierarchy as the editor, with responsibility and constraints in context. */
 export function WorkTemplateReviewChildren(props: ReviewContext): JSX.Element {
@@ -73,6 +74,7 @@ function ReviewChild({
   rootKind,
   orgId,
   templates,
+  rootId,
 }: ReviewContext & { readonly step: BlueprintStep }): JSX.Element {
   const kind = useVocabulary(step.kind === 'milestone' ? 'task' : step.kind);
   const hasDates = Object.values(step.dates).some((rule) => rule && rule.kind !== 'none');
@@ -97,6 +99,7 @@ function ReviewChild({
       {step.template ? (
         <WorkTemplateReviewNestedVersion
           orgId={orgId}
+          returnTo={rootId}
           template={step.template}
           selected={templates.find(
             (value) => value.id === step.template?.workTypeId && value.targetType === step.kind,

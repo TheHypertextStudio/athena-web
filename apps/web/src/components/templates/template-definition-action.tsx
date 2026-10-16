@@ -12,11 +12,13 @@ export function TemplateDefinitionAction({
   initial,
   section,
   onReview,
+  publicationBlocked = false,
 }: {
   form: WorkTemplateFormState;
   initial: WorkTemplateOut | null;
   section: TemplateDefinitionSection;
   onReview: () => void;
+  publicationBlocked?: boolean;
 }): JSX.Element {
   const save = form.dirty || !initial;
   const publish = !save && section === 'review' && initial.status !== 'archived' && form.canEdit;
@@ -35,7 +37,7 @@ export function TemplateDefinitionAction({
         <Button
           type="button"
           aria-label={label}
-          disabled={form.pending || (save && (!form.canEdit || invalid))}
+          disabled={actionDisabled(form, save && invalid, save, publish && publicationBlocked)}
           onClick={action}
         >
           <span className="sm:hidden">{save ? 'Save draft' : publish ? 'Publish' : 'Review'}</span>
@@ -88,4 +90,13 @@ function actionAvailable(
   section: TemplateDefinitionSection,
 ): boolean {
   return save || publish || section !== 'review';
+}
+
+function actionDisabled(
+  form: WorkTemplateFormState,
+  invalid: boolean,
+  save: boolean,
+  publicationBlocked: boolean,
+): boolean {
+  return form.pending || invalid || (save && !form.canEdit) || publicationBlocked;
 }

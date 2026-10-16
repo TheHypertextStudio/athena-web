@@ -5,13 +5,22 @@ import { Skeleton } from '@docket/ui/primitives';
 import { useApiQuery } from '@/lib/query';
 import { useAppRouter } from '@/lib/interactions/navigation';
 import { QueryLoadFailure } from '@/components/feedback';
-import { sectionHref } from '@/components/settings/settings-registry';
+import { workTemplateHref } from '../work-template-navigation';
+import { WorkTemplateWorkspaceFrame } from '../work-template-workspace-frame';
 import { templateGalleryEntryDef } from '../work-template-gallery-queries';
 import { GalleryEntry } from './gallery-entry';
 import { useGalleryWorkspace } from './gallery-workspace';
 
 /** Read one actual released definition and its exact nested references before choosing it. */
 export function GalleryEntryPage({ slug }: { readonly slug: string }): JSX.Element {
+  const state = useGalleryWorkspace();
+  return (
+    <WorkTemplateWorkspaceFrame orgId={state.scope.orgId}>
+      <GalleryEntryContent slug={slug} />
+    </WorkTemplateWorkspaceFrame>
+  );
+}
+function GalleryEntryContent({ slug }: { readonly slug: string }): JSX.Element {
   const state = useGalleryWorkspace(),
     router = useAppRouter();
   const query = useApiQuery(templateGalleryEntryDef(state.scope.orgId, slug));
@@ -25,7 +34,7 @@ export function GalleryEntryPage({ slug }: { readonly slug: string }): JSX.Eleme
       selected={selected}
       selectionFull={choices.roots.length >= 100}
       onBack={() => {
-        router.push(`${sectionHref(state.scope.orgId, 'templates')}/gallery`, { scroll: false });
+        router.push(workTemplateHref(state.scope.orgId, '/gallery'), { scroll: false });
       }}
       onSelect={() => {
         state.change({

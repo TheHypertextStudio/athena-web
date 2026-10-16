@@ -7,6 +7,7 @@ import { Button, Text, Tooltip, TooltipContent, TooltipTrigger } from '../../pri
 import { useContextState } from './ContextProvider';
 import { useShellDrawer } from './ShellDrawerContext';
 import { SidebarNavItem } from './SidebarNavItem';
+import { useSidebarActiveVisibility } from './use-sidebar-active-visibility';
 import { WorkspaceSwitcher } from './WorkspaceSwitcher';
 import type { HomeNavKey, Workspace, WorkspaceNavKey } from './workspaces';
 import type { NavigationDestinationId, ResolvedNavigationDestination } from './navigation-catalog';
@@ -98,6 +99,31 @@ function destinationBadge(
   return {};
 }
 
+function useActiveSidebarRegion(
+  activeOrgId: string | null,
+  loading: boolean,
+  catalog: readonly ResolvedNavigationDestination[],
+): React.RefObject<HTMLDivElement | null> {
+  const region = React.useRef<HTMLDivElement>(null);
+  const activeKey = `${activeOrgId}:${loading}:${catalog
+    .filter((destination) => destination.active)
+    .map((destination) => destination.id)
+    .join('|')}`;
+  useSidebarActiveVisibility(region, activeKey);
+  return region;
+}
+
+function useNavigationDismiss(
+  dismissDrawer: ReturnType<typeof useShellDrawer>,
+): (event: React.MouseEvent<HTMLElement>) => void {
+  return React.useCallback(
+    (event: React.MouseEvent<HTMLElement>): void => {
+      if (dismissDrawer && (event.target as HTMLElement).closest('a,button')) dismissDrawer();
+    },
+    [dismissDrawer],
+  );
+}
+
 /** The browse-oriented sidebar shown on desktop and inside the mobile drawer. */
 export function ExpandedSidebar({
   workspaces,
@@ -116,14 +142,10 @@ export function ExpandedSidebar({
 }: ExpandedSidebarProps): React.JSX.Element {
   const { activeOrgId } = useContextState();
   const dismissDrawer = useShellDrawer();
+  const scrollRegion = useActiveSidebarRegion(activeOrgId, loading, catalog);
   const homeDestinations = catalog.filter((destination) => destination.group === 'home');
   const workspaceDestinations = catalog.filter((destination) => destination.group === 'workspace');
-  const handleNavActivate = React.useCallback(
-    (event: React.MouseEvent<HTMLElement>): void => {
-      if (dismissDrawer && (event.target as HTMLElement).closest('a,button')) dismissDrawer();
-    },
-    [dismissDrawer],
-  );
+  const handleNavActivate = useNavigationDismiss(dismissDrawer);
 
   return (
     <aside
@@ -162,7 +184,11 @@ export function ExpandedSidebar({
         ) : null}
       </div>
 
-      <div data-testid="sidebar-scroll-region" className="min-h-0 flex-1 overflow-y-auto">
+      <div
+        ref={scrollRegion}
+        data-testid="sidebar-scroll-region"
+        className="min-h-0 flex-1 overflow-y-auto"
+      >
         <nav
           aria-label="Home"
           className="flex flex-col space-y-0.5 pt-2"

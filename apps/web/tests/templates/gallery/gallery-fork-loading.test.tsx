@@ -17,7 +17,7 @@ const read = vi.hoisted(() => ({
   refetch: vi.fn(),
 }));
 const state = vi.hoisted(() => ({
-  scope: { userId: 'viewer', orgId: 'workspace' },
+  scope: { userId: 'viewer', orgId: '01ARZ3NDEKTSV4RRFFQ69G5FAX' },
   memory: {
     filters: { fork: 'nonprofit' as const },
     view: 'suggested' as const,

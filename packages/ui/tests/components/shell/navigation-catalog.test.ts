@@ -7,6 +7,32 @@ import {
 } from '../../../src/components/shell/navigation-catalog';
 
 describe('navigation catalog', () => {
+  it.each([true, false])(
+    'offers work definitions as a workspace destination (personal=%s)',
+    (personalWorkspace) => {
+      const catalog = resolveNavigationCatalog({
+        activeOrgId: 'ORG00000000000000000000001',
+        activeWorkspaceKey: 'work-templates',
+        personalWorkspace,
+        vocabulary: {
+          initiatives: 'Initiatives',
+          programs: 'Programs',
+          projects: 'Projects',
+          cycles: 'Cycles',
+          teams: 'Teams',
+        },
+      });
+      expect(catalog.find(({ id }) => id === 'workspace:work-templates')).toMatchObject({
+        active: true,
+        disabled: false,
+        label: 'Work templates',
+        group: 'workspace',
+        moreGroup: 'workspace',
+        rail: false,
+      });
+    },
+  );
+
   it('keeps the daily rail in its fixed product order', () => {
     expect(RAIL_DESTINATION_IDS).toEqual([
       'home:today',

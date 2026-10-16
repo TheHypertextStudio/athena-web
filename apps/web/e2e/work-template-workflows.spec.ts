@@ -41,7 +41,7 @@ for (const kind of ['Task', 'Project', 'Initiative', 'Program'] as const) {
     page,
   }) => {
     const { orgId } = await workspace(page);
-    await page.goto(`/orgs/${orgId}/settings/templates`, {
+    await page.goto(`/orgs/${orgId}/work-templates`, {
       waitUntil: 'commit',
       timeout: TIMEOUTS.pageReady,
     });
@@ -69,7 +69,7 @@ for (const kind of ['Task', 'Project', 'Initiative', 'Program'] as const) {
     const draft = (await response.json()) as { id: string; scope: string; status: string };
     expect(draft.scope).toBe('personal');
     expect(draft.status).toBe('draft');
-    await expect(page).toHaveURL(new RegExp(`/templates/${draft.id}$`));
+    await expect(page).toHaveURL(new RegExp(`/work-templates/${draft.id}$`));
     await expect(page.getByRole('tab', { name: 'Work', exact: true })).toHaveAttribute(
       'aria-selected',
       'true',
@@ -262,7 +262,7 @@ test.describe('touch template layout', () => {
     page,
   }) => {
     const { orgId } = await workspace(page);
-    await page.goto(`/orgs/${orgId}/settings/templates`, {
+    await page.goto(`/orgs/${orgId}/work-templates`, {
       waitUntil: 'commit',
       timeout: TIMEOUTS.pageReady,
     });

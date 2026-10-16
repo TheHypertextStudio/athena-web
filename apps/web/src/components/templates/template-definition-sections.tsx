@@ -76,7 +76,7 @@ export function TemplateDefinitionSections({
           className="flex min-w-0 scroll-mt-48 flex-col gap-6"
           aria-labelledby="tab-review"
         >
-          <WorkTemplateDefinitionReview orgId={orgId} form={form} />
+          <WorkTemplateDefinitionReview orgId={orgId} form={form} templateId={initial?.id} />
           {children}
         </div>
       ) : null}

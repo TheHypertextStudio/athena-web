@@ -31,6 +31,7 @@ const WORKSPACE_SURFACES: Readonly<Record<WorkspaceNavKey, AppSurface | null>> =
   programs: 'list',
   projects: 'list',
   cycles: 'list',
+  'work-templates': 'list',
   library: null,
   teams: null,
   people: null,

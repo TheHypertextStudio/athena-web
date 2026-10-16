@@ -130,7 +130,7 @@ describe('shared workspace sections', () => {
       'statuses',
       'work-structure',
       'labels',
-      'templates',
+      'template-permissions',
       'import',
       'automations',
       'connections',
@@ -146,9 +146,9 @@ describe('shared workspace sections', () => {
     expect(orgSections).toEqual(SETTINGS_SECTIONS);
   });
 
-  it('gates Publishing on management, and only Publishing', () => {
+  it('gates publication and template authoring permissions on management', () => {
     const gated = orgSections.filter((section) => section.requiresManage === true);
-    expect(gated.map((section) => section.key)).toEqual(['publishing']);
+    expect(gated.map((section) => section.key)).toEqual(['template-permissions', 'publishing']);
   });
 
   it('does not expose the retired vocabulary picker or unfinished destinations', () => {
@@ -180,7 +180,7 @@ describe('personal workspace sections', () => {
       'statuses',
       'work-structure',
       'labels',
-      'templates',
+      'template-permissions',
       'import',
       'automations',
     ]);

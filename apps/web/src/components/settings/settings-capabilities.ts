@@ -59,7 +59,7 @@ const workspaceNode = (
 export const SETTINGS_NODES = {
   templatesAuthoring: workspaceNode(
     'templates-authoring',
-    'templates',
+    'template-permissions',
     'Authoring',
     'Choose who may edit and publish work templates. Private drafts keep their visibility.',
     ['template', 'work templates', 'work type', 'blueprint'],

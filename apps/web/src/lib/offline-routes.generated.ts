@@ -206,6 +206,11 @@ export const OFFLINE_ROUTES = [
     load: async () => (await import('@/app/(app)/orgs/[orgId]/settings/statuses/page')).default,
   },
   {
+    pattern: '/orgs/[orgId]/settings/template-permissions',
+    load: async () =>
+      (await import('@/app/(app)/orgs/[orgId]/settings/template-permissions/page')).default,
+  },
+  {
     pattern: '/orgs/[orgId]/settings/templates/[templateId]',
     load: async () =>
       (await import('@/app/(app)/orgs/[orgId]/settings/templates/[templateId]/page')).default,
@@ -274,6 +279,40 @@ export const OFFLINE_ROUTES = [
   {
     pattern: '/orgs/[orgId]/views',
     load: async () => (await import('@/app/(app)/orgs/[orgId]/views/page')).default,
+  },
+  {
+    pattern: '/orgs/[orgId]/work-templates/[templateId]',
+    load: async () =>
+      (await import('@/app/(app)/orgs/[orgId]/work-templates/[templateId]/page')).default,
+  },
+  {
+    pattern: '/orgs/[orgId]/work-templates/gallery/[slug]',
+    load: async () =>
+      (await import('@/app/(app)/orgs/[orgId]/work-templates/gallery/[slug]/page')).default,
+  },
+  {
+    pattern: '/orgs/[orgId]/work-templates/gallery/copies/[bundleId]',
+    load: async () =>
+      (await import('@/app/(app)/orgs/[orgId]/work-templates/gallery/copies/[bundleId]/page'))
+        .default,
+  },
+  {
+    pattern: '/orgs/[orgId]/work-templates/gallery',
+    load: async () =>
+      (await import('@/app/(app)/orgs/[orgId]/work-templates/gallery/page')).default,
+  },
+  {
+    pattern: '/orgs/[orgId]/work-templates/gallery/review',
+    load: async () =>
+      (await import('@/app/(app)/orgs/[orgId]/work-templates/gallery/review/page')).default,
+  },
+  {
+    pattern: '/orgs/[orgId]/work-templates/new',
+    load: async () => (await import('@/app/(app)/orgs/[orgId]/work-templates/new/page')).default,
+  },
+  {
+    pattern: '/orgs/[orgId]/work-templates',
+    load: async () => (await import('@/app/(app)/orgs/[orgId]/work-templates/page')).default,
   },
   {
     pattern: '/plan',

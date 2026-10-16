@@ -34,7 +34,7 @@ test('keeps a reviewed Event privately, restores its outcome on reload, then und
   const pageErrors: string[] = [];
   page.on('pageerror', (error) => pageErrors.push(error.message));
   const { orgId } = await blueprintWorkspace(page);
-  const base = `/orgs/${orgId}/settings/templates`;
+  const base = `/orgs/${orgId}/work-templates`;
   await page.goto(`${base}/gallery`, { waitUntil: 'commit', timeout: TIMEOUTS.pageReady });
   const nonprofit = page.getByRole('button', { name: /^Nonprofits/ });
   await nonprofit.focus();
@@ -128,7 +128,7 @@ test('reviews all sixty startup roots without truncating selection or mounting s
   const pageErrors: string[] = [];
   page.on('pageerror', (error) => pageErrors.push(error.message));
   const { orgId } = await blueprintWorkspace(page);
-  const base = `/orgs/${orgId}/settings/templates`;
+  const base = `/orgs/${orgId}/work-templates`;
   await page.goto(`${base}/gallery`, { waitUntil: 'commit', timeout: TIMEOUTS.pageReady });
   await page.getByRole('button', { name: /^Startups/ }).click();
   await page.getByRole('button', { name: 'All startup work (60)', exact: true }).click();
@@ -159,7 +159,7 @@ test.describe('touch starting-point choices', () => {
     page,
   }) => {
     const { orgId } = await blueprintWorkspace(page);
-    await page.goto(`/orgs/${orgId}/settings/templates/gallery`, {
+    await page.goto(`/orgs/${orgId}/work-templates/gallery`, {
       waitUntil: 'commit',
       timeout: TIMEOUTS.pageReady,
     });

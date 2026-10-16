@@ -1,7 +1,7 @@
 'use client';
 import { createContext, useContext, useEffect, useState, type JSX, type ReactNode } from 'react';
 import type { WorkTemplateGalleryItem } from '@docket/work/template-gallery-contract';
-import { ControlGroup, Skeleton } from '@docket/ui/primitives';
+import { Skeleton } from '@docket/ui/primitives';
 import { useSession } from '@/lib/auth-client';
 import {
   readGalleryTabMemory,
@@ -45,15 +45,7 @@ function ScopedGallery({
   }
   if (memory === null) return <Skeleton className="h-64" />;
   return (
-    <Context.Provider value={{ scope, memory, change, browseReturn }}>
-      <ControlGroup
-        controlSize="xl"
-        orientation="vertical"
-        className="mx-auto w-full max-w-6xl gap-5 px-4 py-4 sm:px-8 sm:py-6"
-      >
-        {children}
-      </ControlGroup>
-    </Context.Provider>
+    <Context.Provider value={{ scope, memory, change, browseReturn }}>{children}</Context.Provider>
   );
 }
 /** Scope tab memory to the actual signed-in account; account changes remount all review state. */

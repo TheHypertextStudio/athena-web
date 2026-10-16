@@ -11,7 +11,7 @@ import {
 import { useVocabulary } from '@docket/ui/hooks';
 import Link from '@/components/docket-link';
 import { GalleryBundleUndo, type GalleryBundleUndoState } from './gallery-bundle-undo';
-import { sectionHref } from '@/components/settings/settings-registry';
+import { workTemplateHref } from '../work-template-navigation';
 
 import { galleryBundleDependencies, galleryBundleConsumers } from './gallery-bundle-dependencies';
 
@@ -37,7 +37,7 @@ function BundleEntry({
     <li className="flex min-w-0 flex-col gap-1 py-3">
       <Link
         className="text-title-medium text-primary underline-offset-4 hover:underline focus-visible:underline"
-        href={`${sectionHref(orgId, 'templates')}/${entry.workTypeId}`}
+        href={`${workTemplateHref(orgId)}/${entry.workTypeId}`}
       >
         {entry.template.definition.name}
       </Link>
@@ -151,7 +151,7 @@ function BundleNextReview({
       <p className="text-body-medium">{nextReviewInstructions(undone, consumers)}</p>
       {next ? (
         <Button asChild className="self-start">
-          <Link href={`${sectionHref(orgId, 'templates')}/${next.workTypeId}?section=review`}>
+          <Link href={`${workTemplateHref(orgId)}/${next.workTypeId}?section=review`}>
             Review {(next.template?.draftDefinition ?? next.template?.definition)?.name}
           </Link>
         </Button>

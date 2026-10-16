@@ -7,6 +7,7 @@ import {
   Inbox,
   Layers,
   LayoutGrid,
+  LayoutTemplate,
   Library,
   ListChecks,
   MessageSquare,
@@ -155,6 +156,14 @@ export const WORKSPACE_NAVIGATION_DESCRIPTORS: readonly WorkspaceNavigationDescr
     aliases: ['activity', 'updates'],
     icon: Activity,
     segment: 'stream',
+  },
+  {
+    key: 'work-templates',
+    label: 'Work templates',
+    description: 'Define the kinds of work your organization does and how they fit together.',
+    aliases: ['templates', 'work definitions', 'blueprints'],
+    icon: LayoutTemplate,
+    segment: 'work-templates',
   },
   {
     key: 'library',

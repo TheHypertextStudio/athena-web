@@ -3,8 +3,8 @@ import type { JSX } from 'react';
 import { WorkTemplateCopyBundle } from '@docket/work/template-gallery-contract';
 import { useApiQuery } from '@/lib/query';
 import { useAppRouter } from '@/lib/interactions/navigation';
-import { sectionHref } from '@/components/settings/settings-registry';
-import { SettingsSectionPage } from '@/components/settings/settings-section-page';
+import { workTemplateHref } from '../work-template-navigation';
+import { WorkTemplateWorkspaceFrame } from '../work-template-workspace-frame';
 import { QueryLoadFailure } from '@/components/feedback';
 import { templateGalleryCopyBundleDef } from '../work-template-gallery-queries';
 import { useGalleryBundleUndo } from './use-gallery-bundle-undo';
@@ -19,10 +19,10 @@ export function GalleryBundlePage({ bundleId }: { readonly bundleId: string }): 
   const undo = useGalleryBundleUndo(state.scope.orgId, bundleId);
   const saved = query.data ? WorkTemplateCopyBundle.parse(query.data) : null;
   const bundle = saved && undo.outcome ? { ...saved, receipt: undo.outcome.receipt } : saved;
-  const href = sectionHref(state.scope.orgId, 'templates');
+  const href = workTemplateHref(state.scope.orgId);
   return (
-    <SettingsSectionPage
-      headingSize="expressive"
+    <WorkTemplateWorkspaceFrame
+      orgId={state.scope.orgId}
       title="Saved starting work"
       parent={{ label: 'Work templates', href }}
       loading={query.isPending}
@@ -39,6 +39,6 @@ export function GalleryBundlePage({ bundleId }: { readonly bundleId: string }): 
           }}
         />
       ) : null}
-    </SettingsSectionPage>
+    </WorkTemplateWorkspaceFrame>
   );
 }

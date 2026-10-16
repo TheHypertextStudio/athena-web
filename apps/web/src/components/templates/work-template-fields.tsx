@@ -43,7 +43,7 @@ export function WorkTemplateFields({
         rootEditor={<TemplateSampleWork orgId={orgId} form={form} />}
       />
       <div className="min-w-0">
-        <TemplateDisclosure title="Template settings">
+        <TemplateDisclosure title="Defaults and availability">
           <Field
             label="Starting status"
             description="If this status is removed, new work uses its normal starting status."
@@ -227,7 +227,7 @@ export function WorkTemplatePurposeFields({
     <div className="flex max-w-2xl min-w-0 flex-col gap-5">
       <div>
         <h2 tabIndex={-1} className="text-title-large">
-          Name the work your workspace repeats
+          Name a kind of work
         </h2>
         <p className="text-body-medium text-on-surface-variant">
           Give a kind of work a shared name, such as Event, client engagement, or volunteer

@@ -107,7 +107,7 @@ test('Event work definition is revisitable, preserves selected work, and reviews
 }) => {
   const { orgId } = await blueprintWorkspace(page);
   const draft = await eventDefinition(page, orgId);
-  const route = `/orgs/${orgId}/settings/templates/${draft.id}`;
+  const route = `/orgs/${orgId}/work-templates/${draft.id}`;
   await page.goto(route, { waitUntil: 'commit', timeout: TIMEOUTS.pageReady });
   await expect(page.getByRole('tab', { name: 'Work', exact: true })).toHaveAttribute(
     'aria-selected',
@@ -120,9 +120,10 @@ test('Event work definition is revisitable, preserves selected work, and reviews
   await page.getByRole('button', { name: 'Edit Dinner day', exact: true }).click();
   await expect(page.getByRole('status').filter({ hasText: /^Saved draft$/ })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Review definition', exact: true })).toBeEnabled();
-  await page.getByRole('button', { name: 'Done editing', exact: true }).click();
+  await page.getByRole('button', { name: 'Back to outline', exact: true }).click();
   await page.getByRole('button', { name: 'Edit Book venue', exact: true }).click();
   const child = page.getByRole('group', { name: 'Child work: Book venue', exact: true });
+  await child.getByRole('button', { name: 'Add a summary', exact: true }).click();
   await child
     .getByRole('textbox', { name: 'Child summary', exact: true })
     .fill('Check capacity, access, kitchen facilities, and the booking terms.');
@@ -145,10 +146,12 @@ test('Event work definition is revisitable, preserves selected work, and reviews
   const scroll = await page.getByRole('main').evaluate((element) => element.scrollTop);
   await page.getByRole('tab', { name: 'Review', exact: true }).click();
   const review = page.getByRole('region', { name: 'Work definition review' });
-  await expect(review).toContainText('Assigned to Event’s responsible person');
+  await expect(review).toContainText('Project lead · Project team, otherwise selected team');
   await expect(review).toContainText('Due 21 days before Event date');
-  await expect(review.getByRole('heading', { name: 'Event', exact: true })).toBeFocused();
-  await expect(review.getByRole('heading', { name: 'Event', exact: true })).toBeInViewport();
+  await expect(review.getByRole('heading', { name: 'Included work', exact: true })).toBeFocused();
+  await expect(
+    review.getByRole('heading', { name: 'Included work', exact: true }),
+  ).toBeInViewport();
   await page.getByRole('tab', { name: 'Work', exact: true }).click();
   await expect(document).toBeFocused();
   await expect(document).toContainText('Preparation requirement 18');
@@ -167,7 +170,7 @@ test('saving a new definition from Review preserves Review and leaves publishing
   page,
 }) => {
   const { orgId } = await blueprintWorkspace(page);
-  await page.goto(`/orgs/${orgId}/settings/templates/new`, {
+  await page.goto(`/orgs/${orgId}/work-templates/new`, {
     waitUntil: 'commit',
     timeout: TIMEOUTS.pageReady,
   });
@@ -183,7 +186,7 @@ test('saving a new definition from Review preserves Review and leaves publishing
   const draft = (await (await saved).json()) as WorkTemplateOut;
   expect(draft.scope).toBe('personal');
   expect(draft.latestVersion).toBeNull();
-  await expect(page).toHaveURL(new RegExp(`/templates/${draft.id}\\?section=review$`));
+  await expect(page).toHaveURL(new RegExp(`/work-templates/${draft.id}\\?section=review$`));
   await expect(page.getByRole('tab', { name: 'Review', exact: true })).toHaveAttribute(
     'aria-selected',
     'true',
@@ -191,7 +194,7 @@ test('saving a new definition from Review preserves Review and leaves publishing
   await expect(
     page.getByRole('button', { name: 'Publish to workspace', exact: true }),
   ).toBeEnabled();
-  await page.goto(`/orgs/${orgId}/settings/templates/${draft.id}`, {
+  await page.goto(`/orgs/${orgId}/work-templates/${draft.id}`, {
     waitUntil: 'commit',
     timeout: TIMEOUTS.pageReady,
   });
@@ -208,7 +211,7 @@ test.describe('phone work outline', () => {
   }) => {
     const { orgId } = await blueprintWorkspace(page);
     const draft = await eventDefinition(page, orgId);
-    await page.goto(`/orgs/${orgId}/settings/templates/${draft.id}`, {
+    await page.goto(`/orgs/${orgId}/work-templates/${draft.id}`, {
       waitUntil: 'commit',
       timeout: TIMEOUTS.pageReady,
     });

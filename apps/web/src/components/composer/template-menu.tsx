@@ -33,7 +33,7 @@ import { ChevronDown, LayoutTemplate, Settings } from '@docket/ui/icons';
 import Link from '@/components/docket-link';
 import { type JSX, useEffect, useMemo, useRef } from 'react';
 
-import { sectionHref } from '@/components/settings/settings-registry';
+import { workTemplateHref } from '@/components/templates/work-template-navigation';
 import {
   sortTemplates,
   templateMatchesContext,
@@ -266,7 +266,7 @@ export function ComposerTemplateControl({
     <TemplateMenu
       templates={templates}
       onApply={onApply}
-      manageHref={sectionHref(orgId, 'templates')}
+      manageHref={workTemplateHref(orgId)}
       onManage={onManage}
       disabled={disabled}
       triggerLabel="Start from template"

@@ -83,7 +83,7 @@ describe('durable private copy review', () => {
     expect(screen.getByRole('link', { name: 'Edited community dinner' })).toBeVisible();
     expect(screen.getByRole('link', { name: 'Review Vendor booking' })).toHaveAttribute(
       'href',
-      `/orgs/${orgId}/settings/templates/${vendorId}?section=review`,
+      `/orgs/${orgId}/work-templates/${vendorId}?section=review`,
     );
     expect(screen.getByText('Publish Vendor booking before this definition.')).toBeVisible();
     expect(screen.queryByText(/Fixed publication|Version 1/)).not.toBeInTheDocument();

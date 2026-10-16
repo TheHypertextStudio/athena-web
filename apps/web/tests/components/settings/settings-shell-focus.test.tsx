@@ -44,7 +44,7 @@ afterEach(() => {
 });
 
 describe('SettingsShell route-fragment focus', () => {
-  it('keeps nested work definition routes in the full-page app shell', () => {
+  it('keeps legacy template redirects outside the settings dialog', () => {
     location.pathname = '/orgs/workspace/settings/templates/new';
     render(
       <SettingsShell active>

@@ -111,7 +111,7 @@ describe('work-template sample authoring', () => {
       mocks.canManage = canManage;
       render(<WorkTemplateForm orgId="org" initial={null} onCreated={vi.fn()} />);
       fireEvent.click(screen.getByRole('tab', { name: 'Work' }));
-      fireEvent.click(screen.getByRole('button', { name: 'Template settings' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Defaults and availability' }));
       const control = screen.getByRole('button', { name: /Offer to teams/ });
       if (canManage) expect(control).toBeEnabled();
       else expect(control).toBeDisabled();

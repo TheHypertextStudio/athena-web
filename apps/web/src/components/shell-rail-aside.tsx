@@ -18,7 +18,7 @@ import { FocusPanel, focusRailStatus, type TimerStatus } from '@/components/time
 const ATHENA_ROUTE = '/athena';
 
 /**
- * Whether "open Athena" has no rail panel to land in on this route: settings and the calendar
+ * Whether "open Athena" has no rail panel to land in on this route: settings, work templates and the calendar
  * render no rail, and `/athena` owns the full conversation width. Each opens the page instead.
  *
  * @param pathname - The current route's path.
@@ -30,7 +30,12 @@ export function athenaRailUnavailable(
   settingsSurface: boolean,
   calendarSurface: boolean,
 ): boolean {
-  return settingsSurface || calendarSurface || pathname === ATHENA_ROUTE;
+  return (
+    settingsSurface ||
+    calendarSurface ||
+    pathname === ATHENA_ROUTE ||
+    /^\/orgs\/[^/]+\/work-templates(?:\/|$)/.test(pathname)
+  );
 }
 
 /**

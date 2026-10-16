@@ -164,14 +164,16 @@ Each work table gets an `(organization_id, work_type_id)` index. Existing search
 `workTypeId` facet to work documents, and search filters apply it through the existing candidate
 query and index. Definitions themselves remain outside general work search. A typed projector
 backfill refreshes existing work documents without copying private draft bodies into the index.
-Group/filter choices include archived templates already used by visible work. Templates
-add nothing to the sidebar. A person may pin an ordinary filtered view.
+Group/filter choices include archived templates already used by visible work. Individual template definitions
+do not add sidebar rows. A person may pin an ordinary filtered view.
 
-Settings is named **Work templates**, grouped by kind, with clear draft/publication/archive state.
+The dedicated **Work templates** workspace groups definitions by readiness and work kind, with clear
+draft/publication/archive state. Authoring permissions alone remain in Settings.
 Editing uses a full-page sample item and the normal document layout; the current guided creation
 flow remains a useful way to start a draft. Publishing has an explicit revision-aware action.
-Administrators manage contributor authoring policy and team offering there. Command-palette search
-for template/type/blueprint finds Settings; published definitions supply **New {template}** actions
+Administrators manage contributor authoring policy in Settings → Template permissions; team
+offerings remain in definition authoring. Command-palette search
+for template/type/blueprint finds the Work templates workspace; published definitions supply **New {template}** actions
 and Program add choices.
 
 Work headers offer **Change template**. In this layer its preview explains identity and optional

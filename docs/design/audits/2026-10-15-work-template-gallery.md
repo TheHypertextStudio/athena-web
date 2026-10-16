@@ -1,5 +1,9 @@
 # Design review: Work-template gallery and reentry — 2026-10-15
 
+> The Settings placement reviewed here was rejected in owner review. Its placement verdict is
+> withdrawn. The dedicated Work templates workspace requires fresh rendered acceptance; the
+> interaction evidence below remains bounded to the behavior it actually exercised.
+
 Register: app, IBM Plex / MD3. Scope: library, nonprofit browse, Event detail,
 first-use choice, single-Event review, full 60-root startup review, focused work
 inspection and saved-copy reentry. This review evaluates the

@@ -88,7 +88,7 @@ async function capturePrivateTemplate(
   expect(captured.template.scope).toBe('personal');
   expect(captured.template.latestVersion).toBeNull();
   expect(captured.template.id).not.toBe(seeded.publication.id);
-  await expect(page).toHaveURL(new RegExp(`/templates/${captured.template.id}$`));
+  await expect(page).toHaveURL(new RegExp(`/work-templates/${captured.template.id}$`));
   await page.reload({ waitUntil: 'commit' });
   await expect(page.getByRole('tab', { name: 'Work', exact: true })).toHaveAttribute(
     'aria-selected',

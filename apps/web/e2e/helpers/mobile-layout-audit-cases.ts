@@ -80,7 +80,7 @@ export const MOBILE_LAYOUT_ROUTE_CASES: readonly MobileLayoutRouteCase[] = [
   { id: 'workspace-settings-members', route: '/orgs/:sharedOrgId/settings/members' },
   { id: 'workspace-settings-publishing', route: '/orgs/:sharedOrgId/settings/publishing' },
   { id: 'workspace-settings-statuses', route: '/orgs/:sharedOrgId/settings/statuses' },
-  { id: 'workspace-settings-templates', route: '/orgs/:sharedOrgId/settings/templates' },
+  { id: 'workspace-work-templates', route: '/orgs/:sharedOrgId/work-templates' },
   { id: 'workspace-settings-work-structure', route: '/orgs/:sharedOrgId/settings/work-structure' },
   { id: 'settings-google-calendar', route: '/settings/connections/google-calendar' },
   {

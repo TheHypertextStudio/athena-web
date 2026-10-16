@@ -14,7 +14,7 @@ import type { Editor } from '@tiptap/react';
 import { type JSX, useMemo, useState } from 'react';
 
 import { TemplateMenu } from '@/components/composer/template-menu';
-import { sectionHref } from '@/components/settings/settings-registry';
+import { workTemplateHref } from '@/components/templates/work-template-navigation';
 import { templateMerge } from '@/components/templates/merge';
 import {
   sortTemplates,
@@ -151,7 +151,7 @@ export function TemplateAwareEntityDocument({
         : createDescriptionTemplateContribution({
             kind,
             templates,
-            manageHref: sectionHref(orgId, 'templates'),
+            manageHref: workTemplateHref(orgId),
           }),
     [kind, orgId, templates],
   );

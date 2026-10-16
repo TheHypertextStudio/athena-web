@@ -288,13 +288,13 @@ commands through one keyboard and accessibility path.
 persisted editors both depend on that template-domain function; neither surface owns a private
 version of the append and blank-label rules.
 
-**4. Settings → Templates** — `app/(app)/orgs/[orgId]/settings/templates/page.tsx`, registered in
-the Workflows group of `settings/sections.ts` and mirrored into the personal registry. Grouped by
-kind, rows separated by tonal steps rather than rules. The editor (`TemplateEditorDialog`) is the
-same `ComposerShell` and the same `*ComposerPickers` components the create dialog uses, with the
-template's name, description, and scope above them — so authoring a template looks like creating
-the thing it makes. The picker components take their reference axes as _optional_ props precisely
-so the editor can omit them.
+**4. Work templates workspace** — `/orgs/[orgId]/work-templates` is a dedicated full-page
+workspace destination. The library groups published definitions and private drafts by work kind;
+Choose a starting point opens the gallery, and Define your own opens the re-enterable
+Purpose → Work → Review authoring flow. Gallery review and saved-copy bundles remain inside the
+same workspace, with explicit return navigation. Existing Settings template links replace themselves
+with the corresponding workspace URL, preserving identity, query and focus without a Back loop.
+Only who may author and publish remains in Settings → Template permissions.
 
 **5. The command palette** — `command-palette/use-command-actions.ts`. Four "New {kind}" actions
 plus a `Create from template` section that stays hidden until the user types (`requiresQuery` on

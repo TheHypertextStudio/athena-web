@@ -7,6 +7,7 @@ import {
   Inbox,
   Layers,
   LayoutGrid,
+  LayoutTemplate,
   Library,
   ListChecks,
   NotePen,
@@ -216,6 +217,15 @@ const DEFINITIONS: readonly NavigationDefinition[] = [
     icon: Activity,
     label: label('Stream'),
     sharedWorkspaceOnly: true,
+  },
+  {
+    id: 'workspace:work-templates',
+    key: 'work-templates',
+    group: 'workspace',
+    moreGroup: 'workspace',
+    rail: false,
+    icon: LayoutTemplate,
+    label: label('Work templates'),
   },
   {
     id: 'workspace:library',

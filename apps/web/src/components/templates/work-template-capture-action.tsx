@@ -3,7 +3,7 @@ import type { TemplateTargetType } from '@docket/work/template-contract';
 import { Button } from '@docket/ui/primitives';
 import { useState, type JSX } from 'react';
 import { useCanManageOrg } from '@/components/settings/use-can-manage-org';
-import { sectionHref } from '@/components/settings/settings-registry';
+import { workTemplateHref } from '@/components/templates/work-template-navigation';
 import { useApiQuery } from '@/lib/query';
 import { useAppRouter } from '@/lib/interactions/navigation';
 import { UserFacingError } from '@/lib/problem';
@@ -56,7 +56,7 @@ export function WorkTemplateCaptureAction({
         sourceSnapshotToken: preview.data.sourceSnapshotToken,
       });
       setOpen(false);
-      router.push(`${sectionHref(orgId, 'templates')}/${result.template.id}`);
+      router.push(`${workTemplateHref(orgId)}/${result.template.id}`);
     } catch (error) {
       setFailure(error instanceof UserFacingError && error.status === 409 ? 'stale' : 'failed');
     }

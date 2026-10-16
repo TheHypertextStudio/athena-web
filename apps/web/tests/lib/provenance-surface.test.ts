@@ -7,6 +7,8 @@ describe('appSurfaceForPath', () => {
     expect(appSurfaceForPath('/orgs/org_1/tasks/task_1')).toBe('detail');
     expect(appSurfaceForPath('/orgs/org_1/projects/project_1')).toBe('detail');
     expect(appSurfaceForPath('/orgs/org_1/projects')).toBe('list');
+    expect(appSurfaceForPath('/orgs/org_1/work-templates')).toBe('list');
+    expect(appSurfaceForPath('/orgs/org_1/work-templates/gallery/review')).toBe('list');
   });
 
   it('maps personal and workspace destinations to their surfaces', () => {

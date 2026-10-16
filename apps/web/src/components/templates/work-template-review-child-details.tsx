@@ -6,7 +6,7 @@ import { Badge, Button } from '@docket/ui/primitives';
 import { useApiQuery } from '@/lib/query';
 import type { WorkTemplateOut } from '@docket/work/work-template-contract';
 import Link from '@/components/docket-link';
-import { sectionHref } from '@/components/settings/settings-registry';
+import { workTemplateHref } from './work-template-navigation';
 import { pendingTemplateReference } from './work-template-pending-reference';
 import { workTemplateVersionsDef } from './work-template-queries';
 import { blueprintStepName } from './work-template-blueprint-edit';
@@ -52,11 +52,13 @@ export function WorkTemplateReviewNestedVersion({
   template,
   name,
   selected,
+  returnTo,
 }: {
   orgId: string;
   template: NonNullable<BlueprintStep['template']>;
   name: string;
   selected?: WorkTemplateOut | undefined;
+  returnTo?: string | undefined;
 }): JSX.Element {
   const selection = template.selection;
   const pending = pendingTemplateReference(template, selected);
@@ -76,7 +78,9 @@ export function WorkTemplateReviewNestedVersion({
         </Badge>
         {pending.canEdit ? (
           <Button asChild variant="ghost" className="min-h-10 self-start">
-            <Link href={`${sectionHref(orgId, 'templates')}/${pending.id}?section=review`}>
+            <Link
+              href={`${workTemplateHref(orgId)}/${pending.id}?section=review${returnTo ? `&returnTo=${returnTo}` : ''}`}
+            >
               Review {pending.definition.name}
             </Link>
           </Button>

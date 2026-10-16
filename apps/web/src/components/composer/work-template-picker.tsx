@@ -16,7 +16,7 @@ import { statusSetsDef } from '@/components/statuses/queries';
 import type { JSX } from 'react';
 import Link from '@/components/docket-link';
 import { workTemplatesDef } from '@/components/templates/work-template-queries';
-import { sectionHref } from '@/components/settings/settings-registry';
+import { workTemplateHref } from '@/components/templates/work-template-navigation';
 import { useApiQuery } from '@/lib/query';
 
 interface WorkTemplatePickerProps {
@@ -98,7 +98,7 @@ export function WorkTemplatePicker({
         ))}
         <DropdownMenuSeparator />
         <DropdownMenuItem asChild>
-          <Link href={sectionHref(orgId, 'templates')}>Manage templates…</Link>
+          <Link href={workTemplateHref(orgId)}>Manage templates…</Link>
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

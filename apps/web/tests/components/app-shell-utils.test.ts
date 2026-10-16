@@ -3,7 +3,11 @@ import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
-import { homeKeyFromPath, isObjectDetailPath } from '../../src/components/app-shell-utils';
+import {
+  homeKeyFromPath,
+  isObjectDetailPath,
+  workspaceKeyFromPath,
+} from '../../src/components/app-shell-utils';
 import { signInReturnPath } from '../../src/lib/auth-navigation';
 
 const root = resolve(import.meta.dirname, '../../../..');
@@ -62,6 +66,20 @@ describe('object detail shell treatment', () => {
 });
 
 describe('workspace navigation', () => {
+  it('highlights the dedicated workspace throughout gallery and authoring reentry', () => {
+    for (const suffix of [
+      '',
+      '/new',
+      '/template-1?section=review',
+      '/gallery',
+      '/gallery/review',
+      '/gallery/copies/bundle-1',
+    ]) {
+      expect(workspaceKeyFromPath(`/orgs/org_1/work-templates${suffix}`)).toBe('work-templates');
+      expect(isObjectDetailPath(`/orgs/org_1/work-templates${suffix}`)).toBe(false);
+    }
+  });
+
   it('highlights Time as a cross-workspace Home destination', () => {
     expect(homeKeyFromPath('/time')).toBe('time');
     expect(homeKeyFromPath('/time/review')).toBe('time');

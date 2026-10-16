@@ -55,6 +55,7 @@ export const NAV_SEGMENTS: readonly WorkspaceNavKey[] = [
   'programs',
   'projects',
   'cycles',
+  'work-templates',
   'library',
   'teams',
   'people',

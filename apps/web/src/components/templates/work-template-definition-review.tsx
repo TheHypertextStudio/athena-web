@@ -7,6 +7,7 @@ import { workTemplatesDef } from './work-template-queries';
 import { WorkTemplateReviewStartingValues } from './work-template-review-starting-values';
 import { WorkTemplateReviewChildren } from './work-template-review-children';
 import { WorkTemplateBlueprintSummary } from './work-template-blueprint-summary';
+import { TemplateDisclosure } from './template-disclosure';
 import { ProgramDefaultScheduleReview } from './program-default-schedule-review';
 import type { WorkTemplateFormState } from './use-work-template-form';
 
@@ -14,9 +15,11 @@ import type { WorkTemplateFormState } from './use-work-template-form';
 export function WorkTemplateDefinitionReview({
   form,
   orgId,
+  templateId,
 }: {
   orgId: string;
   form: WorkTemplateFormState;
+  templateId?: string | undefined;
 }): JSX.Element {
   const templates = useApiQuery(workTemplatesDef(orgId, { includeDrafts: true }));
   const blueprint = form.definition.blueprint;
@@ -25,36 +28,6 @@ export function WorkTemplateDefinitionReview({
       aria-label="Work definition review"
       className="grid min-w-0 items-start gap-5 xl:grid-cols-2"
     >
-      <Surface
-        as="section"
-        tone="card"
-        shape="large"
-        pad="roomy"
-        aria-label="Starting work"
-        className="flex min-w-0 flex-col gap-4"
-      >
-        <h2 tabIndex={-1} className="text-title-large">
-          Starting work
-        </h2>
-        {form.definition.description?.trim() ? (
-          <p className="text-body-medium text-on-surface-variant">{form.definition.description}</p>
-        ) : null}
-        <WorkTemplateReviewStartingValues
-          orgId={orgId}
-          payload={form.definition.payload}
-          defaultStatusKey={form.definition.defaultStatusKey}
-          heading={false}
-          compactProperties
-        >
-          {form.definition.payload.description ? (
-            <StaticMarkdown value={form.definition.payload.description} />
-          ) : (
-            <p className="text-body-small text-on-surface-variant">
-              Starts with an empty document.
-            </p>
-          )}
-        </WorkTemplateReviewStartingValues>
-      </Surface>
       <div className="flex min-w-0 flex-col gap-5">
         <Surface
           as="section"
@@ -65,7 +38,9 @@ export function WorkTemplateDefinitionReview({
           className="flex min-w-0 flex-col gap-4"
         >
           <div className="flex flex-col gap-1">
-            <h2 className="text-title-large">Included work</h2>
+            <h2 tabIndex={-1} className="text-title-large">
+              Included work
+            </h2>
             <WorkTemplateBlueprintSummary blueprint={blueprint} />
           </div>
           {blueprint.steps.length ? (
@@ -75,6 +50,7 @@ export function WorkTemplateDefinitionReview({
               rootKind={form.kind}
               orgId={orgId}
               templates={templates.data?.items ?? []}
+              rootId={templateId}
             />
           ) : (
             <p className="text-body-medium text-on-surface-variant">
@@ -88,6 +64,48 @@ export function WorkTemplateDefinitionReview({
           templates={templates.data?.items ?? []}
         />
       </div>
+      <StartingWorkReview form={form} orgId={orgId} />
     </section>
+  );
+}
+
+function StartingWorkReview({
+  form,
+  orgId,
+}: {
+  form: WorkTemplateFormState;
+  orgId: string;
+}): JSX.Element {
+  return (
+    <Surface
+      as="section"
+      tone="card"
+      shape="large"
+      pad="roomy"
+      aria-label="Starting work"
+      className="flex min-w-0 flex-col gap-4"
+    >
+      <h2 tabIndex={-1} className="text-title-large">
+        Starting work
+      </h2>
+      {form.definition.description?.trim() ? (
+        <p className="text-body-medium text-on-surface-variant">{form.definition.description}</p>
+      ) : null}
+      <WorkTemplateReviewStartingValues
+        orgId={orgId}
+        payload={form.definition.payload}
+        defaultStatusKey={form.definition.defaultStatusKey}
+        heading={false}
+        compactProperties
+      >
+        {form.definition.payload.description ? (
+          <TemplateDisclosure title="Starting document">
+            <StaticMarkdown value={form.definition.payload.description} />
+          </TemplateDisclosure>
+        ) : (
+          <p className="text-body-small text-on-surface-variant">Starts with an empty document.</p>
+        )}
+      </WorkTemplateReviewStartingValues>
+    </Surface>
   );
 }

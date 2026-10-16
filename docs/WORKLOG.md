@@ -7,6 +7,22 @@
 
 ## Active Tasks
 
+### [WEBSITE-WWW-CANONICAL] Preserve the frontend's canonical www redirect on Workers
+
+- **Status**: COMPLETE
+- **Description**: Preserve the existing permanent www-to-apex redirect when the frontend leaves
+  Vercel, including the requested path and query. Keep Publishing and backend host routing intact.
+- **Approach**: Handle the exact configured application's www alias in the existing Worker host
+  canonicalization boundary, before API forwarding and native application rendering.
+- **Files**: Worker gateway, existing Workers configuration checks, operations guidance and this log.
+- **Validation**: Reproduce the production-build www failure, run affected existing checks, and verify
+  the native production preview returns the canonical redirect. Preserve current security headers.
+- **Outcome**: The native production preview returns the permanent canonical redirect with path,
+  query and security headers intact. Affected Workers checks, web types, lint, formatting and
+  independent review pass. Actual hostname attachment remains part of the approved frontend cutover.
+- **Learnings**: Include provider-owned redirects when moving application hosting; the application's
+  own canonicalization boundary can preserve them without retaining the previous provider.
+
 ### [WORK-TEMPLATES-WORKSPACE] Give work definitions a dedicated workspace
 
 - **Status**: REVIEW

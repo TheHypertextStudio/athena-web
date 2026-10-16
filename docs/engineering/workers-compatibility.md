@@ -90,6 +90,10 @@ Workers cutover. The source declares the production app/API, passkey and
 Publishing identities. Confirm actual route ownership, TLS, bindings,
 credentials and prior deployment/alias reversal before applying routes.
 Use a fresh production build with matching public inputs, never staging output.
+The Worker preserves the exact application's `www` alias as a permanent redirect
+to its canonical HTTPS origin, retaining path and query. Include that hostname in
+the frontend cutover so the redirect no longer depends on Vercel. Publishing,
+API/admin and unrelated custom hosts retain their separate routing.
 
 Native OpenNext `deploy:worker` and `upload:worker` both write remote cache and
 provider state. `deploy` serves the new version; `upload` alone does not accept

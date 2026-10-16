@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { imageConfigDefault } from 'next/dist/shared/lib/image-config';
+import { workerHostRedirect } from '../../worker-gateway';
 import { readWorkerRuntimeConfig } from '../../worker-runtime-config';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -10,6 +11,41 @@ afterEach(() => {
 });
 
 describe('Workers provider configuration', () => {
+  it('preserves the existing exact www alias redirect without capturing other hosts', () => {
+    const config = readWorkerRuntimeConfig({
+      STUDIO_DEPLOYMENT_ENV: 'production',
+      WEB_URL: 'https://clearthedocket.com',
+      API_URL: 'https://api.clearthedocket.com',
+      PUBLIC_BRIEF_HOST: 'briefs.clearthedocket.com',
+      BETTER_AUTH_PASSKEY_RP_ID: 'clearthedocket.com',
+      BETTER_AUTH_PASSKEY_LEGACY_RP_ID: 'hypertext.studio',
+    });
+    const response = workerHostRedirect(
+      new URL('https://www.clearthedocket.com/sign-in?callbackURL=%2Ftoday'),
+      config,
+    );
+    expect(response?.status).toBe(308);
+    expect(response?.headers.get('location')).toBe(
+      'https://clearthedocket.com/sign-in?callbackURL=%2Ftoday',
+    );
+    expect(response?.headers.get('x-content-type-options')).toBe('nosniff');
+    for (const host of [
+      'clearthedocket.com',
+      'api.clearthedocket.com',
+      'briefs.clearthedocket.com',
+      'www.briefs.clearthedocket.com',
+      'www.customer.example',
+    ]) {
+      expect(workerHostRedirect(new URL(`https://${host}/sign-in`), config)).toBeUndefined();
+    }
+    expect(
+      workerHostRedirect(
+        new URL('http://www.clearthedocket.com/docs?from=www'),
+        config,
+      )?.headers.get('location'),
+    ).toBe('https://clearthedocket.com/docs?from=www');
+  });
+
   it('uses the source Worker and native OpenNext assets directly', () => {
     const source: unknown = JSON.parse(readFileSync('wrangler.jsonc', 'utf8'));
     expect(source).toMatchObject({

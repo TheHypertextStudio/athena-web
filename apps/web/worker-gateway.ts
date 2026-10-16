@@ -3,10 +3,12 @@ import { overlayWorkerPublicConfig, stripConfigPreconditions } from './worker-pu
 import { transportHeaders } from './worker-transport';
 import { isWorkerApplicationHost, type WorkerRuntimeConfig } from './worker-runtime-config';
 
-/** Existing canonicalization runs before API forwarding; AASA retains its legacy-host exception. */
+/** Canonical aliases redirect before API forwarding; AASA retains its legacy-host exception. */
 export function workerHostRedirect(url: URL, config: WorkerRuntimeConfig): Response | undefined {
   let destination: string | undefined;
-  if (
+  if (url.hostname === `www.${config.appHostname}`) {
+    destination = config.appOrigin;
+  } else if (
     config.legacyRpHostname !== undefined &&
     config.legacyRpHostname !== config.appHostname &&
     url.hostname === config.legacyRpHostname &&

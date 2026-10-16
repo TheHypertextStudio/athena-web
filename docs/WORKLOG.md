@@ -7,6 +7,22 @@
 
 ## Active Tasks
 
+### [WEBSITE-OPENAPI-UUID-EXAMPLES] Preserve valid public examples for UUID retry identities
+
+- **Status**: COMPLETE
+- **Priority**: P1
+- **Description**: Generate the complete public API document when a request uses a UUID retry
+  identity. Every generated example must satisfy the actual schema without relaxing its constraints.
+- **Approach**: Add deterministic UUIDv4 candidates to the existing variant-based string generator.
+  Exercise the gallery's real identifier schema and distinct array examples through the existing
+  schema and full-document suites.
+- **Files**: Public OpenAPI schema generator, its existing regression checks and this worklog.
+- **Subtasks**:
+  - [x] Reproduce the missing candidate and preserve pattern and length refusals.
+  - [x] Validate deterministic UUID examples against the exact generated schema.
+  - [x] Pass affected API document, infrastructure, route and security checks without changing the transfer budget.
+  - [x] Review the minimal source change and pass affected types, lint and formatting.
+
 ### [WEBSITE-CI-DB-COVERAGE] Preserve ordinary database boundary coverage
 
 - **Status**: COMPLETE

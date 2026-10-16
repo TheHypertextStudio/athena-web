@@ -1,4 +1,8 @@
 import { describe, expect, it } from 'vitest';
+import Ajv2020 from 'ajv/dist/2020.js';
+import addFormats from 'ajv-formats';
+import { z } from 'zod';
+import { WorkTemplateGalleryAcceptRequest } from '@docket/work/template-gallery-contract';
 
 import { addExamplesAndDescriptions, exampleForSchema } from '../../src/openapi-public-schema';
 import type { JsonObject } from '../../src/openapi-public-prose';
@@ -25,6 +29,35 @@ describe('public OpenAPI examples', () => {
       components,
     );
     expect(example).toMatch(/^sha256:[a-f0-9]{64}$/);
+  });
+
+  it('generates valid deterministic UUID examples for gallery acceptance retry identities', () => {
+    const requestId = WorkTemplateGalleryAcceptRequest.shape.requestId;
+    const schema = z.toJSONSchema(requestId);
+    const example = exampleForSchema(schema, components);
+    expect(requestId.safeParse(example).success).toBe(true);
+    expect(exampleForSchema(schema, components)).toBe(example);
+    for (const bound of [{ minLength: 37 }, { maxLength: 35 }])
+      expect(() => exampleForSchema({ ...schema, ...bound }, components)).toThrow(
+        'No deterministic public example satisfies pattern',
+      );
+  });
+
+  it('generates distinct UUID array items that satisfy the exact gallery identifier contract', () => {
+    const requestId = WorkTemplateGalleryAcceptRequest.shape.requestId;
+    const schema = {
+      type: 'array',
+      minItems: 2,
+      uniqueItems: true,
+      items: z.toJSONSchema(requestId),
+    };
+    const examples = exampleForSchema(schema, components);
+    const parsed = z.array(requestId).length(2).parse(examples);
+    expect(new Set(parsed).size).toBe(2);
+    const validator = new Ajv2020({ strict: false, logger: false });
+    addFormats(validator);
+    expect(validator.validate(schema, examples)).toBe(true);
+    expect(exampleForSchema(schema, components)).toEqual(examples);
   });
 
   it('uses readable bounded numbers instead of safe-integer sentinels', () => {

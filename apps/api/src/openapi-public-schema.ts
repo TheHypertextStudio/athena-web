@@ -126,6 +126,10 @@ function objectExample(
 }
 
 const EXAMPLE_ULIDS = ['01ARZ3NDEKTSV4RRFFQ69G5FAV', '01ARZ3NDEKTSV4RRFFQ69G5FAW'] as const;
+const EXAMPLE_UUIDS = [
+  '123e4567-e89b-42d3-a456-426614174000',
+  '123e4567-e89b-42d3-a456-426614174001',
+] as const;
 
 function constrainedStringExample(schema: JsonObject, variant: number): string | undefined {
   const pattern = typeof schema['pattern'] === 'string' ? schema['pattern'] : undefined;
@@ -133,6 +137,7 @@ function constrainedStringExample(schema: JsonObject, variant: number): string |
   const ulid = EXAMPLE_ULIDS[variant % EXAMPLE_ULIDS.length] ?? EXAMPLE_ULIDS[0];
   const candidates = [
     ulid,
+    EXAMPLE_UUIDS[variant % EXAMPLE_UUIDS.length] ?? EXAMPLE_UUIDS[0],
     '2026-09-19',
     '2026-09-19T12:00:00.000Z',
     'example-slug',

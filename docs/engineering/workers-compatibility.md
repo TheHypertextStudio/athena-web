@@ -94,8 +94,11 @@ Use a fresh production build with matching public inputs, never staging output.
 Native OpenNext `deploy:worker` and `upload:worker` both write remote cache and
 provider state. `deploy` serves the new version; `upload` alone does not accept
 the application. Use native version/deployment history for code rollback and
-retain independent DNS/route reversal steps. Keep prior hosting through the
-agreed observation and recovery window.
+retain independent DNS/route reversal steps while prior hosting exists. Retire
+superseded hosting and its DNS and deployment dependencies after Workers cutover
+acceptance, with no fixed observation or recovery window. Retain source and build
+configuration for redeployment; use native rollback once an accepted previous
+Worker version exists.
 
 Accept real startup/runtime behavior, Images/cache and invalidation,
 streaming/abort, private-viewer/logout, auth, docs/MCP and Publishing journeys

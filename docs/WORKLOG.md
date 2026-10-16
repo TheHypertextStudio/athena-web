@@ -7,6 +7,16 @@
 
 ## Active Tasks
 
+### [WEBSITE-HOSTING-RETIREMENT] Retire superseded hosting after cutover acceptance
+
+- **Status**: COMPLETE
+- **Description**: Align website operations with the owner's decision that these unlaunched
+  sites need no fixed observation or recovery delay.
+- **Approach**: Retire old hosting and its routing/deployment dependencies after Workers
+  acceptance. Preserve source and build configuration, and accepted native Worker versions.
+- **Files**: Workers compatibility guidance and this worklog.
+- **Validation**: Documentation review and formatting; no runtime or provider change.
+
 ### [WEBSITE-API-BOUNDARY-COVERAGE] Preserve API boundary coverage for template copies
 
 - **Status**: COMPLETE

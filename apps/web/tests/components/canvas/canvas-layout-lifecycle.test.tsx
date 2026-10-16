@@ -109,8 +109,22 @@ vi.mock('@xyflow/react', async () => {
     useOnSelectionChange: () => undefined,
     useReactFlow: () => instance,
     useStore: (
-      selector: (state: { nodes: Node[]; transform: [number, number, number] }) => unknown,
-    ) => selector({ nodes: flowState.nodes, transform: [0, 0, 1] }),
+      selector: (state: {
+        nodes: Node[];
+        transform: [number, number, number];
+        nodeLookup: Map<string, { measured: { width: number; height: number }; hidden: boolean }>;
+      }) => unknown,
+    ) =>
+      selector({
+        nodes: flowState.nodes,
+        transform: [0, 0, 1],
+        nodeLookup: new Map(
+          flowState.nodes.map((node) => [
+            node.id,
+            { measured: { width: 268, height: 96 }, hidden: node.hidden === true },
+          ]),
+        ),
+      }),
   };
 });
 
@@ -327,6 +341,25 @@ describe('Canvas measured layout lifecycle', () => {
     expect(flowState.fitView).toHaveBeenCalledWith(
       expect.objectContaining({ nodes: [{ id: 'project-7' }] }),
     );
+  });
+
+  it('keeps dependency handle taps in connection mode without opening node details', () => {
+    const select = vi.fn();
+    render(<Canvas nodes={projects} edges={[]} onSelectNode={select} />);
+    const click = flowState.reactFlowProps['onNodeClick'] as (
+      event: { target: Element },
+      node: Node,
+    ) => void;
+    const handle = document.createElement('div');
+    handle.className = 'react-flow__handle';
+    const glyph = document.createElement('span');
+    handle.append(glyph);
+    const node = projects[0];
+    if (!node) throw new Error('Missing project fixture.');
+    click({ target: glyph }, node);
+    expect(select).not.toHaveBeenCalled();
+    click({ target: document.createElement('div') }, node);
+    expect(select).toHaveBeenCalledWith(node.id);
   });
 
   it('keeps drag as pan until Shift or one-shot area selection activates', () => {

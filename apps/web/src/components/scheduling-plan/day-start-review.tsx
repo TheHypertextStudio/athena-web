@@ -23,7 +23,7 @@ import type {
   DirectiveOut,
   MorningProposalOut,
 } from '@docket/planning/scheduling-directive-contract';
-import { Button, ControlGroup, Separator, Stack, Text, Toolbar } from '@docket/ui/primitives';
+import { Button, ControlGroup, Separator, Stack, Text } from '@docket/ui/primitives';
 import { CheckCircle2, ScheduleOutlined } from '@docket/ui/icons';
 import type { JSX } from 'react';
 
@@ -33,13 +33,13 @@ import { WorkShapeChip } from './work-shape-chip';
 const POSTURE_HEADLINE: Readonly<Record<DirectiveOut['posture'], string>> = {
   on_track: 'The day is on track',
   attention_needed: 'One thing needs attention',
-  intervention_recommended: 'The day needs re-cutting',
+  intervention_recommended: 'Today needs adjusting',
 };
 
 /** Application-owned copy for each outstanding gate step. */
 const STEP_COPY: Readonly<Record<string, string>> = {
-  agenda_reviewed: 'Walk through today and decide on each block',
-  day_reconciled: 'Decide what happens to unfinished work',
+  agenda_reviewed: 'Choose Keep or Move out for each block',
+  day_reconciled: 'Choose what happens to unfinished work',
   day_reflected: 'Answer the three review questions',
   tomorrow_confirmed: "Confirm tomorrow's agenda",
 };
@@ -81,55 +81,48 @@ export function DayStartReview(props: DayStartReviewProps): JSX.Element {
 
   if (!dayStart.ready) {
     return (
-      <Stack gap={3} className="bg-surface-container-low rounded-xl p-6">
-        <Text as="h2" token="headline-small">
+      <Stack gap={3} className="bg-surface-container-low rounded-xl p-3 sm:p-6">
+        <Text as="h2" token="title-large" className="sm:text-headline-small">
           Today is not planned yet
         </Text>
         <Text token="body-medium" tone="muted">
           {dayStart.readiness === 'not_generated'
-            ? 'No planning run covers today. Plan the week and the agenda will be here.'
-            : 'The week was planned, but nothing landed on today.'}
+            ? 'Plan the week first, then review today’s blocks here.'
+            : 'There are no blocks to review today.'}
         </Text>
       </Stack>
     );
   }
 
   return (
-    <Stack gap={6} className="w-full min-w-0">
-      <Toolbar
-        controlSize="md"
-        leading={
-          <Stack gap={1} className="min-w-0">
-            <Text as="h2" token="headline-small">
-              Walk through today
-            </Text>
-            <Text token="body-small" tone="muted">
-              {released
-                ? `Reviewed at ${clock(dayStart.acknowledgedAt, dayStart.timezone)}`
-                : `${String(decided)} of ${String(dayStart.proposals.length)} decided`}
-            </Text>
-          </Stack>
-        }
-        trailing={
-          <ControlGroup controlSize="md">
-            {props.onReorganize === undefined ? null : (
-              <Button
-                variant="secondary"
-                onClick={props.onReorganize}
-                disabled={props.reorganizing === true}
-              >
-                {props.reorganizing === true ? 'Re-cutting…' : 'Re-cut the rest of today'}
-              </Button>
-            )}
+    <Stack gap={4} className="w-full min-w-0 sm:gap-6">
+      <Stack gap={3} as="header">
+        <Stack gap={1} className="min-w-0">
+          <Text as="h2" token="title-large" className="sm:text-headline-small">
+            Review today
+          </Text>
+          <Text token="body-small" tone="muted">
+            {released
+              ? `Reviewed at ${clock(dayStart.acknowledgedAt, dayStart.timezone)}`
+              : `${String(decided)} of ${String(dayStart.proposals.length)} decided`}
+          </Text>
+        </Stack>
+        <ControlGroup
+          controlSize="md"
+          wrap
+          className="flex-col items-stretch sm:flex-row sm:items-center"
+        >
+          {props.onReorganize === undefined ? null : (
             <Button
-              onClick={props.onAcknowledge}
-              disabled={released || !dayStart.confirm.available || props.acknowledging}
+              variant="secondary"
+              onClick={props.onReorganize}
+              disabled={props.reorganizing === true}
             >
-              {released ? 'Reviewed' : props.acknowledging ? 'Saving…' : "I've been through today"}
+              {props.reorganizing === true ? 'Adjusting…' : 'Adjust today'}
             </Button>
-          </ControlGroup>
-        }
-      />
+          )}
+        </ControlGroup>
+      </Stack>
 
       <GateNotice gate={dayStart.gate} directive={props.directive} />
 
@@ -144,6 +137,14 @@ export function DayStartReview(props: DayStartReviewProps): JSX.Element {
           />
         ))}
       </Stack>
+      <ControlGroup controlSize="md" className="flex-col items-stretch sm:flex-row">
+        <Button
+          onClick={props.onAcknowledge}
+          disabled={released || !dayStart.confirm.available || props.acknowledging}
+        >
+          {released ? 'Reviewed' : props.acknowledging ? 'Saving…' : 'Finish review'}
+        </Button>
+      </ControlGroup>
     </Stack>
   );
 }
@@ -163,7 +164,7 @@ function ProposalRow(props: {
   );
   return (
     <li
-      className="bg-surface-container-low flex min-w-0 flex-col gap-3 rounded-xl px-4 py-3 @2xl:flex-row @2xl:items-center @2xl:justify-between"
+      className="bg-surface-container-low flex min-w-0 flex-col gap-3 rounded-xl px-3 py-3 sm:px-4 @2xl:flex-row @2xl:items-center @2xl:justify-between"
       data-testid="morning-agenda-item"
       data-decision={proposal.decision}
     >
@@ -213,8 +214,11 @@ function GateNotice(props: {
   readonly directive: DirectiveOut | undefined;
 }): JSX.Element {
   const outstanding = props.gate.outstandingSteps;
+  const directive = props.directive;
+  const showDirective =
+    directive && (props.gate.state === 'open' || directive.posture !== 'on_track');
   return (
-    <Stack gap={3} className="bg-surface-container rounded-xl p-4">
+    <Stack gap={3} className="bg-surface-container rounded-xl p-3 sm:p-4">
       <div className="flex items-center gap-2">
         {props.gate.state === 'open' ? (
           <CheckCircle2 fontSize="small" aria-hidden className="text-primary" />
@@ -222,7 +226,7 @@ function GateNotice(props: {
           <ScheduleOutlined fontSize="small" aria-hidden className="text-on-surface-variant" />
         )}
         <Text token="title-small">
-          {props.gate.state === 'open' ? "You've been through today" : 'Today is waiting on you'}
+          {props.gate.state === 'open' ? 'Today is reviewed' : 'Review each block'}
         </Text>
       </div>
       {outstanding.length > 0 ? (
@@ -230,23 +234,23 @@ function GateNotice(props: {
           {outstanding.map((step) => (
             <li key={step}>
               <Text token="body-small" tone="muted">
-                {STEP_COPY[step] ?? step}
+                {STEP_COPY[step] ?? 'Finish the remaining review steps'}
               </Text>
             </li>
           ))}
         </Stack>
       ) : null}
-      {props.directive === undefined ? null : (
+      {!showDirective ? null : (
         <>
           <Separator />
           <Stack gap={1}>
-            <Text token="label-large">{POSTURE_HEADLINE[props.directive.posture]}</Text>
+            <Text token="label-large">{POSTURE_HEADLINE[directive.posture]}</Text>
             <Text token="body-small" tone="muted">
-              {props.directive.reason}
+              {directive.reason}
             </Text>
-            {props.directive.recommendedAction === null ? null : (
+            {directive.recommendedAction === null ? null : (
               <Text token="body-small">
-                Worth your full attention right now: {props.directive.recommendedAction.title}
+                Worth your full attention right now: {directive.recommendedAction.title}
               </Text>
             )}
           </Stack>

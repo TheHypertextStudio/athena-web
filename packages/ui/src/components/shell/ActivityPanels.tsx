@@ -24,7 +24,7 @@ export function ActivityPanels({
     >
       <Surface
         tone="card"
-        pad="tight"
+        pad="comfortable"
         className="sm:p-4"
         hidden={!showPrimary}
         data-activity-panel="primary"
@@ -33,7 +33,7 @@ export function ActivityPanels({
       </Surface>
       <Surface
         tone="card"
-        pad="tight"
+        pad="comfortable"
         className="sm:p-4"
         hidden={!showSecondary}
         data-activity-panel="secondary"

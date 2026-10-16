@@ -1,9 +1,12 @@
+import type { DayStartOut } from '@docket/planning/scheduling-directive-contract';
 import type * as AppLocationModule from '@/lib/app-location';
 import type { ComponentProps } from 'react';
 import { ContextProvider, PageScrollProvider } from '@docket/ui/components';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 import { PlanSurface } from '@/components/scheduling-plan/plan-surface';
+
+const state = vi.hoisted(() => ({ dayStart: undefined as DayStartOut | undefined }));
 
 vi.mock('@/components/docket-link', () => ({
   default: ({ navigation, ...props }: ComponentProps<'a'> & { navigation?: string }) => (
@@ -19,9 +22,33 @@ vi.mock('@/components/scheduling-plan/use-schedule-plan', () => {
   const mutation = () => ({ mutate: vi.fn(), isPending: false });
   return {
     useWeekPlan: query,
-    useDayStart: query,
+    useDayStart: () => ({
+      data: state.dayStart,
+      isPending: state.dayStart === undefined,
+      isError: false,
+    }),
     useDirective: query,
-    useDayCheckIns: query,
+    useDayCheckIns: () => ({
+      data: {
+        items: [
+          {
+            id: 'missed',
+            date: '2026-10-15',
+            scheduledAt: '2026-10-15T10:00:00Z',
+            firedAt: '2026-10-15T10:00:00Z',
+            respondedAt: null,
+            response: null,
+            missed: true,
+            blockCalendarItemId: null,
+            blockTitle: null,
+            outstandingGoals: 0,
+            prompt: 'How is your day going?',
+          },
+        ],
+      },
+      isPending: false,
+      isError: false,
+    }),
     useDayReview: query,
     useGenerateWeek: mutation,
     useAcknowledgeAgenda: mutation,
@@ -33,7 +60,10 @@ vi.mock('@/components/scheduling-plan/use-schedule-plan', () => {
     useConfirmTomorrow: mutation,
   };
 });
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  state.dayStart = undefined;
+});
 
 it('owns a focused planning activity with an explicit return and one current lens', () => {
   render(
@@ -61,4 +91,42 @@ it('owns a focused planning activity with an explicit return and one current len
     'aria-pressed',
     'false',
   );
+});
+
+it('waits for a planned day before offering check-ins, while retaining its missed history', () => {
+  state.dayStart = {
+    date: '2026-10-15',
+    timezone: 'UTC',
+    readiness: 'not_generated',
+    ready: false,
+    agenda: [],
+    proposals: [],
+    confirm: { available: false, outstanding: 0, confirmedAt: null },
+    acknowledgedAt: null,
+    gate: {
+      kind: 'day_start',
+      state: 'holding',
+      outstandingSteps: ['agenda_reviewed'],
+      releasedAt: null,
+    },
+  };
+  const element = (
+    <ContextProvider>
+      <PageScrollProvider>
+        <PlanSurface initialLens="morning" now={new Date('2026-10-15T12:00:00Z')} />
+      </PageScrollProvider>
+    </ContextProvider>
+  );
+  const view = render(element);
+  expect(screen.queryByRole('heading', { name: 'Check-ins' })).not.toBeInTheDocument();
+  state.dayStart = { ...state.dayStart, ready: true, readiness: 'ready' };
+  view.rerender(
+    <ContextProvider>
+      <PageScrollProvider>
+        <PlanSurface initialLens="morning" now={new Date('2026-10-15T12:00:00Z')} />
+      </PageScrollProvider>
+    </ContextProvider>,
+  );
+  expect(screen.getByRole('heading', { name: 'Check-ins' })).toBeVisible();
+  expect(screen.getByText('This one came and went unanswered.')).toBeVisible();
 });

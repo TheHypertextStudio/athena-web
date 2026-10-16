@@ -88,10 +88,17 @@ export async function saveDraft(
     body: { draft, resumeStep, expectedRevision: day.revision },
   });
 }
+/** Switch the focused phone view; wide layouts keep both panels visible. */
+export async function showPlanningPanel(page: Page, name: 'Work' | 'Agenda'): Promise<void> {
+  const button = page.getByRole('button', { name, exact: true });
+  if ((page.viewportSize()?.width ?? 1440) < 1024) await button.click();
+}
+
 /** Open and apply the initial proposed schedule before editing. */
 export async function openPlan(page: Page, date: string): Promise<void> {
   await page.goto(`/plan/day?date=${date}`, { waitUntil: 'domcontentloaded' });
   await expect(page.getByRole('heading', { name: /^Plan (today|tomorrow|day)$/ })).toBeVisible();
+  await showPlanningPanel(page, 'Agenda');
   await expect(page.getByRole('button', { name: 'Organize day', exact: true })).toBeEnabled();
   const apply = page.getByRole('button', { name: 'Apply schedule', exact: true });
   if (await apply.isVisible()) await apply.click();

@@ -8,6 +8,7 @@ import { unwrap, useApiMutation } from '@/lib/query';
 /** Request a short assessment without holding up saving or confirming the plan. */
 export function useDailyPlanAssessment(date: string) {
   return useApiMutation({
+    failure: 'silent',
     mutationFn: ({
       draft,
       proposalFingerprint,

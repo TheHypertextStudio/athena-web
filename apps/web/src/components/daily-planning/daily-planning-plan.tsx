@@ -5,7 +5,8 @@ import type { DailyPlanSession } from '@docket/planning/daily-plan-flow';
 import { instantAt } from '@docket/planning/zoned-time';
 import { Button, Card, CardContent } from '@docket/ui/primitives';
 import type { JSX } from 'react';
-import type { PlanningPanels } from './daily-planning-panels';
+import { visiblePlanningPanels, type PlanningPanels } from './daily-planning-panels';
+import { useMediaQuery } from '@docket/ui/hooks';
 import { ActivityPanels } from '@docket/ui/components';
 
 import { DailyAgenda } from './daily-planning-agenda';
@@ -300,6 +301,8 @@ export function PlanStage({
   readonly panels?: PlanningPanels;
 }): JSX.Element {
   const reviewing = plan.stage === 'review';
+  const wide = useMediaQuery('(min-width: 64rem)');
+  const visible = visiblePlanningPanels(panels, reviewing, wide);
   return (
     <fieldset
       disabled={plan.confirming}
@@ -307,17 +310,19 @@ export function PlanStage({
       className={`min-w-0 space-y-4 ${plan.confirming ? 'pointer-events-none' : ''}`}
     >
       {reviewing ? (
-        <DailyPlanningAssessment
-          proposalToken={assessmentToken(plan)}
-          draft={plan.draft}
-          onTaskCreated={(task) => {
-            plan.addTask(task.id, task.organizationId, task.title);
-          }}
-        />
+        <div className="px-3 sm:px-0">
+          <DailyPlanningAssessment
+            proposalToken={assessmentToken(plan)}
+            draft={plan.draft}
+            onTaskCreated={(task) => {
+              plan.addTask(task.id, task.organizationId, task.title);
+            }}
+          />
+        </div>
       ) : null}
       <ActivityPanels
-        showPrimary={reviewing ? panels.agenda : panels.work}
-        showSecondary={reviewing ? panels.work : panels.agenda}
+        showPrimary={reviewing ? visible.agenda : visible.work}
+        showSecondary={reviewing ? visible.work : visible.agenda}
         primary={reviewing ? <AgendaColumn plan={plan} /> : <WorkColumn plan={plan} />}
         secondary={reviewing ? <WorkColumn plan={plan} /> : <AgendaColumn plan={plan} />}
       />

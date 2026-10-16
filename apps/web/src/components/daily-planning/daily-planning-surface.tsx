@@ -45,7 +45,7 @@ function PlanningLoading({ exit }: { readonly exit: ReactNode }): JSX.Element {
       <div
         role="status"
         aria-label="Loading daily plan"
-        className="flex w-full flex-col gap-4 px-4 pb-4 sm:px-6 sm:pb-6"
+        className="flex w-full flex-col gap-4 px-3 pb-3 sm:px-6 sm:pb-6"
       >
         <div className="space-y-2">
           <SkeletonText className="w-44" />
@@ -131,13 +131,17 @@ export function DailyPlanningSurface(): JSX.Element {
           plan={plan}
           panelControls={
             plan.stage === 'plan' || plan.stage === 'review' ? (
-              <PlanningPanelControls panels={panels} onChange={setPanels} />
+              <PlanningPanelControls
+                panels={panels}
+                onChange={setPanels}
+                reviewing={plan.stage === 'review'}
+              />
             ) : undefined
           }
         />
       }
     >
-      <div className="px-4 pb-4 sm:px-6 sm:pb-6">
+      <div className="pb-3 sm:px-6 sm:pb-6">
         <StageView plan={plan} panels={panels} />
       </div>
     </ImmersiveShell>

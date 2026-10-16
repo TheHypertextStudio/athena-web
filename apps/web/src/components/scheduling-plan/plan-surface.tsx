@@ -139,13 +139,13 @@ function PlanContent(props: PlanSurfaceProps): JSX.Element {
   const confirm = useConfirmTomorrow(date);
 
   return (
-    <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 pb-8 sm:px-6 @2xl:px-10">
+    <div className="mx-auto flex w-full max-w-7xl flex-col gap-3 px-3 pb-4 sm:gap-6 sm:px-6 sm:pb-8 @2xl:px-10">
       <Stack gap={2} as="header">
-        <Text as="h1" token="headline-large">
+        <Text as="h1" token="title-large" className="sm:text-headline-large">
           Plan
         </Text>
-        <Text token="body-medium" tone="muted">
-          Review your weekly schedule, prepare for the day, or reflect on what happened.
+        <Text token="body-medium" tone="muted" className="hidden sm:block">
+          Make room for work, review today, or prepare for tomorrow.
         </Text>
       </Stack>
 
@@ -204,7 +204,7 @@ function PlanContent(props: PlanSurfaceProps): JSX.Element {
                 }}
                 reorganizing={reorganize.isPending}
               />
-              {checkIns.data === undefined ? null : (
+              {checkIns.data === undefined || !dayStart.data.ready ? null : (
                 <DayCheckIns
                   checkIns={checkIns.data.items}
                   timezone={dayStart.data.timezone}
@@ -224,8 +224,7 @@ function PlanContent(props: PlanSurfaceProps): JSX.Element {
           {review.data === undefined ? null : (
             <EveningReview
               review={review.data}
-              // Above the three steps: reconciling what was left over and answering what moved are
-              // both far easier once the day itself is on screen.
+              // Activity stays available as context without preceding the current review decision.
               leadingPanel={<DayHighlights date={explicitDate} mode="review" headingLevel={3} />}
               busy={dispose.isPending || answer.isPending || confirm.isPending}
               onDispose={(input) => {

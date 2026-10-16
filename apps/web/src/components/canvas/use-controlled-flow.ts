@@ -27,6 +27,7 @@ import {
   useEdgesState,
   useNodesState,
   useReactFlow,
+  useStore,
 } from '@xyflow/react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
@@ -74,14 +75,21 @@ function sameNodeIds(left: readonly Node[], right: readonly Node[]): boolean {
   return right.every(({ id }) => ids.has(id));
 }
 
-/** Carry the current selection onto the incoming nodes. */
+/**
+ * Retain selection and observed dimensions across upstream data/layout updates. Dropping measured
+ * dimensions while the same DOM element is still observed can leave it hidden without a new resize.
+ * Real size changes continue through xyflow's ResizeObserver and onNodesChange.
+ */
 function withRetainedSelection(current: readonly Node[], incoming: readonly Node[]): Node[] {
-  const selectedIds = new Set(
-    current.filter(({ selected }) => selected === true).map(({ id }) => id),
-  );
-  return incoming.map((node) =>
-    selectedIds.has(node.id) && node.selected !== true ? { ...node, selected: true } : node,
-  );
+  const byId = new Map(current.map((node) => [node.id, node]));
+  return incoming.map((node) => {
+    const previous = byId.get(node.id);
+    return {
+      ...node,
+      ...(previous?.measured === undefined ? {} : { measured: previous.measured }),
+      ...(previous?.selected === true ? { selected: true } : {}),
+    };
+  });
 }
 
 /**
@@ -167,9 +175,23 @@ export function useFitViewOnChange(
 ): void {
   const { fitView } = useReactFlow();
   const key = ids?.join(',') ?? '';
+  const measured = useStore(
+    (state) =>
+      ids !== undefined &&
+      ids.length > 0 &&
+      ids.every((id) => {
+        const node = state.nodeLookup.get(id);
+        return (
+          node?.hidden !== true &&
+          (node?.measured.width ?? 0) > 0 &&
+          (node?.measured.height ?? 0) > 0
+        );
+      }),
+  );
   useEffect(() => {
-    if (!enabled || ids === undefined || ids.length === 0) return;
-    // Keyed on the joined id list (not the array identity); `fitView` is stable from the store.
+    if (!enabled || !measured || ids === undefined || ids.length === 0) return;
+    // A newly revealed match can be unmeasured on the first render; fitting then omits it.
+    // Wait for the store measurement before moving the viewport.
     void fitView({ nodes: ids.map((id) => ({ id })), duration: 400, maxZoom, padding });
-  }, [enabled, key, fitView, ids, maxZoom, padding]);
+  }, [enabled, measured, key, fitView, ids, maxZoom, padding]);
 }

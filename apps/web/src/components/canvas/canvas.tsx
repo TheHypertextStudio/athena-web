@@ -21,6 +21,7 @@ import {
   type EdgeTypes,
   type OnInit,
   type OnNodeDrag,
+  type NodeMouseHandler,
   ReactFlow,
   ReactFlowProvider,
 } from '@xyflow/react';
@@ -74,6 +75,14 @@ import {
 } from './use-graph-interactions';
 import { LodProvider, useLodValue } from './use-lod';
 import { isCanvasEditableTarget } from './canvas-keyboard';
+
+/** Keep handle taps in connection mode rather than opening a covering inspector. */
+function nodeInspectHandler(select: CanvasProps['onSelectNode']): NodeMouseHandler {
+  return (event, node) => {
+    if (event.target instanceof Element && event.target.closest('.react-flow__handle')) return;
+    select?.(node.id);
+  };
+}
 
 const READABLE_INITIAL_ZOOM = 0.5;
 /** What the bottom chrome covers before it has been measured, when the minimap is showing. */
@@ -454,7 +463,7 @@ function CanvasInner({
             onEdgesChange={onEdgesChange}
             {...(nodeTypes !== undefined ? { nodeTypes } : {})}
             {...(edgeTypes !== undefined ? { edgeTypes } : {})}
-            onNodeClick={(_, node) => onSelectNode?.(node.id)}
+            onNodeClick={nodeInspectHandler(onSelectNode)}
             onNodeContextMenu={(event, node) => {
               if (!node.selected) {
                 flowInstance?.setNodes((current) =>

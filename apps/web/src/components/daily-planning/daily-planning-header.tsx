@@ -154,7 +154,7 @@ export function DailyPlanningHeader({
 }): JSX.Element {
   const { planLabel, heading } = planningHeading(plan);
   return (
-    <div className="space-y-3">
+    <div className="space-y-1 sm:space-y-3">
       <PageHeader className="items-center">
         <PageHeading>
           <p className="text-on-surface-variant text-label-medium">
@@ -164,7 +164,7 @@ export function DailyPlanningHeader({
               day: 'numeric',
             })}
           </p>
-          <PageTitle>{heading}</PageTitle>
+          <PageTitle className="text-title-large sm:text-headline-small">{heading}</PageTitle>
         </PageHeading>
         <Button
           variant="ghost"

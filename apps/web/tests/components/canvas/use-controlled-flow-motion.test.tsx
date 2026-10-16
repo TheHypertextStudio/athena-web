@@ -137,6 +137,47 @@ describe('useControlledFlow motion', () => {
     expect(queue.size).toBe(0);
   });
 
+  it('keeps observed dimensions when upstream fields change without a DOM resize', () => {
+    const { result, rerender } = renderFlow({ nodes: [node('a', 0)], edges: [], animate: false });
+    act(() => {
+      result.current.onNodesChange([
+        { type: 'dimensions', id: 'a', dimensions: { width: 376, height: 124 } },
+      ]);
+    });
+    rerender({
+      nodes: [{ ...node('a', 0), data: { name: 'Updated work' } }],
+      edges: [],
+      animate: false,
+    });
+    expect(result.current.nodes[0]?.measured).toEqual({ width: 376, height: 124 });
+    expect(result.current.nodes[0]?.data).toEqual({ name: 'Updated work' });
+    act(() => {
+      result.current.onNodesChange([
+        { type: 'dimensions', id: 'a', dimensions: { width: 376, height: 192 } },
+      ]);
+    });
+    expect(result.current.nodes[0]?.measured?.height).toBe(192);
+  });
+
+  it('keeps fresh dimensions observed during a layout tween after that tween settles', () => {
+    const { result, rerender } = renderFlow({ nodes: [node('a', 0)], edges: [] });
+    act(() => {
+      result.current.onNodesChange([
+        { type: 'dimensions', id: 'a', dimensions: { width: 376, height: 124 } },
+      ]);
+    });
+    rerender({ nodes: [{ ...node('a', 200), style: { height: 192 } }], edges: [] });
+    runFrame(0);
+    act(() => {
+      result.current.onNodesChange([
+        { type: 'dimensions', id: 'a', dimensions: { width: 376, height: 192 } },
+      ]);
+    });
+    runFrame(120);
+    runFrame(240);
+    expect(result.current.nodes[0]?.measured).toEqual({ width: 376, height: 192 });
+  });
+
   it('keeps a selected node selected through the tween', () => {
     const { result, rerender } = renderFlow({ nodes: [node('a', 0)], edges: [] });
     act(() => {

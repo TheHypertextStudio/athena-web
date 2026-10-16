@@ -53,6 +53,7 @@ export function useAvailableDailyWork(query: string, enabled: boolean) {
 /** Save the draft while leaving any accepted version unchanged. */
 export function useSaveDailyDraft(date: string) {
   return useApiMutation({
+    failure: 'silent',
     mutationFn: ({
       draft,
       resumeStep,
@@ -77,6 +78,7 @@ export function useSaveDailyDraft(date: string) {
 /** Build a read-only proposed schedule without changing the saved or accepted plan. */
 export function useDailyPlanProposal(date: string) {
   return useApiMutation({
+    failure: 'silent',
     mutationFn: (input: { draft?: DailyPlanSnapshot; expectedRevision?: number }) =>
       unwrap(
         () => api.v1['daily-plan'].day[':date'].proposal.$post({ param: { date }, json: input }),
@@ -88,6 +90,7 @@ export function useDailyPlanProposal(date: string) {
 /** Accept the saved draft without starting work. */
 export function useConfirmDailyPlan(date: string) {
   return useApiMutation({
+    failure: 'silent',
     mutationFn: (input: { expectedRevision?: number } | undefined) =>
       unwrap(
         () =>

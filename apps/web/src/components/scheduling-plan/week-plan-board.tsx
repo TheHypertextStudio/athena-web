@@ -6,7 +6,7 @@
  * @remarks
  * This is the surface the whole feature is for: one glance that answers "is the week actually
  * planned, and does it contain all the different kinds of time I need?". So the board leads with
- * the legend of kinds present, states the coverage honestly (including protected time it
+ * the scheduled work, states the coverage honestly (including protected time it
  * deliberately left alone and any hole it could not fill), and lists anything it could not place
  * with the reason — rather than showing a tidy grid that quietly omits what went wrong.
  *
@@ -15,7 +15,16 @@
  * a twenty-minute reading block into an unreadable sliver.
  */
 import type { UnplacedDemandOut, WeekPlanOut } from '@docket/planning/scheduling-contract';
-import { Button, ControlGroup, Stack, Text, Toolbar } from '@docket/ui/primitives';
+import {
+  Button,
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+  Stack,
+  Surface,
+  Text,
+  Toolbar,
+} from '@docket/ui/primitives';
 import { cn } from '@docket/ui/lib/utils';
 import { MapPin, Users } from '@docket/ui/icons';
 import type { JSX } from 'react';
@@ -93,13 +102,13 @@ export function WeekPlanBoard(props: WeekPlanBoardProps): JSX.Element {
         controlSize="md"
         leading={
           <Stack gap={1} className="min-w-0">
-            <Text as="h2" token="headline-small">
+            <Text as="h2" token="title-large" className="sm:text-headline-small">
               Your week
             </Text>
             <Text token="body-small" tone="muted">
               {plan.blocks.length === 0
                 ? 'Nothing planned yet.'
-                : `${String(plan.blocks.length)} blocks across ${String(plan.shapesPresent.length)} kinds of time · planned in ${String(plan.userInputCount)} step`}
+                : `${String(plan.blocks.length)} planned blocks`}
             </Text>
           </Stack>
         }
@@ -112,25 +121,53 @@ export function WeekPlanBoard(props: WeekPlanBoardProps): JSX.Element {
         }
       />
 
-      {plan.shapesPresent.length > 0 ? <WorkShapeLegend shapes={plan.shapesPresent} /> : null}
-
-      <CoverageSummary plan={plan} />
-
-      <div
-        className="grid min-w-0 grid-cols-1 gap-3 @2xl:grid-cols-4 @5xl:grid-cols-7"
-        data-testid="week-plan-grid"
-      >
-        {days.map((date) => (
-          <DayColumn
-            key={date}
-            date={date}
-            timezone={plan.timezone}
-            blocks={plan.blocks.filter((block) => block.date === date)}
-          />
-        ))}
-      </div>
+      {plan.blocks.length === 0 ? (
+        <Surface tone="card" pad="comfortable" shape="large">
+          <Stack gap={2}>
+            <Text token="title-medium">Make room for the work that matters</Text>
+            <Text token="body-medium" tone="muted">
+              Plan this week to arrange your work around the time you have available.
+            </Text>
+          </Stack>
+        </Surface>
+      ) : (
+        <div
+          className="grid min-w-0 grid-cols-1 gap-3 @2xl:grid-cols-4 @5xl:grid-cols-7"
+          data-testid="week-plan-grid"
+        >
+          {days.map((date) => (
+            <DayColumn
+              key={date}
+              date={date}
+              timezone={plan.timezone}
+              blocks={plan.blocks.filter((block) => block.date === date)}
+            />
+          ))}
+        </div>
+      )}
 
       {plan.unplaced.length > 0 ? <UnplacedList unplaced={plan.unplaced} /> : null}
+      {plan.blocks.length > 0 ? (
+        <Collapsible>
+          <CollapsibleTrigger asChild>
+            <Button variant="ghost">Schedule details</Button>
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            <Stack gap={4} className="pt-3">
+              <WorkShapeLegend shapes={plan.shapesPresent} />
+              <CoverageSummary plan={plan} />
+              <Text token="body-small" tone="muted" className="@2xl:hidden">
+                Days without blocks:{' '}
+                {days
+                  .filter((date) => !plan.blocks.some((block) => block.date === date))
+                  .map((date) => dayLabel(date).weekday)
+                  .join(', ') || 'None'}
+                .
+              </Text>
+            </Stack>
+          </CollapsibleContent>
+        </Collapsible>
+      ) : null}
     </Stack>
   );
 }
@@ -142,7 +179,7 @@ function CoverageSummary({ plan }: { plan: WeekPlanOut }): JSX.Element {
     <div className="bg-surface-container-low grid grid-cols-2 gap-4 rounded-xl p-4 @2xl:grid-cols-4">
       <Stack gap={1}>
         <Text token="label-medium" tone="muted">
-          Time accounted for
+          Scheduled time
         </Text>
         <Text token="title-medium" numeric>
           {coverage.coveragePercent.toFixed(1)}%
@@ -164,7 +201,7 @@ function CoverageSummary({ plan }: { plan: WeekPlanOut }): JSX.Element {
       </Stack>
       <Stack gap={1}>
         <Text token="label-medium" tone="muted">
-          Largest unplanned gap
+          Longest open stretch
         </Text>
         <Text token="title-medium" numeric>
           {duration(coverage.largestGapMinutes)}
@@ -175,13 +212,13 @@ function CoverageSummary({ plan }: { plan: WeekPlanOut }): JSX.Element {
       </Stack>
       <Stack gap={1}>
         <Text token="label-medium" tone="muted">
-          Holes left
+          Open stretches
         </Text>
         <Text token="title-medium" numeric>
           {String(coverage.gaps.length)}
         </Text>
         <Text token="body-small" tone="muted">
-          {coverage.gaps.length === 0 ? 'None worth naming' : 'Listed in your calendar'}
+          {coverage.gaps.length === 0 ? 'No long gaps' : 'Shown in your calendar'}
         </Text>
       </Stack>
     </div>
@@ -196,7 +233,12 @@ function DayColumn(props: {
 }): JSX.Element {
   const label = dayLabel(props.date);
   return (
-    <Stack gap={2} className="min-w-0" data-testid="week-plan-day" data-date={props.date}>
+    <Stack
+      gap={2}
+      className={cn('min-w-0', props.blocks.length === 0 && 'hidden @2xl:flex')}
+      data-testid="week-plan-day"
+      data-date={props.date}
+    >
       <Stack gap={0} className="px-1">
         <Text token="label-large">{label.weekday}</Text>
         <Text token="body-small" tone="muted">
@@ -243,7 +285,7 @@ function BlockCard(props: {
         <Text token="body-small" tone="muted" numeric>
           {clock(block.startsAt, props.timezone)} · {duration(block.minutes)}
         </Text>
-        <Text token="title-small" truncate>
+        <Text token="title-small" className="break-words">
           {block.title}
         </Text>
       </Stack>
@@ -288,12 +330,12 @@ function UnplacedList(props: { readonly unplaced: readonly UnplacedDemandOut[] }
       <Stack gap={2} as="ul">
         {props.unplaced.map((item) => (
           <li key={`${item.shape}-${item.title}`} className="flex min-w-0 flex-col gap-1">
-            <ControlGroup controlSize="xs">
-              <WorkShapeChip shape={item.shape} />
-              <Text token="title-small" truncate>
-                {item.title}
-              </Text>
-            </ControlGroup>
+            <Text token="title-small" className="break-words">
+              {item.title}
+            </Text>
+            <div>
+              <WorkShapeChip shape={item.shape} controlSize="xs" />
+            </div>
             <Text token="body-small" tone="muted">
               {UNPLACED_COPY[item.reason]}
               {item.placedSessions > 0

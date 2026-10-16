@@ -211,6 +211,15 @@ afterEach(() => {
 });
 
 describe('PlanInspector', () => {
+  it('explains archived plans inside the inspector and keeps edits unavailable', () => {
+    renderInspector('p1', { plan: { ...PLAN, status: 'archived' }, canEdit: false });
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'This plan is archived. You can view its work here.',
+    );
+    expect(screen.getByLabelText('Title')).toBeDisabled();
+    expect(screen.queryByRole('button', { name: /^Confirm/ })).not.toBeInTheDocument();
+  });
+
   it('commits a retitled draft on blur as one set_fields op', () => {
     const { onApply } = renderInspector('p1');
     const title = screen.getByLabelText('Title');

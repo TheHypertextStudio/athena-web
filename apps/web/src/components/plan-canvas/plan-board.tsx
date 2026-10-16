@@ -10,6 +10,8 @@
  */
 import type { Edge, Node, OnNodeDrag, ReactFlowInstance } from '@xyflow/react';
 import type { JSX } from 'react';
+import { Surface, Text } from '@docket/ui/primitives';
+import CanvasOverlayPanel from '@/components/canvas/canvas-overlay-panel';
 
 import Canvas from '@/components/canvas/canvas';
 import type { CanvasOverlayInsets } from '@/components/canvas/canvas-viewport-insets';
@@ -91,7 +93,20 @@ export function PlanBoard(props: PlanBoardProps): JSX.Element {
       onRelayout={props.onRelayout}
       bottomNotice={props.bottomNotice}
     >
-      <PlanStartOverlay state={props.startState} onAddProject={props.onAddProject} />
+      {props.search.focusOn?.length === 0 ? (
+        <CanvasOverlayPanel position="top-center" className="!top-1/2 !-translate-y-1/2">
+          <Surface tone="card" pad="comfortable" shape="medium" role="status">
+            <Text as="h3" token="title-medium">
+              No matching work
+            </Text>
+            <Text as="p" token="body-medium" tone="muted" className="mt-1">
+              Try searching for another name.
+            </Text>
+          </Surface>
+        </CanvasOverlayPanel>
+      ) : (
+        <PlanStartOverlay state={props.startState} onAddProject={props.onAddProject} />
+      )}
     </Canvas>
   );
 }

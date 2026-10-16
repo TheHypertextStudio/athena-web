@@ -4,8 +4,6 @@ import { instantAt } from '@docket/planning/zoned-time';
 import { ChevronDown } from '@docket/ui/icons';
 import {
   Button,
-  Card,
-  CardContent,
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
@@ -157,35 +155,31 @@ export function ScheduleControls({
         </Button>
       ) : null}
       {plan.preview ? (
-        <Card>
-          <CardContent className="space-y-2 pt-3">
-            <p className="text-label-large">{plan.preview.title}</p>
-            <ul className="text-body-small text-on-surface-variant space-y-1">
-              {plan.preview.proposal?.changes.slice(0, 5).map((change) => (
-                <li key={`${change.type}-${change.sessionId}`}>
-                  {change.taskIds.map(plan.titleFor).join(', ')}
-                  {change.startsAt
-                    ? ` → ${clock(change.startsAt, plan.timezone)}`
-                    : ' → Unscheduled'}
-                </li>
-              ))}
-            </ul>
-            <div className="flex gap-2">
-              <Button size="sm" onClick={plan.applyPreview}>
-                Apply schedule
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => {
-                  plan.setPreview(null);
-                }}
-              >
-                Keep current
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+        <section aria-label="Proposed schedule" className="space-y-2 py-2">
+          <p className="text-label-large">{plan.preview.title}</p>
+          <ul className="text-body-small text-on-surface-variant space-y-1">
+            {plan.preview.proposal?.changes.slice(0, 5).map((change) => (
+              <li key={`${change.type}-${change.sessionId}`}>
+                {change.taskIds.map(plan.titleFor).join(', ')}
+                {change.startsAt ? ` → ${clock(change.startsAt, plan.timezone)}` : ' → Unscheduled'}
+              </li>
+            ))}
+          </ul>
+          <div className="flex gap-2">
+            <Button size="sm" onClick={plan.applyPreview}>
+              Apply schedule
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => {
+                plan.setPreview(null);
+              }}
+            >
+              Keep current
+            </Button>
+          </div>
+        </section>
       ) : null}
     </div>
   );

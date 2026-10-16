@@ -76,6 +76,33 @@ function row(index: number): HTMLElement {
 afterEach(cleanup);
 
 describe('DayStartReview', () => {
+  it('offers confirmation after the agenda and waits for every block decision', () => {
+    const onAcknowledge = vi.fn();
+    const pending = dayStart([proposal({ key: 'block-a' })]);
+    const view = render(
+      <DayStartReview
+        dayStart={pending}
+        directive={undefined}
+        onAcknowledge={onAcknowledge}
+        acknowledging={false}
+      />,
+    );
+    const agenda = screen.getByTestId('morning-agenda');
+    const confirm = screen.getByRole('button', { name: 'Finish review' });
+    expect(agenda.compareDocumentPosition(confirm) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(confirm).toBeDisabled();
+    view.rerender(
+      <DayStartReview
+        dayStart={dayStart([proposal({ key: 'block-a', decision: 'kept' })])}
+        directive={undefined}
+        onAcknowledge={onAcknowledge}
+        acknowledging={false}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Finish review' }));
+    expect(onAcknowledge).toHaveBeenCalledOnce();
+  });
+
   it('answers the row that was clicked, with that row’s own key', () => {
     const onDecide = vi.fn();
     render(

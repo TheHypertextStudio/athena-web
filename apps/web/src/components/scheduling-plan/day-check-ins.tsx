@@ -13,7 +13,15 @@ import type {
   CheckInResponse,
   DayCheckInOut,
 } from '@docket/planning/scheduling-directive-contract';
-import { Button, ControlGroup, Stack, Text } from '@docket/ui/primitives';
+import {
+  Button,
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+  ControlGroup,
+  Stack,
+  Text,
+} from '@docket/ui/primitives';
 import type { JSX } from 'react';
 
 /** Application-owned label for each answer. */
@@ -51,6 +59,10 @@ export interface DayCheckInsProps {
  * @returns the list.
  */
 export function DayCheckIns(props: DayCheckInsProps): JSX.Element {
+  const upcoming = props.checkIns.filter(
+    (item) => item.firedAt === null && item.respondedAt === null && !item.missed,
+  );
+  const current = props.checkIns.filter((item) => !upcoming.includes(item));
   const answered = props.checkIns.filter((c) => c.respondedAt !== null).length;
   return (
     <Stack gap={4} className="w-full min-w-0">
@@ -63,51 +75,77 @@ export function DayCheckIns(props: DayCheckInsProps): JSX.Element {
         </Text>
       </Stack>
       <Stack gap={2} as="ul" data-testid="check-in-list">
-        {props.checkIns.map((checkIn) => (
-          <li
-            key={checkIn.id}
-            className="bg-surface-container-low flex min-w-0 flex-col gap-2 rounded-xl px-4 py-3"
-            data-testid="check-in"
-            data-state={
-              checkIn.respondedAt !== null ? 'answered' : checkIn.missed ? 'missed' : 'waiting'
-            }
-          >
-            <div className="flex min-w-0 items-center gap-2">
-              <Text token="label-small" tone="muted" numeric>
-                {clock(checkIn.scheduledAt, props.timezone)}
-              </Text>
-              <Text token="body-medium" truncate>
-                {checkIn.prompt}
-              </Text>
-            </div>
-            {checkIn.respondedAt === null ? (
-              <ControlGroup controlSize="sm" wrap>
-                {RESPONSES.map((response) => (
-                  <Button
-                    key={response}
-                    variant="secondary"
-                    disabled={props.busy === true || checkIn.firedAt === null}
-                    onClick={() => {
-                      props.onRespond({ id: checkIn.id, response });
-                    }}
-                  >
-                    {RESPONSE_LABEL[response]}
-                  </Button>
-                ))}
-              </ControlGroup>
-            ) : (
-              <Text token="body-small" tone="muted">
-                {`You said: ${RESPONSE_LABEL[checkIn.response ?? 'on_track']}`}
-              </Text>
-            )}
-            {checkIn.respondedAt === null && checkIn.missed ? (
-              <Text token="body-small" tone="muted">
-                This one came and went unanswered.
-              </Text>
-            ) : null}
-          </li>
+        {current.map((checkIn) => (
+          <CheckInRow key={checkIn.id} {...props} checkIn={checkIn} />
         ))}
       </Stack>
+      {upcoming.length > 0 ? (
+        <Collapsible>
+          <CollapsibleTrigger asChild>
+            <Button variant="ghost" size="sm">
+              Upcoming check-ins ({upcoming.length})
+            </Button>
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            <Stack gap={2} as="ul" className="pt-3">
+              {upcoming.map((checkIn) => (
+                <CheckInRow key={checkIn.id} {...props} checkIn={checkIn} />
+              ))}
+            </Stack>
+          </CollapsibleContent>
+        </Collapsible>
+      ) : null}
     </Stack>
+  );
+}
+
+/** One answered, due, missed, or upcoming check-in, retaining its original response semantics. */
+function CheckInRow(props: DayCheckInsProps & { readonly checkIn: DayCheckInOut }): JSX.Element {
+  const { checkIn } = props;
+  return (
+    <li
+      key={checkIn.id}
+      className="bg-surface-container-low flex min-w-0 flex-col gap-2 rounded-xl px-4 py-3"
+      data-testid="check-in"
+      data-state={checkIn.respondedAt !== null ? 'answered' : checkIn.missed ? 'missed' : 'waiting'}
+    >
+      <div className="flex min-w-0 items-center gap-2">
+        <Text token="label-small" tone="muted" numeric className="shrink-0 whitespace-nowrap">
+          {clock(checkIn.scheduledAt, props.timezone)}
+        </Text>
+        <Text token="body-medium" className="min-w-0 break-words">
+          {checkIn.prompt}
+        </Text>
+      </div>
+      {checkIn.respondedAt === null && checkIn.firedAt !== null ? (
+        <ControlGroup controlSize="sm" wrap>
+          {RESPONSES.map((response) => (
+            <Button
+              key={response}
+              variant="secondary"
+              disabled={props.busy === true || checkIn.firedAt === null}
+              onClick={() => {
+                props.onRespond({ id: checkIn.id, response });
+              }}
+            >
+              {RESPONSE_LABEL[response]}
+            </Button>
+          ))}
+        </ControlGroup>
+      ) : checkIn.respondedAt !== null ? (
+        <Text token="body-small" tone="muted">
+          {`You said: ${RESPONSE_LABEL[checkIn.response ?? 'on_track']}`}
+        </Text>
+      ) : (
+        <Text token="body-small" tone="muted">
+          Later today
+        </Text>
+      )}
+      {checkIn.respondedAt === null && checkIn.missed ? (
+        <Text token="body-small" tone="muted">
+          This one came and went unanswered.
+        </Text>
+      ) : null}
+    </li>
   );
 }

@@ -12,6 +12,9 @@ import { signUpAndOnboard } from '../helpers/app';
 import { orgHref, TIMEOUTS } from '../helpers/constants';
 import { expect, test } from '../helpers/fixtures';
 import { apiFetch } from '../helpers/net';
+import { renderedContrastRatio } from '../helpers/calendar-ui';
+import { setColorScheme } from '../helpers/ui';
+import { waitForCaptureAnimations } from '../tools/capture-animations';
 
 const SEED_OPS = [
   {
@@ -99,6 +102,7 @@ test.describe('Planning canvas', () => {
     await expect(conversation).toBeHidden();
     await help.click();
     await expect(conversation).toBeVisible();
+    expect((await conversation.boundingBox())?.width).toBe(448);
     const message = conversation.getByRole('combobox', { name: 'Message Athena' });
     await message.fill('Help me organize the outreach before the fundraising event.');
     await conversation.getByRole('button', { name: 'Back to plan', exact: true }).click();
@@ -212,4 +216,135 @@ test.describe('Planning canvas', () => {
     );
     expect(runtimeErrors).toEqual([]);
   });
+});
+
+test('phone search reveals a project from a newly opened plan', async ({ page }, testInfo) => {
+  test.setTimeout(180_000);
+  await page.setViewportSize({ width: 390, height: 844 });
+  const { orgId } = await signUpAndOnboard(page, 'PhonePlanSearch');
+  for (let iteration = 0; iteration < 8; iteration += 1) {
+    const started = await apiFetch(page, '/v1/me/plans', {
+      method: 'POST',
+      body: { organizationId: orgId, title: 'Spring giving campaign' },
+    });
+    const planId = (started.body as { id: string }).id;
+    await apiFetch(page, `/v1/me/plans/${planId}`, {
+      method: 'PATCH',
+      body: { revision: 0, ops: SEED_OPS },
+    });
+    await page.goto(orgHref(orgId, `plans/${planId}`), { waitUntil: 'domcontentloaded' });
+    if (iteration === 0) {
+      await page.getByRole('button', { name: 'Ask Athena about this plan', exact: true }).click();
+      const conversation = page.getByRole('dialog', { name: 'Plan with Athena', exact: true });
+      await expect(conversation).toBeVisible();
+      expect((await conversation.boundingBox())?.width).toBe(390);
+      const contrast: Record<string, number> = {};
+      for (const scheme of ['light', 'dark'] as const) {
+        await setColorScheme(page, scheme);
+        await conversation.evaluate((dialog) => getComputedStyle(dialog).backgroundColor);
+        await waitForCaptureAnimations(page);
+        contrast[scheme] = await renderedContrastRatio(
+          conversation.getByText('Tell Athena what this plan needs.', { exact: true }),
+        );
+        expect(contrast[scheme]).toBeGreaterThanOrEqual(4.5);
+      }
+      await testInfo.attach('planning-contrast', {
+        body: JSON.stringify(contrast),
+        contentType: 'application/json',
+      });
+      await conversation.getByRole('combobox', { name: 'Message Athena' }).focus();
+      await page.keyboard.press('Tab');
+      await expect
+        .poll(() => conversation.evaluate((dialog) => dialog.contains(document.activeElement)))
+        .toBe(true);
+      await page.keyboard.press('Shift+Tab');
+      await expect
+        .poll(() => conversation.evaluate((dialog) => dialog.contains(document.activeElement)))
+        .toBe(true);
+      await page.keyboard.press('Escape');
+      await expect(conversation).toBeHidden();
+      await expect(
+        page.getByRole('button', { name: 'Ask Athena about this plan', exact: true }),
+      ).toBeFocused();
+      await setColorScheme(page, 'light');
+    }
+    await page.getByRole('button', { name: 'Fit to view', exact: true }).click();
+    await page.getByRole('button', { name: 'Search the plan', exact: true }).click();
+    await page
+      .getByRole('textbox', { name: 'Search the plan', exact: true })
+      .fill('Donor outreach');
+    const target = page.locator('[data-plan-ref="p-outreach"]');
+    try {
+      await expect(target).toBeVisible({ timeout: 5000 });
+      await target.getByRole('button', { name: 'Show 2 tasks' }).first().click();
+      await expect(page.locator('[data-plan-ref="t1"]')).toBeVisible();
+    } catch (error) {
+      const layout = await page.locator('.react-flow').evaluate((canvas) => ({
+        viewport: canvas.querySelector('.react-flow__viewport')?.getAttribute('style'),
+        nodes: Array.from(canvas.querySelectorAll('.react-flow__node')).map((node) => ({
+          id: node.getAttribute('data-id'),
+          style: node.getAttribute('style'),
+          box: node.getBoundingClientRect().toJSON(),
+          text: node.textContent,
+        })),
+      }));
+      await testInfo.attach('phone-search-layout', {
+        body: JSON.stringify(layout, null, 2),
+        contentType: 'application/json',
+      });
+      throw error;
+    }
+  }
+});
+
+test('archived plans explain their state after fresh loads in both layouts and themes', async ({
+  page,
+}, testInfo) => {
+  const errors: string[] = [];
+  let load = 'setup';
+  page.on('pageerror', (error) => errors.push(`${load} pageerror: ${error.message}`));
+  page.on('console', (message) => {
+    if (message.type() === 'error') errors.push(`${load} console: ${message.text()}`);
+  });
+  const { orgId } = await signUpAndOnboard(page, 'ArchivedPlan');
+  const started = await apiFetch(page, '/v1/me/plans', {
+    method: 'POST',
+    body: { organizationId: orgId, title: 'Spring giving campaign' },
+  });
+  const planId = (started.body as { id: string }).id;
+  await apiFetch(page, `/v1/me/plans/${planId}`, {
+    method: 'PATCH',
+    body: { revision: 0, ops: SEED_OPS },
+  });
+  await apiFetch(page, `/v1/me/plans/${planId}/archive`, { method: 'POST' });
+  for (const viewport of [
+    { width: 1440, height: 900 },
+    { width: 390, height: 844 },
+  ]) {
+    await page.setViewportSize(viewport);
+    for (const scheme of ['light', 'dark'] as const) {
+      load = `${viewport.width} ${scheme}`;
+      await setColorScheme(page, scheme);
+      await page.goto('about:blank');
+      await page.goto(orgHref(orgId, `plans/${planId}`), { waitUntil: 'domcontentloaded' });
+      await page.getByRole('button', { name: 'Search the plan', exact: true }).click();
+      await page
+        .getByRole('textbox', { name: 'Search the plan', exact: true })
+        .fill('Donor outreach');
+      await page
+        .locator('[data-plan-ref="p-outreach"] .group-hover\\:bg-surface-container-high')
+        .click();
+      await expect(
+        page.getByText('This plan is archived. You can view its work here.', { exact: true }),
+      ).toBeVisible();
+      await expect(page.getByLabel('Title', { exact: true })).toBeDisabled();
+    }
+  }
+  await testInfo.attach('archived-load-errors', {
+    body: JSON.stringify(errors),
+    contentType: 'application/json',
+  });
+  expect(errors.filter((error) => /hydrat|server rendered HTML|didn.t match/i.test(error))).toEqual(
+    [],
+  );
 });

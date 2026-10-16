@@ -8,6 +8,9 @@ import {
   Dialog,
   DialogContent,
   DialogTitle,
+  DialogHeader,
+  DialogBody,
+  DialogFooter,
   Input,
   Select,
 } from '@docket/ui/primitives';
@@ -73,8 +76,8 @@ function AllocationFields({
   return (
     <div className="space-y-2">
       {allocations.map((part, index) => (
-        <div key={part.taskId} className="flex items-center gap-2">
-          <span className="text-body-medium min-w-0 flex-1">
+        <div key={part.taskId} className="flex flex-wrap items-center gap-2">
+          <span className="text-body-medium min-w-0 basis-full break-words sm:flex-1 sm:basis-auto">
             {names.get(part.taskId) ?? 'Task'}
           </span>
           <Input
@@ -168,7 +171,7 @@ function SessionActions({
   readonly save: () => void;
 }): JSX.Element {
   return (
-    <div className="flex flex-wrap justify-end gap-2">
+    <DialogFooter>
       {existingId ? (
         <Button
           variant="ghost"
@@ -193,7 +196,7 @@ function SessionActions({
       >
         Save block
       </Button>
-    </div>
+    </DialogFooter>
   );
 }
 
@@ -246,8 +249,24 @@ function SessionDuration({
   );
 }
 
+function allocationFor(
+  props: SessionEditorProps,
+  taskId: string,
+): DailyPlanSession['allocations'][number] {
+  return {
+    taskId,
+    plannedMinutes: unplacedMinutes(
+      props.draft,
+      taskId,
+      props.actual ?? [],
+      Date.parse(props.earliestAt),
+    ),
+  };
+}
+
 /** Edit block placement and every allocation without requiring a drag gesture. */
 export function SessionEditor(props: SessionEditorProps): JSX.Element {
+  const form = useSessionForm(props);
   const {
     initial,
     start,
@@ -259,7 +278,7 @@ export function SessionEditor(props: SessionEditorProps): JSX.Element {
     duration,
     save,
     otherTasks,
-  } = useSessionForm(props);
+  } = form;
   return (
     <Dialog
       open
@@ -268,8 +287,10 @@ export function SessionEditor(props: SessionEditorProps): JSX.Element {
       }}
     >
       <DialogContent presentation={{ kind: 'centered', size: 'standard' }}>
-        <DialogTitle>{initial.existing ? 'Edit block' : 'Schedule task'}</DialogTitle>
-        <div className="space-y-4">
+        <DialogHeader>
+          <DialogTitle>{initial.existing ? 'Edit block' : 'Schedule task'}</DialogTitle>
+        </DialogHeader>
+        <DialogBody className="space-y-4">
           <label className="text-body-medium flex items-center justify-between gap-2">
             Start
             <Input
@@ -291,18 +312,7 @@ export function SessionEditor(props: SessionEditorProps): JSX.Element {
             props={props}
             tasks={otherTasks}
             onAdd={(taskId) => {
-              setAllocations([
-                ...allocations,
-                {
-                  taskId,
-                  plannedMinutes: unplacedMinutes(
-                    props.draft,
-                    taskId,
-                    props.actual ?? [],
-                    Date.parse(props.earliestAt),
-                  ),
-                },
-              ]);
+              setAllocations([...allocations, allocationFor(props, taskId)]);
             }}
           />
           <label className="text-body-small flex items-center gap-2">
@@ -314,14 +324,14 @@ export function SessionEditor(props: SessionEditorProps): JSX.Element {
             />
             Keep this block in place
           </label>
-          <SessionActions
-            props={props}
-            existingId={initial.existing?.id}
-            allocations={allocations}
-            noTimeLeft={initial.noTimeLeft}
-            save={save}
-          />
-        </div>
+        </DialogBody>
+        <SessionActions
+          props={props}
+          existingId={initial.existing?.id}
+          allocations={allocations}
+          noTimeLeft={initial.noTimeLeft}
+          save={save}
+        />
       </DialogContent>
     </Dialog>
   );

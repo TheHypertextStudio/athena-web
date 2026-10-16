@@ -48,7 +48,7 @@ export function AddWorkStage({ plan }: { readonly plan: ReadyPlanningController 
       (item) => item.kind === 'task' && item.organizationId !== null,
     ) ?? [];
   return (
-    <section className="max-w-3xl space-y-4">
+    <section className="max-w-3xl space-y-4 px-3 sm:px-0">
       <Button
         variant="secondary"
         onClick={(event) => {

@@ -15,6 +15,7 @@ import { DatePicker, EnumPicker } from '@docket/ui/components';
 import { CheckCircle2, Ellipsis, OpenInNew, Plus, Trash2, X } from '@docket/ui/icons';
 import {
   Button,
+  Text,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -108,7 +109,7 @@ function TemplateField({ orgId, node, disabled, onApply }: TemplateFieldProps): 
       (templates.data?.items ?? []).map((template) => ({
         value: template.id,
         label: template.name,
-        ...(template.description ? { hint: template.description } : {}),
+        ...(template.description ? { supporting: template.description } : {}),
       })),
     [templates.data],
   );
@@ -452,6 +453,11 @@ export default function PlanInspector(props: PlanInspectorProps): JSX.Element | 
           <span>{kind}</span>
           <PlanStateChip status={node.status} />
         </div>
+        {plan.status === 'archived' ? (
+          <Text as="p" token="body-small" tone="muted" role="status">
+            This plan is archived. You can view its work here.
+          </Text>
+        ) : null}
         {draft ? <DraftBody {...props} node={node} /> : <ConfirmedBody plan={plan} node={node} />}
       </div>
     </CanvasInspector>

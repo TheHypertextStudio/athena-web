@@ -2,11 +2,24 @@
 import type { Page } from '@playwright/test';
 import type { DayRead, PlanningContext } from '../helpers/daily-planning';
 import { instantAt, localMinuteOfDay } from '@docket/planning/zoned-time';
-import { openPlan, reviewPlan, saveDraft, setupPlan, snapshot } from '../helpers/daily-planning';
+import {
+  openPlan,
+  reviewPlan,
+  saveDraft,
+  setupPlan,
+  snapshot,
+  showPlanningPanel,
+} from '../helpers/daily-planning';
 import { expect, test } from '../helpers/fixtures';
 import { captureShortBlockEvidence } from '../helpers/daily-planning';
 
 test.use({ hasTouch: true, viewport: { width: 390, height: 844 } });
+test.beforeEach(async ({ page }) => {
+  // Exercise planning persistence without sending an optional provider assessment.
+  await page.route('**/v1/daily-plan/day/*/assessment', (route) =>
+    route.fulfill({ status: 503, json: {} }),
+  );
+});
 test('five-minute adjacent blocks keep exact geometry before and after acceptance', async ({
   page,
 }, testInfo) => {
@@ -140,9 +153,11 @@ test.describe('planning recovery runtime', () => {
       settings: { startAt: `${date}T11:55:00.000Z`, bufferPercent: 0 },
     });
     await page.goto(`/plan/day?date=${date}`, { waitUntil: 'domcontentloaded' });
+    await showPlanningPanel(page, 'Agenda');
     await expect(page.getByRole('button', { name: 'Organize day', exact: true })).toBeEnabled();
     const keep = page.getByRole('button', { name: 'Keep current', exact: true });
     if (await keep.isVisible()) await keep.click();
+    await showPlanningPanel(page, 'Work');
     await page
       .getByRole('button', { name: 'Actions for Late five-minute task', exact: true })
       .click();
@@ -158,14 +173,17 @@ test.describe('planning recovery runtime', () => {
       .poll(async () => (await readDay()).draft?.sessions[0]?.endsAt)
       .toBe(`${date}T12:00:00.000Z`);
     await page.reload({ waitUntil: 'domcontentloaded' });
+    await showPlanningPanel(page, 'Agenda');
     await expect(page.getByRole('button', { name: 'Organize day', exact: true })).toBeEnabled();
     expect((await readDay()).draft?.sessions[0]?.allocations).toEqual([
       { taskId: late, plannedMinutes: 5 },
     ]);
     await page.clock.setFixedTime(`${date}T12:01:00.000Z`);
     await page.reload({ waitUntil: 'domcontentloaded' });
+    await showPlanningPanel(page, 'Agenda');
     await expect(page.getByRole('button', { name: 'Organize day', exact: true })).toBeEnabled();
     if (await keep.isVisible()) await keep.click();
+    await showPlanningPanel(page, 'Work');
     await page
       .getByRole('button', { name: 'Actions for After-finish new task', exact: true })
       .click();
@@ -175,6 +193,7 @@ test.describe('planning recovery runtime', () => {
       'No time remains before your finish time',
     );
     await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await showPlanningPanel(page, 'Work');
     await page
       .getByRole('button', { name: 'Actions for Late five-minute task', exact: true })
       .click();

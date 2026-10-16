@@ -16,7 +16,7 @@ import {
   DropdownMenuTrigger,
   focusRing,
 } from '@docket/ui/primitives';
-import type { JSX, MouseEvent } from 'react';
+import { useState, type JSX, type MouseEvent } from 'react';
 import { useCreateObject } from '@/components/create-object/create-object-provider';
 import {
   useDailyPlanningAssessment,
@@ -75,6 +75,7 @@ function AssessmentRequest({
   readonly pending: boolean;
   readonly requestAgain: () => void;
 }): JSX.Element {
+  const [open, setOpen] = useState(false);
   if (pending)
     return (
       <span role="status" className="sr-only">
@@ -82,7 +83,7 @@ function AssessmentRequest({
       </span>
     );
   return (
-    <Collapsible>
+    <Collapsible open={open} onOpenChange={setOpen}>
       <CollapsibleTrigger
         className={`text-on-surface-variant text-label-medium group flex min-h-10 items-center gap-1 ${focusRing}`}
       >

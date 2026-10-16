@@ -146,7 +146,8 @@ function sameSelection(left: Node, right: Node): boolean {
  *
  * @remarks
  * A node the pointer is dragging keeps the position the drag gave it, and a node the viewer
- * selected or deselected since the sync keeps that choice, so a tween never undoes an interaction.
+ * selected or deselected since the sync keeps that choice. New observed dimensions also survive
+ * the final frame, so expanding a card never restores its old bounds.
  */
 function keepLiveInteraction(target: readonly Node[], live: readonly Node[]): Node[] {
   const liveById = new Map(live.map((node) => [node.id, node]));
@@ -154,9 +155,10 @@ function keepLiveInteraction(target: readonly Node[], live: readonly Node[]): No
     const current = liveById.get(node.id);
     if (current === undefined) return node;
     const dragged = current.dragging === true;
-    if (!dragged && sameSelection(current, node)) return node;
+    if (!dragged && sameSelection(current, node) && current.measured === node.measured) return node;
     return {
       ...node,
+      ...(current.measured === undefined ? {} : { measured: current.measured }),
       ...(dragged ? { position: current.position, dragging: true } : {}),
       ...(current.selected === undefined ? {} : { selected: current.selected }),
     };

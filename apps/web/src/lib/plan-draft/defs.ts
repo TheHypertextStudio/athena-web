@@ -114,6 +114,7 @@ export function usePlanOps(planId: string): PlanOpsController {
   const [error, setError] = useState<string | null>(null);
 
   const mutation = useApiMutation<PlanDraftOut, readonly PlanOp[]>({
+    failure: 'silent',
     mutationFn: async (ops) => {
       const cached = queryClient.getQueryData<PlanDraftOut>(key);
       const revision = cached?.revision ?? (await fetchPlan(planId)).revision;
@@ -170,6 +171,7 @@ export function usePlanOps(planId: string): PlanOpsController {
 export function useCommitPlan(planId: string, orgId: string) {
   const queryClient = useQueryClient();
   return useApiMutation<PlanCommitOut, readonly string[]>({
+    failure: 'silent',
     mutationFn: (refs) =>
       unwrap(
         () =>
@@ -210,6 +212,7 @@ export function planRosterDef(planId: string) {
  */
 export function useUndoPlanCommit(planId: string, orgId: string) {
   return useApiMutation<AthenaUndoOut, string>({
+    failure: 'silent',
     mutationFn: (changeSetId) =>
       unwrap(
         () => api.v1.me.athena.changes[':changeSetId'].undo.$post({ param: { changeSetId } }),

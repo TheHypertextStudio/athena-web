@@ -194,6 +194,24 @@ describe('optional Athena planning review', () => {
     await settle();
     expect(state.assess).toHaveBeenCalledTimes(2);
   });
+  it('keeps an explicitly opened disclosure open across the automatic request', async () => {
+    let reject: ((error: Error) => void) | undefined;
+    state.assess.mockImplementation(
+      () =>
+        new Promise((_resolve, fail) => {
+          reject = fail;
+        }),
+    );
+    render(<DailyPlanningAssessment draft={draft} onTaskCreated={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Athena' }));
+    expect(screen.getByRole('button', { name: 'Ask Athena' })).toBeVisible();
+    await settle();
+    await act(async () => {
+      reject?.(new Error('unavailable'));
+    });
+    expect(screen.getByRole('button', { name: 'Athena' })).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByRole('button', { name: 'Ask Athena' })).toBeVisible();
+  });
   it('announces a pending assessment quietly without creating an empty summary or action', async () => {
     state.assess.mockImplementation(() => new Promise(() => undefined));
     render(<DailyPlanningAssessment draft={draft} onTaskCreated={vi.fn()} />);

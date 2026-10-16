@@ -45,39 +45,45 @@ export function PlanResultLine({ result, onUndo, onDismiss }: PlanResultLineProp
       role={result.error === null ? 'status' : 'alert'}
       data-testid="plan-result"
       data-phase={result.phase}
-      className="pointer-events-auto flex w-max max-w-[min(44rem,calc(100vw-2rem))] min-w-0 items-center gap-2 py-1 pr-1 pl-3"
+      className="pointer-events-auto flex w-full max-w-[min(44rem,calc(100vw-2rem))] min-w-0 flex-col items-stretch gap-2 px-3 py-2 sm:w-max sm:flex-row sm:items-center sm:py-1 sm:pr-1"
     >
-      {undone ? (
-        <span className="text-on-surface text-label-large shrink-0">Undone</span>
-      ) : (
-        <CheckCircle2 aria-hidden="true" className="text-primary size-4 shrink-0" />
-      )}
-      <span className={cn('text-body-medium min-w-0 truncate', textClasses(result))}>
-        {result.error ?? planResultText(result)}
-      </span>
-      {canUndo(result) ? (
+      <div className="flex min-w-0 items-start gap-2 sm:items-center">
+        {undone ? (
+          <span className="text-on-surface text-label-large shrink-0">Undone</span>
+        ) : (
+          <CheckCircle2 aria-hidden="true" className="text-primary size-4 shrink-0" />
+        )}
+        <span
+          className={cn('text-body-medium min-w-0 break-words sm:truncate', textClasses(result))}
+        >
+          {result.error ?? planResultText(result)}
+        </span>
+      </div>
+      <div className="flex shrink-0 justify-end gap-1">
+        {canUndo(result) ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="shrink-0"
+            disabled={result.phase === 'undoing'}
+            onClick={onUndo}
+          >
+            <Undo className="size-4" /> Undo
+          </Button>
+        ) : null}
         <Button
           type="button"
           variant="ghost"
           size="sm"
+          iconOnly
+          aria-label="Dismiss"
           className="shrink-0"
-          disabled={result.phase === 'undoing'}
-          onClick={onUndo}
+          onClick={onDismiss}
         >
-          <Undo className="size-4" /> Undo
+          <X className="size-4" />
         </Button>
-      ) : null}
-      <Button
-        type="button"
-        variant="ghost"
-        size="sm"
-        iconOnly
-        aria-label="Dismiss"
-        className="shrink-0"
-        onClick={onDismiss}
-      >
-        <X className="size-4" />
-      </Button>
+      </div>
     </Surface>
   );
 }

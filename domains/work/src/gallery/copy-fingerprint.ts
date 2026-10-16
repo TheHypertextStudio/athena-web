@@ -11,12 +11,10 @@ interface FingerprintPlatform {
 }
 /** Hash complete normalized copy facts with the runtime's native SHA-256, without I/O or identity allocation. */
 export async function fingerprintCopyFacts(facts: unknown): Promise<string> {
-  const platform = globalThis as unknown as FingerprintPlatform;
-  if (!platform.crypto?.subtle || !platform.TextEncoder)
+  const crypto = (globalThis as unknown as FingerprintPlatform).crypto;
+  const TextEncoder = (globalThis as unknown as FingerprintPlatform).TextEncoder;
+  if (!crypto?.subtle || !TextEncoder)
     throw new BlueprintError('blueprint_invalid', 'Copy review requires native SHA-256 support.');
-  const digest = await platform.crypto.subtle.digest(
-    'SHA-256',
-    new platform.TextEncoder().encode(copyFacts(facts)),
-  );
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(copyFacts(facts)));
   return `sha256:${[...new Uint8Array(digest)].map((value) => value.toString(16).padStart(2, '0')).join('')}`;
 }

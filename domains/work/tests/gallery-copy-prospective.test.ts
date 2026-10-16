@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import { fingerprintCopyFacts } from '../src/gallery/copy-api';
 import { TeamId } from '@docket/identity-access/ids';
 import { LabelId } from '../src/ids';
 import {
@@ -212,4 +213,30 @@ it('shows the exact reviewed document, labels and offerings before destination a
   });
   expect(preview.copies[0]).not.toHaveProperty('reservedFirstPublicationId');
   expect(JSON.stringify(input)).toBe(before);
+});
+
+describe('native copy review fingerprints', () => {
+  it('hashes canonical UTF-8 bytes without depending on object insertion order', async () => {
+    const facts = { z: ['café', null, true, 2], a: '🙂', ignored: undefined };
+    const expected = 'sha256:b431e60a48463fb50fd34650e58fbe93e39db28574e52e2e7c9499df93c320e8';
+    expect(await fingerprintCopyFacts(facts)).toBe(expected);
+    expect(await fingerprintCopyFacts({ a: facts.a, z: facts.z })).toBe(expected);
+    expect(await fingerprintCopyFacts({ ...facts, z: [...facts.z].reverse() })).not.toBe(expected);
+  });
+
+  it.each([
+    { capability: 'crypto', value: undefined },
+    { capability: 'crypto', value: {} },
+    { capability: 'TextEncoder', value: undefined },
+  ])('refuses unavailable native $capability support', async ({ capability, value }) => {
+    vi.stubGlobal(capability, value);
+    try {
+      await expect(fingerprintCopyFacts({ name: 'Reviewed outline' })).rejects.toMatchObject({
+        code: 'blueprint_invalid',
+        message: 'Copy review requires native SHA-256 support.',
+      });
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
 });

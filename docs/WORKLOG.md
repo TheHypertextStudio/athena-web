@@ -7,6 +7,49 @@
 
 ## Active Tasks
 
+### [WEBSITE-API-BOUNDARY-COVERAGE] Preserve API boundary coverage for template copies
+
+- **Status**: IN_PROGRESS
+- **Priority**: P1
+- **Description**: Exercise the template and gallery API's retained validation and authority
+  boundaries through its ordinary test suites without relaxing the package coverage requirement.
+- **Approach**: Identify uncovered executable branches, extend meaningful boundary assertions in
+  existing tests, and validate the affected package after focused checks pass.
+- **Files**: Existing affected API test suites and this worklog.
+- **Subtasks**:
+  - [ ] Identify uncovered template and gallery boundary paths in the ordinary coverage report.
+  - [ ] Cover refusals, replay and authority without changing production behavior or gate scope.
+  - [ ] Pass affected tests, lint, types and formatting, then ordinary package coverage.
+
+### [WEBSITE-ADMIN-NATIVE-BUILD] Preserve the admin's ordinary image build
+
+- **Status**: IN_PROGRESS
+- **Priority**: P1
+- **Description**: Build the existing admin image with its pinned toolchain while preserving its
+  IBM Plex fonts, weights, fallback metrics and runtime configuration.
+- **Approach**: Diagnose the font query failure against the existing Linux Docker builder before
+  choosing a source change. Keep the native image workflow and release gates.
+- **Files**: Admin build configuration only if the reproduced failure requires it, and this worklog.
+- **Subtasks**:
+  - [ ] Reproduce the hosted font parser failure with the existing Linux image builder.
+  - [ ] Correct a demonstrated defect or establish that an unchanged retry is appropriate.
+  - [ ] Accept the ordinary image build without adding assets, dependencies or custom loaders.
+
+### [WEBSITE-COPY-FINGERPRINT-CAPABILITIES] Read native fingerprint capabilities explicitly
+
+- **Status**: COMPLETE
+- **Priority**: P1
+- **Description**: Preserve portable native SHA-256 copy-review fingerprints within the domain's
+  existing module boundary policy.
+- **Approach**: Read only the native crypto and UTF-8 encoder capabilities instead of aliasing the
+  entire global object. Preserve canonical facts, digest method ownership and unavailable-support refusal.
+- **Files**: Gallery copy fingerprint implementation, existing prospective-copy tests and this worklog.
+- **Subtasks**:
+  - [x] Preserve exact canonical UTF-8 hashing and order sensitivity.
+  - [x] Exercise unavailable crypto, digest and encoder support without changing the boundary policy.
+  - [x] Pass existing domain policy, gallery suites, ordinary Work coverage and affected lint/types/format.
+  - [x] Independently review the source and assertion fidelity.
+
 ### [WEBSITE-PLAN-REFERENCE-FIXTURE] Assert template integrity at the draft boundary
 
 - **Status**: COMPLETE

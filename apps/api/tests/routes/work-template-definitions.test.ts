@@ -1,7 +1,7 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import type * as DbModule from '@docket/db';
 import { eq } from 'drizzle-orm';
-import { appWithActor, getDb, seedBaseOrg } from '../support/routes-harness';
+import { appWithActor, getDb, seedBaseOrg, one } from '../support/routes-harness';
 import { WorkTemplateOut, WorkTemplateVersionOut } from '@docket/work/work-template-contract';
 import { z } from 'zod';
 import type templatesRouter from '../../src/routes/templates';
@@ -383,4 +383,124 @@ describe('revision-aware work-template definitions', () => {
     });
     expect(createDenied.status).toBe(403);
   });
+});
+
+it('refuses stale, wrong-kind and archived draft edits without changing canonical state', async () => {
+  const f = await fixture(),
+    row = await create(f.app);
+  const before = one(
+    await schema.db.select().from(schema.template).where(eq(schema.template.id, row.id)),
+  );
+  for (const [body, status, code] of [
+    [
+      { expectedRevision: 9, definition: { ...definition, name: 'Stale overwrite' } },
+      409,
+      'conflict',
+    ],
+    [
+      { expectedRevision: 0, definition: { ...definition, payload: { targetType: 'task' } } },
+      422,
+      'validation_error',
+    ],
+  ] as const) {
+    const refused = await f.app.request(`/definitions/${row.id}/draft`, {
+      method: 'PATCH',
+      headers,
+      body: JSON.stringify(body),
+    });
+    expect(refused.status).toBe(status);
+    expect(await refused.json()).toMatchObject({ code });
+    expect(
+      one(await schema.db.select().from(schema.template).where(eq(schema.template.id, row.id))),
+    ).toEqual(before);
+  }
+  expect((await f.app.request(`/definitions/${row.id}/archive`, { method: 'POST' })).status).toBe(
+    200,
+  );
+  const archived = one(
+    await schema.db.select().from(schema.template).where(eq(schema.template.id, row.id)),
+  );
+  const refused = await f.app.request(`/definitions/${row.id}/draft`, {
+    method: 'PATCH',
+    headers,
+    body: JSON.stringify({
+      expectedRevision: archived.draftRevision,
+      definition: { ...definition, name: 'Archived overwrite' },
+    }),
+  });
+  expect(refused.status).toBe(409);
+  expect(await refused.json()).toMatchObject({ code: 'conflict' });
+  expect(
+    one(await schema.db.select().from(schema.template).where(eq(schema.template.id, row.id))),
+  ).toEqual(archived);
+});
+
+it('retains offerings on a foreign-team refusal and clears only explicitly selected offerings', async () => {
+  const f = await fixture(),
+    foreign = await fixture(),
+    row = await create(f.app);
+  const offered = await f.app.request(`/definitions/${row.id}/draft`, {
+    method: 'PATCH',
+    headers,
+    body: JSON.stringify({ expectedRevision: 0, offeredTeamIds: [f.teamId] }),
+  });
+  expect(offered.status).toBe(200);
+  const before = one(
+    await schema.db.select().from(schema.template).where(eq(schema.template.id, row.id)),
+  );
+  const bindings = await schema.db
+    .select()
+    .from(schema.workTypeTeam)
+    .where(eq(schema.workTypeTeam.workTypeId, row.id));
+  expect(bindings.map((binding) => binding.teamId)).toEqual([f.teamId]);
+  const refused = await f.app.request(`/definitions/${row.id}/draft`, {
+    method: 'PATCH',
+    headers,
+    body: JSON.stringify({ expectedRevision: 1, offeredTeamIds: [foreign.teamId] }),
+  });
+  expect(refused.status).toBe(404);
+  expect(await refused.json()).toMatchObject({ code: 'not_found' });
+  expect(
+    one(await schema.db.select().from(schema.template).where(eq(schema.template.id, row.id))),
+  ).toEqual(before);
+  expect(
+    await schema.db
+      .select()
+      .from(schema.workTypeTeam)
+      .where(eq(schema.workTypeTeam.workTypeId, row.id)),
+  ).toEqual(bindings);
+  const included = z
+    .object({ items: z.array(WorkTemplateOut) })
+    .parse(
+      await (await f.app.request(`/definitions?includeDrafts=true&teamId=${f.teamId}`)).json(),
+    );
+  const excluded = z
+    .object({ items: z.array(WorkTemplateOut) })
+    .parse(
+      await (
+        await f.app.request(`/definitions?includeDrafts=true&teamId=${foreign.teamId}`)
+      ).json(),
+    );
+  expect(included.items.some((item) => item.id === row.id)).toBe(true);
+  expect(excluded.items.some((item) => item.id === row.id)).toBe(false);
+  const cleared = await f.app.request(`/definitions/${row.id}/draft`, {
+    method: 'PATCH',
+    headers,
+    body: JSON.stringify({ expectedRevision: 1, offeredTeamIds: [] }),
+  });
+  expect(cleared.status).toBe(200);
+  expect(WorkTemplateOut.parse(await cleared.json())).toMatchObject({
+    revision: 2,
+    offeredTeamIds: [],
+  });
+  expect(
+    await schema.db
+      .select()
+      .from(schema.workTypeTeam)
+      .where(eq(schema.workTypeTeam.workTypeId, row.id)),
+  ).toEqual([]);
+  expect(
+    one(await schema.db.select().from(schema.template).where(eq(schema.template.id, row.id)))
+      .draftDefinition,
+  ).toEqual(before.draftDefinition);
 });

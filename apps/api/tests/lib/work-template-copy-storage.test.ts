@@ -12,6 +12,14 @@ import { appendPublication } from '../../src/lib/templates/persistence';
 import { publishWorkTemplate } from '../../src/lib/templates/service';
 import { updateTemplate } from '../../src/lib/templates/write';
 import { getTemplateCopyBundleForRequest } from '../../src/lib/templates/copy-reservation';
+import { ConflictError, CapabilityError, ValidationError } from '../../src/error';
+import { claimReservedTemplateIdentity } from '../../src/lib/templates/copy-reservation-claim';
+import {
+  prepareTemplateCopyPublication,
+  reservedFirstPublicationId,
+} from '../../src/lib/templates/copy-publication';
+import { installTemplateCopyContext } from '../../src/lib/templates/copy-reservation-context';
+import type { TemplateCopyFinishInput } from '../../src/lib/templates/copy-reservation-finish';
 import { parseCopyBundleAcceptance } from '../../src/lib/templates/copy-reservation-input';
 
 let schema: typeof DbModule;
@@ -62,7 +70,10 @@ async function fixture() {
   });
   return { ...workspace, principal, input };
 }
-async function install(f: Awaited<ReturnType<typeof fixture>>) {
+async function install(
+  f: Awaited<ReturnType<typeof fixture>>,
+  changeFinish?: (input: TemplateCopyFinishInput) => TemplateCopyFinishInput,
+) {
   return db.transaction(
     async (tx) => {
       const reserved = await reserveTemplateCopyBundleInTransaction(tx, f.principal, f.input);
@@ -99,10 +110,15 @@ async function install(f: Awaited<ReturnType<typeof fixture>>) {
         op: 'create',
         after: { name: created.row.name },
       });
-      await finishTemplateCopyBundleInTransaction(tx, capability, {
+      const finish = {
         receiptId: receipt.id,
         afterStateFingerprints: [{ key: 'root', fingerprint }],
-      });
+      };
+      await finishTemplateCopyBundleInTransaction(
+        tx,
+        capability,
+        changeFinish ? changeFinish(finish) : finish,
+      );
       return { row: created.row, entry: reserved.entries[0], capability };
     },
     { isolationLevel: 'serializable' },
@@ -339,4 +355,142 @@ describe('current reserved publication and outcome access', () => {
         .latestPublishedVersionId,
     ).toBeNull();
   });
+});
+
+it.each(['organization', 'foreign_owner', 'wrong_kind'] as const)(
+  'refuses %s claims before allocating a canonical copy',
+  async (change) => {
+    const f = await fixture();
+    await expect(
+      db.transaction(
+        async (tx) => {
+          const reserved = await reserveTemplateCopyBundleInTransaction(tx, f.principal, f.input);
+          if (reserved.kind !== 'reserved') throw new Error('Expected new reservation');
+          const capability = reserved.reservations.get('root');
+          if (!capability) throw new Error('Missing reservation');
+          const body = WorkTemplateCreate.parse({
+            targetType: change === 'wrong_kind' ? 'project' : 'task',
+            scope: change === 'organization' ? 'organization' : 'personal',
+            ...(change === 'foreign_owner' ? { ownerActorId: schema.genId() } : {}),
+            definition:
+              change === 'wrong_kind'
+                ? { name: 'Wrong kind', payload: { targetType: 'project' } }
+                : definition(),
+          });
+          return claimReservedTemplateIdentity(tx, capability, reserved.actor, body);
+        },
+        { isolationLevel: 'serializable' },
+      ),
+    ).rejects.toBeInstanceOf(change === 'wrong_kind' ? ConflictError : CapabilityError);
+    expect(
+      await db
+        .select()
+        .from(schema.workTemplateCopyBundle)
+        .where(eq(schema.workTemplateCopyBundle.organizationId, f.orgId)),
+    ).toEqual([]);
+  },
+);
+
+it.each(['missing', 'duplicate', 'unknown', 'malformed'] as const)(
+  'rolls back the complete installation for %s final member fingerprints',
+  async (change) => {
+    const f = await fixture();
+    await expect(
+      install(f, (input) => ({
+        ...input,
+        afterStateFingerprints:
+          change === 'missing'
+            ? []
+            : change === 'duplicate'
+              ? [
+                  { key: 'root', fingerprint },
+                  { key: 'root', fingerprint },
+                ]
+              : [
+                  {
+                    key: change === 'unknown' ? 'absent' : 'root',
+                    fingerprint: change === 'malformed' ? 'sha256:invalid' : fingerprint,
+                  },
+                ],
+      })),
+    ).rejects.toBeInstanceOf(ValidationError);
+    expect(
+      await db
+        .select()
+        .from(schema.template)
+        .where(and(eq(schema.template.organizationId, f.orgId), eq(schema.template.isBase, false))),
+    ).toEqual([]);
+    expect(
+      await db
+        .select()
+        .from(schema.workTemplateCopyBundle)
+        .where(eq(schema.workTemplateCopyBundle.organizationId, f.orgId)),
+    ).toEqual([]);
+    expect(
+      await db.select().from(schema.changeSet).where(eq(schema.changeSet.organizationId, f.orgId)),
+    ).toEqual([]);
+  },
+);
+
+it('refuses an unrelated receipt and rolls back its tentative canonical destination', async () => {
+  const f = await fixture();
+  await expect(
+    install(f, (input) => ({ ...input, receiptId: schema.genId() })),
+  ).rejects.toMatchObject({ status: 409, message: 'Copy receipt is unavailable' });
+  expect(
+    await db
+      .select()
+      .from(schema.template)
+      .where(and(eq(schema.template.organizationId, f.orgId), eq(schema.template.isBase, false))),
+  ).toEqual([]);
+});
+
+it.each(['other_actor', 'no_actor', 'revoked_author'] as const)(
+  'rechecks %s authority after preparing the reserved first publication',
+  async (change) => {
+    const f = await fixture(),
+      copied = await install(f);
+    await expect(
+      db.transaction(
+        async (tx) => {
+          expect(await prepareTemplateCopyPublication(tx, copied.row, f.humanActorId)).toBe(
+            copied.entry?.reservedFirstVersionId,
+          );
+          if (change === 'revoked_author')
+            await tx
+              .update(schema.grant)
+              .set({ capabilities: ['view'] })
+              .where(eq(schema.grant.subjectId, f.humanActorId));
+          return reservedFirstPublicationId(
+            tx,
+            copied.row,
+            change === 'no_actor'
+              ? null
+              : change === 'other_actor'
+                ? schema.genId()
+                : f.humanActorId,
+          );
+        },
+        { isolationLevel: 'serializable' },
+      ),
+    ).rejects.toBeInstanceOf(CapabilityError);
+    expect(
+      one(await db.select().from(schema.template).where(eq(schema.template.id, copied.row.id)))
+        .latestPublishedVersionId,
+    ).toBeNull();
+  },
+);
+
+it('does not replace explicit publication attribution with ambient reservation context', async () => {
+  const f = await fixture(),
+    copied = await install(f);
+  await expect(
+    db.transaction(
+      async (tx) => {
+        await installTemplateCopyContext(tx, { orgId: f.orgId, actorId: f.humanActorId });
+        return reservedFirstPublicationId(tx, copied.row, null);
+      },
+      { isolationLevel: 'serializable' },
+    ),
+  ).rejects.toBeInstanceOf(CapabilityError);
 });

@@ -4,6 +4,8 @@ import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { one } from '../support/routes-harness';
 import { flushDeferredWork } from '../../src/lib/after-response';
 import { undoChangeSetAtomically } from '../../src/mcp/change-set';
+import { LabelId } from '@docket/work/ids';
+import { WorkTemplateDefinition } from '@docket/work/work-template-contract';
 import {
   definition,
   fixture,
@@ -19,8 +21,98 @@ beforeAll(async () => {
   schema = await updateSchema();
 });
 afterEach(flushDeferredWork);
+async function receipts(orgId: string) {
+  return schema.db
+    .select()
+    .from(schema.changeSet)
+    .where(eq(schema.changeSet.organizationId, orgId));
+}
+async function labels(taskId: string) {
+  return schema.db.select().from(schema.taskLabel).where(eq(schema.taskLabel.taskId, taskId));
+}
 
 describe('selective generated template adoption', () => {
+  it.each(['starting-field', 'child-change'] as const)(
+    'refuses an unreviewed %s without writing identity, work or receipts',
+    async (choice) => {
+      const f = await fixture();
+      await newer(f);
+      const preview = await review(f);
+      expect(preview.changes).toEqual([]);
+      expect(preview.childChanges.some((change) => change.changeId === 'bp_0000000000000000')).toBe(
+        false,
+      );
+      const before = await rows(f);
+      const beforeReceipts = await receipts(f.orgId);
+      const response = await request(f, '/update', {
+        workTypeId: f.published.id,
+        previewToken: preview.previewToken,
+        ...(choice === 'starting-field'
+          ? { applyFields: ['title'] }
+          : { acceptChildChanges: ['bp_0000000000000000'] }),
+      });
+      expect(response.status).toBe(422);
+      expect(await response.json()).toMatchObject({ code: 'validation_error' });
+      expect(await rows(f)).toEqual(before);
+      expect(await receipts(f.orgId)).toEqual(beforeReceipts);
+    },
+  );
+
+  it('adopts reviewed root labels and workflow status in one reversible change without altering child work', async () => {
+    const f = await fixture();
+    const label = one(
+      await schema.db
+        .insert(schema.label)
+        .values({ organizationId: f.orgId, name: 'Reviewed report', color: 'blue' })
+        .returning(),
+    );
+    const next = WorkTemplateDefinition.parse({
+      ...definition(['prep']),
+      defaultStatusKey: 'in_progress',
+      payload: { targetType: 'task', title: 'Reusable title', labelIds: [LabelId.parse(label.id)] },
+    });
+    await newer(f, undefined, undefined, next);
+    const before = await rows(f);
+    const original = one(before.filter((work) => work.id === f.root.id));
+    const preview = await review(f, 'change');
+    expect(preview.changes.find((change) => change.field === 'labels')).toMatchObject({
+      before: [],
+      after: ['Reviewed report'],
+    });
+    expect(preview.changes.find((change) => change.field === 'status')).toMatchObject({
+      before: original.state,
+      after: 'in_progress',
+    });
+    const response = await request(f, '', {
+      workTypeId: f.published.id,
+      previewToken: preview.previewToken,
+      applyFields: ['labels', 'status'],
+    });
+    expect(response.status).toBe(200);
+    expect(one((await rows(f)).filter((work) => work.id === f.root.id))).toMatchObject({
+      title: 'My report',
+      description: '## Authored notes',
+      state: 'in_progress',
+      blueprintEverStarted: true,
+    });
+    expect(one((await rows(f)).filter((work) => work.id === f.child.id))).toEqual(f.child);
+    expect(await labels(f.root.id)).toMatchObject([{ labelId: label.id }]);
+    const receipt = one(
+      (await receipts(f.orgId)).filter((entry) => entry.summary === 'Changed template'),
+    );
+    expect(
+      (await undoChangeSetAtomically(f.orgId, receipt.id)).outcomes.every(
+        (outcome) => outcome.reverted,
+      ),
+    ).toBe(true);
+    const restored = await rows(f);
+    expect(restored.find((work) => work.id === f.root.id)).toMatchObject({
+      state: original.state,
+      workTypeVersionId: original.workTypeVersionId,
+    });
+    expect(restored.find((work) => work.id === f.child.id)).toEqual(f.child);
+    expect(await labels(f.root.id)).toEqual([]);
+  });
   it('accepts one added child and one derived offset without replacing root or child prose', async () => {
     const f = await fixture();
     await schema.db

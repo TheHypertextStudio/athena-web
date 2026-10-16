@@ -19,6 +19,8 @@ import {
   templateCopyBundleMemberInUse,
   templateCopyReceiptRegistered,
   templateChangeSetHasCopyBundle,
+  templateCopyPendingSelection,
+  templateReferencesInUse,
 } from '../../src/lib/templates/copy-reference-integrity';
 import { ConflictError } from '../../src/error';
 import { createDraft } from '../../src/lib/composer-draft/store';
@@ -293,4 +295,64 @@ describe('copy reference integrity', () => {
       }),
     ).rejects.toBeInstanceOf(ConflictError);
   });
+});
+
+it('projects pending selections through the authorized service without requiring authoring', async () => {
+  const f = await fixture();
+  await schema.db
+    .update(schema.grant)
+    .set({ capabilities: ['view'] })
+    .where(eq(schema.grant.subjectId, f.actorId));
+  const caller = { orgId: f.organizationId, actorId: f.actorId };
+  expect(
+    await schema.db.transaction((tx) => templateCopyPendingSelection(tx, caller, f.destinationId)),
+  ).toEqual({ reservedFirstVersionId: f.reservedId });
+  expect(
+    await schema.db.transaction((tx) => templateCopyPendingSelection(tx, caller, schema.genId())),
+  ).toBeNull();
+  await schema.db
+    .update(schema.grant)
+    .set({ capabilities: ['manage'] })
+    .where(eq(schema.grant.subjectId, f.actorId));
+  expect(
+    await schema.db.transaction((tx) => templateReferencesInUse(tx, caller, f.destinationId)),
+  ).toBe(false);
+  const payload = copyReferenceComposer(f.destinationId, f.reservedId);
+  await schema.db.insert(schema.composerDraft).values({
+    organizationId: f.organizationId,
+    ownerUserId: f.userId,
+    kind: payload.kind,
+    payload,
+    expiresAt: new Date(Date.now() + 60000),
+  });
+  expect(
+    await schema.db.transaction((tx) => templateReferencesInUse(tx, caller, f.destinationId)),
+  ).toBe(true);
+});
+
+it('does not expose pending selections to inactive, archived or revoked viewers', async () => {
+  const f = await fixture();
+  const caller = { orgId: f.organizationId, actorId: f.actorId };
+  await schema.db
+    .update(schema.actor)
+    .set({ status: 'suspended' })
+    .where(eq(schema.actor.id, f.actorId));
+  await expect(
+    schema.db.transaction((tx) => templateCopyPendingSelection(tx, caller, f.destinationId)),
+  ).rejects.toMatchObject({ status: 404, message: 'Workspace not found' });
+  await schema.db
+    .update(schema.actor)
+    .set({ status: 'active', archivedAt: new Date() })
+    .where(eq(schema.actor.id, f.actorId));
+  await expect(
+    schema.db.transaction((tx) => templateCopyPendingSelection(tx, caller, f.destinationId)),
+  ).rejects.toMatchObject({ status: 404, message: 'Workspace not found' });
+  await schema.db
+    .update(schema.actor)
+    .set({ archivedAt: null })
+    .where(eq(schema.actor.id, f.actorId));
+  await schema.db.delete(schema.grant).where(eq(schema.grant.subjectId, f.actorId));
+  await expect(
+    schema.db.transaction((tx) => templateCopyPendingSelection(tx, caller, f.destinationId)),
+  ).rejects.toMatchObject({ status: 403 });
 });

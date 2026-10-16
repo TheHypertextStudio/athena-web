@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { ConflictError } from '../../src/error';
 import { planTemplateCopyUndo, type CopyUndoFacts } from '../../src/lib/template-gallery/undo-plan';
 
 const facts = (
@@ -83,4 +84,11 @@ describe('copy bundle retention', () => {
     bounded[98]?.dependencies.push('entry_99');
     expect(() => planTemplateCopyUndo(bounded)).toThrow();
   });
+});
+
+it('refuses empty receipts and duplicate dependency metadata before proposing any reversal', () => {
+  for (const entries of [[], [facts('child'), facts('parent', ['child', 'child'])]]) {
+    expect(() => planTemplateCopyUndo(entries)).toThrow(ConflictError);
+    expect(() => planTemplateCopyUndo(entries)).toThrow('Copy can no longer be undone');
+  }
 });

@@ -9,7 +9,7 @@
 
 ### [WEBSITE-API-BOUNDARY-COVERAGE] Preserve API boundary coverage for template copies
 
-- **Status**: IN_PROGRESS
+- **Status**: COMPLETE
 - **Priority**: P1
 - **Description**: Exercise the template and gallery API's retained validation and authority
   boundaries through its ordinary test suites without relaxing the package coverage requirement.
@@ -17,9 +17,33 @@
   existing tests, and validate the affected package after focused checks pass.
 - **Files**: Existing affected API test suites and this worklog.
 - **Subtasks**:
-  - [ ] Identify uncovered template and gallery boundary paths in the ordinary coverage report.
-  - [ ] Cover refusals, replay and authority without changing production behavior or gate scope.
-  - [ ] Pass affected tests, lint, types and formatting, then ordinary package coverage.
+  - [x] Identify uncovered template and gallery boundary paths in the ordinary coverage report.
+  - [x] Cover refusals, replay and authority without changing production behavior or gate scope.
+  - [x] Pass affected tests, lint, types and formatting, then ordinary package coverage.
+
+### [WEBSITE-API-RETAINED-TEMPLATE-BOUNDARIES] Preserve native template recovery and review boundaries
+
+- **Status**: COMPLETE
+- **Priority**: P1
+- **Description**: Exercise retained template identity, dependency ownership, authoring authority,
+  prospective review and selective date changes through their ordinary API suites.
+- **Approach**: Use the native full-package coverage map to select real missing scenarios in
+  existing tests. Preserve immutable receipts, manual edits, privacy, transaction rollback and
+  coverage requirements; do not manufacture states protected storage cannot represent.
+- **Files**: Existing dependency, definition/restoration, reflow/update, context and retained-template
+  API suites selected against their corresponding source owners, and this worklog.
+- **Subtasks**:
+  - [x] Exercise historical dependency ownership and lawful template restoration/refusals.
+  - [x] Exercise reflow review and selective mutation boundaries without changing manual work.
+  - [x] Exercise retained identity, calendar context and prospective source privacy/refusals.
+  - [x] Review assertion fidelity and run the affected native suites together.
+  - [x] Pass ordinary API coverage and affected lint, types and formatting.
+- **Validation**: The ordinary API run passes all 726 files and 7,850 tests at the unchanged
+  88% branch requirement. Affected lint, types and formatting pass. Independent review confirms
+  real stored-state scenarios, discriminating refusal/rollback assertions and unchanged gates.
+- **Retrospective**: Coverage gaps came from retained template authority and recovery paths.
+  Existing suites now exercise those paths without adding migration-only checks or altering
+  production behavior. The required hosted image and deployment jobs remain separate acceptance.
 
 ### [WEBSITE-ADMIN-NATIVE-BUILD] Preserve the admin's ordinary image build
 
@@ -30,6 +54,11 @@
 - **Approach**: Diagnose the font query failure against the existing Linux Docker builder before
   choosing a source change. Keep the native image workflow and release gates.
 - **Files**: Admin build configuration only if the reproduced failure requires it, and this worklog.
+- **Validation**: The unchanged native macOS build passes. The Linux arm64 builder completes
+  Turbopack font compilation before TypeScript exhausts its heap; amd64 emulation crashes before
+  Next starts. Neither reproduces the hosted font parser failure or accepts the complete Linux image.
+- **Decision**: Preserve the build configuration. Observe the ordinary image job after the
+  independently required source fixes; a speculative webpack switch is not justified.
 - **Subtasks**:
   - [ ] Reproduce the hosted font parser failure with the existing Linux image builder.
   - [ ] Correct a demonstrated defect or establish that an unchanged retry is appropriate.

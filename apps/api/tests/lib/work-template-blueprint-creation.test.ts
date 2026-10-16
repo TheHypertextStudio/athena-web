@@ -417,4 +417,85 @@ describe('transactional work-template expansion', () => {
         .where(eq(schema.changeSet.organizationId, f.orgId)),
     ).toHaveLength(0);
   });
+  it.each([
+    {
+      kind: 'task',
+      rootKind: 'project',
+      fields: { title: 'T'.repeat(300) },
+      title: 'T'.repeat(256),
+    },
+    {
+      kind: 'project',
+      rootKind: 'initiative',
+      fields: { name: 'Optional project' },
+      title: 'Optional project',
+    },
+    {
+      kind: 'program',
+      rootKind: 'initiative',
+      fields: { name: 'Optional program' },
+      title: 'Optional program',
+    },
+  ] as const)(
+    'previews an unselected $kind without preparing its fields or leaking its body',
+    async ({ kind, rootKind, fields, title }) => {
+      const f = await fixture(
+        [
+          step('extra', {
+            kind,
+            fields: { ...fields, description: 'PRIVATE OPTIONAL BODY' },
+            teamRule: kind === 'task' ? 'parent_team' : 'none',
+            optional: { enabled: true, selectedByDefault: false },
+          }),
+        ],
+        rootKind,
+      );
+      const invocation = { origin: originFor('work_create', {}, appProvenance()) };
+      const body = { name: 'Review only', workTypeId: WorkTypeId.parse(f.published.id) };
+      const command =
+        rootKind === 'project'
+          ? {
+              caller: f.caller,
+              kind: 'project' as const,
+              body: { ...body, teamId: TeamId.parse(f.teamId) },
+              invocation,
+            }
+          : { caller: f.caller, kind: 'initiative' as const, body, invocation };
+      const { previewBlueprintCreation } =
+        await import('../../src/lib/work-template-blueprints/preview');
+      const { BlueprintPreviewOptions } = await import('@docket/work/work-template-blueprint');
+      const preview = await schema.db.transaction((tx) =>
+        previewBlueprintCreation(
+          tx,
+          command,
+          BlueprintPreviewOptions.parse({ optionalChoices: [] }),
+        ),
+      );
+      expect(preview).toMatchObject({
+        selectedCount: 1,
+        descendantCount: 1,
+        summaryOffset: 0,
+        nextSummaryOffset: null,
+      });
+      expect(preview.descendants).toEqual([
+        expect.objectContaining({
+          kind,
+          title,
+          selected: false,
+          selectedByDefault: false,
+          optional: true,
+          dates: {},
+          unresolvedReasons: {},
+          parentPath: [],
+        }),
+      ]);
+      expect(JSON.stringify(preview)).not.toContain('PRIVATE OPTIONAL BODY');
+      expect(
+        await schema.db
+          .select()
+          .from(schema.changeSet)
+          .where(eq(schema.changeSet.organizationId, f.orgId)),
+      ).toHaveLength(0);
+    },
+  );
 });

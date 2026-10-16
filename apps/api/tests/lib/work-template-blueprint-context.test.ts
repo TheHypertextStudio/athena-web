@@ -433,4 +433,56 @@ describe('transaction-owned blueprint context snapshots', () => {
       ).rejects.toMatchObject({ status: 403 });
     });
   });
+  it('uses UTC for a legacy unrecognized creator timezone without shifting the civil date', async () => {
+    const f = await fixture();
+    const userId = await seedUserWithHub(schema.db, schema, 'Legacy timezone');
+    await schema.db.update(schema.actor).set({ userId }).where(eq(schema.actor.id, f.humanActorId));
+    await schema.db
+      .update(schema.hub)
+      .set({ preferences: { timezone: 'Unrecognized/Zone' } })
+      .where(eq(schema.hub.userId, userId));
+    expect(await load(f.command, f.root)).toMatchObject({
+      timezone: 'UTC',
+      creationDate: '2026-10-15',
+    });
+  });
+  it.each(['suspended', 'archived'] as const)(
+    'refuses a creator whose current membership is %s',
+    async (state) => {
+      const f = await fixture();
+      await schema.db
+        .update(schema.actor)
+        .set(state === 'suspended' ? { status: 'suspended' } : { archivedAt: now })
+        .where(eq(schema.actor.id, f.humanActorId));
+      await expect(load(f.command, f.root)).rejects.toMatchObject({
+        status: 404,
+        message: 'Workspace not found',
+      });
+    },
+  );
+  it('refuses a workspace removed before the creation snapshot', async () => {
+    const f = await fixture();
+    await expect(
+      load({ ...f.command, caller: { ...f.command.caller, orgId: schema.genId() } }, f.root),
+    ).rejects.toMatchObject({ status: 404, message: 'Workspace not found' });
+  });
+  it.each(['initiativeId', 'milestoneId', 'projectId', 'parentTaskId'] as const)(
+    'refuses unavailable %s placement without returning another work name',
+    async (field) => {
+      const f = await fixture();
+      const command: OrdinaryWorkCommand =
+        field === 'initiativeId'
+          ? f.command
+          : {
+              ...f.command,
+              kind: 'task',
+              body: { title: 'Child', teamId: TeamId.parse(f.teamId) },
+            };
+      const root: ResolvedRootDraft =
+        field === 'initiativeId' ? f.root : { ...f.root, kind: 'task', fields: { title: 'Child' } };
+      await expect(
+        load(command, { ...root, placement: { [field]: schema.genId() } }),
+      ).rejects.toMatchObject({ status: 404, message: 'Placement not found' });
+    },
+  );
 });

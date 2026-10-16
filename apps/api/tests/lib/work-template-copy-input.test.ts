@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { genId } from '@docket/db';
+import { ValidationError } from '../../src/error';
 import { parseCopyBundleAcceptance } from '../../src/lib/templates/copy-reservation-input';
 const hash = `sha256:${'1'.repeat(64)}`;
 const source = () => ({
@@ -79,4 +80,48 @@ describe('bounded trusted copy reservation input', () => {
       }),
     ).toThrow();
   });
+});
+
+it('binds explicit choice fingerprints and defaults only omitted choices to the reviewed facts', () => {
+  const input = acceptance();
+  expect(parseCopyBundleAcceptance(input).choicesFingerprint).toBe(hash);
+  const choicesFingerprint = `sha256:${'3'.repeat(64)}`;
+  expect(parseCopyBundleAcceptance({ ...input, choicesFingerprint }).choicesFingerprint).toBe(
+    choicesFingerprint,
+  );
+});
+
+it('refuses duplicate source identities, duplicate dependency edges and duplicate roots', () => {
+  const input = acceptance(),
+    [child, root] = input.entries;
+  if (!child || !root) throw new Error('Missing graph fixture');
+  for (const changed of [
+    { ...input, entries: [child, { ...root, source: child.source }] },
+    { ...input, entries: [child, { ...root, dependencies: ['child', 'child'] }] },
+    { ...input, roots: ['root', 'root'] },
+  ]) {
+    expect(() => parseCopyBundleAcceptance(changed)).toThrow(ValidationError);
+  }
+});
+
+it('accepts the exact edge budget and refuses a larger complete dependency-first graph', () => {
+  let remaining = 2000;
+  const entries = Array.from({ length: 100 }, (_, index) => {
+    const count = Math.min(index, remaining);
+    remaining -= count;
+    return {
+      key: `entry${index}`,
+      kind: 'task' as const,
+      source: source(),
+      sourceFingerprint: hash,
+      dependencies: Array.from({ length: count }, (_, dependency) => `entry${dependency}`),
+    };
+  });
+  const input = { ...acceptance(), roots: entries.map((entry) => entry.key), entries };
+  expect(remaining).toBe(0);
+  expect(parseCopyBundleAcceptance(input).entries).toHaveLength(100);
+  const last = entries[99];
+  if (!last) throw new Error('Missing graph boundary');
+  last.dependencies.push('entry0');
+  expect(() => parseCopyBundleAcceptance(input)).toThrow(ValidationError);
 });

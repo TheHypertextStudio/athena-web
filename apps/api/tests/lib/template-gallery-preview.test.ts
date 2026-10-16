@@ -23,11 +23,11 @@ function suggestedEntry() {
   if (!entry || !suggestion) throw new Error('Missing released label-suggestion fixture');
   return { entry, suggestion };
 }
-async function destinationLabel(orgId: string) {
+async function destinationLabel(orgId: string, teamId: string | null = null) {
   return one(
     await schema.db
       .insert(schema.label)
-      .values({ organizationId: orgId, name: 'Reviewed label', color: '#6750a4' })
+      .values({ organizationId: orgId, teamId, name: 'Reviewed label', color: '#6750a4' })
       .returning(),
   );
 }
@@ -111,4 +111,77 @@ describe('actual read-only gallery choices', () => {
       ),
     ).rejects.toThrow();
   });
+});
+
+it('checks team-scoped label visibility independently of workspace authoring', async () => {
+  const f = await fixture(),
+    { entry, suggestion } = suggestedEntry();
+  const label = await destinationLabel(f.orgId, f.teamId);
+  const request = WorkTemplateGalleryPreviewRequest.parse({
+    roots: [entry.slug],
+    release: 1,
+    mode: 'private_drafts',
+    labels: [{ sourceSlug: entry.slug, suggestion, destinationLabelId: label.id }],
+  });
+  const preview = await previewTemplateGalleryCopy(f.caller, request);
+  expect(
+    preview.copies.find((copy) => copy.source.workTypeId === entry.id)?.definition.payload,
+  ).toMatchObject({ labelIds: [label.id] });
+  await schema.db
+    .update(schema.grant)
+    .set({ cascades: false })
+    .where(
+      and(eq(schema.grant.organizationId, f.orgId), eq(schema.grant.subjectId, f.humanActorId)),
+    );
+  await expect(previewTemplateGalleryCopy(f.caller, request)).rejects.toMatchObject({
+    status: 404,
+    message: 'Label not found',
+  });
+});
+
+it('includes only explicit active destination offerings in an administrator review', async () => {
+  const f = await fixture();
+  const request = WorkTemplateGalleryPreviewRequest.parse({
+    roots: ['event'],
+    release: 1,
+    mode: 'published',
+    offerings: [{ sourceSlug: 'event', teamIds: [f.teamId] }],
+  });
+  const preview = await previewTemplateGalleryCopy(f.caller, request);
+  expect(preview.copies.find((copy) => copy.targetType === 'project')?.offeredTeamIds).toEqual([
+    f.teamId,
+  ]);
+  expect(preview.copies.find((copy) => copy.targetType === 'task')?.offeredTeamIds).toEqual([]);
+  expect(
+    await schema.db
+      .select()
+      .from(schema.workTemplateCopyBundle)
+      .where(eq(schema.workTemplateCopyBundle.organizationId, f.orgId)),
+  ).toEqual([]);
+});
+
+it('refuses foreign and archived offering teams before producing a review', async () => {
+  const f = await fixture(),
+    foreign = await fixture();
+  const request = WorkTemplateGalleryPreviewRequest.parse({
+    roots: ['event'],
+    release: 1,
+    mode: 'published',
+  });
+  await expect(
+    previewTemplateGalleryCopy(f.caller, {
+      ...request,
+      offerings: [{ sourceSlug: 'event', teamIds: [TeamId.parse(foreign.teamId)] }],
+    }),
+  ).rejects.toMatchObject({ status: 404, message: 'Team not found' });
+  await schema.db
+    .update(schema.team)
+    .set({ archivedAt: new Date() })
+    .where(eq(schema.team.id, f.teamId));
+  await expect(
+    previewTemplateGalleryCopy(f.caller, {
+      ...request,
+      offerings: [{ sourceSlug: 'event', teamIds: [TeamId.parse(f.teamId)] }],
+    }),
+  ).rejects.toMatchObject({ status: 404, message: 'Team not found' });
 });

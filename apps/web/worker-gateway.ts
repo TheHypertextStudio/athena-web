@@ -10,6 +10,13 @@ export function workerHostRedirect(url: URL, config: WorkerRuntimeConfig): Respo
     destination = config.appOrigin;
   } else if (
     config.legacyRpHostname !== undefined &&
+    url.hostname === `docket.${config.legacyRpHostname}` &&
+    url.hostname !== config.appHostname &&
+    url.hostname !== config.recoveryHostname
+  ) {
+    destination = config.appOrigin;
+  } else if (
+    config.legacyRpHostname !== undefined &&
     config.legacyRpHostname !== config.appHostname &&
     url.hostname === config.legacyRpHostname &&
     url.pathname !== '/.well-known/apple-app-site-association'

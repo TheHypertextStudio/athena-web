@@ -7,6 +7,18 @@
 
 ## Active Tasks
 
+### [WEBSITE-LEGACY-CANONICAL] Preserve the old application alias on Workers
+
+- **Status**: REVIEW
+- **Description**: Preserve the existing old Docket host redirect when removing Vercel hosting.
+- **Approach**: Derive the old application alias from the configured legacy RP and redirect it
+  through the existing canonicalization boundary, preserving path and query. Keep an active
+  transitional recovery host exempt and preserve the historical RP's AASA behavior.
+- **Files**: Worker gateway and this log.
+- **Validation**: Review the narrow condition, build the current-main native production artifact,
+  and accept the alias through its actual managed domain before retiring the provider. Ordinary
+  CI and backend deployment gates remain required; source review alone is not runtime acceptance.
+
 ### [COPY-MIGRATION-CREATOR-ROLE] Preserve managed PostgreSQL creator membership safely
 
 - **Status**: REVIEW

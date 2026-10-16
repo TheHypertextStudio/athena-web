@@ -1,5 +1,12 @@
 # Design review: Focused work activities — 2026-10-16
 
+> **Expanded-state review: below bar pending two phone corrections.** The later complete-state
+> capture pass exposed compressed Start-of-day heading/count/actions and clipped archive pagination
+> labels. The earlier scores below describe the inspected default and authoring frames; they do not
+> establish acceptance of these newly exercised states. Actual screenshots preserve both defects.
+> [Start-of-day phone](/Users/williecubed/.codex/recovery/2026-10-16-all-work-states/planning/lenses/plan-morning-undecided-390x844-light.png)
+> · [Archive pagination phone](/Users/williecubed/.codex/recovery/2026-10-16-all-work-states/authoring/131-archive-active-schedules-390x844-light.png).
+
 Register: app, IBM Plex / neutral MD3. Scope: choosing and defining organizational work,
 focused child/routine editing, weekly planning and proposal review. This replaces the withdrawn
 navigation/information-hierarchy verdict in the previous workspace audit.
@@ -61,7 +68,9 @@ content is identified here as verification data rather than production organizat
 4. **Corrected: retained help failed in the actual runtime.** Shared Sheet retention now provides
    a DOM presence anchor. StrictMode regression coverage and the real canvas browser journey pass.
 
-Verdict: SHIP for the locally verified correction within this scope. This does not grant owner
+Historical verdict: SHIP for the original bounded frames. Current verdict: BELOW BAR for the expanded
+flow until phone Start-of-day actions and archive pagination are corrected. Stack or wrap those
+controls at narrow widths and recapture the actual states before restoring acceptance. This does not grant owner
 approval, establish production deployment, certify Athena provider replies, or complete the
 remaining typed-work roadmap. Offline transport/cache tests pass; a full offline browser journey
 is not claimed. The earlier workspace verdict remains historical and withdrawn.

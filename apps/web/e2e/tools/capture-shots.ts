@@ -17,6 +17,17 @@
  *
  * Usage (from `apps/web`):
  *   tsx e2e/tools/capture-shots.ts --session=<path> --out=<dir> <route> [<route> ...]
+ *   tsx e2e/tools/capture-shots.ts --session=<path> --out=<dir> --scenarios=<json>
+ *
+ * Named scenario files contain an array of `CaptureScenario` records (see capture-scenarios.ts).
+ * Each record declares a route, ordered accessible interactions, optional readiness target, and
+ * explicitly labelled loading/error interception. Per-frame fixture requests use the standard
+ * dev-stack API_URL, and substitute response fields such as {{created.data.id}}. No browser-code
+ * evaluation is accepted. Native dialog actions arm the next dialog before the triggering action;
+ * browser chrome itself is outside page screenshots. --allow-state=loading|error also works for
+ * ordinary route captures. --continue-on-error records the first failed frame per state to
+ * --failures=<jsonl> (default: <out>/failures.jsonl), skips its remaining frames, and exits 1
+ * after capturing the rest of the state matrix. Existing rendering, viewport, theme, and overflow checks still apply.
  *
  * Example:
  *   tsx e2e/tools/capture-shots.ts --session=playwright/.auth/dev-session.json \
@@ -29,7 +40,6 @@
 import { chromium } from '@playwright/test';
 import type { BrowserContext, Page } from '@playwright/test';
 import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 
 import { visitBlueprintDailyPlanner } from '../helpers/work-template-blueprints';
 import { createMobileAuditFixture } from '../helpers/mobile-audit-fixture';
@@ -39,6 +49,14 @@ import {
   type MobileLayoutRouteCase,
 } from '../helpers/mobile-layout-audit-cases';
 import { assertLocalCaptureBaseUrl } from './capture-policy';
+import { parseCaptureArgs, type CliArgs } from './capture-cli';
+import {
+  applyCaptureScenario,
+  installCaptureMocks,
+  parseCaptureScenarios,
+  prepareCaptureScenario,
+  type CaptureScenario,
+} from './capture-scenarios';
 
 interface SessionMeta {
   email: string;
@@ -48,30 +66,8 @@ interface SessionMeta {
   baseURL: string;
 }
 
-interface CliArgs {
-  session: string;
-  outDir: string;
-  /**
-   * Capture against a different origin than the session was created on.
-   *
-   * @remarks
-   * The session cookie is scoped to `.docket.localhost`, so one sign-in reaches every app in the
-   * stack. That makes this tool usable for the admin console — same auth, same shot set, same
-   * overflow check — without a second capture harness to keep correct.
-   */
-  baseURL?: string | undefined;
-  routes: string[];
-  audit: boolean;
-  start: number;
-  limit: number | undefined;
-  frameStart: number;
-  frameLimit: number | undefined;
-  records: string | undefined;
-  clickButton: string | undefined;
-  clickRow: string | undefined;
-  clickMenuItem: string | undefined;
-  clickTab: string | undefined;
-  clickAfter: readonly string[];
+interface CaptureCase extends MobileLayoutRouteCase {
+  scenario?: CaptureScenario;
 }
 
 /** The mobile remediation matrix: four viewports × two color schemes. */
@@ -82,43 +78,6 @@ const VIEWPORTS = [
   { label: '390x600', width: 390, height: 600 },
 ];
 const COLOR_SCHEMES: ('light' | 'dark')[] = ['light', 'dark'];
-
-function parseArgs(argv: string[]): CliArgs {
-  const flags = new Map<string, string>();
-  const routes: string[] = [];
-  for (const arg of argv) {
-    const match = /^--([^=]+)=(.*)$/.exec(arg);
-    if (match) {
-      const [, key, value] = match;
-      if (key !== undefined && value !== undefined) flags.set(key, value);
-    } else {
-      routes.push(arg);
-    }
-  }
-  const audit = argv.includes('--audit');
-  if (!audit && routes.length === 0) {
-    throw new Error('capture-shots: pass at least one route, e.g. /today');
-  }
-  return {
-    session: resolve(flags.get('session') ?? 'playwright/.auth/dev-session.json'),
-    outDir: resolve(flags.get('out') ?? '.data/design-review-shots'),
-    baseURL: flags.get('base-url'),
-    routes,
-    audit,
-    start: flags.has('start') ? Number.parseInt(flags.get('start') ?? '', 10) : 0,
-    limit: flags.has('limit') ? Number.parseInt(flags.get('limit') ?? '', 10) : undefined,
-    frameStart: flags.has('frame-start') ? Number.parseInt(flags.get('frame-start') ?? '', 10) : 0,
-    frameLimit: flags.has('frame-limit')
-      ? Number.parseInt(flags.get('frame-limit') ?? '', 10)
-      : undefined,
-    records: flags.has('records') ? resolve(flags.get('records') ?? '') : undefined,
-    clickButton: flags.get('click-button'),
-    clickRow: flags.get('click-row'),
-    clickMenuItem: flags.get('click-menu-item'),
-    clickTab: flags.get('click-tab'),
-    clickAfter: flags.get('click-after')?.split('|') ?? [],
-  };
-}
 
 /** Replace stable local audit fixture tokens in a route case. */
 function resolveAuditRoute(
@@ -157,7 +116,7 @@ function routeSlug(route: string): string {
 }
 
 /** Wait until client data and loading placeholders have resolved. */
-async function waitForSettledPage(page: Page): Promise<void> {
+async function waitForSettledPage(page: Page, allowLoading = false): Promise<void> {
   await page.waitForFunction(() => document.body.innerText.trim().length > 0);
   await page.waitForFunction(
     () => {
@@ -175,6 +134,7 @@ async function waitForSettledPage(page: Page): Promise<void> {
     { timeout: 20_000 },
   );
   await page.evaluate(async () => document.fonts.ready);
+  if (allowLoading) return;
   const waitForNoLoadingState = (): Promise<unknown> =>
     page.waitForFunction(
       () => {
@@ -206,7 +166,12 @@ async function waitForSettledPage(page: Page): Promise<void> {
  * @param url - The absolute route URL.
  * @param allowSignIn - Whether landing on `/sign-in` is the intended capture rather than a failure.
  */
-async function openReviewRoute(page: Page, url: string, allowSignIn = false): Promise<void> {
+async function openReviewRoute(
+  page: Page,
+  url: string,
+  allowSignIn = false,
+  allowState?: CliArgs['allowState'],
+): Promise<void> {
   // Next development builds a route on its first request. Billing took 30.4 seconds on a cold
   // compile, which exceeded Playwright's default navigation timeout even though the route returned
   // 200. DOM readiness plus the explicit settled-page check below gives cold routes the same
@@ -224,14 +189,14 @@ async function openReviewRoute(page: Page, url: string, allowSignIn = false): Pr
   ) {
     await page.locator('[role="dialog"]').waitFor({ state: 'visible', timeout: 20_000 });
   }
-  await waitForSettledPage(page);
+  await waitForSettledPage(page, allowState === 'loading');
   const failure = await page.evaluate(() => {
     const visibleText = document.body.innerText;
     return /(?:this page doesn['’]t exist|page unavailable|application error|could not load)/i.test(
       visibleText,
     );
   });
-  if (failure) {
+  if (failure && allowState !== 'error') {
     throw new Error(`Could not capture ${url}: the route rendered an application failure state`);
   }
 }
@@ -261,43 +226,71 @@ async function blackPixelRatio(page: Page, png: Buffer): Promise<number> {
 }
 
 /** Capture one integrity-checked frame, recreating the page when Chromium emits black tiles. */
-async function captureCleanFrame(
-  context: BrowserContext,
-  url: string,
-  viewport: (typeof VIEWPORTS)[number],
-  colorScheme: (typeof COLOR_SCHEMES)[number],
-  setup?: MobileLayoutRouteCase['setup'],
-  allowSignIn = false,
-): Promise<Buffer> {
+async function captureCleanFrame(options: {
+  context: BrowserContext;
+  url: string;
+  viewport: (typeof VIEWPORTS)[number];
+  colorScheme: (typeof COLOR_SCHEMES)[number];
+  setup?: MobileLayoutRouteCase['setup'];
+  allowSignIn: boolean;
+  scenario: CaptureScenario | undefined;
+  allowState: CliArgs['allowState'];
+  failureArtifact: string;
+}): Promise<Buffer> {
+  const { context, url, viewport, colorScheme, setup, allowSignIn, scenario, allowState } = options;
   for (let attempt = 1; attempt <= 4; attempt += 1) {
     const page = await context.newPage();
-    await page.setViewportSize(viewport);
-    const device = await context.newCDPSession(page);
-    await device.send('Emulation.setTouchEmulationEnabled', {
-      enabled: viewport.width < 640,
-      maxTouchPoints: 1,
-    });
-    await page.emulateMedia({ colorScheme });
-    await openReviewRoute(page, url, allowSignIn);
-    if (setup) await setup(page);
-    const overflow = await page.evaluate(() => ({
-      clientWidth: document.documentElement.clientWidth,
-      scrollWidth: document.documentElement.scrollWidth,
-    }));
-    if (overflow.scrollWidth > overflow.clientWidth) {
-      throw new Error(
-        `${url} overflows at ${viewport.label} (${String(overflow.scrollWidth)} > ${String(overflow.clientWidth)})`,
+    try {
+      await page.setViewportSize(viewport);
+      const device = await context.newCDPSession(page);
+      await device.send('Emulation.setTouchEmulationEnabled', {
+        enabled: viewport.width < 640,
+        maxTouchPoints: 1,
+      });
+      await page.emulateMedia({ colorScheme });
+      const prepared = scenario ? await prepareCaptureScenario(page, scenario) : undefined;
+      if (prepared) await installCaptureMocks(page, prepared);
+      const resolvedUrl = prepared ? `${new URL(url).origin}${prepared.route}` : url;
+      const permittedState = prepared?.allowState ?? allowState;
+      await openReviewRoute(page, resolvedUrl, allowSignIn, permittedState);
+      if (setup) await setup(page);
+      if (prepared) {
+        await applyCaptureScenario(page, prepared);
+        await waitForSettledPage(page, permittedState === 'loading');
+      }
+      const overflow = await page.evaluate(() => ({
+        clientWidth: document.documentElement.clientWidth,
+        scrollWidth: document.documentElement.scrollWidth,
+      }));
+      if (overflow.scrollWidth > overflow.clientWidth) {
+        throw new Error(
+          `${url} overflows at ${viewport.label} (${String(overflow.scrollWidth)} > ${String(overflow.clientWidth)})`,
+        );
+      }
+      const candidate = await page.screenshot({ type: 'png' });
+      const damaged = (await blackPixelRatio(page, candidate)) > 0.02;
+      if (!damaged) return candidate;
+      console.warn(
+        `[capture-shots] discarded black-tiled frame (${url}, attempt ${String(attempt)})`,
       );
+    } catch (error: unknown) {
+      await recordFailedCapture(page, options.failureArtifact);
+      throw error;
+    } finally {
+      await page.close();
     }
-    const candidate = await page.screenshot({ type: 'png' });
-    const damaged = (await blackPixelRatio(page, candidate)) > 0.02;
-    await page.close();
-    if (!damaged) return candidate;
-    console.warn(
-      `[capture-shots] discarded black-tiled frame (${url}, attempt ${String(attempt)})`,
-    );
   }
   throw new Error(`Could not capture a clean frame after four attempts: ${url}`);
+}
+
+/** Save diagnostic frames separately; failed captures never become accepted gallery evidence. */
+async function recordFailedCapture(page: Page, prefix: string): Promise<void> {
+  await page.screenshot({ path: `${prefix}.failed.png`, timeout: 5_000 }).catch(() => undefined);
+  const text = await page
+    .locator('body')
+    .innerText({ timeout: 2_000 })
+    .catch(() => '[body unavailable]');
+  writeFileSync(`${prefix}.failed.txt`, `${page.url()}\n\n${text}`);
 }
 
 /**
@@ -347,7 +340,18 @@ function captureCases({
   clickMenuItem,
   clickTab,
   clickAfter,
-}: CliArgs): readonly MobileLayoutRouteCase[] {
+  scenarios,
+}: CliArgs): readonly CaptureCase[] {
+  if (scenarios) {
+    return parseCaptureScenarios(JSON.parse(readFileSync(scenarios, 'utf8')))
+      .slice(start, limit === undefined ? undefined : start + limit)
+      .map((scenario) => ({
+        id: scenario.id,
+        route: scenario.route,
+        ...(scenario.authenticated === undefined ? {} : { authenticated: scenario.authenticated }),
+        scenario,
+      }));
+  }
   if (audit)
     return MOBILE_LAYOUT_ROUTE_CASES.slice(start, limit === undefined ? undefined : start + limit);
   return routes.map((route) => ({
@@ -381,7 +385,7 @@ async function prepareAuthoringCapture(
 ): Promise<void> {
   if (
     !cases.some((entry) =>
-      /\/(?:settings\/templates|work-templates)\/[^/]+\/?$/.test(
+      /^\/orgs\/[^/]+\/(?:settings\/templates|work-templates)(?:\/[^/]+)?\/?$/.test(
         entry.route.split(/[?#]/)[0] ?? '',
       ),
     )
@@ -393,10 +397,102 @@ async function prepareAuthoringCapture(
   await preparation.close();
 }
 
+/** Record the first failed frame without admitting its diagnostics to the accepted shot set. */
+function reportCaptureFailure(
+  options: CliArgs,
+  entry: CaptureCase,
+  {
+    viewport,
+    colorScheme,
+  }: { viewport: (typeof VIEWPORTS)[number]; colorScheme: (typeof COLOR_SCHEMES)[number] },
+  error: unknown,
+): void {
+  const outDir = options.outDir;
+  const message = error instanceof Error ? error.message : String(error);
+  appendFileSync(
+    options.failures ?? `${outDir}/failures.jsonl`,
+    `${JSON.stringify({
+      caseId: entry.id,
+      route: entry.route,
+      viewport,
+      colorScheme,
+      error: message,
+      failureArtifact: `${outDir}/failures/${entry.id}-${viewport.label}-${colorScheme}`,
+    })}\n`,
+  );
+  console.error(`[capture-shots] state failed; skipping remaining frames: ${entry.id}: ${message}`);
+}
+
+/** Capture the selected state matrix with stable frame filenames and an optional receipt stream. */
+async function captureSelectedCases({
+  options,
+  selectedCases,
+  context,
+  anonymousContext,
+  meta,
+  sharedOrgId,
+}: {
+  options: CliArgs;
+  selectedCases: readonly CaptureCase[];
+  context: BrowserContext;
+  anonymousContext: BrowserContext;
+  meta: SessionMeta;
+  sharedOrgId: string | undefined;
+}): Promise<number> {
+  const { frameStart, frameLimit, outDir, records } = options;
+  let failureCount = 0;
+  const selectedFrames = VIEWPORTS.flatMap((viewport) =>
+    COLOR_SCHEMES.map((colorScheme) => ({ viewport, colorScheme })),
+  ).slice(frameStart, frameLimit === undefined ? undefined : frameStart + frameLimit);
+  for (const entry of selectedCases) {
+    // Every capture uses a fresh Page so Chromium cannot carry damaged compositor tiles from one
+    // responsive/theme capture set into the next surface.
+    const path = resolveAuditRoute(entry.route, meta, sharedOrgId);
+    const slug = entry.id;
+    const entryContext = entry.authenticated === false ? anonymousContext : context;
+    for (const { viewport, colorScheme } of selectedFrames) {
+      try {
+        const file = `${outDir}/${slug}-${viewport.label}-${colorScheme}.png`;
+        const frame = await captureCleanFrame({
+          context: entryContext,
+          url: `${meta.baseURL}${path}`,
+          viewport,
+          colorScheme,
+          setup: entry.setup,
+          allowSignIn: entry.authenticated === false,
+          scenario: entry.scenario ? { ...entry.scenario, route: path } : undefined,
+          allowState: options.allowState,
+          failureArtifact: `${outDir}/failures/${entry.id}-${viewport.label}-${colorScheme}`,
+        });
+        writeFileSync(file, frame);
+        if (records) {
+          appendFileSync(
+            records,
+            `${JSON.stringify({
+              caseId: entry.id,
+              route: entry.route,
+              viewport,
+              colorScheme,
+              file,
+              ...(entry.scenario ? { scenario: entry.scenario } : {}),
+            })}\n`,
+          );
+        }
+        console.log(`[capture-shots] ${file}`);
+      } catch (error: unknown) {
+        if (!options.continueOnError) throw error;
+        failureCount += 1;
+        reportCaptureFailure(options, entry, { viewport, colorScheme }, error);
+        break;
+      }
+    }
+  }
+  return failureCount;
+}
+
 async function main(): Promise<void> {
-  const options = parseArgs(process.argv.slice(2));
-  const { session, outDir, baseURL, audit, start, limit, frameStart, frameLimit, records } =
-    options;
+  const options = parseCaptureArgs(process.argv.slice(2));
+  const { session, outDir, baseURL, audit, start, limit, frameStart, frameLimit } = options;
   const meta = JSON.parse(readFileSync(`${session}.meta.json`, 'utf8')) as SessionMeta;
   // Apply the override first, then assert: `--base-url` points at another app in the same local
   // stack, so it must still satisfy the same locality check as the session's own origin.
@@ -424,6 +520,7 @@ async function main(): Promise<void> {
   }
 
   mkdirSync(outDir, { recursive: true });
+  mkdirSync(`${outDir}/failures`, { recursive: true });
 
   // GPU compositing occasionally returns a vertically shifted bitmap on this host even though the
   // page DOM and its bounding rectangles are correct. Audit evidence must show the rendered page,
@@ -475,42 +572,17 @@ async function main(): Promise<void> {
 
   await prepareAuthoringCapture(context, meta.baseURL, selectedCases);
 
-  const selectedFrames = VIEWPORTS.flatMap((viewport) =>
-    COLOR_SCHEMES.map((colorScheme) => ({ viewport, colorScheme })),
-  ).slice(frameStart, frameLimit === undefined ? undefined : frameStart + frameLimit);
-  for (const entry of selectedCases) {
-    // Every capture uses a fresh Page so Chromium cannot carry damaged compositor tiles from one
-    // responsive/theme capture set into the next surface.
-    const path = resolveAuditRoute(entry.route, meta, sharedOrgId);
-    const slug = entry.id;
-    const entryContext = entry.authenticated === false ? anonymousContext : context;
-    for (const { viewport, colorScheme } of selectedFrames) {
-      const file = `${outDir}/${slug}-${viewport.label}-${colorScheme}.png`;
-      const frame = await captureCleanFrame(
-        entryContext,
-        `${meta.baseURL}${path}`,
-        viewport,
-        colorScheme,
-        entry.setup,
-        entry.authenticated === false,
-      );
-      writeFileSync(file, frame);
-      if (records) {
-        appendFileSync(
-          records,
-          `${JSON.stringify({
-            caseId: entry.id,
-            route: entry.route,
-            viewport,
-            colorScheme,
-            file,
-          })}\n`,
-        );
-      }
-      console.log(`[capture-shots] ${file}`);
-    }
-  }
+  const failureCount = await captureSelectedCases({
+    options,
+    selectedCases,
+    context,
+    anonymousContext,
+    meta,
+    sharedOrgId,
+  });
   await browser.close();
+  if (failureCount > 0)
+    throw new Error(`${String(failureCount)} capture states failed; inspect failures.jsonl`);
 }
 
 main().catch((error: unknown) => {

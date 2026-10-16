@@ -42,6 +42,57 @@
 - **Learnings**: Include provider-owned redirects when moving application hosting; the application's
   own canonicalization boundary can preserve them without retaining the previous provider.
 
+### [WORK-ACTIVITY-STATE-CAPTURES] Capture the complete work-definition and planning flows
+
+- **Status**: COMPLETE
+- **Priority**: P1
+- **Description**: Make every distinct reachable state in the work-definition, gallery and focused
+  planning flows inspectable through an indexed screenshot collection.
+- **Approach**: Enumerate states from live components and behavior tests, seed local records through
+  canonical APIs, and extend the existing capture tool with named declarative interaction scenarios.
+  Capture desktop and phone in both themes, including disclosed controls, intermediate decisions,
+  recovery and deliberately labeled local loading/failure simulations. Do not present provider or
+  inaccessible states as real acceptance.
+- **Validation**: Check scenario validation and affected tooling types/lint. Use the canonical runtime,
+  verify image counts/hashes and readable capture results, and record any unreachable state explicitly.
+- **Subtasks**:
+  - [x] Inventory template, gallery and planning states in user-flow order.
+  - [x] Extend the existing screenshot command for deterministic named interaction states.
+  - [x] Capture all reachable states and label simulated faults and coverage limits.
+  - [x] Publish a local indexed review gallery and preserve the source/evidence manifest.
+
+#### Results and validation
+
+- Captured 312 named flow states: 132 work-definition, 81 gallery/templating and 99 planning states.
+  The private indexed gallery contains 1,368 preferred images including narrow/short-phone and
+  existing journey supplements. Every applicable canonical state has desktop/phone frames in both
+  themes; the phone-only step chooser is recorded at three phone sizes.
+- Enumerated state coverage and final PNG dimensions/hashes were verified. The portable image archive
+  passed its integrity check. Diagnostic failures, traces and technical historical fixtures stay outside
+  the preferred gallery/archive. Native beforeunload chrome and uncreated provider/voice transcripts
+  are explicit boundaries; the canvas has no projected Program inspector.
+- Extended the existing capture command with named declarative interactions, local per-frame and
+  post-render API fixtures, controlled request failures, pointer gestures, centered scrolling, reload,
+  batch diagnostics and continuation. Final affected validation passes 24 tests, lint, web typecheck
+  and the unchanged complexity ratchet. Refactored a discovered ratchet regression without changing
+  the ledger. No product code changed.
+- Expanded state coverage exposes squeezed Start-of-day phone heading/count/actions and clipped
+  archive pagination labels. Actual frames preserve these defects; the previous bounded craft verdict
+  is withdrawn for the expanded flow until corrected. Phone canvas dependency gestures also require
+  closing covering inspectors between handle taps. Two original short-block evidence tests failed;
+  their redundant partial captures remain separate from a complete real-API replacement state.
+- The local stack was stopped and ordinary PGlite fixtures reset after capture. Capture evidence is
+  local presentation evidence, not owner approval, production acceptance or provider execution.
+
+#### Learnings
+
+- Route screenshots are insufficient for flow review. Inventory intermediate decisions, expanded
+  controls, feedback and recovery, then confirm the relevant controls are actually visible in the
+  captured viewport. A document overflow check does not detect every clipped inner dialog control.
+- Keep screenshot actors independent when planning fixtures can trigger account-wide automatic entry.
+  Replay transient outcomes with independent local records and label simulated faults or retained
+  API receipts. Preserve mistakes as diagnostics rather than counting them as accepted captures.
+
 ### [WORK-TEMPLATE-FOCUSED-FLOW] Isolate work definition and order its decisions
 
 - **Status**: REVIEW

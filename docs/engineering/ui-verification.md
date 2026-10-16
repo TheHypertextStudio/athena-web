@@ -153,6 +153,63 @@ through the authenticated draft API; each frame reopens the same saved input.
 For a full craft review rather than raw captures, use the `design-review` skill
 (`.claude/skills/design-review/`), which consumes exactly this shot set.
 
+### Named interaction states
+
+For a full flow, use the same screenshot command with a private JSON scenario list:
+
+```bash
+APP_URL="$APP_URL" API_URL="$API_URL" pnpm exec tsx e2e/tools/capture-shots.ts \
+  --session=playwright/.auth/<name>.json --scenarios=<private-state-list.json> \
+  --out=<private-capture-directory> --records=<private-receipts.jsonl> \
+  --frame-limit=4 --continue-on-error
+```
+
+The first four frames are desktop and phone in both themes; omit `--frame-limit` for all eight.
+Each scenario has a unique `id`, a local `route`, ordered `actions` and an optional `ready` target.
+Targets use one of `role`/`name`, `label`, `text`, `testId` or `selector`; `exact` defaults to true.
+Actions include `click`, `fill` (`value`), `select` (`value`), `press` (`key`), `check` (`checked`),
+`scroll` (centers the actual target), `reload`, `drag` and `wait`. Clicks accept optional keyboard
+`modifiers`, a mouse `button` and a relative `position`; drags declare `source`/`target` locators and
+optional relative positions. A post-render `request` action uses the same guarded local API origin
+as per-frame fixtures, allowing real remote-update presentation to be captured. Native control labels can include their option text: choose a precise accessible
+role or an appropriately scoped partial label rather than assuming the visible label is its full name.
+
+```json
+[
+  {
+    "id": "new-definition-private-draft",
+    "route": "/orgs/:orgId/work-templates/new",
+    "actions": [
+      { "action": "fill", "target": { "label": "Template name" }, "value": "Volunteer onboarding" },
+      { "action": "click", "target": { "role": "button", "name": "Draft privacy · Only you" } }
+    ],
+    "ready": { "role": "combobox", "name": "Draft visible to", "exact": false }
+  }
+]
+```
+
+Controlled request `mocks` can hold a matching local request or return an explicit status/JSON body.
+Label those scenarios as simulations and use `allowState: "loading"` or `"error"` when intentionally
+capturing an unresolved or failed state. A mock specifies `url`, `method`, and either `hold: true` or
+`response: { status, json }`; optional `skip` and `times` select a later request in a real journey.
+These frames demonstrate application presentation, not provider outcomes or permission enforcement.
+
+For transient outcomes, `fixtureRequests` create independent local records before each frame using
+`API_URL`. Each request declares `url`, `method`, optional `body` and a `saveAs` name; scalar response
+properties such as `{{plan.id}}` may appear in subsequent requests, the route or actions. Requests
+must use the existing authenticated canonical APIs. Never put credentials in scenario files.
+
+With `--continue-on-error`, the first failed frame skips that state's remaining frames and records
+its error in `failures.jsonl` (or `--failures=<path>`). Diagnostic PNG/text files live under `failures/`
+and must not be counted as successful state captures. The command exits unsuccessfully after the
+batch if any state failed; repair and replay missing frames before claiming complete coverage.
+
+The `dialog` action arms acceptance/dismissal of the next browser-owned dialog. Page screenshots
+cannot include native browser chrome such as the leave-page warning; they show the resulting app
+state. Record that limitation or capture the real browser window separately. Do not fabricate an
+application dialog to represent it. The existing planner-entry setup also covers the template overview
+so the automatic daily-planning announcement does not replace an unrelated capture mid-journey.
+
 ## Driving the page in the Browser pane
 
 `.claude/launch.json` has one entry, `docket-stack`, and it runs `dev-stack.sh start`. The two

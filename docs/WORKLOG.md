@@ -7,6 +7,35 @@
 
 ## Active Tasks
 
+### [WEBSITE-ROSTER-TEMPLATE-WIDTH] Keep published template labels inside narrow roster cells
+
+- **Status**: COMPLETE
+- **Priority**: P1
+- **Description**: Preserve readable, actionable work rows when a published template has a long
+  name. The compact template label must truncate within its available column instead of creating
+  horizontal overflow on a phone.
+- **Approach**: Constrain the shared label to its parent width while retaining the full native
+  title, glyph, published version and row navigation. Keep desktop column and mobile overflow gates.
+- **Files**: Shared work-template label, existing work-list column checks and this worklog.
+- **Subtasks**:
+  - [x] Constrain compact labels without changing their identity or interaction.
+  - [x] Validate existing column checks, affected lint and native roster acceptance.
+  - [x] Review the rendered narrow-screen behavior and unchanged wider roster contract.
+
+### [WEBSITE-RELEASE-ROSTER-SEED] Serialize the roster geometry fixture's work creation
+
+- **Status**: COMPLETE
+- **Priority**: P1
+- **Description**: Populate the roster geometry fixture through the existing authenticated API
+  without exhausting bounded SERIALIZABLE transaction retries during setup.
+- **Approach**: Await each Initiative creation before starting the next. Retain all 101 paging
+  rows, real API writes, geometry/interaction assertions and production concurrency safeguards.
+- **Files**: Shared roster browser fixture and this worklog.
+- **Subtasks**:
+  - [x] Preserve the complete fixture with sequential Initiative creation.
+  - [x] Pass affected lint and the existing production-build roster acceptance check.
+  - [x] Independently review the fixture and unchanged application/acceptance scope.
+
 ### [WEBSITE-RELEASE-SHELL] Keep native release acceptance portable to macOS Bash
 
 - **Status**: COMPLETE

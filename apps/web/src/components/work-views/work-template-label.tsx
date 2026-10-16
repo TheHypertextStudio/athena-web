@@ -38,7 +38,7 @@ export function WorkTemplateLabel({
   if (!template) return <span>—</span>;
   return (
     <span
-      className="inline-flex min-w-0 items-center gap-1.5"
+      className="inline-flex max-w-full min-w-0 items-center gap-1.5"
       title={`${template.name} · Version ${String(template.versionNumber)}`}
     >
       {workTemplateGlyph(target, template.icon)}

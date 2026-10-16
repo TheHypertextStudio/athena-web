@@ -89,7 +89,7 @@ export async function connectRosterInitiatives(
   });
 }
 
-/** Create rows in bounded batches so PostgreSQL and the API stay below the machine limits. */
+/** Create geometry-fixture rows serially without exhausting bounded transaction retries. */
 async function createInitiativeBatch(
   page: Page,
   organizationId: string,
@@ -97,13 +97,8 @@ async function createInitiativeBatch(
   status: string,
 ): Promise<readonly string[]> {
   const ids: string[] = [];
-  for (let index = 0; index < names.length; index += 8) {
-    const batch = names.slice(index, index + 8);
-    ids.push(
-      ...(await Promise.all(
-        batch.map((name) => createRosterInitiative(page, organizationId, name, status)),
-      )),
-    );
+  for (const name of names) {
+    ids.push(await createRosterInitiative(page, organizationId, name, status));
   }
   return ids;
 }

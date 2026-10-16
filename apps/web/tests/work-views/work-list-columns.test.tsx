@@ -243,6 +243,7 @@ it('renders the published template name and glyph as a selectable display proper
   expect(templateColumn).toBeDefined();
   render(<>{templateColumn?.render({ ...membership, row })}</>);
   expect(screen.getByText('Community event')).toBeInTheDocument();
+  expect(screen.getByTitle('Community event · Version 1')).toHaveClass('max-w-full');
   expect(document.querySelector('[data-glyph-value="event"]')).toBeInTheDocument();
   expect(screen.queryByText(row.workTypeId ?? '')).not.toBeInTheDocument();
 });

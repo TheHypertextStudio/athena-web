@@ -45,24 +45,30 @@ Initiative-rooted plans show visible existing work, reject dependency cycles, an
 for undo. See the [MCP contract](docs/engineering/specs/mcp-surface.md) and
 [planning canvas](docs/engineering/specs/planning-canvas.md).
 
+Daily, weekly and proposal planning own focused activities with explicit return navigation.
+Proposal review keeps the canvas visible until contextual Athena help is requested. Closing help
+returns to the same plan and retains the unsent message; confirmation and Undo keep using the
+canonical planning commands.
+
 An Initiative's Connected work tab groups projects inside their Programs, expands project details
 on demand, and creates or links work without leaving the page. Quick-add keeps focus for the next
 name and retains failed entries for retry. A Program's existing-project suggestions preserve that
 Program's placement; the object's Move action handles placement changes.
 
 Work templates has its own workspace destination at `/orgs/[orgId]/work-templates`, available
-from workspace navigation. The library, gallery and saved-copy review share that full-page flow;
-only authoring permissions remain in Settings. Each definition shows its purpose, included work and
-next action. A live publication and its unpublished changes stay together; known unpublished linked
-definitions appear before publication, with a direct return to the parent review. Old Settings
-template links retain their destination, review section and focus when reopening here.
+from workspace navigation. Choose a definition from a compact library or use **Define work**;
+**Browse starting points** opens the gallery. Each definition appears once with its purpose, kind
+and draft/publication state. Only authoring permissions remain in Settings.
 
-Work templates define the kinds of work an organization does. Their full-page editor separates
-Purpose, Work, and Review: name the work, shape its starting outline and children, then review it
-before sharing. Return to any section without starting over. Save draft keeps the definition private;
-explicit publication creates an immutable workspace-visible version. Project repetition
-shows its cadence controls in the setup step. Generated work opens its schedule and occurrence
-history in a management overlay.
+Opening or creating a definition enters a focused activity without workspace navigation or side
+panels. Purpose, Starting work, Included work and Review are freely revisitable decisions. Starting
+work defines the initial item; Included work shows its children and Program routines. Selecting one
+child or routine replaces the outline with that editor until you return. Review explains linked
+publication prerequisites and sharing; immutable history and management are disclosed there.
+Save draft retains privacy, while publication explicitly shares an immutable version throughout
+the workspace. Back to Work templates returns to the chosen definition. Old Settings links retain
+identity and review context. Project repetition shows cadence controls in setup; generated work
+opens schedule and occurrence history in its management overlay.
 See [template and repeating-work setup](docs/core/work-template-ui.md) for the saved behavior and
 draft boundaries. Every Initiative, Program, Project, and Task retains its chosen template and
 published version, including work created by connectors or imports through a blank base template.
@@ -83,10 +89,10 @@ included work from recurring work and keeps one editor in focus. Undoing Program
 unchanged installed routines while preserving already generated work and run history. See the
 [Program schedule specification](docs/engineering/specs/work-template-schedules.md) for retained
 history, private drafts and the staged legacy migration.
-The Work templates workspace puts unfinished definitions and unpublished edits under Continue defining,
-ahead of ready-to-use work. Required definitions stay beside the work that needs them; a published
-version stays available while its next revision is being shaped. Choose starting work opens the
-gallery by organizational context and outcomes. Review the real
+The Work templates library keeps a live publication and its pending draft under one identity.
+Search, kind and state filters help choose a definition; dependencies and version details appear
+inside its focused review. Browse starting points opens the gallery by organizational context and
+outcomes. Review the real
 included and recurring structure, make optional adjustments, then keep private drafts or explicitly
 publish independent copies. Complete startup, nonprofit, agency and personal starting sets remain
 available alongside smaller selections. Manual authoring and gallery use are available on every plan.

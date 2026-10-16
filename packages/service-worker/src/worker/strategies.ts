@@ -11,6 +11,7 @@
  * is stored is {@link navigateWithDocumentCache}, whose own gate (a named user, a non-redirected
  * 200 HTML response) is documented in `documents.ts`.
  */
+import { isActivityRedirectHref } from '../activity-routes';
 import {
   documentCacheKey,
   isCacheableDocument,
@@ -162,16 +163,12 @@ export async function navigateWithDocumentCache(
   const settled = await Promise.race([network, after(options.giveUpMs)]);
 
   if (settled !== TIMED_OUT && settled.ok) {
-    if (key !== null && shellKey !== null && isCacheableDocument(settled.response)) {
-      const cache = await caches.open(options.documentCache);
-      void cache.put(key, settled.response.clone());
-      // The same document again, under its navigation-context key. Workspace documents share
-      // chrome, and `RouteSlot` swaps the page for whatever the address bar asks for, so the most
-      // recent one is a perfectly good stand-in for a route that has no document at all. Keeping it
-      // this way costs one extra copy and no request — the alternative was a dedicated route in the
-      // product's URL space, warmed by a fetch per user per release.
-      void cache.put(shellKey, settled.response.clone());
-    }
+    await cacheNavigationDocument(settled.response, {
+      cacheName: options.documentCache,
+      key,
+      shellKey,
+      path,
+    });
     return settled.response;
   }
 
@@ -203,6 +200,17 @@ export async function navigateWithDocumentCache(
       headers: { 'Content-Type': 'text/plain; charset=utf-8' },
     })
   );
+}
+
+/** Keep exact legacy redirects available without replacing a usable activity fallback with a redirect. */
+async function cacheNavigationDocument(
+  response: Response,
+  target: { cacheName: string; key: string | null; shellKey: string | null; path: string },
+): Promise<void> {
+  if (target.key === null || target.shellKey === null || !isCacheableDocument(response)) return;
+  const cache = await caches.open(target.cacheName);
+  void cache.put(target.key, response.clone());
+  if (!isActivityRedirectHref(target.path)) void cache.put(target.shellKey, response.clone());
 }
 
 /** The sentinel a waiting race resolves to. Distinguishable from any settled fetch outcome. */

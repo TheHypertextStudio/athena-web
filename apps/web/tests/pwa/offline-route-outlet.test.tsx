@@ -20,10 +20,23 @@ vi.mock('@/lib/navigation-snapshot-runtime', () => ({
   peekNavigationSnapshot: () => navigationSnapshot,
 }));
 vi.mock('@/lib/offline-routes.generated', () => ({
-  ROUTE_PATTERNS: ['/orgs/[orgId]/projects/[projectId]', '/orgs/[orgId]/tasks/[taskId]'],
+  ROUTE_PATTERNS: [
+    '/orgs/[orgId]/projects/[projectId]',
+    '/orgs/[orgId]/tasks/[taskId]',
+    '/orgs/[orgId]/work-templates/new',
+  ],
   OFFLINE_ROUTES: [
     {
+      pattern: '/orgs/[orgId]/work-templates/new',
+      navigationContext: 'activity',
+      load: async () =>
+        function Authoring(): React.JSX.Element {
+          return <div>Isolated authoring</div>;
+        },
+    },
+    {
       pattern: '/orgs/[orgId]/projects/[projectId]',
+      navigationContext: 'workspace',
       load: async () =>
         function ProjectRoute(): React.JSX.Element {
           if (!pathname.includes('/projects/')) throw new Error('Stale Project route rendered.');
@@ -32,6 +45,7 @@ vi.mock('@/lib/offline-routes.generated', () => ({
     },
     {
       pattern: '/orgs/[orgId]/tasks/[taskId]',
+      navigationContext: 'workspace',
       load: async () =>
         function TaskRoute(): React.JSX.Element {
           return <div>Task route</div>;
@@ -121,4 +135,26 @@ describe('OfflineRouteOutlet', () => {
       screen.getByRole('heading', { name: 'Paint this task from the row snapshot' }),
     ).toBeInTheDocument();
   });
+});
+
+it('never mounts even a warmed authoring page under the workspace outlet', async () => {
+  pathname = '/orgs/01ARZ3NDEKTSV4RRFFQ69G5FAV/work-templates/new';
+  await prefetchAuthenticatedRoute(pathname);
+  render(<OfflineRouteOutlet />);
+  expect(screen.queryByText('Isolated authoring')).not.toBeInTheDocument();
+  expect(await screen.findByText('Page not found')).toBeVisible();
+});
+it('replays the authoring page only inside its activity outlet', async () => {
+  pathname = '/orgs/01ARZ3NDEKTSV4RRFFQ69G5FAV/work-templates/new';
+  await prefetchAuthenticatedRoute(pathname);
+  render(<OfflineRouteOutlet navigationContext="activity" />);
+  expect(screen.getByText('Isolated authoring')).toBeVisible();
+});
+
+it('drops an already rendered activity when the owning outlet context changes', async () => {
+  pathname = '/orgs/01ARZ3NDEKTSV4RRFFQ69G5FAV/work-templates/new';
+  const view = render(<OfflineRouteOutlet navigationContext="activity" />);
+  expect(await screen.findByText('Isolated authoring')).toBeVisible();
+  view.rerender(<OfflineRouteOutlet />);
+  expect(screen.queryByText('Isolated authoring')).not.toBeInTheDocument();
 });

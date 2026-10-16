@@ -9,6 +9,7 @@ import {
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { VocabularyProvider } from '@docket/ui/hooks';
+import { ContextProvider } from '@docket/ui/components';
 import { describe, expect, it, vi } from 'vitest';
 import { WorkTemplateOut, type WorkTemplateDraftUpdate } from '@docket/work/work-template-contract';
 import {
@@ -18,13 +19,22 @@ import {
 describe('blueprint sample authoring', () => {
   it('waits for the canonical session owner before accepting new definition input', () => {
     mocks.sessionPending = true;
-    const view = render(<WorkTemplateAuthoring orgId="01ARZ3NDEKTSV4RRFFQ69G5FAX" id={null} />);
+    const content = (
+      <ContextProvider>
+        <WorkTemplateAuthoring orgId="01ARZ3NDEKTSV4RRFFQ69G5FAX" id={null} />
+      </ContextProvider>
+    );
+    const view = render(content);
     expect(screen.queryByLabelText('Template name')).not.toBeInTheDocument();
     mocks.sessionPending = false;
-    view.rerender(<WorkTemplateAuthoring orgId="01ARZ3NDEKTSV4RRFFQ69G5FAX" id={null} />);
+    view.rerender(
+      <ContextProvider>
+        <WorkTemplateAuthoring orgId="01ARZ3NDEKTSV4RRFFQ69G5FAX" id={null} />
+      </ContextProvider>,
+    );
     change('Template name', 'Event');
     change('When to use it', 'Community gatherings');
-    fireEvent.click(screen.getByRole('button', { name: 'Define the work' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Continue to starting work' }));
     expect(screen.getByRole('heading', { name: 'Event' })).toBeVisible();
     change('Starting name', 'Community dinner');
     expect(screen.getByRole('heading', { name: 'Event' })).toBeVisible();
@@ -64,7 +74,7 @@ describe('blueprint sample authoring', () => {
     expect(screen.getByRole('tab', { name: 'Purpose' })).toHaveAttribute('aria-selected', 'true');
     change('Template name', 'Event');
     change('When to use it', 'Community events with preparation and follow-up');
-    fireEvent.click(screen.getByRole('button', { name: 'Define the work' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Continue to starting work' }));
     const child = add('task');
     change('Child title', 'Book venue', child);
     fireEvent.click(screen.getByRole('tab', { name: 'Review' }));
@@ -82,10 +92,21 @@ describe('blueprint sample authoring', () => {
     expect(screen.getByLabelText('When to use it')).toHaveValue(
       'Community events with preparation and follow-up',
     );
-    fireEvent.click(screen.getByRole('tab', { name: 'Work' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Included work' }));
     expect(screen.getByLabelText('Child title')).toHaveValue('Book venue');
   });
-  it('keeps the outline first, hides configuration, and edits only the selected child', async () => {
+  it('allows standalone work and keeps the starting document out of included-work decisions', () => {
+    render(<WorkTemplateForm orgId="org" initial={template()} onCreated={vi.fn()} />);
+    expect(screen.getByLabelText('Starting document')).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Continue to included work' }));
+    expect(screen.getByLabelText('Starting document')).not.toBeVisible();
+    expect(screen.getByText('No included work yet')).toBeVisible();
+    expect(screen.getByText(/A new project can stand on its own/)).toBeVisible();
+    expect(screen.queryByRole('button', { name: /Edit parent/ })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Review this definition' }));
+    expect(screen.getByRole('button', { name: 'Publish to workspace' })).toBeEnabled();
+  });
+  it('replaces the overview with one child editor and restores its row on return', async () => {
     render(<WorkTemplateForm orgId="org" initial={template()} onCreated={vi.fn()} />);
     expect(screen.getByLabelText('Starting document')).toBeVisible();
     expect(screen.queryByLabelText('Starting priority')).not.toBeInTheDocument();
@@ -95,13 +116,16 @@ describe('blueprint sample authoring', () => {
     const second = add('task');
     change('Child title', 'Send invitations', second);
     expect(screen.getAllByLabelText('Child title')).toHaveLength(1);
+    expect(screen.queryByRole('list', { name: 'Child work outline' })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Starting document')).not.toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Back to included work' }));
     fireEvent.click(screen.getByRole('button', { name: 'Edit Book venue' }));
     expect(screen.getByLabelText('Child title')).toHaveValue('Book venue');
     expect(screen.getAllByLabelText('Child title')).toHaveLength(1);
     fireEvent.click(screen.getByRole('button', { name: 'Dates' }));
     change('Due date rule', 'parent');
     change('Due offset days', '-21');
-    fireEvent.click(screen.getByRole('button', { name: 'Back to outline' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Back to included work' }));
     expect(screen.queryByLabelText('Child title')).not.toBeInTheDocument();
     expect(screen.getByText('Due 21 days before Community dinner date')).toBeVisible();
     await waitFor(() => {
@@ -125,13 +149,14 @@ describe('blueprint sample authoring', () => {
     );
     const child = add('action');
     expect(within(child).getByLabelText('Child title')).toHaveValue('New action');
-    expect(
-      within(screen.getByRole('list', { name: 'Child work outline' })).getByText('Action'),
-    ).toBeVisible();
     fireEvent.click(within(child).getByRole('button', { name: 'Responsibility' }));
     expect(within(child).getByLabelText('Squad rule')).toBeVisible();
     expect(within(child).getByLabelText('Sprint rule')).toBeVisible();
-    expect(within(child).getByRole('button', { name: 'Back to outline' })).toBeVisible();
+    expect(within(child).getByRole('button', { name: 'Back to included work' })).toBeVisible();
+    fireEvent.click(within(child).getByRole('button', { name: 'Back to included work' }));
+    expect(
+      within(screen.getByRole('list', { name: 'Child work outline' })).getByText('Action'),
+    ).toBeVisible();
   });
   it.each(['task', 'project'] as const)(
     'roundtrips canonical %s starting fields while editing children',
@@ -234,6 +259,7 @@ describe('blueprint sample authoring', () => {
     });
     view.unmount();
     render(<WorkTemplateForm orgId="org" initial={saved} onCreated={vi.fn()} />);
+    fireEvent.click(screen.getByRole('tab', { name: 'Included work' }));
     fireEvent.click(screen.getByRole('button', { name: /Edit Book venue/ }));
     expect(screen.getByLabelText('Child title')).toHaveValue('Book venue');
     fireEvent.click(screen.getByRole('button', { name: 'Dates' }));
@@ -278,19 +304,21 @@ describe('blueprint sample authoring', () => {
   });
   it('allows only valid child kinds and removes a child branch with its stale references', async () => {
     render(<WorkTemplateForm orgId="org" initial={template('task')} onCreated={vi.fn()} />);
+    fireEvent.click(screen.getByRole('tab', { name: 'Included work' }));
     expect(screen.queryByRole('button', { name: 'Add project' })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Add subtask' }));
     const first = screen.getByRole('group', { name: /Child work:/ });
     change('Child title', 'Parent task', first);
     fireEvent.click(within(first).getByRole('button', { name: 'Add subtask' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Back to included work' }));
     expect(
       within(screen.getByRole('list', { name: 'Child work outline' })).getAllByRole('listitem'),
     ).toHaveLength(2);
-    expect(screen.getByRole('heading', { name: 'Work outline' })).toBeVisible();
+    expect(screen.getByRole('heading', { name: 'Included work' })).toBeVisible();
     const descendants = screen.getByRole('list', { name: 'Included under Parent task' });
     expect(within(descendants).getByRole('button', { name: 'Edit New task' })).toBeVisible();
     fireEvent.click(within(descendants).getByRole('button', { name: 'Edit New task' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Back to outline' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Back to included work' }));
     await waitFor(() =>
       expect(screen.getByRole('button', { name: 'Edit New task' })).toHaveFocus(),
     );
@@ -301,6 +329,7 @@ describe('blueprint sample authoring', () => {
       }),
     );
     expect(screen.queryByRole('group', { name: /Child work:/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Included work' })).toHaveFocus();
   });
   it('clears stale sibling timing when a Task moves under its Milestone', async () => {
     render(<WorkTemplateForm orgId="org" initial={template()} onCreated={vi.fn()} />);
@@ -342,7 +371,7 @@ describe('blueprint sample authoring', () => {
     expect(screen.getByLabelText('Kind of work')).toBeDisabled();
     view.unmount();
     render(<WorkTemplateForm orgId="org" initial={null} onCreated={vi.fn()} />);
-    fireEvent.click(screen.getByRole('tab', { name: 'Work' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Included work' }));
     fireEvent.click(screen.getByRole('button', { name: 'Edit Keep unsaved child' }));
     expect(screen.getByLabelText('Child title')).toHaveValue('Keep unsaved child');
   });
@@ -373,6 +402,7 @@ describe('blueprint sample authoring', () => {
         onCreated={vi.fn()}
       />,
     );
+    fireEvent.click(screen.getByRole('tab', { name: 'Included work' }));
     expect(screen.getByRole('button', { name: 'Add task' })).toBeDisabled();
   });
 });

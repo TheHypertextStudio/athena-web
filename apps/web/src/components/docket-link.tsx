@@ -1,5 +1,6 @@
 'use client';
 
+import { activityDocumentKind } from '@docket/service-worker/activity-routes';
 import { cn } from '@docket/ui/lib/utils';
 import { QueryClientContext, type DefaultError, type UseQueryOptions } from '@tanstack/react-query';
 import Link from 'next/link';
@@ -186,7 +187,8 @@ export default function DocketLink({
   const routerReachable = serverReachable && online;
   const responsiveRouter = useOptionalResponsiveRouter();
   const href = typeof props.href === 'string' ? props.href : null;
-  const activity = navigation === 'activity';
+  const activity =
+    navigation === 'activity' || (href !== null && activityDocumentKind(href) !== null);
   const localRoute = routePathIsAuthenticated(href, activity);
   const availability = useOfflineAvailability(activity ? null : href, !routerReachable);
   const navigationPending = responsiveRouter?.requestedHref === href;
@@ -215,7 +217,8 @@ export default function DocketLink({
       return;
     }
     event.preventDefault();
-    navigateWithoutRouter(href);
+    if (props.replace) navigateWithoutRouter(href, { replace: true });
+    else navigateWithoutRouter(href);
   };
 
   if (availability === 'unavailable') return <UnavailableLink {...props} />;

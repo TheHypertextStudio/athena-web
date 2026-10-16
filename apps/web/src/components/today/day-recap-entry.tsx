@@ -62,7 +62,7 @@ export function DayRecapEntry({
       // different date than the one just summarised would open a different day than this row
       // describes.
       render={(props) => (
-        <Link {...props} href={`/plan?lens=evening&date=${day.date}`}>
+        <Link {...props} navigation="activity" href={`/plan?lens=evening&date=${day.date}`}>
           {props.children}
         </Link>
       )}

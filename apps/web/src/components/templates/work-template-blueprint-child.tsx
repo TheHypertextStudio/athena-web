@@ -2,6 +2,7 @@
 import type { JSX } from 'react';
 import { Surface } from '@docket/ui/primitives';
 import { useVocabulary } from '@docket/ui/hooks';
+import { ChevronLeft } from '@docket/ui/icons';
 import { Button, Checkbox, Field, Select } from '@docket/ui/primitives';
 import type { Blueprint, BlueprintStep } from '@docket/work/work-template-blueprint';
 import type { BlueprintWorkKind } from '@docket/work/blueprints';
@@ -161,11 +162,14 @@ function ChildEditorHeading({
   readonly onClose: () => void;
 }): JSX.Element {
   return (
-    <div className="flex min-w-0 items-center justify-between gap-2">
-      <h3 className="text-title-large min-w-0 break-words">{blueprintStepName(step)}</h3>
+    <div className="flex min-w-0 flex-col items-start gap-3">
       <Button type="button" variant="ghost" size="sm" onClick={onClose}>
-        Back to outline
+        <ChevronLeft aria-hidden className="size-4" />
+        Back to included work
       </Button>
+      <h3 tabIndex={-1} className="text-title-large min-w-0 break-words outline-none">
+        {blueprintStepName(step)}
+      </h3>
     </div>
   );
 }

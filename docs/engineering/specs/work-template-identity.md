@@ -167,10 +167,15 @@ backfill refreshes existing work documents without copying private draft bodies 
 Group/filter choices include archived templates already used by visible work. Individual template definitions
 do not add sidebar rows. A person may pin an ordinary filtered view.
 
-The dedicated **Work templates** workspace groups definitions by readiness and work kind, with clear
-draft/publication/archive state. Authoring permissions alone remain in Settings.
-Editing uses a full-page sample item and the normal document layout; the current guided creation
-flow remains a useful way to start a draft. Publishing has an explicit revision-aware action.
+The dedicated **Work templates** workspace lists each real definition once with its purpose, kind
+and publication/draft state. Search and filters help select work; reusable references do not imply
+an ownership hierarchy. Authoring permissions alone remain in Settings.
+Opening or creating a definition crosses into the independent activity layout, without workspace
+navigation, tabs, or rails. Purpose, Starting work, Included work and Review separate the decisions;
+child/routine selection replaces its outline with one focused editor. Explicit return navigation
+restores the overview or linked parent review. Publishing remains revision-aware and explicit,
+with dependencies and immutable history in Review. Activity route classification is shared by
+online navigation, offline route composition and cached-document fallback.
 Administrators manage contributor authoring policy in Settings → Template permissions; team
 offerings remain in definition authoring. Command-palette search
 for template/type/blueprint finds the Work templates workspace; published definitions supply **New {template}** actions

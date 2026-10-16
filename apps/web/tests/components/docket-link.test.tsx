@@ -94,6 +94,26 @@ afterEach(() => {
 });
 
 describe('DocketLink', () => {
+  it.each(['new', '01ARZ3NDEKTSV4RRFFQ69G5FAW'])(
+    'recognizes authoring %s as an activity without a caller flag',
+    (leaf) => {
+      responsiveRouter.current = {
+        requestedHref: null,
+        push: vi.fn().mockReturnValue(true),
+        replace: vi.fn().mockReturnValue(true),
+      };
+      const href = `/orgs/01ARZ3NDEKTSV4RRFFQ69G5FAV/work-templates/${leaf}?section=review#included`;
+      render(<DocketLink href={href}>Define work</DocketLink>);
+      const event = new MouseEvent('click', { bubbles: true, cancelable: true });
+      fireEvent(screen.getByRole('link', { name: 'Define work' }), event);
+      expect(event.defaultPrevented).toBe(false);
+      expect(responsiveRouter.current.push).not.toHaveBeenCalled();
+      expect(screen.getByRole('link', { name: 'Define work' })).toHaveAttribute(
+        'data-prefetch',
+        'false',
+      );
+    },
+  );
   it.each(['/plan/day?date=2026-10-07', '/today'])(
     'hands the activity transition at %s to Next without warming a workspace page',
     async (href) => {

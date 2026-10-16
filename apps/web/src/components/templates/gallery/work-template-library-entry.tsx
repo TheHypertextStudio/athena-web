@@ -1,56 +1,46 @@
 'use client';
 import type { JSX } from 'react';
-import { Button, Surface, Text } from '@docket/ui/primitives';
-import { ArrowRight, Plus } from '@docket/ui/icons';
+import { Button, ControlGroup, Surface, Text } from '@docket/ui/primitives';
+import { Plus } from '@docket/ui/icons';
 import Link from '@/components/docket-link';
 import { workTemplateHref } from '../work-template-navigation';
 
-/** Distinguish defining an organization's own work from adopting an existing starting point. */
-export function LibraryDefineEntry({
-  orgId,
-  continuing,
-}: {
-  readonly orgId: string;
-  readonly continuing: boolean;
-}): JSX.Element {
+/** Keep one primary entrance into authoring and one secondary entrance into curated starting work. */
+export function LibraryDefineEntry({ orgId }: { readonly orgId: string }): JSX.Element {
   return (
-    <section
-      aria-label="Define another kind of work"
-      className="grid min-w-0 gap-5 @2xl:grid-cols-2"
-    >
-      <Surface
-        shape="large"
-        tone="well"
-        pad="roomy"
-        className="flex min-w-0 flex-col items-start gap-3"
+    <ControlGroup className="max-w-full flex-wrap gap-2">
+      <Button asChild className="min-h-10">
+        <Link href={workTemplateHref(orgId, '/new')} navigation="activity">
+          <Plus aria-hidden="true" className="size-4" />
+          Define work
+        </Link>
+      </Button>
+      <Button
+        asChild
+        variant="ghost"
+        className="coarse:h-auto h-auto min-h-10 py-2 whitespace-normal"
       >
-        <Text as="h2" token="title-large">
-          {continuing ? 'Define another kind of work' : 'What work does your organization do?'}
-        </Text>
-        <p className="text-body-medium text-on-surface-variant max-w-prose">
-          Name the work, explain its purpose, then decide what each instance includes.
-        </p>
-        <Button asChild variant={continuing ? 'secondary' : 'default'} className="min-h-10">
-          <Link href={workTemplateHref(orgId, '/new')}>
-            <Plus aria-hidden="true" className="size-4" />
-            Define work
-          </Link>
-        </Button>
-      </Surface>
-      <div className="flex min-w-0 flex-col items-start justify-center gap-3 p-4">
-        <Text as="h2" token="title-medium">
-          Start from an existing definition
-        </Text>
-        <p className="text-body-medium text-on-surface-variant max-w-prose">
-          Choose work shaped around your goals. Review what it includes and adapt a private copy.
-        </p>
-        <Button asChild variant="ghost" className="min-h-10">
-          <Link href={workTemplateHref(orgId, '/gallery')}>
-            Choose starting work
-            <ArrowRight aria-hidden="true" className="size-4" />
-          </Link>
-        </Button>
-      </div>
-    </section>
+        <Link href={workTemplateHref(orgId, '/gallery')}>Browse starting points</Link>
+      </Button>
+    </ControlGroup>
+  );
+}
+
+/** Explain the first decision without implying that all organizational work must repeat. */
+export function LibraryEmptyState(): JSX.Element {
+  return (
+    <Surface as="section" shape="large" pad="roomy" className="flex flex-col gap-3 sm:p-6">
+      <Text as="h2" token="headline-small">
+        What work does your organization do?
+      </Text>
+      <p className="text-body-large text-on-surface-variant max-w-prose">
+        A one-off project or an ongoing program can start with a clear purpose and a plan for what
+        it includes.
+      </p>
+      <p className="text-body-medium text-on-surface-variant max-w-prose">
+        Choose Define work to shape your own, or browse starting points to adapt an example. Save a
+        draft as you go; publish when it is ready for your workspace to use.
+      </p>
+    </Surface>
   );
 }

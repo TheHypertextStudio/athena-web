@@ -70,9 +70,36 @@ function initial(values: ProgramDefaultSchedule[] = []) {
   });
 }
 describe('Program reusable recurring work authoring', () => {
+  it('keeps a new Program kind while it owns a routine so hidden schedules cannot invalidate saving', () => {
+    render(
+      <WorkTemplateForm orgId={template().organizationId} initial={null} onCreated={vi.fn()} />,
+    );
+    fireEvent.change(screen.getByLabelText('Kind of work'), { target: { value: 'program' } });
+    change('Template name', 'Community gatherings');
+    fireEvent.click(screen.getByRole('tab', { name: 'Included work' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add schedule' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Choose Vendor booking' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Purpose' }));
+    expect(screen.getByLabelText('Kind of work')).toBeDisabled();
+    expect(
+      screen.getByText('Remove included and recurring work before changing the kind.'),
+    ).toBeVisible();
+    fireEvent.click(screen.getByRole('tab', { name: 'Included work' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Remove routine' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Purpose' }));
+    expect(screen.getByLabelText('Kind of work')).toBeEnabled();
+  });
+
   it('authors a relative routine, retains parent content, and reads its independent consequences', async () => {
-    render(<WorkTemplateForm orgId="org" initial={initial()} onCreated={vi.fn()} />);
+    render(
+      <WorkTemplateForm
+        orgId={template().organizationId}
+        initial={initial()}
+        onCreated={vi.fn()}
+      />,
+    );
     change('Starting document', 'Program welcome and orientation');
+    fireEvent.click(screen.getByRole('tab', { name: 'Included work' }));
     fireEvent.click(screen.getByRole('button', { name: 'Add schedule' }));
     fireEvent.change(screen.getByLabelText('Reusable schedule work kind'), {
       target: { value: 'task' },
@@ -100,9 +127,10 @@ describe('Program reusable recurring work authoring', () => {
     expect(within(review).getByText('Monthly vendor check-in')).toBeVisible();
     expect(within(review).getByText('Every month on the second Thursday')).toBeVisible();
     expect(within(review).getByText('Begins 7 days after Program creation · 6 runs')).toBeVisible();
-    fireEvent.click(screen.getByRole('tab', { name: 'Work' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Included work' }));
     expect(screen.getByLabelText('Reusable schedule name')).toHaveValue('Monthly vendor check-in');
-    fireEvent.click(screen.getByRole('button', { name: 'Edit parent Community dinner' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Back to included work' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Starting work' }));
     expect(screen.getByLabelText('Starting document')).toHaveValue(
       'Program welcome and orientation',
     );
@@ -123,11 +151,12 @@ describe('Program reusable recurring work authoring', () => {
   it('expresses relative starts without signed arithmetic and restores them on re-entry', async () => {
     render(
       <WorkTemplateForm
-        orgId="org"
+        orgId={template().organizationId}
         initial={initial([routine('routine', 'Routine')])}
         onCreated={vi.fn()}
       />,
     );
+    fireEvent.click(screen.getByRole('tab', { name: 'Included work' }));
     fireEvent.click(screen.getByRole('button', { name: 'Edit routine Routine' }));
     expect(screen.getByLabelText('Default schedule begins')).toHaveValue('on_creation');
     expect(screen.queryByLabelText('Default schedule start offset days')).not.toBeInTheDocument();
@@ -135,7 +164,7 @@ describe('Program reusable recurring work authoring', () => {
     change('Default schedule start offset days', '3');
     fireEvent.click(screen.getByRole('tab', { name: 'Review' }));
     expect(screen.getByText('Begins 3 days before Program creation · No end')).toBeVisible();
-    fireEvent.click(screen.getByRole('tab', { name: 'Work' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Included work' }));
     expect(screen.getByLabelText('Default schedule begins')).toHaveValue('before');
     expect(screen.getByLabelText('Default schedule start offset days')).toHaveValue(3);
     change('Default schedule begins', 'after');
@@ -153,20 +182,21 @@ describe('Program reusable recurring work authoring', () => {
   it('collapses included work while keeping its count and recurring work reachable', async () => {
     render(
       <WorkTemplateForm
-        orgId="org"
+        orgId={template().organizationId}
         initial={initial([routine('routine', 'Monthly dinner')])}
         onCreated={vi.fn()}
       />,
     );
-    const branch = screen.getByRole('button', { name: 'Included work' });
+    fireEvent.click(screen.getByRole('tab', { name: 'Included work' }));
+    const branch = screen.getByRole('button', { name: 'Created together' });
     expect(branch).toHaveAttribute('aria-expanded', 'true');
     branch.focus();
     await userEvent.setup().keyboard('{Enter}');
     expect(branch).toHaveAttribute('aria-expanded', 'false');
-    expect(screen.getByLabelText('Blueprint summary')).toBeVisible();
+    expect(screen.getByText('No included work yet')).toBeVisible();
     expect(screen.getByRole('button', { name: 'Edit routine Monthly dinner' })).toBeVisible();
     fireEvent.click(screen.getByRole('button', { name: 'Edit routine Monthly dinner' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Back to outline' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Back to included work' }));
     await waitFor(() => {
       expect(screen.getByRole('button', { name: 'Edit routine Monthly dinner' })).toHaveFocus();
     });
@@ -175,20 +205,25 @@ describe('Program reusable recurring work authoring', () => {
   it('reorders stable keys and removes only the reusable definition entry', async () => {
     render(
       <WorkTemplateForm
-        orgId="org"
+        orgId={template().organizationId}
         initial={initial([routine('dinner', 'Dinner'), routine('check-in', 'Check-in')])}
         onCreated={vi.fn()}
       />,
     );
+    fireEvent.click(screen.getByRole('tab', { name: 'Included work' }));
     fireEvent.click(screen.getByRole('button', { name: 'Edit routine Check-in' }));
     fireEvent.click(screen.getByRole('button', { name: 'Move earlier' }));
+    expect(screen.queryByRole('list', { name: 'Recurring work outline' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('list', { name: 'Child work outline' })).not.toBeInTheDocument();
+    expect(screen.getByText(/Existing Program copies keep their schedules/)).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Back to included work' }));
     const outline = screen.getByRole('list', { name: 'Recurring work outline' });
     expect(
       within(outline)
         .getAllByRole('button')
         .map((button) => button.getAttribute('aria-label')),
     ).toEqual(['Edit routine Check-in', 'Edit routine Dinner']);
-    expect(screen.getByText(/Existing Program copies keep their schedules/)).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Edit routine Check-in' }));
     fireEvent.click(screen.getByRole('button', { name: 'Remove routine' }));
     expect(screen.queryByRole('button', { name: 'Edit routine Check-in' })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Save draft' }));
@@ -205,11 +240,12 @@ describe('Program reusable recurring work authoring', () => {
     mocks.draft.mockRejectedValue(new Error('private provider detail'));
     render(
       <WorkTemplateForm
-        orgId="org"
+        orgId={template().organizationId}
         initial={initial([routine('routine', 'Routine')])}
         onCreated={vi.fn()}
       />,
     );
+    fireEvent.click(screen.getByRole('tab', { name: 'Included work' }));
     fireEvent.click(screen.getByRole('button', { name: 'Edit routine Routine' }));
     change('Default schedule interval', '0');
     expect(screen.getByText('Review this routine')).toBeVisible();
@@ -221,7 +257,7 @@ describe('Program reusable recurring work authoring', () => {
     );
     expect(screen.queryByText('private provider detail')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('tab', { name: 'Review' }));
-    fireEvent.click(screen.getByRole('tab', { name: 'Work' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Included work' }));
     expect(screen.getByLabelText('Default schedule interval')).toHaveValue(0);
   });
   it('uses workspace vocabulary in recurring-work authoring, review and creation consequences', () => {
@@ -237,12 +273,13 @@ describe('Program reusable recurring work authoring', () => {
     const view = render(
       <VocabularyProvider skin={skin}>
         <WorkTemplateForm
-          orgId="org"
+          orgId={template().organizationId}
           initial={initial([routine('dinner', 'Monthly dinner')])}
           onCreated={vi.fn()}
         />
       </VocabularyProvider>,
     );
+    fireEvent.click(screen.getByRole('tab', { name: 'Included work' }));
     fireEvent.click(screen.getByRole('button', { name: 'Edit routine Monthly dinner' }));
     expect(screen.getByRole('option', { name: 'Action' })).toBeVisible();
     expect(screen.getByRole('option', { name: 'When the Practice is created' })).toBeVisible();
@@ -287,8 +324,13 @@ describe('Program reusable recurring work authoring', () => {
       Array.from({ length: 20 }, (_, index) => routine(`routine-${index}`, `Routine ${index + 1}`)),
     );
     render(
-      <WorkTemplateForm orgId="org" initial={{ ...value, canEdit: false }} onCreated={vi.fn()} />,
+      <WorkTemplateForm
+        orgId={template().organizationId}
+        initial={{ ...value, canEdit: false }}
+        onCreated={vi.fn()}
+      />,
     );
+    fireEvent.click(screen.getByRole('tab', { name: 'Included work' }));
     expect(screen.getByRole('button', { name: 'Add schedule' })).toBeDisabled();
     expect(screen.getByText('This definition has the maximum of 20 routines.')).toBeVisible();
     fireEvent.click(screen.getByRole('button', { name: 'Edit routine Routine 1' }));

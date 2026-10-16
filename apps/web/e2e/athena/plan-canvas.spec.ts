@@ -70,6 +70,8 @@ test.describe('Planning canvas', () => {
     page,
   }) => {
     test.setTimeout(240_000);
+    const runtimeErrors: string[] = [];
+    page.on('pageerror', (error) => runtimeErrors.push(error.message));
     const { orgId } = await signUpAndOnboard(page, 'PlanCanvas');
 
     // --- Draft a plan the way Athena's tools do -------------------------------------------
@@ -90,6 +92,25 @@ test.describe('Planning canvas', () => {
     const outreach = page.locator('[data-plan-ref="p-outreach"]');
     await expect(outreach).toBeVisible({ timeout: TIMEOUTS.pageReady });
     await expect(outreach).toHaveAttribute('data-plan-status', 'draft');
+    await expect(page.getByRole('navigation', { name: 'Workspace', exact: true })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Open navigation', exact: true })).toHaveCount(0);
+    const help = page.getByRole('button', { name: 'Ask Athena about this plan', exact: true });
+    const conversation = page.getByRole('dialog', { name: 'Plan with Athena', exact: true });
+    await expect(conversation).toBeHidden();
+    await help.click();
+    await expect(conversation).toBeVisible();
+    const message = conversation.getByRole('combobox', { name: 'Message Athena' });
+    await message.fill('Help me organize the outreach before the fundraising event.');
+    await conversation.getByRole('button', { name: 'Back to plan', exact: true }).click();
+    await expect(conversation).toBeHidden();
+    await expect(help).toBeFocused();
+    await help.click();
+    await expect(message).toHaveValue(
+      'Help me organize the outreach before the fundraising event.',
+    );
+    await page.keyboard.press('Escape');
+    await expect(conversation).toBeHidden();
+
     // A container rests collapsed, naming its tasks in miniature; one click shows the rows.
     await expect(outreach.getByTestId('plan-mini-tasks')).toContainText('Segment lapsed donors');
     await expect(page.locator('[data-plan-ref="t1"]')).toBeHidden();
@@ -181,13 +202,14 @@ test.describe('Planning canvas', () => {
     const root = page.locator('[data-plan-ref="root"]');
     await expect(root).toBeVisible({ timeout: TIMEOUTS.pageReady });
     await expect(root).toHaveAttribute('data-plan-status', 'confirmed');
-    // The conversation is the shell's rail, a peer of the whole board, seeded with the opening line.
-    const rail = page.getByRole('complementary', { name: 'Athena' });
+    // Explicit Plan with Athena enters contextual help, seeded with the opening line.
+    const rail = page.getByRole('dialog', { name: 'Plan with Athena', exact: true });
     await expect(rail.getByRole('combobox', { name: 'Message Athena' })).toHaveValue(
       /Help me plan/,
       {
         timeout: TIMEOUTS.ui,
       },
     );
+    expect(runtimeErrors).toEqual([]);
   });
 });

@@ -1,5 +1,6 @@
 'use client';
 import type { JSX } from 'react';
+import { ChevronRight } from '@docket/ui/icons';
 import { Button, Badge } from '@docket/ui/primitives';
 import { useVocabulary } from '@docket/ui/hooks';
 import type { Blueprint, BlueprintStep } from '@docket/work/work-template-blueprint';
@@ -116,7 +117,7 @@ function BlueprintOutlineRow({
       onClick={onSelect}
       className="coarse:h-auto h-auto min-h-12 w-full scroll-mt-48 justify-start py-2 text-left"
     >
-      <span className="flex min-w-0 flex-col gap-0.5 break-words whitespace-normal">
+      <span className="flex min-w-0 flex-1 flex-col gap-0.5 break-words whitespace-normal">
         <span className="text-label-large">{blueprintStepName(step)}</span>
         <span className="text-body-small text-on-surface-variant">
           {step.kind === 'milestone' ? 'Milestone' : vocabulary}
@@ -134,6 +135,7 @@ function BlueprintOutlineRow({
           </Badge>
         ) : null}
       </span>
+      <ChevronRight aria-hidden="true" className="text-on-surface-variant size-4 shrink-0" />
     </Button>
   );
 }

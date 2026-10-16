@@ -3,14 +3,16 @@ import { WorkTemplateArchiveAction } from './work-template-archive-action';
 import { useState, useSyncExternalStore, type JSX } from 'react';
 import { Button, Skeleton, Badge } from '@docket/ui/primitives';
 import { useVocabulary } from '@docket/ui/hooks';
-import { InlineBanner } from '@docket/ui/components';
+import { ImmersiveShell, InlineBanner } from '@docket/ui/components';
 import {
   TemplateDefinitionAction,
   TemplatePublicationConsequence,
 } from './template-definition-action';
 import { WorkTemplateBlueprintSummary } from './work-template-blueprint-summary';
 import type { WorkTemplateOut } from '@docket/work/work-template-contract';
-import { WorkTemplateWorkspaceFrame } from './work-template-workspace-frame';
+import Link from '@/components/docket-link';
+import { useOptionalActiveOrg } from '@/components/active-org';
+import { ChevronLeft } from '@docket/ui/icons';
 import { workTemplateReturnHref } from './work-template-return-context';
 import { TemplateDisclosure } from './template-disclosure';
 import { workTemplateHref } from './work-template-navigation';
@@ -19,7 +21,10 @@ import { StaticMarkdown } from '@/components/editor/static-markdown';
 import { useSession } from '@/lib/auth-client';
 import { useApiQuery } from '@/lib/query';
 import { useAppSearchParams } from '@/lib/app-location';
-import { useTemplateSectionNavigation } from './use-template-section-navigation';
+import {
+  useTemplateSectionNavigation,
+  type TemplateDefinitionSection,
+} from './use-template-section-navigation';
 import { useAppRouter } from '@/lib/interactions/navigation';
 import { type WorkTemplateFormState, useWorkTemplateForm } from './use-work-template-form';
 import { TemplateDefinitionSections } from './template-definition-sections';
@@ -44,7 +49,24 @@ function useAuthoringSessionReady(): boolean {
 
 function templateAuthoringParent(orgId: string, id: string | null, candidate: string | null) {
   const href = workTemplateReturnHref(orgId, id, candidate);
-  return href ? { label: 'Back to parent definition', href } : { label: 'Work templates' };
+  return href
+    ? { label: 'Back to parent definition', href }
+    : {
+        label: 'Back to Work templates',
+        href: `${workTemplateHref(orgId)}${id ? `#work-template-${id}` : ''}`,
+      };
+}
+
+function authoringSection(value: string | null): TemplateDefinitionSection | undefined {
+  switch (value) {
+    case 'purpose':
+    case 'work':
+    case 'structure':
+    case 'review':
+      return value;
+    default:
+      return undefined;
+  }
 }
 
 /** Routed editor for an editable draft and the template's immutable publication history. */
@@ -56,6 +78,7 @@ export function WorkTemplateAuthoring({
   id: string | null;
 }): JSX.Element {
   const sessionReady = useAuthoringSessionReady();
+  const workspace = useOptionalActiveOrg()?.orgs.find((org) => org.id === orgId);
   const searchParams = useAppSearchParams();
   const requestedSection = searchParams.get('section');
   const parent = templateAuthoringParent(orgId, id, searchParams.get('returnTo'));
@@ -65,8 +88,30 @@ export function WorkTemplateAuthoring({
   const loading = !sessionReady || (id !== null && query.isPending);
   const failed = id !== null && query.isError;
   return (
-    <WorkTemplateWorkspaceFrame orgId={orgId} parent={parent}>
-      <div data-work-template-authoring="" className="flex min-w-0 flex-col gap-6">
+    <ImmersiveShell
+      header={
+        <nav
+          aria-label="Work templates navigation"
+          className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1"
+        >
+          <Button asChild variant="ghost">
+            <Link navigation="activity" href={parent.href}>
+              <ChevronLeft className="size-4" aria-hidden="true" />
+              {parent.label}
+            </Link>
+          </Button>
+          {workspace ? (
+            <p className="text-body-small text-on-surface-variant px-3" aria-label="Workspace">
+              {workspace.name}
+            </p>
+          ) : null}
+        </nav>
+      }
+    >
+      <div
+        data-work-template-authoring=""
+        className="mx-auto flex w-full max-w-5xl min-w-0 flex-col gap-6 px-4 pb-8 sm:px-6"
+      >
         {loading ? <Skeleton className="h-64" /> : null}
         {failed ? (
           <QueryLoadFailure title="Template" query={query} />
@@ -75,20 +120,16 @@ export function WorkTemplateAuthoring({
             key={id ?? 'new'}
             orgId={orgId}
             initial={query.data ?? null}
-            initialSection={requestedSection === 'review' ? 'review' : undefined}
+            initialSection={authoringSection(requestedSection)}
             onCreated={(createdId, section) =>
-              router.replace(`${href}/${createdId}${section === 'review' ? '?section=review' : ''}`)
+              router.replace(
+                `${href}/${createdId}${section && section !== 'work' ? `?section=${section}` : ''}`,
+              )
             }
           />
         )}
-        <TemplatePublishedHistory
-          orgId={orgId}
-          id={id}
-          template={query.data}
-          visible={!loading && !failed}
-        />
       </div>
-    </WorkTemplateWorkspaceFrame>
+    </ImmersiveShell>
   );
 }
 
@@ -101,12 +142,12 @@ export function WorkTemplateForm({
 }: {
   orgId: string;
   initial: WorkTemplateOut | null;
-  onCreated: (id: string, section?: 'review') => void;
-  initialSection?: 'review' | undefined;
+  onCreated: (id: string, section?: TemplateDefinitionSection) => void;
+  initialSection?: TemplateDefinitionSection | undefined;
 }): JSX.Element {
   const navigation = useTemplateSectionNavigation(initialSection ?? (initial ? 'work' : 'purpose'));
   const form = useWorkTemplateForm(orgId, initial, (createdId) => {
-    onCreated(createdId, navigation.section === 'review' ? 'review' : undefined);
+    onCreated(createdId, navigation.section);
   });
   return (
     <div className="flex min-w-0 flex-col gap-6">
@@ -126,6 +167,7 @@ export function WorkTemplateForm({
         initial={initial}
         form={form}
         navigation={navigation}
+        reviewIntro={<TemplateReviewPublication orgId={orgId} initial={initial} form={form} />}
         header={
           <TemplateAuthoringHeader
             orgId={orgId}
@@ -136,7 +178,10 @@ export function WorkTemplateForm({
         }
       >
         {initial ? (
-          <TemplatePublicationActions orgId={orgId} initial={initial} form={form} />
+          <>
+            <TemplatePublishedHistory orgId={orgId} id={initial.id} template={initial} visible />
+            <TemplatePublicationActions orgId={orgId} initial={initial} form={form} />
+          </>
         ) : (
           <p className="text-body-medium text-on-surface-variant">
             Save a private draft to keep this definition. Then publish it when your workspace is
@@ -175,21 +220,38 @@ function TemplateAuthoringHeader({
         />
       </div>
       <TemplateDraftHeader initial={initial} form={form} />
-      {navigation.section === 'review' ? (
-        <TemplatePublicationReadiness
-          orgId={orgId}
-          name={form.definition.name}
-          parentId={initial?.id}
-          readiness={readiness}
-        />
-      ) : null}
-      <TemplatePublicationConsequence form={form} initial={initial} section={navigation.section} />
       {form.error ? (
         <InlineBanner tone="critical" title="Template could not be saved">
           {form.error}
         </InlineBanner>
       ) : null}
     </>
+  );
+}
+
+function TemplateReviewPublication({
+  orgId,
+  initial,
+  form,
+}: {
+  orgId: string;
+  initial: WorkTemplateOut | null;
+  form: WorkTemplateFormState;
+}): JSX.Element {
+  const readiness = useTemplatePublicationReadiness(orgId, form.definition);
+  return (
+    <section aria-label="Review and publish" className="flex min-w-0 flex-col gap-3">
+      <h2 tabIndex={-1} className="text-title-large">
+        Review & publish
+      </h2>
+      <TemplatePublicationReadiness
+        orgId={orgId}
+        name={form.definition.name}
+        parentId={initial?.id}
+        readiness={readiness}
+      />
+      <TemplatePublicationConsequence form={form} initial={initial} section="review" />
+    </section>
   );
 }
 

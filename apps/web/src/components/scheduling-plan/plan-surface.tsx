@@ -14,6 +14,8 @@
  * and never a server sentence.
  */
 import { Button, ControlGroup, Skeleton, Stack, Text, Toolbar } from '@docket/ui/primitives';
+import { ImmersiveShell } from '@docket/ui/components';
+import Link from '@/components/docket-link';
 import { QueryLoadFailure, type QueryFailureSource } from '@/components/feedback';
 import { useAppSearchParams } from '@/lib/app-location';
 import type { JSX } from 'react';
@@ -93,6 +95,22 @@ export interface PlanSurfaceProps {
  * @returns the surface.
  */
 export function PlanSurface(props: PlanSurfaceProps = {}): JSX.Element {
+  return (
+    <ImmersiveShell
+      header={
+        <Button asChild variant="ghost">
+          <Link navigation="activity" href="/today">
+            Back to Today
+          </Link>
+        </Button>
+      }
+    >
+      <PlanContent {...props} />
+    </ImmersiveShell>
+  );
+}
+
+function PlanContent(props: PlanSurfaceProps): JSX.Element {
   // `?date=` and `?lens=` make the surface addressable: a link can open someone straight on the
   // morning walk-through for a specific day, which is exactly what a day-start deep link needs.
   const search = useAppSearchParams();
@@ -121,21 +139,20 @@ export function PlanSurface(props: PlanSurfaceProps = {}): JSX.Element {
   const confirm = useConfirmTomorrow(date);
 
   return (
-    <div className="mx-auto flex h-full w-full max-w-7xl flex-col gap-8 px-6 py-10 @2xl:px-10">
+    <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 pb-8 sm:px-6 @2xl:px-10">
       <Stack gap={2} as="header">
         <Text as="h1" token="headline-large">
           Plan
         </Text>
         <Text token="body-medium" tone="muted">
-          One run lays out the week across every kind of time you work in. The day walks itself from
-          there.
+          Review your weekly schedule, prepare for the day, or reflect on what happened.
         </Text>
       </Stack>
 
       <Toolbar
         controlSize="md"
         leading={
-          <ControlGroup controlSize="md">
+          <ControlGroup controlSize="md" className="flex-wrap">
             {(['week', 'morning', 'evening'] as const).map((option) => (
               <Button
                 key={option}

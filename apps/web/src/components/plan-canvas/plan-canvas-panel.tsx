@@ -2,7 +2,7 @@
 
 /**
  * `components/plan-canvas/plan-canvas-panel` — the planning canvas: a board, its floating chrome,
- * the inspector for a selection; the conversation with Athena lives in the shell's rail.
+ * the inspector for a selection; contextual Athena help is owned by the planning activity.
  *
  * @remarks
  * The panel describes what goes where; `use-plan-panel` composes the state it reads. The board
@@ -32,6 +32,8 @@ export interface PlanChrome {
   readonly title: string;
   /** The way back: an icon button before the title. */
   readonly navigation: ReactNode;
+  /** Optional contextual help, owned by the focused planning activity. */
+  readonly assistance?: ReactNode;
 }
 
 /** Props for {@link PlanCanvasPanel}. */
@@ -123,6 +125,7 @@ export default function PlanCanvasPanel(props: PlanCanvasPanelProps): JSX.Elemen
           <PlanBar
             title={chrome.title}
             navigation={chrome.navigation}
+            assistance={chrome.assistance}
             search={m.search}
             onSearchChange={m.setSearch}
             counts={m.counts}

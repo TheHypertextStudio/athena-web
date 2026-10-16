@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "license": "UNLICENSED",
-  "description": "Docket's service worker — the offline routing table, cache strategies, and the bundler that emits it into a host app's public directory.",
+  "description": "Docket's service worker \u2014 the offline routing table, cache strategies, and the bundler that emits it into a host app's public directory.",
   "scripts": {
     "typecheck": "tsc --noEmit && tsc --noEmit -p src/worker/tsconfig.json",
     "lint": "eslint .",
@@ -19,5 +19,8 @@
     "@docket/tsconfig": "workspace:*",
     "@types/node": "catalog:",
     "esbuild": "^0.28.1"
+  },
+  "exports": {
+    "./activity-routes": "./src/activity-routes.ts"
   }
 }

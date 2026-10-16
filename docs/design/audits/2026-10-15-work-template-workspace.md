@@ -1,5 +1,11 @@
 # Design review: Work-definition workspace — 2026-10-15
 
+> **Previous navigation and information-hierarchy verdict withdrawn.** The owner rejected this
+> surface: ordinary workspace navigation competes with authoring, and the overview exposes editor
+> and publication internals before choosing a definition. The screenshots and functional results
+> below are historical evidence, not acceptance of that design. The focused-flow correction is
+> tracked in WORKLOG.md and requires fresh runtime review.
+
 Register: app, IBM Plex / neutral MD3. Scope: the dedicated Work templates
 workspace, guided Purpose → Work → Review editor, actual linked-definition
 publication, gallery inspection and saved-copy reentry. This evaluates defining
@@ -113,6 +119,6 @@ The earlier visual findings required real changes to grouping, next actions,
 publication order and live/draft identity; moving the route alone did not close
 them. This review does not replace owner acceptance or imply universal usability.
 
-**Verdict: SHIP for the reviewed local UI slice.** All eight dimensions reach the
+**Historical verdict (withdrawn): SHIP for the reviewed local UI slice.** All eight dimensions reach the
 crafted level, and the five gates pass within the stated evidence bounds.
 Production/provider-role migration acceptance and deployment remain separate.

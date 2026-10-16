@@ -29,7 +29,7 @@ created nodes side by side.
 | Web reads and writes                    | `apps/web/src/lib/plan-draft/defs.ts`                                                                                |
 | Projection, layout, diff, confirmation  | `apps/web/src/components/plan-canvas/plan-{nodes,layout,diff,confirm}.ts`                                            |
 | Surface                                 | `apps/web/src/components/plan-canvas/plan-canvas-panel.tsx` and the node, edge, inspector, and bar modules beside it |
-| Route                                   | `apps/web/src/app/(app)/orgs/[orgId]/plans/[planId]/`                                                                |
+| Route                                   | `apps/web/src/app/(activity)/orgs/[orgId]/plans/[planId]/`                                                           |
 | Entry points                            | `plan-start-card.tsx` (thread), `initiatives/plan-with-athena-action.tsx`                                            |
 
 ## The document
@@ -79,7 +79,7 @@ batch optimistically through the reducer, sends it, and on 412 reads the plan ag
 batch once. Template ops are never applied optimistically because the payload lives on the server.
 
 A plan's own poll runs every two seconds while the hosting conversation is working and every ten
-seconds otherwise. `usePlanAthenaSync` watches the org thread the rail already streams and refetches
+seconds otherwise. `usePlanAthenaSync` watches the existing workspace thread and refetches
 the plan the moment a plan-tool action lands. The route records the revisions the person's own
 edits produced; a revision that arrives unrecorded is Athena's, and only that earns the enter
 motion, the highlight sweep, and the "Athena updated" pill.
@@ -145,36 +145,28 @@ summary at body size, owner avatar and name, the whole date, nothing for an unse
 container's header (`plan-project-header.tsx`) carries the lead's avatar, the target, the count, and one `PlanAlsoIn` chip for the other initiatives it belongs to, listing them on hover; the band takes a tonal step under the pointer. A container rests collapsed at the altitude a plan is read: below its header it names its tasks in miniature (`PlanMiniTaskList` in `plan-project-tasks.tsx`, three titles and a count), and that block or the header's chevron shows the rows on a dedicated click. Expanded, the rows are real nodes, and `PLAN_PROJECT_PADDING` keeps the container, its miniature list, and its rows concentric. The panel owns the expanded set: a search opens the containers holding matches, a revision from Athena opens the containers her tasks landed in, adding or moving a task opens its container, and collapsing a container lets go of a row selected inside it. A task row is the leanest thing on the board: no state glyph, a 32px height, its assignee as an avatar, and the due date pinned to the right, so a long name never takes the title's room. The minimap appears once the board
 spills into a second column.
 
-The route is immersive: the board runs edge to edge under floating chrome, and `useOwnPageScroll`
-keeps the page from scrolling under it. `PlanBar` composes the shared `CanvasFloatingBar` (an
-`AppBar` in its `floating` presentation) with the way back, the title, `CanvasSearchField`, "+ Project", and the draft count; when something is selected the count gives way to `PlanSelectionActions` in the same row, with Open and Remove as icon buttons. The bar carries no Athena button: the conversation is the shell's rail, and the rail's own Athena icon opens and closes it. The bar spans the width the floating inspector leaves it and
-follows the `AppBar` rule for that row: the title takes the room the fixed slots leave and
-truncates first, controls and actions never shrink, and the selection group scrolls in the `fill`
-slot. The inspector floats in `GraphInspectorHost`'s `floating` presentation over the board's right
-edge. The conversation is a peer of the whole board, so it lives where the shell keeps a peer of
-`<main>`: the right rail's Athena panel. While the route is mounted, `usePlanAthena` in
-`plan-conversation.tsx` hands the rail `PlanRailConversation` through the Athena provider's
-`provideRailContent`, and `AthenaRailPanel` shows that in place of the queue: the Athena mark, an
-icon to the full page, and `AthenaConversation` on the organisation thread, which is the session
-`plan_start` binds to, with a one-line empty state since the board beside it is the subject. The
-route reveals the rail on arrival, and an entry point that asks for a start (`?athena=start`)
-opens it with an opening line, which the thread's composer takes from the provider's launch
-draft. The rail's own icon collapses and expands it, and the shell's sheet serves it on a compact
-window. Below a 1280px window (`PLAN_RAIL_WIDE_PX`) the route asks the shell to rest the rail
-collapsed so the board keeps the room, and a start or the rail's icon still expands it: a host's rail
-request overrides a surface's collapse request in the shell, as the icon does. The inspector's column takes focus itself when the control that had focus unmounts, so
-Escape after Confirm still closes it.
+The canvas route lives in the independent activity layout. `ImmersiveShell` owns the full
+window and `useOwnPageScroll` leaves panning to React Flow. Ordinary workspace navigation and
+utility rails are absent. The floating bar keeps the way back, title, search and context actions.
+The inspector remains plan-local.
+
+Ask Athena opens the real workspace conversation in an optional responsive sheet scoped to this
+plan. Normal arrival keeps it closed; explicit `?athena=start` opens and seeds it once. Closing
+help restores its opener and retains unsent input, attachments and failed-send recovery. The shared
+`SheetContent keepMounted` option uses a real DOM portal anchor and React Activity to retain state
+while hidden modal effects disconnect; ordinary sheets keep their existing lifecycle.
+
+`PlanBar` composes the shared `CanvasFloatingBar` and `AppBar` floating presentation. The title
+truncates before fixed actions; selection actions occupy the fill slot. `GraphInspectorHost`
+floats the inspector at the board's edge and takes focus when a control unmounts so Escape after
+Confirm can still close it.
 
 The panel measures its overlays into `CanvasOverlayInsets` (bar height plus the gutter on top;
 the inspector on the right) and hands them to `Canvas` as `overlayInsets`, so the
 first frame (`frameAnchor="start"`, anchored to the board's left), `revealAdditions`, and every fit
 keep clear of the chrome. When the inspector docks, the panel refits the whole board if the strip
 it leaves is narrower than the board (`boardOverflows`) and otherwise nudges the selection into
-view. Below the compact threshold the covering pane and the shell sheet
-still apply. The route asks the shell for its icon rail on any window under 1920px
-(`useShellSidebar().requestCompact`) and for a collapsed right rail (`useShellRail()
-.requestCollapsed`) while mounted; both requests are scoped to the route, never touch the viewer's
-saved choice, and yield to the viewer expanding either for as long as the plan is open.
+view.
 
 Selection is xyflow's own: a draft node is not a workspace object and does not enter the global
 object registry. The inspector (`plan-inspector.tsx`, with its text field in `plan-commit-text.tsx`) edits a draft's fields in filled text fields and tonal pickers, commits text on blur or Enter, and names
@@ -192,7 +184,7 @@ leave its container for a drop on another container to re-home it, and a drop th
 is undone by writing the laid-out positions back (`snapToLayout`), which Re-layout also does.
 
 An entry point that wants the conversation open on arrival navigates with `?athena=start`; the
-route reveals the column with an opening line once the plan has loaded and drops the flag.
+route opens contextual help with an opening line once the plan has loaded and drops the flag.
 
 Motion lives in `apps/web/src/app/globals.css` (`plan-node-enter`, `plan-field-changed`) and is
 disabled under reduced motion. The canvas moves the viewport the person chose in one case only:

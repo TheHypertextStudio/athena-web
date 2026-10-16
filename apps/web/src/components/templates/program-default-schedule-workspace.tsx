@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import type { ProgramDefaultSchedule } from '@docket/work/work-schedule-defaults';
 import type { BlueprintEditorProps } from './work-template-blueprint-child';
 import type { WorkTemplateFormState } from './use-work-template-form';
@@ -8,13 +8,17 @@ import { ProgramDefaultScheduleEditor } from './program-default-schedule-editor'
 import { moveDefaultSchedule } from './program-default-schedule-draft';
 const NEW_ROUTINE = '$new';
 
-/** Keep recurring-work selection in the same freely revisitable Program outline. */
+/** Select one recurring-work editor and return to its row without discarding controlled edits. */
 export function useProgramDefaultScheduleWorkspace(
   form: WorkTemplateFormState,
   context: BlueprintEditorProps,
   onActivate: () => void,
-  onReturn: () => void,
-) {
+): {
+  readonly active: boolean;
+  readonly clear: () => void;
+  readonly outline: ReactNode;
+  readonly editor: ReactNode;
+} {
   const [key, setKey] = useState<string | null>(null);
   const values = form.definition.defaultSchedules;
   const index = values.findIndex((value) => value.key === key);
@@ -31,14 +35,12 @@ export function useProgramDefaultScheduleWorkspace(
     if (key !== next.key) focusRoutine();
   };
   const close = (): void => {
-    if (key === NEW_ROUTINE) setKey(null);
-    onReturn();
+    setKey(null);
     focusOutlineRow(value?.key ?? null);
   };
   const remove = (): void => {
     removeRoutine(form, key);
     setKey(null);
-    onReturn();
     focusOutlineRow(null);
   };
   const move = (direction: -1 | 1): void => {
@@ -70,6 +72,7 @@ export function useProgramDefaultScheduleWorkspace(
         <ProgramDefaultScheduleEditor
           key={key}
           orgId={context.orgId}
+          parentTemplateId={form.templateId}
           value={value}
           templates={context.templates}
           disabled={context.disabled}

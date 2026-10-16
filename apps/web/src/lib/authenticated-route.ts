@@ -15,6 +15,8 @@ import {
   ProjectId,
   RecurrenceSeriesId,
   TaskId,
+  WorkTypeId,
+  type WorkTypeId as WorkTypeIdValue,
   type CycleId as CycleIdValue,
   type InitiativeId as InitiativeIdValue,
   type ProgramId as ProgramIdValue,
@@ -33,27 +35,29 @@ import {
 } from './offline-routes.generated';
 import { matchRoutes } from './route-match';
 
-type RouteParamValue<TName extends string> = TName extends 'orgId'
-  ? OrganizationIdValue
-  : TName extends 'taskId'
-    ? TaskIdValue
-    : TName extends 'projectId'
-      ? ProjectIdValue
-      : TName extends 'programId'
-        ? ProgramIdValue
-        : TName extends 'initiativeId'
-          ? InitiativeIdValue
-          : TName extends 'cycleId'
-            ? CycleIdValue
-            : TName extends 'teamId'
-              ? TeamIdValue
-              : TName extends 'actorId'
-                ? ActorIdValue
-                : TName extends 'seriesId'
-                  ? RecurrenceSeriesIdValue
-                  : TName extends 'sessionId'
-                    ? AgentSessionIdValue
-                    : string;
+type RouteParamValue<TName extends string> = TName extends 'templateId'
+  ? WorkTypeIdValue
+  : TName extends 'orgId'
+    ? OrganizationIdValue
+    : TName extends 'taskId'
+      ? TaskIdValue
+      : TName extends 'projectId'
+        ? ProjectIdValue
+        : TName extends 'programId'
+          ? ProgramIdValue
+          : TName extends 'initiativeId'
+            ? InitiativeIdValue
+            : TName extends 'cycleId'
+              ? CycleIdValue
+              : TName extends 'teamId'
+                ? TeamIdValue
+                : TName extends 'actorId'
+                  ? ActorIdValue
+                  : TName extends 'seriesId'
+                    ? RecurrenceSeriesIdValue
+                    : TName extends 'sessionId'
+                      ? AgentSessionIdValue
+                      : string;
 
 type ParamsForSegment<TSegment extends string> = TSegment extends `[...${infer TName}]`
   ? Readonly<Record<TName, readonly string[]>>
@@ -109,6 +113,7 @@ const fallbackParam: RuntimeParamSchema = {
 
 const paramSchemas: Readonly<Record<string, RuntimeParamSchema>> = {
   orgId: OrganizationId,
+  templateId: WorkTypeId,
   taskId: TaskId,
   projectId: ProjectId,
   programId: ProgramId,
@@ -260,8 +265,7 @@ export function buildEntityHref(snapshot: EntityNavigationSnapshot): string {
  * @returns the path without its query string.
  */
 export function pathnameOf(href: string): string {
-  const queryAt = href.indexOf('?');
-  return queryAt === -1 ? href : href.slice(0, queryAt);
+  return href.split(/[?#]/, 1)[0] ?? '';
 }
 
 /**

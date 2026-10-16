@@ -3,7 +3,9 @@ import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 import { WorkTemplatesWorkspace } from '@/components/templates/work-templates-workspace';
 vi.mock('@/components/docket-link', () => ({
-  default: (props: ComponentProps<'a'>) => <a {...props} />,
+  default: ({ navigation, ...props }: ComponentProps<'a'> & { navigation?: string }) => (
+    <a {...props} data-navigation={navigation} />
+  ),
 }));
 vi.mock('@/lib/query', () => ({
   useApiListQuery: () => ({ data: { items: [] }, isPending: false, isError: false }),
@@ -42,12 +44,23 @@ it('enters choosing and defining work through canonical workspace routes', () =>
       <WorkTemplatesWorkspace orgId="01ARZ3NDEKTSV4RRFFQ69G5FAX" />
     </main>,
   );
-  expect(screen.getByRole('link', { name: 'Choose starting work' })).toHaveAttribute(
+  expect(screen.getByRole('link', { name: 'Browse starting points' })).toHaveAttribute(
     'href',
     '/orgs/01ARZ3NDEKTSV4RRFFQ69G5FAX/work-templates/gallery',
   );
   expect(screen.getByRole('link', { name: 'Define work' })).toHaveAttribute(
     'href',
     '/orgs/01ARZ3NDEKTSV4RRFFQ69G5FAX/work-templates/new',
+  );
+});
+
+it('offers exactly one primary definition entry that opens the isolated authoring activity', () => {
+  render(<WorkTemplatesWorkspace orgId="01ARZ3NDEKTSV4RRFFQ69G5FAX" />);
+  const entries = screen.getAllByRole('link', { name: 'Define work' });
+  expect(entries).toHaveLength(1);
+  expect(entries[0]).toHaveAttribute('data-navigation', 'activity');
+  expect(screen.getByRole('link', { name: 'Browse starting points' })).not.toHaveAttribute(
+    'data-navigation',
+    'activity',
   );
 });

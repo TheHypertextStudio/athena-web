@@ -2,17 +2,17 @@
 
 Reader: A Docket contributor defining the kinds of work their organization does or repeating existing work.
 
-Open Work templates in workspace navigation, then choose Define work. The library, gallery and
-saved-copy review share this full-page workspace. Settings contains only Template permissions.
+Open Work templates in workspace navigation. The compact library lists each definition once with
+its purpose, kind and draft/publication state. Choose a definition to continue, Define work to
+start your own, or Browse starting points to adapt a gallery example. Settings contains only
+Template permissions.
 
-Return visits lead with unfinished definitions and their current included work. Published versions
-and unpublished edits of one definition stay together. Checked unpublished dependencies appear
-before publishing; review them and return directly to their parent definition.
-
-Purpose establishes the name, existing work kind and when to use it. Work shapes the sample item: its starting fields and document, included
-children, relative dates and responsibility rules. Select a child to refine it without losing the
-outline. Review reads back the definition before sharing it. For example, an Event project can
-include venue preparation, an optional Vendor booking template and a Dinner day milestone.
+Opening or creating a definition replaces workspace navigation with a focused activity and an
+explicit way back. Purpose names the kind of work and when to use it. Starting work defines the
+initial fields and document for one new item. Included work defines children, relative dates,
+responsibility and Program routines. Review explains the resulting structure, publication
+prerequisites and workspace visibility before sharing. For example, an Event project can include
+venue preparation, a Vendor booking definition and an event-day milestone.
 
 Save draft keeps a new definition private and your next-version edits separate from the
 published version. Publish to workspace makes the reviewed body visible to workspace members;
@@ -30,30 +30,34 @@ and Change template let you review selected child, date and dependency changes w
 authored work. Explicitly edited or cleared dates stay manual.
 Work lists can filter and group by Template, including archived templates already used by work.
 
-The editor uses the full page on desktop and phones. Contained sections distinguish the definition,
-sample work and child outline. Save state stays visible as you work, and Review makes publication
-and its workspace visibility clear. All three sections are directly selectable. Returning to a saved
-definition opens Work; switching sections keeps your selected child, input and editing position.
-The Work outline separates the starting item, Included work and, for Programs, Recurring work.
-Children appear under their parents in the order you arrange them. Collapse Included work to reach
-routines without traversing a long child list. On desktop the outline stays available while reading
-a long document; on phones Back to outline returns to the selected item.
+The editor owns the full window on desktop and phones, without the workspace sidebar, global
+navigation or utility rail. All four sections are directly selectable. New definitions begin with
+Purpose; saved definitions normally open Starting work, and explicit review links open Review.
+Saving a new definition retains its current section. Switching sections preserves input, selected
+child, focus and editing position. Private visibility is the default; disclose Draft privacy to
+choose a team before saving.
 
-The following state diagram shows how a definition can be refined and published.
+Included work shows its ordered outline or one selected child/routine editor at any width.
+Back to included work restores the relevant row. Collapse Created together to reach recurring
+routines in a long Program outline. Linked private definitions retain their real pending
+publication pins; review them without mistaking them for published versions, then return to the
+parent review. Published history and template management are disclosed in Review.
 
 ```mermaid
 stateDiagram-v2
     [*] --> Purpose: New definition
-    [*] --> Work: Reopen saved definition
-    Purpose --> Work: Define the work
-    Work --> Purpose: Refine purpose
-    Work --> Review: Review definition
-    Review --> Work: Refine work
+    [*] --> StartingWork: Reopen saved definition
+    Purpose --> StartingWork: Continue
+    StartingWork --> IncludedWork: Continue
+    IncludedWork --> Review: Review definition
+    Review --> StartingWork: Refine starting content
+    Review --> IncludedWork: Refine structure
+    IncludedWork --> ChildEditor: Select one item
+    ChildEditor --> IncludedWork: Back to included work
     Review --> PrivateDraft: Save draft
     PrivateDraft --> Review: Review saved draft
     Review --> Published: Publish to workspace
     Review --> Review: Save fails; draft retained
-    Published --> Work: Refine next version
 ```
 
 Use Repeat project from an existing project's actions. Work lists the included tasks and

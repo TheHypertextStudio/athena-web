@@ -60,7 +60,9 @@ type OutletState =
  *
  * @returns The route's own UI, or the offline content state when it cannot be rendered.
  */
-export default function OfflineRouteOutlet(): JSX.Element | null {
+export default function OfflineRouteOutlet({
+  navigationContext = 'workspace',
+}: { readonly navigationContext?: 'workspace' | 'activity' } = {}): JSX.Element | null {
   const { pathname } = useAppLocation();
   const online = useOnlineStatus();
   const [state, setState] = useState<OutletState>({ pathname, status: 'loading' });
@@ -68,13 +70,25 @@ export default function OfflineRouteOutlet(): JSX.Element | null {
   // A route whose module has already loaded mounts in this very commit. Waiting a commit for state
   // to say "ready" would put a loading frame between the click and the page, and a shared-element
   // transition captures its destination in exactly one commit.
-  const Warmed = loadedAuthenticatedRoute(pathname);
+  const match = parseAuthenticatedRoute(pathname);
+  const ownedEntry =
+    match.kind === 'matched'
+      ? OFFLINE_ROUTES.find(
+          (route) =>
+            route.pattern === match.route.pattern && route.navigationContext === navigationContext,
+        )
+      : undefined;
+  const Warmed = ownedEntry ? loadedAuthenticatedRoute(pathname) : undefined;
 
   useEffect(() => {
     const match = parseAuthenticatedRoute(pathname);
     const entry =
       match.kind === 'matched'
-        ? OFFLINE_ROUTES.find((route) => route.pattern === match.route.pattern)
+        ? OFFLINE_ROUTES.find(
+            (route) =>
+              route.pattern === match.route.pattern &&
+              route.navigationContext === navigationContext,
+          )
         : undefined;
 
     if (!entry || match.kind !== 'matched') {
@@ -110,7 +124,7 @@ export default function OfflineRouteOutlet(): JSX.Element | null {
       current = false;
       window.clearTimeout(loadTimer);
     };
-  }, [pathname]);
+  }, [pathname, navigationContext]);
 
   if (Warmed !== undefined) return <Warmed key={pathname} />;
   if (state.pathname !== pathname || state.status === 'loading') {
@@ -126,6 +140,8 @@ export default function OfflineRouteOutlet(): JSX.Element | null {
     }
     return <OfflineContent online={online} />;
   }
+  // A retained ready state cannot cross layout ownership, even for the same pathname.
+  if (!ownedEntry) return null;
   return <state.Component key={pathname} />;
 }
 

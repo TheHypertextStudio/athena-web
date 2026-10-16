@@ -9,6 +9,7 @@ import {
   seedBlueprintTemplate,
   seedBlueprintReviewDraft,
   type BlueprintRuntimeTemplate,
+  selectWorkDefinitionSection,
 } from './helpers/work-template-blueprints';
 
 const sessionPath = process.env['E2E_WORK_TEMPLATE_SESSION'];
@@ -90,11 +91,11 @@ async function capturePrivateTemplate(
   expect(captured.template.id).not.toBe(seeded.publication.id);
   await expect(page).toHaveURL(new RegExp(`/work-templates/${captured.template.id}$`));
   await page.reload({ waitUntil: 'commit' });
-  await expect(page.getByRole('tab', { name: 'Work', exact: true })).toHaveAttribute(
+  await expect(page.locator('[role="tab"][aria-label="Starting work"]')).toHaveAttribute(
     'aria-selected',
     'true',
   );
-  await page.getByRole('tab', { name: 'Purpose', exact: true }).click();
+  await selectWorkDefinitionSection(page, 'Purpose');
   await expect(page.getByRole('textbox', { name: 'Template name', exact: true })).toHaveValue(
     capturedName,
   );

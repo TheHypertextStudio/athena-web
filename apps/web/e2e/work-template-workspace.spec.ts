@@ -19,6 +19,7 @@ test('opens work definitions from workspace navigation and replaces legacy revie
     if (message.type() === 'error') errors.push(message.text());
   });
   const { orgId } = await blueprintWorkspace(page);
+  const organization = await apiJson<{ name: string }>(page, `/v1/orgs/${orgId}`);
   const seeded = await seedBlueprintTemplate(page, orgId, 'project');
   const base = `/orgs/${orgId}/work-templates`;
   await page.goto(`${base}/gallery`, { waitUntil: 'commit', timeout: TIMEOUTS.pageReady });
@@ -47,7 +48,7 @@ test('opens work definitions from workspace navigation and replaces legacy revie
   await expect(page.getByRole('dialog', { name: 'Settings', exact: true })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Who can author templates' })).toHaveCount(0);
   await expect(
-    page.getByRole('link', { name: 'Choose starting work', exact: true }),
+    page.getByRole('link', { name: 'Browse starting points', exact: true }),
   ).toHaveAttribute('href', `${base}/gallery`);
   await page.goto(
     `/orgs/${orgId}/settings/templates/${seeded.publication.id}?section=review#definition-review`,
@@ -56,31 +57,49 @@ test('opens work definitions from workspace navigation and replaces legacy revie
   await expect(page).toHaveURL(
     `${new URL(base, page.url()).origin}${base}/${seeded.publication.id}?section=review#definition-review`,
   );
-  await expect(page.getByRole('tab', { name: 'Review', exact: true })).toHaveAttribute(
+  await expect(page.locator('[role="tab"][aria-label="Review"]')).toHaveAttribute(
     'aria-selected',
     'true',
   );
   await expect(page.getByRole('dialog', { name: 'Settings', exact: true })).toHaveCount(0);
-  await expect(destination).toHaveAttribute('aria-current', 'page');
+  await expect(page.getByRole('navigation', { name: 'Workspace', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Open navigation', exact: true })).toHaveCount(0);
+  await expect(page.locator('[data-navigation-context=activity]')).toHaveCount(1);
+  await expect(page.getByLabel('Workspace', { exact: true })).toHaveText(organization.name);
   await page.goBack({ waitUntil: 'commit' });
   await expect(page).toHaveURL(new RegExp(`${base}$`));
   await expect(page.getByRole('heading', { name: 'Work templates', exact: true })).toBeVisible();
+  const definition = page.getByRole('link', {
+    name: `Open ${seeded.publication.definition.name}`,
+    exact: true,
+  });
+  await definition.click();
+  await expect(page.getByRole('navigation', { name: 'Workspace', exact: true })).toHaveCount(0);
+  await page.getByRole('link', { name: 'Back to Work templates', exact: true }).click();
+  await expect(page).toHaveURL(
+    `${new URL(base, page.url()).origin}${base}#work-template-${seeded.publication.id}`,
+  );
+  await expect(definition).toBeInViewport();
   await page.getByRole('link', { name: 'Define work', exact: true }).click();
   await expect(page).toHaveURL(`${new URL(base, page.url()).origin}${base}/new`);
-  await expect(page.getByRole('tab', { name: 'Purpose', exact: true })).toHaveAttribute(
+  await expect(page.getByRole('navigation', { name: 'Workspace', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Open navigation', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('main')).toHaveCount(1);
+  await expect(page.locator('[role="tab"][aria-label="Purpose"]')).toHaveAttribute(
     'aria-selected',
     'true',
   );
   await page.reload({ waitUntil: 'commit' });
-  await expect(page.getByRole('tab', { name: 'Purpose', exact: true })).toHaveAttribute(
+  await expect(page.locator('[role="tab"][aria-label="Purpose"]')).toHaveAttribute(
     'aria-selected',
     'true',
   );
   await page
     .getByRole('navigation', { name: 'Work templates navigation', exact: true })
-    .getByRole('link', { name: 'Work templates', exact: true })
+    .getByRole('link', { name: 'Back to Work templates', exact: true })
     .click();
   await expect(page).toHaveURL(new RegExp(`${base}$`));
+  await expect(page.getByRole('navigation', { name: 'Workspace', exact: true })).toBeVisible();
   expect(errors).toEqual([]);
 });
 
@@ -108,7 +127,7 @@ test('offers personal work definitions through the phone workspace drawer', asyn
   await expect(page.getByRole('main')).toHaveCount(1);
   await expect(page.getByRole('dialog', { name: 'Settings', exact: true })).toHaveCount(0);
   await expect(
-    page.getByRole('link', { name: 'Choose starting work', exact: true }),
+    page.getByRole('link', { name: 'Browse starting points', exact: true }),
   ).toHaveAttribute('href', `${base}/gallery`);
   await expect(page.getByRole('link', { name: 'Define work', exact: true })).toHaveAttribute(
     'href',
@@ -149,6 +168,8 @@ test.describe('touch work-definition journeys', () => {
     const route = `/orgs/${orgId}/work-templates/${event.workTypeId}?section=review`;
     await page.setViewportSize({ width: 320, height: 600 });
     await page.goto(route, { waitUntil: 'commit', timeout: TIMEOUTS.pageReady });
+    await expect(page.getByRole('navigation', { name: 'Workspace', exact: true })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Open navigation', exact: true })).toHaveCount(0);
     const prerequisite = page
       .getByRole('link', { name: 'Review Vendor booking', exact: true })
       .first();
@@ -197,7 +218,7 @@ test.describe('touch work-definition journeys', () => {
       waitUntil: 'commit',
       timeout: TIMEOUTS.pageReady,
     });
-    const resume = page.getByRole('link', { name: `Continue defining ${name}`, exact: true });
+    const resume = page.getByRole('link', { name: `Open ${name}`, exact: true });
     for (const colorScheme of ['light', 'dark'] as const) {
       await page.emulateMedia({ colorScheme, reducedMotion: 'reduce' });
       await resume.scrollIntoViewIfNeeded();

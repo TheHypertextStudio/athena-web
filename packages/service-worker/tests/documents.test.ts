@@ -257,6 +257,36 @@ describe('navigateWithDocumentCache', () => {
     expect(await unseenPlan.text()).toBe('<h1>offline</h1>');
   });
 
+  it('keeps authoring documents separate from workspace and planning fallbacks', async () => {
+    const author = '/orgs/01ARZ3NDEKTSV4RRFFQ69G5FAV/work-templates/new';
+    const unseen = '/orgs/01ARZ3NDEKTSV4RRFFQ69G5FAV/work-templates/01ARZ3NDEKTSV4RRFFQ69G5FAW';
+    await writeOfflineIdentity('u1');
+    await seedOfflinePage();
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(htmlResponse('<html>authoring</html>'));
+    await navigateWithDocumentCache(new Request(`${ORIGIN}${author}`), OPTIONS);
+    fetchMock.mockRejectedValue(new Error('offline'));
+    const workspace = await navigateWithDocumentCache(new Request(`${ORIGIN}/never-seen`), {
+      ...OPTIONS,
+      online: false,
+    });
+    expect(await workspace.text()).toBe('<h1>offline</h1>');
+    const planning = await navigateWithDocumentCache(new Request(`${ORIGIN}/plan/day`), {
+      ...OPTIONS,
+      online: false,
+    });
+    expect(await planning.text()).toBe('<h1>offline</h1>');
+    fetchMock.mockResolvedValue(htmlResponse('<html>workspace</html>'));
+    await navigateWithDocumentCache(new Request(`${ORIGIN}/today`), OPTIONS);
+    fetchMock.mockRejectedValue(new Error('offline'));
+    const edit = await navigateWithDocumentCache(new Request(`${ORIGIN}${unseen}`), {
+      ...OPTIONS,
+      online: false,
+    });
+    expect(await edit.text()).toBe('<html>authoring</html>');
+  });
+
   it('stores nothing at all while nobody is signed in', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(htmlResponse('<html>sign in</html>'));
 

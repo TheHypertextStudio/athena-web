@@ -7,7 +7,7 @@
  * The way back, the plan's title, a search that rests as a button, Add project, and the counts
  * share a single row over the top-left of the board. When something is selected the counts give
  * way to the selection's actions in that same row, so nothing floats over the board and covers a
- * node. The conversation opens from the rail's Athena icon, which the route claims.
+ * node. Optional Athena help opens from this activity's own action.
  */
 import { CheckCircle2, OpenInNew, Plus, Trash2 } from '@docket/ui/icons';
 import { cn } from '@docket/ui/lib/utils';
@@ -115,6 +115,8 @@ export interface PlanBarProps {
   readonly title: string;
   /** The way back: an icon button before the title. */
   readonly navigation: ReactNode;
+  /** Optional contextual help supplied by the activity owner. */
+  readonly assistance?: ReactNode;
   readonly search: string;
   readonly onSearchChange: (value: string) => void;
   readonly counts: PlanCounts;
@@ -133,6 +135,7 @@ export interface PlanBarProps {
 export default function PlanBar({
   title,
   navigation,
+  assistance,
   search,
   onSearchChange,
   counts,
@@ -152,6 +155,7 @@ export default function PlanBar({
       controls={
         <>
           <CanvasSearchField value={search} onChange={onSearchChange} label="Search the plan" />
+          {assistance}
           {onAddProject ? (
             <Button
               type="button"

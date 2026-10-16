@@ -3,7 +3,7 @@
  * `src/lib/offline-routes.generated.ts` from the real route tree.
  *
  * @remarks
- * The offline route table has to name every route in `src/app/(app)` and the client module that
+ * The offline route table has to name every authenticated workspace and activity route and the client module that
  * renders it. Maintaining that by hand would mean a table that silently disagrees with the app the
  * first time somebody adds a page — and the failure would surface as "this route is blank offline",
  * months later, to whoever happened to be on a train. So it is derived from the filesystem, and

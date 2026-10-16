@@ -3,8 +3,8 @@ import { useLayoutEffect, useRef, useState, type FocusEventHandler } from 'react
 import { useInputModality } from '@docket/ui/hooks';
 import { restoreShellScroll, shellScrollPosition } from '@/lib/app-location';
 
-/** The three freely revisitable parts of an organization work definition. */
-export type TemplateDefinitionSection = 'purpose' | 'work' | 'review';
+/** The four freely revisitable parts of an organization work definition. */
+export type TemplateDefinitionSection = 'purpose' | 'work' | 'structure' | 'review';
 
 /** Retain section position and input focus using the app's existing main scroll owner. */
 export function useTemplateSectionNavigation(initial: TemplateDefinitionSection): {
@@ -21,7 +21,7 @@ export function useTemplateSectionNavigation(initial: TemplateDefinitionSection)
   >({});
   const focusedFields = useRef<Partial<Record<TemplateDefinitionSection, HTMLElement>>>({});
   const selectSection = (next: string): void => {
-    if (next !== 'purpose' && next !== 'work' && next !== 'review') return;
+    if (next !== 'purpose' && next !== 'work' && next !== 'structure' && next !== 'review') return;
     if (next === section) return;
     moveFocus.current = !(
       modality === 'keyboard' && document.activeElement?.getAttribute('role') === 'tab'

@@ -1,7 +1,7 @@
 # Project Athena Work Log
 
 > **Purpose**: Comprehensive tracking of all work - past, present, and future.
-> **Last Updated**: 2026-10-15
+> **Last Updated**: 2026-10-16
 
 ---
 
@@ -41,8 +41,84 @@
   independent review pass. Actual hostname attachment remains part of the approved frontend cutover.
 - **Learnings**: Include provider-owned redirects when moving application hosting; the application's
   own canonicalization boundary can preserve them without retaining the previous provider.
+### [WORK-TEMPLATE-FOCUSED-FLOW] Isolate work definition and order its decisions
+
+- **Status**: REVIEW
+- **Priority**: P1
+- **Description**: Enter a work definition as a focused activity with no workspace navigation.
+  Make choosing a definition, describing its purpose, shaping its starting work, including related
+  work, and reviewing publication separate, understandable decisions.
+- **Approach**: Keep a compact overview in the workspace. Reuse the independent activity layout for
+  authoring, with explicit return navigation and freely revisitable steps. Replace simultaneous
+  outline/editor panels with a focused included-work editor. Preserve draft privacy, retained edits,
+  version identity, publication checks and legacy links through the existing typed data layer.
+- **Files**: Work-template library, authoring steps, activity routing/providers and transport,
+  affected behavior tests, verification tooling and interface audit.
+- **Validation**: Verify populated overview → isolated authoring → step/child editing → save/reopen
+  → prerequisite review → return, including keyboard, desktop and 320px phone layouts in both themes.
+  Check navigation boundaries, legacy links and offline routing; run affected tests, types, lint,
+  complexity checks and build. Verify daily planning remains a distinct activity.
+- **Subtasks**:
+  - [x] Reduce the overview to selecting actual work definitions and entering authoring.
+  - [x] Move authoring into the activity navigation level and retain contextual return behavior.
+  - [x] Separate starting work from included/recurring work; show one focused editor at a time.
+  - [x] Verify actual journeys and responsive information hierarchy.
+  - [x] Supersede the previous layout acceptance and deliver the validated correction linearly.
+- **Decision**: The owner rejected the previous overview and persistent shell. Its earlier local
+  design acceptance does not establish acceptance of the navigation or information hierarchy.
+
+#### Decisions and results
+
+- The overview now offers one compact row per definition. Publication and edited draft share a row;
+  defaults, archives and kind filters are subordinate disclosures. It does not expose authoring
+  internals before someone chooses a definition.
+- Authoring is an independent activity with workspace identity and an explicit return to the selected
+  definition. Purpose → Starting work → Included work → Review are freely revisitable. Phones show
+  only the current step until the chooser opens. A selected child or routine replaces its outline;
+  returning restores the selected row's focus. Publication and management stay in Review.
+- Weekly planning and proposal review also use the independent activity layout. Plan-local Athena
+  help opens on request and retains an unsent message when closed; normal arrival leaves it closed.
+  Canonical and legacy navigation cross real layout boundaries. Generated offline route policy keeps
+  activity documents separate from workspace documents and preserves identity, query and replacement.
+- Independent review found missing workspace context and weak child-row affordances. Added the
+  workspace name and explicit chevrons, reduced phone navigation and library density, then recaptured
+  and reviewed the final source. The previous workspace verdict remains withdrawn. The replacement
+  [focused-activities audit](design/audits/2026-10-16-focused-work-activities.md) records the scoped result.
+- Fixed two exposed routine regressions: a copied Program's unpublished version pin remains intact
+  while cadence changes, and an unsaved Program cannot change kind while retaining hidden routines.
+  Linked draft review returns to the parent definition without widening permissions.
+
+#### Validation
+
+- All 23 authenticated browser journeys pass: four kinds, save/reopen, section and child return,
+  long documents, dismissal, prerequisite publication, recurrence/history, planning confirmation and
+  Undo, optional help, and navigation isolation. Layout assertions cover 320, 390, 768, 1440 and
+  1920px. Canonical captures provide 72 final frames in both themes, including zero active definitions
+  with archived starter definitions; this is not a pristine empty workspace.
+- The final affected suite passes 250 tests across 44 files. Separate navigation/provider (95),
+  service-worker (43) and shared Sheet/presentation (15) tests pass. Web, UI and service-worker
+  typechecks, affected lint, formatting, the unchanged complexity ratchet and the production web
+  build pass. Ordinary local PGlite fixtures were reset after browser verification.
+- Actual Next runtime exposed a retained Sheet portal ref error that unit-only review had missed.
+  Reproduced it in StrictMode and corrected the shared primitive with a DOM presence anchor before
+  rerunning the actual canvas journeys. Retained content disconnects modal effects while hidden.
+- Local browser, capture and source checks establish this correction's bounded behavior. They do not
+  establish owner approval, offline browser end-to-end acceptance, an Athena provider response or
+  production deployment. The remaining typed-work roadmap and provider/device gates remain separate.
+
+#### Learnings and files changed
+
+- Navigation level and sequence are design decisions. Adding containers while leaving unrelated
+  contexts visible does not reduce cognitive load. Test the actual entry, focused decision and return
+  path, including what disappears, rather than accepting a populated screenshot alone.
+- Source changes cover activity route leaves/providers, template library and editors, planning canvas
+  and optional conversation, local-first navigation/cache classification, the shared retained Sheet,
+  affected unit/browser tests and interface documentation. Shared behavior belongs in existing typed
+  primitives and query contracts. No complexity-ledger relaxation or parallel data path was needed.
 
 ### [WORK-TEMPLATES-WORKSPACE] Give work definitions a dedicated workspace
+
+> Navigation and information-hierarchy acceptance below is superseded by WORK-TEMPLATE-FOCUSED-FLOW.
 
 - **Status**: REVIEW
 - **Priority**: P1

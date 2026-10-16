@@ -152,10 +152,12 @@ function useComposerDraft(
 ): ComposerDraft {
   const [draft, setDraft] = useState(initialDraft ?? '');
   const composerRef = useRef<HTMLFormElement | null>(null);
+  const appliedRequest = useRef<number | null>(null);
   const version = request?.version ?? null;
   const text = request?.text ?? '';
   useEffect(() => {
-    if (version === null) return;
+    if (version === null || appliedRequest.current === version) return;
+    appliedRequest.current = version;
     setDraft(text);
     composerRef.current?.querySelector('textarea')?.focus({ preventScroll: true });
   }, [version, text]);

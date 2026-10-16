@@ -11,77 +11,17 @@ import {
   Field,
   Input,
   Select,
-  Surface,
+  Tabs,
   Text,
 } from '@docket/ui/primitives';
-import { libraryHasDraft } from './work-template-library-order';
-import {
-  LibraryDraftDefinitions,
-  LibraryPublishedDefinitions,
-} from './work-template-library-definitions';
-import { LibraryDefineEntry } from './work-template-library-entry';
 import { useVocabulary } from '@docket/ui/hooks';
-import Link from '@/components/docket-link';
-import { workTemplateHref } from '../work-template-navigation';
+import { libraryDefinition, libraryHasDraft } from './work-template-library-order';
+import { LibraryDefinitions } from './work-template-library-definitions';
+import { LibraryEmptyState } from './work-template-library-entry';
 
 const kinds = ['initiative', 'program', 'project', 'task'] as const;
-function LibraryGroup({
-  title,
-  items,
-  orgId,
-  empty,
-}: {
-  readonly title: string;
-  readonly items: readonly WorkTemplateOut[];
-  readonly orgId: string;
-  readonly empty?: string;
-}): JSX.Element | null {
-  if (!items.length && !empty) return null;
-  return (
-    <Surface as="section" shape="large" pad="roomy" aria-label={title}>
-      <Text as="h2" token="title-large" className="mb-5">
-        {title}
-      </Text>
-      {items.length ? (
-        <LibraryPublishedDefinitions items={items} orgId={orgId} />
-      ) : (
-        <p className="text-body-medium text-on-surface-variant p-4">{empty}</p>
-      )}
-    </Surface>
-  );
-}
-function ContinueDefining({
-  drafts,
-  orgId,
-}: {
-  readonly drafts: readonly WorkTemplateOut[];
-  readonly orgId: string;
-}): JSX.Element | null {
-  if (!drafts.length) return null;
-  return (
-    <Surface
-      as="section"
-      shape="large"
-      pad="roomy"
-      aria-label="Continue defining"
-      className="flex flex-col gap-6"
-    >
-      <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
-        <Text as="h2" token="title-large">
-          Continue defining
-        </Text>
-        <Button
-          asChild
-          variant="ghost"
-          className="coarse:h-auto h-auto min-h-10 max-w-full py-2 whitespace-normal"
-        >
-          <Link href={workTemplateHref(orgId, '/new')}>Define another kind</Link>
-        </Button>
-      </div>
-      <LibraryDraftDefinitions items={drafts} orgId={orgId} />
-    </Surface>
-  );
-}
+type LibraryState = 'all' | 'drafts' | 'published';
+
 function LibraryKindFilter({
   kind,
   onKind,
@@ -113,44 +53,48 @@ function LibraryKindFilter({
     </Field>
   );
 }
-function LibrarySearch({
+
+function LibraryFilters({
   search,
   kind,
-  setSearch,
-  setKind,
+  onSearch,
+  onKind,
 }: {
   readonly search: string;
   readonly kind: TemplateTargetType | '';
-  readonly setSearch: (search: string) => void;
-  readonly setKind: (kind: TemplateTargetType | '') => void;
+  readonly onSearch: (search: string) => void;
+  readonly onKind: (kind: TemplateTargetType | '') => void;
 }): JSX.Element {
   return (
     <Collapsible>
-      <CollapsibleTrigger asChild>
-        <Button variant="ghost">Find a work definition</Button>
-      </CollapsibleTrigger>
-      <CollapsibleContent className="grid gap-3 py-3 sm:grid-cols-2">
+      <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-end gap-2">
         <Field label="Search work definitions">
           <Input
             value={search}
             onChange={(event) => {
-              setSearch(event.target.value);
+              onSearch(event.target.value);
             }}
           />
         </Field>
-        <LibraryKindFilter kind={kind} onKind={setKind} />
+        <CollapsibleTrigger asChild>
+          <Button variant={kind ? 'secondary' : 'ghost'} aria-label="Filter by work kind">
+            {kind ? 'Filter · 1' : 'Filter'}
+          </Button>
+        </CollapsibleTrigger>
+      </div>
+      <CollapsibleContent className="pt-3">
+        <LibraryKindFilter kind={kind} onKind={onKind} />
       </CollapsibleContent>
     </Collapsible>
   );
 }
+
 function LibraryManagement({
   title,
-  expandedTitle,
   items,
   orgId,
 }: {
   readonly title: string;
-  readonly expandedTitle: string;
   readonly items: readonly WorkTemplateOut[];
   readonly orgId: string;
 }): JSX.Element | null {
@@ -162,13 +106,20 @@ function LibraryManagement({
           {title} ({items.length})
         </Button>
       </CollapsibleTrigger>
-      <CollapsibleContent>
-        <LibraryGroup title={expandedTitle} orgId={orgId} items={items} />
+      <CollapsibleContent className="pt-2">
+        <LibraryDefinitions label={title} items={items} orgId={orgId} />
       </CollapsibleContent>
     </Collapsible>
   );
 }
-/** Organize authorized workspace definitions by readiness before kind, keeping defaults subordinate. */
+
+function matchesState(item: WorkTemplateOut, state: string): boolean {
+  if (state === 'drafts') return libraryHasDraft(item);
+  if (state === 'published') return item.latestVersion !== null;
+  return true;
+}
+
+/** Choose one organizational work definition before entering its focused authoring flow. */
 export function WorkTemplateLibrary({
   items,
   orgId,
@@ -176,74 +127,71 @@ export function WorkTemplateLibrary({
   readonly items: readonly WorkTemplateOut[];
   readonly orgId: string;
 }): JSX.Element {
-  const [search, setSearch] = useState(''),
-    [kind, setKind] = useState<TemplateTargetType | ''>('');
-  const visible = items.filter(
-    (item) =>
+  const [search, setSearch] = useState('');
+  const [kind, setKind] = useState<TemplateTargetType | ''>('');
+  const [state, setState] = useState<LibraryState>('all');
+  const active = items.filter((item) => !item.isBase && item.status !== 'archived');
+  const visible = active.filter((item) => {
+    const definition = libraryDefinition(item, 'authoring');
+    return (
       (!kind || item.targetType === kind) &&
-      `${item.definition.name} ${item.definition.description ?? ''} ${item.draftDefinition?.name ?? ''} ${item.draftDefinition?.description ?? ''}`
+      matchesState(item, state) &&
+      `${definition.name} ${definition.description ?? ''} ${item.definition.name}`
         .toLowerCase()
-        .includes(search.toLowerCase()),
-  );
-  const ready = visible.filter(
-    (item) => item.status === 'published' && !item.isBase && !libraryHasDraft(item),
-  );
-  const drafts = visible.filter(libraryHasDraft);
-  const defaults = visible.filter((item) => item.isBase && item.status !== 'archived');
-  const archived = visible.filter((item) => item.status === 'archived');
+        .includes(search.toLowerCase())
+    );
+  });
+  const defaults = items.filter((item) => item.isBase && item.status !== 'archived');
+  const archived = items.filter((item) => item.status === 'archived');
   return (
-    <ControlGroup controlSize="xl" orientation="vertical" className="gap-5">
-      {items.some((item) => !item.isBase) ? (
-        <LibrarySearch search={search} kind={kind} setSearch={setSearch} setKind={setKind} />
-      ) : null}
-      <ContinueDefining drafts={drafts} orgId={orgId} />
-      <LibraryDefineEntry
-        orgId={orgId}
-        continuing={items.some((item) => !item.isBase && item.status !== 'archived')}
-      />
-      {search || kind ? (
-        <p className="text-body-small text-on-surface-variant">
-          {visible.length} matching definitions{' '}
-          <Button
-            variant="ghost"
-            size="sm"
-            className="min-h-10 min-w-10 sm:min-h-8 sm:min-w-8"
-            onClick={() => {
-              setSearch('');
-              setKind('');
+    <ControlGroup controlSize="xl" orientation="vertical" className="gap-6">
+      {active.length ? (
+        <section aria-label="Choose a work definition" className="flex min-w-0 flex-col gap-4">
+          <Text as="h2" token="title-large" className="sr-only">
+            Work definitions
+          </Text>
+          <LibraryFilters search={search} kind={kind} onSearch={setSearch} onKind={setKind} />
+          <Tabs
+            label="Definition state"
+            value={state}
+            onValueChange={(value) => {
+              if (value === 'all' || value === 'drafts' || value === 'published') setState(value);
             }}
-          >
-            Clear filters
-          </Button>
-        </p>
-      ) : null}
-      {ready.length ||
-      search ||
-      kind ||
-      !visible.some((item) => libraryHasDraft(item) && item.latestVersion) ? (
-        <LibraryGroup
-          title="Ready to use"
-          orgId={orgId}
-          items={ready}
-          empty={
-            search || kind
-              ? 'No published definitions match these filters.'
-              : 'Published definitions appear here. Your drafts stay private until you publish them.'
-          }
-        />
-      ) : null}
-      <LibraryManagement
-        title="Defaults"
-        expandedTitle="Default work"
-        items={defaults}
-        orgId={orgId}
-      />
-      <LibraryManagement
-        title="Archived"
-        expandedTitle="Archived definitions"
-        items={archived}
-        orgId={orgId}
-      />
+            items={[
+              { value: 'all', label: 'All' },
+              { value: 'drafts', label: 'Drafts' },
+              { value: 'published', label: 'Published' },
+            ]}
+          />
+          <div role="tabpanel" id={`tabpanel-${state}`} aria-labelledby={`tab-${state}`}>
+            {visible.length ? (
+              <LibraryDefinitions items={visible} orgId={orgId} />
+            ) : (
+              <div className="flex flex-col items-start gap-2 py-6">
+                <p className="text-body-medium text-on-surface-variant">
+                  No work definitions match these filters.
+                </p>
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    setSearch('');
+                    setKind('');
+                    setState('all');
+                  }}
+                >
+                  Clear filters
+                </Button>
+              </div>
+            )}
+          </div>
+        </section>
+      ) : (
+        <LibraryEmptyState />
+      )}
+      <div className="flex flex-col items-stretch gap-2">
+        <LibraryManagement title="Defaults" orgId={orgId} items={defaults} />
+        <LibraryManagement title="Archived" orgId={orgId} items={archived} />
+      </div>
     </ControlGroup>
   );
 }

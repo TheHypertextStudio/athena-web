@@ -6,7 +6,10 @@ import { TIMEOUTS } from './helpers/constants';
 import { renderedContrastRatio } from './helpers/calendar-ui';
 import { expect, test } from './helpers/fixtures';
 import { createMobileAuditFixture, type MobileAuditFixture } from './helpers/mobile-audit-fixture';
-import { blueprintWorkspace } from './helpers/work-template-blueprints';
+import {
+  blueprintWorkspace,
+  selectWorkDefinitionSection,
+} from './helpers/work-template-blueprints';
 import { apiJson, waitForApiResponse } from './helpers/net';
 
 const sessionPath = process.env['E2E_WORK_TEMPLATE_SESSION'];
@@ -47,7 +50,7 @@ for (const kind of ['Task', 'Project', 'Initiative', 'Program'] as const) {
     });
     const suffix = Date.now();
     const name = `${kind} workflow ${suffix}`;
-    await page.getByRole('link', { name: 'New template', exact: true }).click();
+    await page.getByRole('link', { name: 'Define work', exact: true }).click();
     await expect(page.getByRole('button', { name: 'Save draft', exact: true })).toBeDisabled();
     await page
       .getByRole('combobox', { name: 'Kind of work', exact: true })
@@ -56,7 +59,7 @@ for (const kind of ['Task', 'Project', 'Initiative', 'Program'] as const) {
     await page
       .getByRole('textbox', { name: 'When to use it', exact: true })
       .fill(`Reusable ${kind.toLocaleLowerCase()} starting fields.`);
-    await page.getByRole('button', { name: 'Define the work', exact: true }).click();
+    await page.getByRole('button', { name: 'Continue to starting work', exact: true }).click();
     const starting = kind === 'Task' ? 'Starting title' : 'Starting name';
     await page.getByRole('textbox', { name: starting, exact: true }).fill(`${kind} starting name`);
     await page
@@ -70,14 +73,14 @@ for (const kind of ['Task', 'Project', 'Initiative', 'Program'] as const) {
     expect(draft.scope).toBe('personal');
     expect(draft.status).toBe('draft');
     await expect(page).toHaveURL(new RegExp(`/work-templates/${draft.id}$`));
-    await expect(page.getByRole('tab', { name: 'Work', exact: true })).toHaveAttribute(
+    await expect(page.locator('[role="tab"][aria-label="Starting work"]')).toHaveAttribute(
       'aria-selected',
       'true',
     );
     await expect(page.getByRole('textbox', { name: starting, exact: true })).toHaveValue(
       `${kind} starting name`,
     );
-    await page.getByRole('tab', { name: 'Purpose', exact: true }).click();
+    await selectWorkDefinitionSection(page, 'Purpose');
     const renamed = `${name} revised`;
     await page.getByRole('textbox', { name: 'Template name', exact: true }).fill(renamed);
     await page.getByRole('textbox', { name: 'When to use it', exact: true }).fill('');
@@ -85,22 +88,22 @@ for (const kind of ['Task', 'Project', 'Initiative', 'Program'] as const) {
     await page.getByRole('button', { name: 'Save draft', exact: true }).click();
     expect((await updated).ok()).toBe(true);
     await page.reload({ waitUntil: 'commit' });
-    await expect(page.getByRole('tab', { name: 'Work', exact: true })).toHaveAttribute(
+    await expect(page.locator('[role="tab"][aria-label="Starting work"]')).toHaveAttribute(
       'aria-selected',
       'true',
     );
-    await page.getByRole('tab', { name: 'Purpose', exact: true }).click();
+    await selectWorkDefinitionSection(page, 'Purpose');
     await expect(page.getByRole('textbox', { name: 'Template name', exact: true })).toHaveValue(
       renamed,
     );
     await expect(page.getByRole('textbox', { name: 'When to use it', exact: true })).toHaveValue(
       '',
     );
-    await page.getByRole('tab', { name: 'Work', exact: true }).click();
+    await selectWorkDefinitionSection(page, 'Starting work');
     await expect(
       page.getByRole('textbox', { name: 'Starting document', exact: true }),
     ).toContainText('Record the goal, owner, and next action.');
-    await page.getByRole('tab', { name: 'Review', exact: true }).click();
+    await selectWorkDefinitionSection(page, 'Review');
     const publication = waitForApiResponse(page, /\/publish$/, { method: 'POST' });
     await page.getByRole('button', { name: 'Publish to workspace', exact: true }).click();
     expect((await publication).ok()).toBe(true);
@@ -266,11 +269,11 @@ test.describe('touch template layout', () => {
       waitUntil: 'commit',
       timeout: TIMEOUTS.pageReady,
     });
-    await page.getByRole('link', { name: 'New template', exact: true }).click();
+    await page.getByRole('link', { name: 'Define work', exact: true }).click();
     await page
       .getByRole('textbox', { name: 'Template name', exact: true })
       .fill('Community dinner outline');
-    await page.getByRole('button', { name: 'Define the work', exact: true }).click();
+    await page.getByRole('button', { name: 'Continue to starting work', exact: true }).click();
     const bodyEditor = page.getByRole('textbox', { name: 'Starting document', exact: true });
     await bodyEditor.fill(
       Array.from(
@@ -296,11 +299,11 @@ test.describe('touch template layout', () => {
         await expect.poll(() => renderedContrastRatio(next)).toBeGreaterThanOrEqual(4.5);
       }
     }
-    await page.getByRole('link', { name: 'Work templates', exact: true }).click();
-    await page.getByRole('link', { name: 'New template', exact: true }).click();
-    await page.getByRole('tab', { name: 'Work', exact: true }).click();
+    await page.getByRole('link', { name: 'Back to Work templates', exact: true }).click();
+    await page.getByRole('link', { name: 'Define work', exact: true }).click();
+    await selectWorkDefinitionSection(page, 'Starting work');
     await expect(bodyEditor).toContainText('Review 18');
-    await page.getByRole('tab', { name: 'Purpose', exact: true }).click();
+    await selectWorkDefinitionSection(page, 'Purpose');
     await expect(page.getByRole('textbox', { name: 'Template name', exact: true })).toHaveValue(
       'Community dinner outline',
     );
@@ -311,7 +314,7 @@ test.describe('touch template layout', () => {
     expect(prompt.type()).toBe('beforeunload');
     await prompt.dismiss();
     await reload;
-    await page.getByRole('tab', { name: 'Work', exact: true }).click();
+    await selectWorkDefinitionSection(page, 'Starting work');
     await expect(bodyEditor).toContainText('Review 18');
   });
 });

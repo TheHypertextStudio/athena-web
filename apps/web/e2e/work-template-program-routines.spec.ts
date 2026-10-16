@@ -1,10 +1,18 @@
 import { writeFileSync } from 'node:fs';
+import type {
+  WorkTemplateCopyReceipt,
+  WorkTemplateGalleryPreview,
+} from '@docket/work/template-gallery-contract';
 import type { Page } from '@playwright/test';
 import type { WorkTemplateOut } from '@docket/work/work-template-contract';
 import type { WorkScheduleOut } from '@docket/work/work-schedule-management';
 import { expect, test } from './helpers/fixtures';
 import { apiJson, waitForApiResponse } from './helpers/net';
-import { blueprintWorkspace, seedBlueprintTemplate } from './helpers/work-template-blueprints';
+import {
+  blueprintWorkspace,
+  seedBlueprintTemplate,
+  selectWorkDefinitionSection,
+} from './helpers/work-template-blueprints';
 import { TIMEOUTS } from './helpers/constants';
 
 const session = process.env['E2E_WORK_TEMPLATE_SESSION'];
@@ -62,12 +70,13 @@ async function authorRoutine(
   await page
     .getByRole('textbox', { name: 'When to use it', exact: true })
     .fill('Operate a regular neighborhood dinner with preparation and follow-up.');
-  await page.getByRole('button', { name: 'Define the work', exact: true }).click();
+  await page.getByRole('button', { name: 'Continue to starting work', exact: true }).click();
   await page
     .getByRole('textbox', { name: 'Starting document', exact: true })
     .fill(
       '## Welcome the neighborhood\n\nPlan accessible gatherings and record what the next host needs.',
     );
+  await page.getByRole('button', { name: 'Continue to included work', exact: true }).click();
   await page.getByRole('button', { name: 'Add task', exact: true }).click();
   const child = page.getByRole('group', { name: /^Child work:/ });
   await child
@@ -84,7 +93,7 @@ async function authorRoutine(
     .fill('Confirm the next host');
   await nested.getByRole('button', { name: 'Dates', exact: true }).click();
   await nested.getByRole('combobox', { name: 'Due date rule', exact: true }).selectOption('parent');
-  await nested.getByRole('button', { name: 'Back to outline', exact: true }).click();
+  await nested.getByRole('button', { name: 'Back to included work', exact: true }).click();
   await page.getByRole('button', { name: 'Add schedule', exact: true }).click();
   await page
     .getByRole('region', { name: 'Routine work template', exact: true })
@@ -112,29 +121,31 @@ async function authorRoutine(
   await page
     .getByRole('spinbutton', { name: 'Default schedule start offset days', exact: true })
     .fill('7');
-  await page.getByRole('tab', { name: 'Review', exact: true }).click();
+  await selectWorkDefinitionSection(page, 'Review');
   await expect(page.getByRole('region', { name: 'Recurring work review' })).toContainText(
     'Begins 7 days after Program creation',
   );
   const saving = waitForApiResponse(page, /\/templates\/definitions$/, { method: 'POST' });
   await page.getByRole('button', { name: 'Save draft', exact: true }).click();
-  return (await (await saving).json()) as WorkTemplateOut;
+  const draft = (await (await saving).json()) as WorkTemplateOut;
+  await expect(page).toHaveURL(new RegExp(`/work-templates/${draft.id}\\?section=review$`));
+  return draft;
 }
 async function reopenAndPublish(page: Page): Promise<void> {
   await page.reload({ waitUntil: 'commit' });
-  await page.getByRole('tab', { name: 'Work', exact: true }).click();
+  await selectWorkDefinitionSection(page, 'Included work');
   await page
     .getByRole('button', { name: 'Edit routine Monthly community dinner', exact: true })
     .click();
   await expect(
     page.getByRole('spinbutton', { name: 'Default schedule start offset days', exact: true }),
   ).toHaveValue('7');
-  await page.getByRole('button', { name: 'Back to outline', exact: true }).click();
+  await page.getByRole('button', { name: 'Back to included work', exact: true }).click();
   await expect(
     page.getByRole('button', { name: 'Edit routine Monthly community dinner', exact: true }),
   ).toBeFocused();
   await page.setViewportSize({ width: 390, height: 844 });
-  const branch = page.getByRole('button', { name: 'Included work', exact: true });
+  const branch = page.getByRole('button', { name: 'Created together', exact: true });
   await branch.focus();
   await page.keyboard.press('Enter');
   await expect(branch).toHaveAttribute('aria-expanded', 'false');
@@ -144,13 +155,13 @@ async function reopenAndPublish(page: Page): Promise<void> {
   await page
     .getByRole('button', { name: 'Edit routine Monthly community dinner', exact: true })
     .click();
-  await page.getByRole('button', { name: 'Back to outline', exact: true }).click();
+  await page.getByRole('button', { name: 'Back to included work', exact: true }).click();
   await expect(
     page.getByRole('button', { name: 'Edit routine Monthly community dinner', exact: true }),
   ).toBeFocused();
   await expect(branch).toHaveAttribute('aria-expanded', 'false');
   await page.setViewportSize({ width: 1440, height: 900 });
-  await page.getByRole('tab', { name: 'Review', exact: true }).click();
+  await selectWorkDefinitionSection(page, 'Review');
   const publication = waitForApiResponse(page, /\/publish$/, { method: 'POST' });
   await page.getByRole('button', { name: 'Publish to workspace', exact: true }).click();
   expect((await publication).ok()).toBe(true);
@@ -185,7 +196,7 @@ async function verifyIndependentCopies(
     waitUntil: 'commit',
     timeout: TIMEOUTS.pageReady,
   });
-  await page.getByRole('tab', { name: 'Work', exact: true }).click();
+  await selectWorkDefinitionSection(page, 'Included work');
   await page
     .getByRole('button', { name: 'Edit routine Monthly community dinner', exact: true })
     .click();
@@ -195,7 +206,7 @@ async function verifyIndependentCopies(
   const edit = waitForApiResponse(page, /\/draft$/, { method: 'PATCH' });
   await page.getByRole('button', { name: 'Save draft', exact: true }).click();
   expect((await edit).ok()).toBe(true);
-  await page.getByRole('tab', { name: 'Review', exact: true }).click();
+  await selectWorkDefinitionSection(page, 'Review');
   const republish = waitForApiResponse(page, /\/publish$/, { method: 'POST' });
   await page.getByRole('button', { name: 'Publish next version', exact: true }).click();
   expect((await republish).ok()).toBe(true);
@@ -310,8 +321,10 @@ test('keeps recurring work and the work outline reachable while reading a long P
     waitUntil: 'commit',
     timeout: TIMEOUTS.pageReady,
   });
-  await page.setViewportSize({ width: 390, height: 844 });
-  const branch = page.getByRole('button', { name: 'Included work', exact: true });
+  await selectWorkDefinitionSection(page, 'Starting work');
+  await page.getByText('Final host note', { exact: true }).scrollIntoViewIfNeeded();
+  await selectWorkDefinitionSection(page, 'Included work');
+  const branch = page.getByRole('button', { name: 'Created together', exact: true });
   const routine = page.getByRole('button', {
     name: 'Edit routine Monthly community dinner',
     exact: true,
@@ -324,49 +337,101 @@ test('keeps recurring work and the work outline reachable while reading a long P
     await page.setViewportSize(viewport);
     await expect(branch).toHaveAttribute('aria-expanded', 'true');
     await routine.click();
-    await page.getByRole('button', { name: 'Back to outline', exact: true }).click();
+    await expect(branch).not.toBeVisible();
+    await expect(
+      page.getByRole('list', { name: 'Child work outline', exact: true }),
+    ).not.toBeVisible();
+    await expect(
+      page.getByRole('textbox', { name: 'Starting document', exact: true }),
+    ).not.toBeVisible();
+    await page.getByRole('button', { name: 'Back to included work', exact: true }).click();
     await expect(branch).toHaveAttribute('aria-expanded', 'true');
     await expect(routine).toBeFocused();
     await expect(routine).toBeInViewport();
   }
-  await page.setViewportSize({ width: 390, height: 844 });
+  await page.setViewportSize({ width: 390, height: 600 });
   await branch.click();
   await expect(branch).toHaveAttribute('aria-expanded', 'false');
-  await expect(
-    page.getByRole('button', { name: 'Edit routine Monthly community dinner', exact: true }),
-  ).toBeInViewport();
   await expect(page.getByLabel('Blueprint summary')).toHaveText('24 children');
-  await page.setViewportSize({ width: 1440, height: 900 });
-  await page
-    .getByRole('button', {
-      name: 'Edit parent Neighborhood gatherings operating guide',
-      exact: true,
-    })
-    .click();
-  await page.getByText('Final host note', { exact: true }).scrollIntoViewIfNeeded();
-  const box = await branch.boundingBox();
-  test.info().annotations.push({
-    type: 'outline-position-after-long-document',
-    description: JSON.stringify(box),
-  });
-  await expect(branch).toBeInViewport();
-  await page.setViewportSize({ width: 390, height: 600 });
-  await page.getByRole('button', { name: 'Back to outline', exact: true }).click();
-  await branch.click();
-  await expect(branch).toHaveAttribute('aria-expanded', 'true');
   await page.getByRole('button', { name: 'Add schedule', exact: true }).click();
-  await page.getByRole('button', { name: 'Back to outline', exact: true }).click();
-  const parent = page.getByRole('button', {
-    name: 'Edit parent Neighborhood gatherings operating guide',
-    exact: true,
-  });
-  await expect(parent).toBeFocused();
-  await expect(parent).toBeInViewport();
-  await expect(branch).toHaveAttribute('aria-expanded', 'true');
+  await page.getByRole('button', { name: 'Back to included work', exact: true }).click();
+  const overview = page.getByRole('heading', { name: 'Included work', exact: true });
+  await expect(overview).toBeFocused();
+  await expect(overview).toBeInViewport();
+  await expect(branch).toHaveAttribute('aria-expanded', 'false');
   await routine.click();
   await page.getByRole('button', { name: 'Remove routine', exact: true }).click();
-  await expect(parent).toBeFocused();
-  await expect(parent).toBeInViewport();
-  await expect(branch).toHaveAttribute('aria-expanded', 'true');
+  await expect(overview).toBeFocused();
+  await expect(overview).toBeInViewport();
+  await expect(branch).toHaveAttribute('aria-expanded', 'false');
   await expect(routine).toHaveCount(0);
+});
+
+test('a copied private Program keeps its routine publication pin and returns from linked draft review', async ({
+  page,
+}) => {
+  const { orgId } = await blueprintWorkspace(page);
+  const api = `/v1/orgs/${orgId}/templates/definitions`;
+  const choices = {
+    release: 1,
+    roots: ['event-series'],
+    mode: 'private_drafts',
+    labels: [],
+    offerings: [],
+  };
+  const preview = await apiJson<WorkTemplateGalleryPreview>(page, `${api}/gallery/copy-preview`, {
+    method: 'POST',
+    body: choices,
+  });
+  const receipt = await apiJson<WorkTemplateCopyReceipt>(page, `${api}/gallery/copies`, {
+    method: 'POST',
+    body: {
+      ...choices,
+      requestId: crypto.randomUUID(),
+      expectedReviewFingerprint: preview.reviewFingerprint,
+    },
+  });
+  const root = receipt.roots[0];
+  if (!root) throw new Error('The copied Program is missing.');
+  const program = await apiJson<WorkTemplateOut>(page, `${api}/${root.workTypeId}`);
+  const routine = program.definition.defaultSchedules[0];
+  if (!routine) throw new Error('The copied Program routine is missing.');
+  const linked = await apiJson<WorkTemplateOut>(page, `${api}/${routine.template.workTypeId}`);
+  await page.setViewportSize({ width: 320, height: 600 });
+  await page.goto(`/orgs/${orgId}/work-templates/${program.id}?section=structure`, {
+    waitUntil: 'commit',
+    timeout: TIMEOUTS.pageReady,
+  });
+  await page.getByRole('button', { name: `Edit routine ${routine.name}`, exact: true }).click();
+  await expect(
+    page.getByRole('button', { name: `Unpublished ${linked.definition.name}`, exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('combobox', { name: 'Reusable schedule template updates', exact: true }),
+  ).toHaveCount(0);
+  await page.getByRole('spinbutton', { name: 'Default schedule interval', exact: true }).fill('2');
+  const saved = waitForApiResponse(page, /\/draft$/, { method: 'PATCH' });
+  await page.getByRole('button', { name: 'Save draft', exact: true }).click();
+  expect((await saved).ok()).toBe(true);
+  const persisted = await apiJson<WorkTemplateOut>(page, `${api}/${program.id}`);
+  expect(persisted.draftDefinition?.defaultSchedules[0]?.template.selection).toEqual(
+    routine.template.selection,
+  );
+  const review = page.getByRole('link', { name: `Review ${linked.definition.name}`, exact: true });
+  await expect(review).toHaveAttribute(
+    'href',
+    `/orgs/${orgId}/work-templates/${linked.id}?section=review&returnTo=${program.id}`,
+  );
+  await review.click();
+  await expect(
+    page.getByRole('heading', { level: 1, name: linked.definition.name, exact: true }),
+  ).toBeVisible();
+  await page.getByRole('link', { name: 'Back to parent definition', exact: true }).click();
+  await expect(
+    page.getByRole('heading', { level: 1, name: program.definition.name, exact: true }),
+  ).toBeVisible();
+  await expect(page.locator('[role="tab"][aria-label="Review"]')).toHaveAttribute(
+    'aria-selected',
+    'true',
+  );
 });

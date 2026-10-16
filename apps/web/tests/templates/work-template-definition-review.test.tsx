@@ -10,6 +10,28 @@ import { fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { WorkTemplateForm } from '@/components/templates/work-template-authoring';
 describe('work definition publication review', () => {
+  it('separates purpose, starting content, included work and publication into revisitable decisions', () => {
+    render(<WorkTemplateForm orgId="org" initial={null} onCreated={vi.fn()} />);
+    expect(screen.getByRole('heading', { name: 'Name a kind of work' })).toBeVisible();
+    expect(screen.queryByRole('textbox', { name: 'Starting document' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Add task' })).not.toBeInTheDocument();
+    change('Template name', 'Event');
+    fireEvent.click(screen.getByRole('button', { name: 'Continue to starting work' }));
+    expect(screen.getByRole('textbox', { name: 'Starting document' })).toBeVisible();
+    expect(screen.queryByRole('button', { name: 'Add task' })).not.toBeInTheDocument();
+    change('Starting document', 'A welcoming event.');
+    fireEvent.click(screen.getByRole('button', { name: 'Continue to included work' }));
+    expect(screen.getByRole('button', { name: 'Add task' })).toBeVisible();
+    expect(screen.queryByRole('textbox', { name: 'Starting document' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('tab', { name: 'Starting work' }));
+    expect(screen.getByRole('textbox', { name: 'Starting document' })).toHaveValue(
+      'A welcoming event.',
+    );
+    fireEvent.click(screen.getByRole('tab', { name: 'Purpose' }));
+    expect(screen.getByRole('textbox', { name: 'Template name' })).toHaveValue('Event');
+    expect(mocks.publish).not.toHaveBeenCalled();
+  });
+
   it('offers review for a saved draft and deliberate publication with its sharing consequence', () => {
     render(<WorkTemplateForm orgId="org" initial={template()} onCreated={vi.fn()} />);
     expect(screen.queryByRole('button', { name: 'Save draft' })).not.toBeInTheDocument();
@@ -18,7 +40,9 @@ describe('work definition publication review', () => {
     const header = screen.getByRole('banner');
     expect(within(header).getByRole('button', { name: 'Publish to workspace' })).toBeEnabled();
     expect(
-      within(header).getByText(/Publishing shares this definition with everyone/),
+      within(screen.getByRole('region', { name: 'Review and publish' })).getByText(
+        /Publishing shares this definition with everyone/,
+      ),
     ).toBeVisible();
     expect(mocks.publish).not.toHaveBeenCalled();
   });
@@ -31,10 +55,16 @@ describe('work definition publication review', () => {
       render(<WorkTemplateForm orgId="org" initial={initial} onCreated={vi.fn()} />);
       fireEvent.click(screen.getByRole('button', { name: 'Review definition' }));
       const header = screen.getByRole('banner');
-      expect(within(header).queryByRole('button')).not.toBeInTheDocument();
+      expect(
+        within(header).queryByRole('button', { name: 'Publish to workspace' }),
+      ).not.toBeInTheDocument();
+      expect(within(header).queryByRole('button', { name: 'Save draft' })).not.toBeInTheDocument();
+      expect(
+        within(header).queryByRole('button', { name: 'Review definition' }),
+      ).not.toBeInTheDocument();
       expect(within(header).getByRole('status')).toHaveTextContent('Saved draft');
       expect(screen.getByRole('tab', { name: 'Review' })).toHaveAttribute('aria-selected', 'true');
-      fireEvent.click(screen.getByRole('tab', { name: 'Work' }));
+      fireEvent.click(screen.getByRole('tab', { name: 'Starting work' }));
       expect(within(header).getByRole('button', { name: 'Review definition' })).toBeEnabled();
     },
   );

@@ -1,19 +1,24 @@
 'use client';
-import { useState, type JSX } from 'react';
+import { useState, type ComponentProps, type JSX } from 'react';
 import { ProgramDefaultSchedule } from '@docket/work/work-schedule-defaults';
 import type { WorkTemplateOut } from '@docket/work/work-template-contract';
 import { useVocabulary } from '@docket/ui/hooks';
-import { Button, Field, Input, Select, Surface } from '@docket/ui/primitives';
+import { ChevronLeft } from '@docket/ui/icons';
+import { Badge, Button, Field, Input, Select, Surface } from '@docket/ui/primitives';
 import { InlineBanner } from '@docket/ui/components';
 import { WorkTemplatePicker } from '@/components/composer/work-template-picker';
 import { RelativeRepeatFields } from '@/components/recurrence/relative-repeat-fields';
 import { TemplateDisclosure } from './template-disclosure';
 import { WorkTemplateAssignmentRules } from './work-template-blueprint-relations';
+import Link from '@/components/docket-link';
+import { pendingTemplateReference } from './work-template-pending-reference';
+import { workTemplateHref } from './work-template-navigation';
 import { defaultScheduleForTemplate } from './program-default-schedule-draft';
 
 /** Focus one reusable Program routine; template choice creates its canonical editable draft. */
 export function ProgramDefaultScheduleEditor(props: {
   readonly orgId: string;
+  readonly parentTemplateId?: string | undefined;
   readonly value: ProgramDefaultSchedule | undefined;
   readonly templates: readonly WorkTemplateOut[];
   readonly disabled: boolean;
@@ -24,8 +29,7 @@ export function ProgramDefaultScheduleEditor(props: {
   readonly canMoveEarlier: boolean;
   readonly canMoveLater: boolean;
 }): JSX.Element {
-  const { value, disabled, onChange } = props;
-  const program = useVocabulary('program');
+  const { value } = props;
   const [kind, setKind] = useState<'task' | 'project'>(value?.template.targetType ?? 'project');
   return (
     <Surface
@@ -36,51 +40,19 @@ export function ProgramDefaultScheduleEditor(props: {
       role="group"
       aria-label="Reusable recurring work"
     >
-      <div className="flex min-w-0 items-center justify-between gap-2">
+      <div className="flex min-w-0 flex-col items-start gap-3">
+        <Button type="button" variant="ghost" size="sm" onClick={props.onClose}>
+          <ChevronLeft aria-hidden className="size-4" />
+          Back to included work
+        </Button>
         <h3 tabIndex={-1} className="text-title-large break-words outline-none">
           {value?.name.trim() ? value.name : 'Add recurring work'}
         </h3>
-        <Button type="button" variant="ghost" size="sm" onClick={props.onClose}>
-          Back to outline
-        </Button>
       </div>
       <RoutineTemplateChoice {...props} kind={kind} onKind={setKind} />
       {value ? (
         <>
-          <RoutineStartingFields value={value} disabled={disabled} onChange={onChange} />
-          <section className="flex min-w-0 flex-col gap-3" aria-label="Reusable schedule rhythm">
-            <h4 className="text-title-medium">Repeat</h4>
-            <RelativeRepeatFields
-              value={value.cadence}
-              disabled={disabled}
-              onChange={(cadence) => {
-                onChange({ ...value, cadence });
-              }}
-            />
-          </section>
-          <TemplateDisclosure title="Responsibility">
-            <WorkTemplateAssignmentRules
-              value={value}
-              parentLabel={program}
-              disabled={disabled}
-              onChange={(patch) => {
-                onChange({ ...value, ...patch });
-              }}
-            />
-          </TemplateDisclosure>
-          {!ProgramDefaultSchedule.safeParse(value).success ? (
-            <InlineBanner tone="critical" title="Review this routine">
-              Name the schedule, use supported title tokens, and keep its interval, relative start
-              and run count within their limits.
-            </InlineBanner>
-          ) : null}
-          <RoutineVersionField
-            value={value}
-            template={props.templates.find((item) => item.id === value.template.workTypeId)}
-            disabled={disabled}
-            onChange={onChange}
-          />
-          <RoutineActions {...props} />
+          <RoutineWorkFields {...props} value={value} />
         </>
       ) : (
         <p className="text-body-medium text-on-surface-variant">
@@ -89,6 +61,54 @@ export function ProgramDefaultScheduleEditor(props: {
         </p>
       )}
     </Surface>
+  );
+}
+function RoutineWorkFields(
+  props: Parameters<typeof ProgramDefaultScheduleEditor>[0] & {
+    readonly value: ProgramDefaultSchedule;
+  },
+): JSX.Element {
+  const { value, disabled, onChange } = props;
+  const program = useVocabulary('program');
+  return (
+    <>
+      <RoutineStartingFields value={value} disabled={disabled} onChange={onChange} />
+      <section className="flex min-w-0 flex-col gap-3" aria-label="Reusable schedule rhythm">
+        <h4 className="text-title-medium">Repeat</h4>
+        <RelativeRepeatFields
+          value={value.cadence}
+          disabled={disabled}
+          onChange={(cadence) => {
+            onChange({ ...value, cadence });
+          }}
+        />
+      </section>
+      <TemplateDisclosure title="Responsibility">
+        <WorkTemplateAssignmentRules
+          value={value}
+          parentLabel={program}
+          disabled={disabled}
+          onChange={(patch) => {
+            onChange({ ...value, ...patch });
+          }}
+        />
+      </TemplateDisclosure>
+      {!ProgramDefaultSchedule.safeParse(value).success ? (
+        <InlineBanner tone="critical" title="Review this routine">
+          Name the schedule, use supported title tokens, and keep its interval, relative start and
+          run count within their limits.
+        </InlineBanner>
+      ) : null}
+      <RoutineVersionField
+        orgId={props.orgId}
+        parentTemplateId={props.parentTemplateId}
+        value={value}
+        template={routineTemplate(props.orgId, value, props.templates)}
+        disabled={disabled}
+        onChange={onChange}
+      />
+      <RoutineActions {...props} />
+    </>
   );
 }
 function RoutineStartingFields({
@@ -135,13 +155,13 @@ function RoutineTemplateChoice({
   kind,
   onKind,
   orgId,
+  templates,
   disabled,
   onChange,
 }: Parameters<typeof ProgramDefaultScheduleEditor>[0] & {
   readonly kind: 'task' | 'project';
   readonly onKind: (kind: 'task' | 'project') => void;
 }): JSX.Element {
-  const selection = value?.template.selection;
   const project = useVocabulary('project');
   const task = useVocabulary('task');
   return (
@@ -164,8 +184,7 @@ function RoutineTemplateChoice({
           orgId={orgId}
           teamId={null}
           kind={kind}
-          selectedId={kind === value?.template.targetType ? value.template.workTypeId : undefined}
-          selectedVersionId={selection?.kind === 'pinned' ? selection.workTypeVersionId : undefined}
+          {...routinePickerSelection(orgId, kind, value, templates)}
           disabled={disabled}
           onSelect={(next) => {
             const draft = defaultScheduleForTemplate(next, value);
@@ -183,11 +202,15 @@ function RoutineTemplateChoice({
   );
 }
 function RoutineVersionField({
+  orgId,
+  parentTemplateId,
   value,
   template,
   disabled,
   onChange,
 }: {
+  readonly orgId: string;
+  readonly parentTemplateId?: string | undefined;
   readonly value: ProgramDefaultSchedule;
   readonly template: WorkTemplateOut | undefined;
   readonly disabled: boolean;
@@ -195,6 +218,11 @@ function RoutineVersionField({
 }): JSX.Element {
   const program = useVocabulary('program');
   const selection = value.template.selection;
+  const pending = pendingTemplateReference(value.template, template);
+  if (pending)
+    return (
+      <PendingRoutineVersion orgId={orgId} parentTemplateId={parentTemplateId} template={pending} />
+    );
   return (
     <TemplateDisclosure title="Template version">
       <Field label="Template updates">
@@ -265,4 +293,77 @@ function RoutineActions({
       </p>
     </section>
   );
+}
+
+function routineTemplate(
+  orgId: string,
+  value: ProgramDefaultSchedule,
+  templates: readonly WorkTemplateOut[],
+): WorkTemplateOut | undefined {
+  return templates.find(
+    (item) =>
+      item.organizationId === orgId &&
+      item.id === value.template.workTypeId &&
+      item.targetType === value.template.targetType,
+  );
+}
+function PendingRoutineVersion({
+  orgId,
+  parentTemplateId,
+  template,
+}: {
+  readonly orgId: string;
+  readonly parentTemplateId?: string | undefined;
+  readonly template: WorkTemplateOut;
+}): JSX.Element {
+  const name = (template.draftDefinition ?? template.definition).name;
+  return (
+    <section aria-label="Unpublished routine definition" className="flex min-w-0 flex-col gap-2">
+      <Badge variant="outline" className="self-start">
+        Unpublished {name}
+      </Badge>
+      <p className="text-body-small text-on-surface-variant">
+        This routine keeps the reserved first publication. Publish its linked definition before
+        publishing the parent definition.
+      </p>
+      {template.canEdit ? (
+        <Button asChild variant="ghost" className="min-h-10 self-start">
+          <Link
+            navigation="activity"
+            href={`${workTemplateHref(orgId, `/${template.id}`)}?section=review${parentTemplateId ? `&returnTo=${parentTemplateId}` : ''}`}
+          >
+            Review {name}
+          </Link>
+        </Button>
+      ) : null}
+    </section>
+  );
+}
+
+function routinePickerSelection(
+  orgId: string,
+  kind: 'task' | 'project',
+  value: ProgramDefaultSchedule | undefined,
+  templates: readonly WorkTemplateOut[],
+): Pick<
+  ComponentProps<typeof WorkTemplatePicker>,
+  'selectedId' | 'selectedLabel' | 'selectedVersionId'
+> {
+  if (kind !== value?.template.targetType) return {};
+  const pending = pendingTemplateReference(
+    value.template,
+    routineTemplate(orgId, value, templates),
+  );
+  if (pending)
+    return {
+      selectedId: value.template.workTypeId,
+      selectedLabel: `Unpublished ${(pending.draftDefinition ?? pending.definition).name}`,
+    };
+  return {
+    selectedId: value.template.workTypeId,
+    selectedVersionId:
+      value.template.selection.kind === 'pinned'
+        ? value.template.selection.workTypeVersionId
+        : undefined,
+  };
 }

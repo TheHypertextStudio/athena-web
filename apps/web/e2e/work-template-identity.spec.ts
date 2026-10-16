@@ -5,7 +5,10 @@ import { signUpAndOnboard } from './helpers/app';
 import { TIMEOUTS } from './helpers/constants';
 import { expect, test } from './helpers/fixtures';
 import { apiJson, waitForApiResponse } from './helpers/net';
-import { blueprintWorkspace } from './helpers/work-template-blueprints';
+import {
+  blueprintWorkspace,
+  selectWorkDefinitionSection,
+} from './helpers/work-template-blueprints';
 import { renderedContrastRatio } from './helpers/calendar-ui';
 
 const sessionPath = process.env['E2E_WORK_TEMPLATE_SESSION'];
@@ -32,7 +35,7 @@ async function createDraft(
   await page
     .getByRole('textbox', { name: 'When to use it', exact: true })
     .fill('A community event with a clear preparation plan.');
-  await page.getByRole('button', { name: 'Define the work', exact: true }).click();
+  await page.getByRole('button', { name: 'Continue to starting work', exact: true }).click();
   await page
     .getByRole('textbox', {
       name: kind === 'task' ? 'Starting title' : 'Starting name',
@@ -47,7 +50,7 @@ async function createDraft(
   expect((await response).ok()).toBe(true);
   const draft = (await (await response).json()) as WorkTemplateOut;
   await expect(page).toHaveURL(new RegExp(`/work-templates/${draft.id}$`));
-  await expect(page.getByRole('tab', { name: 'Work', exact: true })).toHaveAttribute(
+  await expect(page.locator('[role="tab"][aria-label="Starting work"]')).toHaveAttribute(
     'aria-selected',
     'true',
   );
@@ -55,7 +58,7 @@ async function createDraft(
 }
 
 async function publish(page: Page): Promise<WorkTemplateOut> {
-  await page.getByRole('tab', { name: 'Review', exact: true }).click();
+  await selectWorkDefinitionSection(page, 'Review');
   const response = waitForApiResponse(page, /\/templates\/definitions\/[^/]+\/publish$/, {
     method: 'POST',
   });
@@ -99,7 +102,7 @@ test.describe('canonical template editor accessibility and recovery', () => {
     const orgId = await workspace(page);
     const draft = await createDraft(page, orgId, 'project', `Recoverable event ${Date.now()}`);
     await page.setViewportSize({ width: 320, height: 600 });
-    await page.getByRole('tab', { name: 'Purpose', exact: true }).click();
+    await selectWorkDefinitionSection(page, 'Purpose');
     const name = page.getByRole('textbox', { name: 'Template name', exact: true });
     await name.focus();
     await page.keyboard.press('Tab');
@@ -158,7 +161,7 @@ test.describe('canonical template editor accessibility and recovery', () => {
     await save.click();
     expect((await saved).ok()).toBe(true);
     await page.reload({ waitUntil: 'commit' });
-    await page.getByRole('tab', { name: 'Purpose', exact: true }).click();
+    await selectWorkDefinitionSection(page, 'Purpose');
     await expect(name).toHaveValue('Retained after a failed save');
   });
 });

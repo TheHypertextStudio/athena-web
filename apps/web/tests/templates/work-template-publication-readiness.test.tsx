@@ -37,8 +37,12 @@ it('shows the checked unpublished prerequisite beside the publication decision a
   fireEvent.click(screen.getByRole('button', { name: 'Review definition' }));
   const header = within(screen.getByRole('banner'));
   expect(header.getByRole('button', { name: 'Publish to workspace' })).toBeDisabled();
-  expect(header.getByText('Publish Vendor booking before Event.')).toBeVisible();
-  expect(header.getByRole('link', { name: 'Review Vendor booking' })).toHaveAttribute(
+  expect(screen.getByText('Publish Vendor booking before Event.')).toBeVisible();
+  expect(
+    within(screen.getByRole('region', { name: 'Before publishing' })).getByRole('link', {
+      name: 'Review Vendor booking',
+    }),
+  ).toHaveAttribute(
     'href',
     `/orgs/${orgId}/work-templates/${nestedId}?section=review&returnTo=${withReference().id}`,
   );
@@ -79,16 +83,16 @@ it.each(['loading', 'error'] as const)(
     expect(header.getByRole('button', { name: 'Publish to workspace' })).toBeDisabled();
     expect(header.queryByText(/Vendor booking/)).not.toBeInTheDocument();
     if (state === 'error') {
-      fireEvent.click(header.getByRole('button', { name: 'Try again' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
       expect(mocks.refetch).toHaveBeenCalled();
-    } else expect(header.getByText('Checking linked definitions…')).toBeVisible();
+    } else expect(screen.getByText('Checking linked definitions…')).toBeVisible();
   },
 );
-it('focuses actual included work on entering Review before the subordinate starting document', () => {
+it('focuses the publication decision on entering Review before the included work and subordinate starting document', () => {
   render(<WorkTemplateForm orgId={orgId} initial={withReference()} onCreated={vi.fn()} />);
   fireEvent.click(screen.getByRole('button', { name: 'Review definition' }));
   const review = within(screen.getByRole('region', { name: 'Work definition review' }));
-  expect(review.getByRole('heading', { name: 'Included work' })).toHaveFocus();
+  expect(screen.getByRole('heading', { name: 'Review & publish' })).toHaveFocus();
   expect(
     review
       .getByRole('heading', { name: 'Included work' })

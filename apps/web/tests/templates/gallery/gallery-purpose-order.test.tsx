@@ -9,7 +9,8 @@ it('names the actual work and its use before shape, with draft privacy separate 
   const kind = screen.getByRole('combobox', { name: 'Kind of work' });
   expect(name.compareDocumentPosition(kind) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   expect(use.compareDocumentPosition(kind) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-  expect(screen.getByRole('heading', { name: 'Draft privacy' })).toBeVisible();
+  expect(screen.queryByRole('combobox', { name: 'Draft visible to' })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Draft privacy · Only you' }));
   expect(screen.getByRole('combobox', { name: 'Draft visible to' })).toHaveValue('personal');
   expect(
     screen.queryByRole('button', { name: 'Icon and draft visibility' }),

@@ -6,7 +6,9 @@ import { galleryFixture } from './gallery-fixture';
 import { WorkTemplateOut } from '@docket/work/work-template-contract';
 import { WorkTemplateLibrary } from '@/components/templates/gallery/work-template-library';
 vi.mock('@/components/docket-link', () => ({
-  default: (props: ComponentProps<'a'>) => <a {...props} />,
+  default: ({ navigation, ...props }: ComponentProps<'a'> & { navigation?: string }) => (
+    <a {...props} data-navigation={navigation} />
+  ),
 }));
 afterEach(cleanup);
 let fixtureId = 0;
@@ -46,115 +48,68 @@ function definition(
     updatedAt: '2026-10-14T00:00:00Z',
   });
 }
-describe('organization work library readiness', () => {
-  it('resumes actual drafts before ready work and keeps defaults/archive subordinate', () => {
+describe('organization work definition library', () => {
+  it('shows each definition once, with draft and publication state beside its identity', () => {
+    const published = definition('Published dinner', 'published', 'organization');
+    published.draftDefinition = { ...published.definition, name: 'Community dinner' };
     render(
       <WorkTemplateLibrary
         orgId="01ARZ3NDEKTSV4RRFFQ69G5FAX"
         items={[
-          definition('Event', 'published', 'organization'),
-          definition('Private planning', 'draft', 'personal'),
+          published,
+          definition('Event', 'draft', 'personal'),
           definition('Team handover', 'draft', 'team'),
-          definition('Blank Project', 'published', 'organization', 'project', true),
-          definition('Former event', 'archived', 'organization'),
         ]}
       />,
     );
+    const library = within(screen.getByRole('group', { name: 'Work definitions' }));
+    expect(library.getAllByRole('link')).toHaveLength(3);
+    const dinner = library.getByRole('link', { name: 'Open Community dinner' });
+    expect(within(dinner).getByText('Published v3 · Draft changes')).toBeVisible();
+    expect(within(dinner).getByText('Published as Published dinner')).toBeVisible();
     expect(
-      screen
-        .getByRole('heading', { name: 'Continue defining' })
-        .compareDocumentPosition(screen.getByRole('heading', { name: 'Ready to use' })) &
-        Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeTruthy();
-    expect(
-      within(screen.getByRole('region', { name: 'Ready to use' })).getByRole('link', {
-        name: /Event/,
-      }),
+      within(library.getByRole('link', { name: 'Open Event' })).getByText('Private draft'),
     ).toBeVisible();
     expect(
-      within(screen.getByRole('region', { name: 'Your drafts' })).getByRole('link', {
-        name: /Private planning/,
-      }),
+      within(library.getByRole('link', { name: 'Open Team handover' })).getByText('Team draft'),
     ).toBeVisible();
+    expect(screen.queryByText('Your drafts')).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Continue defining' })).not.toBeInTheDocument();
     expect(
-      within(screen.getByRole('region', { name: 'Team drafts' })).getByRole('link', {
-        name: /Team handover/,
-      }),
-    ).toBeVisible();
-    expect(screen.queryByRole('link', { name: /Blank Project/ })).not.toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: /Former event/ })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Defaults (1)' }));
-    expect(screen.getByRole('link', { name: /Blank Project/ })).toBeVisible();
-    fireEvent.click(screen.getByRole('button', { name: 'Archived (1)' }));
-    expect(screen.getByRole('link', { name: /Former event/ })).toBeVisible();
-  });
-  it('does not invent four empty kind groups and preserves meaningful filtered empty state', () => {
-    const view = render(<WorkTemplateLibrary orgId="01ARZ3NDEKTSV4RRFFQ69G5FAX" items={[]} />);
-    expect(screen.queryByRole('heading', { name: 'Projects' })).not.toBeInTheDocument();
-    expect(
-      screen.getByRole('heading', { name: 'What work does your organization do?' }),
-    ).toBeVisible();
-    expect(screen.getByText(/Name the work, explain its purpose/)).toBeVisible();
-    expect(
-      screen.queryByRole('button', { name: 'Find a work definition' }),
+      screen.queryByRole('button', { name: /View published version/ }),
     ).not.toBeInTheDocument();
-    view.rerender(
-      <WorkTemplateLibrary
-        orgId="01ARZ3NDEKTSV4RRFFQ69G5FAX"
-        items={[definition('Handover', 'published', 'organization')]}
-      />,
-    );
-    fireEvent.click(screen.getByRole('button', { name: 'Find a work definition' }));
-    fireEvent.change(screen.getByRole('textbox', { name: 'Search work definitions' }), {
-      target: { value: 'Event' },
-    });
-    expect(screen.getByText('No published definitions match these filters.')).toBeVisible();
-    expect(screen.getByRole('button', { name: 'Clear filters' })).toBeVisible();
   });
-});
 
-it('keeps owner-visible workspace drafts without labeling them as team drafts', () => {
-  render(
-    <WorkTemplateLibrary
-      orgId="01ARZ3NDEKTSV4RRFFQ69G5FAX"
-      items={[
-        definition('Recovered draft', 'draft', 'personal'),
-        {
-          ...definition('Workspace draft', 'draft', 'organization'),
-          id: WorkTemplateOut.shape.id.parse('01ARZ3NDEKTSV4RRFFQ69G5FAW'),
-        },
-        {
-          ...definition('Team draft', 'draft', 'team'),
-          id: WorkTemplateOut.shape.id.parse('01ARZ3NDEKTSV4RRFFQ69G5FAY'),
-        },
-      ]}
-    />,
-  );
-  const own = within(screen.getByRole('region', { name: 'Your drafts' }));
-  expect(own.getByRole('link', { name: /Recovered draft/ })).toBeVisible();
-  expect(own.getByRole('link', { name: /Workspace draft/ })).toBeVisible();
-  const team = within(screen.getByRole('region', { name: 'Team drafts' }));
-  expect(team.getByRole('link', { name: /Team draft/ })).toBeVisible();
-  expect(team.queryByRole('link', { name: /Workspace draft/ })).not.toBeInTheDocument();
-});
+  it('opens definitions as isolated authoring activities and orders names consistently', () => {
+    const event = definition('Event', 'draft', 'personal');
+    event.definition.description = 'Host an event with a secured venue.';
+    const community = definition('Community gathering', 'draft', 'personal');
+    render(<WorkTemplateLibrary orgId="01ARZ3NDEKTSV4RRFFQ69G5FAX" items={[event, community]} />);
+    const links = within(screen.getByRole('group', { name: 'Work definitions' })).getAllByRole(
+      'link',
+    );
+    expect(links.map((link) => link.getAttribute('aria-label'))).toEqual([
+      'Open Community gathering',
+      'Open Event',
+    ]);
+    expect(links[1]).toHaveAttribute(
+      'href',
+      `/orgs/01ARZ3NDEKTSV4RRFFQ69G5FAX/work-templates/${event.id}`,
+    );
+    expect(links[1]).toHaveAttribute('data-navigation', 'activity');
+    expect(links[1]).toHaveAttribute('id', `work-template-${event.id}`);
+    expect(
+      within(screen.getByRole('link', { name: 'Open Event' })).getByText(
+        'Host an event with a secured venue.',
+      ),
+    ).toBeVisible();
+    expect(screen.queryByRole('link', { name: /Continue defining Event/ })).not.toBeInTheDocument();
+  });
 
-it('uses readiness headings above ownership and avoids a five-level kind outline', () => {
-  render(
-    <WorkTemplateLibrary
-      orgId="01ARZ3NDEKTSV4RRFFQ69G5FAX"
-      items={[definition('Event', 'draft', 'personal')]}
-    />,
-  );
-  expect(screen.getByRole('heading', { name: 'Continue defining', level: 2 })).toBeVisible();
-  expect(screen.getByRole('heading', { name: 'Event', level: 3 })).toBeVisible();
-  expect(screen.queryByRole('heading', { name: 'Projects' })).not.toBeInTheDocument();
-});
-
-it.each(['personal', 'team'] as const)(
-  'keeps checked %s prerequisite drafts under their current parent and removes stale relationship guidance',
-  (scope) => {
-    const event = definition('Event', 'draft', 'personal'),
-      vendor = definition('Vendor booking', 'draft', scope, 'task');
+  it('keeps reusable dependencies as independent definitions instead of inventing a parent hierarchy', () => {
+    const event = definition('Event', 'draft', 'personal');
+    const other = definition('Community gathering', 'draft', 'personal');
+    const vendor = definition('Vendor booking', 'draft', 'team', 'task');
     vendor.pendingPublication = {
       reservedFirstVersionId: WorkTemplateOut.shape.pendingPublication
         .unwrap()
@@ -172,76 +127,91 @@ it.each(['personal', 'team'] as const)(
         },
       }),
     ];
-    const view = render(
-      <WorkTemplateLibrary orgId="01ARZ3NDEKTSV4RRFFQ69G5FAX" items={[vendor, event]} />,
+    other.definition.blueprint.steps = event.definition.blueprint.steps;
+    render(
+      <WorkTemplateLibrary orgId="01ARZ3NDEKTSV4RRFFQ69G5FAX" items={[vendor, event, other]} />,
     );
-    const own = within(screen.getByRole('region', { name: 'Your drafts' }));
-    expect(
-      own
-        .getByRole('link', { name: 'Continue defining Event' })
-        .compareDocumentPosition(own.getByRole('link', { name: 'Vendor booking' })) &
-        Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeTruthy();
-    expect(own.getByText(/Needed by Event/)).toBeVisible();
-    event.draftDefinition = { ...event.definition, blueprint: { steps: [], dependencies: [] } };
-    view.rerender(
-      <WorkTemplateLibrary orgId="01ARZ3NDEKTSV4RRFFQ69G5FAX" items={[vendor, event]} />,
-    );
+    const library = within(screen.getByRole('group', { name: 'Work definitions' }));
+    expect(library.getAllByRole('link', { name: 'Open Vendor booking' })).toHaveLength(1);
     expect(screen.queryByText(/Needed by Event/)).not.toBeInTheDocument();
-  },
-);
+    expect(screen.queryByText(/Before publishing/)).not.toBeInTheDocument();
+    expect(screen.queryByText('Includes')).not.toBeInTheDocument();
+  });
 
-it('resumes real unpublished edits under their draft name while keeping the publication ready', () => {
-  const event = definition('Published dinner', 'published', 'organization');
-  event.draftDefinition = { ...event.definition, name: 'Dinner with volunteers' };
-  render(<WorkTemplateLibrary orgId="01ARZ3NDEKTSV4RRFFQ69G5FAX" items={[event]} />);
-  expect(
-    within(screen.getByRole('region', { name: 'Your drafts' })).getByRole('link', {
-      name: /Dinner with volunteers/,
-    }),
-  ).toBeVisible();
-  expect(
-    screen.getByRole('button', { name: 'View published version of Published dinner' }),
-  ).toBeVisible();
-  expect(screen.getByText('Unpublished changes · Version 3 stays available')).toBeVisible();
-  fireEvent.click(
-    screen.getByRole('button', { name: 'View published version of Published dinner' }),
-  );
-  expect(screen.getByText('Published dinner')).toBeVisible();
-});
-it('does not duplicate an unchanged publication because object keys have different order', () => {
-  const event = definition('Published dinner', 'published', 'organization');
-  const { payload, ...rest } = event.definition;
-  event.draftDefinition = { payload, ...rest };
-  render(<WorkTemplateLibrary orgId="01ARZ3NDEKTSV4RRFFQ69G5FAX" items={[event]} />);
-  expect(screen.queryByRole('region', { name: 'Continue defining' })).not.toBeInTheDocument();
-});
+  it('filters actual drafts and publications without duplicating an available version', () => {
+    const unchanged = definition('Unchanged dinner', 'published', 'organization');
+    const { payload, ...rest } = unchanged.definition;
+    unchanged.draftDefinition = { payload, ...rest };
+    const changed = definition('Changed dinner', 'published', 'organization');
+    changed.draftDefinition = { ...changed.definition, description: 'Include volunteers.' };
+    render(
+      <WorkTemplateLibrary
+        orgId="01ARZ3NDEKTSV4RRFFQ69G5FAX"
+        items={[unchanged, changed, definition('Private event', 'draft', 'personal')]}
+      />,
+    );
+    fireEvent.click(screen.getByRole('tab', { name: 'Drafts' }));
+    expect(screen.getByRole('link', { name: 'Open Changed dinner' })).toBeVisible();
+    expect(screen.getByRole('link', { name: 'Open Private event' })).toBeVisible();
+    expect(screen.queryByRole('link', { name: 'Open Unchanged dinner' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('tab', { name: 'Published' }));
+    expect(screen.getAllByRole('link', { name: /Open .* dinner/ })).toHaveLength(2);
+    expect(screen.queryByRole('link', { name: 'Open Private event' })).not.toBeInTheDocument();
+  });
 
-it('makes the actual definition and next action primary instead of a settings row', () => {
-  const event = definition('Event', 'draft', 'personal');
-  event.definition.description = 'Host an event with a secured venue.';
-  render(<WorkTemplateLibrary orgId="01ARZ3NDEKTSV4RRFFQ69G5FAX" items={[event]} />);
-  expect(screen.getByRole('heading', { level: 3, name: 'Event' })).toBeVisible();
-  expect(screen.getByRole('link', { name: 'Continue defining Event' })).toHaveAttribute(
-    'href',
-    `/orgs/01ARZ3NDEKTSV4RRFFQ69G5FAX/work-templates/${event.id}`,
-  );
-  expect(screen.getByText('Host an event with a secured venue.')).toBeVisible();
-  const continueSection = within(screen.getByRole('region', { name: 'Continue defining' }));
-  expect(continueSection.getByRole('link', { name: 'Define another kind' })).toHaveAttribute(
-    'href',
-    '/orgs/01ARZ3NDEKTSV4RRFFQ69G5FAX/work-templates/new',
-  );
-});
+  it('makes search visible and offers a recoverable empty result with retained kind filtering', () => {
+    render(
+      <WorkTemplateLibrary
+        orgId="01ARZ3NDEKTSV4RRFFQ69G5FAX"
+        items={[
+          definition('Event', 'published', 'organization'),
+          definition('Handover', 'published', 'organization', 'task'),
+        ]}
+      />,
+    );
+    fireEvent.change(screen.getByRole('textbox', { name: 'Search work definitions' }), {
+      target: { value: 'Event' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Filter by work kind' }));
+    fireEvent.change(screen.getByRole('combobox', { name: 'Work kind' }), {
+      target: { value: 'task' },
+    });
+    expect(screen.getByText('No work definitions match these filters.')).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Clear filters' }));
+    expect(screen.getByRole('textbox', { name: 'Search work definitions' })).toHaveValue('');
+    expect(screen.getByRole('combobox', { name: 'Work kind' })).toHaveValue('');
+    expect(screen.getByRole('link', { name: 'Open Event' })).toBeVisible();
+    expect(screen.getByRole('link', { name: 'Open Handover' })).toBeVisible();
+  });
 
-it('explains a published definition and its changes together rather than duplicating its identity', () => {
-  const dinner = definition('Community dinner', 'published', 'organization');
-  dinner.draftDefinition = { ...dinner.definition, description: 'Include volunteers.' };
-  render(<WorkTemplateLibrary orgId="01ARZ3NDEKTSV4RRFFQ69G5FAX" items={[dinner]} />);
-  expect(screen.getAllByRole('heading', { name: 'Community dinner' })).toHaveLength(1);
-  expect(screen.getByText('Unpublished changes · Version 3 stays available')).toBeVisible();
-  expect(
-    screen.getByRole('button', { name: 'View published version of Community dinner' }),
-  ).toBeVisible();
-  expect(screen.queryByRole('region', { name: 'Ready to use' })).not.toBeInTheDocument();
+  it('keeps defaults and archives reachable after the main definition library', () => {
+    render(
+      <WorkTemplateLibrary
+        orgId="01ARZ3NDEKTSV4RRFFQ69G5FAX"
+        items={[
+          definition('Event', 'published', 'organization'),
+          definition('Blank project', 'published', 'organization', 'project', true),
+          definition('Former event', 'archived', 'organization'),
+        ]}
+      />,
+    );
+    expect(screen.queryByRole('link', { name: 'Open Blank project' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Open Former event' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Defaults (1)' }));
+    expect(screen.getByRole('link', { name: 'Open Blank project' })).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Archived (1)' }));
+    expect(screen.getByRole('link', { name: 'Open Former event' })).toBeVisible();
+  });
+
+  it('introduces first use for one-off and ongoing work without empty publication queues', () => {
+    render(<WorkTemplateLibrary orgId="01ARZ3NDEKTSV4RRFFQ69G5FAX" items={[]} />);
+    expect(
+      screen.getByRole('heading', { name: 'What work does your organization do?' }),
+    ).toBeVisible();
+    expect(screen.getByText(/one-off project or an ongoing program/)).toBeVisible();
+    expect(screen.queryByRole('heading', { name: 'Ready to use' })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('textbox', { name: 'Search work definitions' }),
+    ).not.toBeInTheDocument();
+  });
 });

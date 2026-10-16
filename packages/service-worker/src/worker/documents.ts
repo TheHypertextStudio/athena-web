@@ -1,3 +1,4 @@
+import { activityDocumentKind } from '../activity-routes';
 /**
  * The offline document cache — what makes a previously-visited route come back offline instead of
  * a waiting-room page.
@@ -127,7 +128,13 @@ export const SHELL_DOCUMENT_PATH = '/__docket-offline-shell';
 
 /** Keep activity documents separate from the workspace's interchangeable offline shell. */
 export function shellCacheKey(origin: string, userId: string, pathname = '/today'): string {
-  const shellPath = pathname === '/plan/day' ? '/__docket-offline-planning' : SHELL_DOCUMENT_PATH;
+  const activity = activityDocumentKind(pathname);
+  const shellPath =
+    activity === 'planning'
+      ? '/__docket-offline-planning'
+      : activity === 'work-template-authoring'
+        ? '/__docket-offline-work-template-authoring'
+        : SHELL_DOCUMENT_PATH;
   return documentCacheKey(origin, shellPath, userId);
 }
 

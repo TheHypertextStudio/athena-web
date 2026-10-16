@@ -3,6 +3,7 @@ import type { JSX } from 'react';
 import { QueryLoadFailure } from '@/components/feedback';
 import { useApiListQuery } from '@/lib/query';
 import { WorkTemplateLibrary } from './gallery/work-template-library';
+import { LibraryDefineEntry } from './gallery/work-template-library-entry';
 import { workTemplatesDef } from './work-template-queries';
 import { WorkTemplateWorkspaceFrame } from './work-template-workspace-frame';
 
@@ -15,7 +16,8 @@ export function WorkTemplatesWorkspace({ orgId }: { readonly orgId: string }): J
     <WorkTemplateWorkspaceFrame
       orgId={orgId}
       title="Work templates"
-      description="Define the kinds of work your workspace does and what each includes."
+      description="Decide how your organization’s work starts and what it includes."
+      action={<LibraryDefineEntry orgId={orgId} />}
       loading={query.isPending}
     >
       {query.isError ? (

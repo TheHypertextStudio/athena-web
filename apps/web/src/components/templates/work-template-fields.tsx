@@ -15,7 +15,6 @@ import {
   WorkTemplateSampleProperties,
   WorkTemplateSampleSummary,
 } from './work-template-sample-fields';
-import { WorkTemplateBlueprintFields } from './work-template-blueprint-fields';
 import type { useWorkTemplateForm } from './use-work-template-form';
 
 type Form = ReturnType<typeof useWorkTemplateForm>;
@@ -37,11 +36,9 @@ export function WorkTemplateFields({
   const set = form.setDefinition;
   return (
     <div className="flex min-w-0 flex-col gap-5">
-      <WorkTemplateBlueprintFields
-        orgId={orgId}
-        form={form}
-        rootEditor={<TemplateSampleWork orgId={orgId} form={form} />}
-      />
+      <Surface tone="card" shape="medium" pad="roomy">
+        <TemplateSampleWork orgId={orgId} form={form} />
+      </Surface>
       <div className="min-w-0">
         <TemplateDisclosure title="Defaults and availability">
           <Field
@@ -85,12 +82,16 @@ function TemplateSampleWork({ orgId, form }: { orgId: string; form: Form }): JSX
       aria-label="Sample work"
       id="template-outline"
       tabIndex={-1}
-      className="flex min-w-0 scroll-mt-48 flex-col gap-5 sm:p-6"
+      className="flex min-w-0 scroll-mt-48 flex-col gap-5"
     >
       <div>
         <h2 tabIndex={-1} className="text-title-large">
           Starting {form.definition.name.trim() || 'work'}
         </h2>
+        <p className="text-body-medium text-on-surface-variant">
+          Set the starting contents of one new item. Add the work that comes with it in the next
+          step.
+        </p>
       </div>
       <WorkTemplateSampleFields orgId={orgId} form={form} />
       <Surface tone="well" shape="medium" pad="roomy">
@@ -256,18 +257,16 @@ export function WorkTemplatePurposeFields({
           }}
         />
       </Field>
-      <section className="flex min-w-0 flex-col gap-2">
-        <h3 className="text-title-medium">How this work is organized</h3>
-        <TemplateKindField form={form} existing={existing} />
-      </section>
+      <TemplateKindField form={form} existing={existing} />
       {!existing ? (
-        <section className="flex min-w-0 flex-col gap-2" aria-label="Draft privacy">
-          <h3 className="text-title-medium">Draft privacy</h3>
+        <TemplateDisclosure
+          title={form.scope === 'team' ? 'Draft privacy · A team' : 'Draft privacy · Only you'}
+        >
           <p className="text-body-medium text-on-surface-variant">
             Choose who can review the draft. Publishing it for your workspace is a separate action.
           </p>
           <DraftPrivacyFields form={form} teams={options.teamOptions} />
-        </section>
+        </TemplateDisclosure>
       ) : null}
       <TemplateDisclosure title="Icon">
         <WorkTemplateGlyphField orgId={orgId} form={form} isBase={isBase} />
@@ -283,8 +282,8 @@ function TemplateKindField({ form, existing }: { form: Form; existing: boolean }
     <Field
       label="Kind of work"
       description={
-        form.definition.blueprint.steps.length
-          ? 'Remove child work before changing the root kind.'
+        form.definition.blueprint.steps.length || form.definition.defaultSchedules.length
+          ? 'Remove included and recurring work before changing the kind.'
           : {
               initiative: 'Connects related programs around an outcome.',
               program: 'Organizes an ongoing area of work, including recurring routines.',
@@ -295,7 +294,12 @@ function TemplateKindField({ form, existing }: { form: Form; existing: boolean }
     >
       <Select
         value={form.kind}
-        disabled={existing || disabled || form.definition.blueprint.steps.length > 0}
+        disabled={
+          existing ||
+          disabled ||
+          form.definition.blueprint.steps.length > 0 ||
+          form.definition.defaultSchedules.length > 0
+        }
         onChange={(event) => {
           const kind = TemplateTargetType.parse(event.target.value);
           form.setKind(kind);

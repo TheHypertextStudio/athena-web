@@ -4,10 +4,8 @@
  * `plans/[planId]/plan-route` — the plan route's state, one concern per hook.
  *
  * @remarks
- * The shell requests the route makes while mounted, and the plan with its editing controllers.
- * `plan-client.tsx` composes these with the rail conversation into the panel.
+ * The plan and its editing controllers; `plan-client.tsx` composes them into the focused activity.
  */
-import { useShellRail } from '@docket/ui/components';
 import type {
   PlanCommitOut,
   PlanDraftOut,
@@ -16,11 +14,9 @@ import type {
 } from '@docket/work/plan-draft-contract';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import { useCompactSidebarWhileMounted } from '@/components/canvas/canvas-floating-chrome';
 import { useComposerOptions } from '@/components/pickers/use-composer-options';
 import { usePlanActorResolver } from '@/components/plan-canvas/plan-actors';
 import type { PlanCanvasPanelProps } from '@/components/plan-canvas/plan-canvas-panel';
-import { PLAN_RAIL_WIDE_PX } from '@/components/plan-canvas/plan-panel-support';
 import { EMPTY_PLAN_DIFF, planDiff, type PlanDiff } from '@/components/plan-canvas/plan-diff';
 import { api } from '@/lib/api';
 import type { UndoPlanCommit } from '@/components/plan-canvas/use-plan-view';
@@ -37,19 +33,6 @@ import { apiQueryOptions, queryKeys, useApiListQuery, useApiQuery } from '@/lib/
 import { useOrgCapability } from '@/lib/use-org-capability';
 
 const OPTION_KINDS = ['actors', 'initiatives'] as const;
-
-/**
- * Ask the shell for room while the route is mounted: the sidebar drops to its icon rail, and on a
- * narrower window the right rail rests collapsed until the conversation is asked for.
- */
-export function usePlanShellRequests(): void {
-  useCompactSidebarWhileMounted();
-  const { requestCollapsed } = useShellRail();
-  useEffect(() => {
-    if (window.innerWidth >= PLAN_RAIL_WIDE_PX) return undefined;
-    return requestCollapsed();
-  }, [requestCollapsed]);
-}
 
 /**
  * Which revisions are the person's own, so the panel can tell a local edit from a remote one and

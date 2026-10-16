@@ -4,6 +4,8 @@ import { ContextProvider, PageScrollProvider, useContextState } from '@docket/ui
 import { VocabularyProvider } from '@docket/ui/hooks';
 import { type JSX, type ReactNode, type ComponentProps, useEffect } from 'react';
 import { ActiveOrgContext, useActiveOrg } from '@/components/active-org';
+import { useAppLocation } from '@/lib/app-location';
+import { parseAuthenticatedRoute } from '@/lib/authenticated-route';
 import { readDensity, readLastOrg, resolveActiveOrg } from '@/components/app-shell-utils';
 import {
   CreateObjectProvider,
@@ -22,6 +24,14 @@ import { userErrorMessage } from '@/lib/problem';
 import type { ServerSessionUser } from '@/lib/server-session';
 import { usePersistedDensity } from '@/hooks/use-persisted-density';
 
+function useActivityRouteOrg(): string | null {
+  const { pathname } = useAppLocation();
+  const match = parseAuthenticatedRoute(pathname);
+  return match.kind === 'matched' && 'orgId' in match.route.params
+    ? match.route.params.orgId
+    : null;
+}
+
 /** Authenticated activity dependencies without application navigation, tabs, palette, or rails. */
 export function ActivityProviders({
   initialSession,
@@ -31,6 +41,7 @@ export function ActivityProviders({
   readonly children: ReactNode;
 }): JSX.Element {
   const identity = useAuthenticatedIdentity(initialSession);
+  const routeOrgId = useActivityRouteOrg();
   const orgsQ = useApiQuery(
     apiQueryOptions(
       queryKeys.orgs(),
@@ -43,10 +54,10 @@ export function ActivityProviders({
     ),
   );
   const orgs = identity.identitySwitching ? [] : (orgsQ.data?.items ?? []);
-  const initialOrgId = resolveActiveOrg(null, orgs, null);
+  const initialOrgId = resolveActiveOrg(routeOrgId, orgs, null);
   const rejected = identity.status === 'signed-out' || identity.identitySwitching;
   return (
-    <ContextProvider initialContext={initialOrgId}>
+    <ContextProvider key={identity.userId} initialContext={initialOrgId}>
       <ReachabilityProvider reachable={identity.status !== 'unreachable'}>
         <ActivityOrgScope
           orgs={orgs}
@@ -87,12 +98,13 @@ function ActivityWorkspace({
   readonly children: ReactNode;
 }): JSX.Element {
   const { orgs, skin } = useActiveOrg();
+  const routeOrgId = useActivityRouteOrg();
   const { setContext, setDensity } = useContextState();
   const density = usePersistedDensity(userId);
   useEffect(() => {
-    setContext(resolveActiveOrg(null, orgs, readLastOrg(userId)));
+    setContext(routeOrgId ?? resolveActiveOrg(null, orgs, readLastOrg(userId)));
     setDensity(userId ? density : readDensity(null));
-  }, [orgs, userId, density, setContext, setDensity]);
+  }, [orgs, userId, density, routeOrgId, setContext, setDensity]);
   return (
     <VocabularyProvider skin={skin}>
       <CreateObjectProvider>
@@ -109,5 +121,6 @@ function ActivityOrgScope(
   props: Omit<ComponentProps<typeof ActiveOrgContext>, 'activeOrgId'>,
 ): JSX.Element {
   const { activeOrgId } = useContextState();
-  return <ActiveOrgContext {...props} activeOrgId={activeOrgId} />;
+  const routeOrgId = useActivityRouteOrg();
+  return <ActiveOrgContext {...props} activeOrgId={routeOrgId ?? activeOrgId} />;
 }

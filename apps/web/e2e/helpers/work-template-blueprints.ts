@@ -9,6 +9,18 @@ import { createMobileAuditFixture, type MobileAuditFixture } from './mobile-audi
 import { TIMEOUTS } from './constants';
 
 let fixture: MobileAuditFixture | undefined;
+/** Enter or revisit a definition step through its responsive navigation. */
+export async function selectWorkDefinitionSection(
+  page: Page,
+  label: 'Purpose' | 'Starting work' | 'Included work' | 'Review',
+): Promise<void> {
+  await page.locator('[data-template-definition-header]').waitFor({ state: 'visible' });
+  const chooser = page.getByRole('button', { name: 'Change definition step', exact: true });
+  if (await chooser.isVisible()) {
+    await chooser.click();
+    await page.getByRole('menuitemradio', { name: label, exact: true }).click();
+  } else await page.getByRole('tab', { name: label, exact: true }).click();
+}
 /** Reuse a ceremony-created local session and populate a real entitled audit workspace through the API. */
 export async function blueprintWorkspace(page: Page): Promise<MobileAuditFixture> {
   const workspace = await populatedBlueprintWorkspace(page);

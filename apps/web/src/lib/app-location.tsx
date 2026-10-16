@@ -1,5 +1,7 @@
 'use client';
 
+import { activityDocumentKind } from '@docket/service-worker/activity-routes';
+import { navigateDocument } from './document-navigation';
 import { usePathname, useSearchParams } from 'next/navigation';
 import {
   createContext,
@@ -175,12 +177,21 @@ export function syncLocation(): void {
  *
  * @param href - The destination, as a same-origin path with optional query.
  */
-export function navigateWithoutRouter(href: string): void {
-  if ((pathnameOf(href) === '/plan/day') !== (window.location.pathname === '/plan/day')) {
-    window.location.assign(href);
+export function navigateWithoutRouter(
+  href: string,
+  options: { readonly replace?: boolean } = {},
+): void {
+  if (requiresActivityDocument(href)) {
+    navigateDocument(href, options.replace === true);
     return;
   }
-  navigateHistory(href, false, true);
+  navigateHistory(href, options.replace === true, true);
+}
+
+function requiresActivityDocument(href: string): boolean {
+  const source = activityDocumentKind(window.location.pathname),
+    target = activityDocumentKind(href);
+  return source !== target || target === 'work-template-authoring';
 }
 
 /**
@@ -243,12 +254,12 @@ export function navigateAuthenticated<TPattern extends AuthenticatedRoutePattern
   params: AuthenticatedRouteParams<TPattern>,
   options: AuthenticatedNavigationOptions = {},
 ): void {
-  navigateHistory(
-    buildAuthenticatedHref(pattern, params),
-    options.replace === true,
-    options.scroll !== false,
-    options.transition,
-  );
+  const href = buildAuthenticatedHref(pattern, params);
+  if (requiresActivityDocument(href)) {
+    navigateDocument(href, options.replace === true);
+    return;
+  }
+  navigateHistory(href, options.replace === true, options.scroll !== false, options.transition);
 }
 
 /** Subscribe to location changes. */
@@ -347,7 +358,13 @@ export function AppLocationProvider({
   const navigate = useCallback(
     (href: string, replace: boolean, options?: ResponsiveNavigationOptions): boolean => {
       // Activity layouts cannot be swapped underneath the workspace's local route outlet.
-      if (navigationContext === 'activity' || pathnameOf(href) === '/plan/day') return false;
+      if (navigationContext === 'activity' || activityDocumentKind(href) !== null) {
+        if (!navigator.onLine) {
+          navigateDocument(href, replace);
+          return true;
+        }
+        return false;
+      }
       if (parseAuthenticatedRoute(pathnameOf(href)).kind !== 'matched') return false;
       navigateHistory(href, replace, options?.scroll !== false, options?.transition);
       return true;

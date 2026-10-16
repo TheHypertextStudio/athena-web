@@ -1,5 +1,5 @@
 'use client';
-import { useRef, useState, type JSX, type ReactNode } from 'react';
+import { useRef, useState, type JSX } from 'react';
 import { Surface } from '@docket/ui/primitives';
 import { useVocabulary } from '@docket/ui/hooks';
 import type { Blueprint, BlueprintStep } from '@docket/work/work-template-blueprint';
@@ -15,11 +15,9 @@ import { type BlueprintEditorProps } from './work-template-blueprint-child';
 export function WorkTemplateBlueprintFields({
   orgId,
   form,
-  rootEditor,
 }: {
   orgId: string;
   form: WorkTemplateFormState;
-  rootEditor?: ReactNode;
 }): JSX.Element {
   const childNouns = useBlueprintChildNouns();
   const query = useApiQuery(workTemplatesDef(orgId, { includeDrafts: true }));
@@ -55,7 +53,7 @@ export function WorkTemplateBlueprintFields({
     <Surface
       as="section"
       tone="card"
-      shape="large"
+      shape="medium"
       pad="roomy"
       className="flex min-w-0 scroll-mt-48 flex-col gap-4 sm:p-6"
       aria-label="Template children"
@@ -64,7 +62,6 @@ export function WorkTemplateBlueprintFields({
     >
       {query.isError ? <QueryLoadFailure title="Nested templates" query={query} /> : null}
       <BlueprintWorkspaceLayout
-        rootEditor={rootEditor}
         editor={props}
         selected={selected}
         rowRefs={rowRefs.current}

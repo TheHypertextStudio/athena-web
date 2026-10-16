@@ -49,13 +49,31 @@ import { OVERLAY_SCROLL_FALLBACK } from './overlay-inset';
 import { useOverlayFocusRestore } from './use-overlay-focus-restore';
 
 /**
- * Root controller for an open/closed sheet (Radix Dialog passthrough).
- *
- * @remarks
- * Use controlled (`open` + `onOpenChange`) so the host owns the open state — the shell's mobile
- * drawer is controlled so a nav selection can close it programmatically.
+ * Visibility shared by the sheet controller and opt-in retained content.
  */
-export const Sheet = DialogPrimitive.Root;
+const SheetOpenContext = React.createContext(false);
+
+/** Control sheet visibility and expose it to opt-in state-preserving content. */
+export function Sheet({
+  open: controlledOpen,
+  defaultOpen = false,
+  ...props
+}: React.ComponentProps<typeof DialogPrimitive.Root>): React.JSX.Element {
+  const [localOpen, setLocalOpen] = React.useState(defaultOpen);
+  const open = controlledOpen ?? localOpen;
+  return (
+    <SheetOpenContext.Provider value={open}>
+      <DialogPrimitive.Root
+        {...props}
+        open={open}
+        onOpenChange={(next) => {
+          if (controlledOpen === undefined) setLocalOpen(next);
+          props.onOpenChange?.(next);
+        }}
+      />
+    </SheetOpenContext.Provider>
+  );
+}
 
 /** Element that opens the sheet when activated (Radix passthrough). */
 export const SheetTrigger = DialogPrimitive.Trigger;
@@ -148,6 +166,7 @@ export function SheetContent({
   side = 'left',
   presentation = 'edge',
   size = 'navigation',
+  keepMounted = false,
   onOpenAutoFocus,
   onCloseAutoFocus,
   ...props
@@ -158,27 +177,46 @@ export function SheetContent({
   presentation?: SheetPresentation | undefined;
   /** The width tier used by an edge presentation. */
   size?: SheetSize | undefined;
+  /** Preserve child state while closed; modal effects disconnect until the sheet reopens. */
+  keepMounted?: boolean | undefined;
 }): React.JSX.Element {
   const focusRestore = useOverlayFocusRestore(onOpenAutoFocus, onCloseAutoFocus);
-
+  const open = React.useContext(SheetOpenContext);
+  const panel = (
+    <DialogPrimitive.Content
+      className={cn(
+        'bg-surface-container-high text-on-surface data-[state=open]:animate-in data-[state=closed]:animate-out shadow-level1 fixed z-(--z-sheet) flex min-h-0 flex-col gap-0 overflow-hidden overscroll-contain p-0 ease-(--ease-out) outline-none data-[state=closed]:duration-(--dur-base) data-[state=open]:duration-(--dur-slow)',
+        OVERLAY_SCROLL_FALLBACK,
+        focusRing,
+        sheetPresentationClass(presentation, side, size),
+        className,
+      )}
+      {...(keepMounted ? { forceMount: true as const } : {})}
+      data-surface-tone="floating"
+      onOpenAutoFocus={focusRestore.onOpenAutoFocus}
+      onCloseAutoFocus={focusRestore.onCloseAutoFocus}
+      {...props}
+    >
+      {children}
+    </DialogPrimitive.Content>
+  );
+  if (!keepMounted) {
+    return (
+      <SheetPortal>
+        <SheetOverlay />
+        {panel}
+      </SheetPortal>
+    );
+  }
   return (
-    <SheetPortal>
-      <SheetOverlay />
-      <DialogPrimitive.Content
-        className={cn(
-          'bg-surface-container-high text-on-surface data-[state=open]:animate-in data-[state=closed]:animate-out shadow-level1 fixed z-(--z-sheet) flex min-h-0 flex-col gap-0 overflow-hidden overscroll-contain p-0 ease-(--ease-out) outline-none data-[state=closed]:duration-(--dur-base) data-[state=open]:duration-(--dur-slow)',
-          OVERLAY_SCROLL_FALLBACK,
-          focusRing,
-          sheetPresentationClass(presentation, side, size),
-          className,
-        )}
-        data-surface-tone="floating"
-        onOpenAutoFocus={focusRestore.onOpenAutoFocus}
-        onCloseAutoFocus={focusRestore.onCloseAutoFocus}
-        {...props}
-      >
-        {children}
-      </DialogPrimitive.Content>
+    <SheetPortal forceMount>
+      {/* Radix Presence measures this ref: Activity itself can expose a non-Element instance. */}
+      <div className="contents" data-sheet-presence-anchor="">
+        <React.Activity mode={open ? 'visible' : 'hidden'}>
+          <SheetOverlay />
+          {panel}
+        </React.Activity>
+      </div>
     </SheetPortal>
   );
 }

@@ -1,14 +1,8 @@
 'use client';
 
 /**
- * `components/plan-canvas/plan-conversation` — the plan's conversation, in the shell's rail.
- *
- * @remarks
- * A plan is shaped by talking, and the conversation is a peer of the whole canvas rather than a
- * panel over part of it, so it lives where the shell already keeps a peer of `<main>`: the right
- * rail's Athena panel. While the route is mounted it hands the rail this content, on the org's
- * chat thread, which is the session the plan tools bind to. The rail's own icon opens and closes
- * it, and the shell's sheet serves it on a compact window.
+ * The focused plan's contextual conversation uses the existing workspace thread and plan tools.
+ * The planning activity owns its optional sheet; no global utility rail is required.
  */
 import type { PlanDraftOut } from '@docket/work/plan-draft-contract';
 import { type JSX, useEffect, useRef } from 'react';
@@ -17,8 +11,6 @@ import { AthenaRailConversation } from '@/components/athena/athena-rail-conversa
 import { useAthenaPanel } from '@/components/athena/athena-panel-provider';
 import type { PersonalAthenaContext } from '@/lib/athena/presentation';
 import { useAppRouter } from '@/lib/interactions/navigation';
-
-import { PLAN_RAIL_WIDE_PX } from './plan-panel-support';
 
 /** The rail's empty state: one line, since the board beside it is the subject. */
 const PLAN_EMPTY_STATE = { title: 'Tell Athena what this plan needs.' } as const;
@@ -44,8 +36,7 @@ function planContext(orgId: string, plan: PlanDraftOut | undefined): PersonalAth
 }
 
 /**
- * Hand the rail this plan's conversation while the route is mounted, reveal it on arrival, and
- * seed it with an opening line when an entry point asked for a start.
+ * Open and seed contextual help only when the person explicitly enters through Plan with Athena.
  */
 export function usePlanAthena(
   orgId: string,
@@ -54,20 +45,11 @@ export function usePlanAthena(
   startRequested: boolean,
 ): void {
   const router = useAppRouter();
-  const { openAthena, provideRailContent } = useAthenaPanel();
-  useEffect(
-    () => provideRailContent(<PlanRailConversation orgId={orgId} />),
-    [orgId, provideRailContent],
-  );
-  const revealed = useRef(false);
+  const { openAthena } = useAthenaPanel();
+  const launchedPlan = useRef<string | null>(null);
   useEffect(() => {
-    if (revealed.current || startRequested) return;
-    revealed.current = true;
-    if (window.innerWidth >= PLAN_RAIL_WIDE_PX) openAthena();
-  }, [openAthena, startRequested]);
-  useEffect(() => {
-    if (!startRequested || !plan) return;
-    revealed.current = true;
+    if (!startRequested || !plan || launchedPlan.current === planId) return;
+    launchedPlan.current = planId;
     openAthena(planContext(orgId, plan), `Help me plan "${plan.title}". `);
     router.replace(`/orgs/${orgId}/plans/${planId}`);
   }, [openAthena, orgId, plan, planId, router, startRequested]);

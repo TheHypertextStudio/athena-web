@@ -2,6 +2,7 @@ import { HydrationBoundary } from '@tanstack/react-query';
 import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import type { JSX, ReactNode } from 'react';
+import RouteSlot from '@/components/pwa/route-slot';
 import { ActivityProviders } from '@/components/activity-providers';
 import { AppProviders } from '@/components/app-providers';
 import { AutomaticLocationProvider } from '@/components/work-location/automatic-location-provider';
@@ -36,7 +37,9 @@ export default async function ActivityGroupLayout({
             <ActivityProviders
               initialSession={session.state === 'authenticated' ? session.user : null}
             >
-              {children}
+              <RouteSlot serverPath={serverPath} navigationContext="activity">
+                {children}
+              </RouteSlot>
             </ActivityProviders>
           </AutomaticLocationProvider>
         </AppProviders>

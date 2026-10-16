@@ -153,7 +153,9 @@ export function change(label: string, value: string, scope: HTMLElement = docume
   fireEvent.change(within(scope).getByLabelText(label), { target: { value } });
 }
 export function add(kind: string): HTMLElement {
-  fireEvent.click(screen.getByRole('tab', { name: 'Work' }));
+  fireEvent.click(screen.getByRole('tab', { name: 'Included work' }));
+  const back = screen.queryByRole('button', { name: 'Back to included work' });
+  if (back) fireEvent.click(back);
   const button = screen.getAllByRole('button', { name: `Add ${kind}` }).at(0);
   if (!button) throw new Error('Missing root add action');
   fireEvent.click(button);

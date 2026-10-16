@@ -1,7 +1,10 @@
 import type { WorkTemplateOut } from '@docket/work/work-template-contract';
 import { expect, test } from './helpers/fixtures';
 import { apiJson, waitForApiResponse } from './helpers/net';
-import { blueprintWorkspace } from './helpers/work-template-blueprints';
+import {
+  blueprintWorkspace,
+  selectWorkDefinitionSection,
+} from './helpers/work-template-blueprints';
 import { TIMEOUTS } from './helpers/constants';
 
 const session = process.env['E2E_WORK_TEMPLATE_SESSION'];
@@ -55,11 +58,12 @@ test('authors a private Project child outline and relative due date, reopens it,
   await page.getByRole('combobox', { name: 'Kind of work', exact: true }).selectOption('project');
   const title = `Authored blueprint ${Date.now()}`;
   await page.getByRole('textbox', { name: 'Template name', exact: true }).fill(title);
-  await expect(page.getByRole('heading', { name: 'Draft privacy', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Draft privacy · Only you', exact: true }).click();
   await expect(page.getByRole('combobox', { name: 'Draft visible to', exact: true })).toHaveValue(
     'personal',
   );
-  await page.getByRole('button', { name: 'Define the work', exact: true }).click();
+  await page.getByRole('button', { name: 'Continue to starting work', exact: true }).click();
+  await page.getByRole('button', { name: 'Continue to included work', exact: true }).click();
   await page.getByRole('button', { name: 'Add task', exact: true }).click();
   const child = page.getByRole('group', { name: /^Child work:/ }).first();
   await child.getByRole('textbox', { name: 'Child title', exact: true }).fill('Confirm the venue');
@@ -85,10 +89,13 @@ test('authors a private Project child outline and relative due date, reopens it,
   const draft = (await response.json()) as WorkTemplateOut;
   expect(draft.scope).toBe('personal');
   expect(draft.latestVersion).toBeNull();
-  await expect(page).toHaveURL(new RegExp(`/work-templates/${draft.id}$`));
+  await expect(page).toHaveURL(new RegExp(`/work-templates/${draft.id}\\?section=structure$`));
   await page.reload({ waitUntil: 'commit' });
   await expect(page.getByRole('status').filter({ hasText: /^Saved draft$/ })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Review definition', exact: true })).toBeEnabled();
+  await selectWorkDefinitionSection(page, 'Included work');
+  await expect(
+    page.getByRole('button', { name: 'Review this definition', exact: true }),
+  ).toBeEnabled();
   await page.getByRole('button', { name: 'Edit Confirm the venue', exact: true }).click();
   await expect(child.getByRole('textbox', { name: 'Child title', exact: true })).toHaveValue(
     'Confirm the venue',
@@ -103,7 +110,7 @@ test('authors a private Project child outline and relative due date, reopens it,
   await expect(child.getByRole('combobox', { name: 'Due offset unit', exact: true })).toHaveValue(
     'working',
   );
-  await page.getByRole('tab', { name: 'Review', exact: true }).click();
+  await selectWorkDefinitionSection(page, 'Review');
   await expect(
     page.getByRole('button', { name: 'Publish to workspace', exact: true }),
   ).toBeEnabled();

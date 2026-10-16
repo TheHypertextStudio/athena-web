@@ -4,11 +4,11 @@
  * `plans/[planId]/plan-client` — the planning canvas route.
  *
  * @remarks
- * The board runs edge to edge: the page owns its scroll, the sidebar drops to its icon rail on
- * most windows, and the conversation sits in the shell's right rail, a peer of the whole board.
+ * The board owns a focused activity without application navigation. Contextual Athena help opens
+ * only when requested, leaving the canvas available when the conversation closes.
  * Everything the route holds lives in `plan-route.ts`; this file says what renders in each state.
  */
-import { AppBar, EmptyState, useOwnPageScroll } from '@docket/ui/components';
+import { AppBar, EmptyState, ImmersiveShell, useOwnPageScroll } from '@docket/ui/components';
 import { ChevronLeft, Workflow } from '@docket/ui/icons';
 import {
   Button,
@@ -28,7 +28,9 @@ import { useAppLocation, useTypedRoute } from '@/lib/app-location';
 import { useAppRouter } from '@/lib/interactions/navigation';
 import { userErrorMessage } from '@/lib/problem';
 
-import { usePlanRouteData, usePlanShellRequests } from './plan-route';
+import { usePlanRouteData } from './plan-route';
+import { PlanActivityProvider, PlanAthenaAction } from '@/components/plan-canvas/plan-activity';
+import { PageSource } from '@/components/athena/page-context';
 
 const START_QUERY = 'athena';
 const START_VALUE = 'start';
@@ -92,9 +94,18 @@ export default function PlanClient(): JSX.Element {
   const {
     params: { orgId, planId },
   } = useTypedRoute('/orgs/[orgId]/plans/[planId]');
+  return (
+    <PlanActivityProvider key={planId} orgId={orgId}>
+      <ImmersiveShell>
+        <PlanWorkspace orgId={orgId} planId={planId} />
+      </ImmersiveShell>
+    </PlanActivityProvider>
+  );
+}
+
+function PlanWorkspace({ orgId, planId }: { orgId: string; planId: string }): JSX.Element {
   const router = useAppRouter();
   useOwnPageScroll();
-  usePlanShellRequests();
   const { searchParams } = useAppLocation();
   const startRequested = searchParams.get(START_QUERY) === START_VALUE;
   const data = usePlanRouteData(orgId, planId);
@@ -131,6 +142,9 @@ export default function PlanClient(): JSX.Element {
   }
   return (
     <Surface tone="page" shape="none" className="flex h-full min-h-0 w-full flex-col">
+      {data.plan.rootInitiativeId ? (
+        <PageSource type="initiative" id={data.plan.rootInitiativeId} label={data.plan.title} />
+      ) : null}
       <PlanCanvasPanel
         plan={data.plan}
         orgId={orgId}
@@ -146,7 +160,7 @@ export default function PlanClient(): JSX.Element {
         resolveActor={data.resolveActor}
         initiativeOptions={data.initiativeOptions}
         className="min-h-0 flex-1"
-        chrome={{ title: data.plan.title, navigation }}
+        chrome={{ title: data.plan.title, navigation, assistance: <PlanAthenaAction /> }}
       />
     </Surface>
   );

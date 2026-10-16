@@ -3,7 +3,10 @@ import type { WorkTemplateOut } from '@docket/work/work-template-contract';
 import { WorkTemplateDefinition } from '@docket/work/work-template-contract';
 import { expect, test } from './helpers/fixtures';
 import { apiJson, waitForApiResponse } from './helpers/net';
-import { blueprintWorkspace } from './helpers/work-template-blueprints';
+import {
+  blueprintWorkspace,
+  selectWorkDefinitionSection,
+} from './helpers/work-template-blueprints';
 import { TIMEOUTS } from './helpers/constants';
 
 const session = process.env['E2E_WORK_TEMPLATE_SESSION'];
@@ -109,29 +112,30 @@ test('Event work definition is revisitable, preserves selected work, and reviews
   const draft = await eventDefinition(page, orgId);
   const route = `/orgs/${orgId}/work-templates/${draft.id}`;
   await page.goto(route, { waitUntil: 'commit', timeout: TIMEOUTS.pageReady });
-  await expect(page.getByRole('tab', { name: 'Work', exact: true })).toHaveAttribute(
+  await expect(page.locator('[role="tab"][aria-label="Starting work"]')).toHaveAttribute(
     'aria-selected',
     'true',
   );
   await expect(page.getByRole('dialog', { name: 'Settings', exact: true })).toHaveCount(0);
+  await selectWorkDefinitionSection(page, 'Included work');
   const outline = page.getByRole('list', { name: 'Child work outline' });
   await expect(outline.getByRole('listitem')).toHaveCount(4);
   await expect(outline).toContainText('Due 21 days before Event date');
   await page.getByRole('button', { name: 'Edit Dinner day', exact: true }).click();
   await expect(page.getByRole('status').filter({ hasText: /^Saved draft$/ })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Review definition', exact: true })).toBeEnabled();
-  await page.getByRole('button', { name: 'Back to outline', exact: true }).click();
+  await page.getByRole('button', { name: 'Back to included work', exact: true }).click();
   await page.getByRole('button', { name: 'Edit Book venue', exact: true }).click();
   const child = page.getByRole('group', { name: 'Child work: Book venue', exact: true });
   await child.getByRole('button', { name: 'Add a summary', exact: true }).click();
   await child
     .getByRole('textbox', { name: 'Child summary', exact: true })
     .fill('Check capacity, access, kitchen facilities, and the booking terms.');
-  await page.getByRole('tab', { name: 'Purpose', exact: true }).click();
+  await selectWorkDefinitionSection(page, 'Purpose');
   await expect(page.getByRole('textbox', { name: 'Template name', exact: true })).toHaveValue(
     'Event',
   );
-  await page.getByRole('tab', { name: 'Work', exact: true }).click();
+  await selectWorkDefinitionSection(page, 'Included work');
   await expect(child.getByRole('textbox', { name: 'Child summary', exact: true })).toHaveValue(
     'Check capacity, access, kitchen facilities, and the booking terms.',
   );
@@ -144,21 +148,21 @@ test('Event work definition is revisitable, preserves selected work, and reviews
   );
   await document.focus();
   const scroll = await page.getByRole('main').evaluate((element) => element.scrollTop);
-  await page.getByRole('tab', { name: 'Review', exact: true }).click();
+  await selectWorkDefinitionSection(page, 'Review');
   const review = page.getByRole('region', { name: 'Work definition review' });
   await expect(review).toContainText('Project lead · Project team, otherwise selected team');
   await expect(review).toContainText('Due 21 days before Event date');
-  await expect(review.getByRole('heading', { name: 'Included work', exact: true })).toBeFocused();
+  await expect(page.getByRole('heading', { name: 'Review & publish', exact: true })).toBeFocused();
   await expect(
-    review.getByRole('heading', { name: 'Included work', exact: true }),
+    page.getByRole('heading', { name: 'Review & publish', exact: true }),
   ).toBeInViewport();
-  await page.getByRole('tab', { name: 'Work', exact: true }).click();
+  await selectWorkDefinitionSection(page, 'Included work');
   await expect(document).toBeFocused();
   await expect(document).toContainText('Preparation requirement 18');
   await expect
     .poll(() => page.getByRole('main').evaluate((element) => element.scrollTop))
     .toBe(scroll);
-  await page.getByRole('tab', { name: 'Review', exact: true }).click();
+  await selectWorkDefinitionSection(page, 'Review');
   const saved = waitForApiResponse(page, /\/draft$/, { method: 'PATCH' });
   await page.getByRole('button', { name: 'Save draft', exact: true }).click();
   expect((await saved).ok()).toBe(true);
@@ -180,14 +184,14 @@ test('saving a new definition from Review preserves Review and leaves publishing
   await page
     .getByRole('textbox', { name: 'When to use it', exact: true })
     .fill('Welcome a new volunteer and help them get ready for their first event.');
-  await page.getByRole('tab', { name: 'Review', exact: true }).click();
+  await selectWorkDefinitionSection(page, 'Review');
   const saved = waitForApiResponse(page, /\/templates\/definitions$/, { method: 'POST' });
   await page.getByRole('button', { name: 'Save draft', exact: true }).click();
   const draft = (await (await saved).json()) as WorkTemplateOut;
   expect(draft.scope).toBe('personal');
   expect(draft.latestVersion).toBeNull();
   await expect(page).toHaveURL(new RegExp(`/work-templates/${draft.id}\\?section=review$`));
-  await expect(page.getByRole('tab', { name: 'Review', exact: true })).toHaveAttribute(
+  await expect(page.locator('[role="tab"][aria-label="Review"]')).toHaveAttribute(
     'aria-selected',
     'true',
   );
@@ -198,7 +202,7 @@ test('saving a new definition from Review preserves Review and leaves publishing
     waitUntil: 'commit',
     timeout: TIMEOUTS.pageReady,
   });
-  await expect(page.getByRole('tab', { name: 'Work', exact: true })).toHaveAttribute(
+  await expect(page.locator('[role="tab"][aria-label="Starting work"]')).toHaveAttribute(
     'aria-selected',
     'true',
   );
@@ -215,11 +219,38 @@ test.describe('phone work outline', () => {
       waitUntil: 'commit',
       timeout: TIMEOUTS.pageReady,
     });
-    for (const width of [390, 320]) {
+    for (const width of [390, 320, 768, 1440, 1920]) {
       await page.setViewportSize({ width, height: 600 });
+      await selectWorkDefinitionSection(page, 'Included work');
       const outline = page.getByRole('list', { name: 'Child work outline' });
       const rows = outline.getByRole('button');
       await expect(rows).toHaveCount(4);
+      if (width < 640) {
+        await expect(page.getByRole('tablist', { name: 'Work definition sections' })).toHaveCount(
+          0,
+        );
+        const current = page.getByRole('button', { name: 'Change definition step', exact: true });
+        await expect(current).toHaveText('3 of 4 · Included work');
+        expect(
+          await current.evaluate((button) => button.scrollWidth <= button.clientWidth + 1),
+        ).toBe(true);
+      } else {
+        expect(
+          await page
+            .getByRole('tablist', { name: 'Work definition sections' })
+            .getByRole('tab')
+            .evaluateAll((tabs) =>
+              tabs.every((tab) => {
+                const label = tab.querySelector('span');
+                return label !== null && label.scrollWidth <= label.clientWidth + 1;
+              }),
+            ),
+        ).toBe(true);
+      }
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+        true,
+      );
+
       expect(
         await rows.evaluateAll((buttons) =>
           buttons.every((button) => {

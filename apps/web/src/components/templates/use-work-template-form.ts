@@ -20,6 +20,8 @@ import { useWorkTemplateWrites } from './work-template-queries';
 
 /** Controlled values and revision-aware actions for the template editor. */
 export interface WorkTemplateFormState {
+  /** Saved parent identity for contextual returns from linked-definition review. */
+  templateId?: string | undefined;
   definition: WorkTemplateDefinition;
   setDefinition: Dispatch<SetStateAction<WorkTemplateDefinition>>;
   kind: TemplateTargetType;
@@ -53,7 +55,7 @@ export function useWorkTemplateForm(
   }, [state, dirty]);
   const canEdit = initial ? initial.canEdit && initial.status !== 'archived' : true;
   useProtectTemplateDraft(dirty);
-  return { ...state, ...actions, dirty, canEdit };
+  return { ...state, ...actions, dirty, canEdit, templateId: initial?.id };
 }
 
 function useTemplateDraftState(orgId: string, initial: WorkTemplateOut | null) {

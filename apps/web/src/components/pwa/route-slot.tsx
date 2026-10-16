@@ -11,14 +11,14 @@ import { pathnameOf } from '@/lib/authenticated-route';
  * some other URL — the page that URL actually asks for.
  *
  * @remarks
- * This is what lets **any** cached document act as an app shell for **any** route, which is the
+ * This is what lets a cached document act as a shell for routes with the same navigation owner, which is the
  * whole offline story in one component.
  *
  * Offline, the service worker has a document for some routes and none for most: Docket's routes are
  * mostly parameterized, so `/orgs/[orgId]/tasks/[taskId]` can never have been pre-visited. Rather
  * than keep a dedicated shell document — which would mean a route in the product's URL space that
  * exists for infrastructure reasons, plus a fetch per user per release to warm it — the worker
- * answers with whatever document it already has, and this notices.
+ * answers with a document from the same workspace/activity family, and this notices.
  *
  * The comparison is honest and cheap: the layout knows, server-side, which path it rendered for
  * (`x-docket-pathname`, already set by `proxy.ts`), and the browser knows which path it is on. Equal
@@ -53,6 +53,8 @@ export interface RouteSlotProps {
   readonly serverPath: string | null;
   /** The route Next resolved for this document. */
   readonly children: ReactNode;
+  /** Match the page's owning authenticated layout when replaying a cached document. */
+  readonly navigationContext?: 'workspace' | 'activity';
 }
 
 /**
@@ -61,9 +63,17 @@ export interface RouteSlotProps {
  * @param props - The document's own path and the page Next resolved.
  * @returns The page, or the outlet when this document is standing in for another route.
  */
-export default function RouteSlot({ serverPath, children }: RouteSlotProps): JSX.Element {
+export default function RouteSlot({
+  serverPath,
+  children,
+  navigationContext = 'workspace',
+}: RouteSlotProps): JSX.Element {
   const { pathname } = useAppLocation();
   const routedLocally = serverPath !== null && pathnameOf(serverPath) !== pathname;
 
-  return routedLocally ? <OfflineRouteOutlet /> : <>{children}</>;
+  return routedLocally ? (
+    <OfflineRouteOutlet navigationContext={navigationContext} />
+  ) : (
+    <>{children}</>
+  );
 }

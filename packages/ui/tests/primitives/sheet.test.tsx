@@ -1,8 +1,8 @@
 import '@testing-library/jest-dom/vitest';
 
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { useState } from 'react';
-import { describe, expect, it } from 'vitest';
+import { StrictMode, useState } from 'react';
+import { describe, expect, it, vi } from 'vitest';
 
 import { Button } from '../../src/primitives/button';
 import {
@@ -210,4 +210,103 @@ describe('Sheet family', () => {
     const sheet = await screen.findByRole('dialog');
     expect(sheet).toHaveClass('panel-x');
   });
+});
+
+function StatefulHelpSheet(): React.JSX.Element {
+  const [open, setOpen] = useState(false);
+  const [clicked, setClicked] = useState(false);
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => {
+          setOpen(true);
+        }}
+      >
+        Open help
+      </button>
+      <button
+        type="button"
+        onClick={() => {
+          setClicked(true);
+        }}
+      >
+        Outside action
+      </button>
+      {clicked ? <p>Outside action worked</p> : null}
+      <Sheet open={open} onOpenChange={setOpen}>
+        <SheetContent keepMounted side="right">
+          <SheetTitle>Retained help</SheetTitle>
+          <SheetDescription>Keep the unfinished message when help closes.</SheetDescription>
+          <UnsentMessage />
+          <SheetClose asChild>
+            <Button>Back to plan</Button>
+          </SheetClose>
+        </SheetContent>
+      </Sheet>
+    </>
+  );
+}
+function UnsentMessage(): React.JSX.Element {
+  const [value, setValue] = useState('');
+  return (
+    <textarea
+      aria-label="Message"
+      value={value}
+      onChange={(event) => {
+        setValue(event.target.value);
+      }}
+    />
+  );
+}
+it('retains mounted message state while releasing modal effects, focus, and accessibility on close', async () => {
+  render(<StatefulHelpSheet />);
+  const opener = screen.getByRole('button', { name: 'Open help' });
+  opener.focus();
+  fireEvent.click(opener);
+  fireEvent.change(screen.getByRole('textbox', { name: 'Message' }), {
+    target: { value: 'Keep this unsent plan question' },
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'Back to plan' }));
+  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  await waitFor(() => expect(opener).toHaveFocus());
+  expect(document.body.style.pointerEvents).not.toBe('none');
+  expect(screen.getByRole('button', { name: 'Outside action' })).toBeVisible();
+  fireEvent.click(screen.getByRole('button', { name: 'Outside action' }));
+  expect(screen.getByText('Outside action worked')).toBeVisible();
+  opener.focus();
+  fireEvent.click(opener);
+  expect(screen.getByRole('textbox', { name: 'Message' })).toHaveValue(
+    'Keep this unsent plan question',
+  );
+  fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape', code: 'Escape' });
+  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  await waitFor(() => expect(opener).toHaveFocus());
+});
+
+it('gives portal Presence a real element while retained content reconnects under StrictMode', async () => {
+  const computedStyle = vi.spyOn(window, 'getComputedStyle');
+  try {
+    render(
+      <StrictMode>
+        <StatefulHelpSheet />
+      </StrictMode>,
+    );
+    const anchor = document.querySelector('[data-sheet-presence-anchor]');
+    expect(anchor).toBeInstanceOf(HTMLElement);
+    await waitFor(() => {
+      expect(computedStyle).toHaveBeenCalledWith(anchor);
+    });
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    const opener = screen.getByRole('button', { name: 'Open help' });
+    opener.focus();
+    fireEvent.click(opener);
+    expect(await screen.findByRole('dialog', { name: 'Retained help' })).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Back to plan' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(computedStyle.mock.calls.every(([element]) => element instanceof Element)).toBe(true);
+    await waitFor(() => expect(opener).toHaveFocus());
+  } finally {
+    computedStyle.mockRestore();
+  }
 });

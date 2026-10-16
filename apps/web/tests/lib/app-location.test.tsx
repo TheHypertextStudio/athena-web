@@ -315,3 +315,30 @@ it('leaves the activity through the route layout instead of swapping Today under
   expect(nextPush).toHaveBeenCalledWith('/today', undefined);
   expect(window.location.pathname).toBe('/plan/day');
 });
+
+it.each(['push', 'replace'] as const)(
+  'hands authoring %s to its isolated route layout with exact review, return and focus context',
+  (method) => {
+    const href = `/orgs/${ORG_ID}/work-templates/${TASK_ID}?section=review&returnTo=${ORG_ID}#included`;
+    function EnterAuthoring(): React.JSX.Element {
+      const router = useAppRouter();
+      return (
+        <button
+          onClick={() => {
+            router[method](href);
+          }}
+        >
+          Define work
+        </button>
+      );
+    }
+    render(
+      <AppLocationProvider serverPath="/today">
+        <EnterAuthoring />
+      </AppLocationProvider>,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Define work' }));
+    expect(method === 'push' ? nextPush : nextReplace).toHaveBeenCalledWith(href, undefined);
+    expect(window.location.pathname).toBe('/today');
+  },
+);

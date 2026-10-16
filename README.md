@@ -130,7 +130,9 @@ pnpm --dir apps/web preview:worker --env staging
 
 Supply reviewed public build inputs explicitly; the command does not load root `.env.local`.
 For disposable local API/database/browser acceptance, the existing `pnpm test:release` supports
-`RELEASE_WEB_RUNTIME=workers`. See [Docket web setup](apps/web/README.md) and
+`RELEASE_WEB_RUNTIME=workers`. Supply `DOCS_MINTLIFY_ORIGIN=https://docket.mintlify.dev`, matching
+the existing core-screen CI setting, to include the documentation proxy in either runtime's checks.
+See [Docket web setup](apps/web/README.md) and
 [Workers compatibility](docs/engineering/workers-compatibility.md) for local isolation, native
 staging commands and the required production approval. Vercel remains the active production host.
 Ordinary CI and backend/native publication retain their existing triggers and mandatory checks;

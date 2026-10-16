@@ -70,8 +70,12 @@ independently of Wrangler's final `--env-file` setting.
 Use the existing disposable backend/database/browser runner:
 
 ```sh
+DOCS_MINTLIFY_ORIGIN=https://docket.mintlify.dev \
 RELEASE_WEB_RUNTIME=workers RELEASE_ENV_FILE=/dev/null pnpm test:release
 ```
+
+The documentation origin matches the existing core-screen CI setting. Supply the same public
+input for the Node reference run: `DOCS_MINTLIFY_ORIGIN=https://docket.mintlify.dev pnpm test:release`.
 
 It owns PostgreSQL, migrations, synthetic accounts, processes and cleanup.
 Its explicit local opt-in and compatibility override permit only the declared

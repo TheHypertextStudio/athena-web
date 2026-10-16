@@ -7,6 +7,19 @@
 
 ## Active Tasks
 
+### [WEBSITE-RELEASE-DOCS-INPUT] Document the native release check's Mintlify input
+
+- **Status**: COMPLETE
+- **Priority**: P1
+- **Description**: Include the existing documentation proxy when following the native local
+  release acceptance instructions for Node or Workers.
+- **Approach**: Declare the same public Mintlify origin used by core-screen CI in the documented
+  native commands. Preserve optional documentation configuration in ordinary development.
+- **Files**: Root README, Workers compatibility guidance and this worklog.
+- **Subtasks**:
+  - [x] Match the local release instructions to CI's documentation origin.
+  - [x] Preserve the existing stack owner, native commands and runtime configuration contract.
+
 ### [WEBSITE-ROSTER-TEMPLATE-WIDTH] Keep published template labels inside narrow roster cells
 
 - **Status**: COMPLETE

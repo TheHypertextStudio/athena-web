@@ -7,6 +7,24 @@
 
 ## Active Tasks
 
+### [HOST-ONLY-ACCEPTANCE] Keep test acceptance independent of local cookie scope
+
+- **Status**: READY FOR REVIEW
+- **Description**: Run Core screen acceptance and the disposable release stack with host-only
+  cookies while retaining `APP_MODE=test` and the strict local-only shared-cookie guard.
+- **Approach**: Override the bootstrap cookie domain at both acceptance environment boundaries,
+  after dotenv loading for the local release runner; verify inherited local configuration cannot
+  re-enable shared cookies.
+- **Files**: CI job environment, existing release runner and tooling regression checks, this log.
+- **Validation**: All three new regressions fail before the fix; all 10 affected tooling checks
+  pass after it. Actual dotenv loading retains test mode and the empty domain. Bash syntax, CI
+  gate policy, root typecheck, changed-test lint, formatting and diff checks pass.
+- **Outcome**: Both acceptance entry points explicitly clear the local cookie domain. The auth
+  guard and bootstrap local defaults remain intact. Full browser acceptance and hosted CI were
+  not rerun; the focused checks establish environment loading and workflow configuration.
+- **Learning**: Test mode must override local-only bootstrap values at the acceptance boundary;
+  overriding the mode alone preserves dotenv's shared-cookie configuration.
+
 ### [HOST-ONLY-SESSIONS] Enforce isolated hosted session cookies
 
 - **Status**: READY FOR REVIEW

@@ -308,6 +308,9 @@ jobs:
       # Test mode keeps the non-production sign-up code echo and mock providers without starting
       # the local three-second background scheduler inside this bounded release check.
       APP_MODE: test
+      # Bootstrap's shared local OAuth relay cookie is forbidden in test mode. An explicit
+      # empty value prevents dotenv from filling it from .env.local during API startup.
+      BETTER_AUTH_COOKIE_DOMAIN: ''
       DOCS_MINTLIFY_ORIGIN: https://docket.mintlify.dev
       APP_URL: http://docket.localhost:3000
       WEB_URL: http://docket.localhost:3000

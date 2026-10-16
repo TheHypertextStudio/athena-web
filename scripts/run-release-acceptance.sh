@@ -52,6 +52,8 @@ run_release_env() {
   if [[ "${RELEASE_WEB_RUNTIME}" == workers ]]; then
     release_env+=(PUBLIC_BRIEF_HOST=briefs.docket.localhost NEXT_PUBLIC_BRIEF_HOST=briefs.docket.localhost)
   fi
+  # Apply host-only cookie scope after dotenv so bootstrap's local OAuth relay domain cannot
+  # leak into this test-mode stack, whether inherited from the shell or the local env file.
   pnpm exec dotenv -e "${ENV_FILE}" -- "${release_env[@]}" \
     AGENT_MAX_TURNS=8 \
     ADMIN_GOOGLE_SSO_ENABLED=false \
@@ -60,6 +62,7 @@ run_release_env() {
     APP_URL="${APP_URL}" \
     ATHENA_ASYNC_RUNNER_ENABLED=false \
     BETTER_AUTH_ALLOWED_HOSTS=docket.localhost,api.docket.localhost \
+    BETTER_AUTH_COOKIE_DOMAIN= \
     BETTER_AUTH_PASSKEY_RP_ID=docket.localhost \
     BETTER_AUTH_PASSKEY_RP_NAME=Docket \
     BETTER_AUTH_SECRET=release-acceptance-secret-release-acceptance-secret \

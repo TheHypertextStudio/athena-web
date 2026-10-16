@@ -5,7 +5,7 @@ import { spawnSync } from 'node:child_process';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { REPO_ROOT } from '../../scripts/ci-gate-policy';
+import { parseYaml, REPO_ROOT } from '../../scripts/ci-gate-policy';
 
 const runnerPath = join(REPO_ROOT, 'scripts/run-release-acceptance.sh');
 const temporaryDirectories: string[] = [];
@@ -23,6 +23,16 @@ function readRunner(): string {
 }
 
 describe('release acceptance runner', () => {
+  it('keeps hosted Core screen acceptance in test mode with host-only cookies', () => {
+    const ci = parseYaml(readFileSync(join(REPO_ROOT, '.github/workflows/ci.yml'), 'utf8')) as {
+      readonly jobs: Readonly<Record<string, { readonly env: Readonly<Record<string, string>> }>>;
+    };
+    const environment = ci.jobs['core-screen-smoke']?.env;
+
+    expect(environment?.['APP_MODE']).toBe('test');
+    expect(environment?.['BETTER_AUTH_COOKIE_DOMAIN']).toBe('');
+  });
+
   it('is the executable root release command', () => {
     const rootPackage = JSON.parse(readFileSync(join(REPO_ROOT, 'package.json'), 'utf8')) as {
       scripts: Record<string, string>;
@@ -163,6 +173,41 @@ printf '%s\\n%s\\n' "\${DATABASE_URL:-}" "\${DATABASE_URL_UNPOOLED:-}" > "$CAPTU
       generatedUrl,
       generatedUrl,
     ]);
+  });
+
+  it.each(['node', 'workers'])('overrides local cookie scope for the %s test stack', (runtime) => {
+    const fixture = mkdtempSync(join(tmpdir(), 'docket-release-cookie-test-'));
+    temporaryDirectories.push(fixture);
+    const envPath = join(fixture, '.env.local');
+    writeFileSync(envPath, 'APP_MODE=local\nBETTER_AUTH_COOKIE_DOMAIN=docket.localhost\n');
+
+    const result = spawnSync(
+      'bash',
+      [
+        '-c',
+        `source "$1"
+ENV_FILE=$2
+RELEASE_WEB_RUNTIME=$3
+API_URL=http://api.docket.localhost:49001
+APP_URL=http://docket.localhost:49000
+DATABASE_URL=postgres://docket:docket@127.0.0.1:49152/docket_release_test
+run_release_env node -e "$4"`,
+        'release-cookie-environment-test',
+        runnerPath,
+        envPath,
+        runtime,
+        'console.log(JSON.stringify({ mode: process.env.APP_MODE, domain: process.env.BETTER_AUTH_COOKIE_DOMAIN }))',
+      ],
+      {
+        cwd: REPO_ROOT,
+        encoding: 'utf8',
+        env: { ...process.env, BETTER_AUTH_COOKIE_DOMAIN: 'docket.localhost' },
+      },
+    );
+
+    expect(result.stderr).toBe('');
+    expect(result.status).toBe(0);
+    expect(JSON.parse(result.stdout)).toEqual({ mode: 'test', domain: '' });
   });
 
   it.each(['node', 'workers'])('forwards the %s environment with strict Bash arrays', (runtime) => {

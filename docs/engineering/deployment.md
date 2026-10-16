@@ -1,7 +1,7 @@
-# Deployment — Vercel + GCP Cloud Run
+# Deployment — Cloudflare Workers + GCP Cloud Run
 
 Docket uses a gated hybrid production topology backed by Neon Postgres. The product web app deploys
-to Vercel; the API, admin app, and scheduled/background work deploy to GCP Cloud Run. GitHub Actions
+to Cloudflare Workers; the API, admin app, and scheduled/background work deploy to GCP Cloud Run. GitHub Actions
 authenticates to GCP with Workload Identity Federation, runs migrations from the API image, and deploys only
 after formatting, lint, types, tests, build, and browser E2E are green.
 
@@ -11,7 +11,7 @@ after formatting, lint, types, tests, build, and browser E2E are green.
 
 | Service        | Domain                     | Platform  | Notes                                                   |
 | -------------- | -------------------------- | --------- | ------------------------------------------------------- |
-| `docket` web   | `clearthedocket.com`       | Vercel    | Next.js product + marketing; same-origin API/auth proxy |
+| `docket` web   | `clearthedocket.com`       | Workers   | Next.js product + marketing; same-origin API/auth proxy |
 | `docket-api`   | `api.clearthedocket.com`   | Cloud Run | Hono API, Better Auth, MCP, webhooks, cron endpoints    |
 | `docket-admin` | `admin.clearthedocket.com` | Cloud Run | Next.js operator back office                            |
 
@@ -154,27 +154,21 @@ The bootstrap script checks for these and exits if any are missing or unauthenti
 --provider=mapbox`. Confirm that the account can store permanent geocoding results before adding
    `MAPBOX_ACCESS_TOKEN`. The wizard writes `docket-mapbox-access-token` to Secret Manager and adds
    its Cloud Run binding.
-6. Keep the `docket` Vercel project's Git integration enabled for `main`. In Project Settings →
-   Deployment Checks, require the GitHub Actions check
-   `Deploy production / Migrate database and deploy API` and configure it to block production alias
-   assignment. Vercel may build immediately, but it must not promote the deployment to the production
-   domain until that backend check succeeds.
-7. Push the validated commit to `main`. CI migrates the database, deploys the API, verifies the
-   health/session/signup routes, refreshes Scheduler jobs, and deploys admin. Vercel independently
-   builds the web commit from Git and promotes it only after the migration/API check passes.
+6. Publish the validated backend commit through the ordinary main release workflow. CI migrates
+   the database, deploys the API, verifies health/session/signup routes, refreshes Scheduler jobs,
+   and deploys admin. Keep all backend release gates intact.
+7. Publish the frontend separately through the approved native production Worker operation with
+   matching public build inputs and runtime bindings. Follow
+   [Workers operations](workers-compatibility.md#production-and-recovery); backend success alone
+   does not accept or publish the frontend.
 
-DNS is managed in Cloudflare:
-
-| Name           | Type         | Target                                     | Proxy            |
-| -------------- | ------------ | ------------------------------------------ | ---------------- |
-| `docket`       | Vercel value | Value shown by Vercel domain configuration | DNS only         |
-| `docket-api`   | CNAME        | `docket-api-<hash>-<region>.a.run.app`     | Proxied (orange) |
-| `docket-admin` | CNAME        | `docket-admin-<hash>-<region>.a.run.app`   | Proxied (orange) |
-
-Vercel ownership also requires TXT
-`_vercel.hypertext.studio=vc-domain-verify=docket.hypertext.studio,fad2a1c1b1d7e78d9a71`.
-Cloudflare SSL/TLS remains **Full** for the proxied Cloud Run origins. No Cloud Run domain mapping is
-required.
+Cloudflare owns frontend domain administration and the independently configured API/admin DNS.
+Read back the exact managed Custom Domain, zone, Worker/environment and selected version after
+an approved change. Preserve backend, Publishing and legacy association routes and their records.
+Do not restore retired Vercel frontend DNS or ownership TXT records as a deployment prerequisite.
+Keep managed-domain provisioning separate from restricted Worker build/deploy credentials and
+configuration. Cloudflare SSL/TLS remains **Full** for the existing proxied Cloud Run origins;
+frontend cutover does not alter their origin routing.
 
 ---
 
@@ -194,7 +188,7 @@ Set by `pnpm bootstrap`. Add missing ones with `gh variable set NAME --body "VAL
 | `BETTER_AUTH_PASSKEY_LEGACY_RP_ID` | manual               | Temporary previous RP for native passkey migration. Unset removes the bridge.                                             |
 | `NEON_PROJECT_ID`                  | bootstrap            | Neon project ID (from Neon console)                                                                                       |
 | `API_URL`                          | manual (post-deploy) | Public custom-domain origin of `docket-api`                                                                               |
-| `WEB_URL`                          | manual (post-deploy) | Public custom-domain origin of the Vercel web app                                                                         |
+| `WEB_URL`                          | manual (post-deploy) | Public custom-domain origin of the production web Worker                                                                  |
 | `ADMIN_URL`                        | manual (post-deploy) | Public custom-domain origin of `docket-admin`                                                                             |
 | `BETTER_AUTH_ALLOWED_HOSTS`        | manual               | Canonical web, API, and admin hosts plus old hosts during the migration window.                                           |
 | `GOOGLE_OAUTH_PUBLIC`              | manual               | `false` during review; `true` only after Google approval                                                                  |
@@ -335,11 +329,11 @@ Quiet hours and user category/channel preferences are enforced before external s
 is always the canonical in-product record; email/SMS/push are sibling delivery rows whose status is
 visible to the staff notification monitor and compactly hinted in the user's inbox row.
 
-### Next.js services (Vercel web, Cloud Run admin)
+### Next.js services (Workers web, Cloud Run admin)
 
-`NEXT_PUBLIC_*` vars are **baked into each bundle at build time**. Vercel supplies the web values
-from its production environment; the admin image receives them as Docker build arguments. They
-cannot be changed without rebuilding.
+`NEXT_PUBLIC_*` vars are **baked into each bundle at build time**. Supply the reviewed web inputs
+explicitly to the native Worker build, matching the public production Wrangler bindings; the admin
+image receives them as Docker build arguments. They cannot be changed without rebuilding.
 
 ---
 
@@ -358,10 +352,11 @@ The branch database URL is available as a workflow output (`db_url`, `db_url_wit
 
 The reusable deployment workflow builds the immutable API image, reads the unpooled migration URL
 from Secret Manager without logging it, and runs the migration entry point inside that exact image.
-An unsuccessful migration blocks API, admin, and web promotion. Migrations must be additive and
-must first pass against a fresh PGlite database plus a disposable Neon branch. Never roll production
-schema backward during an application rollback; route traffic to the prior compatible revision
-instead.
+An unsuccessful migration automatically blocks API and admin deployment. Separately approved
+frontend publication must require acceptance of its compatible backend and schema before attaching
+production domains. Migrations must be additive and must first pass against a fresh PGlite database
+plus a disposable Neon branch. Never roll production schema backward during an application
+rollback; route traffic to the prior compatible revision instead.
 
 Before migration, inspect for duplicate `(user_id, provider_id, account_id)` account rows. Migration
 `0029` intentionally stops on duplicates rather than deleting credentials ambiguously.
@@ -393,9 +388,9 @@ docs. Run the same thing locally:
 pnpm launch:verify-docs
 ```
 
-It cannot gate a release. Vercel promotes the web build only once the `deploy-api` check passes, so
-the site it verifies does not exist at gate time; a failure means a red run and a broken site to go
-fix, not a blocked deploy. `pnpm launch:verify-prod` remains the on-demand pass that gates on the
+This post-deployment/scheduled workflow observes the currently published frontend, independently
+of backend publication. A failure reports broken live delivery; it does not replace release gates
+or authorize a deployment. `pnpm launch:verify-prod` remains the on-demand pass that checks the
 whole surface.
 
 ### Viewing logs
@@ -415,32 +410,6 @@ gcloud scheduler jobs describe docket-sync-calendars --location=<REGION> --proje
 ```bash
 git commit --allow-empty -m "chore: force redeploy" && git push
 ```
-
-### Skipping the Vercel web build for pushes that do not touch it
-
-`apps/web/vercel.json` sets `ignoreCommand` to `npx turbo-ignore@2.10.2 @docket/web
---fallback=<sha> --turbo-version=2.10.2`, pinned to the `turbo` devDependency version
-in the root `package.json` (there is no `turbo` entry in the pnpm catalog — it is not
-a cross-cut pin). Vercel runs this inside the project's Root Directory (`apps/web`)
-before every build. `turbo-ignore` asks turbo whether the pushed commit changed
-`@docket/web`'s build-task hash relative to the last deployed commit; if not, it exits
-`0` and Vercel skips the build. `--fallback` only matters on a commit with no prior
-deployment to diff against (first deploy on a branch); in normal operation turbo-ignore
-diffs against the last successfully-deployed commit for the project automatically.
-
-This skips builds for pushes confined to `.github/`, `scripts/`, or a package `@docket/web`
-does not depend on. It does **not** skip pushes to `apps/api` or `packages/integrations`:
-`apps/web/package.json` depends on `@docket/api` directly (the Hono RPC `AppType` contract)
-and on `@docket/integrations`, and turbo's default `build` task inputs are
-`$TURBO_DEFAULT$` (everything except `*.md`) with no exclusion for test files — so even an
-api test-only commit changes `@docket/api#build`'s hash, which cascades to
-`@docket/web#build` through `dependsOn: ["^build"]`. Verified directly: a commit touching
-only `apps/api/tests/**` produced `This commit affects "@docket/web"` (exit 1, build) from
-`turbo-ignore`, while commits confined to `.github/workflows/**` or `scripts/**` produced
-`This project and its dependencies are not affected` (exit 0, skip). Across the last 25
-commits on `main`, only the `.github`-only and `scripts`-only ones would have skipped — most
-of tonight's apps/api and packages/integrations work still triggers a web build, correctly,
-because it changes what `@docket/web` imports.
 
 ### Checking a project for drift
 
@@ -514,7 +483,7 @@ block injects them as `:latest`. So the deploy is green today with connectors ho
 
 **To activate a provider**, register an OAuth app, then replace its placeholder secret value(s)
 and redeploy. Browser linking uses the product origin so Better Auth's session cookie remains
-first-party through the Vercel rewrite:
+first-party through the frontend's same-origin gateway:
 
 | Provider | Register at                                                  | Callback URL                                                   | Secrets to set                                                                                                                               |
 | -------- | ------------------------------------------------------------ | -------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |

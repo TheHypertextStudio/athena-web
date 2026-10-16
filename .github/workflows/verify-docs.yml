@@ -6,10 +6,9 @@
 # origin pointed at a hostname with no DNS record, and every `/docs` page answered
 # `502 BAD_GATEWAY` on the live domain. Only a request to the running site can tell the difference.
 #
-# This is NOT a release gate and cannot be one: Vercel promotes the web build only after the
-# `deploy-api` check passes (docs/engineering/deployment.md), so the thing being verified does not
-# exist until the release is already out. It runs afterwards and reports loudly instead — a
-# failure here is a red run and a broken site, not a blocked deploy.
+# This is post-deployment and scheduled public verification, separate from release gates.
+# The frontend is published independently of the backend release that also calls this workflow.
+# A failure reports broken live delivery; it does not replace frontend or backend acceptance.
 #
 # Billed footprint: one `ubuntu-latest` runner that makes roughly a dozen HTTP requests and exits.
 # Two triggers, both cheap. `workflow_call` adds one run per production release, which is at most

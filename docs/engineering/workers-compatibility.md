@@ -85,24 +85,23 @@ stack, archive, lifecycle runner, identity endpoint or cache uploader.
 
 ## Production and recovery
 
-Vercel remains the production frontend until the independently approved
-Workers cutover. The source declares the production app/API, passkey and
-Publishing identities. Confirm actual route ownership, TLS, bindings,
-credentials and prior deployment/alias reversal before applying routes.
+The production frontend uses the declared Worker. The source declares the
+production app/API, passkey and Publishing identities. Confirm actual managed
+domain and route ownership, TLS, selected-version bindings, credentials and
+recorded routing reversal before applying an approved change.
 Use a fresh production build with matching public inputs, never staging output.
 The Worker preserves the exact application's `www` alias as a permanent redirect
-to its canonical HTTPS origin, retaining path and query. Include that hostname in
-the frontend cutover so the redirect no longer depends on Vercel. Publishing,
+to its canonical HTTPS origin, retaining path and query. Preserve that hostname
+with the frontend so canonicalization remains application-owned. Publishing,
 API/admin and unrelated custom hosts retain their separate routing.
 
 Native OpenNext `deploy:worker` and `upload:worker` both write remote cache and
 provider state. `deploy` serves the new version; `upload` alone does not accept
 the application. Use native version/deployment history for code rollback and
-retain independent DNS/route reversal steps while prior hosting exists. Retire
-superseded hosting and its DNS and deployment dependencies after Workers cutover
-acceptance, with no fixed observation or recovery window. Retain source and build
-configuration for redeployment; use native rollback once an accepted previous
-Worker version exists.
+retain independent managed-domain/DNS/route reversal steps. Vercel frontend
+publication and its aliases are not recovery dependencies. Retain source and
+build configuration for redeployment; use native rollback to an accepted previous
+Worker version. No fixed observation or recovery window is required.
 
 Accept real startup/runtime behavior, Images/cache and invalidation,
 streaming/abort, private-viewer/logout, auth, docs/MCP and Publishing journeys

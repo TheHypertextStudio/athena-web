@@ -16,7 +16,7 @@ The repository pins pnpm and Node through `packageManager` and `.node-version`; 
 workspace lock is unchanged. Shared company ESLint/TypeScript/Prettier configuration composes with
 Docket's existing domain, security, complexity and Tailwind rules.
 
-Normal Node/Vercel commands remain `pnpm dev`, `pnpm build`, `pnpm lint` and `pnpm typecheck` at the
+Normal Node reference commands remain `pnpm dev`, `pnpm build`, `pnpm lint` and `pnpm typecheck` at the
 repository root. Common Mintlify commands remain `pnpm docs:config`, `pnpm docs:config:check`,
 `pnpm docs:dev` and `pnpm docs:check`. Shared private packages `0.0.1` and the pinned Mintlify CLI
 remain installed through the genuine workspace lock. Actions uses its ephemeral GitHub token and
@@ -177,7 +177,7 @@ staging routes that could replace it.
 Workers omit baked backend rewrites. Each request validates explicit `API_URL`, `WEB_URL`,
 `BETTER_AUTH_PASSKEY_RP_ID`, `STUDIO_DEPLOYMENT_ENV`, optional `PUBLIC_BRIEF_HOST` and optional
 `BETTER_AUTH_PASSKEY_LEGACY_RP_ID`. Production requires a brief host. Missing or invalid routing
-returns 503/no-store rather than falling back to production. Node/Vercel keeps its existing
+returns 503/no-store rather than falling back to production. Node keeps its existing
 rewrites, browser-origin auth and legacy RP behavior.
 
 For recognized application-host `GET /v1/config`, the Worker extends a real backend config with
@@ -229,10 +229,11 @@ staff Access challenge must not replace the public metadata document needed by
 the provider. Neither source bindings nor a successful config response establish
 passkey, session, Lattice or data-isolation acceptance.
 
-Vercel remains the active production host. Native Node Proxy middleware is experimental in this
-OpenNext version. Actual upload/startup/CPU, Images/cache, abort/streaming, private-viewer/logout,
-authenticated journeys and isolated staging auth/data remain required. Production cutover also
-requires verified canonical/association/docs identity, complete production routing/bindings and a
-reviewed restoration of the prior Vercel deployment and aliases. The ordinary
-backend release pipeline remains separate from the manual frontend staging
-workflow and the separately approved frontend production cutover.
+The production frontend uses the declared Worker with matching public build inputs and runtime
+bindings. Native Node Proxy middleware is experimental in this OpenNext version, so build and
+dry-run success do not establish hosted runtime acceptance. Verify startup, Images/cache,
+abort/streaming, private-viewer/logout, canonical/association/docs identity and the migration-changed
+auth declarations against the selected version. Keep staging auth/data isolated. Recovery uses
+native Worker versions and separately recorded domain/DNS/route reversal; retired Vercel aliases
+are not a recovery target. The ordinary backend release pipeline remains separate from frontend
+publication and its production approval.

@@ -99,7 +99,7 @@ export const DOCS_CHECK_NAMES: readonly string[] = ['docs', 'llms', 'llms-full']
  *
  * @remarks
  * `/docs` is not a route in `apps/web`; it resolves only through the `next.config.ts` rewrites to
- * `DOCS_MINTLIFY_ORIGIN`. A destination that does not resolve fails inside Vercel's proxy and never
+ * `DOCS_MINTLIFY_ORIGIN`. A destination that does not resolve fails at the frontend proxy and never
  * reaches Mintlify, which is why the canonical-URL assertion matters as much as the status: a
  * gateway error page also carries no `/docs/` URL to land on.
  *

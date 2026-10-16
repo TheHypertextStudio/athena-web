@@ -1,5 +1,11 @@
 # Domain cutover runbook
 
+> **Historical domain migration reference.** Frontend hosting now uses Cloudflare Workers, and
+> the admin service uses Cloud Run. For current publication and recovery, use
+> [deployment](deployment.md), [host ownership](domains.md) and
+> [Workers operations](workers-compatibility.md#production-and-recovery). The dated Vercel/Pages
+> instructions below are not current deployment steps.
+
 > **Requirements:** GEN-24 (registration, DNS, TLS), GEN-25 (nothing user-facing left on
 > `hypertext.studio`), GEN-26 (auth re-scoped), GEN-27 (`hypertext.studio` keeps working),
 > GEN-28 (outbound mail from a Docket/Athena-owned domain).

@@ -1,8 +1,8 @@
 # Domains — Docket's production host contract
 
-> **Read this first.** `clearthedocket.com` was registered on 2026-09-08. The migration is active.
-> DNS and authentication cutover remain incomplete, so the old hosts still answer until the
-> recovery ceremony succeeds on the new passkey relying party.
+> **Read this first.** The production host contract below governs current deployment. Frontend
+> hosting and authentication recovery are separate operations; preserve declared legacy passkey
+> and service routes until their own migration requirements are satisfied.
 
 ---
 
@@ -26,12 +26,15 @@ host literals in production source.
 
 Docs are outside that ban, which is why this page may name the hosts and source may not.
 
-### Migration state
+### Current hosting ownership
 
-Vercel owns `clearthedocket.com` and `www.clearthedocket.com` on project `docket`. Cloudflare DNS,
-the Cloud Run aliases, provider callbacks, and the passkey recovery ceremony remain open. The old
-`docket.hypertext.studio` origin must stay usable until that ceremony succeeds. It will then issue
-a permanent redirect to `https://clearthedocket.com`.
+The native production Worker owns the `clearthedocket.com` frontend and its exact
+`www.clearthedocket.com` canonical redirect. Administer managed Custom Domains separately through
+Cloudflare's native API with approved operator access; routine Worker uploads do not provision
+domains. Keep the API/admin services, Publishing hosts, legacy passkey association and other
+more-specific routes with their declared owners. Frontend hosting does not change callbacks, RP
+identities or cookie scope. Retired Vercel frontend aliases are not a recovery dependency; use
+native Worker version rollback and separately recorded domain/DNS/route reversal.
 
 The cutover itself — the order of operations, and the passkey-invalidation trap in it — is
 [`domain-cutover.md`](./domain-cutover.md).

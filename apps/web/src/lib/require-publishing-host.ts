@@ -5,8 +5,8 @@
  * `NEXT_PUBLIC_BRIEF_HOST` is optional in the client env schema (`clientShared`) because local and
  * preview builds legitimately run without it. A production build has no such excuse — without it,
  * `DefaultAddressRow` renders a bare, meaningless org slug as a "web address" for every workspace.
- * Workers candidates set `STUDIO_DEPLOYMENT_ENV`; existing Vercel deployments retain `VERCEL_ENV`.
- * Both providers enforce the same Publishing readiness guard.
+ * Workers set `STUDIO_DEPLOYMENT_ENV`; the Node compatibility path also accepts `VERCEL_ENV`.
+ * Both runtime paths enforce the same Publishing readiness guard.
  *
  * @param deploymentEnv - The selected provider's deployment environment at build time.
  * @param briefHost - `process.env['NEXT_PUBLIC_BRIEF_HOST']` at build time.

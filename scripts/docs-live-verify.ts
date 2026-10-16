@@ -16,11 +16,10 @@ import {
  * How many times the docs probe runs before the site is called broken.
  *
  * @remarks
- * Vercel promotes the web build only once the `deploy-api` job's check passes
- * (`docs/engineering/deployment.md`), so a release-triggered run can arrive while the promotion is
- * still in flight and read the previous build. Ten attempts a half-minute apart covers that window
- * without turning a genuine outage into a five-minute wait for most runs, because a healthy site
- * passes on the first attempt and never sleeps at all.
+ * A public probe can observe the previous frontend version during an independently approved
+ * deployment. Ten attempts a half-minute apart bound that transition window without making a
+ * healthy site wait: it passes on the first attempt and never sleeps at all. This check observes
+ * live delivery and does not publish the frontend or replace its release acceptance.
  */
 const DEFAULT_ATTEMPTS = 10;
 

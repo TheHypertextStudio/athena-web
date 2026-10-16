@@ -13,7 +13,7 @@
         "BETTER_AUTH_PASSKEY_LEGACY_RP_ID",
         "STUDIO_DEPLOYMENT_ENV"
       ],
-      // Set on the Vercel project and read only at runtime by the server routes. Passed through
+      // Supplied to the Node runtime and read only by the server routes. Passed through
       // rather than declared in `env` so rotating the blob token does not bust the build cache.
       "passThroughEnv": ["BLOB_READ_WRITE_TOKEN"],
       // Stated in full rather than inherited: a package-level `outputs` replaces the root's rather

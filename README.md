@@ -161,7 +161,8 @@ For disposable local API/database/browser acceptance, the existing `pnpm test:re
 the existing core-screen CI setting, to include the documentation proxy in either runtime's checks.
 See [Docket web setup](apps/web/README.md) and
 [Workers compatibility](docs/engineering/workers-compatibility.md) for local isolation, native
-staging commands and the required production approval. Vercel remains the active production host.
+staging commands and the required production approval. The frontend uses the native production Worker;
+Vercel frontend publication is retired independently of Turbo remote cache and Blob storage.
 Ordinary CI and backend/native publication retain their existing triggers and mandatory checks;
 there are no custom candidate/promote workflows or temporary publication-hold flags.
 

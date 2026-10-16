@@ -79,24 +79,24 @@ bounded retries and no new push multiplier.
 
 ## Provider and route contract
 
-The retained authenticated provider observation at 2026-10-11 05:03 UTC is recorded in
-[docs-deployment.json](docs-deployment.json). It is a dated snapshot, not a fresh provider refresh
-or proof of publication of this checkpoint.
+The table describes the current provider contract. The older
+[docs-deployment.json](docs-deployment.json) is a historical snapshot; its pending gates and old
+Host-at address do not describe the accepted Workers cutover. Keep current deployment receipts
+and source/version evidence in private operational records.
 
-| Setting                         | Recorded value                                                                          |
-| ------------------------------- | --------------------------------------------------------------------------------------- |
-| Mintlify organization/project   | `hypertextstudio` / `docket`                                                            |
-| Git integration                 | `TheHypertextStudio/athena-web`, branch `main`, directory `apps/docs`                   |
-| Public origin/prefix            | `https://clearthedocket.com/docs`                                                       |
-| Active source proxy origin      | `DOCS_MINTLIFY_ORIGIN=https://docket.mintlify.dev`                                      |
-| Dashboard upstream              | `https://docket.mintlify.site`; observation only, not a source replacement              |
-| Dashboard Host-at               | `https://docket.hypertext.studio/docs`; stale canonical configuration                   |
-| Last observed successful source | `0aadf2bd2669119ee8f99a1474e7fbac85273f57`, Oct 2, 2026, 5:05 PM dashboard display      |
-| Contributor access              | Existing company Git/Mintlify access; no new account, credential, or role provisioned   |
-| Hosted previews                 | Unavailable after the Pro trial ended; use local preview                                |
-| API deployment access           | Entitlement unverified; existing Git publishing remains selected; no key or plan change |
+| Setting                       | Recorded value                                                                          |
+| ----------------------------- | --------------------------------------------------------------------------------------- |
+| Mintlify organization/project | `hypertextstudio` / `docket`                                                            |
+| Git integration               | `TheHypertextStudio/athena-web`, branch `main`, directory `apps/docs`                   |
+| Public origin/prefix          | `https://clearthedocket.com/docs`                                                       |
+| Active source proxy origin    | `DOCS_MINTLIFY_ORIGIN=https://docket.mintlify.dev`                                      |
+| Dashboard upstream            | `https://docket.mintlify.site`; observation only, not a source replacement              |
+| Dashboard Host-at             | `https://clearthedocket.com/docs`                                                       |
+| Contributor access            | Existing company Git/Mintlify access; no new account, credential, or role provisioned   |
+| Hosted previews               | Unavailable after the Pro trial ended; use local preview                                |
+| API deployment access         | Entitlement unverified; existing Git publishing remains selected; no key or plan change |
 
-Keep the current Vercel rewrite contract in `apps/web/next.config.ts`:
+Keep the current Next/OpenNext documentation proxy contract in `apps/web/next.config.ts`:
 
 | Public source             | Active upstream destination                      |
 | ------------------------- | ------------------------------------------------ |
@@ -115,23 +115,23 @@ this slice does not proxy or migrate it.
 
 ### Canonical reconciliation
 
-The application redirects the Studio alias to `clearthedocket.com`, and product config/links already
-use the primary domain. The retained public observation renders a canonical under the old Studio
-alias. The last observed Mintlify Host-at site address names that alias. The pinned schema has
-page-specific canonical frontmatter and arbitrary SEO meta tags; it has no global canonical-origin setting. Adding one
-fixed canonical tag to every page would conflate different pages, and scattering 52 overrides would
-leave provider-generated assets/sitemaps inconsistent. Retain content URLs and correct the provider
-Host-at address to `https://clearthedocket.com/docs` during the separately reviewed provider phase.
-Then verify each page's own canonical and `og:url`, the sitemap, aliases, redirects, search, and
-assets through the same public prefix. This source checkpoint does not change that remote setting.
+The application redirects the Studio alias to `clearthedocket.com`, and Mintlify's Host-at address
+is `https://clearthedocket.com/docs`. After a provider address change, use the native Manual update
+to rebuild generated canonical URLs. Verify each page's own canonical and `og:url`, the sitemap,
+aliases, redirects, search and assets through the same public prefix. Keep the frontend's managed
+Custom Domain: do not replace the apex with Mintlify's suggested CNAME when proxying only `/docs`.
+
+The pinned schema has page-specific canonical frontmatter and arbitrary SEO meta tags, but no
+global canonical-origin setting. Correct the provider address instead of adding a fixed canonical
+to every page or scattering per-page overrides.
 
 ## Publishing and acceptance record
 
 Publishing continues through the existing Mintlify Git integration after an authorized linear-history
 push to `main`. There is no Workers artifact promotion for this Mintlify project. Before delivery,
-record the reviewed source SHA, package versions, registry lock identity, generated-config identity,
-local check results, and preview review. After publication, record the actual provider update
-identity/status/source SHA and public observations in `docs-deployment.json`.
+retain the reviewed source and local/preview checks in private operational records. After
+publication, retain the actual provider update status, source identity when exposed, and public
+observations beside those records.
 
 Verify `/docs`, a Guides page, a Developers page, Changelog, all six redirects, representative heading
 anchors, logos/styles/client chunks/fonts, search and its request routes, `/docs/llms.txt`,

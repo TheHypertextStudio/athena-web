@@ -43,7 +43,7 @@ const NON_AASA_ROUTES = '/:path((?!\\.well-known/apple-app-site-association$).*)
  * The temporary passkey relying party that must keep serving Apple's trust document.
  *
  * @remarks
- * Vercel host matchers treat the value as a regular expression. The API and web deployment receive
+ * Next host matchers treat the value as a regular expression. The API and web deployment receive
  * the same migration variable, so removing it unmounts the legacy assertion and removes this host
  * redirect exception together. The value must be a bare lower-case hostname because a malformed
  * relying-party identifier must stop a release instead of widening a redirect rule.

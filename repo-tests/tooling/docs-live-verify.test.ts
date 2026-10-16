@@ -3,9 +3,9 @@
  *
  * @remarks
  * The behaviour under test is a split: documentation failures fail the run, everything else on the
- * public production surface is reported without failing it. The retry loop exists for one specific
- * race — Vercel promotes the web build only after the release's API check passes — so the tests
- * pin both that it waits and that waiting cannot rescue a genuinely broken origin.
+ * public production surface is reported without failing it. The retry loop bounds a public
+ * deployment transition, so the tests pin both that it waits and that waiting cannot rescue
+ * a genuinely broken origin.
  */
 import { describe, expect, it, vi } from 'vitest';
 

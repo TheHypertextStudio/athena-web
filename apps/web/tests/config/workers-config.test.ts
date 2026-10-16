@@ -46,6 +46,58 @@ describe('Workers provider configuration', () => {
     ).toBe('https://clearthedocket.com/docs?from=www');
   });
 
+  it('preserves the old application redirect without capturing canonical or recovery hosts', () => {
+    const values = {
+      STUDIO_DEPLOYMENT_ENV: 'production',
+      WEB_URL: 'https://clearthedocket.com',
+      API_URL: 'https://api.clearthedocket.com',
+      PUBLIC_BRIEF_HOST: 'briefs.clearthedocket.com',
+      BETTER_AUTH_PASSKEY_RP_ID: 'clearthedocket.com',
+      BETTER_AUTH_PASSKEY_LEGACY_RP_ID: 'hypertext.studio',
+    };
+    const config = readWorkerRuntimeConfig(values);
+    const alias = new URL('https://docket.hypertext.studio/sign-in?callbackURL=%2Ftoday');
+    const response = workerHostRedirect(alias, config);
+    expect(response?.status).toBe(308);
+    expect(response?.headers.get('location')).toBe(
+      'https://clearthedocket.com/sign-in?callbackURL=%2Ftoday',
+    );
+    expect(response?.headers.get('x-content-type-options')).toBe('nosniff');
+    expect(
+      workerHostRedirect(
+        new URL('https://hypertext.studio/.well-known/apple-app-site-association'),
+        config,
+      ),
+    ).toBeUndefined();
+    expect(
+      workerHostRedirect(
+        alias,
+        readWorkerRuntimeConfig({
+          ...values,
+          WEB_URL: 'https://docket.hypertext.studio',
+          BETTER_AUTH_PASSKEY_RP_ID: 'docket.hypertext.studio',
+        }),
+      ),
+    ).toBeUndefined();
+    expect(
+      workerHostRedirect(
+        alias,
+        readWorkerRuntimeConfig({ ...values, BETTER_AUTH_PASSKEY_RP_ID: 'hypertext.studio' }),
+      ),
+    ).toBeUndefined();
+    expect(
+      workerHostRedirect(
+        alias,
+        readWorkerRuntimeConfig({
+          STUDIO_DEPLOYMENT_ENV: 'staging',
+          WEB_URL: 'https://docket-staging.hypertext.studio',
+          API_URL: 'https://docket-api-staging-770668668034.us-central1.run.app',
+          BETTER_AUTH_PASSKEY_RP_ID: 'docket-staging.hypertext.studio',
+        }),
+      ),
+    ).toBeUndefined();
+  });
+
   it('uses the source Worker and native OpenNext assets directly', () => {
     const source: unknown = JSON.parse(readFileSync('wrangler.jsonc', 'utf8'));
     expect(source).toMatchObject({

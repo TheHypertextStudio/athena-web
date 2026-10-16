@@ -7,17 +7,39 @@
 
 ## Active Tasks
 
+### [WEBSITE-WORKERS-RETIREMENT] Retire the previous frontend provider
+
+- **Status**: COMPLETE
+- **Description**: Finish the approved Workers frontend cutover while preserving the ordinary
+  backend release pipeline, Mintlify publishing and legacy passkey/service identities.
+- **Approach**: Attach the existing native production Worker to the frontend's managed domains,
+  accept public delivery, and remove the superseded Vercel projects and exclusive build config.
+  Keep domain administration separate from restricted Worker publication credentials.
+- **Files**: Frontend provider config, existing gateway regression checks, deployment/docs guidance,
+  historical domain-runbook notice and comments describing the unchanged verification workflows.
+- **Validation**: Local API coverage and performance checks pass, as do the affected gateway and
+  repository verification checks. Ordinary main CI and backend deployment pass. Native staging
+  publication and public metadata pass; an expired staff Access session limits fresh private UI
+  evidence. All six production domains pass TLS and serving checks; canonical redirects, docs,
+  public config/associations, exact built assets, Images and cache responses are accepted. Native
+  request events confirm the selected Worker without exceptions. The Vercel frontend projects
+  and their DNS targets are removed.
+- **Learnings**: Provider migration includes canonical redirects and Mintlify's provider-generated
+  canonical URLs. Keep their ownership explicit without retaining a second frontend host.
+
 ### [WEBSITE-LEGACY-CANONICAL] Preserve the old application alias on Workers
 
-- **Status**: REVIEW
+- **Status**: COMPLETE
 - **Description**: Preserve the existing old Docket host redirect when removing Vercel hosting.
 - **Approach**: Derive the old application alias from the configured legacy RP and redirect it
   through the existing canonicalization boundary, preserving path and query. Keep an active
   transitional recovery host exempt and preserve the historical RP's AASA behavior.
-- **Files**: Worker gateway and this log.
+- **Files**: Worker gateway, existing gateway regression checks and this log.
 - **Validation**: Review the narrow condition, build the current-main native production artifact,
   and accept the alias through its actual managed domain before retiring the provider. Ordinary
   CI and backend deployment gates remain required; source review alone is not runtime acceptance.
+- **Outcome**: Local regression checks and ordinary CI pass. The actual legacy managed domains
+  preserve the canonical redirects with path and query intact after the Workers cutover.
 
 ### [COPY-MIGRATION-CREATOR-ROLE] Preserve managed PostgreSQL creator membership safely
 
@@ -50,7 +72,8 @@
   the native production preview returns the canonical redirect. Preserve current security headers.
 - **Outcome**: The native production preview returns the permanent canonical redirect with path,
   query and security headers intact. Affected Workers checks, web types, lint, formatting and
-  independent review pass. Actual hostname attachment remains part of the approved frontend cutover.
+  independent review pass. The approved frontend cutover accepts the actual managed www hostname
+  with path, query and security headers preserved.
 - **Learnings**: Include provider-owned redirects when moving application hosting; the application's
   own canonicalization boundary can preserve them without retaining the previous provider.
 

@@ -1,8 +1,7 @@
 # Docket — System Architecture
 
-> **Hosts:** `docket.app` below is a placeholder for an apex Docket has not bought yet.
-> Production answers on `docket.hypertext.studio` / `docket-api.hypertext.studio` /
-> `docket-admin.hypertext.studio` today — see [`domains.md` §0](./domains.md).
+> **Hosts:** The diagrams below preserve earlier design placeholders. Current production host
+> ownership is defined in [domains.md](./domains.md); use that contract for operational changes.
 
 > **Historical companion** to `docs/engineering/docket-engineering-plan.md` (the written overview)
 > and `docs/engineering/specs/*`. These diagrams preserve the earlier **Docket** design. Current
@@ -12,7 +11,7 @@
 > **Current-topology note (2026-08-14).** The detailed design narrative below preserves earlier
 > architecture decisions and is not the package-ownership authority for new work. The current
 > workspace has `apps/web` (including the marketing routes), `apps/admin`, `apps/api`, and the
-> feature-flagged Cloudflare `apps/runner`; Web deploys on Vercel, Admin/API on GCP Cloud Run.
+> feature-flagged Cloudflare `apps/runner`; Web deploys on Cloudflare Workers, Admin/API on GCP Cloud Run.
 > For current ownership use [ARCH-001](../WORKLOG.md#arch-001-domain-first-repository-reorganization)
 > and the [domain-first specification](./specs/domain-first-reorganization.md); for operations use
 > the [deployment runbook](./deployment.md).

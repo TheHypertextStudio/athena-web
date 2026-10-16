@@ -389,10 +389,9 @@ describe('the real workflows', () => {
       '.github/workflows/lattice-acceptance-audit.yml',
       '.github/workflows/lattice-staging-hygiene.yml',
       '.github/workflows/neon-branch.yml',
-      // Runs after the release, never before it: Vercel promotes the web build only once
-      // deploy.yml's API check passes, so the documentation site it probes does not exist at
-      // gate time. It carries no gating command token, so the ungated-check-job rule does not
-      // see it as a check job that skipped `release-ready.needs`.
+      // Post-deployment/scheduled live documentation verification is separate from release gates.
+      // It carries no gating command token, so the ungated-check-job rule does not see it as
+      // a check job that skipped `release-ready.needs`.
       '.github/workflows/verify-docs.yml',
     ]);
   });

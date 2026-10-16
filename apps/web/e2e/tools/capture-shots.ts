@@ -49,6 +49,7 @@ import {
   type MobileLayoutRouteCase,
 } from '../helpers/mobile-layout-audit-cases';
 import { assertLocalCaptureBaseUrl } from './capture-policy';
+import { waitForCaptureAnimations } from './capture-animations';
 import { parseCaptureArgs, type CliArgs } from './capture-cli';
 import {
   applyCaptureScenario,
@@ -225,6 +226,11 @@ async function blackPixelRatio(page: Page, png: Buffer): Promise<number> {
   }, png.toString('base64'));
 }
 
+/** Reject broken runtime frames rather than presenting a recovered or development-error screen. */
+function assertNoRuntimeErrors(errors: readonly string[]): void {
+  if (errors.length > 0) throw new Error(`Uncaught runtime error: ${errors[0]}`);
+}
+
 /** Capture one integrity-checked frame, recreating the page when Chromium emits black tiles. */
 async function captureCleanFrame(options: {
   context: BrowserContext;
@@ -240,6 +246,10 @@ async function captureCleanFrame(options: {
   const { context, url, viewport, colorScheme, setup, allowSignIn, scenario, allowState } = options;
   for (let attempt = 1; attempt <= 4; attempt += 1) {
     const page = await context.newPage();
+    const runtimeErrors: string[] = [];
+    page.on('pageerror', (error) => {
+      runtimeErrors.push(error.message);
+    });
     try {
       await page.setViewportSize(viewport);
       const device = await context.newCDPSession(page);
@@ -267,7 +277,10 @@ async function captureCleanFrame(options: {
           `${url} overflows at ${viewport.label} (${String(overflow.scrollWidth)} > ${String(overflow.clientWidth)})`,
         );
       }
+      await waitForCaptureAnimations(page);
+      assertNoRuntimeErrors(runtimeErrors);
       const candidate = await page.screenshot({ type: 'png' });
+      assertNoRuntimeErrors(runtimeErrors);
       const damaged = (await blackPixelRatio(page, candidate)) > 0.02;
       if (!damaged) return candidate;
       console.warn(

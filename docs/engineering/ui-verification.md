@@ -194,6 +194,12 @@ capturing an unresolved or failed state. A mock specifies `url`, `method`, and e
 `response: { status, json }`; optional `skip` and `times` select a later request in a real journey.
 These frames demonstrate application presentation, not provider outcomes or permission enforcement.
 
+The capture command waits for running finite entrance animations before taking the frame. It
+preserves paused, scroll-driven header animations and does not wait for infinite loading loops.
+Uncaught page errors reject a frame rather than admitting a recovered error screen.
+Still choose a content-specific readiness target: an open dialog can be ready before its requested
+error, review result or saved state arrives.
+
 For transient outcomes, `fixtureRequests` create independent local records before each frame using
 `API_URL`. Each request declares `url`, `method`, optional `body` and a `saveAs` name; scalar response
 properties such as `{{plan.id}}` may appear in subsequent requests, the route or actions. Requests

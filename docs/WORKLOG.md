@@ -7,6 +7,44 @@
 
 ## Active Tasks
 
+### [WEBSITE-CI-ROUTE-AUTHORITY] Keep writer fixtures aligned with persisted creation authority
+
+- **Status**: COMPLETE
+- **Priority**: P1
+- **Description**: Seed the intended persisted permissions for successful work-creation and
+  date-reflow fixtures. Creation reloads current authority from the database, so injected request
+  capabilities alone do not represent an authorized writer.
+- **Approach**: Use existing scoped fixture helpers with the same capability the scenario declares.
+  Preserve the shared unprivileged fixture, negative-access cases, production authorization and
+  release gates. Program-authoring scenarios use the current Manage requirement; ordinary work
+  and template authors retain Contribute.
+- **Files**: Affected API route/MCP tests and this worklog.
+- **Subtasks**:
+  - [x] Align affected grouped-route, Project/Initiative detail and aggregate writer fixtures.
+  - [x] Validate the six complete affected route suites, including negative-access assertions.
+  - [x] Independently review the scoped permissions and unchanged isolation/rollback expectations.
+  - [x] Align the completion-driven process owner and positive MCP Program-authoring fixtures.
+  - [x] Validate the complete affected Hub and MCP suites.
+  - [x] Keep retained-series attribution coverage using authenticated creation followed by legacy attribution loss.
+  - [x] Move existing fiscal-date and process-completion cases into focused specs without relaxing file-size gates.
+
+### [WEBSITE-CI-WORK-CONTRACTS] Keep release checks aligned with current work contracts
+
+- **Status**: COMPLETE
+- **Priority**: P1
+- **Description**: Keep ordinary release checks precise as work creation gains shared labels,
+  retained schedules and complete reversible change sets. Preserve provenance, concurrent-edit
+  protection and the existing composite capture response.
+- **Approach**: Select task creation entries by entity kind and id. Exercise Project undo refusal
+  after a later edit. Use the response helper's explicit null Location for composite output with no
+  top-level id, as permitted by the REST conventions.
+- **Files**: Task provenance and atomic undo checks, the capture response helper and this worklog.
+- **Subtasks**:
+  - [x] Preserve creation-operation assertions while excluding label snapshots with the same id.
+  - [x] Preserve negative atomic-undo coverage for later-edited Projects.
+  - [x] Make the composite response's existing header behavior explicit.
+  - [x] Validate the complete existing provenance, undo, Location inventory and capture suites.
+
 ### [WEBSITE-SCHEDULE-PICKER-INVENTORY] Keep the schedule picker audit current
 
 - **Status**: COMPLETE

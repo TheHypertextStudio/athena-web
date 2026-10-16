@@ -4,7 +4,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 
 import type * as DbModule from '@docket/db';
 
-import { appWithActor, getDb, seedBaseOrg } from '../support/routes-harness';
+import { appWithActor, getDb, seedBaseOrg, seedTaskAccessOrg } from '../support/routes-harness';
 import { assertDefined } from '@docket/test-utils';
 import { InitiativeWorkViewQueryRequest } from '@docket/work/work-view-contract';
 import { programRequest, projectRequest, taskRequest } from '../work-views/request-fixtures';
@@ -1489,7 +1489,7 @@ describe('agents router', () => {
 
 describe('tasks router', () => {
   it('create (state default from team) + list + team-not-found + 403/422', async () => {
-    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, humanActorId } = await seedTaskAccessOrg(db, schema, 'contribute');
     const w = appWithActor(r['tasks'], orgId, ['contribute'], humanActorId);
 
     const created = await w.request('/', {
@@ -1538,7 +1538,7 @@ describe('tasks router', () => {
   });
 
   it('falls back to backlog when team has no workflow states', async () => {
-    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, humanActorId } = await seedTaskAccessOrg(db, schema, 'contribute');
     const [t] = await db
       .insert(schema.team)
       .values({
@@ -1561,7 +1561,7 @@ describe('tasks router', () => {
 
 describe('projects router', () => {
   it('create (with + without dates) + list + 403/422', async () => {
-    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, humanActorId } = await seedTaskAccessOrg(db, schema, 'contribute');
     const w = appWithActor(r['projects'], orgId, ['contribute'], humanActorId);
 
     const created = await w.request('/', {
@@ -1856,7 +1856,7 @@ describe('project + initiative labels obey group exclusivity', () => {
   it('collapses an exclusive group on project create and patch', async () => {
     // Projects wrote `project_label` directly and so bypassed exclusivity entirely — a single
     // -choice dimension held for tasks and quietly did not for projects.
-    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, humanActorId } = await seedTaskAccessOrg(db, schema, 'manage');
     const { featureId, bugId } = await seedExclusivePair(orgId);
     const w = appWithActor(r['projects'], orgId, ['manage'], humanActorId);
 
@@ -1889,7 +1889,7 @@ describe('project + initiative labels obey group exclusivity', () => {
   });
 
   it('collapses an exclusive group on initiative create', async () => {
-    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, humanActorId } = await seedTaskAccessOrg(db, schema, 'manage');
     const { featureId, bugId } = await seedExclusivePair(orgId);
     const w = appWithActor(r['initiatives'], orgId, ['manage'], humanActorId);
 
@@ -1909,7 +1909,7 @@ describe('project + initiative labels obey group exclusivity', () => {
   });
 
   it('adds Project, Program, and Initiative labels idempotently through domain routes', async () => {
-    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, humanActorId } = await seedTaskAccessOrg(db, schema, 'manage');
     const [label] = await db
       .insert(schema.label)
       .values({ organizationId: orgId, name: 'Transit', color: 'blue' })

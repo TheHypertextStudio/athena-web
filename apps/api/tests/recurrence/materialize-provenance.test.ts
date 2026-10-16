@@ -5,6 +5,7 @@ import {
   changeSetEntry,
   fullSchema,
   organization,
+  recurrenceSeries,
   seedWorkspaceStatuses,
   team,
   type Database,
@@ -149,9 +150,14 @@ describe('a repeating series records the work it creates', () => {
     }
   });
 
-  it('records nothing for a series no member created, since no one authorized the work', async () => {
+  it('retains unattributed scheduled work after a series loses its author', async () => {
     const before = (await createdChangeSets()).length;
-    const series = await dailySeries('Unowned series');
+    const series = await dailySeries('Unowned series', ownerActorId);
+    // New series require a real author. Model retained legacy attribution loss after creation.
+    await db
+      .update(recurrenceSeries)
+      .set({ createdBy: null })
+      .where(eq(recurrenceSeries.id, series.id));
 
     const result = await materializeRecurrenceSeriesWindow(db, {
       organizationId,

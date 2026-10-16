@@ -3,7 +3,13 @@ import { beforeAll, describe, expect, it } from 'vitest';
 
 import type * as DbModule from '@docket/db';
 
-import { appWithActor, getDb, seedBaseOrg, seedStatuses } from '../support/routes-harness';
+import {
+  appWithActor,
+  getDb,
+  seedBaseOrg,
+  seedStatuses,
+  seedTaskAccessOrg,
+} from '../support/routes-harness';
 import type projectsRouter from '../../src/routes/projects';
 import type tasksRouter from '../../src/routes/tasks';
 import { assertDefined } from '@docket/test-utils';
@@ -71,85 +77,6 @@ async function seedTask(args: {
 }
 
 describe('projects detail router', () => {
-  it('creates and updates exact or broad planning dates as atomic fiscal snapshots', async () => {
-    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
-    await db
-      .update(schema.organization)
-      .set({ fiscalYearStartMonth: 3 })
-      .where(eq(schema.organization.id, orgId));
-    const writer = appWithActor(projects, orgId, ['contribute'], humanActorId);
-
-    const created = await writer.request('/', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        name: 'Fiscal launch',
-        startDate: '2026-04-01',
-        startDateResolution: 'quarter',
-        targetDate: '2027-03-31',
-        targetDateResolution: 'year',
-      }),
-    });
-    expect(created.status).toBe(201);
-    const body = await json<{
-      id: string;
-      startDateResolution: string | null;
-      startDateFiscalYearStartMonth: number | null;
-      targetDateResolution: string | null;
-      targetDateFiscalYearStartMonth: number | null;
-    }>(created);
-    expect(body).toMatchObject({
-      startDateResolution: 'quarter',
-      startDateFiscalYearStartMonth: 3,
-      targetDateResolution: 'year',
-      targetDateFiscalYearStartMonth: 3,
-    });
-
-    await db
-      .update(schema.organization)
-      .set({ fiscalYearStartMonth: 0 })
-      .where(eq(schema.organization.id, orgId));
-    expect(await json(await writer.request(`/${body.id}`))).toMatchObject({
-      startDateResolution: 'quarter',
-      startDateFiscalYearStartMonth: 3,
-      targetDateResolution: 'year',
-      targetDateFiscalYearStartMonth: 3,
-    });
-
-    const exact = await writer.request(`/${body.id}`, {
-      method: 'PATCH',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ targetDate: '2026-12-15' }),
-    });
-    expect(exact.status).toBe(200);
-    expect(await json(exact)).toMatchObject({
-      targetDate: '2026-12-15T00:00:00.000Z',
-      targetDateResolution: null,
-      targetDateFiscalYearStartMonth: null,
-    });
-
-    const resolutionOnly = await writer.request(`/${body.id}`, {
-      method: 'PATCH',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ targetDateResolution: 'month' }),
-    });
-    expect(resolutionOnly.status).toBe(422);
-
-    const noncanonical = await writer.request(`/${body.id}`, {
-      method: 'PATCH',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ targetDate: '2026-12-01', targetDateResolution: 'quarter' }),
-    });
-    expect(noncanonical.status).toBe(422);
-
-    const reversed = await writer.request(`/${body.id}`, {
-      method: 'PATCH',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ targetDate: '2026-03-01' }),
-    });
-    expect(reversed.status).toBe(422);
-  });
-
   it('gets a project by id', async () => {
     const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
     const writer = appWithActor(projects, orgId, ['contribute'], humanActorId);
@@ -325,7 +252,11 @@ describe('projects detail router', () => {
   });
 
   it('patches every updatable field (incl. clearing nullable dates)', async () => {
-    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, humanActorId, statusId } = await seedTaskAccessOrg(
+      db,
+      schema,
+      'contribute',
+    );
     const writer = appWithActor(projects, orgId, ['contribute'], humanActorId);
 
     // Seed a program + a second team to exercise programId/teamId re-pointing.
@@ -698,7 +629,7 @@ describe('projects progress (weighted completion)', () => {
     // Regression for the headline bug: creating a task in a `done` (completed-type) state
     // via the API must stamp completedAt, so the project progress roll-up reflects it
     // instead of permanently reporting 0%.
-    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, humanActorId } = await seedTaskAccessOrg(db, schema, 'contribute');
     const projectWriter = appWithActor(projects, orgId, ['contribute'], humanActorId);
     const taskWriter = appWithActor(tasks, orgId, ['contribute'], humanActorId);
     const id = await seedProject(orgId, teamId, humanActorId);
@@ -756,7 +687,7 @@ describe('projects create with initiative associations', () => {
   }
 
   it('persists initiative_project links on create', async () => {
-    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, humanActorId } = await seedTaskAccessOrg(db, schema, 'contribute');
     const writer = appWithActor(projects, orgId, ['contribute'], humanActorId);
     const initA = await seedInitiative(orgId, humanActorId, 'A');
     const initB = await seedInitiative(orgId, humanActorId, 'B');
@@ -773,7 +704,7 @@ describe('projects create with initiative associations', () => {
   });
 
   it('de-duplicates repeated initiativeIds so the join PK never collides', async () => {
-    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, humanActorId } = await seedTaskAccessOrg(db, schema, 'contribute');
     const writer = appWithActor(projects, orgId, ['contribute'], humanActorId);
     const init = await seedInitiative(orgId, humanActorId);
 
@@ -788,7 +719,7 @@ describe('projects create with initiative associations', () => {
   });
 
   it('atomically replaces Project Initiative associations on patch', async () => {
-    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, humanActorId } = await seedTaskAccessOrg(db, schema, 'contribute');
     const writer = appWithActor(projects, orgId, ['contribute'], humanActorId);
     const initial = await seedInitiative(orgId, humanActorId, 'Initial');
     const replacement = await seedInitiative(orgId, humanActorId, 'Replacement');
@@ -820,7 +751,7 @@ describe('projects create with initiative associations', () => {
   });
 
   it('writes the project’s milestones in the same transaction as the project', async () => {
-    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, humanActorId } = await seedTaskAccessOrg(db, schema, 'contribute');
     const writer = appWithActor(projects, orgId, ['contribute'], humanActorId);
 
     const res = await writer.request('/', {
@@ -851,7 +782,7 @@ describe('projects create with initiative associations', () => {
   });
 
   it('rolls the project back when a milestone fails inside the transaction', async () => {
-    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, humanActorId } = await seedTaskAccessOrg(db, schema, 'contribute');
     const writer = appWithActor(projects, orgId, ['contribute'], humanActorId);
 
     // A whitespace-only name passes the contract's `min(1)` and fails the `milestone_name_not_blank`
@@ -888,7 +819,7 @@ describe('projects create with initiative associations', () => {
   });
 
   it('creates with no links when initiativeIds is omitted or empty', async () => {
-    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, humanActorId } = await seedTaskAccessOrg(db, schema, 'contribute');
     const writer = appWithActor(projects, orgId, ['contribute'], humanActorId);
 
     const omitted = await writer.request('/', {
@@ -909,7 +840,7 @@ describe('projects create with initiative associations', () => {
   });
 
   it('404s (and writes nothing) when an initiativeId is in another org', async () => {
-    const orgA = await seedBaseOrg(db, schema);
+    const orgA = await seedTaskAccessOrg(db, schema, 'contribute');
     const orgB = await seedBaseOrg(db, schema);
     const initInA = await seedInitiative(orgA.orgId, orgA.humanActorId, 'A');
     const initInB = await seedInitiative(orgB.orgId, orgB.humanActorId, 'B');

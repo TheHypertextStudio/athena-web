@@ -7,6 +7,7 @@ import {
   appWithAuthenticatedActor,
   getDb,
   seedBaseOrg,
+  seedTaskAccessOrg,
 } from '../support/routes-harness';
 import type cyclesRouter from '../../src/routes/cycles';
 import type initiativesRouter from '../../src/routes/initiatives';
@@ -40,7 +41,7 @@ const MISSING_ULID = '01ARZ3NDEKTSV4RRFFQ69G5FAV';
 
 describe('initiatives router', () => {
   it('lists, creates, gets, patches, and deletes', async () => {
-    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, humanActorId } = await seedTaskAccessOrg(db, schema, 'manage');
     const writer = await appWithAuthenticatedActor(
       db,
       schema,
@@ -133,7 +134,7 @@ describe('initiatives router', () => {
   });
 
   it('create without targetDate omits the date (undefined branch)', async () => {
-    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, humanActorId } = await seedTaskAccessOrg(db, schema, 'manage');
     const writer = appWithActor(initiatives, orgId, ['manage'], humanActorId);
     const created = await writer.request('/', {
       method: 'POST',
@@ -145,7 +146,7 @@ describe('initiatives router', () => {
   });
 
   it('patch with targetDate set to a date covers the non-null branch', async () => {
-    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, humanActorId } = await seedTaskAccessOrg(db, schema, 'manage');
     const writer = appWithActor(initiatives, orgId, ['manage'], humanActorId);
     const created = await writer.request('/', {
       method: 'POST',
@@ -217,7 +218,7 @@ describe('initiatives router', () => {
 
 describe('programs router', () => {
   it('lists, creates (defaults), gets, patches (all branches), deletes', async () => {
-    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, humanActorId } = await seedTaskAccessOrg(db, schema, 'manage');
     const writer = appWithActor(programs, orgId, ['manage'], humanActorId);
 
     expect((await json<{ items: unknown[] }>(await writer.request('/'))).items).toHaveLength(0);
@@ -380,7 +381,11 @@ describe('cycles router', () => {
 
 describe('milestones router', () => {
   it('lists (with + without project filter), creates, gets, patches, deletes', async () => {
-    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, humanActorId, statusId } = await seedTaskAccessOrg(
+      db,
+      schema,
+      'contribute',
+    );
     const writer = appWithActor(milestones, orgId, ['contribute'], humanActorId);
 
     // Seed a project to attach milestones to.

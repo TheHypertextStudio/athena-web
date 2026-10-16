@@ -173,7 +173,7 @@ describe('MCP template discovery', () => {
   });
 
   it('returns literal Markdown bodies for every supported kind through discovery and both plan reads', async () => {
-    const seed = await seedMcpUpdateOrg(db, schema, ['view', 'contribute']);
+    const seed = await seedMcpUpdateOrg(db, schema, ['view', 'contribute', 'manage']);
     const client = await connectCatalog(registerTools, seed.ctx);
     for (const targetType of ['task', 'project', 'initiative', 'program'] as const) {
       const markdown = `## ${targetType} outcome\n\n- Keep this structure.  \n\n## Evidence\n`;

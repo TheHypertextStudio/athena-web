@@ -24,7 +24,7 @@ afterEach(async () => {
 
 describe('plan template defaults', () => {
   it('persists all four kinds of template properties and explicit overrides', async () => {
-    const seed = await seedMcpUpdateOrg(schema.db, schema, ['view', 'contribute']);
+    const seed = await seedMcpUpdateOrg(schema.db, schema, ['view', 'contribute', 'manage']);
     const labelId = await seedLabel(schema.db, schema, seed, {
       name: 'Plan label',
       teamId: seed.teamId,

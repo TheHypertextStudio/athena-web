@@ -57,6 +57,8 @@ export function workTemplateCaptureRoutes(kind: TemplateTargetType) {
             id: c.req.valid('param').id,
             request: c.req.valid('json'),
           }),
+          // Composite output has no top-level resource id from which to derive a member URL.
+          null,
         ),
     );
 }

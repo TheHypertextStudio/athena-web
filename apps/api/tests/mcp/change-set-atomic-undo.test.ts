@@ -145,12 +145,16 @@ describe('undoChangeSetAtomically', () => {
     expect(await isUndone(changeSetId)).toBe(false);
   });
 
-  it('refuses a change set that touched a project', async () => {
+  it('refuses atomic undo when a recorded Project was edited later', async () => {
     const org = await seedWorkspace();
     const project = await makeProject(org, 'Created');
     const changeSetId = await record(org, [
       { kind: 'project', id: project.id, op: 'create', after: { name: 'Created' } },
     ]);
+    await db
+      .update(schema.project)
+      .set({ name: 'Edited later' })
+      .where(eq(schema.project.id, project.id));
 
     await expect(changeSets.undoChangeSetAtomically(org.orgId, changeSetId)).rejects.toBeInstanceOf(
       ConflictError,
@@ -159,6 +163,8 @@ describe('undoChangeSetAtomically', () => {
       await db.select().from(schema.project).where(eq(schema.project.id, project.id)),
     );
     expect(current.archivedAt).toBeNull();
+    expect(current.name).toBe('Edited later');
+    expect(await isUndone(changeSetId)).toBe(false);
   });
 
   it('refuses to reverse a relation the change set removed', async () => {

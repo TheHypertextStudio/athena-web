@@ -122,7 +122,11 @@ describe('template-backed work creation', () => {
   it.each(['task', 'project', 'initiative', 'program'] as const)(
     'copies the literal %s body and returns it for further editing',
     async (kind) => {
-      const seed = await seedMcpUpdateOrg(db, schema, ['view', 'contribute']);
+      const seed = await seedMcpUpdateOrg(
+        db,
+        schema,
+        kind === 'program' ? ['view', 'contribute', 'manage'] : ['view', 'contribute'],
+      );
       const markdown = '## Outcome\n\n- Fill this in.  \n\n## Evidence\n';
       const templateId = await saveTemplate(seed, { targetType: kind, description: markdown });
       const client = await connectCatalog(registerTools, seed.ctx);
@@ -156,7 +160,7 @@ describe('template-backed work creation', () => {
   );
 
   it('applies container defaults beneath manual properties that a template does not define', async () => {
-    const seed = await seedMcpUpdateOrg(db, schema, ['view', 'contribute']);
+    const seed = await seedMcpUpdateOrg(db, schema, ['view', 'contribute', 'manage']);
     const projectTemplate = await saveTemplate(seed, {
       targetType: 'project',
       description: '## Goal',

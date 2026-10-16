@@ -141,7 +141,9 @@ describe('POST / records the creation', () => {
     });
 
     const creates = await entriesFor(ws.orgId, 'create_task');
-    const create = creates.find((entry) => entry.entityId === created.id);
+    const create = creates.find(
+      (entry) => entry.entityKind === 'task' && entry.entityId === created.id,
+    );
     expect(create?.op).toBe('create');
     expect(create?.after?.['title']).toBe('Created');
     if (create) expectAppOrigin(create, 'create_task', ws.actorId);

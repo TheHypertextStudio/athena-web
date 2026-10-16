@@ -13,6 +13,7 @@ import {
   seedBaseOrg,
   seedOrg,
   seedStatuses,
+  seedTaskAccessOrg,
   seedUserWithHub,
 } from '../support/routes-harness';
 import type initiativesRouter from '../../src/routes/initiatives';
@@ -179,54 +180,6 @@ describe('initiatives detail roll-up', () => {
       expect(projection.connectedWork.map(({ id }) => id)).toEqual([activeProjectId]);
       expect(JSON.stringify(projection)).not.toContain(archivedProjectId);
     }
-  });
-
-  it('persists broad target periods with the workspace fiscal basis', async () => {
-    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
-    await db
-      .update(schema.organization)
-      .set({ fiscalYearStartMonth: 6 })
-      .where(eq(schema.organization.id, orgId));
-    const writer = appWithActor(initiatives, orgId, ['contribute'], humanActorId);
-
-    const created = await writer.request('/', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        name: 'Second-half initiative',
-        targetDate: '2027-06-30',
-        targetDateResolution: 'halfYear',
-      }),
-    });
-    expect(created.status).toBe(201);
-    const body = await json<{
-      id: string;
-      targetDateResolution: string | null;
-      targetDateFiscalYearStartMonth: number | null;
-    }>(created);
-    expect(body).toMatchObject({
-      targetDateResolution: 'halfYear',
-      targetDateFiscalYearStartMonth: 6,
-    });
-
-    const invalid = await writer.request(`/${body.id}`, {
-      method: 'PATCH',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ targetDateResolution: 'month' }),
-    });
-    expect(invalid.status).toBe(422);
-
-    const cleared = await writer.request(`/${body.id}`, {
-      method: 'PATCH',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ targetDate: null }),
-    });
-    expect(cleared.status).toBe(200);
-    expect(await json(cleared)).toMatchObject({
-      targetDate: null,
-      targetDateResolution: null,
-      targetDateFiscalYearStartMonth: null,
-    });
   });
 
   it('composes separately stored display metadata into overview rows', async () => {
@@ -1103,7 +1056,7 @@ describe('initiatives ownerId in-org validation', () => {
   }
 
   it('POST accepts an ownerId that is an actor in the caller’s org', async () => {
-    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, humanActorId } = await seedTaskAccessOrg(db, schema, 'contribute');
     const writer = appWithActor(initiatives, orgId, ['contribute'], humanActorId);
     const ownerId = await seedActor(orgId);
 
@@ -1117,7 +1070,7 @@ describe('initiatives ownerId in-org validation', () => {
   });
 
   it('POST 404s when ownerId belongs to ANOTHER org (FK-class tenant isolation)', async () => {
-    const orgA = await seedBaseOrg(db, schema);
+    const orgA = await seedTaskAccessOrg(db, schema, 'contribute');
     const orgB = await seedBaseOrg(db, schema);
     const ownerInB = await seedActor(orgB.orgId);
 

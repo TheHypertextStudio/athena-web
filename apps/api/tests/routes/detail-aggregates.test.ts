@@ -115,7 +115,7 @@ describe('detail aggregate routes', () => {
   });
 
   it('loads only an Initiative owned by the requested organization', async () => {
-    const local = await seedBaseOrg(db, schema);
+    const local = await seedTaskAccessOrg(db, schema, 'contribute');
     const foreign = await seedBaseOrg(db, schema);
     const writer = appWithActor(initiatives, local.orgId, ['contribute'], local.humanActorId);
     const created = await writer.request('/', {
@@ -361,7 +361,7 @@ describe('detail aggregate routes', () => {
   });
 
   it('returns one bounded Project detail aggregate with visible references only', async () => {
-    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, humanActorId } = await seedTaskAccessOrg(db, schema, 'contribute');
     const writer = appWithActor(projects, orgId, ['contribute'], humanActorId);
     const created = await writer.request('/', {
       method: 'POST',
@@ -384,7 +384,7 @@ describe('detail aggregate routes', () => {
   });
 
   it('serializes Project progress when postgres-js returns aggregate numerics as text', async () => {
-    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, humanActorId } = await seedTaskAccessOrg(db, schema, 'contribute');
     const writer = appWithActor(projects, orgId, ['contribute'], humanActorId);
     const created = await writer.request('/', {
       method: 'POST',
@@ -432,7 +432,7 @@ describe('detail aggregate routes', () => {
   });
 
   it('keeps Project work rows out of the aggregate and returns them only from the deferred section', async () => {
-    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, humanActorId } = await seedTaskAccessOrg(db, schema, 'contribute');
     const writer = appWithActor(projects, orgId, ['contribute'], humanActorId);
     const created = await writer.request('/', {
       method: 'POST',
@@ -452,7 +452,7 @@ describe('detail aggregate routes', () => {
   });
 
   it('returns one bounded Program detail aggregate with its rollup', async () => {
-    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, humanActorId } = await seedTaskAccessOrg(db, schema, 'manage');
     const manager = appWithActor(programs, orgId, ['manage'], humanActorId);
     const created = await manager.request('/', {
       method: 'POST',
@@ -528,7 +528,7 @@ describe('detail aggregate routes', () => {
   });
 
   it('returns one bounded Initiative detail aggregate without loading optional sections', async () => {
-    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, humanActorId } = await seedTaskAccessOrg(db, schema, 'contribute');
     const session = await authenticatedSessionFor([humanActorId]);
     const writer = appWithActor(initiatives, orgId, ['contribute'], humanActorId, session);
     const created = await writer.request('/', {
@@ -761,7 +761,7 @@ describe('detail aggregate routes', () => {
   });
 
   it('keeps an Initiative aggregate usable when it has no owner', async () => {
-    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, humanActorId } = await seedTaskAccessOrg(db, schema, 'contribute');
     const session = await authenticatedSessionFor([humanActorId]);
     const writer = appWithActor(initiatives, orgId, ['contribute'], humanActorId, session);
     const created = await writer.request('/', {
@@ -815,7 +815,7 @@ describe('detail aggregate routes', () => {
   });
 
   it('serializes Initiative health counts when postgres-js returns numerics as text', async () => {
-    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, humanActorId } = await seedTaskAccessOrg(db, schema, 'contribute');
     const session = await authenticatedSessionFor([humanActorId]);
     const writer = appWithActor(initiatives, orgId, ['contribute'], humanActorId, session);
     const created = await writer.request('/', {
@@ -861,7 +861,7 @@ describe('detail aggregate routes', () => {
   });
 
   it('does not expose a foreign label through a corrupt Initiative-label association', async () => {
-    const local = await seedBaseOrg(db, schema);
+    const local = await seedTaskAccessOrg(db, schema, 'contribute');
     const foreign = await seedBaseOrg(db, schema);
     const writer = appWithActor(initiatives, local.orgId, ['contribute'], local.humanActorId);
     const created = await writer.request('/', {
@@ -887,7 +887,7 @@ describe('detail aggregate routes', () => {
   });
 
   it('loads hierarchy and connected work only after the Initiative relationship section opens', async () => {
-    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, humanActorId } = await seedTaskAccessOrg(db, schema, 'manage');
     const session = await authenticatedSessionFor([humanActorId]);
     const initiativeWriter = appWithActor(
       initiatives,
@@ -998,7 +998,7 @@ describe('detail aggregate routes', () => {
   });
 
   it('deduplicates inherited Program and Project work shared by sibling Initiatives', async () => {
-    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, humanActorId } = await seedTaskAccessOrg(db, schema, 'manage');
     const session = await authenticatedSessionFor([humanActorId]);
     const initiativeWriter = appWithActor(
       initiatives,
@@ -1092,8 +1092,8 @@ describe('detail aggregate routes', () => {
   });
 
   it('walks nested Initiative work while suppressing corrupt foreign associations', async () => {
-    const local = await seedBaseOrg(db, schema);
-    const foreign = await seedBaseOrg(db, schema);
+    const local = await seedTaskAccessOrg(db, schema, 'contribute');
+    const foreign = await seedTaskAccessOrg(db, schema, 'manage');
     const session = await authenticatedSessionFor([local.humanActorId]);
     const initiativeWriter = appWithActor(
       initiatives,
@@ -1188,8 +1188,8 @@ describe('detail aggregate routes', () => {
   });
 
   it('shows a cross-workspace Initiative only to a viewer who belongs to both workspaces', async () => {
-    const local = await seedBaseOrg(db, schema);
-    const foreign = await seedBaseOrg(db, schema);
+    const local = await seedTaskAccessOrg(db, schema, 'contribute');
+    const foreign = await seedTaskAccessOrg(db, schema, 'contribute');
     const localWriter = appWithActor(initiatives, local.orgId, ['contribute'], local.humanActorId);
     const foreignWriter = appWithActor(
       initiatives,
@@ -1257,7 +1257,7 @@ describe('detail aggregate routes', () => {
   });
 
   it('bounds an expanded Initiative hierarchy instead of returning every descendant', async () => {
-    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, humanActorId } = await seedTaskAccessOrg(db, schema, 'contribute');
     const session = await authenticatedSessionFor([humanActorId]);
     const writer = appWithActor(initiatives, orgId, ['contribute'], humanActorId, session);
     const rootResponse = await writer.request('/', {
@@ -1628,7 +1628,7 @@ describe('detail aggregate routes', () => {
   });
 
   it('settles each initial aggregate within its bounded database-read budget', async () => {
-    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, humanActorId } = await seedTaskAccessOrg(db, schema, 'manage');
     const session = await authenticatedSessionFor([humanActorId]);
     const taskWriter = appWithActor(tasks, orgId, ['contribute'], humanActorId);
     const projectWriter = appWithActor(projects, orgId, ['contribute'], humanActorId);

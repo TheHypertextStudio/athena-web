@@ -8,6 +8,7 @@ import {
   fakeSession,
   getDb,
   seedBaseOrg,
+  seedTaskAccessOrg,
 } from '../support/routes-harness';
 import { assertDefined } from '@docket/test-utils';
 
@@ -55,7 +56,7 @@ describe('minimal patches cover the "field-absent" spread branches', () => {
   });
 
   it('programs: patch a single field', async () => {
-    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, humanActorId } = await seedTaskAccessOrg(db, schema, 'manage');
     const w = appWithActor(r['programs'], orgId, ['manage'], humanActorId);
     const created = await w.request('/', {
       method: 'POST',

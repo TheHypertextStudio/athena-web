@@ -346,6 +346,29 @@ const MINTED_CREDENTIAL_RESPONSES: ReadonlySet<string> = new Set([
   'POST /v1/orgs/{orgId}/tasks/{id}/template/preview 200 → previewToken',
   'POST /v1/orgs/{orgId}/initiatives/{id}/template/preview 200 → previewToken',
   'POST /v1/orgs/{orgId}/programs/{id}/template/preview 200 → previewToken',
+  // Save-as capture fingerprints bind an authorized source snapshot to its review. Capture
+  // repeats source and author access checks before comparing the SHA-256 value or writing.
+  'POST /v1/orgs/{orgId}/projects/{id}/template/save-as/preview 200 → sourceSnapshotToken',
+  'POST /v1/orgs/{orgId}/tasks/{id}/template/save-as/preview 200 → sourceSnapshotToken',
+  'POST /v1/orgs/{orgId}/initiatives/{id}/template/save-as/preview 200 → sourceSnapshotToken',
+  'POST /v1/orgs/{orgId}/programs/{id}/template/save-as/preview 200 → sourceSnapshotToken',
+  // Blueprint and schedule previews use the same authorized creation preflight. Their
+  // SHA-256 fingerprint detects changed facts; it does not authorize creation or scheduling.
+  'POST /v1/orgs/{orgId}/templates/definitions/{id}/blueprint-preview 200 → previewToken',
+  'POST /v1/orgs/{orgId}/work-schedules/preview 200 → previewToken',
+  'POST /v1/orgs/{orgId}/work-schedules/{id}/preview 200 → previewToken',
+  // Process task specifications and personal composer drafts round-trip BlueprintCreationOptions,
+  // whose optional previewToken is constrained to sha256:<64 hex digits>. Reading saved choices
+  // grants no authority: their eventual work creation still runs the ordinary live preflight.
+  'POST /v1/orgs/{orgId}/process-definitions 201 → previewToken',
+  'POST /v1/orgs/{orgId}/process-definitions/from-project 200 → previewToken',
+  'GET /v1/orgs/{orgId}/process-definitions/{id} 200 → previewToken',
+  'PATCH /v1/orgs/{orgId}/process-definitions/{id} 200 → previewToken',
+  'POST /v1/orgs/{orgId}/process-definitions/{id}/revisions 200 → previewToken',
+  'GET /v1/me/drafts 200 → previewToken',
+  'POST /v1/me/drafts 201 → previewToken',
+  'GET /v1/me/drafts/{id} 200 → previewToken',
+  'PATCH /v1/me/drafts/{id} 200 → previewToken',
   // Starting a voice session mints an EPHEMERAL client secret (minutes, one session) so the
   // browser can hold its own audio link to the speech model. Returning it is the entire point of
   // the operation, and it is deliberately not Docket's provider key — that never leaves the

@@ -24,17 +24,18 @@
 
 ### [WEBSITE-CI-PREVIEW-FINGERPRINT] Classify authorized template preview fingerprints
 
-- **Status**: REVIEW
+- **Status**: COMPLETE
 - **Priority**: P1
 - **Description**: Keep the OpenAPI credential guard accurate for template previews that return a
   SHA-256 work-snapshot fingerprint. That fingerprint detects stale reviews and grants no access;
   preview and apply independently require the caller's current resource authorization.
-- **Approach**: Classify only the four exact template-preview response fields through the existing
-  operation-scoped inventory. Preserve global credential-name checks, the response-count floor and
-  validation that each inventory entry names a live operation.
+- **Approach**: Classify exact template-preview, capture, blueprint/schedule preview and saved-choice
+  fingerprint response fields through the existing operation-scoped inventory. Preserve global
+  credential-name checks, the response-count floor and validation that each inventory entry names a
+  live operation.
 - **Files**: API credential-masking checks and this worklog.
 - **Subtasks**:
-  - [x] Classify the four authorized preview fingerprint responses.
+  - [x] Classify the authorized preview and saved-choice fingerprint responses.
   - [x] Validate the credential guard and existing template authorization/staleness checks.
 
 ### [WEBSITE-FONT-DELIVERY] Preserve typography with deterministic font assets

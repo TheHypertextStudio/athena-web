@@ -24,6 +24,13 @@ running after this command. The tool can clean up background descendants when it
 even after the launcher prints `READY`. Run browser commands in separate sessions, stop the stack
 with `scripts/dev-stack.sh stop`, then close the holding terminal.
 
+For a configuration A/B check, stop and restart the whole stack between variants. Next's automatic
+config restart retained the previous metadata-streaming behavior during a revert, so a hot reload
+did not establish the baseline. The planning cold-load browser test checks the actual delivered
+HTML, ready head metadata and the first activity interaction. Metadata resolves in the initial
+head to avoid a competing hidden body sibling during hydration; ordinary page data still streams.
+Async public metadata waits for its existing live lookup before the response begins.
+
 If development filesystem caches exhaust local storage, stop the stack and remove only this
 checkout's regenerable `apps/web/.next/dev/cache` and `apps/admin/.next/dev/cache` directories.
 Restart the same stack with its optional low-disk setting:

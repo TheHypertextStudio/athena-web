@@ -169,6 +169,10 @@ const NON_DOCS_ROUTES = '/:path((?!docs$|docs/).*)';
  */
 const nextConfig: NextConfig = {
   reactStrictMode: true,
+  // Keep metadata in the initial head, outside the activity's hydration tree. Streaming it
+  // adds a hidden body sibling that can be mistaken for the shell on a cold document load.
+  // Async public metadata waits for its existing lookup; ordinary page data still streams.
+  htmlLimitedBots: /.*/,
   // Low-disk worktrees may keep the compiler cache in memory for this dev session.
   ...(process.env['DOCKET_DEV_DISABLE_CACHE'] === '1'
     ? { experimental: { turbopackFileSystemCacheForDev: false } }

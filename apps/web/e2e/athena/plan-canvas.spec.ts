@@ -8,6 +8,7 @@
  * way her tools draft it, through the same routes and reducer. What only a browser can prove is
  * the surface: containment, the inspector, the confirmation, and the entry point.
  */
+import type { Page, Response, TestInfo } from '@playwright/test';
 import { signUpAndOnboard } from '../helpers/app';
 import { orgHref, TIMEOUTS } from '../helpers/constants';
 import { expect, test } from '../helpers/fixtures';
@@ -297,9 +298,62 @@ test('phone search reveals a project from a newly opened plan', async ({ page },
   }
 });
 
+/** Observe the parsed server surface before hydration so replacement cannot pass unnoticed. */
+async function observeInitialActivity(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    const observer = new MutationObserver(() => {
+      const activity = document.querySelector('[data-navigation-context="activity"]');
+      if (!activity) return;
+      (window as Window & { initialPlanningSurface?: Element }).initialPlanningSurface = activity;
+      observer.disconnect();
+    });
+    observer.observe(document, { childList: true, subtree: true });
+  });
+}
+
+/** The first interaction must use the server-rendered surface without replacing its tree. */
+async function expectActivityPreserved(page: Page): Promise<void> {
+  expect(
+    await page.evaluate(
+      () =>
+        (window as Window & { initialPlanningSurface?: Element }).initialPlanningSurface ===
+        document.querySelector('[data-navigation-context="activity"]'),
+    ),
+    'first click preserved the server-rendered activity',
+  ).toBe(true);
+}
+
+/** Verify the delivered document has ready metadata and begins with its actual activity. */
+async function expectActivityDocument(
+  page: Page,
+  response: Response | null,
+  testInfo: TestInfo,
+): Promise<void> {
+  expect(response, 'navigation delivered a server document').not.toBeNull();
+  if (!response) throw new Error('Navigation did not deliver a server document.');
+  const html = await response.text();
+  await testInfo.attach('activity-server-document', { body: html, contentType: 'text/html' });
+  const initial = await page.evaluate((markup) => {
+    const document = new DOMParser().parseFromString(markup, 'text/html');
+    return {
+      title: document.head.querySelector('title')?.textContent,
+      description: document.head.querySelector('meta[name="description"]')?.getAttribute('content'),
+      competingMetadata: document.querySelector('body > div[hidden]:not([id])') !== null,
+      activityPresent: document.querySelector('[data-navigation-context="activity"]') !== null,
+    };
+  }, html);
+  expect(initial).toEqual({
+    title: 'Docket',
+    description: 'Keep task estimates, calendar placement, and tracked time together.',
+    competingMetadata: false,
+    activityPresent: true,
+  });
+}
+
 test('archived plans explain their state after fresh loads in both layouts and themes', async ({
   page,
 }, testInfo) => {
+  await observeInitialActivity(page);
   const errors: string[] = [];
   let load = 'setup';
   page.on('pageerror', (error) => errors.push(`${load} pageerror: ${error.message}`));
@@ -326,8 +380,12 @@ test('archived plans explain their state after fresh loads in both layouts and t
       load = `${viewport.width} ${scheme}`;
       await setColorScheme(page, scheme);
       await page.goto('about:blank');
-      await page.goto(orgHref(orgId, `plans/${planId}`), { waitUntil: 'domcontentloaded' });
+      const response = await page.goto(orgHref(orgId, `plans/${planId}`), {
+        waitUntil: 'domcontentloaded',
+      });
+      await expectActivityDocument(page, response, testInfo);
       await page.getByRole('button', { name: 'Search the plan', exact: true }).click();
+      await expectActivityPreserved(page);
       await page
         .getByRole('textbox', { name: 'Search the plan', exact: true })
         .fill('Donor outreach');
@@ -344,7 +402,9 @@ test('archived plans explain their state after fresh loads in both layouts and t
     body: JSON.stringify(errors),
     contentType: 'application/json',
   });
-  expect(errors.filter((error) => /hydrat|server rendered HTML|didn.t match/i.test(error))).toEqual(
-    [],
-  );
+  expect(
+    errors.filter((error) =>
+      /hydrat|server rendered HTML|didn.t match|hasn.t mounted yet/i.test(error),
+    ),
+  ).toEqual([]);
 });

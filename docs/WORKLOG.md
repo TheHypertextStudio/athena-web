@@ -37,53 +37,20 @@
   Framework cookie attributes stay host-only and secure; the local relay remains explicitly scoped.
 - **Outcome**: Invalid shared-domain configurations now fail at auth initialization. Hosted OAuth
   routing is unchanged; deployed browser and provider acceptance remain separate from local checks.
-### [WORK-ACTIVITY-PHONE-CRAFT] Correct phone layouts and review every flow state
 
-- **Status**: REVIEW
-- **Priority**: P1
-- **Description**: Make focused work-definition and planning activities readable on phones, with
-  clear grouping, plain language and a predictable next action.
-- **Outcome**: Removed base-layer padding and nested editor insets; related content uses one 12px
-  phone gutter. Compacted headers, corrected document-heading hierarchy and narrow work-header
-  action placement, disclosed planning details, and retained draft/focus state across revisited
-  steps. Corrected pending-template copy, contextual action focus return, archived-plan explanation,
-  canvas measurement retention and search readiness.
-- **Files changed**: Template/recurrence/composer surfaces; gallery and work identity actions;
-  scheduling, daily planning and canvas components; shared activity/sheet/header geometry;
-  affected component/browser tests; the existing capture tool; product and verification guidance.
-- **Validation**: All 319 named states independently reviewed: 132 authoring, 83 gallery and 104
-  planning. The private gallery contains 1,378 accepted frames across both themes, desktop/phone
-  and representative narrow/short-phone boundaries. Affected behavior suites, web/UI typechecks,
-  ESLint for all 112 affected web files and changed UI files, and the unchanged complexity ledger
-  pass. The production build passes. Real browser journeys verify short agenda blocks, canvas
-  search, header geometry, modal focus and responsive sheet dimensions. Two fresh production
-  accounts complete eight cold plan loads without route console/page/hydration errors.
-- **Review**: Fresh owner visual acceptance remains pending. An intermittent development metadata
-  hydration failure is preserved separately below; successful retries are not described as a fix.
-- **Learnings**: Removing redundant containers requires checking every meaningful left edge,
-  including footer actions and nested document headings. Capture code must preserve paused
-  scroll-linked animations rather than manufacture a collapsed header. Screenshot readiness must
-  wait for the selected template, not merely for its disabled loading control to exist.
-- **Subtasks**:
-  - [x] Correct demonstrated phone defects and independently review all named states.
-  - [x] Recapture affected states and inspect corrected screenshots.
-  - [x] Deliver the complete private gallery and source/runtime evidence.
-  - [ ] Obtain fresh owner visual acceptance before integrating the recovered UI.
-
-### [ACTIVITY-COLD-LOAD-METADATA] Resolve intermittent development activity hydration
+### [DEV-STACK-CHECKOUT-ISOLATION] Keep parallel worktree servers independent
 
 - **Status**: IN_PROGRESS
-- **Priority**: P2
-- **Description**: Identify why a fresh activity document can hydrate the plan shell against
-  Next's hidden metadata sibling. Preserve server rendering, first-click reliability and the
-  canonical activity navigation while correcting the demonstrated cause.
-- **Acceptance**: A deterministic regression reproduces the original failure, the causal fix
-  removes it, and cold development and production loads preserve the server tree without errors.
-- **Evidence**: One development archive load failed; subsequent 32 loads across ordinary,
-  cold-chunk and CPU-throttled probes passed. The raw response and Flight payload identify
-  `Next.Metadata` as the hidden sibling. Eight production cold loads pass. No application DOM
-  mutation or inconsistent hydration snapshot has been proved, and no speculative suppression,
-  client-only bypass or dependency patch was introduced. Exact diagnostics remain private.
+- **Description**: Prevent one Athena worktree's dev-stack start/stop from terminating another's
+  supervisor. Every checkout needs its own PID and log identity, even when their directory names
+  are all `athena-web`.
+- **Approach**: Derive stable checkout-scoped process/log paths using tools available without
+  installed workspace dependencies. Exercise two same-named roots through the existing tooling
+  tests and prove stop does not target the foreign supervisor. Retain canonical topology and the
+  existing four-service launcher; do not add a parallel stack.
+- **Context**: The basename-only PID path collided during parallel local acceptance. An attempted
+  cleanup also terminated a foreign launcher before this identity error was identified. Preserve
+  other checkouts and restrict subsequent process operations to verified local ownership.
 
 ### [DOCS-CANONICAL-VERIFICATION] Verify directly served Mintlify guides
 
@@ -13555,6 +13522,80 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
 ---
 
 ## Completed Tasks
+
+### [WORK-ACTIVITY-PHONE-CRAFT] Correct phone layouts and review every flow state
+
+- **Status**: COMPLETE
+- **Priority**: P1
+- **Description**: Make focused work-definition and planning activities readable on phones, with
+  clear grouping, plain language and a predictable next action.
+- **Outcome**: Removed base-layer padding and nested editor insets; related content uses one 12px
+  phone gutter. Compacted headers, corrected document-heading hierarchy and narrow work-header
+  action placement, disclosed planning details, and retained draft/focus state across revisited
+  steps. Corrected pending-template copy, contextual action focus return, archived-plan explanation,
+  canvas measurement retention and search readiness.
+- **Files changed**: Template/recurrence/composer surfaces; gallery and work identity actions;
+  scheduling, daily planning and canvas components; shared activity/sheet/header geometry;
+  affected component/browser tests; the existing capture tool; product and verification guidance.
+- **Validation**: All 319 named states independently reviewed: 132 authoring, 83 gallery and 104
+  planning. The private gallery contains 1,378 accepted frames across both themes, desktop/phone
+  and representative narrow/short-phone boundaries. Affected behavior suites, web/UI typechecks,
+  ESLint for all 112 affected web files and changed UI files, and the unchanged complexity ledger
+  pass. The production build passes. Real browser journeys verify short agenda blocks, canvas
+  search, header geometry, modal focus and responsive sheet dimensions. Two fresh production
+  accounts complete eight cold plan loads without route console/page/hydration errors.
+- **Review**: The owner directed landing after the loading correction. Independent state reviews
+  remain the visual evidence; this instruction does not imply individual screenshot approval.
+  The loading correction and final runtime acceptance are tracked separately below.
+- **Learnings**: Removing redundant containers requires checking every meaningful left edge,
+  including footer actions and nested document headings. Capture code must preserve paused
+  scroll-linked animations rather than manufacture a collapsed header. Screenshot readiness must
+  wait for the selected template, not merely for its disabled loading control to exist.
+- **Subtasks**:
+  - [x] Correct demonstrated phone defects and independently review all named states.
+  - [x] Recapture affected states and inspect corrected screenshots.
+  - [x] Deliver the complete private gallery and source/runtime evidence.
+  - [x] Receive owner direction to land the reviewed UI after fixing the loading failure.
+
+### [ACTIVITY-COLD-LOAD-METADATA] Resolve intermittent development activity hydration
+
+- **Status**: COMPLETE
+- **Priority**: P2
+- **Description**: Identify why a fresh activity document can hydrate the plan shell against
+  Next's hidden metadata sibling. Preserve server rendering, first-click reliability and the
+  canonical activity navigation while correcting the demonstrated cause.
+- **Acceptance**: A deterministic regression detects the metadata boundary implicated in the
+  original failure. The correction removes that competing boundary, and cold development and
+  production loads preserve the server tree and first interaction without hydration errors.
+- **Approach**: Trace the streamed metadata and activity hydration boundary, reproduce the failure
+  through the existing real browser journey with controlled document delivery, and correct the
+  responsible rendering or initialization path. Verify cold loads and first-click behavior in
+  development and the built server, then integrate the validated commits linearly into current
+  remote main with one delivery push. Preserve unrelated primary-checkout changes.
+- **Historical evidence**: One development archive load failed; later development and eight
+  production loads passed. The failed response and Flight payload identify `Next.Metadata` as the
+  hidden sibling consumed in place of the activity shell. Earlier page-level delivery probes did
+  not intercept service-worker requests and do not establish controlled delivery. Verified
+  context-level burst and CPU probes passed without reproducing the intermittent renderer error.
+- **Correction**: Resolve metadata in the initial head with Next's supported `htmlLimitedBots`
+  configuration. The deterministic document contract fails on a clean baseline process with the
+  anonymous hidden metadata sibling present. Preserve ordinary page-data streaming and SSR; do
+  not suppress hydration warnings or patch the renderer. Async public metadata may delay the
+  first response bytes while its existing lookup completes.
+- **Validation**: Clean-process boundary regression fails before the fix. Four fresh development
+  and four fresh production archive loads preserve the original server activity Element and first
+  click, with no hydration or pre-mount errors. Both no-JavaScript public tests pass. Web types,
+  focused lint/formatting, the unchanged complexity ledger, independent code review and the
+  production build pass on the rebased source. Public tests establish unavailable-path privacy,
+  not acceptance of a configured published or revoked brief.
+- **Outcome**: The competing metadata path is removed for browser loads. This is a supported
+  application configuration correction, not an upstream renderer patch or a claim that arbitrary
+  timing can no longer expose any framework defect.
+- **Learnings**: A configuration revert's automatic restart retained stale metadata behavior;
+  only a full canonical stack restart restored the baseline. Assert the actual delivered document
+  and retained server Element, rather than treating successful retries as a causal correction.
+  Local server interruptions are infrastructure failures before product assertions, not failed
+  or successful loading acceptance. Exact diagnostics remain private.
 
 ### [LEGAL-POLICY-COPY] Simplify public policy copy
 

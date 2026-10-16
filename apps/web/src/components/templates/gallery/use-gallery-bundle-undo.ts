@@ -29,7 +29,7 @@ export function useGalleryBundleUndo(orgId: string, bundleId: string): GalleryBu
         outcome: null,
         error: userErrorMessage(
           failure,
-          'This copy could not be undone. Your saved definitions are still here.',
+          'This copy could not be undone. Your saved templates are still here.',
         ),
       });
     } finally {

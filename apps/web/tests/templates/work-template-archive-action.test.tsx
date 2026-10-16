@@ -54,7 +54,7 @@ describe('template archive impact review', () => {
     expect(within(dialog).getByText('Dinner')).toBeInTheDocument();
     expect(within(dialog).getByText('Weekly report')).toBeInTheDocument();
     expect(
-      within(dialog).getByRole('heading', { name: 'Published parents (21)' }),
+      within(dialog).getByRole('heading', { name: 'Templates using this (21)' }),
     ).toBeInTheDocument();
     fireEvent.click(within(dialog).getByRole('button', { name: 'Archive template' }));
     expect(mocks.mutate).toHaveBeenCalledExactlyOnceWith('template', expect.any(Object));
@@ -84,7 +84,13 @@ describe('template archive impact review', () => {
   it('pages each reference list independently and resets pages on reopen', () => {
     render(<WorkTemplateArchiveAction orgId="org" id="template" />);
     const dialog = open();
-    fireEvent.click(within(dialog).getByRole('button', { name: 'More published parents' }));
+    const parents = within(dialog).getByRole('region', { name: 'Templates using this' });
+    expect(
+      within(parents).getByRole('button', { name: 'Previous templates using this' }),
+    ).toHaveTextContent(/^Previous$/);
+    const more = within(parents).getByRole('button', { name: 'More templates using this' });
+    expect(more).toHaveTextContent(/^More$/);
+    fireEvent.click(more);
     expect(mocks.definition).toHaveBeenLastCalledWith('org', 'template', 20, 0);
     fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
     open();

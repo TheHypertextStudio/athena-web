@@ -73,7 +73,12 @@ vi.mock('@/components/editor/static-markdown', () => ({
 }));
 
 vi.mock('@/components/templates/work-template-identity-control', () => ({
-  WorkTemplateIdentityControl: () => <span>Event · Version1</span>,
+  WorkTemplateIdentityControl: ({ onCapture }: { onCapture?: () => void }) => (
+    <>
+      <span>Event · Version1</span>
+      {onCapture ? <button onClick={onCapture}>Save as template</button> : null}
+    </>
+  ),
 }));
 
 beforeEach(() => {
@@ -151,10 +156,10 @@ describe('Save as template from visible work', () => {
       target: { value: 'My authored name' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Save private draft' }));
-    expect(await screen.findByText(/Source work changed/)).toBeVisible();
+    expect(await screen.findByText(/This work changed/)).toBeVisible();
     expect(screen.getByLabelText('Template name')).toHaveValue('My authored name');
     expect(screen.queryByText('Private provider diagnostic')).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Save private draft' })).toBeDisabled();
+    expect(screen.queryByRole('button', { name: 'Save private draft' })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Refresh capture' }));
     expect(mocks.refresh).toHaveBeenCalledOnce();
     mocks.token = 'sha256:fresh';
@@ -180,7 +185,11 @@ describe('Save as template from visible work', () => {
       mocks.previewPending = state === 'loading';
       mocks.previewError = state === 'failed';
       view.rerender(header());
-      expect(screen.getByRole('button', { name: 'Save private draft' })).toBeDisabled();
+      if (state === 'failed')
+        expect(
+          screen.queryByRole('button', { name: 'Save private draft' }),
+        ).not.toBeInTheDocument();
+      else expect(screen.getByRole('button', { name: 'Save private draft' })).toBeDisabled();
       expect(screen.getByLabelText('Template name')).toHaveValue('Keep this name');
     },
   );

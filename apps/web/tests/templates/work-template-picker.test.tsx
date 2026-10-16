@@ -1,5 +1,5 @@
-import { fireEvent, render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { WorkTemplatePicker } from '@/components/composer/work-template-picker';
 
 const mocks = vi.hoisted(() => ({
@@ -24,7 +24,41 @@ const event = {
   definition: { name: 'Event', payload: { targetType: 'project', description: 'Preparation' } },
   latestVersion: { id: 'event-v2', number: 2 },
 };
+afterEach(() => {
+  cleanup();
+  mocks.query.isPending = false;
+});
 describe('persistent work-template picker', () => {
+  it('waits for discovery before calling a selected template unavailable', () => {
+    mocks.query.data.items = [];
+    mocks.query.isPending = true;
+    const view = render(
+      <WorkTemplatePicker
+        orgId="01J00000000000000000000000"
+        kind="project"
+        teamId={null}
+        selectedId="event"
+        onSelect={vi.fn()}
+        disabled={false}
+      />,
+    );
+    expect(screen.getByRole('button', { name: /Loading template/ })).toBeDisabled();
+    expect(screen.queryByText('Template unavailable')).not.toBeInTheDocument();
+    mocks.query.isPending = false;
+    mocks.query.data.items = [base, event];
+    view.rerender(
+      <WorkTemplatePicker
+        orgId="01J00000000000000000000000"
+        kind="project"
+        teamId={null}
+        selectedId="event"
+        onSelect={vi.fn()}
+        disabled={false}
+      />,
+    );
+    expect(screen.getByRole('button', { name: /Event/ })).toBeEnabled();
+  });
+
   it('shows the selected publication after authored prose exists and offers the base', async () => {
     mocks.query.data.items = [base, event];
     const onSelect = vi.fn();

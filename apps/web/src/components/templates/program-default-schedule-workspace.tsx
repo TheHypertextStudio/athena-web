@@ -91,7 +91,11 @@ function focusOutlineRow(key: string | null): void {
   requestAnimationFrame(() => {
     const row = document.getElementById(key ? `routine-outline-${key}` : 'template-work-root');
     const header = document.querySelector<HTMLElement>('[data-template-definition-header]');
-    if (row && header) row.style.scrollMarginTop = `${header.offsetHeight + 24}px`;
+    if (row)
+      row.style.scrollMarginTop =
+        header && getComputedStyle(header).position === 'sticky'
+          ? `${header.offsetHeight + 24}px`
+          : '';
     row?.scrollIntoView({ block: 'start' });
     row?.focus({ preventScroll: true });
   });
@@ -116,7 +120,11 @@ function focusRoutine(): void {
   requestAnimationFrame(() => {
     const panel = document.getElementById('program-routine-editor');
     const header = document.querySelector<HTMLElement>('[data-template-definition-header]');
-    if (panel && header) panel.style.scrollMarginTop = `${header.offsetHeight + 24}px`;
+    if (panel)
+      panel.style.scrollMarginTop =
+        header && getComputedStyle(header).position === 'sticky'
+          ? `${header.offsetHeight + 24}px`
+          : '';
     panel?.scrollIntoView({ block: 'start' });
     panel?.querySelector<HTMLElement>('h3')?.focus({ preventScroll: true });
   });

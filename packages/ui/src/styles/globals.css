@@ -1389,6 +1389,35 @@
   }
 }
 
+/* Phone identity and actions need separate lanes. A transformed, full-width compact title
+ * otherwise paints underneath the timer controls. Keep the phone title readable at one size;
+ * the existing secondary-row collapse still removes supporting metadata when scrolling. */
+@container (max-width: 41.999rem) {
+  .detail-primary {
+    grid-template-columns: var(--detail-expanded-glyph-size) minmax(0, 1fr);
+    grid-template-rows: auto auto;
+    grid-template-areas:
+      'glyph title'
+      'actions actions';
+    row-gap: 0.5rem;
+    animation-name: none;
+  }
+
+  .detail-title {
+    align-self: center;
+    padding: 0;
+    transform: none;
+    font-size: var(--text-title-large);
+    line-height: var(--text-title-large--line-height);
+    animation-name: none;
+  }
+
+  .detail-actions {
+    justify-self: end;
+    max-width: 100%;
+  }
+}
+
 /*
  * The generated document contents rail. One step per heading level, declared once here rather than
  * multiplied out into an inline `padding-left` on every row.

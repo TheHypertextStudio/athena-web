@@ -26,20 +26,23 @@ export function WorkTemplateHeader({
 }): JSX.Element {
   return (
     <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
-      <WorkTemplateIdentityControl
-        orgId={orgId}
-        kind={kind}
-        workId={work.id}
-        teamId={work.teamId ?? work.leadTeamId ?? null}
-        workTypeId={work.workTypeId}
-        workTypeVersionId={work.workTypeVersionId}
-        canEdit={canEdit}
-      />
       <WorkTemplateCaptureAction
         key={`${orgId}:${kind}:${work.id}`}
         orgId={orgId}
         kind={kind}
         workId={work.id}
+        renderTrigger={(onCapture) => (
+          <WorkTemplateIdentityControl
+            orgId={orgId}
+            kind={kind}
+            workId={work.id}
+            teamId={work.teamId ?? work.leadTeamId ?? null}
+            workTypeId={work.workTypeId}
+            workTypeVersionId={work.workTypeVersionId}
+            canEdit={canEdit}
+            onCapture={onCapture}
+          />
+        )}
       />
     </div>
   );

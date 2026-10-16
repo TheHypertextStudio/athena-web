@@ -85,7 +85,7 @@ describe('durable private copy review', () => {
       'href',
       `/orgs/${orgId}/work-templates/${vendorId}?section=review`,
     );
-    expect(screen.getByText('Publish Vendor booking before this definition.')).toBeVisible();
+    expect(screen.getByText('Publish Vendor booking before this template.')).toBeVisible();
     expect(screen.queryByText(/Fixed publication|Version 1/)).not.toBeInTheDocument();
     expect(saved.receipt.roots[0]?.workTypeVersionId).toBeNull();
   });
@@ -137,7 +137,7 @@ it('waits for real Undo and explains actual retained definitions without simulat
     />,
   );
   expect(screen.getByRole('heading', { name: 'This copy was undone' })).toBeVisible();
-  expect(screen.getByRole('heading', { name: 'Definitions kept' })).toBeVisible();
+  expect(screen.getByRole('heading', { name: 'Templates kept' })).toBeVisible();
   expect(screen.getByText(/changed after it was copied/)).toBeVisible();
   expect(screen.queryByRole('button', { name: 'Undo this copy' })).not.toBeInTheDocument();
 });
@@ -162,7 +162,7 @@ it('uses edited dependency removals rather than installation provenance on reent
   render(<GalleryCopyBundle bundle={saved} orgId={orgId} onNew={vi.fn()} />);
   expect(nextGalleryDraft(saved)?.workTypeId).toBe(eventId);
   expect(
-    screen.queryByText('Publish Vendor booking before this definition.'),
+    screen.queryByText('Publish Vendor booking before this template.'),
   ).not.toBeInTheDocument();
 });
 it('requires editor review for a current external reference without guessing its publication', () => {
@@ -176,11 +176,9 @@ it('requires editor review for a current external reference without guessing its
   saved.entries = [root];
   render(<GalleryCopyBundle bundle={saved} orgId={orgId} onNew={vi.fn()} />);
   expect(nextGalleryDraft(saved)).toBeUndefined();
+  expect(screen.getByText('Review the included templates before sharing this one.')).toBeVisible();
   expect(
-    screen.getByText('Review the referenced definitions in the editor before publishing.'),
-  ).toBeVisible();
-  expect(
-    screen.queryByText('Publish Vendor booking before this definition.'),
+    screen.queryByText('Publish Vendor booking before this template.'),
   ).not.toBeInTheDocument();
 });
 it('labels an archived retained publication as archived after Undo', () => {
@@ -206,9 +204,9 @@ it('labels an archived retained publication as archived after Undo', () => {
 
 it('explains the next real prerequisite before its parent without repeating page hierarchy', () => {
   render(<GalleryCopyBundle bundle={bundle()} orgId={orgId} onNew={vi.fn()} />);
-  expect(screen.getByRole('heading', { name: 'Continue defining', level: 2 })).toBeVisible();
+  expect(screen.getByRole('heading', { name: 'Continue setup', level: 2 })).toBeVisible();
   expect(
-    screen.getByText('Edited community dinner uses this definition. Review and publish it first.'),
+    screen.getByText('Edited community dinner uses this template. Review and share it first.'),
   ).toBeVisible();
   expect(screen.getByRole('heading', { name: 'Chosen work', level: 2 })).toBeVisible();
   expect(screen.queryByRole('heading', { level: 1 })).not.toBeInTheDocument();

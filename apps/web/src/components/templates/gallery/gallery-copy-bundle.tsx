@@ -29,7 +29,7 @@ function BundleEntry({
   if (!entry.template)
     return (
       <li className="py-3">
-        <p className="text-body-medium">This definition is no longer available.</p>
+        <p className="text-body-medium">This template is no longer available.</p>
       </li>
     );
   const dependencies = galleryBundleDependencies(entry, bundle);
@@ -51,17 +51,15 @@ function BundleEntry({
               ? 'Unpublished draft'
               : entry.template.latestVersion
                 ? `Published · Version ${entry.template.latestVersion.number}`
-                : 'Publication retained'}
+                : 'Shared template kept'}
       </p>
       {dependencies.unpublished.length ? (
         <p className="text-body-medium">
-          Publish {dependencies.unpublished.join(' and ')} before this definition.
+          Publish {dependencies.unpublished.join(' and ')} before this template.
         </p>
       ) : null}
       {dependencies.requiresReview && entry.template.status !== 'archived' ? (
-        <p className="text-body-medium">
-          Review the referenced definitions in the editor before publishing.
-        </p>
+        <p className="text-body-medium">Review the included templates before sharing this one.</p>
       ) : null}
       {entry.catalogOrigin ? (
         <p className="text-body-small text-on-surface-variant">
@@ -101,9 +99,9 @@ export function GalleryCopyBundle({
   const roots = bundle.entries.filter((entry) => entry.isRoot),
     required = bundle.entries.filter((entry) => !entry.isRoot);
   return (
-    <div className="flex min-w-0 flex-col gap-5">
+    <div className="flex min-w-0 flex-col gap-3 sm:gap-5">
       <BundleNextReview bundle={bundle} next={next} orgId={orgId} onNew={onNew} />
-      <Surface as="section" shape="large" pad="roomy" aria-label="Selected definitions">
+      <Surface as="section" shape="medium" pad="comfortable" aria-label="Selected templates">
         <h2 className="text-title-large">Chosen work</h2>
         <ul>
           {roots.map((entry) => (
@@ -111,14 +109,15 @@ export function GalleryCopyBundle({
           ))}
         </ul>
       </Surface>
-      {undo ? <GalleryBundleUndo bundle={bundle} state={undo} /> : null}
       {required.length ? (
         <Collapsible>
           <CollapsibleTrigger asChild>
-            <Button variant="ghost">Required definitions ({required.length})</Button>
+            <Button variant="ghost" className="px-3 sm:px-0">
+              Included templates ({required.length})
+            </Button>
           </CollapsibleTrigger>
           <CollapsibleContent>
-            <ul>
+            <ul className="px-3 sm:px-0">
               {required.map((entry) => (
                 <BundleEntry key={entry.key} entry={entry} bundle={bundle} orgId={orgId} />
               ))}
@@ -126,6 +125,7 @@ export function GalleryCopyBundle({
           </CollapsibleContent>
         </Collapsible>
       ) : null}
+      {undo ? <GalleryBundleUndo bundle={bundle} state={undo} orgId={orgId} /> : null}
     </div>
   );
 }
@@ -144,9 +144,15 @@ function BundleNextReview({
   const undone = bundle.receipt.state === 'undone';
   const consumers = next ? galleryBundleConsumers(next, bundle) : [];
   return (
-    <Surface as="header" tone="prominent" shape="large" pad="roomy" className="flex flex-col gap-3">
+    <Surface
+      as="header"
+      tone="prominent"
+      shape="medium"
+      pad="comfortable"
+      className="flex flex-col gap-3"
+    >
       <h2 className="text-title-large">
-        {undone ? 'This copy was undone' : next ? 'Continue defining' : 'Saved definitions'}
+        {undone ? 'This copy was undone' : next ? 'Continue setup' : 'Saved templates'}
       </h2>
       <p className="text-body-medium">{nextReviewInstructions(undone, consumers)}</p>
       {next ? (
@@ -168,7 +174,7 @@ function BundleNextReview({
 
 function nextReviewInstructions(undone: boolean, consumers: readonly string[]): string {
   if (undone)
-    return 'Used or edited definitions stay available. Choose starting work to make another copy.';
-  if (!consumers.length) return 'Open a saved definition to review its current state.';
-  return `${consumers.join(' and ')} ${consumers.length === 1 ? 'uses' : 'use'} this definition. Review and publish it first.`;
+    return 'Templates already used or edited stay available. Choose starting work to make another copy.';
+  if (!consumers.length) return 'Open a saved template to continue setup.';
+  return `${consumers.join(' and ')} ${consumers.length === 1 ? 'uses' : 'use'} this template. Review and share it first.`;
 }

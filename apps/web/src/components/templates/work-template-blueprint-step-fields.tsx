@@ -28,7 +28,7 @@ export function WorkTemplateBlueprintStepFields({
   };
   return (
     <>
-      <Field label={step.kind === 'task' ? 'Child title' : 'Child name'}>
+      <Field label={step.kind === 'task' ? 'Title' : 'Name'}>
         <Input
           autoFocus
           disabled={disabled}
@@ -40,11 +40,11 @@ export function WorkTemplateBlueprintStepFields({
       </Field>
       {step.kind !== 'milestone' ? (
         <TemplateDisclosure
-          title={step.fields.summary ? 'Child summary' : 'Add a summary'}
+          title={step.fields.summary ? 'Summary' : 'Add a summary'}
           defaultOpen={Boolean(step.fields.summary?.trim())}
         >
           <Input
-            aria-label="Child summary"
+            aria-label="Summary"
             disabled={disabled}
             value={step.fields.summary ?? ''}
             maxLength={step.kind === 'task' ? 200 : 280}
@@ -54,7 +54,7 @@ export function WorkTemplateBlueprintStepFields({
           />
         </TemplateDisclosure>
       ) : null}
-      <Field label="Child document">
+      <Field label="Document">
         <FreeformTextEditor
           value={step.fields.description ?? ''}
           onChange={(description) => {
@@ -62,9 +62,9 @@ export function WorkTemplateBlueprintStepFields({
           }}
           disabled={disabled}
           readOnly={disabled}
-          ariaLabel="Child document"
+          ariaLabel="Document"
           mentionOrgId={orgId}
-          placeholder="Write the structure this child starts with…"
+          placeholder="What should this work start with?"
           className={`${fieldSurface({ variant: 'plain', controlSize: 'md', multiline: true, ringOn: 'within' })} min-h-24 max-w-none`}
         />
       </Field>
@@ -88,7 +88,7 @@ function ChildProperties({ orgId, step, disabled, onChange }: StepProps): JSX.El
   };
   return (
     <>
-      <Field label="Child starting status">
+      <Field label="Starting status">
         <Select
           disabled={disabled}
           value={step.kind === 'task' ? (step.fields.state ?? '') : (step.fields.status ?? '')}
@@ -105,7 +105,7 @@ function ChildProperties({ orgId, step, disabled, onChange }: StepProps): JSX.El
         </Select>
       </Field>
       {step.kind !== 'program' ? (
-        <Field label="Child priority">
+        <Field label="Priority">
           <Select
             disabled={disabled}
             value={step.fields.priority ?? ''}
@@ -125,7 +125,7 @@ function ChildProperties({ orgId, step, disabled, onChange }: StepProps): JSX.El
       {step.kind === 'task' ? (
         <TaskEffortFields orgId={orgId} step={step} disabled={disabled} onChange={onChange} />
       ) : (
-        <Field label="Child health">
+        <Field label="Health">
           <Select
             disabled={disabled}
             value={step.fields.health ?? ''}
@@ -141,7 +141,7 @@ function ChildProperties({ orgId, step, disabled, onChange }: StepProps): JSX.El
         </Field>
       )}
       {step.kind === 'program' ? (
-        <Field label="Child visibility">
+        <Field label="Visibility">
           <Select
             disabled={disabled}
             value={step.fields.visibility ?? ''}
@@ -168,7 +168,7 @@ function TaskEffortFields({
   return (
     <>
       <div className="grid gap-3 sm:grid-cols-2">
-        <Field label="Child point estimate">
+        <Field label="Point estimate">
           <Input
             type="number"
             min={0}
@@ -186,7 +186,7 @@ function TaskEffortFields({
             }}
           />
         </Field>
-        <Field label="Child time estimate (minutes)">
+        <Field label="Time estimate (minutes)">
           <Input
             type="number"
             min={0}
@@ -205,7 +205,7 @@ function TaskEffortFields({
           />
         </Field>
       </div>
-      <Field label="Child labels">
+      <Field label="Labels">
         <LabelsPicker
           options={options.labelOptions}
           value={step.fields.labelIds ?? []}

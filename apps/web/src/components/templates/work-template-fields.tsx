@@ -1,6 +1,6 @@
 'use client';
 import type { JSX } from 'react';
-import { Field, Input, Select, Surface, fieldSurface } from '@docket/ui/primitives';
+import { Field, Input, Select, Surface, Textarea, fieldSurface } from '@docket/ui/primitives';
 import { EntityMultiPicker } from '@docket/ui/components';
 import { useVocabulary } from '@docket/ui/hooks';
 import { TemplateTargetType } from '@docket/work/template-contract';
@@ -35,11 +35,11 @@ export function WorkTemplateFields({
   const statuses = statusRegistry.statusesFor(form.kind);
   const set = form.setDefinition;
   return (
-    <div className="flex min-w-0 flex-col gap-5">
-      <Surface tone="card" shape="medium" pad="roomy">
+    <div className="flex min-w-0 flex-col gap-4 sm:gap-5">
+      <Surface tone="card" shape="medium" pad="comfortable" className="sm:p-4">
         <TemplateSampleWork orgId={orgId} form={form} />
       </Surface>
-      <div className="min-w-0">
+      <div className="min-w-0 px-3 sm:px-0">
         <TemplateDisclosure title="Defaults and availability">
           <Field
             label="Starting status"
@@ -82,7 +82,7 @@ function TemplateSampleWork({ orgId, form }: { orgId: string; form: Form }): JSX
       aria-label="Sample work"
       id="template-outline"
       tabIndex={-1}
-      className="flex min-w-0 scroll-mt-48 flex-col gap-5"
+      className="flex min-w-0 scroll-mt-48 flex-col gap-4 sm:gap-5"
     >
       <div>
         <h2 tabIndex={-1} className="text-title-large">
@@ -94,7 +94,7 @@ function TemplateSampleWork({ orgId, form }: { orgId: string; form: Form }): JSX
         </p>
       </div>
       <WorkTemplateSampleFields orgId={orgId} form={form} />
-      <Surface tone="well" shape="medium" pad="roomy">
+      <Surface tone="well" shape="medium" pad="none" className="contents sm:block sm:p-4">
         <Field label="Starting document">
           <FreeformTextEditor
             value={form.definition.payload.description ?? ''}
@@ -225,7 +225,7 @@ export function WorkTemplatePurposeFields({
   const disabled = form.pending || !form.canEdit;
   const set = form.setDefinition;
   return (
-    <div className="flex max-w-2xl min-w-0 flex-col gap-5">
+    <div className="flex max-w-2xl min-w-0 flex-col gap-4 sm:gap-5">
       <div>
         <h2 tabIndex={-1} className="text-title-large">
           Name a kind of work
@@ -248,7 +248,9 @@ export function WorkTemplatePurposeFields({
         />
       </Field>
       <Field label="When to use it">
-        <Input
+        <Textarea
+          aria-label="When to use it"
+          rows={2}
           value={form.definition.description ?? ''}
           disabled={disabled}
           placeholder="What makes a piece of work an example of this?"
@@ -283,10 +285,10 @@ function TemplateKindField({ form, existing }: { form: Form; existing: boolean }
       label="Kind of work"
       description={
         form.definition.blueprint.steps.length || form.definition.defaultSchedules.length
-          ? 'Remove included and recurring work before changing the kind.'
+          ? 'Remove included and repeating work before changing the kind.'
           : {
               initiative: 'Connects related programs around an outcome.',
-              program: 'Organizes an ongoing area of work, including recurring routines.',
+              program: 'Organizes an ongoing area of work, including repeating work.',
               project: 'Organizes work toward a result with a finish.',
               task: 'Defines a single action and any subtasks.',
             }[form.kind]

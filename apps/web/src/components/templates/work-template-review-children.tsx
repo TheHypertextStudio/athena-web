@@ -106,7 +106,7 @@ function ReviewChild({
           )}
           name={
             templates.find((value) => value.id === step.template?.workTypeId)?.definition.name ??
-            'Nested template'
+            'Selected template'
           }
         />
       ) : null}
@@ -126,7 +126,7 @@ function ReviewResponsibility({
   const noun = useVocabulary(kind === 'milestone' ? rootKind : kind);
   const team = useVocabulary('team').toLocaleLowerCase();
   if (step.kind === 'milestone') return null;
-  const label = parent ? 'Parent' : noun;
+  const label = parent ? blueprintStepName(parent) : noun;
   const role = kind === 'task' ? 'assignee' : kind === 'project' ? 'lead' : 'owner';
   const actors = {
     creator: 'Person creating work',
@@ -136,8 +136,8 @@ function ReviewResponsibility({
   };
   const teams = {
     creation_team: `Selected ${team}`,
-    parent_team: `${label} ${team}, otherwise selected ${team}`,
-    none: `No inherited ${team}`,
+    parent_team: `Same ${team} as ${label}, or the ${team} chosen for new work`,
+    none: `No ${team}`,
   };
   return (
     <p className="text-body-small text-on-surface-variant">

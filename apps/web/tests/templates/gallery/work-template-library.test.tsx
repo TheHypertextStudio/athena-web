@@ -62,7 +62,7 @@ describe('organization work definition library', () => {
         ]}
       />,
     );
-    const library = within(screen.getByRole('group', { name: 'Work definitions' }));
+    const library = within(screen.getByRole('group', { name: 'Work templates' }));
     expect(library.getAllByRole('link')).toHaveLength(3);
     const dinner = library.getByRole('link', { name: 'Open Community dinner' });
     expect(within(dinner).getByText('Published v3 · Draft changes')).toBeVisible();
@@ -74,7 +74,7 @@ describe('organization work definition library', () => {
       within(library.getByRole('link', { name: 'Open Team handover' })).getByText('Team draft'),
     ).toBeVisible();
     expect(screen.queryByText('Your drafts')).not.toBeInTheDocument();
-    expect(screen.queryByRole('heading', { name: 'Continue defining' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Continue setup' })).not.toBeInTheDocument();
     expect(
       screen.queryByRole('button', { name: /View published version/ }),
     ).not.toBeInTheDocument();
@@ -85,7 +85,7 @@ describe('organization work definition library', () => {
     event.definition.description = 'Host an event with a secured venue.';
     const community = definition('Community gathering', 'draft', 'personal');
     render(<WorkTemplateLibrary orgId="01ARZ3NDEKTSV4RRFFQ69G5FAX" items={[event, community]} />);
-    const links = within(screen.getByRole('group', { name: 'Work definitions' })).getAllByRole(
+    const links = within(screen.getByRole('group', { name: 'Work templates' })).getAllByRole(
       'link',
     );
     expect(links.map((link) => link.getAttribute('aria-label'))).toEqual([
@@ -103,7 +103,7 @@ describe('organization work definition library', () => {
         'Host an event with a secured venue.',
       ),
     ).toBeVisible();
-    expect(screen.queryByRole('link', { name: /Continue defining Event/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /Continue setup Event/ })).not.toBeInTheDocument();
   });
 
   it('keeps reusable dependencies as independent definitions instead of inventing a parent hierarchy', () => {
@@ -131,7 +131,7 @@ describe('organization work definition library', () => {
     render(
       <WorkTemplateLibrary orgId="01ARZ3NDEKTSV4RRFFQ69G5FAX" items={[vendor, event, other]} />,
     );
-    const library = within(screen.getByRole('group', { name: 'Work definitions' }));
+    const library = within(screen.getByRole('group', { name: 'Work templates' }));
     expect(library.getAllByRole('link', { name: 'Open Vendor booking' })).toHaveLength(1);
     expect(screen.queryByText(/Needed by Event/)).not.toBeInTheDocument();
     expect(screen.queryByText(/Before publishing/)).not.toBeInTheDocument();
@@ -169,16 +169,16 @@ describe('organization work definition library', () => {
         ]}
       />,
     );
-    fireEvent.change(screen.getByRole('textbox', { name: 'Search work definitions' }), {
+    fireEvent.change(screen.getByRole('textbox', { name: 'Search work templates' }), {
       target: { value: 'Event' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Filter by work kind' }));
     fireEvent.change(screen.getByRole('combobox', { name: 'Work kind' }), {
       target: { value: 'task' },
     });
-    expect(screen.getByText('No work definitions match these filters.')).toBeVisible();
+    expect(screen.getByText('No work templates match these filters.')).toBeVisible();
     fireEvent.click(screen.getByRole('button', { name: 'Clear filters' }));
-    expect(screen.getByRole('textbox', { name: 'Search work definitions' })).toHaveValue('');
+    expect(screen.getByRole('textbox', { name: 'Search work templates' })).toHaveValue('');
     expect(screen.getByRole('combobox', { name: 'Work kind' })).toHaveValue('');
     expect(screen.getByRole('link', { name: 'Open Event' })).toBeVisible();
     expect(screen.getByRole('link', { name: 'Open Handover' })).toBeVisible();
@@ -211,7 +211,7 @@ describe('organization work definition library', () => {
     expect(screen.getByText(/one-off project or an ongoing program/)).toBeVisible();
     expect(screen.queryByRole('heading', { name: 'Ready to use' })).not.toBeInTheDocument();
     expect(
-      screen.queryByRole('textbox', { name: 'Search work definitions' }),
+      screen.queryByRole('textbox', { name: 'Search work templates' }),
     ).not.toBeInTheDocument();
   });
 });

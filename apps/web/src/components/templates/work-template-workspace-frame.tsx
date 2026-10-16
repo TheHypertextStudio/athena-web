@@ -33,11 +33,11 @@ export function WorkTemplateWorkspaceFrame({
   children,
 }: WorkTemplateWorkspaceFrameProps): JSX.Element {
   return (
-    <PageContainer as="div" className="@container max-w-6xl min-w-0">
-      <ControlGroup controlSize="xl" orientation="vertical" className="gap-6">
+    <PageContainer as="div" className="@container max-w-6xl min-w-0 p-0 sm:p-3">
+      <ControlGroup controlSize="xl" orientation="vertical" className="gap-3 sm:gap-6">
         {parent ? (
-          <nav aria-label="Work templates navigation">
-            <Button asChild variant="ghost" className="self-start">
+          <nav aria-label="Work templates navigation" className="px-3 pt-2 sm:px-0 sm:pt-0">
+            <Button asChild variant="ghost" className="self-start px-0">
               <Link href={parent.href ?? workTemplateHref(orgId)}>
                 <ChevronLeft className="size-4" aria-hidden="true" />
                 {parent.label}
@@ -46,9 +46,9 @@ export function WorkTemplateWorkspaceFrame({
           </nav>
         ) : null}
         {title ? (
-          <PageHeader className="flex-col items-start @2xl:flex-row @2xl:items-end">
+          <PageHeader className="flex-col items-start px-3 sm:px-0 @2xl:flex-row @2xl:items-end">
             <PageHeading>
-              <PageTitle>{title}</PageTitle>
+              <PageTitle className="text-title-large sm:text-headline-large">{title}</PageTitle>
               {description ? <PageSubtitle>{description}</PageSubtitle> : null}
             </PageHeading>
             {action}

@@ -89,8 +89,8 @@ function ReferencePicker({
 }): JSX.Element {
   return (
     <Field
-      label="Nested template"
-      description="Inline children use the blank template's starting fields. A selected template also contributes its own children."
+      label="Start from template"
+      description="Start blank, or use another template’s starting contents and included work."
     >
       <Select
         disabled={disabled}
@@ -108,9 +108,9 @@ function ReferencePicker({
           });
         }}
       >
-        <option value="">Inline child</option>
+        <option value="">Start blank</option>
         {reference && !selected ? (
-          <option value={reference.workTypeId}>Retained template</option>
+          <option value={reference.workTypeId}>Saved template</option>
         ) : null}
         {pendingDraft ? (
           <option value={pendingDraft.id}>Unpublished {pendingDraft.definition.name}</option>
@@ -132,18 +132,18 @@ function SelectedReference(props: ReferenceProps): JSX.Element {
   return (
     <>
       <Badge variant="outline">
-        {selected?.definition.name ?? 'Retained template'} ·{' '}
+        {selected?.definition.name ?? 'Saved template'} ·{' '}
         {reference.selection.kind === 'latest'
-          ? 'Use latest publication'
+          ? 'Use latest version'
           : props.versions.some(
                 (version) =>
                   reference.selection.kind === 'pinned' &&
                   version.id === reference.selection.workTypeVersionId,
               )
-            ? 'Pinned publication'
+            ? 'Keep this version'
             : props.pending
-              ? 'Checking publication'
-              : 'Publication unavailable — review required'}
+              ? 'Checking versions'
+              : 'Version unavailable — choose another'}
       </Badge>
       <Field label="Template version">
         <Select
@@ -167,7 +167,7 @@ function SelectedReference(props: ReferenceProps): JSX.Element {
         >
           <option value="latest">Use latest when creating work</option>
           <option value="pinned" disabled={!latest}>
-            Pin a published version
+            Keep a specific version
           </option>
         </Select>
       </Field>
@@ -187,7 +187,7 @@ function PinnedReference({
   pinnedId,
 }: ReferenceProps & { pinnedId: string }): JSX.Element {
   return (
-    <Field label="Pinned version">
+    <Field label="Version to keep">
       <Select
         disabled={disabled || pending}
         value={pinnedId}
@@ -205,7 +205,7 @@ function PinnedReference({
         }}
       >
         {!versions.some((version) => version.id === pinnedId) ? (
-          <option value={pinnedId}>Publication unavailable — review required</option>
+          <option value={pinnedId}>Version unavailable — choose another</option>
         ) : null}
         {versions.map((version) => (
           <option key={version.id} value={version.id}>
@@ -245,8 +245,8 @@ function PendingReference({
     <div className="flex min-w-0 flex-col gap-2">
       <Badge variant="outline">Unpublished {draft.definition.name}</Badge>
       <p className="text-body-small text-on-surface-variant">
-        Publish this definition before publishing its parent. This reference keeps the reserved
-        first publication.
+        Publish this template before the template that includes it. This work will use its first
+        published version.
       </p>
       {draft.canEdit ? (
         <Button asChild variant="ghost" className="min-h-10 self-start">

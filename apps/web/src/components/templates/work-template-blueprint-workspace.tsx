@@ -38,7 +38,11 @@ function SelectedBlueprintChild({
     if (!key) return;
     const panel = document.getElementById(`blueprint-child-${key}`);
     const header = document.querySelector<HTMLElement>('[data-template-definition-header]');
-    if (panel && header) panel.style.scrollMarginTop = `${header.offsetHeight + 24}px`;
+    if (panel)
+      panel.style.scrollMarginTop =
+        header && getComputedStyle(header).position === 'sticky'
+          ? `${header.offsetHeight + 24}px`
+          : '';
     panel?.scrollIntoView({ block: 'start' });
     panel?.querySelector<HTMLElement>('h3')?.focus({ preventScroll: true });
   }, [key]);
@@ -88,11 +92,11 @@ export function BlueprintWorkspaceLayout({
     wasActive.current = active;
   }, [active]);
   return (
-    <div className="flex min-w-0 flex-col gap-4">
+    <div className="flex min-w-0 flex-col gap-4 p-3 sm:p-0">
       {!Blueprint.safeParse(editor.blueprint).success ? (
         <InlineBanner tone="critical" title="Review child work">
-          Name every child, choose completion prerequisites, and keep offsets and estimates within
-          their limits before saving.
+          Name each item, choose what must finish first, and check dates and estimates before
+          saving.
         </InlineBanner>
       ) : null}
       <div hidden={active}>
@@ -179,7 +183,12 @@ function CreatedTogether({
   const noun = useVocabulary(editor.rootKind).toLocaleLowerCase();
   const [childrenOpen, setChildrenOpen] = useState(true);
   return (
-    <Surface tone="well" shape="medium" pad="comfortable" className="flex min-w-0 flex-col gap-4">
+    <Surface
+      tone="well"
+      shape="medium"
+      pad="none"
+      className="contents min-w-0 flex-col gap-4 sm:flex sm:p-3"
+    >
       <Collapsible open={childrenOpen} onOpenChange={setChildrenOpen} className="min-w-0">
         <div className="flex flex-col gap-1">
           <h3>
@@ -187,7 +196,7 @@ function CreatedTogether({
               <Button
                 type="button"
                 variant="ghost"
-                className="group text-title-medium h-auto w-full justify-between"
+                className="group text-title-medium h-auto w-full justify-between px-0 sm:px-4"
               >
                 Created together
                 <ChevronDown
@@ -226,8 +235,8 @@ function CreatedTogether({
             />
             {editor.blueprint.steps.length >= 450 ? (
               <p className="text-body-small text-on-surface-variant">
-                {editor.blueprint.steps.length} of 499 authored children. Publication checks nested
-                templates against the 500-item limit.
+                {editor.blueprint.steps.length} of 499 included items. A template can create at most
+                500 items, including work added by other templates.
               </p>
             ) : null}
           </div>

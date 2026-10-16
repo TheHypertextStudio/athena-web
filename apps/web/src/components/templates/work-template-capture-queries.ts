@@ -63,6 +63,7 @@ function saveCapture(
 /** Save only the reviewed name and source token; publication remains a separate editor action. */
 export function useWorkTemplateCapture(orgId: string, kind: TemplateTargetType, id: string) {
   return useApiMutation({
+    failure: 'silent',
     mutationFn: (input: WorkTemplateCaptureRequest) =>
       unwrap(
         () => saveCapture(orgId, kind, id, input),

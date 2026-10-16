@@ -28,7 +28,7 @@ export function WorkTemplateBlueprintRules({
         }}
       />
       {step.kind === 'task' ? (
-        <Field label={`${cycle} rule`}>
+        <Field label={cycle}>
           <Select
             disabled={disabled}
             value={step.cycleRule}
@@ -41,10 +41,10 @@ export function WorkTemplateBlueprintRules({
           >
             <option value="none">No {cycle.toLocaleLowerCase()}</option>
             <option value="parent_cycle">
-              Nearest parent {task}'s {cycle.toLocaleLowerCase()}
+              Same {cycle.toLocaleLowerCase()} as parent {task}
             </option>
             <option value="current_cycle">
-              Current {cycle.toLocaleLowerCase()} for the selected {team.toLocaleLowerCase()}
+              Current {cycle.toLocaleLowerCase()} for the chosen {team.toLocaleLowerCase()}
             </option>
           </Select>
         </Field>
@@ -84,7 +84,14 @@ export function WorkTemplateAssignmentRules({
           <option value="athena">Athena</option>
         </Select>
       </Field>
-      <Field label={`${team} rule`}>
+      <Field
+        label={team}
+        description={
+          value.teamRule === 'parent_team'
+            ? `Uses the parent’s ${team.toLocaleLowerCase()} when available; otherwise the ${team.toLocaleLowerCase()} chosen for the new work.`
+            : undefined
+        }
+      >
         <Select
           disabled={disabled}
           value={value.teamRule}
@@ -93,11 +100,10 @@ export function WorkTemplateAssignmentRules({
           }}
         >
           <option value="parent_team">
-            {parentLabel}'s {team.toLocaleLowerCase()}, otherwise creation{' '}
-            {team.toLocaleLowerCase()}
+            Same {team.toLocaleLowerCase()} as {parentLabel.toLocaleLowerCase()}
           </option>
-          <option value="creation_team">Creation {team.toLocaleLowerCase()}</option>
-          <option value="none">No inherited {team.toLocaleLowerCase()}</option>
+          <option value="creation_team">Chosen {team.toLocaleLowerCase()} for new work</option>
+          <option value="none">No {team.toLocaleLowerCase()}</option>
         </Select>
       </Field>
     </>
@@ -123,9 +129,12 @@ export function WorkTemplateBlueprintDependencies({
   if (!siblings.length) return null;
   return (
     <div className="flex flex-col gap-2">
-      <h4 className="text-label-large">Sibling dependencies</h4>
+      <h4 className="text-label-large">Must wait for</h4>
       {siblings.map((other) => (
-        <label key={other.key} className="text-body-medium flex items-center gap-2">
+        <label
+          key={other.key}
+          className="text-body-medium flex min-h-10 items-center gap-2 sm:min-h-0"
+        >
           <Checkbox
             disabled={disabled}
             checked={blueprint.dependencies.some(
@@ -143,7 +152,7 @@ export function WorkTemplateBlueprintDependencies({
               });
             }}
           />
-          Blocked by {blueprintStepName(other)}
+          Wait for {blueprintStepName(other)}
         </label>
       ))}
     </div>

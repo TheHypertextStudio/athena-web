@@ -100,10 +100,7 @@ function acceptanceFailure(failure: unknown): Pick<AttemptState, 'needsReview' |
     needsReview: stale,
     error: stale
       ? 'This review changed. Review the updated copies before continuing.'
-      : userErrorMessage(
-          failure,
-          'Could not save these work definitions. Your choices are still here.',
-        ),
+      : userErrorMessage(failure, 'Could not save these templates. Your choices are still here.'),
   };
 }
 /** Preserve request identities across reloads, block duplicate clicks and accept only real receipts. */

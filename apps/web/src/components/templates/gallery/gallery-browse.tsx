@@ -106,7 +106,7 @@ export function GalleryBrowse(props: GalleryBrowseProps): JSX.Element {
     );
   }
   return (
-    <div className="flex min-w-0 flex-col gap-5">
+    <div className="flex min-w-0 flex-col gap-3 sm:gap-5">
       <GalleryBrowseBody
         props={{ ...props, onSelect: changeSelection }}
         suggested={suggested}
@@ -116,7 +116,7 @@ export function GalleryBrowse(props: GalleryBrowseProps): JSX.Element {
       />
       {selectionError ? (
         <InlineBanner tone="warning" title="Review a smaller selection">
-          Choose up to 100 starting definitions. Remove some work before adding more.
+          Choose up to 100 starting points. Remove some work before adding more.
         </InlineBanner>
       ) : null}
       {props.selected.length ? (
@@ -167,13 +167,6 @@ function GalleryBrowseBody({
           props.onFilters(filters);
         }}
       />
-      <GalleryBrowseGroups
-        groups={groups}
-        selected={selected}
-        suggested={suggested}
-        baseHref={props.baseHref}
-        onToggle={onToggle}
-      />{' '}
       <GalleryBrowseActions
         props={props}
         suggested={suggested}
@@ -181,6 +174,13 @@ function GalleryBrowseBody({
           onSuggested(value);
           if (value) props.onFilters({ fork: props.filters.fork });
         }}
+      />
+      <GalleryBrowseGroups
+        groups={groups}
+        selected={selected}
+        suggested={suggested}
+        baseHref={props.baseHref}
+        onToggle={onToggle}
       />
     </>
   );
@@ -196,8 +196,8 @@ function GalleryAudienceStart({
     <Surface
       as="section"
       tone="prominent"
-      shape="large"
-      pad="roomy"
+      shape="medium"
+      pad="comfortable"
       aria-label="Organization starting points"
     >
       <h2 className="text-headline-small">What are you organizing?</h2>
@@ -225,7 +225,7 @@ function GalleryAudienceStart({
         ))}
       </div>
       <Button className="mt-3" variant="ghost" onClick={onAll}>
-        Browse all work definitions
+        Browse all starting points
       </Button>
     </Surface>
   );
@@ -248,7 +248,7 @@ function GalleryBrowseGroups({
       role="tabpanel"
       id={`tabpanel-${suggested ? 'suggested' : 'all'}`}
       aria-labelledby={`tab-${suggested ? 'suggested' : 'all'}`}
-      className="flex min-w-0 flex-col gap-5"
+      className="flex min-w-0 flex-col gap-3 sm:gap-5"
     >
       {groups
         .filter((group) => group.items.length)
@@ -256,8 +256,8 @@ function GalleryBrowseGroups({
           <Surface
             key={group.label}
             as="section"
-            shape="large"
-            pad="roomy"
+            shape="medium"
+            pad="comfortable"
             aria-label={group.label}
           >
             <h2 className="text-title-large">{group.label}</h2>
@@ -277,7 +277,7 @@ function GalleryBrowseGroups({
           </Surface>
         ))}
       {!groups.some((group) => group.items.length) ? (
-        <p>No templates match these filters.</p>
+        <p className="px-3 sm:px-0">No templates match these filters.</p>
       ) : null}
     </div>
   );
@@ -289,8 +289,8 @@ function GallerySelectionBar(
     <Surface
       as="footer"
       tone="floating"
-      shape="large"
-      pad="roomy"
+      shape="medium"
+      pad="comfortable"
       className="sticky bottom-0 flex flex-wrap items-center justify-between gap-3"
     >
       <p role="status" className="text-label-large">
@@ -313,7 +313,7 @@ function GalleryBrowseActions({
 }): JSX.Element {
   const forkLabel = GALLERY_FORKS.find((item) => item.value === props.filters.fork);
   return (
-    <div className="flex flex-wrap items-center gap-2">
+    <div className="flex flex-wrap items-center gap-2 px-3 sm:px-0">
       <Tabs
         label="Gallery view"
         value={suggested ? 'suggested' : 'all'}
@@ -328,6 +328,7 @@ function GalleryBrowseActions({
       {forkLabel ? (
         <Button
           variant="ghost"
+          className="px-0"
           disabled={!props.forkItems.length}
           onClick={() => {
             props.onSelect([
@@ -348,7 +349,7 @@ function GalleryFilters({
   onFilters,
 }: Pick<GalleryBrowseProps, 'filters' | 'onFilters'>): JSX.Element {
   return (
-    <div className="grid gap-2 sm:grid-cols-[minmax(0,16rem)_1fr]">
+    <div className="grid gap-2 px-3 sm:grid-cols-[minmax(0,16rem)_1fr] sm:px-0">
       <Select
         aria-label="Starting points for"
         value={filters.fork ?? ''}

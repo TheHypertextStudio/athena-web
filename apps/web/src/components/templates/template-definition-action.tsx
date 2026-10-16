@@ -40,15 +40,24 @@ export function TemplateDefinitionAction({
           disabled={actionDisabled(form, save && invalid, save, publish && publicationBlocked)}
           onClick={action}
         >
-          <span className="sm:hidden">{save ? 'Save draft' : publish ? 'Publish' : 'Review'}</span>
+          <span className="sm:hidden">{compactActionLabel(form.pending, save, publish)}</span>
           <span className="hidden sm:inline">{label}</span>
         </Button>
       ) : null}
-      <span role="status" className="text-body-small text-on-surface-variant">
+      <span
+        role="status"
+        className="text-body-small text-on-surface-variant sr-only sm:not-sr-only"
+      >
         {saveStatus(form, initial !== null)}
       </span>
     </div>
   );
+}
+
+function compactActionLabel(pending: boolean, save: boolean, publish: boolean): string {
+  if (pending) return 'Saving…';
+  if (save) return 'Save draft';
+  return publish ? 'Publish' : 'Review';
 }
 
 /** Place the sharing consequence next to the deliberate publication action. */

@@ -75,7 +75,7 @@ export function WorkTemplatePicker({
         >
           <LayoutTemplate className="size-4 shrink-0" />
           <span className="truncate">
-            {selectedLabel ?? label}
+            {selectedLabel ?? (query.isPending ? 'Loading template…' : label)}
             {earlier ? ' · Earlier version' : ''}
           </span>
           <ChevronDown className="size-4 shrink-0" />

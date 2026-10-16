@@ -49,8 +49,10 @@ export function useTemplateSectionNavigation(initial: TemplateDefinitionSection)
     if (position) restoreShellScroll(position);
     else {
       const header = document.querySelector<HTMLElement>('[data-template-definition-header]');
-      if (header) panel.style.scrollMarginTop = `${header.offsetHeight + 24}px`;
-      panel.scrollIntoView({ block: 'start' });
+      const stickyHeader = header && getComputedStyle(header).position === 'sticky';
+      panel.style.scrollMarginTop = stickyHeader ? `${header.offsetHeight + 24}px` : '';
+      // A phone starts each new step with its context; later scrolling belongs to the fields.
+      (stickyHeader ? panel : (header ?? panel)).scrollIntoView({ block: 'start' });
     }
   }, [section]);
   return { section, selectSection, rememberFocus };

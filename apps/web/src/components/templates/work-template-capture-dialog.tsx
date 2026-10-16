@@ -47,7 +47,7 @@ export function WorkTemplateCaptureDialog(props: WorkTemplateCaptureDialogProps)
         <DialogHeader>
           <DialogTitle>Save as template</DialogTitle>
           <DialogDescription>
-            Only you can read this draft. Review its outline, then continue in the template editor.
+            Only you can see this draft. Check the included work, then finish setting it up.
           </DialogDescription>
         </DialogHeader>
         <DialogBody className="flex flex-col gap-4">
@@ -60,6 +60,13 @@ export function WorkTemplateCaptureDialog(props: WorkTemplateCaptureDialogProps)
               }}
             />
           </Field>
+          {props.failure ? (
+            <FieldError>
+              {props.failure === 'stale'
+                ? 'This work changed. Refresh and check it again. Your template name is kept.'
+                : 'Could not save this draft. Your template name is kept; try again.'}
+            </FieldError>
+          ) : null}
           <CaptureOutline {...props} />
         </DialogBody>
         <CaptureFooter {...props} />
@@ -77,9 +84,7 @@ function CaptureOutline({
     <div className="flex min-w-0 flex-col gap-3">
       {loading ? <p role="status">Reviewing current work…</p> : null}
       {previewFailed ? (
-        <FieldError>
-          Could not capture this complete outline. Check your access and refresh.
-        </FieldError>
+        <FieldError>Could not load the included work. Check your access and try again.</FieldError>
       ) : null}
       {ready && preview ? (
         <>
@@ -105,33 +110,22 @@ function CaptureOutline({
 function CaptureFooter(props: WorkTemplateCaptureDialogProps): JSX.Element {
   return (
     <DialogFooter>
-      {props.failure ? (
-        <FieldError>
-          {props.failure === 'stale'
-            ? 'Source work changed. Refresh the capture and review it again. Your name is still here.'
-            : 'Could not save the private draft. Your name is still here; try again.'}
-        </FieldError>
-      ) : null}
-      {props.failure || props.previewFailed ? (
-        <Button
-          type="button"
-          variant="secondary"
-          disabled={props.pending || props.loading}
-          onClick={props.onRefresh}
-        >
-          Refresh capture
-        </Button>
-      ) : null}
       <Button type="button" variant="ghost" disabled={props.pending} onClick={props.onClose}>
         Cancel
       </Button>
-      <Button
-        type="button"
-        disabled={!props.ready || props.pending || !props.name.trim()}
-        onClick={props.onSave}
-      >
-        {props.pending ? 'Saving…' : 'Save private draft'}
-      </Button>
+      {props.failure || props.previewFailed ? (
+        <Button type="button" disabled={props.pending || props.loading} onClick={props.onRefresh}>
+          Refresh capture
+        </Button>
+      ) : (
+        <Button
+          type="button"
+          disabled={!props.ready || props.pending || !props.name.trim()}
+          onClick={props.onSave}
+        >
+          {props.pending ? 'Saving…' : 'Save private draft'}
+        </Button>
+      )}
     </DialogFooter>
   );
 }

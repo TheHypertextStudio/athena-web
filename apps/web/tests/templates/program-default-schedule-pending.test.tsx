@@ -43,17 +43,19 @@ describe('honest copied Program routine pins', () => {
     const saved = copiedProgram();
     render(<WorkTemplateForm orgId={saved.organizationId} initial={saved} onCreated={vi.fn()} />);
     fireEvent.click(screen.getByRole('tab', { name: 'Included work' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Edit routine Monthly vendor review' }));
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Edit repeating work Monthly vendor review' }),
+    );
     expect(screen.getByRole('button', { name: 'Unpublished Vendor booking' })).toBeVisible();
     expect(screen.queryByText('Template unavailable')).not.toBeInTheDocument();
-    expect(screen.queryByLabelText('Reusable schedule template updates')).not.toBeInTheDocument();
-    expect(screen.queryByText(/Keep the selected publication/)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Template updates for repeating work')).not.toBeInTheDocument();
+    expect(screen.queryByText(/Keep the selected version/)).not.toBeInTheDocument();
     const review = screen.getByRole('link', { name: 'Review Vendor booking' });
     expect(review).toHaveAttribute(
       'href',
       `/orgs/${saved.organizationId}/work-templates/${nestedId}?section=review&returnTo=${saved.id}`,
     );
-    change('Default schedule interval', '2');
+    change('Repeat interval', '2');
     fireEvent.click(screen.getByRole('button', { name: 'Save draft' }));
     await waitFor(() => {
       expect(mocks.draft).toHaveBeenCalled();
@@ -67,9 +69,11 @@ describe('honest copied Program routine pins', () => {
     const saved = copiedProgram(false);
     render(<WorkTemplateForm orgId={saved.organizationId} initial={saved} onCreated={vi.fn()} />);
     fireEvent.click(screen.getByRole('tab', { name: 'Included work' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Edit routine Monthly vendor review' }));
-    expect(screen.getByText(/reserved first publication/)).toBeVisible();
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Edit repeating work Monthly vendor review' }),
+    );
+    expect(screen.getByText(/first published version/)).toBeVisible();
     expect(screen.queryByRole('link', { name: 'Review Vendor booking' })).not.toBeInTheDocument();
-    expect(screen.queryByLabelText('Reusable schedule template updates')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Template updates for repeating work')).not.toBeInTheDocument();
   });
 });

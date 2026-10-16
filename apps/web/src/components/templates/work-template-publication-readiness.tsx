@@ -68,13 +68,13 @@ export function TemplatePublicationReadiness({
   if (readiness.loading)
     return (
       <p role="status" className="text-body-small">
-        Checking linked definitions…
+        Checking included templates…
       </p>
     );
   if (readiness.failed)
     return (
       <div className="flex flex-wrap items-center gap-2">
-        <p className="text-body-medium">Linked definitions could not be checked.</p>
+        <p className="text-body-medium">Included templates could not be checked.</p>
         <Button
           variant="secondary"
           onClick={() => {

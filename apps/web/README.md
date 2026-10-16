@@ -1,5 +1,10 @@
 # Docket web
 
+The work-template and planning activities replace workspace navigation while you focus on a task.
+Phone editors use one content gutter, compact headers and revisitable steps. See
+[work-template setup](../../docs/core/work-template-ui.md) and
+[daily planning](../../docs/core/daily-planning.md) for their interaction contracts.
+
 Next.js owns marketing, application pages, request-time authentication and Publishing host routing.
 Hono owns backend state and Scalar API documentation. Mintlify continues to publish `../docs`;
 see [docs authoring](../../docs/engineering/docs-authoring.md).

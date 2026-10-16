@@ -115,7 +115,7 @@ function BlueprintOutlineRow({
       aria-label={`Edit ${blueprintStepName(step)}`}
       aria-pressed={selected}
       onClick={onSelect}
-      className="coarse:h-auto h-auto min-h-12 w-full scroll-mt-48 justify-start py-2 text-left"
+      className="coarse:h-auto h-auto min-h-12 w-full scroll-mt-48 justify-start px-0 py-2 text-left sm:px-4"
     >
       <span className="flex min-w-0 flex-1 flex-col gap-0.5 break-words whitespace-normal">
         <span className="text-label-large">{blueprintStepName(step)}</span>
@@ -131,7 +131,7 @@ function BlueprintOutlineRow({
         {step.template ? (
           <Badge variant="outline" className="self-start">
             {templates.find((value) => value.id === step.template?.workTypeId)?.definition.name ??
-              'Nested template'}
+              'Selected template'}
           </Badge>
         ) : null}
       </span>

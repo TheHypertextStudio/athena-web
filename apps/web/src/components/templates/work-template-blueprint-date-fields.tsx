@@ -36,7 +36,7 @@ export function WorkTemplateBlueprintDateFields(props: DateProps): JSX.Element {
   const { label, value, siblings, disabled, onChange } = props;
   return (
     <div className="flex min-w-0 flex-col gap-3">
-      <Field label={`${label} date rule`}>
+      <Field label={label === 'Start' ? 'Starts' : label === 'Due' ? 'Is due' : 'Target date'}>
         <Select
           value={ruleKind(value)}
           disabled={disabled}
@@ -44,17 +44,17 @@ export function WorkTemplateBlueprintDateFields(props: DateProps): JSX.Element {
             onChange(changeKind(event.target.value, value));
           }}
         >
-          <option value="none">No managed date</option>
-          <option value="parent">Relative to parent anchor</option>
+          <option value="none">Choose later</option>
+          <option value="parent">The containing work’s date</option>
           {siblings
             .filter((step) => step.kind === 'milestone')
             .map((step) => (
               <option key={step.key} value={`milestone:${step.key}`}>
-                Relative to {blueprintStepName(step)}
+                The date of {blueprintStepName(step)}
               </option>
             ))}
           {siblings.some((step) => step.kind === 'task') ? (
-            <option value="after_completion">After sibling {tasks} complete</option>
+            <option value="after_completion">After other {tasks} finish</option>
           ) : null}
         </Select>
       </Field>
@@ -86,7 +86,7 @@ function TimingDetails({
           disabled={disabled}
           onChange={onChange}
         />
-        <Field label={`${label} offset unit`}>
+        <Field label={`${label}: count days as`}>
           <Select
             disabled={disabled}
             value={value.offset.unit}
@@ -101,7 +101,7 @@ function TimingDetails({
             }}
           >
             <option value="calendar">Calendar days</option>
-            <option value="working">Workspace working days</option>
+            <option value="working">Working days</option>
           </Select>
         </Field>
       </div>
@@ -119,7 +119,7 @@ function WeekdayFields({
 }): JSX.Element {
   return (
     <>
-      <Field label={`${label} weekday adjustment`}>
+      <Field label={`${label}: move to a weekday`}>
         <Select
           disabled={disabled}
           value={value.snap?.direction ?? ''}
@@ -138,14 +138,14 @@ function WeekdayFields({
               });
           }}
         >
-          <option value="">Keep derived day</option>
-          <option value="next">Following weekday</option>
-          <option value="previous">Previous weekday</option>
+          <option value="">Keep calculated date</option>
+          <option value="next">Move to next weekday</option>
+          <option value="previous">Move to previous weekday</option>
         </Select>
       </Field>
       {value.snap ? (
         <>
-          <Field label={`${label} weekday`}>
+          <Field label={`${label}: weekday`}>
             <Select
               disabled={disabled}
               value={value.snap.weekday}
@@ -168,7 +168,7 @@ function WeekdayFields({
               )}
             </Select>
           </Field>
-          <label className="text-body-medium flex items-center gap-2">
+          <label className="text-body-medium flex min-h-10 items-center gap-2 sm:min-h-0">
             <Checkbox
               disabled={disabled}
               checked={value.snap.inclusive}
@@ -182,7 +182,7 @@ function WeekdayFields({
                 });
               }}
             />
-            {label} include anchor weekday
+            {label}: allow the same day
           </label>
         </>
       ) : null}
@@ -202,12 +202,15 @@ function CompletionFields({
       {value.kind === 'after_completion' ? (
         <div className="flex flex-col gap-2">
           <p className="text-body-small text-on-surface-variant">
-            Work is created immediately; its date waits for every selected Task to complete.
+            This work is created now. Its date is set after all the chosen work finishes.
           </p>
           {siblings
             .filter((step) => step.kind === 'task')
             .map((step) => (
-              <label key={step.key} className="text-body-medium flex items-center gap-2">
+              <label
+                key={step.key}
+                className="text-body-medium flex min-h-10 items-center gap-2 sm:min-h-0"
+              >
                 <Checkbox
                   disabled={disabled}
                   checked={value.stepKeys.includes(step.key)}
@@ -220,7 +223,7 @@ function CompletionFields({
                     });
                   }}
                 />
-                {label} after {blueprintStepName(step)} completes
+                {label}: after {blueprintStepName(step)} finishes
               </label>
             ))}
         </div>
@@ -247,13 +250,22 @@ function OffsetDays({
   const invalid = raw !== '' && parseOffset(raw, minimum) === undefined;
   return (
     <Field
-      label={`${label} offset days`}
+      label={
+        minimum === 0 ? `${label}: days after finishing` : `${label}: days before (−) or after (+)`
+      }
       description={
         minimum === 0
-          ? 'Zero or more days after completion.'
-          : 'Negative is before the anchor; positive is after.'
+          ? 'Number of days after the chosen work finishes.'
+          : 'Use a negative number for days before, zero for the same day, or a positive number for days after.'
       }
-      {...(invalid ? { error: 'Enter whole days within the allowed range.' } : {})}
+      {...(invalid
+        ? {
+            error:
+              minimum === 0
+                ? 'Enter a whole number of days from 0 to 36500.'
+                : 'Enter a whole number of days between −36500 and 36500.',
+          }
+        : {})}
     >
       <Input
         type="number"

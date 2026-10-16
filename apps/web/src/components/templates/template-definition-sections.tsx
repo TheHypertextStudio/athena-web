@@ -35,8 +35,8 @@ export function TemplateDefinitionSections({
         data-template-definition-header=""
         tone="prominent"
         shape="medium"
-        pad="comfortable"
-        className="sticky top-2 z-10 flex min-w-0 flex-col gap-2 sm:p-5"
+        pad="tight"
+        className="flex min-w-0 flex-col gap-1 px-3 sm:sticky sm:top-2 sm:z-10 sm:gap-2 sm:p-5"
       >
         {header}
         <TemplateDefinitionNavigation section={section} onValueChange={selectSection} />
@@ -69,9 +69,9 @@ export function TemplateDefinitionSections({
           className="flex min-w-0 scroll-mt-48 flex-col gap-6"
           aria-labelledby="tab-review"
         >
-          {reviewIntro}
+          <div className="px-3 sm:px-0">{reviewIntro}</div>
           <WorkTemplateDefinitionReview orgId={orgId} form={form} templateId={initial?.id} />
-          {children}
+          <div className="flex min-w-0 flex-col gap-6 px-3 sm:px-0">{children}</div>
         </div>
       ) : null}
     </>
@@ -106,7 +106,7 @@ function DefinitionWork({
       <Button
         type="button"
         variant="secondary"
-        className="mt-6"
+        className="mt-6 ml-3 sm:ml-0"
         onClick={() => {
           onReview();
         }}
@@ -141,7 +141,7 @@ function DefinitionPurpose({
       className="scroll-mt-48"
       aria-labelledby="tab-purpose"
     >
-      <Surface tone="card" shape="medium" pad="roomy" className="sm:p-6">
+      <Surface tone="card" shape="medium" pad="comfortable" className="sm:p-6">
         <WorkTemplatePurposeFields
           orgId={orgId}
           form={form}
@@ -185,7 +185,7 @@ function DefinitionStructure({
       <Button
         type="button"
         variant="secondary"
-        className="mt-6"
+        className="mt-6 ml-3 sm:ml-0"
         onClick={() => {
           navigation.selectSection('review');
         }}

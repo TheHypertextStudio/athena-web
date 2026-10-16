@@ -1,6 +1,5 @@
 'use client';
 import type { JSX } from 'react';
-import { Surface } from '@docket/ui/primitives';
 import { useVocabulary } from '@docket/ui/hooks';
 import { ChevronLeft } from '@docket/ui/icons';
 import { Button, Checkbox, Field, Select } from '@docket/ui/primitives';
@@ -96,10 +95,7 @@ export function BlueprintChildCard(
     (value) => value.key !== step.key && value.parentStepKey === step.parentStepKey,
   );
   return (
-    <Surface
-      tone="prominent"
-      shape="medium"
-      pad="roomy"
+    <section
       id={`blueprint-child-${step.key}`}
       role="group"
       aria-label={`Child work: ${blueprintStepName(step)}`}
@@ -117,8 +113,8 @@ export function BlueprintChildCard(
         disabled={disabled}
         onChange={update}
       />
-      <section className="flex flex-col gap-2" aria-label="Child inclusion">
-        <h4 className="text-label-large">Inclusion</h4>
+      <section className="flex flex-col gap-2" aria-label="Include this work">
+        <h4 className="text-label-large">Include this work</h4>
         <OptionalFields step={step} disabled={disabled} onChange={update} />
       </section>
       <TemplateDisclosure title="Dates">
@@ -139,7 +135,7 @@ export function BlueprintChildCard(
         disabled={disabled}
         onChange={update}
       />
-      <TemplateDisclosure title="Template and placement">
+      <TemplateDisclosure title="Template and location">
         <WorkTemplateBlueprintReferenceFields
           orgId={props.orgId}
           step={step}
@@ -150,7 +146,7 @@ export function BlueprintChildCard(
         <ParentField {...props} />
       </TemplateDisclosure>
       <ChildActions {...props} />
-    </Surface>
+    </section>
   );
 }
 
@@ -163,7 +159,7 @@ function ChildEditorHeading({
 }): JSX.Element {
   return (
     <div className="flex min-w-0 flex-col items-start gap-3">
-      <Button type="button" variant="ghost" size="sm" onClick={onClose}>
+      <Button type="button" variant="ghost" size="sm" className="px-0 sm:px-3" onClick={onClose}>
         <ChevronLeft aria-hidden className="size-4" />
         Back to included work
       </Button>
@@ -184,7 +180,7 @@ function OptionalFields({
 }): JSX.Element {
   return (
     <div className="flex flex-wrap gap-4">
-      <label className="text-body-medium flex items-center gap-2">
+      <label className="text-body-medium flex min-h-10 items-center gap-2 sm:min-h-0">
         <Checkbox
           checked={step.optional.enabled}
           disabled={disabled}
@@ -198,10 +194,10 @@ function OptionalFields({
             });
           }}
         />
-        Optional child
+        Make optional
       </label>
       {step.optional.enabled ? (
-        <label className="text-body-medium flex items-center gap-2">
+        <label className="text-body-medium flex min-h-10 items-center gap-2 sm:min-h-0">
           <Checkbox
             disabled={disabled}
             checked={step.optional.selectedByDefault}
@@ -212,7 +208,7 @@ function OptionalFields({
               });
             }}
           />
-          Selected by default
+          Include by default
         </label>
       ) : null}
     </div>
@@ -238,7 +234,7 @@ function ParentField({
     (other) => !descendants.has(other.key) && blueprintChildKinds(other.kind).includes(step.kind),
   );
   return (
-    <Field label="Child parent">
+    <Field label="Included under">
       <Select
         value={step.parentStepKey ?? ''}
         disabled={disabled}
@@ -247,7 +243,7 @@ function ParentField({
         }}
       >
         {blueprintChildKinds(rootKind).includes(step.kind) ? (
-          <option value="">Root item</option>
+          <option value="">This work</option>
         ) : null}
         {choices.map((other) => (
           <option key={other.key} value={other.key}>
@@ -319,6 +315,7 @@ function ChildActions({
           type="button"
           variant="ghost"
           size="sm"
+          className="px-0 sm:px-3"
           disabled={disabled || position === 0}
           onClick={() => {
             onChange(moveBlueprintChild(blueprint, step.key, -1));
@@ -330,6 +327,7 @@ function ChildActions({
           type="button"
           variant="ghost"
           size="sm"
+          className="px-0 sm:px-3"
           disabled={disabled || position === siblings.length - 1}
           onClick={() => {
             onChange(moveBlueprintChild(blueprint, step.key, 1));
@@ -341,12 +339,13 @@ function ChildActions({
           type="button"
           variant="ghost"
           size="sm"
+          className="px-0 sm:px-3"
           disabled={disabled}
           onClick={() => {
             onChange(removeBlueprintChild(blueprint, step.key));
           }}
         >
-          Remove child and descendants
+          Remove work and its included items
         </Button>
       </div>
     </>

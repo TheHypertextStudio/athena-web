@@ -1,5 +1,5 @@
 'use client';
-import { useRef, useState, type JSX } from 'react';
+import { useRef, useState, type JSX, type ReactNode } from 'react';
 import type {
   WorkTemplateGalleryPreview,
   WorkTemplateGalleryPreviewRequest,
@@ -33,6 +33,7 @@ export interface GalleryReviewProps {
   readonly selectedItems: readonly WorkTemplateGalleryItem[];
   readonly state: GalleryReviewState;
   readonly choices?: GalleryCopyChoicesProps;
+  readonly alerts?: ReactNode;
   readonly onMode: (mode: WorkTemplateGalleryPreviewRequest['mode']) => void;
   readonly onAccept: (preview: WorkTemplateGalleryPreview) => void;
   readonly onBack: () => void;
@@ -75,10 +76,10 @@ function GalleryDestination({ props }: { readonly props: GalleryReviewProps }): 
   const busy = props.state.pending || props.state.updating || props.state.blocked;
   const published = props.preview.mode === 'published';
   return (
-    <Surface as="section" shape="large" pad="roomy" aria-label="Destination and visibility">
-      <h2 className="text-title-large">Destination and visibility</h2>
+    <Surface as="section" shape="medium" pad="comfortable" aria-label="Destination and visibility">
+      <h2 className="text-title-large">Sharing</h2>
       <p className="text-title-medium break-words">{props.workspaceName}</p>
-      <Field label="Copy visibility">
+      <Field label="Who can see these templates">
         <Select
           disabled={busy}
           value={props.preview.mode}
@@ -93,10 +94,11 @@ function GalleryDestination({ props }: { readonly props: GalleryReviewProps }): 
       <p className="text-body-medium text-on-surface-variant">
         {published
           ? `Members of ${props.workspaceName} can see and use the published templates.`
-          : 'Only you can review these drafts. Publication is a separate, explicit action.'}
+          : 'Only you can see these drafts. You can share them with the workspace later.'}
       </p>
       <p className="text-body-small text-on-surface-variant">
-        Reusable definitions only. No work is created or schedules started yet.
+        These are starting points for future work. Saving them does not create work or start
+        routines.
       </p>
     </Surface>
   );
@@ -127,7 +129,7 @@ function GalleryFocusedAdjustments({
       as="section"
       shape="medium"
       tone="well"
-      pad="roomy"
+      pad="comfortable"
       aria-label={`Optional adjustments for ${copy.name}`}
     >
       <h2 className="text-title-large">Optional adjustments</h2>
@@ -155,12 +157,14 @@ function GalleryFocusedReview({
   readonly onBack: () => void;
 }): JSX.Element {
   return (
-    <section aria-label={`Review ${copy.name}`} className="flex min-w-0 flex-col gap-4">
-      <Button variant="ghost" className="self-start" autoFocus onClick={onBack}>
+    <section aria-label={`Review ${copy.name}`} className="flex min-w-0 flex-col gap-3">
+      <Button variant="ghost" className="self-start px-3 sm:px-0" autoFocus onClick={onBack}>
         Back to review
       </Button>
-      <h1 className="text-headline-medium break-words">{copy.name}</h1>
-      {useText ? <p className="text-body-large">{useText}</p> : null}
+      <h1 className="text-title-large sm:text-headline-medium px-3 break-words sm:px-0">
+        {copy.name}
+      </h1>
+      {useText ? <p className="text-body-medium px-3 sm:px-0">{useText}</p> : null}
       <GalleryWorkOutline definition={copy.definition} sources={galleryPreviewSources(preview)} />
       <GalleryFocusedAdjustments copy={copy} preview={preview} choices={choices} />
     </section>
@@ -168,9 +172,9 @@ function GalleryFocusedReview({
 }
 function ReviewHeader({ workspaceName }: { readonly workspaceName: string }): JSX.Element {
   return (
-    <header className="flex min-w-0 flex-col gap-2">
+    <header className="flex min-w-0 flex-col gap-1 px-3 sm:px-0">
       <p className="text-label-large">Review for {workspaceName}</p>
-      <h1 className="text-headline-medium">Review your starting work</h1>
+      <h1 className="text-title-large sm:text-headline-medium">Review your starting work</h1>
     </header>
   );
 }
@@ -208,8 +212,9 @@ export function GalleryReview(props: GalleryReviewProps): JSX.Element {
         />
       ) : null}
       <div hidden={Boolean(focused)}>
-        <div className="flex min-w-0 flex-col gap-5" aria-busy={busy}>
+        <div className="flex min-w-0 flex-col gap-3 sm:gap-5" aria-busy={busy}>
           <ReviewHeader workspaceName={props.workspaceName} />
+          {props.alerts}
           <GalleryReviewOrganization
             preview={props.preview}
             selectedItems={props.selectedItems}
@@ -226,28 +231,40 @@ export function GalleryReview(props: GalleryReviewProps): JSX.Element {
               {props.state.error}
             </InlineBanner>
           ) : null}
-          {props.state.updating ? <p role="status">Updating the review…</p> : null}
-          <div className="flex flex-wrap justify-between gap-3">
-            <Button variant="ghost" disabled={props.state.pending} onClick={props.onBack}>
-              Back to selection
-            </Button>
-            <Button
-              disabled={busy}
-              onClick={() => {
-                props.onAccept(props.preview);
-              }}
-            >
-              {props.state.pending
-                ? published
-                  ? 'Adding…'
-                  : 'Keeping…'
-                : published
-                  ? `Add to ${props.workspaceName}`
-                  : 'Keep private drafts'}
-            </Button>
-          </div>
+          {props.state.updating ? (
+            <p role="status" className="px-3 sm:px-0">
+              Updating the review…
+            </p>
+          ) : null}
+          <GalleryReviewFooter props={props} />
         </div>
       </div>
     </>
+  );
+}
+
+function GalleryReviewFooter({ props }: { readonly props: GalleryReviewProps }): JSX.Element {
+  const published = props.preview.mode === 'published';
+  const busy = props.state.pending || props.state.updating || props.state.blocked;
+  return (
+    <div className="flex flex-col-reverse justify-between gap-2 px-3 sm:flex-row sm:gap-3 sm:px-0">
+      <Button variant="ghost" disabled={props.state.pending} onClick={props.onBack}>
+        Back to selection
+      </Button>
+      <Button
+        disabled={busy}
+        onClick={() => {
+          props.onAccept(props.preview);
+        }}
+      >
+        {props.state.pending
+          ? published
+            ? 'Adding…'
+            : 'Keeping…'
+          : published
+            ? 'Publish to workspace'
+            : 'Keep private drafts'}
+      </Button>
+    </div>
   );
 }

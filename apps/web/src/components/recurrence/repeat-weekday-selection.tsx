@@ -12,9 +12,9 @@ export function RepeatWeekdaySelection({
   readonly onChange: (value: RecurrenceWeekday[]) => void;
 }): JSX.Element {
   return (
-    <fieldset className="flex min-w-0 flex-col gap-2">
+    <fieldset className="@container flex min-w-0 flex-col gap-2">
       <legend className="text-label-medium">On</legend>
-      <div className="grid min-w-0 grid-cols-4 gap-1 sm:grid-cols-7">
+      <div className="grid min-w-0 grid-cols-4 gap-0.5 @[292px]:grid-cols-7">
         {RecurrenceWeekday.options.map((day) => {
           const selected = value.includes(day);
           return (
@@ -37,7 +37,7 @@ export function RepeatWeekdaySelection({
                 );
               }}
             >
-              {day[0]?.toUpperCase()}
+              {day.slice(0, 1).toUpperCase() + day.slice(1, 3)}
             </Button>
           );
         })}

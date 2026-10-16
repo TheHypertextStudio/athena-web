@@ -68,7 +68,7 @@ function DefinitionRow({
 export function LibraryDefinitions({
   items,
   orgId,
-  label = 'Work definitions',
+  label = 'Work templates',
 }: {
   readonly items: readonly WorkTemplateOut[];
   readonly orgId: string;

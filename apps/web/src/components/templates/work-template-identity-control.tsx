@@ -29,6 +29,7 @@ export interface WorkTemplateIdentityControlProps {
   readonly workTypeId?: string | undefined;
   readonly workTypeVersionId?: string | undefined;
   readonly canEdit: boolean;
+  readonly onCapture?: (() => void) | undefined;
 }
 
 /** Show the pinned version and preview explicit starting changes while preserving work by default. */
@@ -40,6 +41,7 @@ export function WorkTemplateIdentityControl({
   workTypeId,
   workTypeVersionId,
   canEdit,
+  onCapture,
 }: WorkTemplateIdentityControlProps): JSX.Element {
   const change = useTemplateChangeController(orgId, kind, workId, workTypeId);
   const queryClient = useQueryClient();
@@ -47,20 +49,27 @@ export function WorkTemplateIdentityControl({
   const current = identity.data;
   if (!current)
     return (
-      <TemplateIdentityRetry
-        loading={identity.isPending && Boolean(workTypeId)}
-        onRetry={() => {
-          if (workTypeId && workTypeVersionId) void identity.refetch();
-          else
-            void queryClient.invalidateQueries({
-              queryKey: [...workTargetCollectionKey(orgId, kind), workId],
-            });
-        }}
-      />
+      <>
+        <TemplateIdentityRetry
+          loading={identity.isPending && Boolean(workTypeId)}
+          onRetry={() => {
+            if (workTypeId && workTypeVersionId) void identity.refetch();
+            else
+              void queryClient.invalidateQueries({
+                queryKey: [...workTargetCollectionKey(orgId, kind), workId],
+              });
+          }}
+        />
+        {onCapture ? (
+          <Button variant="ghost" size="sm" onClick={onCapture}>
+            Save as template
+          </Button>
+        ) : null}
+      </>
     );
   return (
     <>
-      {canEdit ? (
+      {canEdit || onCapture ? (
         <WorkTemplateChoiceMenu
           orgId={orgId}
           kind={kind}
@@ -68,30 +77,24 @@ export function WorkTemplateIdentityControl({
           current={current}
           versionId={workTypeVersionId}
           onSelect={change.select}
+          canChange={canEdit}
+          onCapture={onCapture}
+          onUpdate={
+            canEdit &&
+            !current.archived &&
+            current.latestVersionNumber > current.versionNumber &&
+            workTypeVersionId
+              ? () => {
+                  change.select({ ...current, versionNumber: current.latestVersionNumber });
+                }
+              : undefined
+          }
         />
       ) : (
         <span className="text-label-medium inline-flex max-w-full min-w-0 items-center gap-1.5">
           <WorkTemplateIdentityLabel kind={kind} current={current} />
         </span>
       )}
-      {canEdit &&
-      !current.archived &&
-      current.latestVersionNumber > current.versionNumber &&
-      workTypeVersionId ? (
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          onClick={() => {
-            change.select({
-              ...current,
-              versionNumber: current.latestVersionNumber,
-            });
-          }}
-        >
-          Update template
-        </Button>
-      ) : null}
       <WorkTemplateChangePreview key={change.previewKey} {...change.previewProps} />
     </>
   );

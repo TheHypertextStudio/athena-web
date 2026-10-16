@@ -200,9 +200,7 @@ test('Event project retains its publication, then changes identity without repla
     waitUntil: 'commit',
     timeout: TIMEOUTS.pageReady,
   });
-  await expect(
-    page.getByRole('button', { name: `Change template: ${name}, Version 1`, exact: true }),
-  ).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Template actions', exact: true })).toBeVisible();
   await page.goto(`/orgs/${orgId}/work-templates/${draft.id}`, { waitUntil: 'commit' });
   await page
     .getByRole('textbox', { name: 'Starting document', exact: true })
@@ -212,13 +210,12 @@ test('Event project retains its publication, then changes identity without repla
   expect((await saved).ok()).toBe(true);
   const versionTwo = await publish(page);
   await page.goto(`/orgs/${orgId}/projects/${project.id}`, { waitUntil: 'commit' });
-  await page
-    .getByRole('button', { name: `Change template: ${name}, Version 1`, exact: true })
-    .click();
+  await page.getByRole('button', { name: 'Template actions', exact: true }).click();
+  await page.getByRole('menuitem', { name: 'Change template', exact: true }).click();
   await page.getByRole('menuitem', { name: `${name} · Version 2`, exact: true }).click();
   const preview = page.getByRole('dialog', { name: 'Update template', exact: true });
   await expect(preview).toContainText(
-    'Your outline stays unchanged. Choose each work change to adopt.',
+    'Choose which changes to use. Nothing changes until you confirm.',
   );
   const changed = waitForApiResponse(page, /\/template\/update$/, { method: 'POST' });
   await preview.getByRole('button', { name: 'Update template', exact: true }).click();
@@ -229,9 +226,7 @@ test('Event project retains its publication, then changes identity without repla
   );
   expect(reopened.workTypeVersionId).toBe(versionTwo.latestVersion?.id);
   expect(reopened.description).toBe(project.description);
-  await expect(
-    page.getByRole('button', { name: `Change template: ${name}, Version 2`, exact: true }),
-  ).toBeVisible();
+  await expect(page.getByText('Version 2', { exact: true })).toBeVisible();
   await page.goto(`/orgs/${orgId}/projects`, { waitUntil: 'commit' });
   const display = page.getByRole('dialog', { name: 'Display view', exact: true });
   const grouping = display.getByRole('combobox', { name: 'Group by', exact: true });

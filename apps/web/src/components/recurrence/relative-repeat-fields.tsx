@@ -20,37 +20,34 @@ export function RelativeRepeatFields({
   const program = useVocabulary('program');
   return (
     <fieldset disabled={disabled} className="flex min-w-0 flex-col gap-4">
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="Repeats">
-          <Select
-            aria-label="Default schedule cadence"
-            value={value.kind}
-            onChange={(event) => {
-              onChange(
-                relativeCadence(
-                  event.target.value as RelativeCalendarRecurrenceSchedule['kind'],
-                  value,
-                ),
-              );
-            }}
-          >
-            <option value="daily">Daily</option>
-            <option value="weekly">Weekly</option>
-            <option value="monthly">Monthly</option>
-            <option value="yearly">Yearly</option>
-          </Select>
-        </Field>
-        <Field label="Every">
-          <Input
-            aria-label="Default schedule interval"
-            type="number"
-            min={1}
-            value={value.interval}
-            onChange={(event) => {
-              onChange({ ...value, interval: Number(event.target.value) });
-            }}
-          />
-        </Field>
+      <div className="grid min-w-0 grid-cols-[auto_4rem_minmax(0,1fr)] items-center gap-2">
+        <span className="text-label-large">Repeat every</span>
+        <Input
+          aria-label="Repeat interval"
+          type="number"
+          min={1}
+          value={value.interval}
+          onChange={(event) => {
+            onChange({ ...value, interval: Number(event.target.value) });
+          }}
+        />
+        <Select
+          aria-label="Repeat frequency"
+          value={value.kind}
+          onChange={(event) => {
+            onChange(
+              relativeCadence(
+                event.target.value as RelativeCalendarRecurrenceSchedule['kind'],
+                value,
+              ),
+            );
+          }}
+        >
+          <option value="daily">{value.interval === 1 ? 'day' : 'days'}</option>
+          <option value="weekly">{value.interval === 1 ? 'week' : 'weeks'}</option>
+          <option value="monthly">{value.interval === 1 ? 'month' : 'months'}</option>
+          <option value="yearly">{value.interval === 1 ? 'year' : 'years'}</option>
+        </Select>
       </div>
       {value.kind === 'weekly' ? (
         <RepeatWeekdaySelection
@@ -79,8 +76,8 @@ export function RelativeRepeatFields({
       <RelativeStart {...{ value, onChange }} />
       <RelativeEnd {...{ value, onChange }} />
       <p className="text-body-small text-on-surface-variant">
-        Each {program} supplies its own creation date and timezone. Its schedule copy can be changed
-        independently.
+        These settings apply each time you create a {program}. You can change its repeat schedule
+        later.
       </p>
     </fieldset>
   );
@@ -95,9 +92,9 @@ function RelativeStart({
   );
   return (
     <div className="grid gap-4 sm:grid-cols-2">
-      <Field label="Begins">
+      <Field label="First occurrence">
         <Select
-          aria-label="Default schedule begins"
+          aria-label="First occurrence"
           value={direction}
           onChange={(event) => {
             const next = event.target.value;
@@ -109,15 +106,15 @@ function RelativeStart({
             });
           }}
         >
-          <option value="on_creation">When the {program} is created</option>
-          <option value="after">After {program} creation</option>
-          <option value="before">Before {program} creation</option>
+          <option value="on_creation">When this {program} is created</option>
+          <option value="after">After this {program} is created</option>
+          <option value="before">Before this {program} is created</option>
         </Select>
       </Field>
       {direction !== 'on_creation' ? (
-        <Field label="Days from creation">
+        <Field label={direction === 'before' ? 'Days before creation' : 'Days after creation'}>
           <Input
-            aria-label="Default schedule start offset days"
+            aria-label="Days before or after creation"
             type="number"
             min={1}
             max={36500}
@@ -138,9 +135,9 @@ function RelativeEnd({
 }: Pick<Parameters<typeof RelativeRepeatFields>[0], 'value' | 'onChange'>): JSX.Element {
   return (
     <div className="grid gap-4 sm:grid-cols-2">
-      <Field label="Ends">
+      <Field label="Stops">
         <Select
-          aria-label="Default schedule ends"
+          aria-label="Stops repeating"
           value={value.end.kind}
           onChange={(event) => {
             onChange({
@@ -153,13 +150,13 @@ function RelativeEnd({
           }}
         >
           <option value="never">Never</option>
-          <option value="after_count">After a number of runs</option>
+          <option value="after_count">After a set number of times</option>
         </Select>
       </Field>
       {value.end.kind === 'after_count' ? (
-        <Field label="Number of runs">
+        <Field label="Number of times">
           <Input
-            aria-label="Default schedule run count"
+            aria-label="Number of times"
             type="number"
             min={1}
             max={10000}

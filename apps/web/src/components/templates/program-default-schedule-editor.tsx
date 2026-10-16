@@ -4,7 +4,7 @@ import { ProgramDefaultSchedule } from '@docket/work/work-schedule-defaults';
 import type { WorkTemplateOut } from '@docket/work/work-template-contract';
 import { useVocabulary } from '@docket/ui/hooks';
 import { ChevronLeft } from '@docket/ui/icons';
-import { Badge, Button, Field, Input, Select, Surface } from '@docket/ui/primitives';
+import { Badge, Button, Field, Input, Select } from '@docket/ui/primitives';
 import { InlineBanner } from '@docket/ui/components';
 import { WorkTemplatePicker } from '@/components/composer/work-template-picker';
 import { RelativeRepeatFields } from '@/components/recurrence/relative-repeat-fields';
@@ -32,21 +32,20 @@ export function ProgramDefaultScheduleEditor(props: {
   const { value } = props;
   const [kind, setKind] = useState<'task' | 'project'>(value?.template.targetType ?? 'project');
   return (
-    <Surface
-      tone="prominent"
-      shape="medium"
-      pad="roomy"
-      className="flex min-w-0 flex-col gap-5"
-      role="group"
-      aria-label="Reusable recurring work"
-    >
+    <section className="flex min-w-0 flex-col gap-6" role="group" aria-label="Repeating work">
       <div className="flex min-w-0 flex-col items-start gap-3">
-        <Button type="button" variant="ghost" size="sm" onClick={props.onClose}>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="px-0 sm:px-3"
+          onClick={props.onClose}
+        >
           <ChevronLeft aria-hidden className="size-4" />
           Back to included work
         </Button>
         <h3 tabIndex={-1} className="text-title-large break-words outline-none">
-          {value?.name.trim() ? value.name : 'Add recurring work'}
+          {value?.name.trim() ? value.name : 'Add repeating work'}
         </h3>
       </div>
       <RoutineTemplateChoice {...props} kind={kind} onKind={setKind} />
@@ -56,11 +55,10 @@ export function ProgramDefaultScheduleEditor(props: {
         </>
       ) : (
         <p className="text-body-medium text-on-surface-variant">
-          Choose a published template for the work this routine will create. Its included work comes
-          with it.
+          Choose a template for the work to repeat. Its included work comes with it.
         </p>
       )}
-    </Surface>
+    </section>
   );
 }
 function RoutineWorkFields(
@@ -73,7 +71,7 @@ function RoutineWorkFields(
   return (
     <>
       <RoutineStartingFields value={value} disabled={disabled} onChange={onChange} />
-      <section className="flex min-w-0 flex-col gap-3" aria-label="Reusable schedule rhythm">
+      <section className="flex min-w-0 flex-col gap-3" aria-label="Repeat settings">
         <h4 className="text-title-medium">Repeat</h4>
         <RelativeRepeatFields
           value={value.cadence}
@@ -94,9 +92,8 @@ function RoutineWorkFields(
         />
       </TemplateDisclosure>
       {!ProgramDefaultSchedule.safeParse(value).success ? (
-        <InlineBanner tone="critical" title="Review this routine">
-          Name the schedule, use supported title tokens, and keep its interval, relative start and
-          run count within their limits.
+        <InlineBanner tone="critical" title="Check repeating work">
+          Check the name, title, repeat frequency and number of times before saving.
         </InlineBanner>
       ) : null}
       <RoutineVersionField
@@ -124,7 +121,7 @@ function RoutineStartingFields({
     <>
       <Field label="Schedule name">
         <Input
-          aria-label="Reusable schedule name"
+          aria-label="Repeating work name"
           disabled={disabled}
           maxLength={120}
           value={value.name}
@@ -135,10 +132,10 @@ function RoutineStartingFields({
       </Field>
       <Field
         label="Title of each new item"
-        description="Use {month}, {day}, {year} or {quarter} to include its run date."
+        description="Use {month}, {day}, {year} or {quarter} to include the date in each item’s title."
       >
         <Input
-          aria-label="Reusable schedule title pattern"
+          aria-label="Title for each new item"
           disabled={disabled}
           maxLength={256}
           value={value.titlePattern}
@@ -165,11 +162,11 @@ function RoutineTemplateChoice({
   const project = useVocabulary('project');
   const task = useVocabulary('task');
   return (
-    <section className="flex min-w-0 flex-col gap-3" aria-label="Routine work template">
+    <section className="flex min-w-0 flex-col gap-3" aria-label="Work to repeat">
       <div className="flex flex-wrap items-center gap-3">
         <div className="w-32">
           <Select
-            aria-label="Reusable schedule work kind"
+            aria-label="Work kind for repeating work"
             value={kind}
             disabled={disabled}
             onChange={(event) => {
@@ -227,7 +224,7 @@ function RoutineVersionField({
     <TemplateDisclosure title="Template version">
       <Field label="Template updates">
         <Select
-          aria-label="Reusable schedule template updates"
+          aria-label="Template updates for repeating work"
           value={selection.kind}
           disabled={disabled}
           onChange={(event) => {
@@ -246,8 +243,8 @@ function RoutineVersionField({
       </Field>
       <p className="text-body-small text-on-surface-variant">
         {selection.kind === 'pinned'
-          ? `Keep the selected publication${template?.latestVersion?.id === selection.workTypeVersionId ? ` · Version ${template.latestVersion.number}` : ''}.`
-          : `Each new run uses the latest publication available to its ${program}.`}
+          ? `Keep the selected version${template?.latestVersion?.id === selection.workTypeVersionId ? ` · Version ${template.latestVersion.number}` : ''}.`
+          : `Each new item uses the latest version available to its ${program}.`}
       </p>
     </TemplateDisclosure>
   );
@@ -259,37 +256,49 @@ function RoutineActions({
   canMoveEarlier,
   canMoveLater,
 }: Parameters<typeof ProgramDefaultScheduleEditor>[0]): JSX.Element {
-  const program = useVocabulary('program');
+  const programs = useVocabulary('program', { plural: true });
   return (
-    <section className="flex min-w-0 flex-col gap-3" aria-label="Routine ordering">
+    <section className="flex min-w-0 flex-col gap-3" aria-label="Repeating work actions">
       <div className="flex flex-wrap gap-2">
+        {canMoveEarlier || canMoveLater ? (
+          <>
+            <Button
+              type="button"
+              variant="ghost"
+              className="px-0 sm:px-4"
+              disabled={disabled || !canMoveEarlier}
+              onClick={() => {
+                onMove(-1);
+              }}
+            >
+              Move earlier
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              className="px-0 sm:px-4"
+              disabled={disabled || !canMoveLater}
+              onClick={() => {
+                onMove(1);
+              }}
+            >
+              Move later
+            </Button>
+          </>
+        ) : null}
         <Button
           type="button"
           variant="ghost"
-          disabled={disabled || !canMoveEarlier}
-          onClick={() => {
-            onMove(-1);
-          }}
+          className="px-0 sm:px-4"
+          disabled={disabled}
+          onClick={onRemove}
         >
-          Move earlier
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          disabled={disabled || !canMoveLater}
-          onClick={() => {
-            onMove(1);
-          }}
-        >
-          Move later
-        </Button>
-        <Button type="button" variant="ghost" disabled={disabled} onClick={onRemove}>
-          Remove routine
+          Remove repeating work
         </Button>
       </div>
       <p className="text-body-small text-on-surface-variant">
-        Removing this routine affects future {program} creations. Existing {program} copies keep
-        their schedules.
+        New {programs} won’t include this repeating work. {programs} already created keep their
+        schedules.
       </p>
     </section>
   );
@@ -318,13 +327,16 @@ function PendingRoutineVersion({
 }): JSX.Element {
   const name = (template.draftDefinition ?? template.definition).name;
   return (
-    <section aria-label="Unpublished routine definition" className="flex min-w-0 flex-col gap-2">
+    <section
+      aria-label="Unpublished template for repeating work"
+      className="flex min-w-0 flex-col gap-2"
+    >
       <Badge variant="outline" className="self-start">
         Unpublished {name}
       </Badge>
       <p className="text-body-small text-on-surface-variant">
-        This routine keeps the reserved first publication. Publish its linked definition before
-        publishing the parent definition.
+        This repeating work will use the template’s first published version. Publish that template
+        before publishing the template that includes it.
       </p>
       {template.canEdit ? (
         <Button asChild variant="ghost" className="min-h-10 self-start">

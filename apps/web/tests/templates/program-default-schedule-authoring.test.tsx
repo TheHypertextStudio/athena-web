@@ -77,15 +77,15 @@ describe('Program reusable recurring work authoring', () => {
     fireEvent.change(screen.getByLabelText('Kind of work'), { target: { value: 'program' } });
     change('Template name', 'Community gatherings');
     fireEvent.click(screen.getByRole('tab', { name: 'Included work' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Add schedule' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add repeating work' }));
     fireEvent.click(screen.getByRole('button', { name: 'Choose Vendor booking' }));
     fireEvent.click(screen.getByRole('tab', { name: 'Purpose' }));
     expect(screen.getByLabelText('Kind of work')).toBeDisabled();
     expect(
-      screen.getByText('Remove included and recurring work before changing the kind.'),
+      screen.getByText('Remove included and repeating work before changing the kind.'),
     ).toBeVisible();
     fireEvent.click(screen.getByRole('tab', { name: 'Included work' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Remove routine' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Remove repeating work' }));
     fireEvent.click(screen.getByRole('tab', { name: 'Purpose' }));
     expect(screen.getByLabelText('Kind of work')).toBeEnabled();
   });
@@ -100,35 +100,37 @@ describe('Program reusable recurring work authoring', () => {
     );
     change('Starting document', 'Program welcome and orientation');
     fireEvent.click(screen.getByRole('tab', { name: 'Included work' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Add schedule' }));
-    fireEvent.change(screen.getByLabelText('Reusable schedule work kind'), {
+    fireEvent.click(screen.getByRole('button', { name: 'Add repeating work' }));
+    fireEvent.change(screen.getByLabelText('Work kind for repeating work'), {
       target: { value: 'task' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Choose Vendor booking' }));
     const user = userEvent.setup();
-    const nameInput = screen.getByLabelText('Reusable schedule name');
+    const nameInput = screen.getByLabelText('Repeating work name');
     await user.clear(nameInput);
     await user.type(nameInput, 'Monthly vendor check-in');
     expect(nameInput).toHaveFocus();
-    change('Reusable schedule title pattern', '{month} vendor check-in');
+    change('Title for each new item', '{month} vendor check-in');
     change('Monthly repeat pattern', 'nth_weekday');
     change('Monthly weekday position', '2');
     change('Monthly weekday', 'thursday');
-    change('Default schedule begins', 'after');
-    change('Default schedule start offset days', '7');
-    change('Default schedule ends', 'after_count');
-    change('Default schedule run count', '6');
+    change('First occurrence', 'after');
+    change('Days before or after creation', '7');
+    change('Stops repeating', 'after_count');
+    change('Number of times', '6');
     fireEvent.click(screen.getByRole('button', { name: 'Responsibility' }));
     change('Responsible person', 'creator');
     fireEvent.click(screen.getByRole('button', { name: 'Template version' }));
-    change('Reusable schedule template updates', 'pinned');
+    change('Template updates for repeating work', 'pinned');
     fireEvent.click(screen.getByRole('tab', { name: 'Review' }));
-    const review = screen.getByRole('region', { name: 'Recurring work review' });
+    const review = screen.getByRole('region', { name: 'Repeating work review' });
     expect(within(review).getByText('Monthly vendor check-in')).toBeVisible();
     expect(within(review).getByText('Every month on the second Thursday')).toBeVisible();
-    expect(within(review).getByText('Begins 7 days after Program creation · 6 runs')).toBeVisible();
+    expect(
+      within(review).getByText('Begins 7 days after Program creation · 6 times'),
+    ).toBeVisible();
     fireEvent.click(screen.getByRole('tab', { name: 'Included work' }));
-    expect(screen.getByLabelText('Reusable schedule name')).toHaveValue('Monthly vendor check-in');
+    expect(screen.getByLabelText('Repeating work name')).toHaveValue('Monthly vendor check-in');
     fireEvent.click(screen.getByRole('button', { name: 'Back to included work' }));
     fireEvent.click(screen.getByRole('tab', { name: 'Starting work' }));
     expect(screen.getByLabelText('Starting document')).toHaveValue(
@@ -157,20 +159,22 @@ describe('Program reusable recurring work authoring', () => {
       />,
     );
     fireEvent.click(screen.getByRole('tab', { name: 'Included work' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Edit routine Routine' }));
-    expect(screen.getByLabelText('Default schedule begins')).toHaveValue('on_creation');
-    expect(screen.queryByLabelText('Default schedule start offset days')).not.toBeInTheDocument();
-    change('Default schedule begins', 'before');
-    change('Default schedule start offset days', '3');
+    fireEvent.click(screen.getByRole('button', { name: 'Edit repeating work Routine' }));
+    expect(screen.getByLabelText('First occurrence')).toHaveValue('on_creation');
+    expect(screen.queryByLabelText('Days before or after creation')).not.toBeInTheDocument();
+    change('First occurrence', 'before');
+    change('Days before or after creation', '3');
     fireEvent.click(screen.getByRole('tab', { name: 'Review' }));
-    expect(screen.getByText('Begins 3 days before Program creation · No end')).toBeVisible();
+    expect(
+      screen.getByText('Begins 3 days before Program creation · Repeats until stopped'),
+    ).toBeVisible();
     fireEvent.click(screen.getByRole('tab', { name: 'Included work' }));
-    expect(screen.getByLabelText('Default schedule begins')).toHaveValue('before');
-    expect(screen.getByLabelText('Default schedule start offset days')).toHaveValue(3);
-    change('Default schedule begins', 'after');
-    expect(screen.getByLabelText('Default schedule start offset days')).toHaveValue(3);
-    change('Default schedule begins', 'on_creation');
-    change('Reusable schedule name', 'Routine beginning on creation');
+    expect(screen.getByLabelText('First occurrence')).toHaveValue('before');
+    expect(screen.getByLabelText('Days before or after creation')).toHaveValue(3);
+    change('First occurrence', 'after');
+    expect(screen.getByLabelText('Days before or after creation')).toHaveValue(3);
+    change('First occurrence', 'on_creation');
+    change('Repeating work name', 'Routine beginning on creation');
     fireEvent.click(screen.getByRole('button', { name: 'Save draft' }));
     await waitFor(() => {
       expect(mocks.draft).toHaveBeenCalled();
@@ -194,11 +198,15 @@ describe('Program reusable recurring work authoring', () => {
     await userEvent.setup().keyboard('{Enter}');
     expect(branch).toHaveAttribute('aria-expanded', 'false');
     expect(screen.getByText('No included work yet')).toBeVisible();
-    expect(screen.getByRole('button', { name: 'Edit routine Monthly dinner' })).toBeVisible();
-    fireEvent.click(screen.getByRole('button', { name: 'Edit routine Monthly dinner' }));
+    expect(
+      screen.getByRole('button', { name: 'Edit repeating work Monthly dinner' }),
+    ).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Edit repeating work Monthly dinner' }));
     fireEvent.click(screen.getByRole('button', { name: 'Back to included work' }));
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'Edit routine Monthly dinner' })).toHaveFocus();
+      expect(
+        screen.getByRole('button', { name: 'Edit repeating work Monthly dinner' }),
+      ).toHaveFocus();
     });
     expect(branch).toHaveAttribute('aria-expanded', 'false');
   });
@@ -211,21 +219,23 @@ describe('Program reusable recurring work authoring', () => {
       />,
     );
     fireEvent.click(screen.getByRole('tab', { name: 'Included work' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Edit routine Check-in' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Edit repeating work Check-in' }));
     fireEvent.click(screen.getByRole('button', { name: 'Move earlier' }));
-    expect(screen.queryByRole('list', { name: 'Recurring work outline' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('list', { name: 'Repeating work outline' })).not.toBeInTheDocument();
     expect(screen.queryByRole('list', { name: 'Child work outline' })).not.toBeInTheDocument();
-    expect(screen.getByText(/Existing Program copies keep their schedules/)).toBeVisible();
+    expect(screen.getByText(/Programs already created keep their schedules/)).toBeVisible();
     fireEvent.click(screen.getByRole('button', { name: 'Back to included work' }));
-    const outline = screen.getByRole('list', { name: 'Recurring work outline' });
+    const outline = screen.getByRole('list', { name: 'Repeating work outline' });
     expect(
       within(outline)
         .getAllByRole('button')
         .map((button) => button.getAttribute('aria-label')),
-    ).toEqual(['Edit routine Check-in', 'Edit routine Dinner']);
-    fireEvent.click(screen.getByRole('button', { name: 'Edit routine Check-in' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Remove routine' }));
-    expect(screen.queryByRole('button', { name: 'Edit routine Check-in' })).not.toBeInTheDocument();
+    ).toEqual(['Edit repeating work Check-in', 'Edit repeating work Dinner']);
+    fireEvent.click(screen.getByRole('button', { name: 'Edit repeating work Check-in' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Remove repeating work' }));
+    expect(
+      screen.queryByRole('button', { name: 'Edit repeating work Check-in' }),
+    ).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Save draft' }));
     await waitFor(() => {
       expect(mocks.draft).toHaveBeenCalled();
@@ -246,9 +256,9 @@ describe('Program reusable recurring work authoring', () => {
       />,
     );
     fireEvent.click(screen.getByRole('tab', { name: 'Included work' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Edit routine Routine' }));
-    change('Default schedule interval', '0');
-    expect(screen.getByText('Review this routine')).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Edit repeating work Routine' }));
+    change('Repeat interval', '0');
+    expect(screen.getByText('Check repeating work')).toBeVisible();
     fireEvent.click(screen.getByRole('button', { name: 'Save draft' }));
     await waitFor(() =>
       expect(
@@ -258,7 +268,7 @@ describe('Program reusable recurring work authoring', () => {
     expect(screen.queryByText('private provider detail')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('tab', { name: 'Review' }));
     fireEvent.click(screen.getByRole('tab', { name: 'Included work' }));
-    expect(screen.getByLabelText('Default schedule interval')).toHaveValue(0);
+    expect(screen.getByLabelText('Repeat interval')).toHaveValue(0);
   });
   it('uses workspace vocabulary in recurring-work authoring, review and creation consequences', () => {
     const skin = {
@@ -280,17 +290,21 @@ describe('Program reusable recurring work authoring', () => {
       </VocabularyProvider>,
     );
     fireEvent.click(screen.getByRole('tab', { name: 'Included work' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Edit routine Monthly dinner' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Edit repeating work Monthly dinner' }));
     expect(screen.getByRole('option', { name: 'Action' })).toBeVisible();
-    expect(screen.getByRole('option', { name: 'When the Practice is created' })).toBeVisible();
+    expect(screen.getByRole('option', { name: 'When this Practice is created' })).toBeVisible();
     fireEvent.click(screen.getByRole('button', { name: 'Template version' }));
     expect(
-      screen.getByText('Each new run uses the latest publication available to its Practice.'),
+      screen.getByText('Each new item uses the latest version available to its Practice.'),
     ).toBeVisible();
     fireEvent.click(screen.getByRole('tab', { name: 'Review' }));
-    expect(screen.getByText('Begins when the Practice is created · No end')).toBeVisible();
     expect(
-      screen.getByText('Practice owner · Practice circle, otherwise selected circle'),
+      screen.getByText('Begins when the Practice is created · Repeats until stopped'),
+    ).toBeVisible();
+    expect(
+      screen.getByText(
+        'Practice owner · Same circle as the Practice, or the circle chosen for new work',
+      ),
     ).toBeVisible();
     view.unmount();
     render(
@@ -331,10 +345,10 @@ describe('Program reusable recurring work authoring', () => {
       />,
     );
     fireEvent.click(screen.getByRole('tab', { name: 'Included work' }));
-    expect(screen.getByRole('button', { name: 'Add schedule' })).toBeDisabled();
-    expect(screen.getByText('This definition has the maximum of 20 routines.')).toBeVisible();
-    fireEvent.click(screen.getByRole('button', { name: 'Edit routine Routine 1' }));
-    expect(screen.getByLabelText('Reusable schedule name')).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Remove routine' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Add repeating work' })).toBeDisabled();
+    expect(screen.getByText('A template can include up to 20 repeating items.')).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Edit repeating work Routine 1' }));
+    expect(screen.getByLabelText('Repeating work name')).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Remove repeating work' })).toBeDisabled();
   });
 });

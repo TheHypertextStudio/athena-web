@@ -29,15 +29,13 @@ export function WorkTemplateReviewChildDetails({
     .map(blueprintStepName);
   const cycles = {
     none: `No ${cycle}`,
-    parent_cycle: `Nearest parent ${task}’s ${cycle}`,
+    parent_cycle: `Same ${cycle} as the containing ${task}`,
     current_cycle: `Current ${cycle} for the selected ${team}`,
   };
   return (
     <>
       {blockers.length ? (
-        <p className="text-body-small text-on-surface-variant">
-          Blocked by {blockers.join(' and ')}
-        </p>
+        <p className="text-body-small text-on-surface-variant">Wait for {blockers.join(' and ')}</p>
       ) : null}
       {step.cycleRule !== 'none' ? (
         <p className="text-body-small text-on-surface-variant">{cycles[step.cycleRule]}</p>
@@ -74,7 +72,8 @@ export function WorkTemplateReviewNestedVersion({
     return (
       <div className="flex min-w-0 flex-col gap-2">
         <Badge variant="outline" className="max-w-full break-words whitespace-normal">
-          Unpublished {pending.definition.name} — publish this definition before its parent
+          Unpublished {pending.definition.name} — publish this template before the one that includes
+          it
         </Badge>
         {pending.canEdit ? (
           <Button asChild variant="ghost" className="min-h-10 self-start">
@@ -91,12 +90,12 @@ export function WorkTemplateReviewNestedVersion({
     <Badge variant="outline" className="max-w-full break-words whitespace-normal">
       {name} ·{' '}
       {selection.kind === 'latest'
-        ? 'Latest publication when work is created'
+        ? 'Latest version when work is created'
         : number
-          ? `Fixed at Version ${number}`
+          ? `Keep Version ${number}`
           : versions.isPending
-            ? 'Checking publication'
-            : 'Publication unavailable — review required'}
+            ? 'Checking versions'
+            : 'Version unavailable — choose another'}
     </Badge>
   );
 }

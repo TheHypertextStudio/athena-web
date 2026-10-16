@@ -179,7 +179,7 @@ describe('real callback gallery review', () => {
     const view = render(
       <GalleryReview {...props} state={{ pending: false, updating: false, error: null }} />,
     );
-    fireEvent.change(screen.getByRole('combobox', { name: 'Copy visibility' }), {
+    fireEvent.change(screen.getByRole('combobox', { name: 'Who can see these templates' }), {
       target: { value: 'published' },
     });
     expect(onMode).toHaveBeenCalledExactlyOnceWith('published');
@@ -197,7 +197,7 @@ describe('real callback gallery review', () => {
     );
     expect(screen.getByText(/Members of Neighborhood association can see/)).toBeVisible();
     expect(screen.getByText('Review the updated selection.')).toBeVisible();
-    fireEvent.click(screen.getByRole('button', { name: 'Add to Neighborhood association' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Publish to workspace' }));
     expect(onAccept).toHaveBeenCalledExactlyOnceWith({ ...preview, mode: 'published' });
   });
 });
@@ -216,7 +216,7 @@ it('starts with organization context before an explicit all-work browse', () => 
     />,
   );
   expect(screen.queryByRole('checkbox', { name: 'Select Event' })).not.toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button', { name: 'Browse all work definitions' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Browse all starting points' }));
   expect(screen.getByRole('tab', { name: 'All templates' })).toHaveAttribute(
     'aria-selected',
     'true',
@@ -262,7 +262,7 @@ it('keeps a bounded selection recoverable when another full fork would exceed th
   fireEvent.click(screen.getByRole('button', { name: 'All startup work (60)' }));
   expect(onSelect).not.toHaveBeenCalled();
   expect(screen.getByText('100 selected')).toBeVisible();
-  expect(screen.getByText(/Choose up to 100 starting definitions/)).toBeVisible();
+  expect(screen.getByText(/Choose up to 100 starting points/)).toBeVisible();
 });
 
 it('leads composed work with its actual structure and discloses the starting document on demand', () => {
@@ -292,12 +292,12 @@ it('leads composed work with its actual structure and discloses the starting doc
   ).toBeVisible();
 });
 
-it('shows outcomes before the optional all-work browse controls', () => {
+it('keeps gallery view controls before the outcome groups', () => {
   render(<Browse onReview={vi.fn()} />);
   expect(
     screen
-      .getByRole('heading', { name: 'Ship a product' })
-      .compareDocumentPosition(screen.getByRole('button', { name: 'All startup work (60)' })) &
+      .getByRole('button', { name: 'All startup work (60)' })
+      .compareDocumentPosition(screen.getByRole('heading', { name: 'Ship a product' })) &
       Node.DOCUMENT_POSITION_FOLLOWING,
   ).toBeTruthy();
 });
@@ -317,4 +317,20 @@ it('reviews one chosen work directly without category and kind heading wrappers'
   expect(work.queryByRole('heading', { name: 'Your starting work' })).not.toBeInTheDocument();
   expect(work.queryByRole('heading', { name: /Events|Projects/ })).not.toBeInTheDocument();
   expect(work.getByRole('button', { name: 'Inspect Event' })).toBeVisible();
+});
+
+it('offers the next review step from a selected template detail', () => {
+  const onReview = vi.fn();
+  render(
+    <GalleryEntry
+      detail={{ ...galleryFixture('event'), references: [galleryFixture('vendor-booking')] }}
+      selected
+      onSelect={vi.fn()}
+      onBack={vi.fn()}
+      onReview={onReview}
+    />,
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Review selection' }));
+  expect(onReview).toHaveBeenCalledOnce();
+  expect(screen.getByRole('button', { name: 'Remove from selection' })).toBeVisible();
 });

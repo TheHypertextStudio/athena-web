@@ -20,24 +20,24 @@ export function GalleryCopyResult({
   return (
     <Surface
       as="section"
-      shape="large"
-      pad="roomy"
+      shape="medium"
+      pad="comfortable"
       aria-label="Copy outcome"
       className="flex min-w-0 flex-col gap-4"
     >
-      <h1 className="text-headline-medium">
+      <h1 className="text-title-large sm:text-headline-medium">
         {undone
           ? 'This copy was undone'
           : privateDrafts
             ? 'Private drafts kept'
-            : 'Work definitions added'}
+            : 'Templates ready to use'}
       </h1>
       <p className="text-body-medium">
         {undone
-          ? 'The original installation remains undone. Choose starting work to make a new copy.'
+          ? 'This copy is still undone. Choose starting work to make a new copy.'
           : privateDrafts
-            ? 'Your selected work is ready to review. Only you can see these drafts; publication is a separate action.'
-            : `The published definitions are ready to use in ${workspaceName}. Existing work stays as it is.`}
+            ? 'Your selected work is ready to review. Only you can see these drafts. Share them when you are ready.'
+            : `These templates are ready to use in ${workspaceName}. Existing work stays as it is.`}
       </p>
       <div className="flex flex-wrap gap-3">
         {!undone ? (
@@ -46,7 +46,7 @@ export function GalleryCopyResult({
               onOpen(receipt);
             }}
           >
-            {privateDrafts ? 'Open drafts' : 'View work definitions'}
+            {privateDrafts ? 'Open drafts' : 'View templates'}
           </Button>
         ) : null}
         <Button variant={undone ? 'default' : 'ghost'} onClick={onNew}>

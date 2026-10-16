@@ -47,7 +47,9 @@ export function ImmersiveShell({
           className="sm:rounded-corner-lg relative flex h-full w-full max-w-[1320px] min-w-0 flex-col overflow-hidden"
         >
           {contentOverlay}
-          {header ? <div className="shrink-0 px-4 pt-4 pb-3 sm:px-6 sm:pt-5">{header}</div> : null}
+          {header ? (
+            <div className="shrink-0 px-3 py-2 sm:px-6 sm:pt-5 sm:pb-3">{header}</div>
+          ) : null}
           {banner ? <div className="shrink-0">{banner}</div> : null}
           <main
             id="main-content"
@@ -55,14 +57,14 @@ export function ImmersiveShell({
             className={cn(
               '@container isolate min-h-0 min-w-0 flex-1 outline-none',
               scrollOwner === 'shell'
-                ? 'scrollbar-gutter-stable overflow-auto pb-[env(safe-area-inset-bottom)]'
+                ? 'overflow-auto pb-[env(safe-area-inset-bottom)] sm:scrollbar-gutter-stable'
                 : 'overflow-hidden',
             )}
           >
             {children}
           </main>
           {footer ? (
-            <footer className="shrink-0 px-4 pt-2 pb-[max(1rem,env(safe-area-inset-bottom))] sm:px-6">
+            <footer className="shrink-0 px-3 pt-2 pb-[max(1rem,env(safe-area-inset-bottom))] sm:px-6">
               {footer}
             </footer>
           ) : null}

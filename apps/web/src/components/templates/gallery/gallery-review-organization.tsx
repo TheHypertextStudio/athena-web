@@ -40,7 +40,7 @@ function ReviewedWorkButton({
     <Button
       variant="ghost"
       aria-label={`Inspect ${copy.name}`}
-      className="h-auto min-h-10 w-full justify-between text-left whitespace-normal"
+      className="h-auto min-h-10 w-full justify-between px-0 text-left whitespace-normal"
       onClick={() => {
         onInspect(copy);
       }}
@@ -63,7 +63,7 @@ function WorkCopySummary({ copy }: { readonly copy: GalleryReviewedCopy }): JSX.
     routines ? `${routines} recurring routines` : '',
   ].filter(Boolean);
   return parts.length ? (
-    <p className="text-body-small text-on-surface-variant px-4">{parts.join(' · ')}</p>
+    <p className="text-body-small text-on-surface-variant px-0">{parts.join(' · ')}</p>
   ) : null;
 }
 function KindRows({
@@ -92,10 +92,10 @@ function KindRows({
             <ReviewedWorkButton copy={copy} onInspect={onInspect} />
             <WorkCopySummary copy={copy} />
             {copy.use ? (
-              <p className="text-body-medium text-on-surface-variant px-4 pb-2">{copy.use}</p>
+              <p className="text-body-medium text-on-surface-variant px-0 pb-2">{copy.use}</p>
             ) : null}
             {copy.adjustmentCount ? (
-              <p className="text-body-small text-on-surface-variant px-4 pb-2">
+              <p className="text-body-small text-on-surface-variant px-0 pb-2">
                 {copy.adjustmentCount} optional adjustments · Open to review
               </p>
             ) : null}
@@ -117,13 +117,13 @@ function CategoryGroup({
   readonly open: boolean;
 }): JSX.Element {
   return (
-    <Surface as="section" shape="large" pad="roomy" aria-label={name}>
+    <Surface as="section" shape="medium" pad="comfortable" aria-label={name}>
       <Collapsible defaultOpen={open}>
         <h3 className="text-title-large">
           <CollapsibleTrigger asChild>
             <Button
               variant="ghost"
-              className="h-auto min-h-10 w-full justify-between text-left whitespace-normal"
+              className="h-auto min-h-10 w-full justify-between px-0 text-left whitespace-normal"
             >
               <span className="text-title-large">{name}</span>{' '}
               <span className="text-label-medium text-on-surface-variant">
@@ -158,11 +158,11 @@ export function GalleryReviewOrganization({
   const selectedCount = preview.roots.length;
   return (
     <section aria-label="Your starting work" className="flex min-w-0 flex-col gap-3">
-      <p className="text-body-medium text-on-surface-variant">
+      <p className="text-body-medium text-on-surface-variant px-3 sm:px-0">
         {selectedCount} selected · {preview.copies.length} templates
       </p>
       {selectedCount === 1 ? (
-        <Surface as="section" shape="large" pad="roomy">
+        <Surface as="section" shape="medium" pad="comfortable">
           {groups
             .flatMap((group) => group.copies)
             .map((copy) => (
@@ -172,10 +172,10 @@ export function GalleryReviewOrganization({
                 </h2>
                 <WorkCopySummary copy={copy} />
                 {copy.use ? (
-                  <p className="text-body-medium text-on-surface-variant px-4">{copy.use}</p>
+                  <p className="text-body-medium text-on-surface-variant px-0">{copy.use}</p>
                 ) : null}
                 {copy.adjustmentCount ? (
-                  <p className="text-body-small text-on-surface-variant px-4 pt-2">
+                  <p className="text-body-small text-on-surface-variant px-0 pt-2">
                     {copy.adjustmentCount} optional adjustments · Open to review
                   </p>
                 ) : null}
@@ -206,20 +206,24 @@ export function GalleryRequiredCopies({
   return (
     <Collapsible>
       <CollapsibleTrigger asChild>
-        <Button variant="ghost" className="h-auto min-h-10 text-left whitespace-normal">
+        <Button
+          variant="ghost"
+          className="h-auto min-h-10 px-3 text-left whitespace-normal sm:px-0"
+        >
           {required.length} required {required.length === 1 ? 'template' : 'templates'}
         </Button>
       </CollapsibleTrigger>
       <CollapsibleContent>
-        <section aria-label="Required templates">
+        <section aria-label="Required templates" className="px-3 sm:px-0">
           <p className="text-body-medium text-on-surface-variant">
-            Shared dependencies are copied once.
+            Templates used in more than one place are copied once.
           </p>
-          <ul>
+          <ul className="pl-3">
             {required.map((copy) => (
               <li key={gallerySourceKey(copy.source)} className="py-2">
                 <Button
                   variant="ghost"
+                  className="px-0"
                   onClick={() => {
                     onInspect(copy);
                   }}

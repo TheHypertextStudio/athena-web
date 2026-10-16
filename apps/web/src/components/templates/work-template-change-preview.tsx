@@ -47,7 +47,7 @@ function reviewedVersion(
 export function WorkTemplateChangePreview(props: PreviewProps): JSX.Element {
   const { selected, pending, preview, loading, previewFailed, onClose, onConfirm } = props;
   const choices = useTemplateChangeChoices(preview);
-  const ready = Boolean(preview && !loading && !previewFailed && !props.failed);
+  const ready = Boolean(preview && !loading && !previewFailed);
   const update = (props.mode ?? preview?.mode) === 'update';
   return (
     <Dialog
@@ -65,6 +65,7 @@ export function WorkTemplateChangePreview(props: PreviewProps): JSX.Element {
           </DialogDescription>
         </DialogHeader>
         <DialogBody>
+          {props.failed ? <FieldError>{failureCopy(preview, props.stale)}</FieldError> : null}
           <StartingChanges
             preview={preview}
             ready={ready}
@@ -101,9 +102,9 @@ function reviewDescription(
   fields: readonly WorkTemplateChangeField[],
 ): string {
   if (preview?.mode === 'update')
-    return 'Your outline stays unchanged. Choose each work change to adopt.';
+    return 'Choose which changes to use. Nothing changes until you confirm.';
   if (preview && preview.childChanges.length > 0)
-    return 'Existing child work stays. Review new work, dates and dependencies individually.';
+    return 'Existing work stays. Choose any new work, dates or links to include.';
   return fields.length === 0
     ? 'Your description, dates and child work stay unchanged.'
     : 'Only the starting values you select will change. Dates and child work stay unchanged.';
@@ -144,7 +145,7 @@ function StartingChanges({
           ))
         : null}
       {ready && preview?.mode !== 'update' && preview?.changes.length === 0 ? (
-        <p>No starting values differ from this work.</p>
+        <p>Your work will use this template. Its details stay the same.</p>
       ) : null}
     </div>
   );
@@ -168,30 +169,29 @@ function PreviewActions({
   ready,
   onAccept,
   preview,
-  stale,
+  mode,
 }: PreviewProps & {
   readonly ready: boolean;
   readonly onAccept: () => void;
 }): JSX.Element {
   return (
     <DialogFooter>
-      {failed ? <FieldError>{failureCopy(preview, stale)}</FieldError> : null}
-      {previewFailed || failed ? (
-        <Button
-          type="button"
-          variant="secondary"
-          disabled={pending || loading}
-          onClick={onRetryPreview}
-        >
-          Retry preview
-        </Button>
-      ) : null}
       <Button type="button" variant="ghost" disabled={pending} onClick={onClose}>
         Cancel
       </Button>
-      <Button type="button" disabled={!selected || pending || !ready} onClick={onAccept}>
-        {pending ? 'Applying…' : preview?.mode === 'update' ? 'Update template' : 'Change template'}
-      </Button>
+      {previewFailed || failed ? (
+        <Button type="button" disabled={pending || loading} onClick={onRetryPreview}>
+          Retry preview
+        </Button>
+      ) : (
+        <Button type="button" disabled={!selected || pending || !ready} onClick={onAccept}>
+          {pending
+            ? 'Applying…'
+            : (mode ?? preview?.mode) === 'update'
+              ? 'Update template'
+              : 'Change template'}
+        </Button>
+      )}
     </DialogFooter>
   );
 }
@@ -239,7 +239,13 @@ function StartingValue({
   readonly value: WorkTemplateFieldChange['before'];
   readonly markdown: boolean;
 }): JSX.Element {
-  if (markdown && typeof value === 'string' && value) return <StaticMarkdown value={value} />;
+  if (markdown && typeof value === 'string' && value)
+    return (
+      <StaticMarkdown
+        value={value}
+        className="[&_h1]:text-title-small [&_h2]:text-title-small [&_h3]:text-label-large [&_h1]:mt-3 [&_h2]:mt-3 [&_h3]:mt-2"
+      />
+    );
   const text = Array.isArray(value) ? value.join(', ') : value?.replaceAll('_', ' ');
   return <p className="text-body-medium">{text?.length ? text : 'None'}</p>;
 }

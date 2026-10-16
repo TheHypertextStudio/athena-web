@@ -33,9 +33,9 @@ export function WorkTemplateDefinitionReview({
           as="section"
           tone="card"
           shape="large"
-          pad="roomy"
+          pad="comfortable"
           aria-label="Included work"
-          className="flex min-w-0 flex-col gap-4"
+          className="flex min-w-0 flex-col gap-4 sm:p-4"
         >
           <div className="flex flex-col gap-1">
             <h2 tabIndex={-1} className="text-title-large">
@@ -81,9 +81,9 @@ function StartingWorkReview({
       as="section"
       tone="card"
       shape="large"
-      pad="roomy"
+      pad="comfortable"
       aria-label="Starting work"
-      className="flex min-w-0 flex-col gap-4"
+      className="flex min-w-0 flex-col gap-4 sm:p-4"
     >
       <h2 tabIndex={-1} className="text-title-large">
         Starting work

@@ -58,10 +58,13 @@ function ReviewWaiting({
 }): JSX.Element {
   return (
     <div className="flex flex-col gap-3">
+      <h1 className="text-title-large sm:text-headline-medium px-3 sm:px-0">
+        Review your starting work
+      </h1>
       {empty ? (
         <>
-          <p>Choose the work your workspace needs before reviewing it.</p>
-          <Button className="self-start" onClick={back}>
+          <p className="px-3 sm:px-0">Choose the work your workspace needs before reviewing it.</p>
+          <Button className="mx-3 self-start sm:mx-0" onClick={back}>
             Choose starting work
           </Button>
         </>
@@ -70,7 +73,9 @@ function ReviewWaiting({
           <InlineBanner tone="critical" title="Could not prepare this selection">
             {error}
           </InlineBanner>
-          <Button onClick={refresh}>Review again</Button>
+          <Button className="mx-3 sm:mx-0" onClick={refresh}>
+            Review again
+          </Button>
           <Button variant="ghost" onClick={back}>
             Back to selection
           </Button>
@@ -121,13 +126,13 @@ function ReviewAlerts({
   return (
     <>
       {acceptance.checkingOutcome ? (
-        <p role="status" className="text-body-medium">
-          Checking whether your work definitions were added…
+        <p role="status" className="text-body-medium px-3 sm:px-0">
+          Checking whether your templates were saved…
         </p>
       ) : null}
       {acceptance.needsReview ? (
         <Button
-          className="self-start"
+          className="mx-3 self-start sm:mx-0"
           onClick={() => {
             acceptance.reset();
             review.refresh();
@@ -150,7 +155,12 @@ function ReviewAlerts({
 function OriginalWaiting({ acceptance }: { readonly acceptance: GalleryAcceptance }): JSX.Element {
   return (
     <div className="flex min-w-0 flex-col gap-3">
-      <p role="status">Checking whether your work definitions were added…</p>
+      <h1 className="text-title-large sm:text-headline-medium px-3 sm:px-0">Check saved work</h1>
+      {acceptance.pending ? (
+        <p role="status" className="px-3 sm:px-0">
+          Checking whether your templates were saved…
+        </p>
+      ) : null}
       {acceptance.error ? (
         <InlineBanner tone="critical" title="Could not check the original copy">
           {acceptance.error}
@@ -158,7 +168,7 @@ function OriginalWaiting({ acceptance }: { readonly acceptance: GalleryAcceptanc
       ) : null}
       {!acceptance.pending ? (
         <Button
-          className="self-start"
+          className="mx-3 self-start sm:mx-0"
           onClick={() => {
             void acceptance.resume().catch(() => undefined);
           }}
@@ -192,7 +202,7 @@ function useReviewDestination(orgId: string): {
 export function GalleryReviewPage(): JSX.Element {
   const state = useGalleryWorkspace();
   return (
-    <WorkTemplateWorkspaceFrame orgId={state.scope.orgId}>
+    <WorkTemplateWorkspaceFrame orgId={state.scope.orgId} parent={{ label: 'Work templates' }}>
       <GalleryReviewContent />
     </WorkTemplateWorkspaceFrame>
   );
@@ -234,13 +244,15 @@ function GalleryReviewContent(): JSX.Element {
   const busy = acceptance.pending || review.updating;
   return (
     <div className="flex min-w-0 flex-col gap-4">
-      <ReviewAlerts
-        acceptance={acceptance}
-        review={review}
-        error={pickers.error}
-        retry={pickers.retry}
-      />
       <GalleryReview
+        alerts={
+          <ReviewAlerts
+            acceptance={acceptance}
+            review={review}
+            error={pickers.error}
+            retry={pickers.retry}
+          />
+        }
         preview={checked.preview}
         outcomes={gallerySelectedOutcomes(state.memory)}
         workspaceName={workspaceName}

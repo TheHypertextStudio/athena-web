@@ -57,6 +57,10 @@ function templateAuthoringParent(orgId: string, id: string | null, candidate: st
       };
 }
 
+function compactParentLabel(label: string): string {
+  return label === 'Back to parent definition' ? 'Parent definition' : 'Work templates';
+}
+
 function authoringSection(value: string | null): TemplateDefinitionSection | undefined {
   switch (value) {
     case 'purpose':
@@ -92,16 +96,20 @@ export function WorkTemplateAuthoring({
       header={
         <nav
           aria-label="Work templates navigation"
-          className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1"
+          className="flex min-w-0 items-center justify-between gap-2"
         >
-          <Button asChild variant="ghost">
-            <Link navigation="activity" href={parent.href}>
+          <Button asChild variant="ghost" className="px-0 sm:px-4">
+            <Link navigation="activity" href={parent.href} aria-label={parent.label}>
               <ChevronLeft className="size-4" aria-hidden="true" />
-              {parent.label}
+              <span className="sm:hidden">{compactParentLabel(parent.label)}</span>
+              <span className="hidden sm:inline">{parent.label}</span>
             </Link>
           </Button>
           {workspace ? (
-            <p className="text-body-small text-on-surface-variant px-3" aria-label="Workspace">
+            <p
+              className="text-body-small text-on-surface-variant min-w-0 truncate sm:px-3"
+              aria-label="Workspace"
+            >
               {workspace.name}
             </p>
           ) : null}
@@ -110,7 +118,7 @@ export function WorkTemplateAuthoring({
     >
       <div
         data-work-template-authoring=""
-        className="mx-auto flex w-full max-w-5xl min-w-0 flex-col gap-6 px-4 pb-8 sm:px-6"
+        className="mx-auto flex w-full max-w-5xl min-w-0 flex-col gap-4 px-0 pb-6 sm:gap-6 sm:px-6 sm:pb-8"
       >
         {loading ? <Skeleton className="h-64" /> : null}
         {failed ? (
@@ -152,14 +160,14 @@ export function WorkTemplateForm({
   return (
     <div className="flex min-w-0 flex-col gap-6">
       {!form.canEdit ? (
-        <p className="text-body-small text-on-surface-variant">
-          You can read this template. Its authoring permissions do not allow edits.
+        <p className="text-body-small text-on-surface-variant px-3 sm:px-0">
+          You can read this template, but you don’t have permission to edit it.
         </p>
       ) : null}
       {initial?.isBase ? (
-        <p className="text-body-small text-on-surface-variant">
-          The blank template remains available for every item of this kind. Its name follows
-          workspace terminology.
+        <p className="text-body-small text-on-surface-variant px-3 sm:px-0">
+          Every item of this kind can use the blank template. Its name follows your workspace’s
+          terminology.
         </p>
       ) : null}
       <TemplateDefinitionSections
@@ -184,8 +192,8 @@ export function WorkTemplateForm({
           </>
         ) : (
           <p className="text-body-medium text-on-surface-variant">
-            Save a private draft to keep this definition. Then publish it when your workspace is
-            ready to use it.
+            Save a private draft to keep this template. Then publish it when your workspace is ready
+            to use it.
           </p>
         )}
       </TemplateDefinitionSections>
@@ -205,8 +213,16 @@ function TemplateAuthoringHeader({
   navigation: ReturnType<typeof useTemplateSectionNavigation>;
 }): JSX.Element {
   const readiness = useTemplatePublicationReadiness(orgId, form.definition);
+  const noun = useVocabulary(form.kind);
   return (
     <>
+      <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+        <p className="text-label-medium text-on-surface-variant sm:text-label-large">
+          {noun}
+          <span className="hidden sm:inline"> definition</span>
+        </p>
+        <TemplateDraftHeader initial={initial} form={form} />
+      </div>
       <div className="flex min-w-0 items-start justify-between gap-3">
         <TemplateDefinitionIdentity form={form} />
         <TemplateDefinitionAction
@@ -219,7 +235,6 @@ function TemplateAuthoringHeader({
           }}
         />
       </div>
-      <TemplateDraftHeader initial={initial} form={form} />
       {form.error ? (
         <InlineBanner tone="critical" title="Template could not be saved">
           {form.error}
@@ -256,11 +271,9 @@ function TemplateReviewPublication({
 }
 
 function TemplateDefinitionIdentity({ form }: { form: WorkTemplateFormState }): JSX.Element {
-  const noun = useVocabulary(form.kind);
   return (
     <div className="min-w-0">
-      <p className="text-label-large text-on-surface-variant">{noun} definition</p>
-      <h1 className="text-headline-medium sm:text-headline-large break-words">
+      <h1 className="text-title-large sm:text-headline-large break-words">
         {form.definition.name.trim() ? form.definition.name : 'Define your work'}
       </h1>
     </div>

@@ -69,7 +69,7 @@ it('keeps an actual historical publication valid rather than treating a nonlates
   const header = within(screen.getByRole('banner'));
   expect(header.getByRole('button', { name: 'Publish to workspace' })).toBeEnabled();
   expect(header.queryByRole('link', { name: 'Review Vendor booking' })).not.toBeInTheDocument();
-  expect(screen.getByText('Vendor booking · Fixed at Version 2')).toBeVisible();
+  expect(screen.getByText('Vendor booking · Keep Version 2')).toBeVisible();
 });
 
 it.each(['loading', 'error'] as const)(
@@ -85,7 +85,7 @@ it.each(['loading', 'error'] as const)(
     if (state === 'error') {
       fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
       expect(mocks.refetch).toHaveBeenCalled();
-    } else expect(screen.getByText('Checking linked definitions…')).toBeVisible();
+    } else expect(screen.getByText('Checking included templates…')).toBeVisible();
   },
 );
 it('focuses the publication decision on entering Review before the included work and subordinate starting document', () => {

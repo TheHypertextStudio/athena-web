@@ -30,7 +30,8 @@ test('short-phone capture keeps name inset and save reachable while reviewing a 
     waitUntil: 'commit',
     timeout: TIMEOUTS.pageReady,
   });
-  await page.getByRole('button', { name: 'Save as template', exact: true }).click();
+  await page.getByRole('button', { name: 'Template actions', exact: true }).click();
+  await page.getByRole('menuitem', { name: 'Save as template', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Save as template', exact: true });
   const name = dialog.getByRole('textbox', { name: 'Template name', exact: true });
   await expect(name).toHaveValue(/Capture layout/);
@@ -66,17 +67,19 @@ test('authors a private Project child outline and relative due date, reopens it,
   await page.getByRole('button', { name: 'Continue to included work', exact: true }).click();
   await page.getByRole('button', { name: 'Add task', exact: true }).click();
   const child = page.getByRole('group', { name: /^Child work:/ }).first();
-  await child.getByRole('textbox', { name: 'Child title', exact: true }).fill('Confirm the venue');
+  await child.getByRole('textbox', { name: 'Title', exact: true }).fill('Confirm the venue');
   await child
-    .getByRole('textbox', { name: 'Child document', exact: true })
+    .getByRole('textbox', { name: 'Document', exact: true })
     .fill('Record the venue agreement and accessibility requirements.');
   await child.getByRole('button', { name: 'Dates', exact: true }).click();
-  await child.getByRole('combobox', { name: 'Due date rule', exact: true }).selectOption('parent');
-  await child.getByRole('spinbutton', { name: 'Due offset days', exact: true }).fill('-3');
+  await child.getByRole('combobox', { name: 'Is due', exact: true }).selectOption('parent');
   await child
-    .getByRole('combobox', { name: 'Due offset unit', exact: true })
+    .getByRole('spinbutton', { name: 'Due: days before (−) or after (+)', exact: true })
+    .fill('-3');
+  await child
+    .getByRole('combobox', { name: 'Due: count days as', exact: true })
     .selectOption('working');
-  const optional = child.getByRole('checkbox', { name: 'Optional child', exact: true });
+  const optional = child.getByRole('checkbox', { name: 'Make optional', exact: true });
   await optional.focus();
   await page.keyboard.press('Space');
   await expect(optional).toBeChecked();
@@ -97,19 +100,19 @@ test('authors a private Project child outline and relative due date, reopens it,
     page.getByRole('button', { name: 'Review this definition', exact: true }),
   ).toBeEnabled();
   await page.getByRole('button', { name: 'Edit Confirm the venue', exact: true }).click();
-  await expect(child.getByRole('textbox', { name: 'Child title', exact: true })).toHaveValue(
+  await expect(child.getByRole('textbox', { name: 'Title', exact: true })).toHaveValue(
     'Confirm the venue',
   );
-  await expect(child.getByRole('textbox', { name: 'Child document', exact: true })).toContainText(
+  await expect(child.getByRole('textbox', { name: 'Document', exact: true })).toContainText(
     'venue agreement',
   );
   await child.getByRole('button', { name: 'Dates', exact: true }).click();
-  await expect(child.getByRole('spinbutton', { name: 'Due offset days', exact: true })).toHaveValue(
-    '-3',
-  );
-  await expect(child.getByRole('combobox', { name: 'Due offset unit', exact: true })).toHaveValue(
-    'working',
-  );
+  await expect(
+    child.getByRole('spinbutton', { name: 'Due: days before (−) or after (+)', exact: true }),
+  ).toHaveValue('-3');
+  await expect(
+    child.getByRole('combobox', { name: 'Due: count days as', exact: true }),
+  ).toHaveValue('working');
   await selectWorkDefinitionSection(page, 'Review');
   await expect(
     page.getByRole('button', { name: 'Publish to workspace', exact: true }),

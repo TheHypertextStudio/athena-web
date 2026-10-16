@@ -46,7 +46,11 @@ describe('Sheet presentations', () => {
       </Sheet>,
     );
 
-    expect(screen.getByRole('dialog', { name: 'Inspect event' })).toHaveClass('sm:right-0', 'w-96');
+    expect(screen.getByRole('dialog', { name: 'Inspect event' })).toHaveClass(
+      'sm:right-0',
+      'sm:w-96',
+      'w-[100vw]',
+    );
   });
 
   // Each side's anchor has to be a complete class name in the source, because that is the only
@@ -74,7 +78,7 @@ describe('Sheet presentations', () => {
       // On desktop it pins to its own edge and releases the opposite one that `inset-0` pinned.
       // No border faces the page: the sheet is an overlay, so its `shadow-level1` and its tonal
       // fill do that separating, the way every other overlay in the system does it.
-      expect(sheet).toHaveClass(anchor, release, 'sm:w-auto', 'w-72');
+      expect(sheet).toHaveClass(anchor, release, 'sm:w-72', 'w-[100vw]');
     },
   );
 });

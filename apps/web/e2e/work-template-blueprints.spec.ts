@@ -77,7 +77,8 @@ async function capturePrivateTemplate(
     waitUntil: 'commit',
     timeout: TIMEOUTS.pageReady,
   });
-  await page.getByRole('button', { name: 'Save as template', exact: true }).click();
+  await page.getByRole('button', { name: 'Template actions', exact: true }).click();
+  await page.getByRole('menuitem', { name: 'Save as template', exact: true }).click();
   const capture = page.getByRole('dialog', { name: 'Save as template', exact: true });
   await expect(capture.getByText(seeded.childTitle, { exact: true })).toBeVisible();
   const capturedName = `Captured ${seeded.publication.definition.name}`;

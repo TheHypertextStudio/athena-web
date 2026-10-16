@@ -68,7 +68,7 @@ function LibraryFilters({
   return (
     <Collapsible>
       <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-end gap-2">
-        <Field label="Search work definitions">
+        <Field label="Search work templates">
           <Input
             value={search}
             onChange={(event) => {
@@ -146,9 +146,9 @@ export function WorkTemplateLibrary({
   return (
     <ControlGroup controlSize="xl" orientation="vertical" className="gap-6">
       {active.length ? (
-        <section aria-label="Choose a work definition" className="flex min-w-0 flex-col gap-4">
+        <section aria-label="Choose a template" className="flex min-w-0 flex-col gap-4">
           <Text as="h2" token="title-large" className="sr-only">
-            Work definitions
+            Work templates
           </Text>
           <LibraryFilters search={search} kind={kind} onSearch={setSearch} onKind={setKind} />
           <Tabs
@@ -169,7 +169,7 @@ export function WorkTemplateLibrary({
             ) : (
               <div className="flex flex-col items-start gap-2 py-6">
                 <p className="text-body-medium text-on-surface-variant">
-                  No work definitions match these filters.
+                  No work templates match these filters.
                 </p>
                 <Button
                   variant="secondary"

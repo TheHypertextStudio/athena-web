@@ -54,13 +54,13 @@ export function WorkTemplateBlueprintFields({
       as="section"
       tone="card"
       shape="medium"
-      pad="roomy"
-      className="flex min-w-0 scroll-mt-48 flex-col gap-4 sm:p-6"
+      pad="comfortable"
+      className="contents min-w-0 scroll-mt-48 flex-col gap-4 sm:flex sm:p-6"
       aria-label="Template children"
       id="template-children"
       tabIndex={-1}
     >
-      {query.isError ? <QueryLoadFailure title="Nested templates" query={query} /> : null}
+      {query.isError ? <QueryLoadFailure title="Start from templates" query={query} /> : null}
       <BlueprintWorkspaceLayout
         editor={props}
         selected={selected}

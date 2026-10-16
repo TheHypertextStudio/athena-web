@@ -7,6 +7,7 @@ import {
   CollapsibleTrigger,
   Surface,
 } from '@docket/ui/primitives';
+import { ChevronDown } from '@docket/ui/icons';
 import { useVocabulary } from '@docket/ui/hooks';
 import type { WorkTemplateDefinition } from '@docket/work/work-template-contract';
 import { StaticMarkdown } from '@/components/editor/static-markdown';
@@ -17,42 +18,63 @@ import {
   type GalleryStructureSource,
 } from './gallery-structure';
 
-function WorkNode({ node }: { readonly node: GalleryStructureNode }): JSX.Element {
+const INSTRUCTION_TYPOGRAPHY =
+  '[&_h1]:text-title-small [&_h2]:text-title-small [&_h3]:text-label-large [&_h1]:mt-3 [&_h2]:mt-3 [&_h3]:mt-2';
+
+function WorkNode({
+  node,
+  root,
+}: {
+  readonly node: GalleryStructureNode;
+  readonly root: boolean;
+}): JSX.Element {
   const noun = useVocabulary(node.kind === 'milestone' ? 'task' : node.kind);
   const kind = node.kind === 'milestone' ? 'Milestone' : noun;
   return (
     <li className="min-w-0">
-      <Collapsible>
-        <CollapsibleTrigger asChild>
-          <Button
-            variant="ghost"
-            className="h-auto min-h-10 w-full justify-start text-left whitespace-normal"
+      <Surface tone={root ? 'card' : 'well'} shape="medium" pad={root ? 'comfortable' : 'none'}>
+        <Collapsible>
+          <CollapsibleTrigger asChild>
+            <Button
+              variant="ghost"
+              className="h-auto min-h-10 w-full justify-start px-0 text-left whitespace-normal"
+            >
+              <span className="text-title-medium min-w-0 flex-1">{node.name}</span>
+              <ChevronDown className="size-4 shrink-0" aria-hidden="true" />
+            </Button>
+          </CollapsibleTrigger>
+          <p className="text-body-small text-on-surface-variant">
+            {kind}
+            {node.optional ? ' · Optional' : ''}
+            {node.timing ? ` · ${node.timing}` : ''}
+          </p>
+          <CollapsibleContent className="py-2">
+            <StaticMarkdown value={node.document} className={INSTRUCTION_TYPOGRAPHY} />
+          </CollapsibleContent>
+        </Collapsible>
+        {node.children.length ? (
+          <ol
+            aria-label={`Included under ${node.name}`}
+            className="ml-3 flex min-w-0 flex-col gap-2"
           >
-            {node.name}
-          </Button>
-        </CollapsibleTrigger>
-        <p className="text-body-small text-on-surface-variant px-3">
-          {kind}
-          {node.optional ? ' · Optional' : ''}
-          {node.timing ? ` · ${node.timing}` : ''}
-        </p>
-        <CollapsibleContent className="px-3 py-3">
-          <StaticMarkdown value={node.document} />
-        </CollapsibleContent>
-      </Collapsible>
-      {node.children.length ? (
-        <ol aria-label={`Included under ${node.name}`} className="ml-3 flex min-w-0 flex-col gap-2">
-          <WorkBranch nodes={node.children} />
-        </ol>
-      ) : null}
+            <WorkBranch nodes={node.children} root={false} />
+          </ol>
+        ) : null}
+      </Surface>
     </li>
   );
 }
-function WorkBranch({ nodes }: { readonly nodes: readonly GalleryStructureNode[] }): JSX.Element {
+function WorkBranch({
+  nodes,
+  root = true,
+}: {
+  readonly nodes: readonly GalleryStructureNode[];
+  readonly root?: boolean;
+}): JSX.Element {
   return (
     <>
       {nodes.map((node) => (
-        <WorkNode key={node.key} node={node} />
+        <WorkNode key={node.key} node={node} root={root} />
       ))}
     </>
   );
@@ -67,7 +89,13 @@ function RecurringWork({
   const program = useVocabulary('program');
   if (!definition.defaultSchedules.length) return null;
   return (
-    <section aria-label="Recurring work" className="flex min-w-0 flex-col gap-3">
+    <Surface
+      as="section"
+      tone="well"
+      pad="comfortable"
+      aria-label="Recurring work"
+      className="flex min-w-0 flex-col gap-3"
+    >
       <h2 className="text-title-large">Recurring work</h2>
       <p className="text-body-medium text-on-surface-variant">
         These routines begin when you create a {program} from this template. Each {program} gets its
@@ -93,15 +121,18 @@ function RecurringWork({
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="min-h-10 min-w-10 sm:min-h-8 sm:min-w-8"
+                    className="min-h-10 min-w-10 px-0 sm:min-h-8 sm:min-w-8"
                   >
-                    Routine details for {schedule.name}
+                    Routine details for {schedule.name}{' '}
+                    <ChevronDown className="size-4" aria-hidden="true" />
                   </Button>
                 </CollapsibleTrigger>
                 <CollapsibleContent>
-                  <p className="text-body-small break-words">Run title: {schedule.titlePattern}</p>
+                  <p className="text-body-small break-words">
+                    New work title: {schedule.titlePattern}
+                  </p>
                   <p className="text-body-small">
-                    Responsibility:{' '}
+                    Owner:{' '}
                     {schedule.actorRule === 'parent_responsible'
                       ? `${program} owner`
                       : schedule.actorRule === 'creator'
@@ -116,28 +147,29 @@ function RecurringWork({
           );
         })}
       </ol>
-    </section>
+    </Surface>
   );
 }
 function StartingInstructions({
   definition,
-  composed,
 }: {
   readonly definition: WorkTemplateDefinition;
-  readonly composed: boolean;
 }): JSX.Element | null {
   if (!definition.payload.description) return null;
   return (
-    <Surface as="section" shape="medium" tone="well" pad="roomy" aria-label="Starting work">
+    <Surface as="section" shape="medium" tone="well" pad="comfortable" aria-label="Starting work">
       <h2 className="text-title-medium">Starting work</h2>
-      <Collapsible defaultOpen={!composed}>
+      <Collapsible>
         <CollapsibleTrigger asChild>
-          <Button variant="ghost" className="min-h-10">
-            Read starting instructions
+          <Button variant="ghost" className="min-h-10 px-0">
+            Read starting instructions <ChevronDown className="size-4" aria-hidden="true" />
           </Button>
         </CollapsibleTrigger>
         <CollapsibleContent>
-          <StaticMarkdown value={definition.payload.description} />
+          <StaticMarkdown
+            value={definition.payload.description}
+            className={INSTRUCTION_TYPOGRAPHY}
+          />
         </CollapsibleContent>
       </Collapsible>
     </Surface>
@@ -154,12 +186,12 @@ export function GalleryWorkOutline({
   const [includedOpen, setIncludedOpen] = useState(true);
   const nodes = galleryStructure(definition, sources);
   return (
-    <div className="flex min-w-0 flex-col gap-6">
+    <div className="flex min-w-0 flex-col gap-3 sm:gap-6">
       {nodes.length ? (
         <Collapsible open={includedOpen} onOpenChange={setIncludedOpen}>
           <CollapsibleTrigger asChild>
-            <Button variant="ghost" className="w-full justify-between">
-              Included work
+            <Button variant="ghost" className="w-full justify-between px-3 sm:px-0">
+              Included work <ChevronDown className="size-4" aria-hidden="true" />
             </Button>
           </CollapsibleTrigger>
           <CollapsibleContent>
@@ -170,10 +202,7 @@ export function GalleryWorkOutline({
         </Collapsible>
       ) : null}
       <RecurringWork definition={definition} sources={sources} />
-      <StartingInstructions
-        definition={definition}
-        composed={Boolean(nodes.length || definition.defaultSchedules.length)}
-      />
+      <StartingInstructions definition={definition} />
     </div>
   );
 }

@@ -28,7 +28,7 @@ export function GalleryBundlePage({ bundleId }: { readonly bundleId: string }): 
       loading={query.isPending}
     >
       {query.isError ? (
-        <QueryLoadFailure title="Saved work definitions" query={query} />
+        <QueryLoadFailure title="Saved templates" query={query} />
       ) : bundle ? (
         <GalleryCopyBundle
           bundle={bundle}

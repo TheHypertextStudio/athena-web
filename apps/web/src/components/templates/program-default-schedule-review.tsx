@@ -25,14 +25,14 @@ export function ProgramDefaultScheduleReview({
       as="section"
       tone="card"
       shape="large"
-      pad="roomy"
-      className="flex min-w-0 flex-col gap-4"
-      aria-label="Recurring work review"
+      pad="comfortable"
+      className="flex min-w-0 flex-col gap-4 sm:p-6"
+      aria-label="Repeating work review"
     >
-      <h2 className="text-title-large">Recurring work</h2>
+      <h2 className="text-title-large">Repeating work</h2>
       <p className="text-body-medium text-on-surface-variant">
-        Each new {program} keeps its own schedules. Later definition changes leave existing copies
-        intact.
+        Each new {program} gets its own repeat schedules. Changing this template later leaves
+        existing schedules as they are.
       </p>
       <ol className="flex min-w-0 flex-col gap-4">
         {values.map((value) => (
@@ -42,11 +42,11 @@ export function ProgramDefaultScheduleReview({
             <p className="text-body-small text-on-surface-variant">
               {relativeStart(value.cadence.startOffsetDays, program)} ·{' '}
               {value.cadence.end.kind === 'after_count'
-                ? `${value.cadence.end.count} runs`
-                : 'No end'}
+                ? `${value.cadence.end.count} times`
+                : 'Repeats until stopped'}
             </p>
             <p className="text-body-small text-on-surface-variant break-words">
-              Run title: {value.titlePattern}
+              Item title: {value.titlePattern}
             </p>
             <WorkTemplateReviewNestedVersion
               orgId={orgId}
@@ -88,8 +88,8 @@ function teamRule(
   team: string,
 ): string {
   return {
-    parent_team: `${program} ${team}, otherwise selected ${team}`,
+    parent_team: `Same ${team} as the ${program}, or the ${team} chosen for new work`,
     creation_team: `Selected ${team}`,
-    none: `No inherited ${team}`,
+    none: `No ${team}`,
   }[value];
 }

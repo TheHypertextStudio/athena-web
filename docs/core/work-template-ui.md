@@ -43,6 +43,13 @@ routines in a long Program outline. Linked private definitions retain their real
 publication pins; review them without mistaking them for published versions, then return to the
 parent review. Published history and template management are disclosed in Review.
 
+On phones, the activity canvas has no outer content inset. The active editor owns one content
+gutter; its wrappers add no further padded cards. A compact header scrolls away while editing a
+child or routine. Opening a new section restores its context; revisiting a section restores its
+prior editing position. Keep weekday names readable, optional-work choices easy to tap, and
+archive pagination compact without losing its accessible reference-list context. Dialog bodies scroll independently of their title
+and consequential footer actions.
+
 ```mermaid
 stateDiagram-v2
     [*] --> Purpose: New definition

@@ -6,13 +6,18 @@ export function WorkTemplateBlueprintSummary({ blueprint }: { blueprint: Bluepri
   const optional = blueprint.steps.filter((step) => step.optional.enabled).length;
   const nested = blueprint.steps.filter((step) => step.template !== null).length;
   const details = [
-    `${blueprint.steps.length} ${blueprint.steps.length === 1 ? 'child' : 'children'}`,
+    blueprint.steps.length === 0
+      ? 'No included work'
+      : `${blueprint.steps.length} included ${blueprint.steps.length === 1 ? 'item' : 'items'}`,
   ];
   if (optional) details.push(`${optional} optional`);
-  if (nested) details.push(`${nested} nested ${nested === 1 ? 'template' : 'templates'}`);
-  if (blueprint.dependencies.length) details.push(`${blueprint.dependencies.length} dependencies`);
+  if (nested) details.push(`${nested} from ${nested === 1 ? 'a template' : 'templates'}`);
+  if (blueprint.dependencies.length)
+    details.push(
+      `${blueprint.dependencies.length} ${blueprint.dependencies.length === 1 ? 'link' : 'links'} between tasks`,
+    );
   return (
-    <p className="text-body-small text-on-surface-variant" aria-label="Blueprint summary">
+    <p className="text-body-small text-on-surface-variant" aria-label="Included work summary">
       {details.join(' · ')}
     </p>
   );

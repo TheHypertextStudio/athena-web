@@ -143,10 +143,10 @@ export function change(label: string, value: string, scope: HTMLElement = docume
         ? 'Add a starting summary'
         : label.startsWith('Starting ')
           ? 'Starting properties'
-          : /^(Due|Start|Target) /.test(label)
+          : /^(Starts$|Is due$|Target date$|(?:Due|Start|Target):)/.test(label)
             ? 'Dates'
-            : /^(Nested template|Template version|Pinned version|Child parent)$/.test(label)
-              ? 'Template and placement'
+            : /^(Start from template|Template version|Version to keep|Included under)$/.test(label)
+              ? 'Template and location'
               : 'Responsibility';
     fireEvent.click(within(scope).getByRole('button', { name: disclosure }));
   }

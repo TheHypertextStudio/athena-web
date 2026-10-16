@@ -54,13 +54,14 @@ export function templateGalleryEntryDef(orgId: string, slug: string) {
     [...queryKeys.templates(orgId), 'gallery', 'entry', slug],
     () =>
       api.v1.orgs[':orgId'].templates.definitions.gallery[':slug'].$get({ param: { orgId, slug } }),
-    'Could not load this work definition.',
+    'Could not load this template.',
     { staleTime: STALE.static },
   );
 }
 /** Request a read-only checked copy review; this mutation allocates no identities and writes nothing. */
 export function useTemplateGalleryPreview(orgId: string) {
   return useApiMutation({
+    failure: 'silent',
     mutationFn: (input: WorkTemplateGalleryPreviewRequest) =>
       unwrap(
         () =>
@@ -68,7 +69,7 @@ export function useTemplateGalleryPreview(orgId: string) {
             param: { orgId },
             json: input,
           }),
-        'Could not review these work definitions.',
+        'Could not review these templates.',
       ),
   });
 }
@@ -92,6 +93,7 @@ export function templateGalleryForkDef(
 /** Accept only the exact checked choices; transport retries retain their original request identity. */
 export function useTemplateGalleryAccept(orgId: string) {
   return useApiMutation({
+    failure: 'silent',
     mutationFn: (input: WorkTemplateGalleryAcceptRequest) =>
       unwrap(
         () =>
@@ -99,7 +101,7 @@ export function useTemplateGalleryAccept(orgId: string) {
             param: { orgId },
             json: input,
           }),
-        'Could not save these work definitions.',
+        'Could not save these templates.',
       ),
     invalidateKeys: [queryKeys.templates(orgId)],
   });
@@ -113,7 +115,7 @@ export function templateGalleryCopyStatusDef(orgId: string, requestId: string) {
       api.v1.orgs[':orgId'].templates.definitions.gallery.copies.requests[':requestId'].$get({
         param: { orgId, requestId },
       }),
-    'Could not check whether these definitions were saved.',
+    'Could not check whether these templates were saved.',
     { staleTime: 0 },
   );
 }
@@ -126,13 +128,14 @@ export function templateGalleryCopyBundleDef(orgId: string, bundleId: string) {
       api.v1.orgs[':orgId'].templates.definitions.gallery.copies[':bundleId'].$get({
         param: { orgId, bundleId },
       }),
-    'Could not open these saved work definitions.',
+    'Could not open these saved templates.',
   );
 }
 
 /** Reverse the actual copy receipt, retaining later authored edits and used definitions. */
 export function useTemplateGalleryCopyUndo(orgId: string) {
   return useApiMutation({
+    failure: 'silent',
     mutationFn: (input: { readonly bundleId: string }) =>
       unwrap(
         () =>

@@ -123,6 +123,13 @@ const SHEET_SIZE: Readonly<Record<SheetSize, string>> = {
   wide: 'w-[28rem] max-w-[calc(100vw-1.5rem)]',
 };
 
+/** Responsive panels fill the phone window and use an explicit desktop width, never intrinsic sizing. */
+const SHEET_SIZE_SM: Readonly<Record<SheetSize, string>> = {
+  navigation: 'sm:w-72 sm:max-w-[85vw]',
+  standard: 'sm:w-96 sm:max-w-[calc(100vw-1.5rem)]',
+  wide: 'sm:w-[28rem] sm:max-w-[calc(100vw-1.5rem)]',
+};
+
 /**
  * The `sm`-and-up edge anchor and inner border for each {@link SheetSide}.
  *
@@ -144,7 +151,7 @@ function sheetPresentationClass(
 ): string {
   if (presentation === 'fullscreen') return 'inset-0 h-[100dvh] w-[100vw] border-0';
   if (presentation === 'responsive-fullscreen')
-    return `inset-0 h-[100dvh] w-[100vw] border-0 sm:inset-y-0 sm:h-full sm:w-auto sm:border-0 ${SIDE_ANCHOR_SM[side]} ${SHEET_SIZE[size]}`;
+    return `inset-0 h-[100dvh] w-[100vw] border-0 sm:inset-y-0 sm:h-full sm:border-0 ${SIDE_ANCHOR_SM[side]} ${SHEET_SIZE_SM[size]}`;
   return `${SIDE_CLASS[side]} ${SHEET_SIZE[size]}`;
 }
 

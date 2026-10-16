@@ -1,7 +1,7 @@
 'use client';
 import { useState, type JSX } from 'react';
 import { ConfirmDestructiveDialog } from '@docket/ui/components';
-import { Button } from '@docket/ui/primitives';
+import { Button, ControlGroup } from '@docket/ui/primitives';
 import type { WorkTemplateArchiveImpact } from '@docket/work/work-template-contract';
 import { QueryLoadFailure } from '@/components/feedback';
 import { useApiQuery } from '@/lib/query';
@@ -25,7 +25,7 @@ function ImpactPage({
         {title} ({page.total})
       </h3>
       {page.total === 0 ? (
-        <p className="text-body-medium text-on-surface-variant">None you can access.</p>
+        <p className="text-body-medium text-on-surface-variant">None visible to you.</p>
       ) : (
         <ul className="text-body-medium list-disc space-y-1 pl-5">
           {page.items.map((item) => (
@@ -36,28 +36,30 @@ function ImpactPage({
         </ul>
       )}
       {offset > 0 || page.nextOffset !== null ? (
-        <div className="flex gap-2">
+        <ControlGroup controlSize="sm" wrap>
           <Button
             type="button"
             variant="ghost"
+            aria-label={`Previous ${title.toLowerCase()}`}
             disabled={offset === 0}
             onClick={() => {
               onPage(Math.max(0, offset - 20));
             }}
           >
-            Previous {title.toLowerCase()}
+            Previous
           </Button>
           <Button
             type="button"
             variant="ghost"
+            aria-label={`More ${title.toLowerCase()}`}
             disabled={page.nextOffset === null}
             onClick={() => {
               if (page.nextOffset !== null) onPage(page.nextOffset);
             }}
           >
-            More {title.toLowerCase()}
+            More
           </Button>
-        </div>
+        </ControlGroup>
       ) : null}
     </section>
   );
@@ -97,7 +99,7 @@ export function WorkTemplateArchiveAction({
         open={open}
         onOpenChange={setOpen}
         title="Archive this template?"
-        description="It will stop appearing for new work. Existing work, published parents, and schedules keep their saved versions."
+        description="It will no longer be offered for new work. Work already created and repeating work will stay as they are."
         confirmLabel="Archive template"
         pending={writes.archive.isPending}
         confirmDisabled={query.isPending || query.isFetching || query.isError}
@@ -115,19 +117,19 @@ export function WorkTemplateArchiveAction({
         }}
       >
         {query.isError ? (
-          <QueryLoadFailure title="Archive impact" query={query} />
+          <QueryLoadFailure title="Where this is used" query={query} />
         ) : query.isPending ? (
-          <p role="status">Reviewing template references…</p>
+          <p role="status">Checking where this is used…</p>
         ) : (
           <div className="space-y-4">
             <ImpactPage
-              title="Published parents"
+              title="Templates using this"
               page={query.data.parents}
               offset={parentOffset}
               onPage={setParentOffset}
             />
             <ImpactPage
-              title="Active schedules"
+              title="Repeating work"
               page={query.data.schedules}
               offset={scheduleOffset}
               onPage={setScheduleOffset}

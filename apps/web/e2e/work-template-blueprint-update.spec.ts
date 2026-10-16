@@ -114,7 +114,8 @@ test('updates a published blueprint selectively while preserving authored notes 
     waitUntil: 'commit',
     timeout: TIMEOUTS.pageReady,
   });
-  await page.getByRole('button', { name: 'Update template', exact: true }).click();
+  await page.getByRole('button', { name: 'Template actions', exact: true }).click();
+  await page.getByRole('menuitem', { name: 'Update template', exact: true }).click();
   const review = page.getByRole('dialog', { name: 'Update template', exact: true });
   await expect(review).toContainText('Version 2');
   await review

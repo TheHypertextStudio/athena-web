@@ -61,6 +61,27 @@ function ControlledNavSheet(): React.JSX.Element {
 }
 
 describe('Sheet family', () => {
+  it.each([
+    ['navigation', 'sm:w-72'],
+    ['standard', 'sm:w-96'],
+    ['wide', 'sm:w-[28rem]'],
+  ] as const)(
+    'keeps responsive %s panels full-width on phones and sized on desktop',
+    async (size, desktopWidth) => {
+      render(
+        <Sheet defaultOpen>
+          <SheetContent presentation="responsive-fullscreen" size={size}>
+            <SheetTitle>Activity help</SheetTitle>
+            <SheetDescription>Continue the current activity.</SheetDescription>
+          </SheetContent>
+        </Sheet>,
+      );
+      const sheet = await screen.findByRole('dialog');
+      expect(sheet).toHaveClass('w-[100vw]', desktopWidth);
+      expect(sheet).not.toHaveClass('sm:w-auto');
+    },
+  );
+
   it('opens from its trigger as a labelled, described modal dialog', async () => {
     render(<NavSheet />);
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();

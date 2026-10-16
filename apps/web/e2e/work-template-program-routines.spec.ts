@@ -79,32 +79,28 @@ async function authorRoutine(
   await page.getByRole('button', { name: 'Continue to included work', exact: true }).click();
   await page.getByRole('button', { name: 'Add task', exact: true }).click();
   const child = page.getByRole('group', { name: /^Child work:/ });
-  await child
-    .getByRole('textbox', { name: 'Child title', exact: true })
-    .fill('Prepare host handover');
+  await child.getByRole('textbox', { name: 'Title', exact: true }).fill('Prepare host handover');
   await child.getByRole('button', { name: 'Responsibility', exact: true }).click();
   await child
     .getByRole('combobox', { name: 'Responsible person', exact: true })
     .selectOption('parent_responsible');
   await child.getByRole('button', { name: 'Add subtask', exact: true }).click();
   const nested = page.getByRole('group', { name: /^Child work:/ });
-  await nested
-    .getByRole('textbox', { name: 'Child title', exact: true })
-    .fill('Confirm the next host');
+  await nested.getByRole('textbox', { name: 'Title', exact: true }).fill('Confirm the next host');
   await nested.getByRole('button', { name: 'Dates', exact: true }).click();
-  await nested.getByRole('combobox', { name: 'Due date rule', exact: true }).selectOption('parent');
+  await nested.getByRole('combobox', { name: 'Is due', exact: true }).selectOption('parent');
   await nested.getByRole('button', { name: 'Back to included work', exact: true }).click();
-  await page.getByRole('button', { name: 'Add schedule', exact: true }).click();
+  await page.getByRole('button', { name: 'Add repeating work', exact: true }).click();
   await page
-    .getByRole('region', { name: 'Routine work template', exact: true })
+    .getByRole('region', { name: 'Work to repeat', exact: true })
     .getByRole('button')
     .click();
   await page.getByRole('menuitem', { name: new RegExp(`^${eventName}`) }).click();
   await page
-    .getByRole('textbox', { name: 'Reusable schedule name', exact: true })
+    .getByRole('textbox', { name: 'Repeating work name', exact: true })
     .fill('Monthly community dinner');
   await page
-    .getByRole('textbox', { name: 'Reusable schedule title pattern', exact: true })
+    .getByRole('textbox', { name: 'Title for each new item', exact: true })
     .fill('{month} community dinner');
   await page
     .getByRole('combobox', { name: 'Monthly repeat pattern', exact: true })
@@ -115,14 +111,12 @@ async function authorRoutine(
   await page
     .getByRole('combobox', { name: 'Monthly weekday', exact: true })
     .selectOption('thursday');
+  await page.getByRole('combobox', { name: 'First occurrence', exact: true }).selectOption('after');
   await page
-    .getByRole('combobox', { name: 'Default schedule begins', exact: true })
-    .selectOption('after');
-  await page
-    .getByRole('spinbutton', { name: 'Default schedule start offset days', exact: true })
+    .getByRole('spinbutton', { name: 'Days before or after creation', exact: true })
     .fill('7');
   await selectWorkDefinitionSection(page, 'Review');
-  await expect(page.getByRole('region', { name: 'Recurring work review' })).toContainText(
+  await expect(page.getByRole('region', { name: 'Repeating work review' })).toContainText(
     'Begins 7 days after Program creation',
   );
   const saving = waitForApiResponse(page, /\/templates\/definitions$/, { method: 'POST' });
@@ -135,14 +129,14 @@ async function reopenAndPublish(page: Page): Promise<void> {
   await page.reload({ waitUntil: 'commit' });
   await selectWorkDefinitionSection(page, 'Included work');
   await page
-    .getByRole('button', { name: 'Edit routine Monthly community dinner', exact: true })
+    .getByRole('button', { name: 'Edit repeating work Monthly community dinner', exact: true })
     .click();
   await expect(
-    page.getByRole('spinbutton', { name: 'Default schedule start offset days', exact: true }),
+    page.getByRole('spinbutton', { name: 'Days before or after creation', exact: true }),
   ).toHaveValue('7');
   await page.getByRole('button', { name: 'Back to included work', exact: true }).click();
   await expect(
-    page.getByRole('button', { name: 'Edit routine Monthly community dinner', exact: true }),
+    page.getByRole('button', { name: 'Edit repeating work Monthly community dinner', exact: true }),
   ).toBeFocused();
   await page.setViewportSize({ width: 390, height: 844 });
   const branch = page.getByRole('button', { name: 'Created together', exact: true });
@@ -150,14 +144,14 @@ async function reopenAndPublish(page: Page): Promise<void> {
   await page.keyboard.press('Enter');
   await expect(branch).toHaveAttribute('aria-expanded', 'false');
   await expect(
-    page.getByRole('button', { name: 'Edit routine Monthly community dinner', exact: true }),
+    page.getByRole('button', { name: 'Edit repeating work Monthly community dinner', exact: true }),
   ).toBeInViewport();
   await page
-    .getByRole('button', { name: 'Edit routine Monthly community dinner', exact: true })
+    .getByRole('button', { name: 'Edit repeating work Monthly community dinner', exact: true })
     .click();
   await page.getByRole('button', { name: 'Back to included work', exact: true }).click();
   await expect(
-    page.getByRole('button', { name: 'Edit routine Monthly community dinner', exact: true }),
+    page.getByRole('button', { name: 'Edit repeating work Monthly community dinner', exact: true }),
   ).toBeFocused();
   await expect(branch).toHaveAttribute('aria-expanded', 'false');
   await page.setViewportSize({ width: 1440, height: 900 });
@@ -198,10 +192,10 @@ async function verifyIndependentCopies(
   });
   await selectWorkDefinitionSection(page, 'Included work');
   await page
-    .getByRole('button', { name: 'Edit routine Monthly community dinner', exact: true })
+    .getByRole('button', { name: 'Edit repeating work Monthly community dinner', exact: true })
     .click();
   await page
-    .getByRole('textbox', { name: 'Reusable schedule name', exact: true })
+    .getByRole('textbox', { name: 'Repeating work name', exact: true })
     .fill('A different future routine');
   const edit = waitForApiResponse(page, /\/draft$/, { method: 'PATCH' });
   await page.getByRole('button', { name: 'Save draft', exact: true }).click();
@@ -326,7 +320,7 @@ test('keeps recurring work and the work outline reachable while reading a long P
   await selectWorkDefinitionSection(page, 'Included work');
   const branch = page.getByRole('button', { name: 'Created together', exact: true });
   const routine = page.getByRole('button', {
-    name: 'Edit routine Monthly community dinner',
+    name: 'Edit repeating work Monthly community dinner',
     exact: true,
   });
   for (const viewport of [
@@ -352,15 +346,15 @@ test('keeps recurring work and the work outline reachable while reading a long P
   await page.setViewportSize({ width: 390, height: 600 });
   await branch.click();
   await expect(branch).toHaveAttribute('aria-expanded', 'false');
-  await expect(page.getByLabel('Blueprint summary')).toHaveText('24 children');
-  await page.getByRole('button', { name: 'Add schedule', exact: true }).click();
+  await expect(page.getByLabel('Included work summary')).toHaveText('24 included items');
+  await page.getByRole('button', { name: 'Add repeating work', exact: true }).click();
   await page.getByRole('button', { name: 'Back to included work', exact: true }).click();
   const overview = page.getByRole('heading', { name: 'Included work', exact: true });
   await expect(overview).toBeFocused();
   await expect(overview).toBeInViewport();
   await expect(branch).toHaveAttribute('aria-expanded', 'false');
   await routine.click();
-  await page.getByRole('button', { name: 'Remove routine', exact: true }).click();
+  await page.getByRole('button', { name: 'Remove repeating work', exact: true }).click();
   await expect(overview).toBeFocused();
   await expect(overview).toBeInViewport();
   await expect(branch).toHaveAttribute('aria-expanded', 'false');
@@ -402,14 +396,16 @@ test('a copied private Program keeps its routine publication pin and returns fro
     waitUntil: 'commit',
     timeout: TIMEOUTS.pageReady,
   });
-  await page.getByRole('button', { name: `Edit routine ${routine.name}`, exact: true }).click();
+  await page
+    .getByRole('button', { name: `Edit repeating work ${routine.name}`, exact: true })
+    .click();
   await expect(
     page.getByRole('button', { name: `Unpublished ${linked.definition.name}`, exact: true }),
   ).toBeVisible();
   await expect(
-    page.getByRole('combobox', { name: 'Reusable schedule template updates', exact: true }),
+    page.getByRole('combobox', { name: 'Template updates for repeating work', exact: true }),
   ).toHaveCount(0);
-  await page.getByRole('spinbutton', { name: 'Default schedule interval', exact: true }).fill('2');
+  await page.getByRole('spinbutton', { name: 'Repeat interval', exact: true }).fill('2');
   const saved = waitForApiResponse(page, /\/draft$/, { method: 'PATCH' });
   await page.getByRole('button', { name: 'Save draft', exact: true }).click();
   expect((await saved).ok()).toBe(true);

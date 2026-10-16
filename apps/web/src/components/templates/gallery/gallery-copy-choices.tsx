@@ -86,8 +86,8 @@ function OfferingChoice({
       label={`Offer ${item.name} in team creation menus`}
       description={
         props.canManageOfferings
-          ? 'An empty selection offers the published definition throughout the workspace.'
-          : 'Administrators choose team offerings. The suggested team is not assigned automatically.'
+          ? 'Leave this empty to offer this template to every team.'
+          : 'An administrator can choose teams. No team is assigned automatically.'
       }
     >
       <EntityMultiPicker

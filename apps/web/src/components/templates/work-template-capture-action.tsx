@@ -1,7 +1,7 @@
 'use client';
 import type { TemplateTargetType } from '@docket/work/template-contract';
 import { Button } from '@docket/ui/primitives';
-import { useState, type JSX } from 'react';
+import { useState, type JSX, type ReactNode } from 'react';
 import { useCanManageOrg } from '@/components/settings/use-can-manage-org';
 import { workTemplateHref } from '@/components/templates/work-template-navigation';
 import { useApiQuery } from '@/lib/query';
@@ -28,10 +28,12 @@ export function WorkTemplateCaptureAction({
   orgId,
   kind,
   workId,
+  renderTrigger,
 }: {
   readonly orgId: string;
   readonly kind: TemplateTargetType;
   readonly workId: string;
+  readonly renderTrigger?: (open: (() => void) | undefined) => ReactNode;
 }): JSX.Element | null {
   const allowed = useCapturePermission(orgId);
   const [open, setOpen] = useState(false);
@@ -61,21 +63,15 @@ export function WorkTemplateCaptureAction({
       setFailure(error instanceof UserFacingError && error.status === 409 ? 'stale' : 'failed');
     }
   };
-  if (!allowed) return null;
+  const openCapture = (): void => {
+    mutation.reset();
+    setFailure(null);
+    setOpen(true);
+  };
+  if (!allowed) return <CaptureTrigger renderTrigger={renderTrigger} />;
   return (
     <>
-      <Button
-        type="button"
-        variant="ghost"
-        size="sm"
-        onClick={() => {
-          mutation.reset();
-          setFailure(null);
-          setOpen(true);
-        }}
-      >
-        Save as template
-      </Button>
+      <CaptureTrigger renderTrigger={renderTrigger} onOpen={openCapture} />
       <WorkTemplateCaptureDialog
         open={open}
         name={name}
@@ -99,4 +95,19 @@ export function WorkTemplateCaptureAction({
       />
     </>
   );
+}
+
+function CaptureTrigger({
+  renderTrigger,
+  onOpen,
+}: {
+  readonly renderTrigger: ((open: (() => void) | undefined) => ReactNode) | undefined;
+  readonly onOpen?: () => void;
+}): JSX.Element | null {
+  if (renderTrigger) return <>{renderTrigger(onOpen)}</>;
+  return onOpen ? (
+    <Button type="button" variant="ghost" size="sm" onClick={onOpen}>
+      Save as template
+    </Button>
+  ) : null;
 }

@@ -133,12 +133,14 @@ describe('existing work template header', () => {
 
   it('previews identity-only changes before submitting exactly the chosen publication', async () => {
     render(<WorkTemplateIdentityControl {...props} canEdit />);
-    fireEvent.pointerDown(screen.getByRole('button', { name: /^Change template:/ }), {
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'Template actions' }), {
       button: 0,
       ctrlKey: false,
       pointerType: 'mouse',
     });
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Change template' }));
     fireEvent.click(await screen.findByRole('menuitem', { name: /Meeting/ }));
+    await screen.findByRole('dialog');
     expect(mocks.mutate).not.toHaveBeenCalled();
     expect(screen.getByRole('dialog')).toHaveTextContent(
       'Your description, dates and child work stay unchanged.',
@@ -160,11 +162,12 @@ describe('existing work template header', () => {
   it('offers the next metadata page without losing loaded choices', async () => {
     mocks.hasNext = true;
     render(<WorkTemplateIdentityControl {...props} canEdit />);
-    fireEvent.pointerDown(screen.getByRole('button', { name: /^Change template:/ }), {
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'Template actions' }), {
       button: 0,
       ctrlKey: false,
       pointerType: 'mouse',
     });
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Change template' }));
     fireEvent.click(await screen.findByRole('menuitem', { name: 'More templates…' }));
     expect(mocks.fetchNext).toHaveBeenCalledOnce();
     expect(screen.getByRole('menuitem', { name: /Meeting/ })).toBeVisible();
@@ -173,12 +176,14 @@ describe('existing work template header', () => {
   it('keeps a failed preview and offers application-owned retry copy', async () => {
     mocks.isError = true;
     render(<WorkTemplateIdentityControl {...props} canEdit />);
-    fireEvent.pointerDown(screen.getByRole('button', { name: /^Change template:/ }), {
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'Template actions' }), {
       button: 0,
       ctrlKey: false,
       pointerType: 'mouse',
     });
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Change template' }));
     fireEvent.click(await screen.findByRole('menuitem', { name: /Meeting/ }));
+    await screen.findByRole('dialog');
     expect(screen.getByRole('alert')).toHaveTextContent(
       'Could not change the template. Try again.',
     );
@@ -186,12 +191,14 @@ describe('existing work template header', () => {
   });
   it('keeps starting differences off and submits only individually selected changes', async () => {
     render(<WorkTemplateIdentityControl {...props} canEdit />);
-    fireEvent.pointerDown(screen.getByRole('button', { name: /^Change template:/ }), {
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'Template actions' }), {
       button: 0,
       ctrlKey: false,
       pointerType: 'mouse',
     });
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Change template' }));
     fireEvent.click(await screen.findByRole('menuitem', { name: /Meeting/ }));
+    await screen.findByRole('dialog');
     const document = screen.getByRole('checkbox', { name: 'Starting document' });
     expect(document).not.toBeChecked();
     expect(screen.getByRole('checkbox', { name: 'Health' })).not.toBeChecked();
@@ -213,17 +220,19 @@ describe('existing work template header', () => {
   it('disables acceptance when the publication preview cannot be loaded', async () => {
     mocks.previewError = true;
     render(<WorkTemplateIdentityControl {...props} canEdit />);
-    fireEvent.pointerDown(screen.getByRole('button', { name: /^Change template:/ }), {
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'Template actions' }), {
       button: 0,
       ctrlKey: false,
       pointerType: 'mouse',
     });
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Change template' }));
     fireEvent.click(await screen.findByRole('menuitem', { name: /Meeting/ }));
-    expect(screen.getByRole('button', { name: 'Change template' })).toBeDisabled();
+    await screen.findByRole('dialog');
+    expect(screen.queryByRole('button', { name: 'Change template' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Retry preview' })).toBeVisible();
     expect(mocks.mutate).not.toHaveBeenCalled();
   });
-  it('offers an explicit update review and submits individually chosen child changes', () => {
+  it('offers an explicit update review and submits individually chosen child changes', async () => {
     mocks.children = [
       WorkTemplateChildChange.parse({
         changeId: 'bp_1111111111111111',
@@ -245,7 +254,13 @@ describe('existing work template header', () => {
       }),
     ];
     render(<WorkTemplateIdentityControl {...props} canEdit />);
-    fireEvent.click(screen.getByRole('button', { name: 'Update template' }));
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'Template actions' }), {
+      button: 0,
+      ctrlKey: false,
+      pointerType: 'mouse',
+    });
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Update template' }));
+    await screen.findByRole('dialog');
     expect(screen.getByRole('dialog')).toHaveTextContent('Update template');
     expect(screen.getByRole('checkbox', { name: 'Due date for Preparation' })).not.toBeChecked();
     expect(screen.getByRole('checkbox', { name: 'Cancel Old preparation' })).not.toBeChecked();
@@ -263,19 +278,31 @@ describe('existing work template header', () => {
     );
   });
 
-  it('explains omitted reusable defaults before accepting newly added work', () => {
+  it('explains omitted reusable defaults before accepting newly added work', async () => {
     mocks.warnings = [{ code: 'label_unavailable', paths: [['review']], count: 1 }];
     render(<WorkTemplateIdentityControl {...props} canEdit />);
-    fireEvent.click(screen.getByRole('button', { name: 'Update template' }));
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'Template actions' }), {
+      button: 0,
+      ctrlKey: false,
+      pointerType: 'mouse',
+    });
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Update template' }));
+    await screen.findByRole('dialog');
     expect(screen.getByRole('dialog')).toHaveTextContent(
       'Unavailable labels are omitted from newly added work.',
     );
   });
 
-  it('shows the exact reviewed publication when the catalog advanced beyond the cached header', () => {
+  it('shows the exact reviewed publication when the catalog advanced beyond the cached header', async () => {
     mocks.versionNumber = 3;
     render(<WorkTemplateIdentityControl {...props} canEdit />);
-    fireEvent.click(screen.getByRole('button', { name: 'Update template' }));
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'Template actions' }), {
+      button: 0,
+      ctrlKey: false,
+      pointerType: 'mouse',
+    });
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Update template' }));
+    await screen.findByRole('dialog');
     expect(screen.getByRole('dialog')).toHaveTextContent('Version 3');
   });
 
@@ -294,7 +321,13 @@ describe('existing work template header', () => {
       }),
     ];
     const rendered = render(<WorkTemplateIdentityControl {...props} canEdit />);
-    fireEvent.click(screen.getByRole('button', { name: 'Update template' }));
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'Template actions' }), {
+      button: 0,
+      ctrlKey: false,
+      pointerType: 'mouse',
+    });
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Update template' }));
+    await screen.findByRole('dialog');
     fireEvent.click(screen.getByRole('checkbox', { name: 'Due date for Preparation' }));
     mocks.isError = true;
     mocks.error = new UserFacingError('Provider-private diagnostic', {
@@ -305,8 +338,8 @@ describe('existing work template header', () => {
     expect(screen.getByRole('alert')).toHaveTextContent('your choices are kept');
     expect(screen.queryByText('Provider-private diagnostic')).not.toBeInTheDocument();
     expect(
-      within(screen.getByRole('dialog')).getByRole('button', { name: 'Update template' }),
-    ).toBeDisabled();
+      within(screen.getByRole('dialog')).queryByRole('button', { name: 'Update template' }),
+    ).not.toBeInTheDocument();
     mocks.isError = false;
     mocks.previewToken = 'sha256:refreshed';
     mocks.children = mocks.children.map((change) => ({
@@ -374,7 +407,9 @@ describe('existing work template header', () => {
     });
     const user = userEvent.setup();
     render(<WorkTemplateIdentityControl {...props} canEdit />);
-    await user.click(screen.getByRole('button', { name: 'Update template' }));
+    await user.click(screen.getByRole('button', { name: 'Template actions' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Update template' }));
+    await screen.findByRole('dialog');
     const added = screen.getByRole('checkbox', { name: 'Add review (1 item)' });
     expect(added).toBeChecked();
     expect(screen.getByText('Optional · Not included')).toBeVisible();
@@ -391,4 +426,45 @@ describe('existing work template header', () => {
     );
     expect(mocks.mutate.mock.calls[0]?.[0]).not.toHaveProperty('acceptChildChanges');
   });
+});
+
+it('keeps capture available to an authorized viewer without offering source changes', async () => {
+  const onCapture = vi.fn();
+  const user = userEvent.setup();
+  render(<WorkTemplateIdentityControl {...props} canEdit={false} onCapture={onCapture} />);
+  await user.click(screen.getByRole('button', { name: 'Template actions' }));
+  expect(screen.queryByRole('menuitem', { name: 'Change template' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('menuitem', { name: 'Update template' })).not.toBeInTheDocument();
+  await user.click(screen.getByRole('menuitem', { name: 'Save as template' }));
+  await waitFor(() => {
+    expect(onCapture).toHaveBeenCalledOnce();
+  });
+});
+
+it('lets a keyboard user return from template choices to contextual actions', async () => {
+  const user = userEvent.setup();
+  render(<WorkTemplateIdentityControl {...props} canEdit />);
+  screen.getByRole('button', { name: 'Template actions' }).focus();
+  await user.keyboard('[Enter]');
+  await user.click(screen.getByRole('menuitem', { name: 'Change template' }));
+  await user.click(screen.getByRole('menuitem', { name: 'Back to template actions' }));
+  expect(screen.getByRole('menuitem', { name: 'Update template' })).toBeVisible();
+  await user.keyboard('[Escape]');
+  await waitFor(() => {
+    expect(screen.getByRole('button', { name: 'Template actions' })).toHaveFocus();
+  });
+});
+
+it('states the pinned current version before offering a reviewed alternative', async () => {
+  const user = userEvent.setup();
+  render(<WorkTemplateIdentityControl {...props} canEdit />);
+  await user.click(screen.getByRole('button', { name: 'Template actions' }));
+  await user.click(screen.getByRole('menuitem', { name: 'Change template' }));
+  expect(screen.getByText('Choose a template to review before changing this work.')).toBeVisible();
+  expect(
+    screen.getByRole('menuitem', { name: 'Current template: Event · Version 1' }),
+  ).toHaveAttribute('aria-disabled', 'true');
+  await user.click(screen.getByRole('menuitem', { name: /Meeting/ }));
+  await screen.findByRole('dialog');
+  expect(mocks.mutate).not.toHaveBeenCalled();
 });

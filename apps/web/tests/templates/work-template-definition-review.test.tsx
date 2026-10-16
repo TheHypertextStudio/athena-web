@@ -75,8 +75,8 @@ describe('work definition publication review', () => {
   ] as const)('reads %s child %s documents in the publication review', (root, kind, body) => {
     render(<WorkTemplateForm orgId="org" initial={template(root)} onCreated={vi.fn()} />);
     const child = add(kind);
-    change('Child name', `Sample ${kind}`, child);
-    change('Child document', body, child);
+    change('Name', `Sample ${kind}`, child);
+    change('Document', body, child);
     fireEvent.click(screen.getByRole('tab', { name: 'Review' }));
     const review = screen.getByRole('region', { name: 'Work definition review' });
     expect(
@@ -97,11 +97,11 @@ describe('work definition publication review', () => {
     };
     render(<WorkTemplateForm orgId="org" initial={initial} onCreated={vi.fn()} />);
     const parent = add('task');
-    change('Child title', 'Prepare host handover', parent);
+    change('Title', 'Prepare host handover', parent);
     change('Responsible person', 'parent_responsible', parent);
     fireEvent.click(within(parent).getByRole('button', { name: 'Add subtask' }));
     const child = screen.getByRole('group', { name: 'Child work: New task' });
-    change('Child title', 'Confirm the next host', child);
+    change('Title', 'Confirm the next host', child);
     change('Responsible person', 'parent_responsible', child);
     fireEvent.click(screen.getByRole('tab', { name: 'Review' }));
     const review = screen.getByRole('region', { name: 'Work definition review' });
@@ -115,10 +115,14 @@ describe('work definition publication review', () => {
     });
     expect(within(nested).getByText('Confirm the next host')).toBeVisible();
     expect(
-      within(review).getByText('Program owner · Program team, otherwise selected team'),
+      within(review).getByText(
+        'Program owner · Same team as Program, or the team chosen for new work',
+      ),
     ).toBeVisible();
     expect(
-      within(nested).getByText('Parent assignee · Parent team, otherwise selected team'),
+      within(nested).getByText(
+        'Prepare host handover assignee · Same team as Prepare host handover, or the team chosen for new work',
+      ),
     ).toBeVisible();
     expect(within(review).queryByText('No cycle')).not.toBeInTheDocument();
     expect(within(review).queryByText('No dates set')).not.toBeInTheDocument();
@@ -136,27 +140,27 @@ describe('work definition publication review', () => {
     initial.definition.defaultStatusKey = 'backlog';
     render(<WorkTemplateForm orgId="org" initial={initial} onCreated={vi.fn()} />);
     const first = add('task');
-    change('Child title', 'Book venue', first);
+    change('Title', 'Book venue', first);
     fireEvent.click(within(first).getByRole('button', { name: 'Add a summary' }));
-    change('Child summary', 'Confirm capacity and access', first);
-    change('Child document', '## Venue terms', first);
+    change('Summary', 'Confirm capacity and access', first);
+    change('Document', '## Venue terms', first);
     fireEvent.click(within(first).getByRole('button', { name: 'Starting properties' }));
-    change('Child priority', 'high', first);
+    change('Priority', 'high', first);
     const second = add('task');
-    change('Child title', 'Confirm accessibility', second);
-    change('Cycle rule', 'current_cycle', second);
+    change('Title', 'Confirm accessibility', second);
+    change('Cycle', 'current_cycle', second);
     fireEvent.click(within(second).getByRole('button', { name: 'Dates' }));
-    fireEvent.click(within(second).getByLabelText('Blocked by Book venue'));
-    change('Nested template', nestedId, second);
+    fireEvent.click(within(second).getByLabelText('Wait for Book venue'));
+    change('Start from template', nestedId, second);
     change('Template version', 'pinned', second);
-    change('Pinned version', versionId, second);
+    change('Version to keep', versionId, second);
     fireEvent.click(screen.getByRole('tab', { name: 'Review' }));
     const review = screen.getByRole('region', { name: 'Work definition review' });
     expect(within(review).getByText('Community dinner sample')).toBeVisible();
     expect(within(review).getByText('An accessible neighborhood meal')).toBeVisible();
     fireEvent.click(within(review).getByRole('button', { name: 'Starting properties' }));
     expect(within(review).getByText(/High priority.*At risk.*Backlog/)).toBeVisible();
-    expect(within(review).getByText('Blocked by Book venue')).toBeVisible();
+    expect(within(review).getByText('Wait for Book venue')).toBeVisible();
     fireEvent.click(
       within(review).getByRole('button', { name: 'Starting details for Book venue' }),
     );
@@ -164,6 +168,6 @@ describe('work definition publication review', () => {
     expect(within(review).getByRole('heading', { name: 'Venue terms' })).toBeVisible();
     expect(within(review).getByText('High priority')).toBeVisible();
     expect(within(review).getByText('Current cycle for the selected team')).toBeVisible();
-    expect(within(review).getByText('Vendor booking · Fixed at Version 2')).toBeVisible();
+    expect(within(review).getByText('Vendor booking · Keep Version 2')).toBeVisible();
   });
 });

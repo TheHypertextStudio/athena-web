@@ -12,6 +12,13 @@ import { fullSchema } from '../../src/client';
 import { migrateWithWorkTemplateCheckpoint } from '../../src/migrate-work-templates';
 import { migrationRows } from '../../src/work-template-blueprint-migration/query';
 import {
+  registerRetainedDateOwnership,
+  markRetainedDatesManual,
+  type RetainedDateSourceScope,
+} from '../../src/retained-date-ownership';
+import { retainedDateOwnership } from '../../src/schema/retained-date-ownership';
+import { genId } from '../../src/id';
+import {
   prepareBlueprintRetainedFixture,
   type BlueprintRetainedFixture,
 } from '../fixtures/work-template-blueprint-migration';
@@ -62,6 +69,87 @@ it('retains exact mapped Project and Milestone ownership alongside Task timing',
     { work_kind: 'project', field: 'targetDate', manual: true },
     { work_kind: 'task', field: 'dueDate', manual: true },
   ]);
+});
+it('registers exact source dates, preserves replayed ownership, and returns only manual transitions', async () => {
+  const rollback = new Error('Roll back ownership API fixture');
+  await expect(
+    database.transaction(async (tx) => {
+      const scopes = await migrationRows<RetainedDateSourceScope>(
+        tx,
+        sql`select distinct organization_id as "organizationId",occurrence_id as "occurrenceId",invocation_id as "invocationId",source_step_id as "sourceStepId",work_kind as "workKind",work_id as "workId" from work_template_retained_date_ownership where organization_id=${fixture.organizationId} order by work_kind`,
+      );
+      await tx.execute(
+        sql`delete from work_template_retained_date_ownership where organization_id=${fixture.organizationId}`,
+      );
+      for (const scope of scopes) {
+        await registerRetainedDateOwnership(tx, {
+          ...scope,
+          dates: { startDate: '2026-11-02', targetDate: '2026-11-09' },
+          ...(scope.workKind === 'project'
+            ? { manualFields: new Set<'startDate'>(['startDate']) }
+            : {}),
+        });
+      }
+      const registered = await tx.select().from(retainedDateOwnership);
+      expect(
+        registered
+          .map((row) => ({
+            kind: row.workKind,
+            field: row.field,
+            manual: row.manual,
+            date: row.lastDerivedDate,
+          }))
+          .sort((a, b) => `${a.kind}:${a.field}`.localeCompare(`${b.kind}:${b.field}`)),
+      ).toEqual([
+        { kind: 'milestone', field: 'targetDate', manual: false, date: '2026-11-09' },
+        { kind: 'project', field: 'startDate', manual: true, date: '2026-11-02' },
+        { kind: 'project', field: 'targetDate', manual: false, date: '2026-11-09' },
+        { kind: 'task', field: 'dueDate', manual: false, date: null },
+      ]);
+      for (const scope of scopes) {
+        await registerRetainedDateOwnership(tx, {
+          ...scope,
+          dates: { dueDate: '2027-01-01', targetDate: null },
+          manualFields: new Set(['dueDate', 'targetDate']),
+        });
+        await registerRetainedDateOwnership(tx, { ...scope, organizationId: genId(), dates: {} });
+        await registerRetainedDateOwnership(tx, { ...scope, workId: genId(), dates: {} });
+      }
+      expect(await tx.select().from(retainedDateOwnership)).toEqual(registered);
+      const changes = await markRetainedDatesManual(tx, {
+        organizationId: fixture.organizationId,
+        workKind: 'project',
+        workId: fixture.projectId,
+        fields: ['startDate', 'targetDate', 'dueDate'],
+      });
+      const target = registered.find(
+        (row) => row.workKind === 'project' && row.field === 'targetDate',
+      );
+      expect(target).toBeDefined();
+      expect(changes).toEqual([{ before: target, after: { ...target, manual: true } }]);
+      expect(
+        await markRetainedDatesManual(tx, {
+          organizationId: fixture.organizationId,
+          workKind: 'project',
+          workId: fixture.projectId,
+          fields: ['startDate', 'targetDate'],
+        }),
+      ).toEqual([]);
+      expect(
+        await markRetainedDatesManual(tx, {
+          organizationId: genId(),
+          workKind: 'task',
+          workId: fixture.taskId,
+          fields: ['dueDate'],
+        }),
+      ).toEqual([]);
+      expect(
+        (await tx.select().from(retainedDateOwnership)).find((row) => row.workKind === 'task')
+          ?.manual,
+      ).toBe(false);
+      throw rollback;
+    }),
+  ).rejects.toBe(rollback);
 });
 it('refuses a forged physical work identity or unsupported date field', async () => {
   await expect(

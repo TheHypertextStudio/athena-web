@@ -5,6 +5,110 @@ import { genId } from '../../src/id';
 import { hashScheduleArchive } from '../../src/work-schedule-archive';
 import { migrationRows } from '../../src/work-template-blueprint-migration/query';
 import type { BlueprintRetainedFixture } from './work-template-blueprint-migration';
+import { WorkScheduleDraft } from '@docket/work/work-schedule';
+import { WorkScheduleForest } from '@docket/work/work-schedule-forest';
+import { WorkScheduleRevisionFallback } from '@docket/work/work-schedule-fallback';
+import {
+  persistScheduleForestInvocation,
+  registerScheduleAuthoringFallback,
+  registerScheduleDraft,
+} from '../../src/work-schedule-storage';
+
+/** Exercise native storage APIs against tenant-bound rows, including one-time registration. */
+export async function exerciseNativeScheduleStorage(
+  database: Database,
+  fixture: BlueprintRetainedFixture,
+): Promise<void> {
+  const [selection] = await migrationRows<{ id: string; versionId: string }>(
+    database,
+    sql`select id,latest_published_version_id as "versionId" from template where organization_id=${fixture.organizationId} and target_type='task' and is_base`,
+  );
+  assert.ok(selection);
+  const series = genId();
+  await database.execute(
+    sql`insert into recurrence_series(id,organization_id,name) values(${series},${fixture.organizationId},'Native authoring')`,
+  );
+  for (const kind of ['schedule', 'forest'] as const) {
+    const revision = genId();
+    const documents = scheduleClaimDocuments(fixture, selection, revision);
+    const draft = WorkScheduleDraft.parse(documents.draft);
+    const forest = WorkScheduleForest.parse({
+      kind: 'forest',
+      revision: 1,
+      state: 'published',
+      roots: [{ key: 'root', draft }],
+      dependencies: [],
+      timing: [],
+    });
+    const document = kind === 'forest' ? forest : draft;
+    await database.execute(
+      sql`insert into recurrence_series_revision(id,organization_id,series_id,number,effective_from,trigger_kind) values(${revision},${fixture.organizationId},${series},${kind === 'forest' ? 2 : 1},${kind === 'forest' ? '2026-10-16' : '2026-10-15'}::date,'manual')`,
+    );
+    const register = (organizationId: string) =>
+      registerScheduleDraft(database, {
+        organizationId,
+        seriesRevisionId: revision,
+        draft: document,
+      });
+    await assert.rejects(register(genId()), /one unregistered revision/);
+    await register(fixture.organizationId);
+    await assert.rejects(register(fixture.organizationId), /one unregistered revision/);
+    const fallback = WorkScheduleRevisionFallback.parse({
+      ...documents.fallback,
+      draftFingerprint: hashScheduleArchive(document),
+    });
+    await assert.rejects(
+      registerScheduleAuthoringFallback(database, { organizationId: genId(), fallback }),
+      /one unregistered revision/,
+    );
+    await registerScheduleAuthoringFallback(database, {
+      organizationId: fixture.organizationId,
+      fallback,
+    });
+    await assert.rejects(
+      registerScheduleAuthoringFallback(database, {
+        organizationId: fixture.organizationId,
+        fallback,
+      }),
+      /one unregistered revision/,
+    );
+    const [saved] = await migrationRows<{ draft: unknown; fallback: unknown }>(
+      database,
+      sql`select schedule_draft as draft,authoring_fallback as fallback from recurrence_series_revision where id=${revision}`,
+    );
+    assert.deepEqual(saved, { draft: document, fallback });
+    await assertStoredForests(database, fixture, forest);
+  }
+}
+
+async function assertStoredForests(
+  database: Database,
+  fixture: BlueprintRetainedFixture,
+  forest: WorkScheduleForest,
+): Promise<void> {
+  for (const ownerActorId of [fixture.actorId, null]) {
+    const id = await persistScheduleForestInvocation(database, {
+      organizationId: fixture.organizationId,
+      ownerActorId,
+      document: forest,
+    });
+    const [stored] = await migrationRows<{
+      organizationId: string;
+      owner: string | null;
+      manifest: unknown;
+      overrides: unknown;
+    }>(
+      database,
+      sql`select organization_id as "organizationId",owner_actor_id as owner,manifest,overrides from work_template_blueprint_invocation where id=${id}`,
+    );
+    assert.deepEqual(stored, {
+      organizationId: fixture.organizationId,
+      owner: ownerActorId,
+      manifest: forest,
+      overrides: [],
+    });
+  }
+}
 
 /** Exercise accepted claim immutability, monotonic ordinal, failed-work survival and stale attempt CAS. */
 export async function exerciseScheduleClaims(

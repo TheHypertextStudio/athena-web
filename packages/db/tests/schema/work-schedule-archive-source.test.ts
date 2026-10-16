@@ -118,6 +118,129 @@ function changeSort(row: ScheduleArchiveSource, id: string, sort: number): Sched
   };
 }
 describe('original retained source ordering proof', () => {
+  it.each([
+    'steps',
+    'tasks',
+    'projects',
+    'milestones',
+    'taskLabels',
+    'projectLabels',
+    'dependencies',
+  ])('rejects a missing %s source collection', (field) => {
+    const row = source();
+    expect(() => {
+      verifyOriginalScheduleSource({ ...row, source: { ...row.source, [field]: null } });
+    }).toThrow('source is incomplete');
+  });
+  it('refuses changed graph membership and source keys even when a fingerprint is unchanged', () => {
+    const row = source();
+    const steps = row.source['steps'] as Record<string, unknown>[];
+    for (const changedSteps of [
+      steps.slice(1),
+      steps.map((step, index) => (index === 0 ? { ...step, id: 'unknown' } : step)),
+    ])
+      expect(() => {
+        verifyOriginalScheduleSource({ ...row, source: { ...row.source, steps: changedSteps } });
+      }).toThrow('source graph differs');
+    expect(() => {
+      verifyOriginalScheduleSource({
+        ...row,
+        source: { ...row.source, steps: steps.map((step) => ({ ...step, key: 'renamed' })) },
+      });
+    }).toThrow('source keys differ');
+  });
+  it('compares retained scalar fields and every immutable timing fact', () => {
+    const row = source();
+    expect(() => {
+      verifyOriginalScheduleSource({
+        ...row,
+        overrides: row.overrides.filter((entry) => entry.kind !== 'task'),
+      });
+    }).toThrow('source fields differ');
+    expect(() => {
+      verifyOriginalScheduleSource({
+        ...row,
+        source: {
+          ...row.source,
+          tasks: [{ step_id: 'task', title: 'Changed title', project_step_id: 'project' }],
+        },
+      });
+    }).toThrow('source fields differ');
+    for (const difference of [
+      { kind: 'milestone' },
+      { timing: { kind: 'on_trigger', offsetDays: 1, afterStepId: null } },
+      { timing: { kind: 'on_trigger', offsetDays: null, afterStepId: 'project' } },
+      { timing: { kind: 'after_step', offsetDays: null, afterStepId: null } },
+    ])
+      expect(() => {
+        verifyOriginalScheduleSource({
+          ...row,
+          overrides: row.overrides.map((entry) =>
+            entry.kind === 'task' ? { ...entry, ...difference } : entry,
+          ),
+        } as ScheduleArchiveSource);
+      }).toThrow('source timing differs');
+  });
+  it('matches both task and project labels as unordered original identities', () => {
+    const row = source();
+    const labeled = {
+      ...row,
+      source: {
+        ...row.source,
+        taskLabels: [
+          { task_step_id: 'task', label_id: 'b' },
+          { task_step_id: 'task', label_id: 'a' },
+        ],
+        projectLabels: [{ project_step_id: 'project', label_id: 'c' }],
+      },
+      overrides: row.overrides.map((entry) => ({
+        ...entry,
+        fields: { ...entry.fields, labelIds: entry.kind === 'task' ? ['a', 'b'] : ['c'] },
+      })),
+    };
+    expect(() => {
+      verifyOriginalScheduleSource(labeled);
+    }).not.toThrow();
+    expect(() => {
+      verifyOriginalScheduleSource({ ...labeled, source: { ...labeled.source, taskLabels: [] } });
+    }).toThrow('source labels differ');
+  });
+  it('compares dependency direction while ignoring storage order', () => {
+    const row = source();
+    const edges = [
+      { blocking_step_id: 'project', blocked_step_id: 'task' },
+      { blocking_step_id: 'task', blocked_step_id: 'project' },
+    ];
+    const dependencies = [
+      { blockerStepId: 'task', blockedStepId: 'project' },
+      { blockerStepId: 'project', blockedStepId: 'task' },
+    ];
+    const connected = {
+      ...row,
+      source: { ...row.source, dependencies: edges },
+      manifest: { ...row.manifest, dependencies },
+    };
+    expect(() => {
+      verifyOriginalScheduleSource(connected);
+    }).not.toThrow();
+    expect(() => {
+      verifyOriginalScheduleSource({
+        ...connected,
+        source: { ...connected.source, dependencies: edges.slice(1) },
+      });
+    }).toThrow('source dependencies differ');
+  });
+  it('rejects malformed fingerprints and noninteger or negative source order', () => {
+    const row = source();
+    for (const fingerprints of [{ fingerprint: 'invalid' }, { originalFingerprint: 'invalid' }])
+      expect(() => {
+        verifyOriginalScheduleSource({ ...row, ...fingerprints });
+      }).toThrow('ordering evidence');
+    for (const sort of [-1, 0.5])
+      expect(() => {
+        verifyOriginalScheduleSource(changeSort(row, 'task', sort));
+      }).toThrow('ordering is invalid');
+  });
   it('accepts an unchanged original whole MD5 and explicit child projection sort, without deriving root sort from array position', () => {
     expect(() => {
       verifyOriginalScheduleSource(source());
@@ -195,5 +318,25 @@ describe('original retained source ordering proof', () => {
     expect(() => {
       verifyOriginalScheduleSource({ ...row, originalStepOrders: [{ ...original, sort: 99 }] });
     }).toThrow('ordering evidence');
+  });
+  it('requires one exact matching immutable projection for each projected child', () => {
+    const row = source();
+    const original = row.originalStepOrders[0];
+    if (!original) throw new Error('Missing projection fixture');
+    for (const originalStepOrders of [
+      [],
+      [original, original],
+      [{ ...original, blueprintStepId: 'another-projection' }],
+      [{ ...original, sourceVersionId: 'another-publication' }],
+      [{ ...original, key: 'another-path' }],
+      [{ ...original, kind: 'project' }],
+      [{ ...original, sort: null }],
+      [{ ...original, sort: -1, stepSort: -1, definitionSort: -1 }],
+      [{ ...original, sort: 0.5, stepSort: 0.5, definitionSort: 0.5 }],
+      [{ ...original, definitionSort: 6 }],
+    ])
+      expect(() => {
+        verifyOriginalScheduleSource({ ...row, originalStepOrders });
+      }).toThrow('ordering evidence');
   });
 });

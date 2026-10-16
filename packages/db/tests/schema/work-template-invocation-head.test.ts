@@ -17,9 +17,11 @@ describe('private compatibility invocation heads', () => {
       'description',
       'status',
       'revision',
+      'canonicalAuthoringAt',
       'draftInvocationId',
       'publishedInvocationId',
     ]);
+    expect(getTableColumns(invocationHead).canonicalAuthoringAt.notNull).toBe(false);
     const config = getTableConfig(invocationHead);
     expect(config.enableRLS).toBe(true);
     expect(config.policies.map((policy) => policy.name)).toContain('invocation_head_private');

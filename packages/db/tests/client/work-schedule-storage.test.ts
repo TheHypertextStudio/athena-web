@@ -45,6 +45,10 @@ beforeAll(async () => {
 afterAll(async () => client.close());
 
 describe('canonical schedule storage expansion', () => {
+  it('persists native forests and registers tenant-bound drafts and fallbacks exactly once', async () => {
+    const { exerciseNativeScheduleStorage } = await import('../fixtures/work-schedule-storage');
+    await exerciseNativeScheduleStorage(database, fixture);
+  });
   it('stores a private definition head without creating visible wrapper work', async () => {
     const id = genId();
     const [before] = await migrationRows<{ count: number }>(
@@ -137,6 +141,38 @@ describe('nonexecuting historical pagination', () => {
     });
     expect(first.references).toEqual(references.slice(0, 500));
     expect(first.nextOffset).toBe(500);
+    const defaults = await readScheduleHistoricalReferences(database, {
+      organizationId: fixture.organizationId,
+      occurrenceId: id,
+    });
+    expect(defaults).toEqual({ references: references.slice(0, 100), nextOffset: 100 });
+    expect(
+      await readScheduleHistoricalReferences(database, {
+        organizationId: genId(),
+        occurrenceId: id,
+      }),
+    ).toEqual({ references: [], nextOffset: null });
+    expect(
+      await readScheduleHistoricalReferences(database, {
+        organizationId: fixture.organizationId,
+        occurrenceId: id,
+        offset: 601,
+      }),
+    ).toEqual({ references: [], nextOffset: null });
+    for (const pagination of [
+      { offset: -1 },
+      { offset: 0.5 },
+      { limit: 0 },
+      { limit: 501 },
+      { limit: 1.5 },
+    ])
+      await expect(
+        readScheduleHistoricalReferences(database, {
+          organizationId: fixture.organizationId,
+          occurrenceId: id,
+          ...pagination,
+        }),
+      ).rejects.toThrow(RangeError);
     const final = await readScheduleHistoricalReferences(database, {
       organizationId: fixture.organizationId,
       occurrenceId: id,
@@ -158,6 +194,48 @@ describe('private schedule scopes', () => {
 });
 
 describe('immutable source and historical archives', () => {
+  it('retains unmapped selected identities and avoids duplicating live mappings', async () => {
+    const { archiveHistoricalSelections } =
+      await import('../../src/work-schedule-archive-selections');
+    expect(await archiveHistoricalSelections(database, null, [])).toEqual([]);
+    const [occurrence] = await migrationRows<{
+      id: string;
+      roots: { key: string; kind: string; id: string }[];
+    }>(
+      database,
+      sql`select id,blueprint_root_refs as roots from process_occurrence where organization_id=${fixture.organizationId} and blueprint_invocation_id is not null and blueprint_root_refs is not null order by id limit 1`,
+    );
+    if (!occurrence) throw new Error('Missing retained occurrence.');
+    const retained = await archiveHistoricalSelections(database, occurrence.id, []);
+    expect(retained).toEqual(
+      occurrence.roots
+        .map((root) => ({
+          rootKey: root.key,
+          selection: { path: [], kind: root.kind, id: root.id },
+          deleted: false,
+        }))
+        .sort((a, b) => a.rootKey.localeCompare(b.rootKey)),
+    );
+    const mappings = occurrence.roots.map((root) => ({
+      kind: root.kind,
+      mapping: { [`${root.kind}_id`]: root.id },
+    }));
+    expect(await archiveHistoricalSelections(database, occurrence.id, mappings)).toEqual([]);
+    const project = occurrence.roots.find((root) => root.kind === 'project');
+    if (!project) throw new Error('Missing retained project.');
+    const rollback = new Error('Roll back deleted selection fixture');
+    await expect(
+      database.transaction(async (tx) => {
+        await tx.execute(sql`delete from project where id=${project.id}`);
+        expect(await archiveHistoricalSelections(tx, occurrence.id, [])).toContainEqual({
+          rootKey: project.key,
+          selection: { path: [], kind: project.kind, id: project.id },
+          deleted: true,
+        });
+        throw rollback;
+      }),
+    ).rejects.toBe(rollback);
+  });
   it('preserves every original immutable invocation and original fingerprint across resumable conversion', async () => {
     const { backfillWorkScheduleArchives, verifyWorkScheduleArchives } =
       await import('../../src/work-schedule-archive');
@@ -165,6 +243,21 @@ describe('immutable source and historical archives', () => {
       database,
       sql`select c.legacy_process_revision_id,c.source_fingerprint,i.manifest,i.overrides from work_template_blueprint_conversion c join work_template_blueprint_invocation i on i.id=c.invocation_id order by c.legacy_process_revision_id`,
     );
+    const historical: { id: string; status: string }[] = [];
+    for (const status of ['completed', 'canceled', 'failed', 'pending', 'active']) {
+      const id = genId();
+      await database.execute(
+        sql`insert into process_instance(id,organization_id,definition_id,revision_id,status) select ${id},organization_id,definition_id,id,${status}::process_instance_status from process_revision where id=${fixture.forestRevisionId}`,
+      );
+      historical.push({
+        id,
+        status: ['pending', 'active'].includes(status) ? 'needs_resolution' : status,
+      });
+    }
+    for (const batchSize of [0, 1001, 1.5])
+      await expect(backfillWorkScheduleArchives(database, { batchSize })).rejects.toThrow(
+        RangeError,
+      );
     await expect(
       backfillWorkScheduleArchives(database, {
         batchSize: 1,
@@ -180,6 +273,54 @@ describe('immutable source and historical archives', () => {
     expect(committed?.count).toBe(1);
     await backfillWorkScheduleArchives(database, { batchSize: 1 });
     await verifyWorkScheduleArchives(database);
+    for (const expected of historical) {
+      const [saved] = await migrationRows<{
+        id: string;
+        status: string;
+        runKind: string;
+        references: unknown;
+      }>(
+        database,
+        sql`select legacy_instance_id as id,status,run_kind as "runKind",historical_archive->'references' as references from process_occurrence where legacy_instance_id=${expected.id}`,
+      );
+      expect(saved).toEqual({ ...expected, runKind: 'historical', references: [] });
+    }
+    const rollback = new Error('Roll back changed historical source');
+    await expect(
+      database.transaction(async (tx) => {
+        await tx.execute(
+          sql`update process_instance set status='failed' where id=${historical[0]?.id}`,
+        );
+        await expect(verifyWorkScheduleArchives(tx)).rejects.toThrow(
+          'Historical instance source changed',
+        );
+        throw rollback;
+      }),
+    ).rejects.toBe(rollback);
+    await expect(
+      database.transaction(async (tx) => {
+        await tx.execute(
+          sql`insert into process_instance(id,organization_id,definition_id,revision_id) select ${genId()},organization_id,definition_id,id from process_revision where id=${fixture.forestRevisionId}`,
+        );
+        await expect(verifyWorkScheduleArchives(tx)).rejects.toThrow(
+          'Schedule instance archive is incomplete',
+        );
+        throw rollback;
+      }),
+    ).rejects.toBe(rollback);
+    const { verifyHistoricalMappingArchives } =
+      await import('../../src/work-schedule-archive-selections');
+    await expect(
+      database.transaction(async (tx) => {
+        await tx.execute(
+          sql`delete from process_instance_task where organization_id=${fixture.organizationId}`,
+        );
+        await expect(verifyHistoricalMappingArchives(tx)).rejects.toThrow(
+          'Historical instance mappings changed',
+        );
+        throw rollback;
+      }),
+    ).rejects.toBe(rollback);
     expect(
       await migrationRows(
         database,

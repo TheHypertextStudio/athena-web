@@ -10,14 +10,13 @@ import { afterAll, beforeAll, expect, it } from 'vitest';
 import { fullSchema, type Database } from '../../src/client';
 import { genId } from '../../src/id';
 import { withMigrationPrefix } from '../../src/migration-prefix';
+import { migrateWithWorkTemplateCheckpoint } from '../../src/migrate-work-templates';
+import { provisionMigrationBases } from '../../src/work-template-migration/bases';
 import {
   organization,
-  processDefinition,
-  processRevision,
   processStep,
   processTaskSpec,
   task,
-  team,
   template,
   workTypeVersion,
 } from '../../src/schema';
@@ -74,38 +73,27 @@ beforeAll(async () => {
     '0152_work_template_identity_enforce',
     applySqlMigrations,
   );
-  organizationId = assertDefined(
-    (
-      await database
-        .insert(organization)
-        .values({ name: 'Recurring templates', slug: 'recurring-templates' })
-        .returning()
-    )[0],
-  ).id;
-  teamId = assertDefined(
-    (
-      await database.insert(team).values({ organizationId, name: 'Core', key: 'CORE' }).returning()
-    )[0],
-  ).id;
-  const definition = assertDefined(
-    (
-      await database
-        .insert(processDefinition)
-        .values({ organizationId, name: 'Repeat' })
-        .returning()
-    )[0],
-  );
-  revisionId = assertDefined(
-    (
-      await database
-        .insert(processRevision)
-        .values({ organizationId, definitionId: definition.id, number: 1 })
-        .returning()
-    )[0],
-  ).id;
-  retainedStepId = await step();
+  organizationId = genId();
+  teamId = genId();
+  const definitionId = genId();
+  revisionId = genId();
+  retainedStepId = genId();
+  // Historical setup uses only checkpoint columns; current Drizzle also includes later fields.
+  await database.execute(sql`insert into organization (id, name, slug)
+    values (${organizationId}, 'Recurring templates', 'recurring-templates')`);
+  await database.execute(sql`insert into team (id, organization_id, name, key)
+    values (${teamId}, ${organizationId}, 'Core', 'CORE')`);
+  await database.execute(sql`insert into process_definition (id, organization_id, name)
+    values (${definitionId}, ${organizationId}, 'Repeat')`);
+  await database.execute(sql`insert into process_revision (id, organization_id, definition_id, number)
+    values (${revisionId}, ${organizationId}, ${definitionId}, 1)`);
+  await database.execute(sql`insert into process_step
+    (id, organization_id, revision_id, key, kind, timing_kind)
+    values (${retainedStepId}, ${organizationId}, ${revisionId}, ${genId()}, 'task', 'on_trigger')`);
   await database.execute(sql`insert into process_task_spec (step_id, organization_id, title, team_id)
     values (${retainedStepId}, ${organizationId}, 'Retained recurring task', ${teamId})`);
+  await database.transaction((transaction) => provisionMigrationBases(transaction, organizationId));
+  await migrateWithWorkTemplateCheckpoint(database, { migrationsFolder, applySqlMigrations });
   statusId = assertDefined(
     (await seedWorkspaceStatuses(database, organizationId)).get(statusLookupKey('task', 'backlog')),
   );
@@ -118,7 +106,7 @@ beforeAll(async () => {
     )[0],
   ).id;
   await seedWorkspaceStatuses(database, foreignId);
-  const bases = await database.select().from(template);
+  const bases = await database.select().from(template).where(eq(template.isBase, true));
   taskBase = assertDefined(
     bases.find((row) => row.organizationId === organizationId && row.targetType === 'task'),
   );
@@ -128,7 +116,6 @@ beforeAll(async () => {
   foreignTaskBase = assertDefined(
     bases.find((row) => row.organizationId === foreignId && row.targetType === 'task'),
   );
-  await applySqlMigrations(migrationsFolder);
 });
 
 afterAll(async () => {

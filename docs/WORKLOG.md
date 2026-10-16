@@ -7,6 +7,39 @@
 
 ## Active Tasks
 
+### [WEBSITE-CI-DB-COVERAGE] Preserve ordinary database boundary coverage
+
+- **Status**: COMPLETE
+- **Priority**: P1
+- **Description**: Exercise frozen publication parsing, retained blueprint validation, native
+  schedule persistence and historical recovery through the existing database package suites.
+- **Approach**: Extend ordinary tests with valid historical inputs, malformed source refusals,
+  transactional replay and tenant boundaries. Preserve production migrations, application code,
+  inclusion rules and the existing coverage requirements.
+- **Files**: Existing database client/schema suites, their retained fixtures and this worklog.
+- **Subtasks**:
+  - [x] Cover historical format and retained graph boundaries without changing frozen defaults.
+  - [x] Cover native schedule persistence, original receipts and replay isolation.
+  - [x] Keep the invocation-head schema inventory aligned with its nullable canonical-authoring marker.
+  - [x] Pass ordinary package coverage and affected lint, types and formatting.
+  - [x] Independently review assertion fidelity and unchanged production/gate scope.
+
+### [WEBSITE-RECURRENCE-MIGRATION-FIXTURE] Preserve the recurrence fixture's historical schema
+
+- **Status**: COMPLETE
+- **Priority**: P1
+- **Description**: Exercise retained recurrence data through the real upgrade from checkpoint
+  0152 without reading or inserting columns that did not exist at that checkpoint.
+- **Approach**: Seed explicit historical columns and use the existing frozen base provisioner.
+  Apply the normal checkpoint-aware upgrade before current workspace provisioning and template
+  reads. Preserve all retention, publication, tenant, pair and kind constraints.
+- **Files**: Existing recurrence-template schema checks and this worklog.
+- **Subtasks**:
+  - [x] Keep the pre-0153 retained task spec and historical schema faithful.
+  - [x] Run the normal data checkpoint and retain all seven existing assertions.
+  - [x] Validate the focused schema checks, package coverage and affected lint/types/format.
+  - [x] Independently review the unchanged migration and application scope.
+
 ### [WEBSITE-RELEASE-DOCS-INPUT] Document the native release check's Mintlify input
 
 - **Status**: COMPLETE

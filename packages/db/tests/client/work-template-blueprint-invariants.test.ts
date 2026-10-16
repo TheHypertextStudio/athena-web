@@ -11,6 +11,7 @@ import { fullSchema } from '../../src/client';
 import { genId } from '../../src/id';
 import { migrateWithWorkTemplateCheckpoint } from '../../src/migrate-work-templates';
 import { persistBlueprintProjection } from '../../src/work-template-blueprint-projection';
+import { blueprintDependency, blueprintStep } from '../../src/schema/work-template-blueprint';
 import { migrationRows } from '../../src/work-template-blueprint-migration/query';
 import { exerciseBlueprintInvocationWrites } from '../fixtures/work-template-blueprint-invocation';
 import {
@@ -91,6 +92,139 @@ it('rejects independent projection mutation and deletion', async () => {
   await expect(database.execute(sql`update blueprint_step set sort=sort+1`)).rejects.toThrow();
   await expect(database.execute(sql`delete from blueprint_step`)).rejects.toThrow();
 });
+
+it('refuses a missing or foreign publication before allocating a projection', async () => {
+  const blueprint = WorkTemplateDefinition.parse(publication.definition).blueprint;
+  for (const input of [
+    { organizationId: fixture.organizationId, versionId: genId(), blueprint },
+    { organizationId: genId(), versionId: publication.id, blueprint },
+  ])
+    await expect(persistBlueprintProjection(database, input)).rejects.toThrow(
+      'publication not found',
+    );
+});
+
+it('refuses a projection that differs from its immutable publication', async () => {
+  const blueprint = WorkTemplateDefinition.parse(publication.definition).blueprint;
+  await expect(
+    persistBlueprintProjection(database, {
+      organizationId: fixture.organizationId,
+      versionId: publication.id,
+      blueprint: { ...blueprint, steps: [] },
+    }),
+  ).rejects.toThrow('differs from publication');
+});
+
+it('replays a historical publication without blueprint as an empty projection', async () => {
+  const [base] = await migrationRows<{ id: string }>(
+    database,
+    sql`select latest_published_version_id as id from template where organization_id=${fixture.organizationId} and target_type='task' and is_base`,
+  );
+  expect(
+    await persistBlueprintProjection(database, {
+      organizationId: fixture.organizationId,
+      versionId: requiredRow(base).id,
+      blueprint: { steps: [], dependencies: [] },
+    }),
+  ).toEqual({});
+});
+
+const dependencyDefinition = () =>
+  WorkTemplateDefinition.parse({
+    name: 'Ordered sibling Tasks',
+    payload: { targetType: 'project' },
+    blueprint: {
+      steps: ['a', 'b', 'c'].map((key) => ({
+        key,
+        kind: 'task',
+        parentStepKey: null,
+        sort: 0,
+        optional: { enabled: false, selectedByDefault: true },
+        template: null,
+        fields: { title: key },
+        teamRule: 'creation_team',
+        actorRule: 'unassigned',
+        cycleRule: 'none',
+        dates: {},
+      })),
+      dependencies: [{ blockerStepKey: 'a', blockedStepKey: 'b' }],
+    },
+  });
+
+it('persists native dependency endpoints and reuses the exact projected IDs on replay', async () => {
+  const versionId = genId();
+  const definition = dependencyDefinition();
+  await database.transaction(async (tx) => {
+    await tx.execute(
+      sql`insert into work_type_version(id,organization_id,work_type_id,number,definition) values(${versionId},${fixture.organizationId},${publication.work_type_id},10,${JSON.stringify(definition)}::jsonb)`,
+    );
+    const input = {
+      organizationId: fixture.organizationId,
+      versionId,
+      blueprint: definition.blueprint,
+    };
+    const ids = await persistBlueprintProjection(tx, input);
+    expect(Object.keys(ids)).toEqual(['a', 'b', 'c']);
+    expect(
+      await migrationRows(
+        tx,
+        sql`select blocker_step_id,blocked_step_id from blueprint_dependency where version_id=${versionId}`,
+      ),
+    ).toEqual([{ blocker_step_id: ids['a'], blocked_step_id: ids['b'] }]);
+    expect(await persistBlueprintProjection(tx, input)).toEqual(ids);
+  });
+});
+
+it.each(['missing-step', 'missing-edge'] as const)(
+  'refuses %s projection replay and rolls the incomplete publication back',
+  async (fault) => {
+    const definition = dependencyDefinition();
+    const versionId = genId();
+    await expect(
+      database.transaction(async (tx) => {
+        await tx.execute(
+          sql`insert into work_type_version(id,organization_id,work_type_id,number,definition) values(${versionId},${fixture.organizationId},${publication.work_type_id},11,${JSON.stringify(definition)}::jsonb)`,
+        );
+        const ids = Object.fromEntries(['a', 'b', 'c'].map((key) => [key, genId()]));
+        for (const original of definition.blueprint.steps) {
+          if (fault === 'missing-step' && original.key === 'c') continue;
+          const step = original;
+          await tx.insert(blueprintStep).values({
+            id: requiredRow(ids[original.key]),
+            organizationId: fixture.organizationId,
+            versionId,
+            key: step.key,
+            kind: step.kind,
+            parentStepKey: step.parentStepKey,
+            sort: step.sort,
+            step,
+          });
+        }
+        if (fault !== 'missing-edge')
+          await tx.insert(blueprintDependency).values({
+            organizationId: fixture.organizationId,
+            versionId,
+            blockerStepId: requiredRow(ids['a']),
+            blockedStepId: requiredRow(ids['b']),
+          });
+        await persistBlueprintProjection(tx, {
+          organizationId: fixture.organizationId,
+          versionId,
+          blueprint: definition.blueprint,
+        });
+      }),
+    ).rejects.toThrow('projection is incomplete or different');
+    expect(
+      await migrationRows(database, sql`select id from work_type_version where id=${versionId}`),
+    ).toEqual([]);
+    expect(
+      await migrationRows(
+        database,
+        sql`select id from blueprint_step where version_id=${versionId}`,
+      ),
+    ).toEqual([]);
+  },
+);
 it('rejects unsupported manual-date fields and malformed binding members', async () => {
   await expect(
     database.execute(

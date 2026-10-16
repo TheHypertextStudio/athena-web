@@ -7,6 +7,97 @@ import type {
 } from '../../src/blueprint-invocation';
 import { migrationRows } from '../../src/work-template-blueprint-migration/query';
 import type { BlueprintRetainedFixture } from './work-template-blueprint-migration';
+import { recoverRetainedRootResolution } from '../../src/retained-root-resolution';
+import { genId } from '../../src/id';
+
+/** Recover from original creation evidence, never from current public work or another scope. */
+export async function exerciseRetainedRootRecovery(
+  database: Database,
+  fixture: BlueprintRetainedFixture,
+): Promise<void> {
+  const rollback = new Error('Roll back root recovery fixture');
+  await assert.rejects(
+    database.transaction(async (tx) => {
+      const { occurrence, ref, root, manifest } = await resolutionFixture(tx, fixture);
+      const identity = await readOccurrenceIdentity(tx, occurrence.id);
+      const scope = {
+        organizationId: fixture.organizationId,
+        occurrenceId: occurrence.id,
+        invocationId: identity.invocationId,
+        sourceKey: ref.key,
+        kind: ref.kind,
+        workId: ref.id,
+      };
+      for (const mismatch of [
+        { organizationId: genId() },
+        { occurrenceId: genId() },
+        { invocationId: genId() },
+        { sourceKey: 'other' },
+        { kind: 'task' as const },
+        { workId: fixture.taskId },
+      ])
+        assert.equal(await recoverRetainedRootResolution(tx, { ...scope, ...mismatch }), undefined);
+      assert.equal(await recoverRetainedRootResolution(tx, scope), undefined);
+      await tx.execute(
+        sql`update process_occurrence set blueprint_applied_at=now() where id=${occurrence.id}`,
+      );
+      assert.equal(await recoverRetainedRootResolution(tx, scope), undefined);
+      const receipt = genId();
+      const origin = {
+        channel: 'rule',
+        surface: 'recurrence',
+        tool: 'recurrence_materialize',
+        ref: { seriesId: identity.seriesId },
+      };
+      await tx.execute(
+        sql`insert into change_set(id,organization_id,actor_id,origin,summary) values(${receipt},${fixture.organizationId},${fixture.actorId},${JSON.stringify(origin)}::jsonb,'Original retained creation')`,
+      );
+      const after = {
+        workTypeId: root.workTypeId,
+        workTypeVersionId: root.versionId,
+        blueprintState: { generationKey: ref.id, resolvedManifest: manifest },
+      };
+      await tx.execute(
+        sql`insert into change_set_entry(change_set_id,entity_kind,entity_id,op,after) values(${receipt},${ref.kind},${ref.id},'create',${JSON.stringify(after)}::jsonb)`,
+      );
+      await tx.execute(
+        sql`update change_set_entry set after=jsonb_set(after,'{blueprintState,resolvedManifest}','[]'::jsonb) where change_set_id=${receipt}`,
+      );
+      await assert.rejects(
+        recoverRetainedRootResolution(tx, scope),
+        /Original retained resolution receipt is invalid/,
+      );
+      await tx.execute(
+        sql`update change_set_entry set after=${JSON.stringify(after)}::jsonb where change_set_id=${receipt}`,
+      );
+      await replacePublicState(tx, fixture.organizationId, ref);
+      assert.deepEqual(await recoverRetainedRootResolution(tx, scope), manifest);
+      const [saved] = await migrationRows<{ roots: BlueprintOccurrenceRoot[] }>(
+        tx,
+        sql`select blueprint_root_refs as roots from process_occurrence where id=${occurrence.id}`,
+      );
+      assert.deepEqual(
+        saved?.roots,
+        occurrence.roots.map((value) =>
+          value === ref ? { ...value, resolvedManifest: manifest } : value,
+        ),
+      );
+      await tx.execute(sql`update change_set set undone_at=now() where id=${receipt}`);
+      assert.deepEqual(await recoverRetainedRootResolution(tx, scope), manifest);
+      throw rollback;
+    }),
+    (error: unknown) => error === rollback,
+  );
+}
+
+async function readOccurrenceIdentity(database: Database, occurrenceId: string) {
+  const [identity] = await migrationRows<{ invocationId: string; seriesId: string }>(
+    database,
+    sql`select blueprint_invocation_id as "invocationId",series_id as "seriesId" from process_occurrence where id=${occurrenceId}`,
+  );
+  assert.ok(identity);
+  return identity;
+}
 
 /** Prove original accepted private versions survive mutable public state and cannot be rebound. */
 export async function exerciseRetainedRootResolution(

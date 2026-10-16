@@ -15,7 +15,28 @@
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-LOG="${TMPDIR:-/tmp}/docket-dev-${UID}-$(basename "$ROOT").log"
+# Worktrees commonly share a basename. Hash the full checkout path using system tools so
+# cleanup remains available even when Node or workspace dependencies are broken.
+root_digest() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum
+  elif command -v shasum >/dev/null 2>&1; then
+    shasum -a 256
+  else
+    return 1
+  fi
+}
+ROOT_DIGEST=$(printf '%s' "$ROOT" | root_digest) || {
+  echo "dev-stack: could not hash checkout identity; sha256sum or shasum is required." >&2
+  exit 1
+}
+ROOT_DIGEST=${ROOT_DIGEST%% *}
+if ! [[ "$ROOT_DIGEST" =~ ^[[:xdigit:]]{64}$ ]]; then
+  echo "dev-stack: invalid checkout identity digest; refusing shared state." >&2
+  exit 1
+fi
+STACK_KEY="docket-dev-${UID}-$(basename "$ROOT")-${ROOT_DIGEST}"
+LOG="${TMPDIR:-/tmp}/${STACK_KEY}.log"
 
 PREFIX="$(basename "$(git -C "$ROOT" rev-parse --abbrev-ref HEAD 2>/dev/null || echo main)")"
 
@@ -46,6 +67,13 @@ path_is_ours() {
     "$ROOT" | "$ROOT"/*) return 0 ;;
     *) return 1 ;;
   esac
+}
+
+# PID files can outlive their process and the OS can reuse that PID for another checkout.
+process_is_ours() {
+  local cwd
+  cwd=$(lsof -a -p "$1" -d cwd -Fn 2>/dev/null | sed -n 's/^n//p' | head -1)
+  path_is_ours "$cwd"
 }
 
 block_is_available() {
@@ -93,11 +121,11 @@ resolve_ports() {
   RUNNER_PORT="$DOCKET_RUNNER_PORT"
 }
 
-# Named after the checkout rather than the port, so `stop` can find it without resolving the
-# topology. Tearing a stack down must not depend on the resolver being runnable: a half-finished
+# Named after the complete checkout identity rather than the port, so `stop` can find it
+# without resolving the topology. Tearing a stack down must not depend on the resolver being runnable: a half-finished
 # `pnpm install` would otherwise leave a running stack that its own script cannot stop, and
 # `scripts/bootstrap-verify` calls `stop` from a trap.
-STACK_PID_FILE="${TMPDIR:-/tmp}/docket-dev-${UID}-$(basename "$ROOT").pid"
+STACK_PID_FILE="${TMPDIR:-/tmp}/${STACK_KEY}.pid"
 
 print_env() {
   cat <<EOF
@@ -167,7 +195,13 @@ stop_stack() {
     IFS= read -r stack_pid <"$STACK_PID_FILE" || true
     case "$stack_pid" in
       ''|*[!0-9]*) stack_pid="" ;;
-      *) terminate_tree "$stack_pid" TERM ;;
+      *)
+        if process_is_ours "$stack_pid"; then
+          terminate_tree "$stack_pid" TERM
+        else
+          stack_pid=""
+        fi
+        ;;
     esac
   fi
   # Remove processes left by the retired proxy-backed stack as well as this supervisor. Every
@@ -175,7 +209,7 @@ stop_stack() {
   pkill -f "$ROOT/scripts/dev-stack-supervisor.sh" 2>/dev/null || true
   pkill -f "$ROOT/node_modules/portless/dist/cli.js proxy start" 2>/dev/null || true
   sleep 2
-  if [ -n "$stack_pid" ] && kill -0 "$stack_pid" 2>/dev/null; then
+  if [ -n "$stack_pid" ] && process_is_ours "$stack_pid" && kill -0 "$stack_pid" 2>/dev/null; then
     terminate_tree "$stack_pid" KILL
   fi
   rm -f "$STACK_PID_FILE"

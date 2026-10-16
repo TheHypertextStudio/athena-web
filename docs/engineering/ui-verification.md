@@ -57,6 +57,11 @@ allowlist, or answered from another migration's schema. The symptom looks exactl
 regression or a broken config in your own branch, and one session lost an hour to that diagnosis
 before the port was the answer.
 
+PID and log files are scoped to a hash of the full checkout path, so same-named worktrees do not
+share process state. Stop verifies the recorded process belongs to this checkout before signalling
+it, including forced cleanup. Old basename-only PID files are ignored; do not use one to identify
+a supervisor. Stop needs a system SHA-256 tool, but does not need Node or installed dependencies.
+
 `status` now refuses to report healthy unless the process listening on the web port has a working
 directory inside this checkout, and prints the foreign listener's pid and cwd when it does not. If
 you see that message, stop the other stack or set `DOCKET_DEV_PORT`; do not trust anything you

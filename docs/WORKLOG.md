@@ -38,20 +38,6 @@
 - **Outcome**: Invalid shared-domain configurations now fail at auth initialization. Hosted OAuth
   routing is unchanged; deployed browser and provider acceptance remain separate from local checks.
 
-### [DEV-STACK-CHECKOUT-ISOLATION] Keep parallel worktree servers independent
-
-- **Status**: IN_PROGRESS
-- **Description**: Prevent one Athena worktree's dev-stack start/stop from terminating another's
-  supervisor. Every checkout needs its own PID and log identity, even when their directory names
-  are all `athena-web`.
-- **Approach**: Derive stable checkout-scoped process/log paths using tools available without
-  installed workspace dependencies. Exercise two same-named roots through the existing tooling
-  tests and prove stop does not target the foreign supervisor. Retain canonical topology and the
-  existing four-service launcher; do not add a parallel stack.
-- **Context**: The basename-only PID path collided during parallel local acceptance. An attempted
-  cleanup also terminated a foreign launcher before this identity error was identified. Preserve
-  other checkouts and restrict subsequent process operations to verified local ownership.
-
 ### [DOCS-CANONICAL-VERIFICATION] Verify directly served Mintlify guides
 
 - **Status**: COMPLETE
@@ -13522,6 +13508,31 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
 ---
 
 ## Completed Tasks
+
+### [DEV-STACK-CHECKOUT-ISOLATION] Keep parallel worktree servers independent
+
+- **Status**: COMPLETE
+- **Description**: Prevent one Athena worktree's dev-stack start/stop from terminating another's
+  supervisor. Every checkout needs its own PID and log identity, even when their directory names
+  are all `athena-web`.
+- **Approach**: Derive stable checkout-scoped process/log paths using tools available without
+  installed workspace dependencies. Exercise two same-named roots through the existing tooling
+  tests and prove stop does not target the foreign supervisor. Retain canonical topology and the
+  existing four-service launcher; do not add a parallel stack.
+- **Context**: The basename-only PID path collided during parallel local acceptance. An attempted
+  cleanup also terminated a foreign launcher before this identity error was identified. Preserve
+  other checkouts and restrict subsequent process operations to verified local ownership.
+
+- **Files changed**: `scripts/dev-stack.sh`, its existing tooling tests and UI-verification guidance.
+- **Outcome**: Full checkout-path hashes isolate PID/log state. Invalid hashes stop before process
+  operations. Recorded supervisors must belong to this checkout before both normal and forced
+  termination. Legacy shared PID files remain untouched; no Node or pnpm dependency is needed.
+- **Validation**: Three regressions fail against the old launcher. All 19 final behavioral/tooling
+  tests pass, including hash failure, foreign/stale PID rejection, ownership changes before forced
+  cleanup and successful owned cleanup. Shell syntax, repository types, changed-source lint and
+  independent review pass; no live foreign processes are used by the tests.
+- **Learnings**: Port isolation alone is insufficient when process-state files use only a shared
+  checkout basename. Check the entire process identity at every destructive cleanup boundary.
 
 ### [WORK-ACTIVITY-PHONE-CRAFT] Correct phone layouts and review every flow state
 

@@ -1,7 +1,9 @@
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { spawnSync } from 'node:child_process';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
 
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 
 const script = readFileSync(resolve(import.meta.dirname, '../../scripts/dev-stack.sh'), 'utf8');
 const supervisor = readFileSync(
@@ -15,6 +17,85 @@ const bootstrapVerifier = readFileSync(
 const adminManifest = JSON.parse(
   readFileSync(resolve(import.meta.dirname, '../../apps/admin/package.json'), 'utf8'),
 ) as { readonly devDependencies?: Readonly<Record<string, string>> };
+
+const fixtures: string[] = [];
+afterEach(() => {
+  for (const directory of fixtures.splice(0)) rmSync(directory, { recursive: true, force: true });
+});
+
+/** Run cleanup against disposable checkouts with every process signal replaced by a recorder. */
+function stackFixture() {
+  const directory = mkdtempSync(join(tmpdir(), 'docket-stack-test-'));
+  fixtures.push(directory);
+  const bin = join(directory, 'bin');
+  mkdirSync(bin);
+  const mocks = {
+    lsof: `owner="$MOCK_CWD"
+if [ -n "\${MOCK_ESCALATED_CWD:-}" ] && [ -f "$CALL_LOG" ]; then
+  case "$(cat "$CALL_LOG")" in *'signal -TERM'*) owner="$MOCK_ESCALATED_CWD" ;; esac
+fi
+printf "n%s\\n" "$owner"`,
+    pgrep: 'exit 1',
+    pkill: 'printf "fallback %s\\n" "$*" >> "$CALL_LOG"',
+    sleep: 'exit 0',
+    pnpm: 'exit 97',
+    node: 'exit 97',
+  };
+  for (const [name, body] of Object.entries(mocks)) {
+    writeFileSync(join(bin, name), `#!/bin/bash\n${body}\n`, { mode: 0o755 });
+  }
+  return { directory, bin, calls: join(directory, 'calls') };
+}
+
+/** Copy only the launcher, without Node, pnpm dependencies, or a real supervisor. */
+function checkoutFixture(directory: string, name: string): string {
+  const root = join(directory, name, 'athena-web');
+  mkdirSync(join(root, 'scripts'), { recursive: true });
+  writeFileSync(join(root, 'scripts/dev-stack.sh'), script);
+  return root;
+}
+
+/** Process ownership and lifetime simulated by the fixture's command recorders. */
+interface StopOptions {
+  readonly owner?: string;
+  readonly escalatedOwner?: string;
+  readonly alive?: boolean;
+  readonly expectedStatus?: number;
+}
+
+/** Source the real stop command so its computed state paths can also be inspected. */
+function stopFixture(
+  fixture: ReturnType<typeof stackFixture>,
+  root: string,
+  options: StopOptions = {},
+) {
+  const result = spawnSync(
+    'bash',
+    [
+      '-c',
+      'kill() { printf "signal %s\\n" "$*" >> "$CALL_LOG"; [ "$1" != "-0" ] || [ "${MOCK_ALIVE:-}" = 1 ]; }; export -f kill; source "$1" stop; printf "%s\\n" "$LOG" "$STACK_PID_FILE"',
+      'dev-stack-test',
+      join(root, 'scripts/dev-stack.sh'),
+    ],
+    {
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        PATH: `${fixture.bin}:${process.env['PATH']}`,
+        TMPDIR: fixture.directory,
+        CALL_LOG: fixture.calls,
+        MOCK_CWD: options.owner ?? root,
+        MOCK_ESCALATED_CWD: options.escalatedOwner ?? '',
+        MOCK_ALIVE: options.alive ? '1' : '',
+      },
+    },
+  );
+  expect(result.status, result.stderr).toBe(options.expectedStatus ?? 0);
+  if (result.status !== 0) return { log: '', pid: '', stderr: result.stderr };
+  const [log, pid] = result.stdout.trim().split('\n').slice(-2);
+  if (!log || !pid) throw new Error('Launcher did not report its state files.');
+  return { log, pid, stderr: result.stderr };
+}
 
 describe('documented development stack', () => {
   it('takes its hosts and ports from the shared resolver instead of declaring them', () => {
@@ -122,5 +203,74 @@ describe('documented development stack', () => {
     expect(bootstrapVerifier).toContain('e2e/auth/sign-in.spec.ts');
     expect(bootstrapVerifier).toContain('"$repo_root/scripts/dev-stack.sh" stop');
     expect(bootstrapVerifier).toContain('trap cleanup');
+  });
+});
+
+describe('checkout-scoped development stack state', () => {
+  it('gives same-basename checkouts distinct stable PID and log files without pnpm', () => {
+    const fixture = stackFixture();
+    const alpha = checkoutFixture(fixture.directory, 'alpha');
+    const beta = checkoutFixture(fixture.directory, 'beta');
+    const first = stopFixture(fixture, alpha);
+    const second = stopFixture(fixture, beta);
+    expect(first.pid).not.toBe(second.pid);
+    expect(first.log).not.toBe(second.log);
+    expect(stopFixture(fixture, alpha)).toEqual(first);
+  });
+
+  it('ignores the other checkout PID and the old shared basename PID', () => {
+    const fixture = stackFixture();
+    const alpha = checkoutFixture(fixture.directory, 'alpha');
+    const beta = checkoutFixture(fixture.directory, 'beta');
+    const own = stopFixture(fixture, alpha);
+    const foreign = stopFixture(fixture, beta);
+    const legacy = join(fixture.directory, `docket-dev-${process.getuid?.()}-athena-web.pid`);
+    writeFileSync(foreign.pid, '12345\n');
+    writeFileSync(legacy, '67890\n');
+    writeFileSync(fixture.calls, '');
+    stopFixture(fixture, alpha, { owner: beta });
+    expect(readFileSync(fixture.calls, 'utf8')).not.toContain('signal');
+    expect(readFileSync(foreign.pid, 'utf8')).toBe('12345\n');
+    expect(readFileSync(legacy, 'utf8')).toBe('67890\n');
+    expect(own.pid).not.toBe(foreign.pid);
+  });
+
+  it.each(['exit 1', 'printf invalid'])('fails closed when hashing fails: %s', (body) => {
+    const fixture = stackFixture();
+    const root = checkoutFixture(fixture.directory, 'alpha');
+    writeFileSync(fixture.calls, '');
+    writeFileSync(join(fixture.bin, 'sha256sum'), `#!/bin/bash\n${body}\n`, { mode: 0o755 });
+    const result = stopFixture(fixture, root, { expectedStatus: 1 });
+    expect(result.stderr).toContain('checkout identity');
+    expect(readFileSync(fixture.calls, 'utf8')).toBe('');
+  });
+
+  it('does not escalate when a terminated supervisor PID is reused by another checkout', () => {
+    const fixture = stackFixture();
+    const alpha = checkoutFixture(fixture.directory, 'alpha');
+    const beta = checkoutFixture(fixture.directory, 'beta');
+    const own = stopFixture(fixture, alpha);
+    writeFileSync(own.pid, '12345\n');
+    writeFileSync(fixture.calls, '');
+    stopFixture(fixture, alpha, { alive: true, escalatedOwner: beta });
+    const calls = readFileSync(fixture.calls, 'utf8');
+    expect(calls).toContain('signal -TERM 12345');
+    expect(calls).not.toContain('signal -KILL');
+  });
+
+  it('rejects a reused foreign PID even in its own state file and still stops its supervisor', () => {
+    const fixture = stackFixture();
+    const alpha = checkoutFixture(fixture.directory, 'alpha');
+    const beta = checkoutFixture(fixture.directory, 'beta');
+    const own = stopFixture(fixture, alpha);
+    writeFileSync(own.pid, '12345\n');
+    writeFileSync(fixture.calls, '');
+    stopFixture(fixture, alpha, { owner: beta });
+    expect(readFileSync(fixture.calls, 'utf8')).not.toContain('signal');
+    writeFileSync(own.pid, '12345\n');
+    writeFileSync(fixture.calls, '');
+    stopFixture(fixture, alpha, { alive: true });
+    expect(readFileSync(fixture.calls, 'utf8')).toContain('signal -TERM 12345');
+    expect(readFileSync(fixture.calls, 'utf8')).toContain('signal -KILL 12345');
   });
 });

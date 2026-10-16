@@ -222,10 +222,19 @@ not just print it:
 callback through `api.docket.localhost` and writes the session there, but the app runs on
 `docket.localhost` — a host-only cookie would be invisible to it. `.env.local` sets
 `BETTER_AUTH_COOKIE_DOMAIN=docket.localhost`, which scopes the session cookie to the shared parent so
-all `*.docket.localhost` hosts see it. The sign-in buttons also pass an **absolute** `callbackURL` on
-the current origin, so the post-login redirect lands on the app host (not the API host). A new
-`BETTER_AUTH_COOKIE_DOMAIN` value needs a full `pnpm dev` restart (it's loaded by the root
-`dotenv -e .env.local`, not hot-reloaded).
+all `*.docket.localhost` hosts see it. This exception is accepted only with `APP_MODE=local`, the
+exact domain `docket.localhost`, and a `BETTER_AUTH_URL` host of `docket.localhost` or one of its
+subdomains. Other configured cookie domains fail at auth initialization. Production and staging
+must leave it unset and use their existing same-origin auth proxy; sharing a Studio parent domain
+would expose sessions to sibling applications.
+
+Hosted cookies retain Better Auth's existing `__Secure-` names. The pinned framework prepends that
+prefix in secure mode, so adopting `__Host-` requires compatible framework configuration and a
+separate session-name migration. Host-only enforcement does not rename existing sessions.
+
+The sign-in buttons also pass an **absolute** `callbackURL` on the current origin, so the post-login
+redirect lands on the app host. Changing `BETTER_AUTH_COOKIE_DOMAIN` needs a full `pnpm dev` restart
+(it's loaded by the root `dotenv -e .env.local`, not hot-reloaded).
 
 Only **two** things are left to you (bootstrap prints both):
 

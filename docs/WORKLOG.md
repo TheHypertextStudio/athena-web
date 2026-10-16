@@ -7,6 +7,19 @@
 
 ## Active Tasks
 
+### [HOST-ONLY-SESSIONS] Enforce isolated hosted session cookies
+
+- **Status**: READY FOR REVIEW
+- **Description**: Keep production and staging authentication cookies on the browser-facing host.
+  Retain the exact local `docket.localhost` exception needed by the local OAuth relay.
+- **Approach**: Reject shared-domain configuration outside the explicit local authority family;
+  correct setup guidance and cover hosted defaults, forbidden domains and the local exception.
+- **Files**: Auth builder and existing builder tests, environment guidance and local-development docs.
+- **Validation**: All 106 affected auth tests, auth typecheck/lint and changed-file formatting pass.
+  Framework cookie attributes stay host-only and secure; the local relay remains explicitly scoped.
+- **Outcome**: Invalid shared-domain configurations now fail at auth initialization. Hosted OAuth
+  routing is unchanged; deployed browser and provider acceptance remain separate from local checks.
+
 ### [DOCS-CANONICAL-VERIFICATION] Verify directly served Mintlify guides
 
 - **Status**: COMPLETE

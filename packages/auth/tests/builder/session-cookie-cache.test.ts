@@ -234,3 +234,73 @@ describe('session cookie response safety', () => {
     expect(options.session?.disableSessionRefresh).toBe(true);
   });
 });
+
+describe('session cookie host isolation', () => {
+  const baseEnv = {
+    BETTER_AUTH_SECRET: 'test-secret-at-least-32-characters-long',
+    BETTER_AUTH_URL: 'http://localhost:4000',
+    BETTER_AUTH_PASSKEY_RP_ID: 'localhost',
+    BETTER_AUTH_PASSKEY_RP_NAME: 'Docket',
+  } as const;
+  const MAILER_DEPS = { mailer: captureMailer };
+
+  it.each(['production', 'staging', 'local', 'test'] as const)(
+    'keeps %s session cookies host-only when the domain is unset',
+    async (APP_MODE) => {
+      const { buildAuthOptions } = await import('../../src/index');
+      const { getCookies } = await import('better-auth/cookies');
+      const options = buildAuthOptions(
+        { ...baseEnv, APP_MODE, BETTER_AUTH_URL: 'https://usedocket.app' },
+        MAILER_DEPS,
+      );
+      expect(options.advanced?.crossSubDomainCookies).toBeUndefined();
+      expect(getCookies(options).sessionToken.attributes).toMatchObject({
+        secure: true,
+        httpOnly: true,
+        sameSite: 'lax',
+        path: '/',
+      });
+      expect(getCookies(options).sessionToken.attributes.domain).toBeUndefined();
+    },
+  );
+
+  it('shares cookies only for the explicit local docket.localhost OAuth relay', async () => {
+    const { buildAuthOptions } = await import('../../src/index');
+    const options = buildAuthOptions(
+      {
+        ...baseEnv,
+        APP_MODE: 'local',
+        BETTER_AUTH_URL: 'https://api.docket.localhost',
+        BETTER_AUTH_COOKIE_DOMAIN: 'docket.localhost',
+      },
+      MAILER_DEPS,
+    );
+    expect(options.advanced?.crossSubDomainCookies).toEqual({
+      enabled: true,
+      domain: 'docket.localhost',
+    });
+  });
+
+  it.each([
+    ['production', 'https://usedocket.app', 'usedocket.app'],
+    ['staging', 'https://staging.usedocket.app', 'usedocket.app'],
+    ['production', 'https://api.docket.localhost', 'docket.localhost'],
+    ['test', 'https://api.docket.localhost', 'docket.localhost'],
+    [undefined, 'https://api.docket.localhost', 'docket.localhost'],
+    ['local', 'https://api.docket.localhost', 'hypertext.studio'],
+    ['local', 'https://usedocket.app', 'docket.localhost'],
+    ['local', 'https://evildocket.localhost', 'docket.localhost'],
+    ['local', 'https://docket.localhost.example.com', 'docket.localhost'],
+  ] as const)(
+    'rejects shared cookies for mode %s, authority %s and domain %s',
+    async (APP_MODE, BETTER_AUTH_URL, BETTER_AUTH_COOKIE_DOMAIN) => {
+      const { buildAuthOptions } = await import('../../src/index');
+      expect(() =>
+        buildAuthOptions(
+          { ...baseEnv, APP_MODE, BETTER_AUTH_URL, BETTER_AUTH_COOKIE_DOMAIN },
+          MAILER_DEPS,
+        ),
+      ).toThrow('BETTER_AUTH_COOKIE_DOMAIN is only permitted for local docket.localhost');
+    },
+  );
+});

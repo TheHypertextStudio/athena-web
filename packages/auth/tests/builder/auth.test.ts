@@ -2201,21 +2201,6 @@ describe('buildAuthOptions env-gating', () => {
       jwt: { issuer: 'https://api.docket.test/api/auth' },
     });
   });
-
-  it('shares session cookies across a parent domain only when BETTER_AUTH_COOKIE_DOMAIN is set', async () => {
-    const { buildAuthOptions } = await import('../../src/index');
-    const withoutDomain = buildAuthOptions(baseEnv, MAILER_DEPS);
-    expect(withoutDomain.advanced?.crossSubDomainCookies).toBeUndefined();
-
-    const withDomain = buildAuthOptions(
-      { ...baseEnv, BETTER_AUTH_COOKIE_DOMAIN: 'docket.localhost' },
-      MAILER_DEPS,
-    );
-    expect(withDomain.advanced?.crossSubDomainCookies).toEqual({
-      enabled: true,
-      domain: 'docket.localhost',
-    });
-  });
 });
 
 // Runs LAST in the file: both tests here stub process env, mock a neighboring module, and reset

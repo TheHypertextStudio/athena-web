@@ -513,6 +513,20 @@ function configuredPasskeyMigration(e: AuthEnv, deps: AuthDeps): BetterAuthPlugi
   return [passkeyMigrationPlugin(e, deps.migrationWebAuthn, deps.migrationDatabase)];
 }
 
+/** Resolve the sole shared-cookie exception: the explicit local OAuth relay. */
+function localCookieDomain(e: AuthEnv): string | undefined {
+  if (!isRealValue(e.BETTER_AUTH_COOKIE_DOMAIN)) return undefined;
+  const hostname = new URL(e.BETTER_AUTH_URL).hostname;
+  if (
+    e.APP_MODE !== 'local' ||
+    e.BETTER_AUTH_COOKIE_DOMAIN !== 'docket.localhost' ||
+    !(hostname === 'docket.localhost' || hostname.endsWith('.docket.localhost'))
+  ) {
+    throw new Error('BETTER_AUTH_COOKIE_DOMAIN is only permitted for local docket.localhost');
+  }
+  return e.BETTER_AUTH_COOKIE_DOMAIN;
+}
+
 function configuredDocketOAuthProvider(e: AuthEnv): BetterAuthPlugin[] {
   if (!isRealValue(e.OIDC_LOGIN_PAGE_URL)) return [];
   const issuer = new URL('/api/auth', e.MCP_ISSUER_URL ?? e.BETTER_AUTH_URL).toString();
@@ -809,17 +823,9 @@ export function buildAuthOptions(e: AuthEnv, deps: AuthDeps): BetterAuthOptions 
   const allowedHosts = parseTrustedOrigins(e.BETTER_AUTH_ALLOWED_HOSTS);
   const dynamicBaseURL = allowedHosts.length > 0;
 
-  // `BETTER_AUTH_COOKIE_DOMAIN`, when set, scopes session cookies to a shared parent domain so a
-  // cookie written by one subdomain is readable by its siblings. This is required wherever the
-  // browser and the auth handler answer on DIFFERENT hosts: locally the `oAuthProxy` social flow
-  // relays the callback through `api.docket.localhost` and writes the session there, but the app
-  // runs on `docket.localhost` — host-only cookies would be invisible to it. Setting the domain to
-  // `docket.localhost` shares the cookie across the whole `*.docket.localhost` family (app, api,
-  // admin). Unset ⇒ host-only cookies (the same-origin production default). See
-  // `docs/local-development.md` (Tunnels & local OAuth).
-  const cookieDomain = isRealValue(e.BETTER_AUTH_COOKIE_DOMAIN)
-    ? e.BETTER_AUTH_COOKIE_DOMAIN
-    : undefined;
+  // Hosted apps proxy auth on their own origin. Only the local OAuth relay needs cookies
+  // shared between api.docket.localhost and the local browser app; reject broader deployment scope.
+  const cookieDomain = localCookieDomain(e);
 
   // Apple posts its OAuth callback (form_post) from `appleid.apple.com`, so that origin must be
   // trusted or Better Auth rejects the callback. Added ONLY when Apple is configured — unset ⇒ the

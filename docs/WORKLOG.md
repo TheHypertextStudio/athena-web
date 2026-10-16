@@ -7,6 +7,21 @@
 
 ## Active Tasks
 
+### [WEBSITE-SCHEDULE-PICKER-INVENTORY] Keep the schedule picker audit current
+
+- **Status**: COMPLETE
+- **Priority**: P1
+- **Description**: Include the work schedule's effective-date and manual-run date controls in the
+  enforced calendar-day picker inventory so ordinary website validation covers the existing surfaces.
+- **Approach**: Record the two existing shared `DatePicker` call sites and their fields. Keep the
+  inventory gate and picker implementation intact.
+- **Files**: Date-picker inventory and this worklog.
+- **Subtasks**:
+  - [x] Inventory both schedule date-picker call sites against the current source.
+  - [x] Verify the existing date-picker inventory gate (all six assertions pass).
+- **Release blockers**: Current main also has API fixture schema, work-package coverage and release
+  journey failures; this documentation correction does not resolve those independent gates.
+
 ### [WEBSITE-CI-PREVIEW-FINGERPRINT] Classify authorized template preview fingerprints
 
 - **Status**: REVIEW

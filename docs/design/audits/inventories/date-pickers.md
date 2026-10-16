@@ -74,6 +74,8 @@ delegation are asserted in `apps/web/tests/pickers/timeframe-picker-contract.tes
 | 29  | Team settings → cycle cadence             | `apps/web/src/components/team-detail/team-cycle-settings.tsx`           | New cadence starts                       | Shared picker                                 |
 | 30  | Cycle assignment → go to future date      | `apps/web/src/components/pickers/future-cycle-picker.tsx`               | Future cycle lookup                      | Shared picker                                 |
 | 31  | Daily planning → yesterday review         | `apps/web/src/components/daily-planning/daily-planning-yesterday.tsx`   | Move unfinished work to another date     | Shared picker                                 |
+| 32  | Work schedule → repeat settings           | `apps/web/src/components/work-schedules/schedule-repeat-fields.tsx`     | Effective date                           | Shared picker                                 |
+| 33  | Work schedule → manual run                | `apps/web/src/components/work-schedules/schedule-run-dialog.tsx`        | Run date                                 | Shared picker                                 |
 
 Before this pass, rows 9–12 each hosted their own `<input type="date">`, so four surfaces had four
 different behaviours and none of them had bounds. Rows 1–8 already shared a component, but that

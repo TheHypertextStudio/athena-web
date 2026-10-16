@@ -7,6 +7,21 @@
 
 ## Active Tasks
 
+### [WEBSITE-PLAN-REFERENCE-FIXTURE] Assert template integrity at the draft boundary
+
+- **Status**: COMPLETE
+- **Priority**: P1
+- **Description**: Keep MCP plan boundary checks faithful to the database's persisted-reference
+  contract. Foreign, wrong-kind and deleted template references must fail before saving a draft.
+- **Approach**: Assert the earlier conflict and unchanged stored document and revision. Retain
+  human confirmation checks for structurally valid private and team references and all label cases.
+- **Files**: Existing MCP plan-template boundary checks and this worklog.
+- **Subtasks**:
+  - [x] Verify the named reference-integrity refusal rather than bypassing the database guard.
+  - [x] Preserve rollback, no-work-creation, confirmation and label assertions.
+  - [x] Pass the existing focused suite, affected lint, types and formatting.
+  - [x] Review the test-only change and unchanged production authority.
+
 ### [WEBSITE-OPENAPI-UUID-EXAMPLES] Preserve valid public examples for UUID retry identities
 
 - **Status**: COMPLETE

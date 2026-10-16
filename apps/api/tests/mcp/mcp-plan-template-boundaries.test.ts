@@ -1,4 +1,4 @@
-/** Both confirmation entry points enforce template and label boundaries. */
+/** Draft persistence and human confirmation enforce template and label boundaries. */
 import type * as DbModule from '@docket/db';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
@@ -10,6 +10,7 @@ import { getMigratedDb } from '../support/db';
 import { resetAuthMocks } from '../support/auth-mock';
 import {
   body,
+  errorText,
   closeCatalogClients,
   connectCatalog,
   seedLabel,
@@ -48,7 +49,7 @@ function confirm(seed: Seed, planId: string): ReturnType<typeof commitOwnedPlan>
 async function taskPlan(
   seed: Seed,
   templateId: string,
-  options: { apply?: boolean; teamId?: string; labelIds?: string[] } = {},
+  options: { apply?: boolean; teamId?: string; labelIds?: string[]; rejectDraft?: boolean } = {},
 ): Promise<string> {
   const client = await connectCatalog(registerTools, seed.ctx);
   const started = body<{ planId: string }>(
@@ -85,7 +86,17 @@ async function taskPlan(
     name: 'plan_draft',
     arguments: { planId: started.planId, revision: 0, ops },
   });
-  expect(drafted.isError).not.toBe(true);
+  if (options.rejectDraft) {
+    expect(drafted.isError, errorText(drafted)).toBe(true);
+    expect(errorText(drafted)).toMatch(/^conflict:/);
+    const [unchanged] = await schema.db
+      .select({ revision: schema.planDraft.revision, document: schema.planDraft.document })
+      .from(schema.planDraft)
+      .where(eq(schema.planDraft.id, started.planId));
+    expect(unchanged).toEqual({ revision: 0, document: { nodes: [], edges: [] } });
+  } else {
+    expect(drafted.isError, errorText(drafted)).not.toBe(true);
+  }
   return started.planId;
 }
 
@@ -120,14 +131,29 @@ async function invalidReference(
 }
 
 describe('shared plan template boundaries', () => {
-  it.each(['foreign', 'private', 'kind', 'team', 'deleted'])(
+  it.each(['foreign', 'kind', 'deleted'])(
+    'draft persistence rejects a %s template reference',
+    async (reason) => {
+      const seed = await seedMcpUpdateOrg(schema.db, schema, ['view', 'contribute']);
+      const reference = await invalidReference(seed, reason);
+      await taskPlan(seed, reference.templateId, { ...reference, rejectDraft: true });
+      expect(
+        await schema.db
+          .select()
+          .from(schema.task)
+          .where(eq(schema.task.organizationId, seed.orgId)),
+      ).toHaveLength(0);
+    },
+  );
+
+  it.each(['private', 'team'])(
     'human confirmation rejects a %s template reference',
     async (reason) => {
       const seed = await seedMcpUpdateOrg(schema.db, schema, ['view', 'contribute']);
       const reference = await invalidReference(seed, reason);
       const planId = await taskPlan(seed, reference.templateId, reference);
       await expect(confirm(seed, planId)).rejects.toMatchObject({
-        code: reason === 'kind' || reason === 'team' ? 'validation_error' : 'not_found',
+        code: reason === 'team' ? 'validation_error' : 'not_found',
       });
       expect(
         await schema.db

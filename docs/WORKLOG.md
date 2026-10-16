@@ -7,6 +7,19 @@
 
 ## Active Tasks
 
+### [WEBSITE-RELEASE-SHELL] Keep native release acceptance portable to macOS Bash
+
+- **Status**: COMPLETE
+- **Priority**: P1
+- **Description**: Run the existing disposable release stack with the system Bash on macOS as
+  well as CI. Preserve strict shell errors and the runtime-specific frontend environment.
+- **Approach**: Keep the environment command in the argument array so Node acceptance never
+  expands an empty array under Bash 3.2. Extend the existing launcher checks for both runtimes.
+- **Files**: Release acceptance launcher, its tooling checks and this worklog.
+- **Subtasks**:
+  - [x] Preserve Node and Worker environment forwarding under strict shell execution.
+  - [x] Validate the existing launcher checks and resume the native roster acceptance check.
+
 ### [WEBSITE-CI-WORK-COVERAGE] Cover work-planning boundaries through ordinary domain tests
 
 - **Status**: COMPLETE

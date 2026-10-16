@@ -164,4 +164,42 @@ printf '%s\\n%s\\n' "\${DATABASE_URL:-}" "\${DATABASE_URL_UNPOOLED:-}" > "$CAPTU
       generatedUrl,
     ]);
   });
+
+  it.each(['node', 'workers'])('forwards the %s environment with strict Bash arrays', (runtime) => {
+    const result = spawnSync(
+      'bash',
+      [
+        '-c',
+        `source "$1"
+pnpm() { printf '%s\\n' "$@"; }
+RELEASE_WEB_RUNTIME=$2
+ENV_FILE=/unused/docket-release.env
+API_URL=http://api.docket.localhost:49001
+APP_URL=http://docket.localhost:49000
+DATABASE_URL=postgres://docket:docket@127.0.0.1:49152/docket_release_test
+run_release_env true`,
+        'release-environment-test',
+        runnerPath,
+        runtime,
+      ],
+      { encoding: 'utf8' },
+    );
+
+    expect(result.stderr).toBe('');
+    expect(result.status).toBe(0);
+    const args = result.stdout.trim().split('\n');
+    expect(args.slice(0, 6)).toEqual([
+      'exec',
+      'dotenv',
+      '-e',
+      '/unused/docket-release.env',
+      '--',
+      'env',
+    ]);
+    expect(args).toContain('NODE_ENV=production');
+    expect(args.at(-1)).toBe('true');
+    for (const key of ['PUBLIC_BRIEF_HOST', 'NEXT_PUBLIC_BRIEF_HOST']) {
+      expect(args.includes(`${key}=briefs.docket.localhost`)).toBe(runtime === 'workers');
+    }
+  });
 });

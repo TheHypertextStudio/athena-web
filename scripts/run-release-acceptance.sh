@@ -48,11 +48,11 @@ run_migrations() {
 }
 
 run_release_env() {
-  local worker_host_env=()
+  local release_env=(env)
   if [[ "${RELEASE_WEB_RUNTIME}" == workers ]]; then
-    worker_host_env=(PUBLIC_BRIEF_HOST=briefs.docket.localhost NEXT_PUBLIC_BRIEF_HOST=briefs.docket.localhost)
+    release_env+=(PUBLIC_BRIEF_HOST=briefs.docket.localhost NEXT_PUBLIC_BRIEF_HOST=briefs.docket.localhost)
   fi
-  pnpm exec dotenv -e "${ENV_FILE}" -- env "${worker_host_env[@]}" \
+  pnpm exec dotenv -e "${ENV_FILE}" -- "${release_env[@]}" \
     AGENT_MAX_TURNS=8 \
     ADMIN_GOOGLE_SSO_ENABLED=false \
     API_URL="${API_URL}" \

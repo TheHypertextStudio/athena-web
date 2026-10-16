@@ -136,8 +136,9 @@ observations beside those records.
 Verify `/docs`, a Guides page, a Developers page, Changelog, all six redirects, representative heading
 anchors, logos/styles/client chunks/fonts, search and its request routes, `/docs/llms.txt`,
 `/docs/llms-full.txt`, and the Scalar reference link. Check narrow layout and keyboard operation.
-Run `pnpm launch:verify-docs` for the existing bounded public delivery probe, and perform canonical
-and search checks it does not cover. A public HTTP 200 or the provider's old successful update is
+Run `pnpm launch:verify-docs` for the existing bounded public delivery probe. It accepts a directly
+served first guide or a redirect and requires its actual document-head canonical to identify a
+public guide. Perform per-page canonical, `og:url` and search checks beyond that root guide. A public HTTP 200 or the provider's old successful update is
 insufficient evidence for the newly reviewed source. Keep source CI, local preview, provider
 publication, public delivery, and application release results separate.
 

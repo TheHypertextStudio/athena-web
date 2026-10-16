@@ -36,7 +36,7 @@ function healthyResponses(): Record<string, Response> {
   return {
     [APP]: response('<script src="/_next/static/chunks/app.js"></script>', { status: 200 }, APP),
     [`${APP}/docs`]: response(
-      '<title>What Docket is</title>',
+      `<head><title>What Docket is</title><link rel="canonical" href="${APP}/docs/guides/what-docket-is"></head>`,
       { status: 200 },
       `${APP}/docs/guides/what-docket-is`,
     ),
@@ -138,6 +138,46 @@ describe('documentation gating list', () => {
   });
 });
 
+describe('public documentation canonical identity', () => {
+  it.each([`${APP}/docs`, `${APP}/docs/guides/what-docket-is`])(
+    'accepts the real guide served at %s',
+    async (responseUrl) => {
+      const checks = await checkDocs(
+        fetcherWith((url) =>
+          url === `${APP}/docs`
+            ? response(
+                `<head><link href="${APP}/docs/guides/what-docket-is" rel="canonical"></head>`,
+                { status: 200 },
+                responseUrl,
+              )
+            : null,
+        ),
+      );
+      expect(checks.find((check) => check.name === 'docs')?.passed).toBe(true);
+    },
+  );
+
+  it.each([
+    '<head><title>Gateway error</title></head>',
+    `<head><link rel="canonical" href="https://docket.mintlify.dev/docs/guide"></head>`,
+    `<head><link rel="canonical" href="https://docket.hypertext.studio/docs/guide"></head>`,
+    `<head><link rel="canonical" href="${APP}/docs"></head>`,
+    `<head><link rel="canonical" href="${APP}/docs/"></head>`,
+    `<head><link rel="canonical" href="${APP}/docs/demo"></head>`,
+    `<head><link rel="canonical" href="${APP}/docs/%64emo"></head>`,
+    `<head><link rel="canonical" href="${APP}/docs/demo/guide"></head>`,
+    `<head><link rel="canonical" href="${APP}/docs/guide"><link rel="canonical" href="${APP}/docs/other"></head>`,
+    `<body><link rel="canonical" href="${APP}/docs/guide"></body>`,
+  ])('rejects invalid canonical metadata: %s', async (body) => {
+    const checks = await checkDocs(
+      fetcherWith((url) =>
+        url === `${APP}/docs` ? response(body, { status: 200 }, `${APP}/docs/guide`) : null,
+      ),
+    );
+    expect(checks.find((check) => check.name === 'docs')?.passed).toBe(false);
+  });
+});
+
 describe('polling for the web promotion', () => {
   it('passes on the first probe and never waits when docs are already live', async () => {
     const options = instantRetries(10);
@@ -152,7 +192,7 @@ describe('polling for the web promotion', () => {
     expect(options.waits).toEqual([]);
   });
 
-  it('keeps probing while Vercel is still promoting the web build', async () => {
+  it('keeps probing during an incomplete frontend deployment', async () => {
     let probes = 0;
     const fetcher = fetcherWith((url) => {
       if (url !== `${APP}/docs`) return null;

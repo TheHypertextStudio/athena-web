@@ -7,6 +7,21 @@
 
 ## Active Tasks
 
+### [DOCS-CANONICAL-VERIFICATION] Verify directly served Mintlify guides
+
+- **Status**: COMPLETE
+- **Description**: Accept the real first guide when Mintlify serves it directly at the docs prefix,
+  while continuing to reject broken proxies, demos and incorrect public canonical identities.
+- **Approach**: Check the response boundary and one canonical link in the actual document head.
+  Preserve HTTP failures and all machine-readable index requirements; keep the ordinary verifier.
+- **Files**: Production verifier, existing production/docs verifier tests and this worklog.
+- **Validation**: Run affected ordinary tests, repo types/lint/formatting and the existing public
+  documentation verifier locally. The earlier hosted HTTP 403 remains a separate failed observation.
+- **Outcome**: All 24 affected checks, repo types, lint and independent review pass. The existing
+  live verifier passes on its first attempt with the real public guide canonical and both indexes.
+  Public app/API/auth metadata checks pass; the existing static-cache advisory remains separate
+  from docs gating and retains the previously accepted native ETag/cache behavior.
+
 ### [WEBSITE-WORKERS-RETIREMENT] Retire the previous frontend provider
 
 - **Status**: COMPLETE

@@ -26,7 +26,7 @@ describe('production verification', () => {
           app,
         ),
         [`${app}/docs`]: response(
-          '<title>What Docket is</title>',
+          `<head><title>What Docket is</title><link rel="canonical" href="${app}/docs/guides/what-docket-is"></head>`,
           { status: 200 },
           `${app}/docs/guides/what-docket-is`,
         ),

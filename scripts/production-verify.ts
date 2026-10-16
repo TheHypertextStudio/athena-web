@@ -94,6 +94,56 @@ async function checkApp(fetcher: Fetcher): Promise<{ body: string; check: Produc
  */
 export const DOCS_CHECK_NAMES: readonly string[] = ['docs', 'llms', 'llms-full'];
 
+/** Require a public guide path rather than the docs root or a demo segment. */
+function isPublicDocsGuide(url: URL): boolean {
+  const pathname = decodeURIComponent(url.pathname);
+  return (
+    url.origin === APP_ORIGIN &&
+    pathname.startsWith('/docs/') &&
+    pathname !== '/docs/' &&
+    !/\/demo(?:\/|$)/i.test(pathname)
+  );
+}
+
+/**
+ * Read the public guide identity from its actual document head.
+ *
+ * Mintlify can serve the first guide directly at `/docs` without redirecting. Its canonical
+ * metadata must still name exactly one guide under the public documentation prefix.
+ */
+function canonicalDocsPage(body: string): string | null {
+  const head = /<head\b[^>]*>([\s\S]*?)<\/head>/i.exec(body)?.[1] ?? '';
+  const links = [
+    ...head.matchAll(
+      /<link\b(?=[^>]*\brel\s*=\s*["']canonical["'])[^>]*\bhref\s*=\s*["']([^"']+)["'][^>]*>/gi,
+    ),
+  ];
+  if (links.length !== 1) return null;
+  try {
+    const url = new URL(links[0]?.[1] ?? '');
+    return isPublicDocsGuide(url) ? url.href : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Check public transport and the guide's canonical metadata together. */
+function checkDocumentationPage(docs: ReadResult): ProductionCheck {
+  const docsUrl = docs.response?.url ?? '';
+  const canonicalUrl = canonicalDocsPage(docs.body);
+  const passed =
+    docs.response?.status === 200 &&
+    (docsUrl === `${APP_ORIGIN}/docs` || docsUrl.startsWith(`${APP_ORIGIN}/docs/`)) &&
+    canonicalUrl !== null &&
+    !/(?:^|\/)demo(?:\/|$)|documentation demo/im.test(`${docsUrl}\n${docs.body}`);
+  return check(
+    'docs',
+    passed,
+    `canonical page ${canonicalUrl ?? docsUrl}`,
+    `${status(docs)} at ${docsUrl === '' ? 'no URL' : docsUrl}`,
+  );
+}
+
 /**
  * Probe the documentation site as it is served through the product domain.
  *
@@ -101,26 +151,14 @@ export const DOCS_CHECK_NAMES: readonly string[] = ['docs', 'llms', 'llms-full']
  * `/docs` is not a route in `apps/web`; it resolves only through the `next.config.ts` rewrites to
  * `DOCS_MINTLIFY_ORIGIN`. A destination that does not resolve fails at the frontend proxy and never
  * reaches Mintlify, which is why the canonical-URL assertion matters as much as the status: a
- * gateway error page also carries no `/docs/` URL to land on.
+ * gateway error page does not establish a public guide canonical identity.
  *
  * @param fetcher - Fetch implementation. Tests supply a deterministic boundary double.
  * @returns One check for the canonical page and one for each machine-readable index.
  */
 export async function checkDocs(fetcher: Fetcher): Promise<ProductionCheck[]> {
   const docs = await read(fetcher, `${APP_ORIGIN}/docs`);
-  const docsUrl = docs.response?.url ?? '';
-  const passed =
-    docs.response?.status === 200 &&
-    docsUrl.startsWith(`${APP_ORIGIN}/docs/`) &&
-    !/(?:^|\/)demo(?:\/|$)|documentation demo/im.test(`${docsUrl}\n${docs.body}`);
-  const checks = [
-    check(
-      'docs',
-      passed,
-      `canonical page ${docsUrl}`,
-      `${status(docs)} at ${docsUrl === '' ? 'no URL' : docsUrl}`,
-    ),
-  ];
+  const checks = [checkDocumentationPage(docs)];
   for (const [name, path, minimumBytes] of [
     ['llms', '/docs/llms.txt', 500],
     ['llms-full', '/docs/llms-full.txt', 10_000],

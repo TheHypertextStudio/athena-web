@@ -41,6 +41,7 @@
   independent review pass. Actual hostname attachment remains part of the approved frontend cutover.
 - **Learnings**: Include provider-owned redirects when moving application hosting; the application's
   own canonicalization boundary can preserve them without retaining the previous provider.
+
 ### [WORK-TEMPLATE-FOCUSED-FLOW] Isolate work definition and order its decisions
 
 - **Status**: REVIEW

@@ -549,6 +549,9 @@ importers:
       '@docket/planning':
         specifier: workspace:*
         version: link:../../domains/planning
+      '@docket/service-worker':
+        specifier: workspace:*
+        version: link:../../packages/service-worker
       '@docket/ui':
         specifier: workspace:*
         version: link:../../packages/ui
@@ -658,9 +661,6 @@ importers:
       '@docket/eslint-config':
         specifier: workspace:*
         version: link:../../tooling/eslint-config
-      '@docket/service-worker':
-        specifier: workspace:*
-        version: link:../../packages/service-worker
       '@docket/test-utils':
         specifier: workspace:*
         version: link:../../packages/test-utils

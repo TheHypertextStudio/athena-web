@@ -3,7 +3,7 @@
  *
  * @remarks
  * The single typed edge for binary artifact storage (export artifacts). The real
- * adapter targets Vercel Blob / S3 with env creds; the mock `LocalDiskBlob` writes
+ * adapter targets private Google Cloud Storage using ADC; the mock `LocalDiskBlob` writes
  * under `.data/exports`. No business logic lives here; only the storage edge does.
  */
 
@@ -11,13 +11,13 @@
 export interface BlobPutResult {
   /** The key the blob was stored under. */
   readonly key: string;
-  /** A URL the blob can be fetched from. */
+  /** A durable storage address; private adapters require authenticated reads. */
   readonly url: string;
 }
 
 /**
  * The blob storage port: a single typed edge for putting, getting, and addressing
- * binary artifacts by key. Implemented by `RealBlob` and `LocalDiskBlob`.
+ * binary artifacts by key. Implemented by `GcsBlob` and `LocalDiskBlob`.
  */
 export interface BlobStore {
   /**
@@ -26,7 +26,7 @@ export interface BlobStore {
    * @param key - The storage key (path-like).
    * @param data - The bytes to store.
    * @param contentType - Optional MIME type to record.
-   * @returns the stored key and a fetchable URL.
+   * @returns the stored key and its durable storage address.
    */
   put(key: string, data: Uint8Array, contentType?: string): Promise<BlobPutResult>;
 
@@ -39,10 +39,10 @@ export interface BlobStore {
   get(key: string): Promise<Uint8Array | null>;
 
   /**
-   * Resolve the fetchable URL for a key (without reading the bytes).
+   * Resolve the durable storage address for a key (without reading the bytes).
    *
    * @param key - The storage key.
-   * @returns the URL the blob is addressable at.
+   * @returns the address the blob is stored at; it need not be browser-fetchable.
    */
   url(key: string): string;
 
@@ -56,5 +56,5 @@ export interface BlobStore {
 
 export { LocalDiskBlob } from './local-disk';
 export type { LocalDiskBlobOptions } from './local-disk';
-export { RealBlob } from './vercel';
-export type { BlobDeleteFn, BlobUploadFn, RealBlobConfig, RealBlobDeps } from './vercel';
+export { GcsBlob } from './gcs';
+export type { GcsBlobConfig, GcsBucket, GcsObject } from './gcs';

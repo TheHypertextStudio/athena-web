@@ -12,25 +12,20 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-# Turbo Remote Cache. A task computed on any run — or on a developer's linked machine — is
-# replayed rather than recomputed here, so a pull request that touches one package no longer pays
-# to rebuild and retest the other eighteen.
-#
-# These are configured, not aspirational: TURBO_TOKEN is a Vercel Access Token scoped to the team
-# in TURBO_TEAM, and TURBO_REMOTE_CACHE_SIGNATURE_KEY is required by `remoteCache.signature` in
-# turbo.json. They were unset for a long time, during which turbo silently fell back to the local
-# cache and reported `Cached: 0 cached, 19 total` on every run — silently, because an unset token
-# is not an error. If cache hits ever vanish, check that the token has not expired before
-# suspecting the task graph. TURBO_API is only for a self-hosted cache; unset means Vercel's.
-#
-# There is deliberately no `actions/cache` step for `.turbo`. The remote cache supersedes it, and
-# keeping both meant paying GitHub's cache I/O for a result the remote cache already had — the
-# Build job spent 39s restoring and 24s saving to serve a task that took 2s.
+# Signed artifacts are shared through the Studio's IAM-protected Cloud Run cache. Each cache
+# job mints an audience-bound ID token after installation, immediately before its Turbo task.
+# Missing configuration and untrusted refs use only local cache, including when TURBO_API is
+# unset: they cannot select Vercel's default endpoint. No separate .turbo actions/cache is needed.
 env:
-  TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+  TURBO_CACHE: local:rw
   TURBO_TEAM: ${{ vars.TURBO_TEAM }}
   TURBO_API: ${{ vars.TURBO_API }}
-  TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY }}
+  TURBO_REMOTE_CACHE_SIGNATURE_KEY: >-
+    ${{ github.repository == 'TheHypertextStudio/athena-web' &&
+    github.ref == 'refs/heads/main' &&
+    (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
+    (github.workflow_ref == 'TheHypertextStudio/athena-web/.github/workflows/ci.yml@refs/heads/main' ||
+    github.workflow_ref == 'TheHypertextStudio/athena-web/.github/workflows/e2e.yml@refs/heads/main') && secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY || '' }}
 
 jobs:
   # Lint and typecheck were one job on the theory that they share an install. They also shared a
@@ -57,6 +52,7 @@ jobs:
     permissions:
       contents: read
       packages: read
+      id-token: write
     name: Lint (${{ matrix.group }})
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -79,6 +75,8 @@ jobs:
 
       # A cold apps shard must first build API and Admin dependencies before Web ESLint starts.
       # The old 180-second cap killed Web lint at startup whenever remote Turbo caching was down.
+      - uses: ./.github/actions/turbo-cache
+
       - run: timeout --signal=TERM --kill-after=10s 300s pnpm turbo run lint ${{ matrix.filter }} --concurrency=1
 
   # Sharded for the same reason as lint, and with the same memory ceiling intact: `tsc` holds a
@@ -88,6 +86,7 @@ jobs:
     permissions:
       contents: read
       packages: read
+      id-token: write
     name: Types (${{ matrix.group }})
     runs-on: ubuntu-latest
     strategy:
@@ -110,6 +109,8 @@ jobs:
       - uses: actions/checkout@v7.0.1
 
       - uses: ./.github/actions/setup
+
+      - uses: ./.github/actions/turbo-cache
 
       - run: pnpm turbo run typecheck ${{ matrix.filter }} --concurrency=1
 
@@ -187,6 +188,7 @@ jobs:
     permissions:
       contents: read
       packages: read
+      id-token: write
     name: Test (${{ matrix.group }})
     runs-on: ubuntu-latest
     strategy:
@@ -219,6 +221,8 @@ jobs:
           fetch-depth: 0
 
       - uses: ./.github/actions/setup
+
+      - uses: ./.github/actions/turbo-cache
 
       - run: pnpm turbo run test:coverage ${{ matrix.filter }} --concurrency=1
 
@@ -271,6 +275,7 @@ jobs:
     permissions:
       contents: read
       packages: read
+      id-token: write
     name: Build
     runs-on: ubuntu-latest
     env:
@@ -288,6 +293,8 @@ jobs:
 
       - run: pnpm docs:check
 
+      - uses: ./.github/actions/turbo-cache
+
       - run: pnpm turbo run build --concurrency=1
 
   # This is the browser contract production depends on. The full E2E workflow remains advisory
@@ -300,6 +307,7 @@ jobs:
     permissions:
       contents: read
       packages: read
+      id-token: write
     name: Core screen acceptance
     needs: build
     runs-on: ubuntu-latest
@@ -352,6 +360,8 @@ jobs:
         # The job already owns a healthy PostgreSQL service. Running the root Turbo task would
         # invoke db:up and try to start a second Docker Compose database inside the runner.
         run: pnpm exec dotenv -e .env.local -- pnpm --filter @docket/db db:migrate
+
+      - uses: ./.github/actions/turbo-cache
 
       - name: Build the production Web app
         env:

@@ -12,7 +12,7 @@ import type { ModelBackendEnv } from '@docket/athena/turn/model-backend';
 import { InMemoryBillingGateway } from '@docket/billing/adapters/in-memory';
 import { RealStripeGateway } from '@docket/billing/adapters/stripe';
 import type { BillingGateway } from '@docket/billing/contracts';
-import { LocalDiskBlob, RealBlob } from '@docket/blob-store';
+import { GcsBlob, LocalDiskBlob } from '@docket/blob-store';
 import type { BlobStore } from '@docket/blob-store';
 import { MockNotionMirror } from '@docket/connections/notion/adapters/in-memory';
 import { NotionMirrorClient } from '@docket/connections/notion/adapters/notion-sdk';
@@ -115,8 +115,7 @@ export interface AppRuntimeEnv {
   readonly PUSH_ENDPOINT?: string;
   readonly PUSH_API_KEY?: string;
   readonly PUSH_APP_ID?: string;
-  readonly BLOB_READ_WRITE_TOKEN?: string;
-  readonly EXPORT_BUCKET_URL?: string;
+  readonly GCS_BLOB_BUCKET?: string;
   readonly GITHUB_API_BASE?: string;
   readonly LINEAR_API_BASE?: string;
   readonly GOOGLE_GMAIL_API_BASE?: string;
@@ -532,10 +531,7 @@ export function buildAppContainer(runtimeEnv: AppRuntimeEnv = toAppRuntimeEnv())
   const blob = lazyValue(() =>
     mock
       ? new LocalDiskBlob()
-      : new RealBlob({
-          token: required('BLOB_READ_WRITE_TOKEN', runtimeEnv.BLOB_READ_WRITE_TOKEN),
-          ...(runtimeEnv.EXPORT_BUCKET_URL ? { baseUrl: runtimeEnv.EXPORT_BUCKET_URL } : {}),
-        }),
+      : new GcsBlob({ bucket: required('GCS_BLOB_BUCKET', runtimeEnv.GCS_BLOB_BUCKET) }),
   );
   const placeGeocoder = lazyValue(() => buildPlaceGeocoder(runtimeEnv));
 

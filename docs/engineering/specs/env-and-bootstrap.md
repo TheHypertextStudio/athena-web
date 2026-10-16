@@ -6,7 +6,7 @@
 
 **Spec area:** `env-and-bootstrap` · **Status:** implementation-grade · **Verified against current docs 2026-06-05** (t3-oss/env, Neon CLI `neonctl`, Vercel CLI, Stripe CLI, Better Auth 1.6.14, Linear OAuth).
 
-> **Note on §3 (bootstrap flow):** This spec was written targeting Vercel as the deployment platform. The production deployment now uses **GCP Cloud Run** — see [`docs/engineering/deployment.md`](../deployment.md) for the actual deployment reference, GitHub Actions variables, GCP resource inventory, and first-deploy walkthrough. Sections §0–§2 (env-var contract and `@docket/env` package design) remain accurate. Section §3 reflects the intended full provisioning flow; steps §3.8–§3.9 (Vercel CLI env writes, `vercel link`) do not apply to the current implementation.
+> **Note on §3 (bootstrap flow):** This spec was written targeting Vercel as the deployment platform. The production deployment now uses **GCP Cloud Run** — see [`docs/engineering/deployment.md`](../deployment.md) for the actual deployment reference, GitHub Actions variables, GCP resource inventory, and first-deploy walkthrough. Current storage uses private Google Cloud Storage (`GCS_BLOB_BUCKET`) and Application Default Credentials; signed Turbo caching uses a separate IAM-protected Cloud Run service and GCS bucket. The runtime registry remains the source of truth for §0–§2. Section §3 reflects the intended full provisioning flow; steps §3.8–§3.9 (Vercel CLI env writes, `vercel link`) do not apply to the current implementation.
 
 > **Current-topology note (2026-08-14).** There is no standalone `apps/marketing` deployable:
 > marketing routes live in `apps/web`. `apps/runner` is an additive Cloudflare Queue/Workflows
@@ -24,7 +24,7 @@ These follow directly from the engineering plan; everything below is pinned to t
 
 - **Auth/MCP/OIDC owner = `apps/api` (Hono).** `/api/auth/*`, the `oidcProvider()`/`mcp()` discovery endpoints, and the `/mcp` endpoint are all served by `apps/api`. The auth _handler_ lives on the API, but Better Auth's `baseURL` is **dynamic** (`BETTER_AUTH_ALLOWED_HOSTS`): each Next app proxies `/api/auth/*` to the API same-origin, so a browser request resolves `baseURL` to its **product origin** (OAuth callback + cookie first-party there) while a direct API/MCP request resolves to the **API origin** (the OIDC/MCP issuer). `BETTER_AUTH_URL` is the fallback. (Engineering §2 recommends Hono; see open issue if Next is chosen instead.)
 - **Three Next apps + one API**, all 12-factor, env-var-only deploy. Each deployable validates **only the variables it actually consumes** via its own `@docket/env` composition.
-- **Hosting (overridable):** Vercel for `web`, `marketing`, `admin`, and `api`; **Neon serverless Postgres**. Dev mirrors prod: identical variable names and Zod validation, different values.
+- **Hosting (overridable):** Cloudflare Workers for the product web app and marketing; GCP Cloud Run for API and admin; **Neon serverless Postgres**. Dev mirrors prod: identical variable names and Zod validation, different values.
 - **Domains (canonical example; substitute real domains in bootstrap):**
 
   | Logical                        | Dev                     | Prod                                    |
@@ -218,23 +218,23 @@ Athena is the built-in agent; compute/cost/telemetry are **not** stored by Docke
 
 ### 1.7 Operational / observability (optional but defined for parity)
 
-| Name                                        | Apps | Scope         | D/P            | What it is                                                                                        | Where to obtain                                                   |
-| ------------------------------------------- | ---- | ------------- | -------------- | ------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
-| `CRON_SECRET`                               | api  | server        | D=P            | Shared secret guarding the data-lifecycle deletion sweep cron endpoint (`Authorization: Bearer`). | Bootstrap generates `openssl rand -hex 32`; Vercel Cron sends it. |
-| `SENTRY_DSN` / `NEXT_PUBLIC_SENTRY_DSN`     | all  | server/client | D=P (optional) | Error reporting DSN.                                                                              | sentry.io → project → Client Keys (DSN).                          |
-| `EXPORT_BUCKET_URL` / `EXPORT_BUCKET_TOKEN` | api  | server        | P (optional)   | Storage target for org export artifacts in the lifecycle pipeline (e.g. Vercel Blob).             | Vercel Blob store token, or chosen object store.                  |
-| `VERCEL_OIDC_TOKEN`                         | all  | server        | auto           | Vercel-injected OIDC token (do not set manually; pulled by `vercel env pull`).                    | Managed by Vercel.                                                |
+| Name                                    | Apps | Scope         | D/P            | What it is                                                                                                                    | Where to obtain                                                                                         |
+| --------------------------------------- | ---- | ------------- | -------------- | ----------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `CRON_SECRET`                           | api  | server        | D=P            | Shared secret guarding the data-lifecycle deletion sweep cron endpoint (`Authorization: Bearer`).                             | Bootstrap generates the secret; Cloud Scheduler sends it.                                               |
+| `SENTRY_DSN` / `NEXT_PUBLIC_SENTRY_DSN` | all  | server/client | D=P (optional) | Error reporting DSN.                                                                                                          | sentry.io → project → Client Keys (DSN).                                                                |
+| `GCS_BLOB_BUCKET`                       | api  | server        | P (optional)   | Private bucket for retained API artifacts. Access is authorized through the API; stored `gs://` locators are not public URLs. | Production bootstrap creates `<project>-docket-artifacts`; runtime service-account ADC provides access. |
 
 ### 1.8 CI / bootstrap-only (never in app `.env`, never validated by `@docket/env`)
 
 These authenticate the **bootstrap script and CI to the cloud CLIs**; they are operator credentials, not runtime config.
 
-| Name                                  | Used by       | What it is                                                                                                                                          | Where to obtain                            |
-| ------------------------------------- | ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ |
-| `VERCEL_TOKEN`                        | bootstrap     | Optional Vercel access token for non-interactive `vercel env add/pull/link`; production CI uses the native Git integration and does not consume it. | Vercel → Account Settings → Tokens.        |
-| `VERCEL_ORG_ID` / `VERCEL_PROJECT_ID` | bootstrap     | Identify the Vercel team + project for scripted bootstrap writes (also written to `.vercel/project.json` by `vercel link`).                         | `vercel link` output, or Project Settings. |
-| `NEON_API_KEY`                        | bootstrap, CI | Non-interactive `neonctl` auth (`neonctl --api-key`).                                                                                               | Neon Console → Account → API keys.         |
-| `STRIPE_API_KEY` (test)               | bootstrap     | Lets bootstrap run `stripe products/prices create` non-interactively (`stripe --api-key`).                                                          | Stripe test secret key (`sk_test_…`).      |
+| Name                                                           | Used by         | What it is                                                                                                                                                   | Where to obtain                                                                                    |
+| -------------------------------------------------------------- | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------- |
+| `GCP_WIF_PROVIDER` / `GCP_SERVICE_ACCOUNT`                     | CI              | Workload Identity Federation configuration for native Google Cloud deployment.                                                                               | Existing production bootstrap and selected Google Cloud project.                                   |
+| `TURBO_API` / `TURBO_TEAM` / `GCP_TURBO_CACHE_SERVICE_ACCOUNT` | CI              | Dedicated IAM-protected cache endpoint, namespace and invoker identity. `TURBO_TOKEN` is generated per invocation through WIF or native local impersonation. | Production bootstrap.                                                                              |
+| `TURBO_REMOTE_CACHE_SIGNATURE_KEY`                             | CI, local Turbo | HMAC key for signed cache artifacts; kept separate from the short-lived authentication token.                                                                | The pinned `docket-turbo-cache-signing-key` Secret Manager version and synchronized GitHub secret. |
+| `NEON_API_KEY`                                                 | bootstrap, CI   | Non-interactive `neonctl` auth (`neonctl --api-key`).                                                                                                        | Neon Console → Account → API keys.                                                                 |
+| `STRIPE_API_KEY` (test)                                        | bootstrap       | Lets bootstrap run `stripe products/prices create` non-interactively (`stripe --api-key`).                                                                   | Stripe test secret key (`sk_test_…`).                                                              |
 
 ---
 
@@ -254,7 +254,7 @@ packages/env/
 │  ├─ stripe.ts        # STRIPE_*, DOCKET_PRICE_*
 │  ├─ mcp.ts           # MCP_*, OIDC_LOGIN_PAGE_URL
 │  ├─ agent.ts         # ATHENA_*, ANTHROPIC_API_KEY
-│  ├─ ops.ts           # CRON_SECRET, SENTRY_DSN, EXPORT_*
+│  ├─ ops.ts           # CRON_SECRET, SENTRY_DSN, GCS_BLOB_BUCKET
 │  ├─ env.api.ts       # createEnv extends [shared, db, auth, stripe, mcp, agent, ops]
 │  ├─ env.web.ts       # createEnv extends [shared, stripe(client only)] (+ auth client base via shared)
 │  ├─ env.marketing.ts # createEnv extends [shared]

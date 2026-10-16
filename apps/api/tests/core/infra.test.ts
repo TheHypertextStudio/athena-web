@@ -449,7 +449,7 @@ describe('container', () => {
 
     expect(container.mailer).toBe(container.mailer);
     expect(() => container.billing).toThrow('STRIPE_SECRET_KEY');
-    expect(() => container.blob).toThrow('BLOB_READ_WRITE_TOKEN');
+    expect(() => container.blob).toThrow('GCS_BLOB_BUCKET');
   });
 });
 

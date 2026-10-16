@@ -39,7 +39,7 @@ import { capabilityGuard } from '../permissions/capability-guard';
 
 type DocumentImageRow = typeof documentImage.$inferSelect;
 
-/** Max size for one inline image (bytes). Kept under Vercel's ~4.5 MB request-body limit. */
+/** Max size for one inline image (bytes). Bounded to limit upload memory and request duration. */
 const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
 /** The cap expressed in MB, for the user-facing over-limit message. */
 const MAX_IMAGE_MB = MAX_IMAGE_BYTES / (1024 * 1024);

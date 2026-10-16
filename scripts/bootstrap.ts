@@ -45,6 +45,8 @@ import type { StaffRole } from '../packages/db/src/index';
 
 import { parseEnvFile } from './env-file';
 import { API_RUNTIME_SA_ROLES, grantProjectRoles } from './bootstrap/gcp-iam';
+import { setupDocketStorage, type StorageBootstrapResult } from './bootstrap/gcp-storage';
+import { assertWritesEveryName } from './bootstrap/github';
 import { reconcileLocalConfig } from './bootstrap/local-config';
 import { cloudflaredConfigYaml, launchAgentPlist, tunnelRegistrationUrls } from './tunnel';
 
@@ -134,6 +136,7 @@ export const REQUIRED_GCP_APIS: readonly string[] = [
   'cloudscheduler.googleapis.com', // drives the secret-guarded cron endpoints (pnpm scheduler:setup)
   'cloudidentity.googleapis.com', // reads Workspace group membership for operator SSO
   'aiplatform.googleapis.com', // runs Athena turns through Vertex with the API service account
+  'storage.googleapis.com', // private API artifacts and the signed Turbo remote cache
 ];
 
 /** Project roles the CI deploy account needs. */
@@ -161,6 +164,9 @@ export const REPO_VAR_NAMES: readonly string[] = [
   'GCP_SERVICE_ACCOUNT',
   'GCP_API_RUNTIME_SERVICE_ACCOUNT',
   'GCP_WIF_PROVIDER',
+  'GCP_TURBO_CACHE_SERVICE_ACCOUNT',
+  'TURBO_API',
+  'TURBO_TEAM',
   'NEON_PROJECT_ID',
 ];
 
@@ -180,6 +186,7 @@ export const PRODUCTION_VAR_NAMES: readonly string[] = [
   'ADMIN_URL',
   'BETTER_AUTH_ALLOWED_HOSTS',
   'GOOGLE_OAUTH_PUBLIC',
+  'GCS_BLOB_BUCKET',
 ];
 
 export const AR_REPO = 'docket';
@@ -564,6 +571,7 @@ function setupGcp(cfg: Config): {
   saEmail: string;
   apiRuntimeSaEmail: string;
   wifProvider: string;
+  storage: StorageBootstrapResult;
 } {
   section('GCP — APIs');
 
@@ -599,15 +607,7 @@ function setupGcp(cfg: Config): {
     ok(`created: ${apiRuntimeSaEmail}`);
   }
 
-  for (const role of DEPLOY_SA_ROLES) {
-    exec(`gcloud projects add-iam-policy-binding ${cfg.project} \
-      --member="serviceAccount:${saEmail}" \
-      --role="${role}" \
-      --condition=None \
-      --quiet`);
-    ok(role);
-  }
-
+  grantProjectRoles(cfg.project, saEmail, DEPLOY_SA_ROLES, exec, ok);
   grantProjectRoles(cfg.project, apiRuntimeSaEmail, API_RUNTIME_SA_ROLES, exec, ok);
 
   // This org role only covers security groups. The grant is best-effort because the project can
@@ -728,7 +728,11 @@ function setupGcp(cfg: Config): {
   }
   note([...created, ...skipped].join('\n') || '(none)', 'Secret Manager');
 
-  return { saEmail, apiRuntimeSaEmail, wifProvider };
+  section('GCP — Private artifacts and signed Turbo cache');
+  const storage = setupDocketStorage({ ...cfg, apiRuntimeSaEmail, wifPool: WIF_POOL });
+  ok('Private storage, cache identity and signed remote cache configured');
+
+  return { saEmail, apiRuntimeSaEmail, wifProvider, storage };
 }
 
 /**
@@ -777,29 +781,12 @@ function provisionOperatorGroups(cfg: Config, orgId: string): void {
 
 // ── github ────────────────────────────────────────────────────────────────────
 
-/**
- * Fail loudly when the variables written no longer cover the names promised to `pnpm doctor`.
- *
- * @throws {Error} when a promised name is absent, naming it.
- */
-function assertWritesEveryName(
-  written: Readonly<Record<string, string>>,
-  promised: readonly string[],
-  constantName: string,
-): void {
-  const missing = promised.filter((name) => !(name in written));
-  if (missing.length > 0) {
-    throw new Error(
-      `${constantName} promises ${missing.join(', ')}, which bootstrap never writes.`,
-    );
-  }
-}
-
 function setupGithub(
   cfg: Config,
   saEmail: string,
   apiRuntimeSaEmail: string,
   wifProvider: string,
+  storage: StorageBootstrapResult,
 ): void {
   section('GitHub — Repository Variables');
 
@@ -809,6 +796,9 @@ function setupGithub(
     GCP_SERVICE_ACCOUNT: saEmail,
     GCP_API_RUNTIME_SERVICE_ACCOUNT: apiRuntimeSaEmail,
     GCP_WIF_PROVIDER: wifProvider,
+    GCP_TURBO_CACHE_SERVICE_ACCOUNT: storage.cacheClientSaEmail,
+    TURBO_API: storage.cacheUrl,
+    TURBO_TEAM: 'docket',
     NEON_PROJECT_ID: cfg.neonProjectId,
   };
   const productionVars: Record<string, string> = {
@@ -822,6 +812,7 @@ function setupGithub(
       new URL(cfg.adminUrl).host,
     ].join(','),
     GOOGLE_OAUTH_PUBLIC: 'false',
+    GCS_BLOB_BUCKET: storage.artifactBucket,
     ...(cfg.workspaceDomain
       ? {
           GOOGLE_WORKSPACE_DOMAIN: cfg.workspaceDomain,
@@ -1286,8 +1277,8 @@ async function main(): Promise<void> {
     return;
   }
   const cfg = await gatherConfig();
-  const { saEmail, apiRuntimeSaEmail, wifProvider } = setupGcp(cfg);
-  setupGithub(cfg, saEmail, apiRuntimeSaEmail, wifProvider);
+  const { saEmail, apiRuntimeSaEmail, wifProvider, storage } = setupGcp(cfg);
+  setupGithub(cfg, saEmail, apiRuntimeSaEmail, wifProvider, storage);
 
   if (!flags.skipProviders) {
     await runIntegrationSetup({

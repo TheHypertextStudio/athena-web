@@ -131,8 +131,7 @@ export function toAppRuntimeEnv(): AppRuntimeEnv {
     ...notificationRuntimeEnv(),
     ...telephonyRuntimeEnv(),
     ...integrationRuntimeEnv(),
-    ...(env.BLOB_READ_WRITE_TOKEN ? { BLOB_READ_WRITE_TOKEN: env.BLOB_READ_WRITE_TOKEN } : {}),
-    ...(env.EXPORT_BUCKET_URL ? { EXPORT_BUCKET_URL: env.EXPORT_BUCKET_URL } : {}),
+    ...(env.GCS_BLOB_BUCKET ? { GCS_BLOB_BUCKET: env.GCS_BLOB_BUCKET } : {}),
     ...(env.MAPBOX_ACCESS_TOKEN ? { MAPBOX_ACCESS_TOKEN: env.MAPBOX_ACCESS_TOKEN } : {}),
   };
 }

@@ -97,7 +97,7 @@ function toOut(a: AttachmentRow): z.input<typeof AttachmentOut> {
   };
 }
 
-/** Max size for an uploaded file attachment (bytes). Kept under Vercel's ~4.5 MB request-body limit. */
+/** Max size for an uploaded file attachment (bytes). Bounded to limit upload memory and request duration. */
 const MAX_UPLOAD_BYTES = 4 * 1024 * 1024;
 /** The cap expressed in MB, for the user-facing over-limit message. */
 const MAX_UPLOAD_MB = MAX_UPLOAD_BYTES / (1024 * 1024);

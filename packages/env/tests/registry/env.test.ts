@@ -316,7 +316,7 @@ describe('slices', () => {
     expect(() => opsServer.CRON_SECRET.parse(undefined)).toThrow();
     expect(opsServer.CRON_SECRET.parse('cron-secret')).toBe('cron-secret');
     expect(opsServer.SENTRY_DSN.parse(undefined)).toBeUndefined();
-    expect(opsServer.EXPORT_BUCKET_URL.parse(undefined)).toBeUndefined();
+    expect(opsServer.GCS_BLOB_BUCKET.parse(undefined)).toBeUndefined();
     expect(opsServer.RESEND_API_KEY.parse(undefined)).toBeUndefined();
 
     expect(() => clientShared.NEXT_PUBLIC_API_URL.parse(undefined)).toThrow();
@@ -1011,41 +1011,24 @@ describe('api composition', () => {
     });
   });
 
-  describe('cross-field: export bucket pairing', () => {
-    it('passes when both URL and token are set', async () => {
+  describe('private GCS storage configuration', () => {
+    it('accepts a non-secret bucket without static storage credentials', async () => {
       for (const [key, value] of Object.entries({
         ...validApiEnv(),
-        EXPORT_BUCKET_URL: 'https://bucket.example.com',
-        EXPORT_BUCKET_TOKEN: 'bucket-token',
+        GCS_BLOB_BUCKET: 'studio-artifacts',
       })) {
         vi.stubEnv(key, value);
       }
       const mod = await import('../../src/api');
-      expect(mod.env.EXPORT_BUCKET_URL).toBe('https://bucket.example.com');
+      expect(mod.env.GCS_BLOB_BUCKET).toBe('studio-artifacts');
+      expect(findVar('GCS_BLOB_BUCKET')?.sensitive).not.toBe(true);
     });
 
-    it('throws when only the URL is set', async () => {
-      for (const [key, value] of Object.entries({
-        ...validApiEnv(),
-        EXPORT_BUCKET_URL: 'https://bucket.example.com',
-      })) {
-        vi.stubEnv(key, value);
-      }
-      await expect(import('../../src/api')).rejects.toThrow(
-        'EXPORT_BUCKET_URL and EXPORT_BUCKET_TOKEN must be set together',
+    it('rejects URLs and path prefixes in the bucket field', () => {
+      expect(opsServer.GCS_BLOB_BUCKET.safeParse('https://storage.example/bucket').success).toBe(
+        false,
       );
-    });
-
-    it('throws when only the token is set', async () => {
-      for (const [key, value] of Object.entries({
-        ...validApiEnv(),
-        EXPORT_BUCKET_TOKEN: 'bucket-token',
-      })) {
-        vi.stubEnv(key, value);
-      }
-      await expect(import('../../src/api')).rejects.toThrow(
-        'EXPORT_BUCKET_URL and EXPORT_BUCKET_TOKEN must be set together',
-      );
+      expect(opsServer.GCS_BLOB_BUCKET.safeParse('bucket/exports').success).toBe(false);
     });
   });
 

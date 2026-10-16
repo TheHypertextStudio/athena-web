@@ -162,7 +162,10 @@ the existing core-screen CI setting, to include the documentation proxy in eithe
 See [Docket web setup](apps/web/README.md) and
 [Workers compatibility](docs/engineering/workers-compatibility.md) for local isolation, native
 staging commands and the required production approval. The frontend uses the native production Worker;
-Vercel frontend publication is retired independently of Turbo remote cache and Blob storage.
+private API artifacts use Google Cloud Storage with the Cloud Run runtime identity. Signed Turbo
+artifacts use the maintained Ducktors cache server on IAM-protected Cloud Run with a separate GCS
+bucket. CI authenticates through short-lived Workload Identity Federation tokens; local developers
+use native `gcloud` identity tokens. See [storage and cache setup](docs/engineering/deployment.md#private-storage-and-signed-turbo-cache).
 Ordinary CI and backend/native publication retain their existing triggers and mandatory checks;
 there are no custom candidate/promote workflows or temporary publication-hold flags.
 

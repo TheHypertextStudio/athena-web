@@ -268,10 +268,6 @@ function assertCrossFieldRules(e: typeof env): void {
     }
   }
 
-  if (Boolean(e.EXPORT_BUCKET_URL) !== Boolean(e.EXPORT_BUCKET_TOKEN)) {
-    fail('EXPORT_BUCKET_URL and EXPORT_BUCKET_TOKEN must be set together.');
-  }
-
   // oAuthProxy needs BOTH the shared secret and the production URL to route preview OAuth through
   // prod; half-configured would silently disable the proxy or fail the OAuth flow at runtime.
   if (Boolean(e.OAUTH_PROXY_SECRET) !== Boolean(e.OAUTH_PROXY_PRODUCTION_URL)) {

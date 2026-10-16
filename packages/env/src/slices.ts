@@ -348,9 +348,11 @@ export const voiceServer = {
 export const opsServer = {
   CRON_SECRET: z.string().min(1),
   SENTRY_DSN: z.string().optional(),
-  BLOB_READ_WRITE_TOKEN: z.string().optional(),
-  EXPORT_BUCKET_URL: z.string().optional(),
-  EXPORT_BUCKET_TOKEN: z.string().optional(),
+  /** Private GCS bucket; the runtime service account supplies ADC without a storage secret. */
+  GCS_BLOB_BUCKET: z
+    .string()
+    .regex(/^[a-z0-9][a-z0-9._-]{1,220}[a-z0-9]$/)
+    .optional(),
   /** Resend API key for production transactional email over HTTPS, and inbound body reads. */
   RESEND_API_KEY: z.string().min(1).optional(),
   /**

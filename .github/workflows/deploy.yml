@@ -117,6 +117,7 @@ jobs:
           NODE_ENV: production
           APP_MODE: production
           API_URL: "${{ vars.API_URL }}"
+          GCS_BLOB_BUCKET: "${{ vars.GCS_BLOB_BUCKET }}"
           WEB_URL: "${{ vars.WEB_URL }}"
           PUBLIC_BRIEF_HOST: "${{ vars.PUBLIC_BRIEF_HOST }}"
           CUSTOM_DOMAIN_CNAME_TARGET: "${{ vars.CUSTOM_DOMAIN_CNAME_TARGET }}"

@@ -1,0 +1,34 @@
+name: Authenticate the signed Turbo cache
+description: Mint a short-lived Cloud Run ID token for trusted Studio main workflows.
+
+runs:
+  using: composite
+  steps:
+    # Other refs and incomplete configuration retain the workflow's local-only cache setting.
+    # The invoker service account also restricts WIF to this repository's main branch subject.
+    - id: auth
+      if: >-
+        github.repository == 'TheHypertextStudio/athena-web' &&
+        github.ref == 'refs/heads/main' &&
+        (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
+        (github.workflow_ref == 'TheHypertextStudio/athena-web/.github/workflows/ci.yml@refs/heads/main' ||
+        github.workflow_ref == 'TheHypertextStudio/athena-web/.github/workflows/e2e.yml@refs/heads/main') &&
+        vars.TURBO_API != '' && vars.TURBO_TEAM != '' &&
+        vars.GCP_WIF_PROVIDER != '' && vars.GCP_TURBO_CACHE_SERVICE_ACCOUNT != '' &&
+        env.TURBO_REMOTE_CACHE_SIGNATURE_KEY != ''
+      uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
+      with:
+        workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+        service_account: ${{ vars.GCP_TURBO_CACHE_SERVICE_ACCOUNT }}
+        token_format: id_token
+        id_token_audience: ${{ vars.TURBO_API }}
+        id_token_include_email: true
+        create_credentials_file: false
+
+    - name: Enable the authenticated remote cache
+      if: steps.auth.outputs.id_token != ''
+      shell: bash
+      env:
+        CACHE_TOKEN: ${{ steps.auth.outputs.id_token }}
+      run: |
+        printf '%s\n' "TURBO_TOKEN=$CACHE_TOKEN" 'TURBO_CACHE=local:rw,remote:rw' >> "$GITHUB_ENV"

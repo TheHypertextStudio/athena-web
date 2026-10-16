@@ -344,8 +344,7 @@ describe('buildAppContainer', () => {
       PUSH_ENDPOINT: 'https://push.example/send',
       PUSH_API_KEY: 'push-key',
       PUSH_APP_ID: 'push-app',
-      BLOB_READ_WRITE_TOKEN: 'blob-token',
-      EXPORT_BUCKET_URL: 'https://blob.example/exports',
+      GCS_BLOB_BUCKET: 'studio-artifacts',
       OPENAI_API_KEY: 'sk-openai-x',
     });
     expect(container.sms).toBeInstanceOf(RealSmsSender);
@@ -360,9 +359,8 @@ describe('buildAppContainer', () => {
     expect(container.taskSynthesizer).toBeDefined();
   });
 
-  it('builds every real service in production mode with the price/gateway/bucket fields omitted', () => {
-    // Covers the "no priceKey", "no webhookSecret/portalConfigId", and "no EXPORT_BUCKET_URL"
-    // sides of buildAppContainer's optional-field ternaries.
+  it('builds every real service in production mode with the optional price/gateway fields omitted', () => {
+    // Covers the omitted priceKey, webhookSecret, and portalConfigId configuration.
     const container = buildAppContainer({
       APP_MODE: 'production',
       STRIPE_SECRET_KEY: 'sk_live_x',
@@ -377,7 +375,7 @@ describe('buildAppContainer', () => {
       PUSH_ENDPOINT: 'https://push.example/send',
       PUSH_API_KEY: 'push-key',
       PUSH_APP_ID: 'push-app',
-      BLOB_READ_WRITE_TOKEN: 'vercel_blob_rw_teststore123_abcdef',
+      GCS_BLOB_BUCKET: 'studio-artifacts',
     });
     expect(container.billing).toBeDefined();
     expect(container.blob).toBeDefined();
@@ -406,10 +404,8 @@ describe('buildAppContainer', () => {
     );
   });
 
-  it('refuses production blob storage without a token', () => {
+  it('refuses production blob storage without a bucket', () => {
     const container = buildAppContainer(PROD_BASE);
-    expect(() => container.blob).toThrow(
-      'Missing required production config: BLOB_READ_WRITE_TOKEN',
-    );
+    expect(() => container.blob).toThrow('Missing required production config: GCS_BLOB_BUCKET');
   });
 });

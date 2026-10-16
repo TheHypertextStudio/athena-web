@@ -5,16 +5,11 @@
   // These live here — not in the root globalEnv — so they only invalidate API caches, never the
   // Next apps'. `build` is `tsc` (no runtime env) and `test` sets its own env, so neither needs them.
   "tasks": {
-    // `BLOB_READ_WRITE_TOKEN` is set on the Vercel project and read only at runtime, but under
-    // `envMode: "strict"` turbo withholds anything undeclared and warns that the build may fail.
-    // `passThroughEnv` hands it to the build without adding it to the cache key, so rotating the
-    // blob token does not invalidate a build that never reads it.
     "build": {
       // Every emitted runtime must identify this checkout's HEAD, including a source-identical
       // commit. A source-hash cache hit would otherwise restore the previous Git revision.
       "cache": false,
-      "env": ["DOCKET_BUILD_REVISION"],
-      "passThroughEnv": ["BLOB_READ_WRITE_TOKEN"]
+      "env": ["DOCKET_BUILD_REVISION"]
     },
     // `tests/core/infra.test.ts` compares the published RPC contract against the router source, and
     // it reads the contract from `dist/rpc-contract.d.ts`. Ordering that build here rather than in
@@ -46,8 +41,7 @@
         "CRON_SECRET",
         "CREDENTIALS_ENCRYPTION_KEY",
         "SENTRY_DSN",
-        "BLOB_READ_WRITE_TOKEN",
-        "EXPORT_BUCKET_*",
+        "GCS_BLOB_BUCKET",
         "BILLING_CANARY_EMAILS",
         "BILLING_ENABLED",
         "BILLING_RECONCILIATION_MODE",

@@ -18,14 +18,18 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-# The same Turbo Remote Cache ci.yml uses. Without these the build job below is the one place in
-# the pipeline still recomputing a Next build that ci.yml's `build` job has usually already done
-# and uploaded — same task, same hash, so it replays instead of rebuilding.
+# The build uses the same signed Cloud Run cache as CI. Only a trusted main dispatch enables
+# remote access; migrations and browser shards keep local-only caching.
 env:
-  TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+  TURBO_CACHE: local:rw
   TURBO_TEAM: ${{ vars.TURBO_TEAM }}
   TURBO_API: ${{ vars.TURBO_API }}
-  TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY }}
+  TURBO_REMOTE_CACHE_SIGNATURE_KEY: >-
+    ${{ github.repository == 'TheHypertextStudio/athena-web' &&
+    github.ref == 'refs/heads/main' &&
+    (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
+    (github.workflow_ref == 'TheHypertextStudio/athena-web/.github/workflows/ci.yml@refs/heads/main' ||
+    github.workflow_ref == 'TheHypertextStudio/athena-web/.github/workflows/e2e.yml@refs/heads/main') && secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY || '' }}
 
 jobs:
   # The production build runs once here rather than once per shard. Each of the four shards used
@@ -37,6 +41,7 @@ jobs:
     permissions:
       contents: read
       packages: read
+      id-token: write
     name: Build the app
     runs-on: ubuntu-latest
     env:
@@ -60,6 +65,8 @@ jobs:
       # first request — inside whichever test asked for it — which on a two-core runner outlasts
       # any per-test budget worth setting and makes the suite's result a function of which spec
       # drew the cold route.
+      - uses: ./.github/actions/turbo-cache
+
       - name: Build the app
         run: pnpm turbo run build --filter=@docket/web
 

@@ -346,12 +346,7 @@ function appName(env: Environment): string {
   return `Docket (${env})`;
 }
 
-const OBSERVABILITY_VARS = [
-  'SENTRY_DSN',
-  'BLOB_READ_WRITE_TOKEN',
-  'EXPORT_BUCKET_URL',
-  'EXPORT_BUCKET_TOKEN',
-] as const;
+const OBSERVABILITY_VARS = ['SENTRY_DSN', 'GCS_BLOB_BUCKET'] as const;
 
 export const PROVIDER_GROUPS: readonly ProviderGroup[] = [
   {
@@ -903,12 +898,8 @@ export const PROVIDER_GROUPS: readonly ProviderGroup[] = [
     vars: OBSERVABILITY_VARS,
     requiredVars: [],
     optionalVars: OBSERVABILITY_VARS,
-    optionalCapabilities: [
-      ['SENTRY_DSN'],
-      ['BLOB_READ_WRITE_TOKEN'],
-      ['EXPORT_BUCKET_URL', 'EXPORT_BUCKET_TOKEN'],
-    ],
-    optionalLabel: 'observability and export storage credentials',
+    optionalCapabilities: [['SENTRY_DSN'], ['GCS_BLOB_BUCKET']],
+    optionalLabel: 'observability and private artifact storage',
     instructions: () => [
       'All optional. Leave blank to disable each.',
       '',
@@ -916,9 +907,10 @@ export const PROVIDER_GROUPS: readonly ProviderGroup[] = [
       '  1) https://sentry.io → create/select a project (platform: Node).',
       '  2) Settings → "Client Keys (DSN)" → copy the DSN (https://…@…ingest.sentry.io/…).',
       '',
-      'Export storage (only if you use data-export artifacts):',
-      '  • Vercel Blob: provide BLOB_READ_WRITE_TOKEN; the store URL is derived automatically.',
-      '  • Custom storage: provide EXPORT_BUCKET_URL + EXPORT_BUCKET_TOKEN together.',
+      'Private artifact storage (exports, attachments, images, and billing evidence):',
+      '  • Set GCS_BLOB_BUCKET to the Studio Google Cloud Storage bucket name.',
+      '  • Grant the Cloud Run runtime service account bucket-scoped Storage Object User access.',
+      '  • Cloud Run supplies Application Default Credentials; no storage key or token is needed.',
     ],
   },
 ];

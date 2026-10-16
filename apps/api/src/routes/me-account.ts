@@ -467,7 +467,7 @@ const NOT_READY_MESSAGE: Partial<Record<AccountExportStatus, string>> = {
  * out of the contract `hc<AppType>` consumes (same convention as cron/webhooks/stream).
  * Authorization is implicit: only the caller's own `ready` export, keyed by their fresh session,
  * is served — the `:exportId` is verified to belong to them. The bytes flow through `BlobStore.get`,
- * so it works identically against local disk and prod Vercel Blob alike.
+ * so it works identically against local disk and private production storage alike.
  */
 export const meAccountExportDownload: Hono<AppEnv> = new Hono<AppEnv>().get(
   '/:exportId/file',

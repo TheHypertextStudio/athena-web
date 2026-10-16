@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "license": "UNLICENSED",
-  "description": "Blob storage contract, local filesystem double, and Vercel Blob adapter.",
+  "description": "Blob storage contract, local filesystem double, and private Google Cloud Storage adapter.",
   "exports": {
     ".": "./src/index.ts"
   },
@@ -20,7 +20,7 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
-    "@vercel/blob": "^2.6.1"
+    "@google-cloud/storage": "8.4.0"
   },
   "devDependencies": {
     "@docket/eslint-config": "workspace:*",

@@ -183,33 +183,13 @@ describe('guided integration bootstrap contracts', () => {
     if (!observability)
       throw new Error('Observability provider is missing from the guided catalog');
     expect(observability.optionalVars).toEqual(observability.vars);
-    expect(observability.optionalCapabilities).toEqual([
-      ['SENTRY_DSN'],
-      ['BLOB_READ_WRITE_TOKEN'],
-      ['EXPORT_BUCKET_URL', 'EXPORT_BUCKET_TOKEN'],
-    ]);
+    expect(observability.optionalCapabilities).toEqual([['SENTRY_DSN'], ['GCS_BLOB_BUCKET']]);
     expect(optionalProviderVars(observability, 'production')).toEqual(observability.vars);
     expect(setupProviderVars(observability, 'production', false)).toEqual([]);
     expect(setupProviderVars(observability, 'production', true)).toEqual(observability.vars);
     expect(classifyProviderStatus(observability, new Set())).toBe('missing');
     expect(classifyProviderStatus(observability, new Set(['SENTRY_DSN']))).toBe('configured');
-    expect(classifyProviderStatus(observability, new Set(['BLOB_READ_WRITE_TOKEN']))).toBe(
-      'configured',
-    );
-    expect(classifyProviderStatus(observability, new Set(['EXPORT_BUCKET_URL']))).toBe('partial');
-    expect(classifyProviderStatus(observability, new Set(['EXPORT_BUCKET_TOKEN']))).toBe('partial');
-    expect(
-      classifyProviderStatus(observability, new Set(['EXPORT_BUCKET_URL', 'EXPORT_BUCKET_TOKEN'])),
-    ).toBe('configured');
-    expect(
-      classifyProviderStatus(observability, new Set(['SENTRY_DSN', 'EXPORT_BUCKET_URL'])),
-    ).toBe('partial');
-    expect(
-      classifyProviderStatus(
-        observability,
-        new Set(['BLOB_READ_WRITE_TOKEN', 'EXPORT_BUCKET_TOKEN']),
-      ),
-    ).toBe('partial');
+    expect(classifyProviderStatus(observability, new Set(['GCS_BLOB_BUCKET']))).toBe('configured');
   });
 
   it('builds deploy bindings from existing canonical and legacy secrets only', () => {

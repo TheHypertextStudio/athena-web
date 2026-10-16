@@ -125,6 +125,10 @@ Prompts for: GCP project ID, region, GitHub repo (`owner/repo`), passkey domain,
    `API_SECRET_BINDINGS`
 10. Writes a `.env.local` skeleton with independent generated development secrets
 
+The production infrastructure pass also provisions private API artifacts and the signed Turbo
+cache described below. `--skip-infrastructure` skips these resources; use the ordinary production
+bootstrap pass to reconcile them.
+
 ### Prerequisites
 
 The bootstrap script checks for these and exits if any are missing or unauthenticated:
@@ -178,34 +182,39 @@ frontend cutover does not alter their origin routing.
 
 Set by `pnpm bootstrap`. Add missing ones with `gh variable set NAME --body "VALUE" --repo owner/repo`.
 
-| Variable                           | Set by               | Description                                                                                                               |
-| ---------------------------------- | -------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| `GCP_PROJECT_ID`                   | bootstrap            | GCP project ID (e.g. `my-project-123`)                                                                                    |
-| `GCP_REGION`                       | bootstrap            | Deployment region (e.g. `us-central1`)                                                                                    |
-| `GCP_SERVICE_ACCOUNT`              | bootstrap            | Full SA email: `docket-deploy@<project>.iam.gserviceaccount.com`                                                          |
-| `GCP_WIF_PROVIDER`                 | bootstrap            | Full WIF provider resource name: `projects/<num>/locations/global/workloadIdentityPools/github/providers/github-actions`  |
-| `PASSKEY_RP_ID`                    | bootstrap/manual     | WebAuthn relying-party domain. Production uses `clearthedocket.com`.                                                      |
-| `BETTER_AUTH_PASSKEY_LEGACY_RP_ID` | manual               | Temporary previous RP for native passkey migration. Unset removes the bridge.                                             |
-| `NEON_PROJECT_ID`                  | bootstrap            | Neon project ID (from Neon console)                                                                                       |
-| `API_URL`                          | manual (post-deploy) | Public custom-domain origin of `docket-api`                                                                               |
-| `WEB_URL`                          | manual (post-deploy) | Public custom-domain origin of the production web Worker                                                                  |
-| `ADMIN_URL`                        | manual (post-deploy) | Public custom-domain origin of `docket-admin`                                                                             |
-| `BETTER_AUTH_ALLOWED_HOSTS`        | manual               | Canonical web, API, and admin hosts plus old hosts during the migration window.                                           |
-| `GOOGLE_OAUTH_PUBLIC`              | manual               | `false` during review; `true` only after Google approval                                                                  |
-| `GOOGLE_OAUTH_TEST_EMAILS`         | manual               | Staged Docket user allowlist, initially `willieechalmers@gmail.com`                                                       |
-| `GCP_API_RUNTIME_SERVICE_ACCOUNT`  | bootstrap            | Runtime identity for `docket-api`: `docket-api@<project>.iam.gserviceaccount.com`. Unset ⇒ Cloud Run's default compute SA |
-| `ADMIN_GOOGLE_SSO_ENABLED`         | manual               | `false` until the Workspace groups exist AND the runtime SA can read them; `true` enables console Google sign-in          |
-| `ADMIN_GOOGLE_GROUP_ROLES`         | manual               | CSV of `group-email:staff-role` pairs, e.g. `docket-support@…:support,docket-admins@…:superadmin`                         |
-| `GOOGLE_WORKSPACE_DOMAIN`          | manual               | Workspace domain operator sign-in is confined to                                                                          |
-| `WORK_LOCATION_PROJECTION_ENABLED` | manual               | `false` during canonical bootstrap; `true` enables outbound linked-account projection                                     |
-| `LINEAR_AGENT_ENABLED`             | manual               | `false` until the signed Linear Agent sandbox matrix passes; `true` enables install, webhook, and relay surfaces          |
-| `API_SECRET_BINDINGS`              | bootstrap            | Non-secret multiline Cloud Run env-to-Secret Manager mapping; includes only configured providers                          |
+| Variable                           | Set by                             | Description                                                                                                               |
+| ---------------------------------- | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `GCP_PROJECT_ID`                   | bootstrap                          | GCP project ID (e.g. `my-project-123`)                                                                                    |
+| `GCP_REGION`                       | bootstrap                          | Deployment region (e.g. `us-central1`)                                                                                    |
+| `GCP_SERVICE_ACCOUNT`              | bootstrap                          | Full SA email: `docket-deploy@<project>.iam.gserviceaccount.com`                                                          |
+| `GCP_WIF_PROVIDER`                 | bootstrap                          | Full WIF provider resource name: `projects/<num>/locations/global/workloadIdentityPools/github/providers/github-actions`  |
+| `GCP_TURBO_CACHE_SERVICE_ACCOUNT`  | bootstrap                          | Dedicated cache invoker: `docket-turbo-cache-client@<project>.iam.gserviceaccount.com`                                    |
+| `TURBO_API`                        | bootstrap                          | HTTPS URL of the IAM-protected `docket-turbo-cache` Cloud Run service                                                     |
+| `TURBO_TEAM`                       | bootstrap                          | `docket`; an artifact namespace within this repository's dedicated cache                                                  |
+| `GCS_BLOB_BUCKET`                  | bootstrap (production environment) | Private API artifact bucket: `<project>-docket-artifacts`                                                                 |
+| `PASSKEY_RP_ID`                    | bootstrap/manual                   | WebAuthn relying-party domain. Production uses `clearthedocket.com`.                                                      |
+| `BETTER_AUTH_PASSKEY_LEGACY_RP_ID` | manual                             | Temporary previous RP for native passkey migration. Unset removes the bridge.                                             |
+| `NEON_PROJECT_ID`                  | bootstrap                          | Neon project ID (from Neon console)                                                                                       |
+| `API_URL`                          | manual (post-deploy)               | Public custom-domain origin of `docket-api`                                                                               |
+| `WEB_URL`                          | manual (post-deploy)               | Public custom-domain origin of the production web Worker                                                                  |
+| `ADMIN_URL`                        | manual (post-deploy)               | Public custom-domain origin of `docket-admin`                                                                             |
+| `BETTER_AUTH_ALLOWED_HOSTS`        | manual                             | Canonical web, API, and admin hosts plus old hosts during the migration window.                                           |
+| `GOOGLE_OAUTH_PUBLIC`              | manual                             | `false` during review; `true` only after Google approval                                                                  |
+| `GOOGLE_OAUTH_TEST_EMAILS`         | manual                             | Staged Docket user allowlist, initially `willieechalmers@gmail.com`                                                       |
+| `GCP_API_RUNTIME_SERVICE_ACCOUNT`  | bootstrap                          | Runtime identity for `docket-api`: `docket-api@<project>.iam.gserviceaccount.com`. Unset ⇒ Cloud Run's default compute SA |
+| `ADMIN_GOOGLE_SSO_ENABLED`         | manual                             | `false` until the Workspace groups exist AND the runtime SA can read them; `true` enables console Google sign-in          |
+| `ADMIN_GOOGLE_GROUP_ROLES`         | manual                             | CSV of `group-email:staff-role` pairs, e.g. `docket-support@…:support,docket-admins@…:superadmin`                         |
+| `GOOGLE_WORKSPACE_DOMAIN`          | manual                             | Workspace domain operator sign-in is confined to                                                                          |
+| `WORK_LOCATION_PROJECTION_ENABLED` | manual                             | `false` during canonical bootstrap; `true` enables outbound linked-account projection                                     |
+| `LINEAR_AGENT_ENABLED`             | manual                             | `false` until the signed Linear Agent sandbox matrix passes; `true` enables install, webhook, and relay surfaces          |
+| `API_SECRET_BINDINGS`              | bootstrap                          | Non-secret multiline Cloud Run env-to-Secret Manager mapping; includes only configured providers                          |
 
 ### Secrets (`secrets.*`)
 
-| Secret         | Set by    | Description                                                                   |
-| -------------- | --------- | ----------------------------------------------------------------------------- |
-| `NEON_API_KEY` | bootstrap | Neon API key — used by `neon-branch.yml` to create/delete PR preview branches |
+| Secret                             | Set by    | Description                                                                                                                  |
+| ---------------------------------- | --------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `NEON_API_KEY`                     | bootstrap | Neon API key — used by `neon-branch.yml` to create/delete PR preview branches                                                |
+| `TURBO_REMOTE_CACHE_SIGNATURE_KEY` | bootstrap | HMAC signing key, synchronized from the cache's pinned Secret Manager version; supplied only to trusted main cache workflows |
 
 ---
 
@@ -213,19 +222,104 @@ Set by `pnpm bootstrap`. Add missing ones with `gh variable set NAME --body "VAL
 
 Everything created by `pnpm bootstrap`:
 
-| Resource                      | Name / Path                                                                                                                  |
-| ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| Service account               | `docket-deploy@<project>.iam.gserviceaccount.com`                                                                            |
-| SA roles                      | `roles/run.developer`, `roles/artifactregistry.writer`, `roles/secretmanager.secretAccessor`, `roles/iam.serviceAccountUser` |
-| Artifact Registry             | `<region>-docker.pkg.dev/<project>/docket`                                                                                   |
-| WIF pool                      | `projects/<project>/locations/global/workloadIdentityPools/github`                                                           |
-| WIF provider                  | `…/providers/github-actions` (OIDC, scoped to your GitHub repo)                                                              |
-| Secret Manager: database URL  | `docket-database-url`                                                                                                        |
-| Secret Manager: migration URL | `docket-database-url-unpooled`                                                                                               |
-| Secret Manager: auth secret   | `docket-auth-secret` (generated by bootstrap)                                                                                |
-| Secret Manager: cron secret   | `docket-cron-secret` (generated by bootstrap)                                                                                |
-| Cloud Run: API                | `docket-api`                                                                                                                 |
-| Cloud Run: admin              | `docket-admin`                                                                                                               |
+| Resource                          | Name / Path                                                                                                                  |
+| --------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| Service account                   | `docket-deploy@<project>.iam.gserviceaccount.com`                                                                            |
+| SA roles                          | `roles/run.developer`, `roles/artifactregistry.writer`, `roles/secretmanager.secretAccessor`, `roles/iam.serviceAccountUser` |
+| Artifact Registry                 | `<region>-docker.pkg.dev/<project>/docket`                                                                                   |
+| WIF pool                          | `projects/<project>/locations/global/workloadIdentityPools/github`                                                           |
+| WIF provider                      | `…/providers/github-actions` (OIDC, scoped to your GitHub repo)                                                              |
+| Secret Manager: database URL      | `docket-database-url`                                                                                                        |
+| Secret Manager: migration URL     | `docket-database-url-unpooled`                                                                                               |
+| Secret Manager: auth secret       | `docket-auth-secret` (generated by bootstrap)                                                                                |
+| Secret Manager: cron secret       | `docket-cron-secret` (generated by bootstrap)                                                                                |
+| Cloud Run: API                    | `docket-api`                                                                                                                 |
+| Cloud Run: admin                  | `docket-admin`                                                                                                               |
+| GCS: API artifacts                | `<project>-docket-artifacts`; private, uniform access, public access prevention, soft delete disabled                        |
+| GCS: Turbo cache                  | `<project>-docket-turbo-cache`; same privacy settings, 14-day age cleanup                                                    |
+| Cloud Run: Turbo cache            | `docket-turbo-cache`; pinned upstream container, required IAM, HTTP/2                                                        |
+| Cache runtime service account     | `docket-turbo-cache@<project>.iam.gserviceaccount.com`                                                                       |
+| Cache client service account      | `docket-turbo-cache-client@<project>.iam.gserviceaccount.com`                                                                |
+| Secret Manager: cache signing key | `docket-turbo-cache-signing-key`; numeric version pinned on the cache service                                                |
+
+---
+
+## Private storage and signed Turbo cache
+
+The existing production bootstrap owns both storage resources through
+`scripts/bootstrap/gcp-storage.ts`. It uses native `gcloud` and `gh` commands and preserves existing
+resources and signing keys. Run the production infrastructure pass with the selected Studio
+accounts and project; no separate cache lifecycle runner or publication workflow is required.
+
+The API runs as `docket-api@athena-services.iam.gserviceaccount.com` and receives
+`GCS_BLOB_BUCKET=athena-services-docket-artifacts`. Its bucket grants that runtime identity
+`roles/storage.objectUser` at bucket scope. The adapter uses Application Default Credentials;
+there is no downloaded service-account key or storage access token. Objects remain private, and
+application routes authorize access before returning their bytes. Stored `gs://` locators are not
+public download links. Retained artifacts have no automatic age cleanup. When moving existing
+storage, copy every retained object and verify bytes and database references before retiring the
+old store or its credentials.
+
+The cache is [Ducktors Turborepo Remote Cache 2.14.3](https://github.com/ducktors/turborepo-remote-cache/releases/tag/v2.14.3),
+pinned to image index `sha256:781b0549dca80cf5aca27bf416fc766d44cad57333a7368098a755c5f12b8822`.
+Its native `google-cloud-storage` backend uses its dedicated runtime identity through ADC. The
+container sets `AUTH_MODE=none` because Cloud Run requires IAM authentication before forwarding
+any request. Bootstrap enables the invoker IAM check and removes public invoker bindings. Never
+disable that check or grant `allUsers` or `allAuthenticatedUsers` access to this service.
+
+The service enables HTTP/2 on both Cloud Run and the container, streams artifacts, sets a 1 GiB
+upload limit, and uses request-based billing with zero minimum and one maximum instance. Its
+private bucket grants only the cache runtime `roles/storage.objectUser`. A native GCS lifecycle
+rule deletes cache objects older than 14 days; deletion is asynchronous. The API artifact bucket
+is separate and does not receive this rule.
+
+CI impersonates the cache client using the exact WIF subject
+`repo:TheHypertextStudio/athena-web:ref:refs/heads/main` in pool `github` of project `770668668034`.
+That service account has `roles/run.invoker` only on the cache service. The shared cache action
+mints an audience-bound ID token immediately before each cacheable task after installation.
+Pull requests, other refs, other repositories and incomplete configuration keep `TURBO_CACHE=local:rw`;
+they receive neither a cache token nor the HMAC signing secret. An unset `TURBO_API` cannot select
+Vercel's default remote endpoint in these workflows. `TURBO_TEAM=docket` selects an object namespace;
+the dedicated endpoint, identities and bucket enforce the repository boundary.
+
+The server receives `TURBO_REMOTE_CACHE_SIGNATURE_KEY` from its pinned version of
+`docket-turbo-cache-signing-key`; GitHub holds the same value under the existing signing-secret name.
+Bootstrap creates a key only when absent and synchronizes the selected version without rotating it
+on ordinary reruns. Rotate the server and client configuration together. The runtime gets a
+secret-level accessor binding. Existing project-level secret-access grants remain separate and
+must be considered when auditing who can read the key.
+
+For local cache access, the operator needs `roles/iam.serviceAccountTokenCreator` on the cache
+client account and permission to read the signing secret. Bootstrap scopes impersonation to that
+account. Authenticate the Studio account, then use native commands in the current shell:
+
+```sh
+export TURBO_API="$(gcloud run services describe docket-turbo-cache \
+  --project=athena-services --region=us-central1 --account=willie@hypertext.studio \
+  --format='value(status.url)')"
+export TURBO_TEAM=docket
+export TURBO_REMOTE_CACHE_SIGNATURE_KEY="$(gcloud secrets versions access latest \
+  --secret=docket-turbo-cache-signing-key --project=athena-services \
+  --account=willie@hypertext.studio)"
+export TURBO_TOKEN="$(gcloud auth print-identity-token \
+  --account=willie@hypertext.studio \
+  --impersonate-service-account=docket-turbo-cache-client@athena-services.iam.gserviceaccount.com \
+  --audiences="$TURBO_API" --include-email)"
+export TURBO_CACHE=local:rw,remote:rw
+pnpm turbo run build --filter=@docket/api
+```
+
+Do not print or commit either secret. The signing version must match the server's pinned version;
+bootstrap synchronizes `latest` at reconciliation time. Google service-account ID tokens expire
+after one hour; mint a fresh token before another invocation when needed. Local-only work can set
+`TURBO_CACHE=local:rw` and unset `TURBO_TOKEN` and `TURBO_REMOTE_CACHE_SIGNATURE_KEY`.
+
+Cache acceptance requires two runs of the same cacheable task and hash with distinct empty local
+cache directories and `--cache=remote:rw --summarize`, a remote HIT on the second run, restored
+artifacts, a matching signature, and correlated hosted requests. Also check that an unauthenticated
+request is rejected, a mismatched signing key produces a miss, and an artifact larger than 32 MiB
+survives the actual HTTP/2 path. Local cache hits and a healthy server do not establish remote cache
+acceptance. `CI` is part of the task hash, so local and CI runs can intentionally have different hashes.
 
 ---
 

@@ -51,6 +51,7 @@ import internalNotifications from './routes/internal-notifications';
 import internalAthenaExecution from './routes/internal-athena-execution';
 import { meAccountExportDownload } from './routes/me-account';
 import publicBriefs from './routes/publish-public';
+import { settingsImages } from './routes/settings-images';
 import timePublic from './routes/time-public';
 import streamSse from './routes/stream-sse';
 import integrationsGithub from './routes/integrations-github';
@@ -208,6 +209,9 @@ server.route('/v1/me/account/exports', meAccountExportDownload);
 // exemption into that gate would make "no `/v1` route is accidentally public" a claim about a
 // pattern match rather than about structure. See `routes/publish-public.ts`.
 server.route('/v1/public', publicBriefs);
+// Selected avatars retain their public image behavior; the route only serves current record
+// references and cannot address private artifacts or arbitrary object keys.
+server.route('/v1/public/settings-images', settingsImages);
 // The token-authorized "what am I working on" read, mounted for the same structural reason as
 // the published brief above: it must not live inside the session-gated `/v1` app. Its
 // credential-free CORS policy is declared by path in `cors.ts`. See `routes/time-public.ts`.

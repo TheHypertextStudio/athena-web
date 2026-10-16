@@ -28,6 +28,8 @@ export interface SectionHeaderProps {
   description: string;
   /** Optional trailing content aligned to the header's end (e.g. an action). */
   action?: ReactNode;
+  /** Expressive headings for guided work definition; ordinary settings remain compact. */
+  headingSize?: 'compact' | 'expressive';
 }
 
 /**
@@ -36,11 +38,19 @@ export interface SectionHeaderProps {
  * @param props - The {@link SectionHeaderProps}.
  * @returns the rendered section header.
  */
-export function SectionHeader({ title, description, action }: SectionHeaderProps): JSX.Element {
+export function SectionHeader({
+  title,
+  description,
+  action,
+  headingSize = 'compact',
+}: SectionHeaderProps): JSX.Element {
   return (
     <header className="flex flex-col gap-3 @2xl:flex-row @2xl:flex-wrap @2xl:items-center @2xl:justify-between">
       <div className="flex flex-col gap-1">
-        <Text as="h2" token="title-medium">
+        <Text
+          as={headingSize === 'expressive' ? 'h1' : 'h2'}
+          token={headingSize === 'expressive' ? 'headline-medium' : 'title-medium'}
+        >
           {title}
         </Text>
         <Text as="p" token="body-medium" tone="muted">

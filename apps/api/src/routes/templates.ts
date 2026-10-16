@@ -82,7 +82,7 @@ const templates = new Hono<AppEnv>()
   )
   .post(
     '/',
-    capabilityGuard('contribute'),
+    capabilityGuard('contribute', { sharedWorkMutation: false }),
     apiDoc({
       status: 201,
       tag: 'Templates',
@@ -120,7 +120,7 @@ const templates = new Hono<AppEnv>()
   )
   .patch(
     '/:id',
-    capabilityGuard('contribute'),
+    capabilityGuard('contribute', { sharedWorkMutation: false }),
     apiDoc({
       tag: 'Templates',
       summary: 'Update a template',
@@ -145,7 +145,7 @@ const templates = new Hono<AppEnv>()
   )
   .delete(
     '/:id',
-    capabilityGuard('contribute'),
+    capabilityGuard('contribute', { sharedWorkMutation: false }),
     apiDoc({
       tag: 'Templates',
       summary: 'Delete a template',

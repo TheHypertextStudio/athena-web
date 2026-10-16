@@ -1,3 +1,8 @@
+import {
+  lockRegisteredSeriesDefinition,
+  insertCanonicalCompatibilitySeries,
+  registeredPublishedRevisionId,
+} from './registered-series-definition';
 import { triggerStorage } from './series-trigger-storage';
 import { recurrenceBlueprintBinding } from './work-template-series-binding';
 /** Recurrence authoring with immutable revisions and explicit occurrence exceptions. */
@@ -222,6 +227,7 @@ async function latestProcessRevision(
   organizationId: string,
   definitionId: string,
 ): Promise<typeof processRevision.$inferSelect> {
+  const registeredId = await registeredPublishedRevisionId(tx, organizationId, definitionId);
   const rows = await tx
     .select({ revision: processRevision })
     .from(processRevision)
@@ -230,6 +236,7 @@ async function latestProcessRevision(
       and(
         eq(processRevision.definitionId, definitionId),
         eq(processRevision.organizationId, organizationId),
+        registeredId ? eq(processRevision.id, registeredId) : undefined,
         eq(processDefinition.status, 'published'),
         isNull(processDefinition.archivedAt),
       ),
@@ -311,20 +318,27 @@ export async function createRecurrenceSeriesInTransaction(
     actorId: command.actorId,
     definitionId: body.processDefinitionId,
   });
+  await lockRegisteredSeriesDefinition(tx, {
+    organizationId: command.organizationId,
+    actorId: command.actorId,
+    definitionId: body.processDefinitionId,
+  });
   const revision = await latestProcessRevision(
     tx,
     command.organizationId,
     body.processDefinitionId,
   );
-  const inserted = await tx
-    .insert(recurrenceSeries)
-    .values({
-      organizationId: command.organizationId,
-      definitionId: body.processDefinitionId,
-      name: body.name,
-      createdBy: command.actorId,
-    })
-    .returning({ id: recurrenceSeries.id });
+  const inserted = await insertCanonicalCompatibilitySeries(() =>
+    tx
+      .insert(recurrenceSeries)
+      .values({
+        organizationId: command.organizationId,
+        definitionId: body.processDefinitionId,
+        name: body.name,
+        createdBy: command.actorId,
+      })
+      .returning({ id: recurrenceSeries.id }),
+  );
   const created = inserted[0];
   if (!created) throw new ConflictError('Recurrence series could not be created');
   await persistSeriesRevision(tx, {

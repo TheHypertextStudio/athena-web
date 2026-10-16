@@ -1,6 +1,7 @@
 /** Validated authoring of immutable process revisions that never rewrite existing instances. */
 import {
   actor,
+  invocationHead,
   cycle,
   genId,
   label,
@@ -29,7 +30,6 @@ import {
   ProcessDefinitionCreate,
   ProcessDefinitionDetailOut,
   ProcessDefinitionSummaryOut,
-  ProcessDefinitionUpdate,
   type ProcessDefinitionCreate as ProcessDefinitionCreateValue,
   type ProcessDefinitionFromProjectCreate,
   type ProcessStepTiming,
@@ -39,12 +39,13 @@ import type { z } from 'zod';
 
 import { ConflictError, CycleError, NotFoundError } from '../../error';
 import { calendarDaysBetween } from '@docket/planning/calendar-date';
-import { listActiveProcessDefinitionRows } from './list-store';
 import { prepareProcessTemplates, type PreparedProcessDefinition } from './task-template-identity';
 import { projectProcessTasks, timingFromRow } from './process-task-projection';
 
 import { bindPublishedProcessBlueprint } from './work-template-authoring';
 import { requireLegacyActor, requireLegacyDefinitionAccess } from './legacy-definition-access';
+import { canonicalDefinitionDetail } from './canonical-definition';
+import { registerCanonicalPublication } from './canonical-definition-publication';
 import { archiveLegacyDefinition } from './legacy-definition-archive';
 import { captureLegacyProjectSource } from './legacy-source-capture';
 import {
@@ -717,17 +718,33 @@ export async function appendPublishedProcessRevision(
       .orderBy(desc(processRevision.number))
       .limit(1);
     const revisionNumber = (latest[0]?.number ?? 0) + 1;
-    await tx
-      .update(processDefinition)
-      .set({ name: definition.name, description: definition.description, status: 'published' })
-      .where(eq(processDefinition.id, command.definitionId));
-    return persistRevision(tx, {
+    const [head] = await tx
+      .select()
+      .from(invocationHead)
+      .where(
+        and(
+          eq(invocationHead.id, command.definitionId),
+          eq(invocationHead.organizationId, command.organizationId),
+        ),
+      )
+      .for('update')
+      .limit(1);
+    if (head?.canonicalAuthoringAt && (head.archivedAt || head.status === 'archived'))
+      throw new ConflictError('Archived process cannot change');
+    if (!head?.canonicalAuthoringAt)
+      await tx
+        .update(processDefinition)
+        .set({ name: definition.name, description: definition.description, status: 'published' })
+        .where(eq(processDefinition.id, command.definitionId));
+    const saved = await persistRevision(tx, {
       organizationId: command.organizationId,
       actorId: command.actorId,
       definitionId: command.definitionId,
       revisionNumber,
       definition,
     });
+    await registerCanonicalPublication(tx, { head, revisionId: saved.revisionId, definition });
+    return saved;
   });
   const { templateEffects, ...published } = result;
   await reconcileTemplateCreationEffects(templateEffects);
@@ -742,6 +759,19 @@ export async function loadProcessDefinitionDetail(
   actorId: string | undefined,
 ): Promise<z.input<typeof ProcessDefinitionDetailOut>> {
   await requireLegacyDefinitionAccess(database, { organizationId, actorId, definitionId });
+  const canonical = await canonicalDefinitionDetail(database, {
+    organizationId,
+    actorId,
+    definitionId,
+  });
+  return canonical ?? loadNormalizedProcessDefinitionDetail(database, organizationId, definitionId);
+}
+
+async function loadNormalizedProcessDefinitionDetail(
+  database: Database,
+  organizationId: string,
+  definitionId: string,
+): Promise<z.input<typeof ProcessDefinitionDetailOut>> {
   const definitions = await database
     .select()
     .from(processDefinition)
@@ -888,77 +918,10 @@ export async function loadProcessDefinitionDetail(
   });
 }
 
-/** List active org-scoped process definitions as compact latest-revision summaries. */
-export async function listProcessDefinitions(
-  database: Database,
-  organizationId: string,
-  pagination: { readonly cursor?: string | undefined; readonly limit: number },
-  actorId: string | undefined,
-): Promise<z.input<typeof ProcessDefinitionSummaryOut>[]> {
-  const definitions = await listActiveProcessDefinitionRows(
-    database,
-    organizationId,
-    actorId,
-    pagination,
-  );
-  return Promise.all(
-    definitions.map(async (definition) => {
-      const latest = await database
-        .select({ number: processRevision.number })
-        .from(processRevision)
-        .where(eq(processRevision.definitionId, definition.id))
-        .orderBy(desc(processRevision.number))
-        .limit(1);
-      const number = latest[0]?.number;
-      if (!number) throw new ConflictError('Process definition has no published revision');
-      return ProcessDefinitionSummaryOut.parse({
-        id: definition.id,
-        organizationId: definition.organizationId,
-        name: definition.name,
-        description: definition.description,
-        status: definition.status,
-        latestRevisionNumber: number,
-        createdAt: definition.createdAt.toISOString(),
-        updatedAt: definition.updatedAt.toISOString(),
-      });
-    }),
-  );
-}
-
-/** Update mutable definition metadata without rewriting executable revision history. */
-export async function updateProcessDefinitionMetadata(
-  database: Database,
-  command: {
-    readonly organizationId: string;
-    readonly actorId: string | undefined;
-    readonly definitionId: string;
-    readonly patch: z.input<typeof ProcessDefinitionUpdate>;
-  },
-): Promise<z.input<typeof ProcessDefinitionDetailOut>> {
-  await requireLegacyDefinitionAccess(database, command, 'manage');
-  const patch = ProcessDefinitionUpdate.parse(command.patch);
-  const updated = await database
-    .update(processDefinition)
-    .set({
-      ...(patch.name === undefined ? {} : { name: patch.name }),
-      ...(patch.description === undefined ? {} : { description: patch.description }),
-    })
-    .where(
-      and(
-        eq(processDefinition.id, command.definitionId),
-        eq(processDefinition.organizationId, command.organizationId),
-        isNull(processDefinition.archivedAt),
-      ),
-    )
-    .returning({ id: processDefinition.id });
-  if (!updated[0]) throw new NotFoundError('Process definition not found');
-  return loadProcessDefinitionDetail(
-    database,
-    command.organizationId,
-    command.definitionId,
-    command.actorId,
-  );
-}
+export {
+  listProcessDefinitions,
+  updateProcessDefinitionMetadata,
+} from './process-definition-metadata';
 
 /** Archive a process definition and end active series without deleting historical work. */
 export async function archiveProcessDefinition(

@@ -18,7 +18,7 @@ export function WorkTemplateDefinitionReview({
   orgId: string;
   form: WorkTemplateFormState;
 }): JSX.Element {
-  const templates = useApiQuery(workTemplatesDef(orgId));
+  const templates = useApiQuery(workTemplatesDef(orgId, { includeDrafts: true }));
   const blueprint = form.definition.blueprint;
   return (
     <section

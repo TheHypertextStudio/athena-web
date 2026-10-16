@@ -1,3 +1,4 @@
+import { templateReferenceWriteError } from '../templates/copy-reference-errors';
 /**
  * `@docket/api` — showing the work already under a plan's root initiative.
  *
@@ -198,7 +199,8 @@ export async function refreshExistingWork(row: PlanRow): Promise<PlanRow> {
       revision: row.revision + 1,
     })
     .where(and(eq(planDraft.id, row.id), eq(planDraft.revision, row.revision)))
-    .returning();
+    .returning()
+    .catch(templateReferenceWriteError);
   if (updated[0]) return updated[0];
   // Someone edited the plan in between; return what they left rather than a stale copy.
   const current = await db.select().from(planDraft).where(eq(planDraft.id, row.id)).limit(1);

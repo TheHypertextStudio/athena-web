@@ -1,3 +1,4 @@
+import { templateReferenceWriteError } from './copy-reference-errors';
 import { db, template } from '@docket/db';
 import type { TemplateCreate, TemplateUpdate } from '@docket/work/template-contract';
 import { WorkTemplateDefinition } from '@docket/work/work-template-contract';
@@ -16,6 +17,8 @@ import {
 } from './persistence';
 import { archiveWorkTemplate, createWorkTemplate } from './service';
 import { visibleTemplateWhere } from './visibility';
+import { prepareTemplateCopyScopePublication } from './copy-publication';
+import { templateCopyPendingSelection } from './copy-reference-integrity';
 import { serializableTx } from '../serializable-tx';
 import {
   readPublicationDraft,
@@ -121,6 +124,7 @@ export async function updateTemplate(
         : await lockTemplate(tx, orgId, id, actorId);
     if (locked.draftRevision !== before.draftRevision)
       throw new ConflictError('Template draft changed');
+    await prepareTemplateCopyScopePublication(tx, locked, actorId, scope.scope);
     const [draft] = await tx
       .update(template)
       .set({
@@ -141,7 +145,7 @@ export async function updateTemplate(
     const after =
       scope.scope === 'organization' ? await appendPublication(tx, draft, actorId) : draft;
     return { before, after };
-  });
+  }).catch(templateReferenceWriteError);
   await reconcileTemplateImages(orgId, id, 'upsert');
   return result;
 }
@@ -157,7 +161,9 @@ export async function deleteTemplate(
   const current = await requireVisibleTemplate(orgId, actorId, id);
   await requireTemplateAuthor(actor);
   if (current.latestPublishedVersionId) return archiveWorkTemplate(actor, id);
-  const row = await db.transaction(async (tx) => {
+  const pending = await db.transaction((tx) => templateCopyPendingSelection(tx, actor, id));
+  if (pending) return archiveWorkTemplate(actor, id);
+  const row = await serializableTx(async (tx) => {
     const locked = await lockTemplate(tx, orgId, id, actorId);
     if (await templateDraftInUse(tx, orgId, id)) throw new ConflictError('Template is in use');
     if (locked.isBase || locked.latestPublishedVersionId)
@@ -168,7 +174,7 @@ export async function deleteTemplate(
       .returning();
     if (!deleted) throw new NotFoundError('Template not found');
     return deleted;
-  });
+  }).catch(templateReferenceWriteError);
   await reconcileTemplateImages(orgId, id, 'delete');
   return row;
 }

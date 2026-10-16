@@ -15,7 +15,7 @@ import type { ActorCtx } from '../context';
 import { TaskId } from '@docket/work/ids';
 import { z } from 'zod';
 
-import { requireTemplateUndoAuthor } from '../lib/templates/service';
+import { requireUndoReceiptAccess } from './undo-access';
 import { workScheduleUndoAccess } from '../lib/recurrence/work-schedule-undo-access';
 import { NotFoundError } from '../error';
 import { createCapturedTasks } from './capture-template-tasks';
@@ -251,22 +251,13 @@ export function registerWriteTools(server: McpRegistrar, ctx: McpContext): void 
     (input) =>
       runTool(async () => {
         const actorCtx = await scopedActor(ctx, input.orgId, 'work:write');
-        await authorize(actorCtx, 'contribute', {
-          kind: 'organization',
-          id: input.orgId,
-          orgId: input.orgId,
-        });
-
         // Defaulting to the caller's own latest change is scoped to their actor and to the door
         // they came through: "undo that" never reaches for a colleague's work or an app edit.
         const targetId =
           input.changeSetId ?? (await latestOwnChangeSet(input.orgId, actorCtx.actorId));
         if (!targetId) throw new NotFoundError('Nothing to undo');
 
-        await requireTemplateUndoAuthor(
-          { orgId: input.orgId, actorId: actorCtx.actorId },
-          targetId,
-        );
+        await requireUndoReceiptAccess(actorCtx, targetId);
         const { summary, outcomes } = await undoWithAccess(actorCtx, targetId);
         for (const outcome of outcomes) {
           if (reindexes(outcome)) await enqueueSearchUpsert(input.orgId, outcome.kind, outcome.id);

@@ -1,6 +1,7 @@
-import { processDefinition, recurrenceSeries, type Database } from '@docket/db';
+import { processDefinition, recurrenceSeries, invocationHead, type Database } from '@docket/db';
 import { and, eq, isNull, ne } from 'drizzle-orm';
 import { requireLegacyDefinitionAccess } from './legacy-definition-access';
+import { canonicalDefinitionHead } from './canonical-definition';
 import { requireScheduleAccess } from './schedule-access';
 
 /**
@@ -19,6 +20,7 @@ export async function archiveLegacyDefinition(
   const { organizationId, actorId, definitionId } = input;
   await database.transaction(async (tx) => {
     await requireLegacyDefinitionAccess(tx, { organizationId, actorId, definitionId }, 'manage');
+    const head = await canonicalDefinitionHead(tx, input, 'update');
     const series = await tx
       .select({ id: recurrenceSeries.id })
       .from(recurrenceSeries)
@@ -33,15 +35,21 @@ export async function archiveLegacyDefinition(
       .for('update');
     for (const row of series)
       await requireScheduleAccess(tx, { organizationId, actorId, seriesId: row.id }, 'manage');
-    await tx
-      .update(processDefinition)
-      .set({ status: 'archived', archivedAt: now })
-      .where(
-        and(
-          eq(processDefinition.id, definitionId),
-          eq(processDefinition.organizationId, organizationId),
-        ),
-      );
+    if (head)
+      await tx
+        .update(invocationHead)
+        .set({ status: 'archived', archivedAt: now, revision: head.revision + 1 })
+        .where(eq(invocationHead.id, head.id));
+    else
+      await tx
+        .update(processDefinition)
+        .set({ status: 'archived', archivedAt: now })
+        .where(
+          and(
+            eq(processDefinition.id, definitionId),
+            eq(processDefinition.organizationId, organizationId),
+          ),
+        );
     await tx
       .update(recurrenceSeries)
       .set({ status: 'ended', endedAt: now })

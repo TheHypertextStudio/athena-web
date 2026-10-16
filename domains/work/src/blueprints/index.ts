@@ -15,3 +15,10 @@ export { diffBlueprint } from './diff';
 export { captureBlueprint } from './capture';
 export { discoverPublicationReferences } from './publication-references';
 export { matchedBlueprintRow, type BlueprintMatchIndex } from './diff-matching';
+export { validateProspectiveBlueprintDefinition } from './prospective';
+export type {
+  ProspectiveBlueprintSnapshot,
+  ProspectiveBlueprintBinding,
+  ProspectiveBlueprintInput,
+  ProspectiveBlueprintGraph,
+} from './prospective';

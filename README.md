@@ -76,6 +76,20 @@ included work from recurring work and keeps one editor in focus. Undoing Program
 unchanged installed routines while preserving already generated work and run history. See the
 [Program schedule specification](docs/engineering/specs/work-template-schedules.md) for retained
 history, private drafts and the staged legacy migration.
+The Work templates library puts unfinished definitions and unpublished edits under Continue defining,
+ahead of ready-to-use work. Required definitions stay beside the work that needs them; a published
+version stays available while its next revision is being shaped. Choose starting work opens the
+gallery by organizational context and outcomes. Review the real
+included and recurring structure, make optional adjustments, then keep private drafts or explicitly
+publish independent copies. Complete startup, nonprofit, agency and personal starting sets remain
+available alongside smaller selections. Manual authoring and gallery use are available on every plan.
+Saved copy reviews reopen current canonical drafts and show unpublished dependency pins honestly;
+interrupted saves reconcile the original request instead of creating another bundle. Undo reverses the
+aggregate copy while retaining later edits, used definitions and publication history. These interfaces
+use `/templates/definitions/gallery` for discovery, checked preview and copy acceptance, with saved
+bundle reentry and Undo under `/gallery/copies`. See the
+[gallery specification](docs/engineering/specs/work-template-gallery-athena.md) for the separate
+Athena, onboarding and cross-workspace delivery layers.
 See the [identity engineering specification](docs/engineering/specs/work-template-identity.md) and
 [blueprint specification](docs/engineering/specs/work-template-blueprints.md) for migration ordering,
 private-draft preservation, transactional creation and REST/MCP compatibility.

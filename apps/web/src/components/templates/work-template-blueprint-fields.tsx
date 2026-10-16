@@ -22,7 +22,7 @@ export function WorkTemplateBlueprintFields({
   rootEditor?: ReactNode;
 }): JSX.Element {
   const childNouns = useBlueprintChildNouns();
-  const query = useApiQuery(workTemplatesDef(orgId));
+  const query = useApiQuery(workTemplatesDef(orgId, { includeDrafts: true }));
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const rowRefs = useRef(new Map<string, HTMLButtonElement>());
   const blueprint = form.definition.blueprint;

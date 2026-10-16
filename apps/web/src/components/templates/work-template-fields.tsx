@@ -227,14 +227,13 @@ export function WorkTemplatePurposeFields({
     <div className="flex max-w-2xl min-w-0 flex-col gap-5">
       <div>
         <h2 tabIndex={-1} className="text-title-large">
-          What kind of work is this?
+          Name the work your workspace repeats
         </h2>
         <p className="text-body-medium text-on-surface-variant">
           Give a kind of work a shared name, such as Event, client engagement, or volunteer
           onboarding.
         </p>
       </div>
-      <TemplateKindField form={form} existing={existing} />
       <Field label="Template name">
         <Input
           variant="plain"
@@ -257,9 +256,21 @@ export function WorkTemplatePurposeFields({
           }}
         />
       </Field>
-      <TemplateDisclosure title="Icon and draft visibility">
+      <section className="flex min-w-0 flex-col gap-2">
+        <h3 className="text-title-medium">How this work is organized</h3>
+        <TemplateKindField form={form} existing={existing} />
+      </section>
+      {!existing ? (
+        <section className="flex min-w-0 flex-col gap-2" aria-label="Draft privacy">
+          <h3 className="text-title-medium">Draft privacy</h3>
+          <p className="text-body-medium text-on-surface-variant">
+            Choose who can review the draft. Publishing it for your workspace is a separate action.
+          </p>
+          <DraftPrivacyFields form={form} teams={options.teamOptions} />
+        </section>
+      ) : null}
+      <TemplateDisclosure title="Icon">
         <WorkTemplateGlyphField orgId={orgId} form={form} isBase={isBase} />
-        {!existing ? <DraftPrivacyFields form={form} teams={options.teamOptions} /> : null}
       </TemplateDisclosure>
     </div>
   );
@@ -274,7 +285,12 @@ function TemplateKindField({ form, existing }: { form: Form; existing: boolean }
       description={
         form.definition.blueprint.steps.length
           ? 'Remove child work before changing the root kind.'
-          : undefined
+          : {
+              initiative: 'Connects related programs around an outcome.',
+              program: 'Organizes an ongoing area of work, including recurring routines.',
+              project: 'Organizes work toward a result with a finish.',
+              task: 'Defines a single action and any subtasks.',
+            }[form.kind]
       }
     >
       <Select

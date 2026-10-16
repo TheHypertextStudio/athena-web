@@ -53,3 +53,7 @@ export * from './retained-date-ownership';
 
 export * from './work-template-invocation-head';
 export * from './work-schedule-storage';
+
+export * from './work-template-invocation-revision';
+
+export * from './work-template-copy';

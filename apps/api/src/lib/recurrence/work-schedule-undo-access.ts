@@ -79,7 +79,7 @@ async function requireUndoWork(tx: Tx, caller: ActorCtx, reference: WorkReferenc
  * @throws When membership, affected work editing or an installed routine's management rights were revoked.
  */
 export function workScheduleUndoAccess(caller: UndoCaller): UndoAccessCheck {
-  return async (tx, entries) => {
+  const check: UndoAccessCheck = async (tx, entries) => {
     if (!entries.some((entry) => protectedKinds.has(entry.entityKind))) return;
     const current = await liveCaller(tx, caller);
     const schedules = [
@@ -97,4 +97,5 @@ export function workScheduleUndoAccess(caller: UndoCaller): UndoAccessCheck {
       );
     for (const reference of workReferences(entries)) await requireUndoWork(tx, current, reference);
   };
+  return Object.assign(check, { templateCopyCaller: caller });
 }

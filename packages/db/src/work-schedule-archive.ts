@@ -52,15 +52,19 @@ export interface ScheduleArchiveOptions {
   readonly onScheduleArchiveBatch?: (progress: ScheduleArchiveProgress) => void | Promise<void>;
 }
 
-async function readOriginalSource(
+/** Read and independently prove current or frozen original source without changing its conversion evidence. */
+export async function readProvedScheduleSource(
   connection: BlueprintMigrationConnection,
   id: string,
+  archived = false,
 ): Promise<ScheduleArchiveSource> {
   const [row] = await migrationRows<ScheduleArchiveSource>(
     connection,
     sql`
-    select docket_blueprint_retained_source(r.id) as source,to_jsonb(d) as header,to_jsonb(r) as "revisionAudit",
-      docket_blueprint_source_fingerprint(r.id) as fingerprint,c.source_fingerprint as "originalFingerprint",i.manifest,i.overrides,
+    select case when ${archived} then c.source_archive->'source' else docket_blueprint_retained_source(r.id) end as source,
+      case when ${archived} then c.source_archive->'header' else to_jsonb(d) end as header,
+      case when ${archived} then c.source_archive->'revisionAudit' else to_jsonb(r) end as "revisionAudit",
+      case when ${archived} then md5((c.source_archive->'source')::text) else docket_blueprint_source_fingerprint(r.id) end as fingerprint,c.source_fingerprint as "originalFingerprint",i.manifest,i.overrides,
       coalesce((select jsonb_agg(jsonb_build_object(
         'sourceStepId',entry.value->>'sourceStepId','blueprintStepId',projection.id,
         'sourceVersionId',version.id,'key',projection.key,'kind',projection.kind,'sort',projection.sort,
@@ -82,11 +86,12 @@ async function readOriginalSource(
   verifyOriginalScheduleSource(row);
   return row;
 }
-async function revisionArchive(
+/** Capture one independently proved immutable revision archive on the caller transaction. */
+export async function archiveWorkScheduleRevision(
   connection: BlueprintMigrationConnection,
   id: string,
 ): Promise<void> {
-  const row = await readOriginalSource(connection, id);
+  const row = await readProvedScheduleSource(connection, id);
   const archive: ScheduleSourceArchive = {
     revision: 1,
     source: row.source,
@@ -195,7 +200,7 @@ async function archiveSources(
   for (;;) {
     const batch = await database.transaction((tx) =>
       archiveWorkScheduleSourceBatch(tx, { ...input, after }, (id) =>
-        input.kind === 'revisions' ? revisionArchive(tx, id) : instanceArchive(tx, id),
+        input.kind === 'revisions' ? archiveWorkScheduleRevision(tx, id) : instanceArchive(tx, id),
       ),
     );
     if (batch.after === null) return totals;
@@ -239,7 +244,7 @@ export async function verifyWorkScheduleArchives(
     )
       throw new Error('Schedule source archive is incomplete or stale.');
     // A resumed checkpoint must also reject an unproved snapshot accepted by an older archiver.
-    await readOriginalSource(connection, row.id);
+    await readProvedScheduleSource(connection, row.id);
   }
   const missing = await migrationRows<{ id: string }>(
     connection,

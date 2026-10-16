@@ -125,3 +125,44 @@ Affected areas are `domains/work` leaf contracts, `domains/planning` recurrence 
 - Hidden/private/foreign templates, suspended creators, invalid assignments, forged/cross-transaction authority and over-limit expansion fail without partial work or leaked details.
 - Full-journal PostgreSQL upgrades, interrupted conversion and equivalent legacy REST/MCP execution pass before process-table removal. Required affected tests, types, lint, complexity and builds pass without ledger relaxation.
 - Authenticated populated UI acceptance covers both themes, desktop/phone/short-phone/320px, keyboard interaction, failed run/retry and independent default-schedule editing. Provider release evidence remains distinct from local source/runtime evidence.
+
+## Remaining legacy per-field timing conversion
+
+### Private rule representation
+
+Introduce a version2 private ScheduleDocument/rule vocabulary while retaining version1 documents and claims unchanged. Keep the existing public reusable definitions and exact publication closure. Add a normalized vector of private per-field timing rules; use the same root-qualified canonical path for single-root and forest schedules (the single root is its existing root key).
+
+Proposed logical form:
+
+```ts
+interface PrivateDateTarget {
+  rootKey: StepKey;
+  path: readonly StepKey[];
+  field: 'startDate' | 'dueDate' | 'targetDate';
+}
+type PrivateDateSource =
+  | { kind: 'run' }
+  | { kind: 'work_date'; work: ForestPath; field: DateField }
+  | { kind: 'after_completion'; works: readonly ForestPath[] };
+interface PrivateDateRule {
+  target: PrivateDateTarget;
+  source: PrivateDateSource;
+  offset: { days: number; unit: 'calendar' };
+}
+```
+
+This private vector is authoritative for the fields it names. An omitted legacy Project.targetDate or Task.startDate remains unmanaged; version2 conversion must suppress version1's implicit root-primary run-date ownership for these absent fields. Native authoring may explicitly emit its usual root due/target run rule. Stored authored dates/nulls remain distinct explicit pins; service-derived waiting nulls and timing overrides are not authored dates.
+
+Version1 normalization is exact: existing private timing maps target/source to the same implicit primary field used today; root ownership maps to the same run-date primary field. There is no reinterpretation of saved version1 JSON or its fingerprints.
+
+Rules validate field/kind compatibility, one rule per target (rootKey,path,field), selected path existence, exact selected publication kinds, same saved timezone, offsets/ranges and combined graph bounds. Project start and target are independent targets, not mutually exclusive rules on a node. Up to500 physical work items can have up to1000 managed fields. Cap physical affected writes at500 independently of read-only facts; keep private/public dependency graph edges bounded using the shared limits. Historical larger receipts remain complete paginated nonexecuting history, not truncated arrays.
+
+Preserve legacy declared dependency/completion-cycle rejection. Evaluate date-field references precisely, and do not turn physical parent creation order into a completion-date cycle: a Project can exist with unresolved startDate while one of its actual child Tasks supplies the later completion fact. Keep the dependency/existence graph separate from the date-field derivation graph.
+
+Legacy contracts can name a non-Task known step as a completion source, while retained runtime only supplies Task completion timestamps. Do not fabricate a Project/Milestone completion instant or substitute occurrence.completedAt/processing time. Such a retained reference remains waiting with a missing actual Task fact; new authoring can reject unsupported non-Task completion sources. Pin down this edge in a differential fixture before tightening any migrated contract. Out-of-range legacy offsets that cannot be represented lawfully remain explicit unresolved/nonexecuting conversion records with original data intact, never silently clamped or rewritten.
+
+Implement and validate these private contracts before registration or runtime cutover. The current
+source remains required until exact aliases, accepted receipts and migration ordering are proved.
+
+The [canonical cutover engineering specification](work-schedule-canonical-cutover.md) defines the
+immutable alias registry, guarded read adapter, conversion receipts and activation prerequisites.

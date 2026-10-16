@@ -1,14 +1,19 @@
 import type { JSX } from 'react';
-import { Badge, Field, Select } from '@docket/ui/primitives';
+import { Badge, Button, Field, Select } from '@docket/ui/primitives';
 import type { BlueprintStep } from '@docket/work/work-template-blueprint';
 import { WorkTypeId, WorkTypeVersionId } from '@docket/work/ids';
 import type { WorkTemplateOut } from '@docket/work/work-template-contract';
 import { useApiQuery } from '@/lib/query';
 import { QueryLoadFailure } from '@/components/feedback';
+import Link from '@/components/docket-link';
+import { sectionHref } from '@/components/settings/settings-registry';
+import { pendingTemplateReference } from './work-template-pending-reference';
 import { workTemplateVersionsDef } from './work-template-queries';
 
 type Reference = NonNullable<BlueprintStep['template']>;
 interface ReferenceProps {
+  orgId: string;
+  pendingDraft: WorkTemplateOut | undefined;
   step: Exclude<BlueprintStep, { kind: 'milestone' }>;
   reference: Reference;
   disabled: boolean;
@@ -32,44 +37,29 @@ export function WorkTemplateBlueprintReferenceFields({
   onChange: (step: BlueprintStep) => void;
 }): JSX.Element | null {
   const reference = step.template;
-  const versions = useBlueprintVersions(orgId, reference);
+  const authorized = templates.find(
+    (item) => item.id === reference?.workTypeId && item.targetType === step.kind,
+  );
+  const pendingDraft = pendingTemplateReference(reference, authorized);
+  const versions = useBlueprintVersions(orgId, pendingDraft ? null : reference);
   if (step.kind === 'milestone') return null;
   const choices = publishedChoices(templates, step.kind);
-  const selected = choices.find((item) => item.id === reference?.workTypeId);
+  const selected = pendingDraft ?? choices.find((item) => item.id === reference?.workTypeId);
   return (
     <div className="flex min-w-0 flex-col gap-3">
-      <Field
-        label="Nested template"
-        description="Inline children use the blank template's starting fields. A selected template also contributes its own children."
-      >
-        <Select
-          disabled={disabled}
-          value={reference?.workTypeId ?? ''}
-          onChange={(event) => {
-            onChange({
-              ...step,
-              template: event.target.value
-                ? {
-                    workTypeId: WorkTypeId.parse(event.target.value),
-                    selection: { kind: 'latest' },
-                  }
-                : null,
-            });
-          }}
-        >
-          <option value="">Inline child</option>
-          {reference && !selected ? (
-            <option value={reference.workTypeId}>Retained template</option>
-          ) : null}
-          {choices.map((item) => (
-            <option key={item.id} value={item.id}>
-              {item.definition.name}
-            </option>
-          ))}
-        </Select>
-      </Field>
+      <ReferencePicker
+        step={step}
+        reference={reference}
+        pendingDraft={pendingDraft}
+        selected={selected}
+        choices={choices}
+        disabled={disabled}
+        onChange={onChange}
+      />
       {reference ? (
         <SelectedReference
+          orgId={orgId}
+          pendingDraft={pendingDraft}
           step={step}
           reference={reference}
           selected={selected}
@@ -85,14 +75,75 @@ export function WorkTemplateBlueprintReferenceFields({
     </div>
   );
 }
+function ReferencePicker({
+  step,
+  reference,
+  pendingDraft,
+  selected,
+  choices,
+  disabled,
+  onChange,
+}: Pick<ReferenceProps, 'step' | 'pendingDraft' | 'selected' | 'disabled' | 'onChange'> & {
+  readonly reference: Reference | null;
+  readonly choices: readonly WorkTemplateOut[];
+}): JSX.Element {
+  return (
+    <Field
+      label="Nested template"
+      description="Inline children use the blank template's starting fields. A selected template also contributes its own children."
+    >
+      <Select
+        disabled={disabled}
+        value={reference?.workTypeId ?? ''}
+        onChange={(event) => {
+          if (pendingDraft?.id === event.target.value) return;
+          onChange({
+            ...step,
+            template: event.target.value
+              ? {
+                  workTypeId: WorkTypeId.parse(event.target.value),
+                  selection: { kind: 'latest' },
+                }
+              : null,
+          });
+        }}
+      >
+        <option value="">Inline child</option>
+        {reference && !selected ? (
+          <option value={reference.workTypeId}>Retained template</option>
+        ) : null}
+        {pendingDraft ? (
+          <option value={pendingDraft.id}>Unpublished {pendingDraft.definition.name}</option>
+        ) : null}
+        {choices.map((item) => (
+          <option key={item.id} value={item.id}>
+            {item.definition.name}
+          </option>
+        ))}
+      </Select>
+    </Field>
+  );
+}
 function SelectedReference(props: ReferenceProps): JSX.Element {
   const { reference, selected } = props;
+  if (props.pendingDraft)
+    return <PendingReference orgId={props.orgId} draft={props.pendingDraft} />;
   const latest = selected?.latestVersion?.id ?? props.versions[0]?.id;
   return (
     <>
       <Badge variant="outline">
         {selected?.definition.name ?? 'Retained template'} ·{' '}
-        {reference.selection.kind === 'latest' ? 'Latest published' : 'Pinned publication'}
+        {reference.selection.kind === 'latest'
+          ? 'Use latest publication'
+          : props.versions.some(
+                (version) =>
+                  reference.selection.kind === 'pinned' &&
+                  version.id === reference.selection.workTypeVersionId,
+              )
+            ? 'Pinned publication'
+            : props.pending
+              ? 'Checking publication'
+              : 'Publication unavailable — review required'}
       </Badge>
       <Field label="Template version">
         <Select
@@ -154,7 +205,7 @@ function PinnedReference({
         }}
       >
         {!versions.some((version) => version.id === pinnedId) ? (
-          <option value={pinnedId}>Retained published version</option>
+          <option value={pinnedId}>Publication unavailable — review required</option>
         ) : null}
         {versions.map((version) => (
           <option key={version.id} value={version.id}>
@@ -181,4 +232,29 @@ function useBlueprintVersions(orgId: string, reference: Reference | null) {
     ...workTemplateVersionsDef(orgId, reference?.workTypeId ?? ''),
     enabled: reference !== null,
   });
+}
+
+function PendingReference({
+  orgId,
+  draft,
+}: {
+  readonly orgId: string;
+  readonly draft: WorkTemplateOut;
+}): JSX.Element {
+  return (
+    <div className="flex min-w-0 flex-col gap-2">
+      <Badge variant="outline">Unpublished {draft.definition.name}</Badge>
+      <p className="text-body-small text-on-surface-variant">
+        Publish this definition before publishing its parent. This reference keeps the reserved
+        first publication.
+      </p>
+      {draft.canEdit ? (
+        <Button asChild variant="ghost" className="min-h-10 self-start">
+          <Link href={`${sectionHref(orgId, 'templates')}/${draft.id}?section=review`}>
+            Review {draft.definition.name}
+          </Link>
+        </Button>
+      ) : null}
+    </div>
+  );
 }

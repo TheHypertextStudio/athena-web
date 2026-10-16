@@ -1,8 +1,9 @@
 /** Cursor-backed reads shared by process-definition and recurrence-series services. */
-import { processDefinition, recurrenceSeries, type Database } from '@docket/db';
-import { and, asc, eq, isNull, ne } from 'drizzle-orm';
+import { processDefinition, recurrenceSeries, invocationHead, type Database } from '@docket/db';
+import { and, asc, eq, isNull, isNotNull, ne, or } from 'drizzle-orm';
 
 import { encodeIdCursor, seekAfterId } from '../list-cursor';
+import { canonicalDefinitionHead } from './canonical-definition';
 import { NotFoundError } from '../../error';
 import { requireLegacyActor, requireLegacyDefinitionAccess } from './legacy-definition-access';
 
@@ -44,6 +45,8 @@ async function visibleDefinition(
 ): Promise<typeof processDefinition.$inferSelect | undefined> {
   try {
     await requireLegacyDefinitionAccess(database, identity);
+    const head = await canonicalDefinitionHead(database, identity);
+    if (head) return head;
     const [row] = await database
       .select()
       .from(processDefinition)
@@ -68,11 +71,28 @@ async function activeDefinitionIds(
   return database
     .select({ id: processDefinition.id })
     .from(processDefinition)
+    .leftJoin(
+      invocationHead,
+      and(
+        eq(invocationHead.id, processDefinition.id),
+        eq(invocationHead.organizationId, processDefinition.organizationId),
+      ),
+    )
     .where(
       and(
         eq(processDefinition.organizationId, organizationId),
-        isNull(processDefinition.archivedAt),
-        ne(processDefinition.status, 'archived'),
+        or(
+          and(
+            isNotNull(invocationHead.canonicalAuthoringAt),
+            isNull(invocationHead.archivedAt),
+            ne(invocationHead.status, 'archived'),
+          ),
+          and(
+            isNull(invocationHead.canonicalAuthoringAt),
+            isNull(processDefinition.archivedAt),
+            ne(processDefinition.status, 'archived'),
+          ),
+        ),
         seekAfterId(processDefinition.id, cursor, 'asc'),
       ),
     )

@@ -17,6 +17,7 @@ import {
   seedSecondTeam,
 } from './mcp-catalog-harness';
 import { seedMcpUpdateOrg } from './mcp-update-tool-fixtures';
+import { seedMcpTemplateManager } from './mcp-template-creation-permission-fixtures';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -120,13 +121,12 @@ describe('template-backed work creation', () => {
   });
 
   it.each(['task', 'project', 'initiative', 'program'] as const)(
-    'copies the literal %s body and returns it for further editing',
+    'copies the literal %s body with required persisted permissions and returns it for further editing',
     async (kind) => {
-      const seed = await seedMcpUpdateOrg(
-        db,
-        schema,
-        kind === 'program' ? ['view', 'contribute', 'manage'] : ['view', 'contribute'],
-      );
+      const seed =
+        kind === 'program'
+          ? await seedMcpTemplateManager(db, schema)
+          : await seedMcpUpdateOrg(db, schema, ['view', 'contribute']);
       const markdown = '## Outcome\n\n- Fill this in.  \n\n## Evidence\n';
       const templateId = await saveTemplate(seed, { targetType: kind, description: markdown });
       const client = await connectCatalog(registerTools, seed.ctx);
@@ -160,7 +160,7 @@ describe('template-backed work creation', () => {
   );
 
   it('applies container defaults beneath manual properties that a template does not define', async () => {
-    const seed = await seedMcpUpdateOrg(db, schema, ['view', 'contribute', 'manage']);
+    const seed = await seedMcpTemplateManager(db, schema);
     const projectTemplate = await saveTemplate(seed, {
       targetType: 'project',
       description: '## Goal',
@@ -181,40 +181,40 @@ describe('template-backed work creation', () => {
       health: 'on_track',
     });
     const client = await connectCatalog(registerTools, seed.ctx);
-    const result = body<Created>(
-      await client.callTool({
-        name: 'organize',
-        arguments: {
-          orgId: seed.orgId,
-          items: [
-            {
-              ref: 'p',
-              kind: 'project',
-              title: 'Launch',
-              template: projectTemplate,
-              targetDate: '2026-10-30',
-              lead: seed.actorId,
-              priority: 'urgent',
-              description: '',
-            },
-            {
-              ref: 'i',
-              kind: 'initiative',
-              title: 'Events strategy',
-              template: initiativeTemplate,
-              owner: seed.actorId,
-            },
-            {
-              ref: 'o',
-              kind: 'program',
-              title: 'Events operation',
-              template: programTemplate,
-              health: 'off_track',
-            },
-          ],
-        },
-      }),
-    );
+    const response = await client.callTool({
+      name: 'organize',
+      arguments: {
+        orgId: seed.orgId,
+        items: [
+          {
+            ref: 'p',
+            kind: 'project',
+            title: 'Launch',
+            template: projectTemplate,
+            targetDate: '2026-10-30',
+            lead: seed.actorId,
+            priority: 'urgent',
+            description: '',
+          },
+          {
+            ref: 'i',
+            kind: 'initiative',
+            title: 'Events strategy',
+            template: initiativeTemplate,
+            owner: seed.actorId,
+          },
+          {
+            ref: 'o',
+            kind: 'program',
+            title: 'Events operation',
+            template: programTemplate,
+            health: 'off_track',
+          },
+        ],
+      },
+    });
+    expect(response.isError).not.toBe(true);
+    const result = body<Created>(response);
     const ids = new Map(result.placed.map((p) => [p.kind, p.id]));
     const [project] = await db
       .select()

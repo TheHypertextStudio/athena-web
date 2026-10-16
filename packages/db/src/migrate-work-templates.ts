@@ -1,3 +1,7 @@
+import {
+  backfillInvocationRevisionAliases,
+  type InvocationRevisionBackfillOptions,
+} from './invocation-revision-backfill';
 import { backfillWorkScheduleArchives, type ScheduleArchiveOptions } from './work-schedule-archive';
 import {
   backfillRetainedDateOwnership,
@@ -30,7 +34,8 @@ export interface WorkTemplateMigrationOptions
     WorkTemplateBackfillOptions,
     BlueprintBackfillOptions,
     RetainedDateBackfillOptions,
-    ScheduleArchiveOptions {
+    ScheduleArchiveOptions,
+    InvocationRevisionBackfillOptions {
   readonly migrationsFolder: string;
   readonly applySqlMigrations: (folder: string) => Promise<void>;
 }
@@ -93,4 +98,6 @@ export async function migrateWithWorkTemplateCheckpoint(
         `Schedule source proof deferred for ${progress.deferredRevisions} revisions; legacy sources remain retained until explicit retirement verification.`,
       );
   }
+  if (journal.entries.some((entry) => entry.tag === '0165_invocation_revision_aliases'))
+    await backfillInvocationRevisionAliases(database, options);
 }

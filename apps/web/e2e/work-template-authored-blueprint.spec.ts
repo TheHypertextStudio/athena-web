@@ -55,7 +55,7 @@ test('authors a private Project child outline and relative due date, reopens it,
   await page.getByRole('combobox', { name: 'Kind of work', exact: true }).selectOption('project');
   const title = `Authored blueprint ${Date.now()}`;
   await page.getByRole('textbox', { name: 'Template name', exact: true }).fill(title);
-  await page.getByRole('button', { name: 'Icon and draft visibility', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Draft privacy', exact: true })).toBeVisible();
   await expect(page.getByRole('combobox', { name: 'Draft visible to', exact: true })).toHaveValue(
     'personal',
   );

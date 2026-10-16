@@ -2,8 +2,12 @@
 import type { JSX } from 'react';
 import type { Blueprint, BlueprintStep } from '@docket/work/work-template-blueprint';
 import { useVocabulary } from '@docket/ui/hooks';
-import { Badge } from '@docket/ui/primitives';
+import { Badge, Button } from '@docket/ui/primitives';
 import { useApiQuery } from '@/lib/query';
+import type { WorkTemplateOut } from '@docket/work/work-template-contract';
+import Link from '@/components/docket-link';
+import { sectionHref } from '@/components/settings/settings-registry';
+import { pendingTemplateReference } from './work-template-pending-reference';
 import { workTemplateVersionsDef } from './work-template-queries';
 import { blueprintStepName } from './work-template-blueprint-edit';
 
@@ -47,20 +51,38 @@ export function WorkTemplateReviewNestedVersion({
   orgId,
   template,
   name,
+  selected,
 }: {
   orgId: string;
   template: NonNullable<BlueprintStep['template']>;
   name: string;
+  selected?: WorkTemplateOut | undefined;
 }): JSX.Element {
   const selection = template.selection;
+  const pending = pendingTemplateReference(template, selected);
   const versions = useApiQuery({
     ...workTemplateVersionsDef(orgId, template.workTypeId),
-    enabled: selection.kind === 'pinned',
+    enabled: selection.kind === 'pinned' && !pending,
   });
   const number =
     selection.kind === 'pinned'
       ? versions.data?.items.find((value) => value.id === selection.workTypeVersionId)?.number
       : undefined;
+  if (pending)
+    return (
+      <div className="flex min-w-0 flex-col gap-2">
+        <Badge variant="outline" className="max-w-full break-words whitespace-normal">
+          Unpublished {pending.definition.name} — publish this definition before its parent
+        </Badge>
+        {pending.canEdit ? (
+          <Button asChild variant="ghost" className="min-h-10 self-start">
+            <Link href={`${sectionHref(orgId, 'templates')}/${pending.id}?section=review`}>
+              Review {pending.definition.name}
+            </Link>
+          </Button>
+        ) : null}
+      </div>
+    );
   return (
     <Badge variant="outline" className="max-w-full break-words whitespace-normal">
       {name} ·{' '}
@@ -68,7 +90,9 @@ export function WorkTemplateReviewNestedVersion({
         ? 'Latest publication when work is created'
         : number
           ? `Fixed at Version ${number}`
-          : 'Fixed publication'}
+          : versions.isPending
+            ? 'Checking publication'
+            : 'Publication unavailable — review required'}
     </Badge>
   );
 }

@@ -57,6 +57,8 @@ export interface SettingsSectionPageProps {
   readonly description?: string;
   /** A control aligned to the header's trailing edge. */
   readonly action?: ReactNode;
+  /** Use the shared expressive heading only for guided work-definition surfaces. */
+  readonly headingSize?: 'compact' | 'expressive';
   /**
    * The section this page is nested under.
    *
@@ -92,6 +94,7 @@ export function SettingsSectionPage({
   title,
   description,
   action,
+  headingSize = 'compact',
   parent,
   loading = false,
   children,
@@ -112,7 +115,12 @@ export function SettingsSectionPage({
         {/* Above the title, because that is where you look for where you came from — and because
             `action` means the section's own primary control everywhere else in Settings. */}
         {parent ? <SettingsBackLink href={parent.href} label={parent.label} /> : null}
-        <SectionHeader title={resolvedTitle} description={resolvedDescription} action={action} />
+        <SectionHeader
+          title={resolvedTitle}
+          description={resolvedDescription}
+          action={action}
+          headingSize={headingSize}
+        />
       </div>
       {loading ? (
         // placeholder: the section's body, whatever that section reads.

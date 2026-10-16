@@ -255,7 +255,19 @@
         "./work-schedule-fallback",
         "./schedule-title-pattern",
         "./work-schedule-management",
-        "./work-schedule-trigger"
+        "./work-schedule-trigger",
+        "./template-gallery",
+        "./template-copy",
+        "./template-gallery-contract",
+        "./work-schedule-field-timing",
+        "./schedule-field-timing",
+        "./schedule-legacy-timing",
+        "./work-schedule-import",
+        "./schedule-import-compiler",
+        "./schedule-legacy-title",
+        "./schedule-legacy-completion",
+        "./work-schedule-import-receipt",
+        "./schedule-import-receipt"
       ],
       "allowedRuntimeDependencies": ["@docket/automation", "@docket/identity-access", "zod"],
       "supportedDeployableRuntimes": ["api", "web", "admin", "runner", "desktop"]

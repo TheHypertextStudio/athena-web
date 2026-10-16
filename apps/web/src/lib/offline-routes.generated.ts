@@ -211,6 +211,27 @@ export const OFFLINE_ROUTES = [
       (await import('@/app/(app)/orgs/[orgId]/settings/templates/[templateId]/page')).default,
   },
   {
+    pattern: '/orgs/[orgId]/settings/templates/gallery/[slug]',
+    load: async () =>
+      (await import('@/app/(app)/orgs/[orgId]/settings/templates/gallery/[slug]/page')).default,
+  },
+  {
+    pattern: '/orgs/[orgId]/settings/templates/gallery/copies/[bundleId]',
+    load: async () =>
+      (await import('@/app/(app)/orgs/[orgId]/settings/templates/gallery/copies/[bundleId]/page'))
+        .default,
+  },
+  {
+    pattern: '/orgs/[orgId]/settings/templates/gallery',
+    load: async () =>
+      (await import('@/app/(app)/orgs/[orgId]/settings/templates/gallery/page')).default,
+  },
+  {
+    pattern: '/orgs/[orgId]/settings/templates/gallery/review',
+    load: async () =>
+      (await import('@/app/(app)/orgs/[orgId]/settings/templates/gallery/review/page')).default,
+  },
+  {
     pattern: '/orgs/[orgId]/settings/templates/new',
     load: async () =>
       (await import('@/app/(app)/orgs/[orgId]/settings/templates/new/page')).default,

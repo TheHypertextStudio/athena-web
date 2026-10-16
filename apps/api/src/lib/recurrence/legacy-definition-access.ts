@@ -24,7 +24,13 @@ async function definitionOwner(
   input: LegacyDefinitionAccessRequest,
 ): Promise<string | null> {
   const [head] = await database
-    .select({ id: invocationHead.id, ownerActorId: invocationHead.ownerActorId })
+    .select({
+      id: invocationHead.id,
+      ownerActorId: invocationHead.ownerActorId,
+      canonicalAuthoringAt: invocationHead.canonicalAuthoringAt,
+      status: invocationHead.status,
+      archivedAt: invocationHead.archivedAt,
+    })
     .from(invocationHead)
     .where(
       and(

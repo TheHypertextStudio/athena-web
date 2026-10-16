@@ -145,7 +145,23 @@ describe('undoChangeSetAtomically', () => {
     expect(await isUndone(changeSetId)).toBe(false);
   });
 
-  it('refuses atomic undo when a recorded Project was edited later', async () => {
+  it('archives an unchanged created project through the shared atomic container reversal', async () => {
+    const org = await seedWorkspace();
+    const project = await makeProject(org, 'Created');
+    const changeSetId = await record(org, [
+      { kind: 'project', id: project.id, op: 'create', after: { name: 'Created' } },
+    ]);
+
+    const result = await changeSets.undoChangeSetAtomically(org.orgId, changeSetId);
+    expect(result.outcomes).toEqual([{ kind: 'project', id: project.id, reverted: true }]);
+    const current = one(
+      await db.select().from(schema.project).where(eq(schema.project.id, project.id)),
+    );
+    expect(current.archivedAt).toBeInstanceOf(Date);
+    expect(await isUndone(changeSetId)).toBe(true);
+  });
+
+  it('refuses an edited project without recording a partial atomic reversal', async () => {
     const org = await seedWorkspace();
     const project = await makeProject(org, 'Created');
     const changeSetId = await record(org, [
@@ -153,17 +169,15 @@ describe('undoChangeSetAtomically', () => {
     ]);
     await db
       .update(schema.project)
-      .set({ name: 'Edited later' })
+      .set({ name: 'Independently edited' })
       .where(eq(schema.project.id, project.id));
-
     await expect(changeSets.undoChangeSetAtomically(org.orgId, changeSetId)).rejects.toBeInstanceOf(
       ConflictError,
     );
     const current = one(
       await db.select().from(schema.project).where(eq(schema.project.id, project.id)),
     );
-    expect(current.archivedAt).toBeNull();
-    expect(current.name).toBe('Edited later');
+    expect(current).toMatchObject({ name: 'Independently edited', archivedAt: null });
     expect(await isUndone(changeSetId)).toBe(false);
   });
 

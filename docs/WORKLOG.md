@@ -730,6 +730,75 @@ same grouped Review. Interaction acceptance must include returning to an offscre
 editing a partially reordered tree. Persisted undo receipts also need current permission checks;
 historical ownership alone cannot authorize a later reversal.
 
+#### Remaining canonical migration and prospective validation plan
+
+The Program-routine and organization-flow checkpoint is integrated linearly. Complete legacy
+conversion remains a separate required slice. Add versioned private per-field timing rules that
+preserve the retained runtime's actual completion dates, explicit run-offset precedence and
+independent Project start/target fields. Normalize existing version-one documents without changing
+saved JSON or fingerprints. Reuse the shared date engine, exact occurrence receipts, affected-write
+permissions and atomic undo. Convert aliases and historical receipts resumably before switching
+legacy readers/writers; source-table denial and the full PostgreSQL journal precede explicit removal.
+The detailed engineering design is tracked in `docs/engineering/specs/work-schedule-canonical-cutover.md`;
+A1 adds immutable revision aliases, resumable proved registrations and canonical private reads without
+activating schedules or removing source FKs. Metadata takeover must not let an old backfill overwrite
+a canonical rename. Required validation includes current private scope, exact aliases/publication
+numbers, resumability and real restricted-role PostgreSQL constraints. No old source is retired
+based only on archive integrity.
+
+For gallery copies, factor the existing structural blueprint traversal into a shared internal core
+and preserve published creation as an adapter that still requires real immutable projection IDs.
+Add a validation-only prospective adapter over exact logical source identities and owner-qualified
+reference bindings. It validates draft/catalog inline work without fabricated base publications,
+retains hierarchy, timing/dependency cycles and the 500-item/2,000-edge limits, and cannot become
+executable authority. Verify parity against the existing blueprint suite and explicit unpublished
+fixtures before integrating the honest-source gallery planner. Add typed gallery discovery/detail and source-validated preview through the existing organization
+API, then extend its typed browser query definitions. Keep list/detail on catalog facts and require
+current destination authoring and explicit label/team choices for preview. These routes do not
+allocate destination IDs or publish work. Subsequent copy storage and acceptance services still
+require the reservation, privacy and concurrency proof in the gallery engineering specification.
+
+The gallery design is now specified in `docs/design/work-template-gallery-flow.md`. Implement
+outcome-first Suggested/Browse navigation with grouped rows, an honest catalog outline and one
+review route. Preserve exact full forks, explicit subset selection and both visibility choices.
+New presentation components must use shared MD3 surfaces and typed queries. Wire Keep/Add only to
+the real idempotent canonical acceptance service; no simulated success or saved-draft claim.
+Validate complete forks, nested Event/Vendor work, Program routines, navigation/focus, permission
+failures and both themes at all four standard viewport sizes before accepting the interface.
+
+The copy acceptance service will reconcile an existing actor-scoped request before source reads,
+then reauthorize a new request through the current user principal inside the existing retrying
+SERIALIZABLE owner. Recompute the reviewed closure, compare its fingerprint, reserve the canonical
+identity pairs and use only the ordinary draft/publication writer in dependency order. Private Keep
+creates no publications; explicit publication consumes the reserved first IDs. One aggregate receipt
+and canonical after-state/offerings/reservation fingerprints bind the installation. Known outcomes
+remain terminal after Undo and never overwrite later edits. Reference integrity and aggregate Undo
+must be verified before exposing acceptance in the routed UI.
+
+Undo derives parent-before-dependency order from trusted persisted metadata, compares current
+canonical state plus offerings and reservation state, and checks actual references immediately before
+each removal. Changed parents protect their current edges, not stale edges from the original bundle.
+The reference boundary checks hidden private drafts, all active
+plan work kinds, saved composers and retained copy dependencies without exposing their identities.
+Actual reference writers must lock and revalidate targets so a concurrent draft deletion cannot leave
+a dangling selection. Validate these behaviors under restricted PostgreSQL roles and all ordinary
+Undo entry points before claiming copy acceptance.
+
+The latest design pass changes the decision sequence, not only the containers: continue a draft or
+choose starting work, understand its real structure, adjust it, then decide visibility beside the final
+action. Lead browse with organizational context and outcomes; keep search, abstract kinds, icon and
+maintenance controls subordinate. Preserve the full-fork set, authored order, scoped reentry and focus.
+Use the existing shared MD3 surfaces with 16px outer and 12px inset radii. Fresh authenticated captures
+and interaction evidence remain required before acceptance.
+
+The actual PostgreSQL snapshot-before-READ-COMMITTED-writer test demonstrated that target row locks
+alone can leave an orphan after Undo. Append a private concurrency-only reference epoch to each copy
+entry. Writers update entries in destination order before target validation; Undo locks that same
+entry set before targets. Prove serialization retry and lock inversion with real connections. Exclude
+the epoch from authored-state fingerprints, receipts and public output. The routing discriminator for
+copy Undo exposes only exact receipt-binding existence to the trusted server role; actual acceptor,
+current View and authoring checks still govern replay and reversal.
+
 #### Gallery and Athena implementation plan
 
 Use `docs/engineering/specs/work-template-gallery-athena.md` after the schedule layer. Finalize the
@@ -739,6 +808,48 @@ handling with current authoring rights and the existing paid capability, followe
 review, explicit onboarding starter choices and confirmed label-group conversion. Keep manual template
 features available on every plan, preserve private drafts and existing work, and prove the nonprofit
 Event journey before claiming acceptance.
+
+#### Organization flow hierarchy pass
+
+- **Status**: REVIEW (local interface accepted; production prerequisites remain open)
+- **Objective**: Make work definitions a guided, reenterable organization flow whose grouping and
+  order reduce the decisions a person must hold in mind.
+- **Approach**: Lead with unfinished definitions in the library and actual outcomes in discovery.
+  Place included work and routines before supporting instructions. Remove duplicate context,
+  singleton heading levels and empty selection chrome. Keep complete fork selection and advanced
+  filters available as secondary actions, with visibility beside the final decision.
+- **Files**: Gallery and library components, affected interaction tests, gallery route validation,
+  authenticated browser journeys and the design direction document.
+- **Validation**: Capture populated desktop, phone and short-phone states in both themes through
+  the existing authenticated tooling; inspect hierarchy and keyboard focus; verify 320px overflow,
+  private copy/reentry/Undo and all sixty startup roots. Route tests mount the real nested router so
+  inherited organization parameters cannot be mistaken for injected JSON authority.
+- **Files changed**: Library readiness and current-reference ordering, gallery discovery/detail/review
+  and saved-copy reentry, the additive shared settings-heading variant, nested route validation and
+  regressions, authenticated browser coverage, README and the gallery design direction/audit.
+- **Validation**: Three authenticated browser journeys pass, including actual Event copy/reload/Undo,
+  all sixty startup roots, keyboard inspection/return focus, primary-action contrast and touch size,
+  and wrapped-label containment at 320px in both themes. The canonical capture procedure produced
+  64 final frames across eight populated or first-use states. Independent review accepts the local
+  interface at the crafted level. The affected API run passes all 44 cases across seven files,
+  including real nested URLs, private/public Undo boundaries, ordinary atomic Undo and Free manual
+  authoring. Affected UI tests, package types, lint, formatting and the unchanged complexity ratchet
+  pass; production-artifact validation is recorded separately from provider acceptance.
+- **Findings**: Browser review caught collapsed wrapper widths, inherited route parameters rejected
+  by isolated-test validators, a false empty state during fork loading and wrapped labels escaping
+  fixed-height touch buttons. Each was corrected and verified in the actual affected state. Draft
+  relationships now follow authorized current references; unpublished edits and published names stay
+  distinct, and supporting work remains reachable without requiring a person to reconstruct it.
+- **Retrospective**: Containers and horizontal-overflow checks cannot establish usable hierarchy or
+  vertical text containment. Inspect populated relationships and every narrow-width choice, with
+  independent image review and actual geometry/keyboard assertions. Keep expert filters secondary
+  and remove heading levels that do not express a useful decision.
+- **Release prerequisites**: The actual production migration connection passes a rolled-back
+  privilege check for creating the restricted role, temporary membership and SET ROLE, column
+  grants, function ownership transfer and membership revocation. The probe leaves no role or
+  function behind. This establishes the migration-role prerequisite; actual schema/data rollout
+  and deployed runtime acceptance remain separate from local UI acceptance. Remaining schedule
+  adoption, Athena/onboarding and cross-workspace delivery remain separate work.
 
 ### [LEGAL-POLICIES-002] Keep policy versions easy to navigate
 

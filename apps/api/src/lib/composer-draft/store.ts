@@ -1,3 +1,4 @@
+import { templateReferenceWriteError } from '../templates/copy-reference-errors';
 /**
  * `@docket/api` — reading and saving personal composer drafts.
  *
@@ -88,7 +89,8 @@ export async function createDraft(
       payload: body.payload,
       expiresAt: composerDraftExpiry(new Date()),
     })
-    .returning();
+    .returning()
+    .catch(templateReferenceWriteError);
   const row = inserted[0];
   /* v8 ignore next -- @preserve defensive: insert always returns a row */
   if (!row) throw new Error('composer draft insert returned no row');
@@ -140,7 +142,8 @@ export async function patchDraft(
         expiresAt: composerDraftExpiry(new Date()),
       })
       .where(eq(composerDraft.id, id))
-      .returning();
+      .returning()
+      .catch(templateReferenceWriteError);
     const next = updated[0];
     /* v8 ignore next -- @preserve defensive: update always returns a row */
     if (!next) throw new Error('composer draft update returned no row');

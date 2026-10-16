@@ -32,6 +32,86 @@ Bound installation to 100 distinct definitions, 500 expanded work nodes per root
 
 Undo uses the existing catalog/change-set engine. It removes or archives only the created copies that still match that receipt; templates used by work/schedules or independently edited since installation remain recoverable and are reported as retained/conflicted. Never undo by deleting the generated work or changing the source workspace. Templates used by later work archive rather than disappear. Manual copy and gallery installation share the exact planner, authoring validation, projection and undo path.
 
+The aggregate edge budget counts explicit nested-template and default-schedule references plus
+authored work-dependency and timing links once per distinct copied source identity/version.
+Containment alone does not consume this dependency budget. The existing blueprint engine separately
+validates each root's complete expansion and prerequisites against the 500-item boundary.
+Different legitimate historical pins of one source identity become independent destination copies;
+contradictory content for the same exact source identity/version is rejected.
+
+## Honest source identities and private copy bundles
+
+Copy sources are discriminated facts: an actual published tenant/template/version; an authorized
+unpublished tenant/template/draft revision and fingerprint; or a catalog identity in its immutable
+release namespace. Draft revision zero is valid. A draft or catalog entry is never represented as a
+fabricated database publication, workspace or blueprint projection. Fingerprint the complete
+normalized definition and reviewed copy decisions. Explicit copying of an authorized archived
+publication is allowed; an archived source never resolves implicit latest selection.
+
+Factor validation-only prospective blueprint facts from the existing structural engine. They carry
+logical keys and honest source identities, without physical version/step IDs. Keep executable
+publication resolution, ordinary creation, origin and retained-run inputs restricted to actual
+immutable publications. A prospective preview cannot grant execution authority.
+
+Persist one copy bundle and its entries as metadata around the canonical template writer. Each entry
+retains its immutable destination template ID, globally unique reserved first-publication ID, exact
+source origin, dependency order, original after-state fingerprint and pending/consumed/void state.
+Private copies create real canonical draft rows and zero publication/projection rows. The first
+explicitly reviewed publication consumes its reserved ID through ordinary appendPublication; later
+versions use normal generated IDs. Reservations bind identity, allowing lawful private edits before
+first publication. They do not grant source access or automatically publish dependencies.
+
+Use a nullable live destination reference beside the immutable destination ID. Its same-tenant FK is
+NO ACTION, DEFERRABLE INITIALLY DEFERRED; installed pending/consumed entries must have a lawful live
+destination at commit. Undo voids an unpublished reservation and clears this reference while deleting
+its unchanged unused draft in the same transaction. Keep the entry tombstone and unique reserved ID
+forever within the workspace, so retries cannot resurrect or reuse it. Consumed entries retain the
+same-tenant exact version/template reference and archive published destinations instead of deleting
+versions. Account deletion must not cascade reservations required by surviving team copies; retain
+an immutable audit actor key with a nullable live actor reference. Workspace purge removes the bundle.
+
+The canonical writer accepts only an opaque server capability bound to its exact transaction, bundle,
+entry, tenant, accepting principal and persisted identity reservation. Public JSON cannot choose an
+identity or version. A storage guard rejects alternate first IDs, reservation stealing, void-ID
+publication, foreign tenants and inconsistent consumption, while preserving existing immutable
+version, closure and projection checks. Ordinary later team publication may read minimal checked
+reservation facts without learning the acceptor's private review metadata.
+
+Resolve source and destination actors independently from the verified principal's user identity and
+active tenant membership. Caller-supplied actor IDs and capabilities are not proof. Bundle provenance
+and review metadata remain acceptor-private after destination publication. Redact cross-workspace
+origin IDs unless the current reader can see that source. Existing application scope checks must not
+be claimed as database RLS protection; add actual restricted projections/policies before granting
+restricted roles access to private bodies or receipt snapshots.
+
+The existing central undo entry points dispatch bundles through their persisted receipt binding.
+Derive parent-before-dependency reversal from trusted entry metadata, not query order or a client flag.
+Check current reference existence immediately before each tentative removal. A retained parent's
+current references protect its dependencies; removed historical edges do not. Deliberately compare offerings and reservation state as well as template
+fields. Protect active plans of every work kind, private blueprint/default-schedule references, live
+composer selections and retained bundle dependencies. Return only a safe in-use result for hidden
+references, without counts or identities. Reference writers update the pending copy entry's private
+concurrency epoch before locking/revalidating destination rows. Undo locks the complete same sorted
+entry set before targets, making a committed READ COMMITTED reference invalidate a stale SERIALIZABLE
+snapshot. The epoch is excluded from authored fingerprints and public projections. Prove the actual
+snapshot-before-writer race and bounded retry; row locks alone do not establish this guarantee.
+
+A narrowly privileged reference-integrity boundary may return existence only after checking current
+principal authority. It requires a fixed safe search path, qualified objects, revoked public execution,
+a non-login owner with minimal privileges, same-tenant scans and generic unauthorized/not-found
+failures. Current-reference checks run after parent removals without any exclusion list or SQL access
+to receipt bodies. A separate server-only exact receipt-binding discriminator prevents generic Undo
+fallback even for callerless internal calls; it grants no read or mutation authority. Resolve current
+human acceptor/View for terminal replay and current authoring for installed mutation. Preserve current canonical creation/publication/image effects and the existing change-set
+engine; no second template writer, notification store or general undo system is introduced.
+
+Before API/UI integration, prove real restricted-role PostgreSQL acceptance for deferred FK failures,
+private bundles with zero publications, first-ID theft/void rejection, consumption after independent
+edits, normal version two, teammate metadata privacy, source-principal isolation, rollback, concurrent
+idempotence, terminal retries, account/workspace purge, hidden reference races and every generic undo
+entry point. Each accepted install rechecks source fingerprints and current destination authoring and
+offering policy in its transaction. Reinstall after undo requires a new request ID.
+
 ## Athena authority and drafts
 
 Use actual persisted execution identity. User-owned Athena sessions already execute through a verified user principal and retain server-owned Athena provenance; registered agents execute as their own org-scoped agent principal. Do not invent a human actor, use an item's creator as authority, or trust a caller-supplied agent/client label. A trusted session/executor proof is registered inside the server and revalidated against the tenant, active membership, product capability and current template-authoring policy on execution.
@@ -72,3 +152,10 @@ Use append-only migrations for catalog-origin/review/idempotency records only wh
 - Existing template publication stays immutable. No automated legacy-tool path publishes without explicit human action; no forged, foreign or revoked recipient/session proof is accepted.
 - Onboarding selections install the intended fork independently of AI. Tailored proposals use authorized facts and dedupe after retries. Label conversion changes nothing before explicit confirmation and restores exact labels/identities on lawful undo.
 - Tenant/RLS, API/MCP, source policy, affected types/lint/complexity/builds and authenticated responsive journeys pass. Provider/model execution evidence is distinguished from deterministic local fixture coverage.
+
+## Guided organization flow
+
+Follow the [gallery organization flow](../../design/work-template-gallery-flow.md) for outcome-first
+discovery, exact full-fork selection, nested work review and durable draft-bundle reentry. A selected
+curated subset is explicit; it never silently replaces the approved full fork. All acceptance and
+publication controls use the checked canonical copy services described above.

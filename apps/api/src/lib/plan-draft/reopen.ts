@@ -1,3 +1,4 @@
+import { templateReferenceWriteError } from '../templates/copy-reference-errors';
 /**
  * `@docket/api` — returning a plan's nodes to draft after their commit is undone.
  *
@@ -45,25 +46,27 @@ export async function reopenUndoneNodes(
 ): Promise<boolean> {
   const revertedIds = new Set(outcomes.filter((entry) => entry.reverted).map((entry) => entry.id));
   if (revertedIds.size === 0) return false;
-  return db.transaction(async (tx) => {
-    const locked = await tx
-      .select()
-      .from(planDraft)
-      .where(eq(planDraft.id, planId))
-      .for('update')
-      .limit(1);
-    const row = locked[0];
-    if (!row) return false;
-    const document = reopenDocument(row.document, revertedIds);
-    if (planCounts(document).draft === planCounts(row.document).draft) return false;
-    await tx
-      .update(planDraft)
-      .set({
-        document,
-        status: row.status === 'archived' ? 'archived' : 'active',
-        revision: row.revision + 1,
-      })
-      .where(eq(planDraft.id, planId));
-    return true;
-  });
+  return db
+    .transaction(async (tx) => {
+      const locked = await tx
+        .select()
+        .from(planDraft)
+        .where(eq(planDraft.id, planId))
+        .for('update')
+        .limit(1);
+      const row = locked[0];
+      if (!row) return false;
+      const document = reopenDocument(row.document, revertedIds);
+      if (planCounts(document).draft === planCounts(row.document).draft) return false;
+      await tx
+        .update(planDraft)
+        .set({
+          document,
+          status: row.status === 'archived' ? 'archived' : 'active',
+          revision: row.revision + 1,
+        })
+        .where(eq(planDraft.id, planId));
+      return true;
+    })
+    .catch(templateReferenceWriteError);
 }

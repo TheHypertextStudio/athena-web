@@ -98,6 +98,9 @@ function ReviewChild({
         <WorkTemplateReviewNestedVersion
           orgId={orgId}
           template={step.template}
+          selected={templates.find(
+            (value) => value.id === step.template?.workTypeId && value.targetType === step.kind,
+          )}
           name={
             templates.find((value) => value.id === step.template?.workTypeId)?.definition.name ??
             'Nested template'

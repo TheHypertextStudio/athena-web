@@ -1,3 +1,4 @@
+import { templateReferenceWriteError } from './copy-reference-errors';
 import { actor as actorTable, changeSet, changeSetEntry, db, template } from '@docket/db';
 import type {
   WorkTemplateCreate,
@@ -26,6 +27,7 @@ import {
 import { visibleTemplateWhere } from './visibility';
 import { serializableTx } from '../serializable-tx';
 import { createWorkTemplateInTransaction, reconcileTemplateCreationEffects } from './creation';
+import { isTemplateCopyChangeSet } from '../template-gallery/undo';
 export {
   createPublishedWorkTemplateInTransaction,
   createWorkTemplateInTransaction,
@@ -100,7 +102,7 @@ export async function createWorkTemplate(
 ): Promise<TemplateRow> {
   const result = await serializableTx((tx) =>
     createWorkTemplateInTransaction(tx, actor, body, options),
-  );
+  ).catch(templateReferenceWriteError);
   await reconcileTemplateCreationEffects(result.effects);
   return result.row;
 }
@@ -114,7 +116,7 @@ export async function editWorkTemplateDraft(
   await getWorkTemplate(actor, id);
   await requireTemplateAuthor(actor);
   const canManageOfferings = await mayManageTemplateOfferings(actor);
-  const row = await db.transaction(async (tx) => {
+  const row = await serializableTx(async (tx) => {
     const current = await lockTemplate(tx, actor.orgId, id, actor.actorId);
     requireRevision(current, body.expectedRevision);
     const previous = draftOf(current);
@@ -148,7 +150,7 @@ export async function editWorkTemplateDraft(
       .returning();
     if (!updated) throw new NotFoundError('Template not found');
     return updated;
-  });
+  }).catch(templateReferenceWriteError);
   await reconcileTemplateImages(actor.orgId, row.id, 'upsert');
   return row;
 }
@@ -206,6 +208,7 @@ export async function requireTemplateUndoAuthor(
   caller: TemplateActor | { readonly orgId: string; readonly userId: string },
   changeSetId: string,
 ): Promise<void> {
+  if (await isTemplateCopyChangeSet(caller.orgId, changeSetId)) return;
   const entries = await db
     .select({ id: changeSetEntry.entityId })
     .from(changeSetEntry)

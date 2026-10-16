@@ -51,6 +51,11 @@ export function ProgramDefaultScheduleReview({
             <WorkTemplateReviewNestedVersion
               orgId={orgId}
               template={value.template}
+              selected={templates.find(
+                (item) =>
+                  item.id === value.template.workTypeId &&
+                  item.targetType === value.template.targetType,
+              )}
               name={
                 templates.find((item) => item.id === value.template.workTypeId)?.definition.name ??
                 'Selected work template'

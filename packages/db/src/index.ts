@@ -68,3 +68,8 @@ export * from './work-schedule-storage';
 export * from './work-schedule-history';
 export type { NativeScheduleDateOwnership } from './schema/work-schedule-date-ownership';
 export { hashScheduleArchive } from './work-schedule-archive';
+
+export * from './invocation-revision-backfill';
+export * from './invocation-revision-proof';
+
+export { backfillWorkTemplateBlueprints } from './work-template-blueprint-backfill';

@@ -28,6 +28,7 @@ import {
 import { zJson, zParam, zQuery } from '../lib/validate';
 import { capabilityGuard } from '../permissions/capability-guard';
 import identities from './work-template-identities';
+import gallery from './work-template-gallery';
 import blueprints from './work-template-blueprints';
 
 const idParam = z.object({ id: z.string() });
@@ -41,6 +42,7 @@ const doc = (summary: string, response: z.ZodType, status: 200 | 201 = 200) =>
 
 /** Revision-aware work-template definition and immutable publication routes. */
 const definitions = new Hono<AppEnv>()
+  .route('/gallery', gallery)
   .route('/', identities)
   .route('/', blueprints)
   .get(
@@ -56,7 +58,7 @@ const definitions = new Hono<AppEnv>()
   )
   .post(
     '/',
-    capabilityGuard('contribute'),
+    capabilityGuard('contribute', { sharedWorkMutation: false }),
     doc('Create a work-template draft', WorkTemplateOut, 201),
     zJson(WorkTemplateCreate),
     async (c) => {
@@ -83,7 +85,7 @@ const definitions = new Hono<AppEnv>()
   )
   .patch(
     '/:id/draft',
-    capabilityGuard('contribute'),
+    capabilityGuard('contribute', { sharedWorkMutation: false }),
     doc('Edit a work-template draft', WorkTemplateOut),
     zParam(idParam),
     zJson(WorkTemplateDraftUpdate),
@@ -101,7 +103,7 @@ const definitions = new Hono<AppEnv>()
   )
   .post(
     '/:id/publish',
-    capabilityGuard('contribute'),
+    capabilityGuard('contribute', { sharedWorkMutation: false }),
     doc('Publish a work-template revision', WorkTemplateOut),
     zParam(idParam),
     zJson(WorkTemplatePublish),
@@ -132,7 +134,7 @@ const definitions = new Hono<AppEnv>()
   )
   .get(
     '/:id/archive-impact',
-    capabilityGuard('contribute'),
+    capabilityGuard('contribute', { sharedWorkMutation: false }),
     doc('Preview authorized template archive impact', WorkTemplateArchiveImpact),
     zParam(idParam),
     zQuery(WorkTemplateArchiveImpactQuery),
@@ -149,7 +151,7 @@ const definitions = new Hono<AppEnv>()
   )
   .post(
     '/:id/archive',
-    capabilityGuard('contribute'),
+    capabilityGuard('contribute', { sharedWorkMutation: false }),
     doc('Archive a work-template definition', WorkTemplateOut),
     zParam(idParam),
     async (c) => {

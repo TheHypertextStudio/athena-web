@@ -257,3 +257,13 @@ it('applies the creation edge cap to selected work while publication checks the 
     validateBlueprintGraph(selected);
   }).toThrow(/2000|limit/i);
 });
+
+it('still requires immutable physical projections after sharing prospective structural validation', () => {
+  const base = publication(9, 'task');
+  const root = publication(2, 'project', [step('prepare')]);
+  expect(() => {
+    validateBlueprintGraph(
+      graph({ ...root, stepIds: {} }, [base], [resolution(['prepare'], base)]),
+    );
+  }).toThrow(/projection/i);
+});

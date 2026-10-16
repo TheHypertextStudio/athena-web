@@ -1,15 +1,19 @@
 'use client';
-import { useState, type JSX } from 'react';
-import { useVocabulary } from '@docket/ui/hooks';
-import { Button, Field, Select } from '@docket/ui/primitives';
-import type { WorkTemplateOut } from '@docket/work/work-template-contract';
-import type { TemplateTargetType } from '@docket/work/template-contract';
-import { WorkTemplateGuidedCreate } from './work-template-guided-create';
+import type { JSX } from 'react';
+import {
+  Button,
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+  Field,
+  Select,
+} from '@docket/ui/primitives';
+import Link from '@/components/docket-link';
+import { WorkTemplateLibrary } from './gallery/work-template-library';
 import { QueryLoadFailure } from '@/components/feedback';
 import { SettingsSectionPage } from '@/components/settings/settings-section-page';
 import { SettingsGroup } from '@/components/settings/settings-group';
 import { SETTINGS_NODES } from '@/components/settings/settings-capabilities';
-import { SettingRow } from '@/components/settings/setting-row';
 import { sectionHref } from '@/components/settings/settings-registry';
 import { useCanManageOrg } from '@/components/settings/use-can-manage-org';
 import { api } from '@/lib/api';
@@ -23,85 +27,44 @@ import {
 } from '@/lib/query';
 import { workTemplatesDef } from './work-template-queries';
 
-const KINDS = ['initiative', 'program', 'project', 'task'] as const;
-
 /** Manage definitions, private drafts and retained publications in one workspace. */
 export function WorkTemplateSettings({ orgId }: { orgId: string }): JSX.Element {
-  const [archived, setArchived] = useState(false);
   const query = useApiListQuery(
-    workTemplatesDef(orgId, { includeDrafts: true, includeArchived: archived }),
+    workTemplatesDef(orgId, { includeDrafts: true, includeArchived: true }),
   );
   return (
     <SettingsSectionPage
+      headingSize="expressive"
       title="Work templates"
       description="Give work a name and a reusable structure. Published templates keep their own history."
-      action={<WorkTemplateGuidedCreate orgId={orgId} />}
+      action={
+        <div className="flex flex-wrap gap-2">
+          <Button asChild className="min-h-10">
+            <Link href={`${sectionHref(orgId, 'templates')}/gallery`}>Choose starting work</Link>
+          </Button>
+          <Button asChild variant="secondary" className="min-h-10">
+            <Link href={`${sectionHref(orgId, 'templates')}/new`}>Define work</Link>
+          </Button>
+        </div>
+      }
       loading={query.isPending}
     >
-      <Button
-        type="button"
-        variant="ghost"
-        size="sm"
-        onClick={() => {
-          setArchived(!archived);
-        }}
-      >
-        {archived ? 'Hide archived templates' : 'Show archived templates'}
-      </Button>
       {query.isError ? (
         <QueryLoadFailure title="Work templates" query={query} />
       ) : (
-        KINDS.map((kind) => (
-          <TemplateKindRows
-            key={kind}
-            kind={kind}
-            orgId={orgId}
-            items={(query.data?.items ?? []).filter((item) => item.targetType === kind)}
-          />
-        ))
+        <WorkTemplateLibrary orgId={orgId} items={query.data?.items ?? []} />
       )}
-      <WorkTemplateAuthoringSetting orgId={orgId} />
+      <Collapsible>
+        <CollapsibleTrigger asChild>
+          <Button variant="ghost" className="min-h-10">
+            Template permissions
+          </Button>
+        </CollapsibleTrigger>
+        <CollapsibleContent>
+          <WorkTemplateAuthoringSetting orgId={orgId} />
+        </CollapsibleContent>
+      </Collapsible>
     </SettingsSectionPage>
-  );
-}
-
-function TemplateKindRows({
-  orgId,
-  kind,
-  items,
-}: {
-  orgId: string;
-  kind: TemplateTargetType;
-  items: readonly WorkTemplateOut[];
-}): JSX.Element {
-  const noun = useVocabulary(kind, { plural: true });
-  return (
-    <SettingsGroup title={noun} discoverable={false} body="rows">
-      {items.map((item) => (
-        <SettingRow
-          key={item.id}
-          href={`${sectionHref(orgId, 'templates')}/${item.id}`}
-          label={item.definition.name}
-          description={[
-            item.isBase
-              ? 'Default'
-              : item.scope === 'personal'
-                ? 'Only you'
-                : item.scope === 'team'
-                  ? 'Team'
-                  : 'Workspace',
-            item.status === 'published'
-              ? `Version ${String(item.latestVersion?.number ?? 1)}`
-              : item.status === 'archived'
-                ? 'Archived'
-                : 'Draft',
-            item.definition.description,
-          ]
-            .filter(Boolean)
-            .join(' · ')}
-        />
-      ))}
-    </SettingsGroup>
   );
 }
 

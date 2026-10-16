@@ -58,7 +58,19 @@
     "./work-schedule-fallback": "./src/contracts/work-schedule-fallback.ts",
     "./schedule-title-pattern": "./src/schedule-title-pattern.ts",
     "./work-schedule-management": "./src/contracts/work-schedule-management.ts",
-    "./work-schedule-trigger": "./src/contracts/work-schedule-trigger.ts"
+    "./work-schedule-trigger": "./src/contracts/work-schedule-trigger.ts",
+    "./template-gallery": "./src/gallery/index.ts",
+    "./template-copy": "./src/gallery/copy-api.ts",
+    "./template-gallery-contract": "./src/contracts/template-gallery.ts",
+    "./work-schedule-field-timing": "./src/contracts/work-schedule-field-timing.ts",
+    "./schedule-field-timing": "./src/schedule-field-timing.ts",
+    "./schedule-legacy-timing": "./src/schedule-legacy-timing.ts",
+    "./work-schedule-import": "./src/contracts/work-schedule-import.ts",
+    "./schedule-import-compiler": "./src/schedule-import-compiler.ts",
+    "./schedule-legacy-title": "./src/schedule-legacy-title.ts",
+    "./schedule-legacy-completion": "./src/schedule-legacy-completion.ts",
+    "./work-schedule-import-receipt": "./src/contracts/work-schedule-import-receipt.ts",
+    "./schedule-import-receipt": "./src/schedule-import-receipt.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

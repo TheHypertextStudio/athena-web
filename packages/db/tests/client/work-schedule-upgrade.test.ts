@@ -30,7 +30,14 @@ async function fixture() {
 it('ordinary upgrades accept legitimate legacy rename/completion without rewriting frozen evidence', async () => {
   const f = await fixture();
   try {
-    await migrateWithWorkTemplateCheckpoint(f.database, f.options);
+    // Exercise the real pre-canonical ownership upgrade boundary: legacy metadata
+    // remains editable until 0165 takes ownership, then canonical heads own it.
+    await withMigrationPrefix(
+      f.options.migrationsFolder,
+      '0164_schedule_native_date_undo',
+      (folder) =>
+        migrateWithWorkTemplateCheckpoint(f.database, { ...f.options, migrationsFolder: folder }),
+    );
     const before = await migrationRows(
       f.database,
       sql`select c.legacy_process_revision_id,c.source_fingerprint,c.source_archive,c.source_archive_hash,i.manifest,i.overrides from work_template_blueprint_conversion c join work_template_blueprint_invocation i on i.id=c.invocation_id order by c.legacy_process_revision_id`,

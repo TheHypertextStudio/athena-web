@@ -39,12 +39,7 @@ import type { AnyPgColumn, PgTable } from 'drizzle-orm/pg-core';
 import type { RecordedOrigin } from '@docket/work/provenance-contract';
 
 import { ConflictError, NotFoundError } from '../error';
-import {
-  isCompanionKind,
-  revertCompanion,
-  revertCompanionIn,
-  type StoredEntry,
-} from './change-set-companions';
+import { isCompanionKind, revertCompanion, revertCompanionIn } from './change-set-companions';
 import {
   isAtomicContainerKind,
   revertAtomicContainer,
@@ -63,6 +58,9 @@ import {
   type TaskStateMutation,
 } from '../lib/task-state';
 import { planTaskReparents } from '../services/task-hierarchy';
+import { tryUndoTemplateCopyChangeSet } from '../lib/template-gallery/undo';
+import type { UndoAccessCheck, UndoOutcome, UndoRevertedHandler } from './change-set-undo-access';
+export type { UndoAccessCheck, UndoOutcome } from './change-set-undo-access';
 
 /**
  * The entity kinds a change set can record, mapped to the table they live in.
@@ -183,15 +181,6 @@ export type RecordedChange = ChangeRecord | LinkRecord | StoredChange;
 /** Whether a recorded change describes a relation rather than an entity. */
 function isLinkRecord(change: RecordedChange): change is LinkRecord {
   return 'linked' in change;
-}
-
-/** What an undo did, per entity. */
-export interface UndoOutcome {
-  readonly kind: string;
-  readonly id: string;
-  readonly reverted: boolean;
-  /** Why it was left alone, when it was. */
-  readonly reason?: string;
 }
 
 /** The input shared by standalone and caller-owned change-set writes. */
@@ -616,9 +605,6 @@ async function revertEntry(
   }
 }
 
-/** Recheck authenticated undo permissions on persisted entries before any atomic reversal writes. */
-export type UndoAccessCheck = (tx: Tx, entries: readonly StoredEntry[]) => Promise<void>;
-
 /**
  * Reverse a change set, reporting what it could not take back.
  *
@@ -638,6 +624,8 @@ export async function undoChangeSet(
   changeSetId: string,
   guard?: UndoAccessCheck,
 ): Promise<{ summary: string; outcomes: UndoOutcome[] }> {
+  const copy = await tryUndoTemplateCopyChangeSet(orgId, changeSetId, guard?.templateCopyCaller);
+  if (copy) return copy;
   const sets = await db
     .select({ id: changeSet.id, summary: changeSet.summary })
     .from(changeSet)
@@ -679,13 +667,11 @@ export async function undoChangeSet(
 export async function undoChangeSetAtomically(
   orgId: string,
   changeSetId: string,
-  onReverted?: (input: {
-    readonly tx: Parameters<Parameters<typeof db.transaction>[0]>[0];
-    readonly entries: readonly (typeof changeSetEntry.$inferSelect)[];
-    readonly outcomes: readonly UndoOutcome[];
-  }) => Promise<void>,
+  onReverted?: UndoRevertedHandler,
   guard?: UndoAccessCheck,
 ): Promise<{ summary: string; outcomes: UndoOutcome[] }> {
+  const copy = await tryUndoTemplateCopyChangeSet(orgId, changeSetId, guard?.templateCopyCaller);
+  if (copy) return copy;
   const result = await serializableTx(async (tx) => {
     const [set] = await tx
       .select({ id: changeSet.id, summary: changeSet.summary })

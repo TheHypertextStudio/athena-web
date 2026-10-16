@@ -20,6 +20,8 @@ import {
   publicationDefinitionIds,
 } from '../work-template-blueprints/publication';
 import { loadTemplateRestoration } from './restoration';
+import { templateReferencesInUse } from './copy-reference-integrity';
+import { reservedFirstPublicationId } from './copy-publication';
 
 /** The existing database transaction type; definitions have no parallel data-access layer. */
 export type TemplateTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
@@ -128,34 +130,7 @@ export async function appendPublication(
   retainedVersionId: string | null = row.latestPublishedVersionId,
 ): Promise<TemplateRow> {
   await lockPublicationClosure(tx, row, row.draftDefinition, retainedVersionId);
-  if (row.scope !== 'organization') {
-    await tx
-      .update(template)
-      .set({ scope: 'organization', teamId: null })
-      .where(and(eq(template.organizationId, row.organizationId), eq(template.id, row.id)));
-  }
-  const [latest] = await tx
-    .select({ number: workTypeVersion.number })
-    .from(workTypeVersion)
-    .where(
-      and(
-        eq(workTypeVersion.organizationId, row.organizationId),
-        eq(workTypeVersion.workTypeId, row.id),
-      ),
-    )
-    .orderBy(desc(workTypeVersion.number))
-    .limit(1);
-  const [version] = await tx
-    .insert(workTypeVersion)
-    .values({
-      organizationId: row.organizationId,
-      workTypeId: row.id,
-      number: (latest?.number ?? 0) + 1,
-      definition: WorkTemplateDefinition.parse(row.draftDefinition),
-      publishedByActorId: actorId,
-    })
-    .returning();
-  if (!version) throw new Error('Template publication returned no row');
+  const version = await insertPublication(tx, row, actorId);
   await persistBlueprintProjection(tx, {
     organizationId: row.organizationId,
     versionId: version.id,
@@ -224,7 +199,9 @@ export async function templateDraftInUse(
   tx: TemplateTransaction,
   orgId: string,
   id: string,
+  actorId?: string,
 ): Promise<boolean> {
+  if (actorId) return templateReferencesInUse(tx, { orgId, actorId }, id);
   const [work] = await tx
     .select({ id: task.id })
     .from(task)
@@ -364,4 +341,43 @@ async function restoreTemplateEdit(
       .where(eq(template.id, current.id));
   }
   return 'restored';
+}
+
+/** Preserve the existing version writer, adding only a checked first-publication identity choice. */
+async function insertPublication(
+  tx: TemplateTransaction,
+  row: TemplateRow,
+  actorId: string | null,
+): Promise<TemplateVersionRow> {
+  const [latest] = await tx
+    .select({ number: workTypeVersion.number })
+    .from(workTypeVersion)
+    .where(
+      and(
+        eq(workTypeVersion.organizationId, row.organizationId),
+        eq(workTypeVersion.workTypeId, row.id),
+      ),
+    )
+    .orderBy(desc(workTypeVersion.number))
+    .limit(1);
+  const firstId = latest ? null : await reservedFirstPublicationId(tx, row, actorId);
+  if (row.scope !== 'organization') {
+    await tx
+      .update(template)
+      .set({ scope: 'organization', teamId: null })
+      .where(and(eq(template.organizationId, row.organizationId), eq(template.id, row.id)));
+  }
+  const [version] = await tx
+    .insert(workTypeVersion)
+    .values({
+      ...(firstId ? { id: firstId } : {}),
+      organizationId: row.organizationId,
+      workTypeId: row.id,
+      number: (latest?.number ?? 0) + 1,
+      definition: WorkTemplateDefinition.parse(row.draftDefinition),
+      publishedByActorId: actorId,
+    })
+    .returning();
+  if (!version) throw new Error('Template publication returned no row');
+  return version;
 }

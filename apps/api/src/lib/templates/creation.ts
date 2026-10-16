@@ -12,6 +12,8 @@ import {
 import { appendPublication, replaceOfferings, type TemplateTransaction } from './persistence';
 import type { TemplateRow } from './model';
 import { reconcileTemplateImages } from './images';
+import type { TemplateCopyReservation } from './copy-reservation-proof';
+import { claimReservedTemplateIdentity } from './copy-reservation-claim';
 
 /** Committed template image projection work returned to the enclosing transaction owner. */
 export interface TemplateCreationEffect {
@@ -26,6 +28,7 @@ export interface TemplateCreationResult {
 }
 /** Server-only canonical creation controls; client JSON cannot publish, seed or set copy provenance. */
 export interface TemplateCreationOptions {
+  readonly identityReservation?: TemplateCopyReservation;
   readonly publish?: boolean;
   readonly isSeed?: boolean;
   readonly origin?: WorkTemplateOrigin | null;
@@ -59,9 +62,13 @@ export async function createWorkTemplateInTransaction(
   await requireTemplateAuthor(actor, tx);
   const canManageOfferings = await mayManageTemplateOfferings(actor, tx);
   const ownership = await creationOwnership(tx, actor, body, options.publish);
+  const reservedId = options.identityReservation
+    ? await claimReservedTemplateIdentity(tx, options.identityReservation, actor, body)
+    : null;
   const [created] = await tx
     .insert(template)
     .values({
+      ...(reservedId ? { id: reservedId } : {}),
       organizationId: actor.orgId,
       targetType: body.targetType,
       scope: body.scope,

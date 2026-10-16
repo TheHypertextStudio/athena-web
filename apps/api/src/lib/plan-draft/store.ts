@@ -1,3 +1,4 @@
+import { templateReferenceWriteError } from '../templates/copy-reference-errors';
 /**
  * `@docket/api` — reading and editing personal plan drafts.
  *
@@ -137,7 +138,8 @@ export async function createOrReopenPlan(
   const inserted = await db
     .insert(planDraft)
     .values({ ...values, document })
-    .returning();
+    .returning()
+    .catch(templateReferenceWriteError);
   const row = inserted[0];
   /* v8 ignore next -- @preserve defensive: insert always returns a row */
   if (!row) throw new Error('plan insert returned no row');
@@ -237,7 +239,8 @@ export async function attachPlanSession(
     .update(planDraft)
     .set({ sessionId })
     .where(eq(planDraft.id, row.id))
-    .returning();
+    .returning()
+    .catch(templateReferenceWriteError);
   return updated[0] ?? row;
 }
 
@@ -428,7 +431,8 @@ export async function patchPlan(
       .update(planDraft)
       .set({ document, title, status, revision: row.revision + 1 })
       .where(eq(planDraft.id, id))
-      .returning();
+      .returning()
+      .catch(templateReferenceWriteError);
     const next = updated[0];
     /* v8 ignore next -- @preserve defensive: update always returns a row */
     if (!next) throw new Error('plan update returned no row');
@@ -444,7 +448,8 @@ export async function archivePlan(ownerUserId: string, id: string): Promise<Plan
     .update(planDraft)
     .set({ status: 'archived', archivedAt: new Date() })
     .where(eq(planDraft.id, id))
-    .returning();
+    .returning()
+    .catch(templateReferenceWriteError);
   return updated[0] ?? current;
 }
 

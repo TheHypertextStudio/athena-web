@@ -7,6 +7,7 @@ import {
   pgPolicy,
   pgTable,
   text,
+  timestamp,
   uniqueIndex,
 } from 'drizzle-orm/pg-core';
 import { actor, auditColumns } from './identity';
@@ -22,6 +23,7 @@ export const invocationHead = pgTable(
     description: text('description'),
     status: text('status').$type<'draft' | 'published' | 'archived'>().notNull().default('draft'),
     revision: integer('revision').notNull().default(1),
+    canonicalAuthoringAt: timestamp('canonical_authoring_at', { withTimezone: true }),
     draftInvocationId: text('draft_invocation_id'),
     publishedInvocationId: text('published_invocation_id'),
   },

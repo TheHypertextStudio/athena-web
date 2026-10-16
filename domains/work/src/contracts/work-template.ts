@@ -132,6 +132,8 @@ export const WorkTemplateOut = z.object({
   draftDefinition: WorkTemplateDefinition.optional(),
   offeredTeamIds,
   latestVersion: WorkTemplateVersionOut.nullable(),
+  /** Actual visible first-publication reservation; it is not an existing immutable version. */
+  pendingPublication: z.strictObject({ reservedFirstVersionId: WorkTypeVersionId }).optional(),
   canEdit: z.boolean(),
   createdAt: z.iso.datetime(),
   updatedAt: z.iso.datetime(),

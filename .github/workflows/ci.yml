@@ -76,6 +76,11 @@ jobs:
       # A cold apps shard must first build API and Admin dependencies before Web ESLint starts.
       # The old 180-second cap killed Web lint at startup whenever remote Turbo caching was down.
       - uses: ./.github/actions/turbo-cache
+        with:
+          workload-identity-provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service-account: ${{ vars.GCP_TURBO_CACHE_SERVICE_ACCOUNT }}
+          api: ${{ vars.TURBO_API }}
+          team: ${{ vars.TURBO_TEAM }}
 
       - run: timeout --signal=TERM --kill-after=10s 300s pnpm turbo run lint ${{ matrix.filter }} --concurrency=1
 
@@ -111,6 +116,11 @@ jobs:
       - uses: ./.github/actions/setup
 
       - uses: ./.github/actions/turbo-cache
+        with:
+          workload-identity-provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service-account: ${{ vars.GCP_TURBO_CACHE_SERVICE_ACCOUNT }}
+          api: ${{ vars.TURBO_API }}
+          team: ${{ vars.TURBO_TEAM }}
 
       - run: pnpm turbo run typecheck ${{ matrix.filter }} --concurrency=1
 
@@ -223,6 +233,11 @@ jobs:
       - uses: ./.github/actions/setup
 
       - uses: ./.github/actions/turbo-cache
+        with:
+          workload-identity-provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service-account: ${{ vars.GCP_TURBO_CACHE_SERVICE_ACCOUNT }}
+          api: ${{ vars.TURBO_API }}
+          team: ${{ vars.TURBO_TEAM }}
 
       - run: pnpm turbo run test:coverage ${{ matrix.filter }} --concurrency=1
 
@@ -294,6 +309,11 @@ jobs:
       - run: pnpm docs:check
 
       - uses: ./.github/actions/turbo-cache
+        with:
+          workload-identity-provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service-account: ${{ vars.GCP_TURBO_CACHE_SERVICE_ACCOUNT }}
+          api: ${{ vars.TURBO_API }}
+          team: ${{ vars.TURBO_TEAM }}
 
       - run: pnpm turbo run build --concurrency=1
 
@@ -362,6 +382,11 @@ jobs:
         run: pnpm exec dotenv -e .env.local -- pnpm --filter @docket/db db:migrate
 
       - uses: ./.github/actions/turbo-cache
+        with:
+          workload-identity-provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service-account: ${{ vars.GCP_TURBO_CACHE_SERVICE_ACCOUNT }}
+          api: ${{ vars.TURBO_API }}
+          team: ${{ vars.TURBO_TEAM }}
 
       - name: Build the production Web app
         env:

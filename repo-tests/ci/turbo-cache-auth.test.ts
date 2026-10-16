@@ -57,10 +57,10 @@ describe('signed Cloud Run Turbo cache authentication', () => {
       'google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093',
     );
     expect(authentication.with).toMatchObject({
-      workload_identity_provider: '${{ vars.GCP_WIF_PROVIDER }}',
-      service_account: '${{ vars.GCP_TURBO_CACHE_SERVICE_ACCOUNT }}',
+      workload_identity_provider: '${{ inputs.workload-identity-provider }}',
+      service_account: '${{ inputs.service-account }}',
       token_format: 'id_token',
-      id_token_audience: '${{ vars.TURBO_API }}',
+      id_token_audience: '${{ inputs.api }}',
       id_token_include_email: true,
       create_credentials_file: false,
     });
@@ -68,11 +68,17 @@ describe('signed Cloud Run Turbo cache authentication', () => {
     expect(authentication.if).toContain("github.ref == 'refs/heads/main'");
     expect(authentication.if).toContain("github.event_name == 'push'");
     expect(authentication.if).toContain("github.event_name == 'workflow_dispatch'");
-    expect(authentication.if).toContain("vars.TURBO_API != ''");
-    expect(authentication.if).toContain("vars.TURBO_TEAM != ''");
-    expect(authentication.if).toContain("vars.GCP_WIF_PROVIDER != ''");
-    expect(authentication.if).toContain("vars.GCP_TURBO_CACHE_SERVICE_ACCOUNT != ''");
+    expect(authentication.if).toContain("inputs.api != ''");
+    expect(authentication.if).toContain("inputs.team != ''");
+    expect(authentication.if).toContain("inputs.workload-identity-provider != ''");
+    expect(authentication.if).toContain("inputs.service-account != ''");
     expect(authentication.if).toContain("env.TURBO_REMOTE_CACHE_SIGNATURE_KEY != ''");
+  });
+
+  it('keeps repository variable resolution in callers, outside the composite manifest', () => {
+    const source = readFileSync(join(REPO_ROOT, '.github/actions/turbo-cache/action.yml'), 'utf8');
+
+    expect(source).not.toMatch(/\bvars\./);
   });
 
   it.each(['ci', 'e2e'])(
@@ -95,6 +101,12 @@ describe('signed Cloud Run Turbo cache authentication', () => {
             job.steps[index - 1]?.uses,
             `${job.id}: cache auth must precede ${step.label}`,
           ).toBe('./.github/actions/turbo-cache');
+          expect(job.steps[index - 1]?.with).toEqual({
+            'workload-identity-provider': '${{ vars.GCP_WIF_PROVIDER }}',
+            'service-account': '${{ vars.GCP_TURBO_CACHE_SERVICE_ACCOUNT }}',
+            api: '${{ vars.TURBO_API }}',
+            team: '${{ vars.TURBO_TEAM }}',
+          });
           expect(document.jobs[job.id]?.permissions?.['id-token']).toBe('write');
           expect(
             job.steps.slice(0, index - 1).some((prior) => prior.uses === './.github/actions/setup'),

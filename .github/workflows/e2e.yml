@@ -66,6 +66,11 @@ jobs:
       # any per-test budget worth setting and makes the suite's result a function of which spec
       # drew the cold route.
       - uses: ./.github/actions/turbo-cache
+        with:
+          workload-identity-provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service-account: ${{ vars.GCP_TURBO_CACHE_SERVICE_ACCOUNT }}
+          api: ${{ vars.TURBO_API }}
+          team: ${{ vars.TURBO_TEAM }}
 
       - name: Build the app
         run: pnpm turbo run build --filter=@docket/web

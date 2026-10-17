@@ -13587,6 +13587,15 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
 
 ## Completed Tasks
 
+### [ATHENA-FOLLOW-THROUGH-PLANNING] Plan completion of existing assignment features
+
+- **Completed**: 2026-10-16
+- **Summary**: Planned the task/project follow-through release in Docket using existing work. The private design, acceptance criteria, priorities and dependency relations remain in Docket; no private task content is copied into repository history.
+- **Approach**: Read assignment creation, event/scheduled triggers, execution admission, lifecycle controls and companion presentation before shaping the completion work. Prefer closing the existing product flow over adding a parallel tracker or scheduler.
+- **Validation**: Read saved project/task changes back, preserve existing requirements and unrelated metadata, and check that required acceptance dependencies form an acyclic graph. No product implementation or runtime acceptance is claimed.
+- **Files Changed**: This worklog only.
+- **Learnings**: Existing confirmed planning-canvas nodes are immutable; use canonical work updates and relations when refining existing tasks. Component completion must remain distinct from acceptance of a complete user workflow.
+
 ### [DEV-STACK-CHECKOUT-ISOLATION] Keep parallel worktree servers independent
 
 - **Status**: COMPLETE

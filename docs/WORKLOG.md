@@ -30,6 +30,17 @@
   - [x] Studio hosting configuration uses Workers without active Pages or Vercel dependencies.
   - [x] The plugin defines registration, CI/local setup, diagnosis and runtime acceptance.
   - [x] Retained user storage and unrelated work are preserved; local unpublished source remains unpublished.
+### [ATHENA-CAPABILITY-AUDIT] Assess personal-assistant and chief-of-staff capabilities
+
+- **Status**: COMPLETE
+- **Started**: 2026-10-16
+- **Description**: Compare Athena's implementation with everyday assistant and chief-of-staff expectations, distinguish implementation from runtime evidence, and recommend the first coherent product increment.
+- **Approach**: Trace channel entry points, personal context, assignments and triggers, connected tools, planning, notifications, and recovery. Cross-check tests and recorded acceptance without treating designs or mocks as delivered capabilities.
+- **Validation**: Check each assessment against executable source and identify evidence limits. Review the complete capability matrix for coverage of the requested list.
+- **Blockers**: None for source assessment; new provider and physical-device acceptance are outside this audit.
+- **Outcome**: Recorded all 12 assistant and eight chief-of-staff expectations in `docs/research/2026-10-16-athena-capability-audit.md`, with implementation gaps, source/test references, retained-evidence qualifications, and a dependency-informed build order. Recommend completing a Docket-native follow-through workflow before Gmail correspondence and everyday messaging.
+- **Files changed**: The capability audit and this entry. Product code and pre-existing Android edits are unchanged.
+- **Learnings**: Shared conversation history does not provide tool parity across channels; recurring work generation does not provide a personal assistant routine. Historical launch-ledger statuses require reconciliation against current executable source.
 
 ### [STUDIO-R2-CACHE] Keep shared caching within existing Cloudflare allowances
 

@@ -519,35 +519,38 @@ describe('/mcp handler — 401 challenge + 403 step-up', () => {
     expect(wa).toContain('scope="work:read work:write agents:run connectors:link offline_access"');
   });
 
-  it('returns a 403 insufficient_scope step-up for a tools/call the token cannot satisfy', async () => {
-    const s = await seedOrg(['contribute']);
-    // A real, audience-bound read-only token (Bearer path) → the handler resolves scopes.
-    const { clientId } = await seedConsentedClient(schema, s.userId, ['work:read']);
-    verifyAccessToken.mockResolvedValue({ sub: s.userId, azp: clientId, scope: 'work:read' });
-    const body = JSON.stringify({
-      jsonrpc: '2.0',
-      id: 2,
-      method: 'tools/call',
-      params: { name: 'capture', arguments: { orgId: s.orgId, text: 'x' } },
-    });
-    const res = await mcpApp().request('/mcp', {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        accept: 'application/json, text/event-stream',
-        authorization: 'Bearer ro',
-      },
-      body,
-    });
-    expect(res.status).toBe(403);
-    const wa = res.headers.get('www-authenticate') ?? '';
-    expect(wa).toContain('error="insufficient_scope"');
-    expect(wa).toContain('scope="work:read work:write"');
-    const problem = (await res.json()) as { code: string; scope: string; type: string };
-    expect(problem.code).toBe('insufficient_scope');
-    expect(problem.scope).toBe('work:write');
-    expect(problem.type).toMatch(/\/problems\/insufficient_scope$/);
-  });
+  it.each(['capture', 'send_email'])(
+    'returns a 403 insufficient_scope step-up before invoking %s for a read-only token',
+    async (tool) => {
+      const s = await seedOrg(['contribute']);
+      // A real, audience-bound read-only token (Bearer path) → the handler resolves scopes.
+      const { clientId } = await seedConsentedClient(schema, s.userId, ['work:read']);
+      verifyAccessToken.mockResolvedValue({ sub: s.userId, azp: clientId, scope: 'work:read' });
+      const body = JSON.stringify({
+        jsonrpc: '2.0',
+        id: 2,
+        method: 'tools/call',
+        params: { name: tool, arguments: { orgId: s.orgId, text: 'x' } },
+      });
+      const res = await mcpApp().request('/mcp', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          accept: 'application/json, text/event-stream',
+          authorization: 'Bearer ro',
+        },
+        body,
+      });
+      expect(res.status).toBe(403);
+      const wa = res.headers.get('www-authenticate') ?? '';
+      expect(wa).toContain('error="insufficient_scope"');
+      expect(wa).toContain('scope="work:read work:write"');
+      const problem = (await res.json()) as { code: string; scope: string; type: string };
+      expect(problem.code).toBe('insufficient_scope');
+      expect(problem.scope).toBe('work:write');
+      expect(problem.type).toMatch(/\/problems\/insufficient_scope$/);
+    },
+  );
 
   it('does not step-up a tools/call the token can satisfy (proceeds to the transport)', async () => {
     const s = await seedOrg(['contribute']);

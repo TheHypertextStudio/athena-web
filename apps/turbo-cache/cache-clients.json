@@ -34,13 +34,13 @@
   },
   {
     "namespace": "studio-product-admin",
-    "repository": null,
+    "repository": "TheHypertextStudio/product-admin",
     "root": ".",
     "packageName": "@hypertext/admin-workspace",
     "serviceAccount": "studio-cache-product-admin@athena-services.iam.gserviceaccount.com",
     "subject": "102992198824375895059",
-    "wifProvider": null,
-    "wifCondition": null,
+    "wifProvider": "projects/770668668034/locations/global/workloadIdentityPools/github/providers/github-actions-admin-cache",
+    "wifCondition": "assertion.repository=='TheHypertextStudio/product-admin' && assertion.repository_id=='1422827491' && assertion.repository_owner_id=='170363390' && assertion.ref=='refs/heads/main'",
     "signingSecret": "studio-turbo-cache-studio-product-admin-signing-key"
   }
 ]

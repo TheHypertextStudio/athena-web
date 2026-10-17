@@ -282,7 +282,7 @@ object metadata for Turbo clients to verify with HMAC.
 
 The pinned `TheHypertextStudio/release-engineering/actions/turbo-cache` action mints an audience-bound token immediately before each cacheable task. Callers supply `GCP_TURBO_CACHE_WIF_PROVIDER`, `GCP_TURBO_CACHE_SERVICE_ACCOUNT`, `TURBO_API`, and `TURBO_TEAM`; application deployment keeps its own `GCP_WIF_PROVIDER`.
 
-`apps/turbo-cache/cache-clients.json` registers each Studio namespace and its distinct identity, repository trust and signing-key reference. Docket uses `docket`, Curfew web uses `curfew-web`, LogDate web uses `logdate-web`, and unpublished product administration uses `studio-product-admin` with local owner impersonation only. No client can read or write another client's artifact prefix. See the plugin runbook for registration and local setup.
+`apps/turbo-cache/cache-clients.json` registers each Studio namespace and its distinct identity, repository trust and signing-key reference. Docket uses `docket`, Curfew web uses `curfew-web`, LogDate web uses `logdate-web`, and private Product Admin uses `studio-product-admin` with its own exact-main WIF provider. No client can read or write another client's artifact prefix. See the plugin runbook for registration and local setup.
 
 Untrusted refs remain local-only and receive neither the cache token nor the HMAC key. Trusted
 main with incomplete cache configuration stays local-only; it cannot mint a cache token. Native `turbo.json` defaults select the Studio endpoint and `docket` namespace;

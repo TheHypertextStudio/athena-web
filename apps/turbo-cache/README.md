@@ -6,7 +6,7 @@ Deploy configuration binds the private `studio-turbo-cache` bucket directly and 
 
 Authentication accepts Google-issued RS256 ID tokens for a registered numeric service-account subject
 and the exact endpoint audience. `cache-clients.json` is the canonical identity/namespace registry:
-Docket (`docket`), Curfew web (`curfew-web`), LogDate web (`logdate-web`) and local product administration
+Docket (`docket`), Curfew web (`curfew-web`), LogDate web (`logdate-web`) and private Product Admin
 (`studio-product-admin`). Namespace and numeric subject uniqueness are validated during native builds;
 invalid registries fail before deployment. Only the minimal subject-to-namespace map reaches the Worker.
 

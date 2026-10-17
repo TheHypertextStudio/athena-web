@@ -7,6 +7,15 @@
 
 ## Active Tasks
 
+### [PRODUCT-ADMIN-CACHE-CI] Register private Product Admin CI
+
+- **Status**: DONE
+- **Description**: Bind the private Studio Product Admin repository to its existing isolated cache client through exact-main workload identity.
+- **Approach**: Preserve the numeric Google subject, namespace and signing key; register the owned GitHub repository and dedicated WIF provider. Keep application deployment access separate.
+- **Acceptance**:
+  - [x] Source registration matches the actual private repository and narrowly scoped provider.
+  - [x] Published-repository cache diagnostics pass without changing Worker artifact access.
+
 ### [STUDIO-CACHE-ROLLOUT] Share private caching across Studio repositories
 
 - **Status**: DONE

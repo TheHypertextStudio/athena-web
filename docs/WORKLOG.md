@@ -45,6 +45,8 @@
 
 - **Final recovery checks**: Persist each attachment result before fetching the next, and retain pending admission while retrieval is unavailable. Scheduler regressions cover partial provider rate limits, adapter restoration and overlapping workers. Expand lossless local-model schema pooling so the complete tool catalog stays within its existing prompt ceiling. All 90 focused workflow/catalog tests and 420 Athena-domain tests pass; the full web suite passes 5,419 tests and its coverage gate. The full API run passed 7,952 tests with only the two catalog-budget failures, now corrected in focused checks; final aggregate coverage remains to be measured. API and domain typechecks, changed-code lint, and the separate API/web performance suites pass. The native production frontend deployment succeeds.
 
+- **Coverage closure**: The full API run passes all 7,957 tests; its 87.86% branch result exposed remaining authority and recovery cases. Add 56 behavior cases for live consent, source ownership, exact approved files, partial checkpoints, send leases and signed receipt shape. All 146 focused workflow/catalog tests, final API typecheck and changed-test lint pass. Production source is unchanged from the full run; Istanbul merging verifies identical statement/function/branch maps and measures 88.01% branches with every existing 88% threshold satisfied. The normal full CI gate remains required before backend publication.
+
 ### [ATHENA-CAPABILITY-AUDIT] Assess personal-assistant and chief-of-staff capabilities
 
 - **Status**: COMPLETE

@@ -63,6 +63,28 @@ async function status(id: string) {
   return assertDefined(row).status;
 }
 describe('authenticated delivery receipts', () => {
+  it.each([
+    null,
+    'not an event',
+    { type: 'email.delivered' },
+    { type: 'email.delivered', data: { email_id: 42 } },
+  ])(
+    'rejects a signed but malformed receipt without changing delivery state: %j',
+    async (payload) => {
+      const target = await intent(`malformed-${Math.random()}`);
+      const body = JSON.stringify(payload);
+      const id = `invalid-shape-${Math.random()}`;
+      const timestamp = String(Math.floor(Date.now() / 1000));
+      const headers = {
+        'svix-id': id,
+        'svix-timestamp': timestamp,
+        'svix-signature': `v1,${signSvixPayload(signingSecret, id, timestamp, body)}`,
+      };
+      expect(await receiveMailProviderEvent(body, headers)).toBe(false);
+      expect(await status(target.id)).toBe('sent');
+    },
+  );
+
   it('rejects unsigned and modified events without changing a send or another owner', async () => {
     const id = `provider-${Math.random()}`;
     const target = await intent(id);

@@ -1,0 +1,172 @@
+import { describe, expect, it } from 'vitest';
+import { shareLargeSchemaFragments } from '../src/turn/internal/lattice-schema-registry';
+
+type Schema = Record<string, unknown>;
+const NAMED = new Set(['properties', 'patternProperties', 'definitions', 'dependentSchemas']);
+const CHILDREN = new Set([
+  'items',
+  'prefixItems',
+  'additionalItems',
+  'contains',
+  'additionalProperties',
+  'unevaluatedProperties',
+  'propertyNames',
+  'not',
+  'if',
+  'then',
+  'else',
+  'anyOf',
+  'oneOf',
+  'allOf',
+]);
+function record(value: unknown): value is Schema {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+/** Expand document-local references only in schema positions; annotation literals remain literal. */
+function expanded(root: Schema): unknown {
+  function pointer(ref: string): unknown {
+    if (!ref.startsWith('#/')) throw new Error('Expected document-local pointer');
+    return ref
+      .slice(2)
+      .split('/')
+      .reduce<unknown>((value, key) => {
+        if (!record(value)) throw new Error('Invalid schema reference');
+        return value[key.replaceAll('~1', '/').replaceAll('~0', '~')];
+      }, root);
+  }
+  function visit(value: unknown): unknown {
+    if (!record(value)) return value;
+    const referenced = typeof value['$ref'] === 'string' ? pointer(value['$ref']) : null;
+    if (referenced) return visit(referenced);
+    return Object.fromEntries(
+      Object.entries(value)
+        .filter(([key]) => key !== '$defs')
+        .map(([key, child]) => {
+          if (NAMED.has(key) && record(child))
+            return [
+              key,
+              Object.fromEntries(
+                Object.entries(child).map(([name, schema]) => [name, visit(schema)]),
+              ),
+            ];
+          if (CHILDREN.has(key))
+            return [key, Array.isArray(child) ? child.map(visit) : visit(child)];
+          return [key, child];
+        }),
+    );
+  }
+  return visit(root);
+}
+/** Unique parent shapes leave repeated small constraints that the old 40-character cutoff misses. */
+function toolbox(identicalParents = false): Schema {
+  return {
+    type: 'object',
+    properties: Object.fromEntries(
+      Array.from({ length: 30 }, (_, index) => {
+        const body = identicalParents ? 'body' : `body${index}`;
+        return [
+          `tool${index}`,
+          {
+            type: 'object',
+            properties: {
+              id: { type: 'string', minLength: 1 },
+              orgId: { type: 'string', minLength: 1 },
+              [body]: { type: 'string', minLength: 1 },
+            },
+            required: ['id', 'orgId', body],
+          },
+        ];
+      }),
+    ),
+  };
+}
+
+describe('lossless local-model schema pooling', () => {
+  it('compresses repeated short constraints across different tool shapes without changing expansion', () => {
+    const original = toolbox();
+    const before = JSON.stringify(original);
+    const pooled = shareLargeSchemaFragments(original);
+    expect(JSON.stringify(pooled).length).toBeLessThan(before.length * 0.9);
+    expect(expanded(pooled)).toEqual(expanded(original));
+    expect(JSON.stringify(original)).toBe(before);
+  });
+
+  it('retains the shorter existing candidate when extra leaf definitions would make it larger', () => {
+    const original = toolbox(true);
+    const pooled = shareLargeSchemaFragments(original);
+    // Existing parent pooling costs 1,118 bytes; eagerly pooling its small leaves costs 1,121.
+    // This protects the real case where more definitions create a larger prompt.
+    expect(JSON.stringify(pooled).length).toBeLessThanOrEqual(1118);
+    expect(expanded(pooled)).toEqual(expanded(original));
+  });
+
+  it('preserves digest patterns, file bounds, required fields and literal default/example values', () => {
+    const tools = toolbox();
+    const original: Schema = {
+      ...tools,
+      properties: {
+        ...(tools['properties'] as Schema),
+        send_email: {
+          type: 'object',
+          additionalProperties: false,
+          properties: {
+            description: { type: 'string', minLength: 1 },
+            attachments: {
+              type: 'array',
+              maxItems: 5,
+              items: {
+                type: 'object',
+                properties: {
+                  digest: { type: 'string', pattern: '^[a-f0-9]{64}$' },
+                  size: { type: 'integer', minimum: 0, maximum: 65536 },
+                  contentType: { enum: ['text/plain', 'text/markdown', 'text/csv'] },
+                },
+                required: ['digest', 'size', 'contentType'],
+                additionalProperties: false,
+              },
+            },
+            literal: {
+              type: 'object',
+              default: { $ref: '#/not-a-schema-reference', properties: { keep: true } },
+              examples: [{ $ref: '#/also-literal' }],
+            },
+          },
+          required: ['description', 'attachments'],
+        },
+      },
+    };
+    expect(expanded(shareLargeSchemaFragments(original))).toEqual(expanded(original));
+  });
+
+  it('keeps an existing definition and its local reference distinct from generated definitions', () => {
+    const tools = toolbox();
+    const definition = { type: 'string', pattern: '^approved$' };
+    const original: Schema = {
+      ...tools,
+      $defs: { '0': definition },
+      properties: {
+        ...(tools['properties'] as Schema),
+        approved: { $ref: '#/$defs/0' },
+      },
+    };
+    const pooled = shareLargeSchemaFragments(original);
+    expect((pooled['$defs'] as Schema)['0']).toEqual(definition);
+    expect(expanded(pooled)).toEqual(expanded(original));
+  });
+
+  it.each(['$id', '$anchor', '$dynamicAnchor', '$dynamicRef'])(
+    'preserves a document with %s rather than moving its reference-resolution scope',
+    (keyword) => {
+      const original = { ...toolbox(), [keyword]: 'scope' };
+      expect(shareLargeSchemaFragments(original)).toBe(original);
+    },
+  );
+
+  it('does not expand a tiny schema when references cannot save bytes', () => {
+    const original = {
+      type: 'object',
+      properties: { enabled: { type: 'boolean' }, empty: { type: 'null' } },
+    };
+    expect(shareLargeSchemaFragments(original)).toEqual(original);
+  });
+});

@@ -68,6 +68,23 @@ function emailBrief(message: Inbound, ownerAddress: string, prior: string): stri
     .filter(Boolean)
     .join('\n\n');
 }
+async function activeOwnerActor(
+  userId: string,
+  organizationId: string,
+): Promise<string | undefined> {
+  const [member] = await db
+    .select({ id: actor.id })
+    .from(actor)
+    .where(
+      and(
+        eq(actor.userId, userId),
+        eq(actor.organizationId, organizationId),
+        eq(actor.status, 'active'),
+        isNull(actor.archivedAt),
+      ),
+    );
+  return member?.id;
+}
 async function admitMessage(message: Inbound): Promise<void> {
   const mailbox = await mailChannelAuthority(
     message.mailboxId,
@@ -89,20 +106,11 @@ async function admitMessage(message: Inbound): Promise<void> {
     return;
   }
   message = await prepareMailAttachments(message);
+  if (message.attachments.some((file) => file.status === 'unavailable')) return;
   if (await prepareMailContinuation(message, mailbox)) return;
   const parent = await resolveCanonicalConversation(mailbox.ownerUserId, mailbox.organizationId);
   const prior = await threadContext(message);
-  const [member] = await db
-    .select({ id: actor.id })
-    .from(actor)
-    .where(
-      and(
-        eq(actor.userId, mailbox.ownerUserId),
-        eq(actor.organizationId, mailbox.organizationId ?? ''),
-        eq(actor.status, 'active'),
-        isNull(actor.archivedAt),
-      ),
-    );
+  const memberId = await activeOwnerActor(mailbox.ownerUserId, mailbox.organizationId ?? '');
   await db.transaction(async (tx) => {
     const [locked] = await tx
       .select()
@@ -118,7 +126,7 @@ async function admitMessage(message: Inbound): Promise<void> {
         ownerUserId: mailbox.ownerUserId,
         contextOrganizationId: mailbox.organizationId,
         parentSessionId: parent.id,
-        initiatorId: member?.id,
+        initiatorId: memberId,
         kind: 'job',
         workLinkage: 'observation',
         trigger: 'mention',

@@ -86,11 +86,14 @@ function fingerprintOf(schema: Schema): string {
       : value,
   );
 }
-function repeatedSchemas(root: Schema): Map<string, RepeatedSchema> {
+function repeatedSchemas(
+  root: Schema,
+  minimumFingerprintLength: number,
+): Map<string, RepeatedSchema> {
   const repeated = new Map<string, RepeatedSchema>();
   const visit = (schema: Schema): Schema => {
     const fingerprint = fingerprintOf(schema);
-    if (fingerprint.length >= 40 && schema['$ref'] === undefined) {
+    if (fingerprint.length >= minimumFingerprintLength && schema['$ref'] === undefined) {
       const found = repeated.get(fingerprint);
       if (found) found.count += 1;
       else repeated.set(fingerprint, { schema, count: 1 });
@@ -174,13 +177,13 @@ function inlineSingleUse(root: Schema, definitions: Map<string, Schema>): Schema
  * Literal defaults/examples and existing references retain their exact values. The root remains
  * an object and generated references stay in this document; no resolution or network work occurs.
  */
-export function shareLargeSchemaFragments(root: Schema): Schema {
+function shareSchemaFragments(root: Schema, minimumFingerprintLength: number): Schema {
   // Moving an anchored scope could change relative resolution. Preserve such documents verbatim.
   if (/"\$(?:id|anchor|dynamicAnchor|dynamicRef)":/.test(JSON.stringify(root))) return root;
   const existing = record(root['$defs']) ? root['$defs'] : {};
   const names = new Map<string, string>();
   const originals = new Map<string, Schema>();
-  for (const [fingerprint, entry] of repeatedSchemas(root)) {
+  for (const [fingerprint, entry] of repeatedSchemas(root, minimumFingerprintLength)) {
     let index = names.size;
     let name = index.toString(36);
     while (Object.hasOwn(existing, name) || originals.has(name)) name = (++index).toString(36);
@@ -210,4 +213,13 @@ export function shareLargeSchemaFragments(root: Schema): Schema {
     },
   };
   return JSON.stringify(result).length < JSON.stringify(root).length ? result : root;
+}
+
+/** Pick the shorter lossless registry while preserving anchored scopes and literal values. */
+export function shareLargeSchemaFragments(root: Schema): Schema {
+  const existing = shareSchemaFragments(root, 40);
+  const smallFragments = shareSchemaFragments(root, 20);
+  return JSON.stringify(smallFragments).length < JSON.stringify(existing).length
+    ? smallFragments
+    : existing;
 }

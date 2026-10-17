@@ -67,8 +67,10 @@ async function prepareFile(
     .values({ key: blobKey, ownerUserId: message.ownerUserId, messageId: message.id })
     .onConflictDoNothing();
   await getContainer().blob.put(blobKey, bytes, file.contentType ?? 'text/plain');
+  const metadata = { ...file };
+  delete metadata.errorCode;
   return {
-    ...file,
+    ...metadata,
     status: 'ready',
     digest,
     size: bytes.byteLength,
@@ -76,19 +78,57 @@ async function prepareFile(
     extractedText: text.slice(0, 12000),
   };
 }
-/** Retrieve only after enrolled-owner authorization; a failed network read remains recoverable. */
+/** Merge one file result under a row lock; a stale worker cannot erase completed sibling work. */
+async function persistFileProgress(
+  message: Inbound,
+  result: AthenaMailAttachmentMeta,
+): Promise<AthenaMailAttachmentMeta[]> {
+  return db.transaction(async (tx) => {
+    const [locked] = await tx
+      .select()
+      .from(athenaInboundMessage)
+      .where(eq(athenaInboundMessage.id, message.id))
+      .for('update');
+    if (!locked) throw new NotFoundError('Email message not found');
+    const current = locked.attachments.length ? locked.attachments : message.attachments;
+    const attachments = current.map((file) => {
+      if (
+        file.id !== result.id ||
+        file.filename !== result.filename ||
+        file.contentType !== result.contentType
+      )
+        return file;
+      return file.status === 'ready' || file.status === 'rejected' ? file : result;
+    });
+    await tx
+      .update(athenaInboundMessage)
+      .set({ attachments })
+      .where(eq(athenaInboundMessage.id, message.id));
+    return attachments;
+  });
+}
+/** Persist each completed file before fetching the next, so provider rate limits cannot restart a batch. */
 export async function prepareMailAttachments(message: Inbound): Promise<Inbound> {
   if (!message.attachments.length) return message;
   if (!(await mailChannelAuthority(message.mailboxId, message.channelRevision ?? -1)))
     throw new ConflictError('Email channel is unavailable');
-  const attachments: AthenaMailAttachmentMeta[] = [];
-  for (const [index, file] of message.attachments.entries())
-    attachments.push(await prepareFile(message, file, index));
-  await db
-    .update(athenaInboundMessage)
-    .set({ attachments })
-    .where(eq(athenaInboundMessage.id, message.id));
-  return { ...message, attachments };
+  let current = message;
+  for (const [index, original] of message.attachments.entries()) {
+    const file = current.attachments.find((item) => item.id === original.id) ?? original;
+    let result: AthenaMailAttachmentMeta;
+    try {
+      result = await prepareFile(current, file, index);
+    } catch (error) {
+      await persistFileProgress(current, {
+        ...file,
+        status: 'unavailable',
+        errorCode: 'attachment_unavailable',
+      });
+      throw error;
+    }
+    current = { ...current, attachments: await persistFileProgress(current, result) };
+  }
+  return current;
 }
 /** Bound extracted context and mark it untrusted; unsupported files are explained explicitly. */
 export function mailAttachmentContext(message: Pick<Inbound, 'id' | 'attachments'>): string {

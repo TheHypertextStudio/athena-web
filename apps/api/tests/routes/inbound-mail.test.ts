@@ -293,7 +293,7 @@ describe('the universal inbox stream', () => {
 });
 
 describe('delivery into Athena', () => {
-  it('lands on the one open conversation through the shared message ingress', async () => {
+  it('captures external mail without injecting the owner conversation', async () => {
     const fixture = await seedOwner();
     const { resolveCanonicalConversation } = await import('../../src/routes/agent-dispatch');
     const conversation = await resolveCanonicalConversation(fixture.ownerUserId);
@@ -311,10 +311,7 @@ describe('delivery into Athena', () => {
       (row) =>
         row.type === 'response' && (row.body as { author?: string } | null)?.author === 'user',
     );
-    expect(humanTurns).toHaveLength(1);
-    const text = (humanTurns[0]?.body as { text?: string } | null)?.text ?? '';
-    expect(text).toContain('Renew the hosting plan');
-    expect(text).toContain('jane@example.com');
+    expect(humanTurns).toHaveLength(0);
 
     // No second conversation was opened for the email.
     const sessions = await db
@@ -332,30 +329,26 @@ describe('delivery into Athena', () => {
     const agentTurns = activities.filter(
       (row) => (row.body as { author?: string } | null)?.author !== 'user',
     );
-    expect(agentTurns.length).toBeGreaterThan(0);
+    expect(agentTurns).toHaveLength(0);
 
     const [message] = await db
       .select()
       .from(schema.athenaInboundMessage)
       .where(eq(schema.athenaInboundMessage.ownerUserId, fixture.ownerUserId));
-    expect(message?.sessionId).toBe(conversation.id);
+    expect(message?.sessionId).toBeNull();
+    expect(message?.processingStatus).toBe('captured');
   });
 
-  it('names the stored context object so Athena can act on it', async () => {
+  it('retains an attachable context object without executing external instructions', async () => {
     const fixture = await seedOwner();
     await deliver(fixture.address);
     const [message] = await db
       .select()
       .from(schema.athenaInboundMessage)
       .where(eq(schema.athenaInboundMessage.ownerUserId, fixture.ownerUserId));
-    const activities = await db
-      .select()
-      .from(schema.sessionActivity)
-      .where(eq(schema.sessionActivity.sessionId, assertDefined(assertDefined(message).sessionId)));
-    const text = activities
-      .map((row) => (row.body as { text?: string } | null)?.text ?? '')
-      .join('\n');
-    expect(text).toContain(assertDefined(message).id);
+    expect(message?.id).toBeTruthy();
+    expect(message?.sessionId).toBeNull();
+    expect(message?.processingStatus).toBe('captured');
   });
 });
 

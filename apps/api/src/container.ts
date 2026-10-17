@@ -101,6 +101,7 @@ export interface AppRuntimeEnv {
   readonly NOTION_WEBHOOK_TOKEN?: string;
   readonly GITHUB_APP_WEBHOOK_SECRET?: string;
   readonly RESEND_API_KEY?: string;
+  readonly RESEND_RECEIVING_API_KEY?: string;
   readonly RESEND_INBOUND_WEBHOOK_SECRET?: string;
   readonly RESEND_RECEIVING_API_BASE?: string;
   readonly SMTP_HOST?: string;
@@ -393,6 +394,9 @@ function buildInboundReceiver(runtimeEnv: AppRuntimeEnv): InboundMailReceiver {
   return buildInboundReceiverFromEnv({
     APP_MODE: runtimeEnv.APP_MODE ?? 'production',
     ...(runtimeEnv.RESEND_API_KEY ? { RESEND_API_KEY: runtimeEnv.RESEND_API_KEY } : {}),
+    ...(runtimeEnv.RESEND_RECEIVING_API_KEY
+      ? { RESEND_RECEIVING_API_KEY: runtimeEnv.RESEND_RECEIVING_API_KEY }
+      : {}),
     ...(runtimeEnv.RESEND_INBOUND_WEBHOOK_SECRET
       ? { RESEND_INBOUND_WEBHOOK_SECRET: runtimeEnv.RESEND_INBOUND_WEBHOOK_SECRET }
       : {}),

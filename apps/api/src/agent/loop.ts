@@ -1,3 +1,5 @@
+import { mailElicitationAttachmentContext } from '../services/athena-mail/attachments';
+import { isMailSession, mailSessionAuthorized } from '../services/athena-mail/session-auth';
 import { collectProviderTurn } from './provider-turn';
 import { loadSessionAgent } from './session-agent';
 import { notificationTriageBrief } from '../services/device-notifications/triage-context';
@@ -316,9 +318,18 @@ async function reconcileToolUse(sessionId: string, use: ToolUse): Promise<Reconc
     // object — so the model reads back exactly what the schema promised. The prose beside it is
     // for the person reading the transcript, and is only the fallback for a legacy free-text reply.
     if ('elicitationAnswer' in answered.body) {
+      const attachmentContext = await mailElicitationAttachmentContext(
+        sessionId,
+        typeof answered.body['elicitationId'] === 'string' ? answered.body['elicitationId'] : '',
+      );
       return {
         kind: 'result',
-        result: { content: JSON.stringify(answered.body['elicitationAnswer']), isError: false },
+        result: {
+          content: [JSON.stringify(answered.body['elicitationAnswer']), attachmentContext]
+            .filter(Boolean)
+            .join('\n\n'),
+          isError: false,
+        },
       };
     }
     const reply = answered.body.text;
@@ -455,7 +466,10 @@ async function driveSessionWithAdmission(
         .limit(1)
     : [];
   const contextName = orgRows[0]?.name ?? null;
-  const principalPreferences = await principalAthenaPreferences(session);
+  const savedPreferences = await principalAthenaPreferences(session);
+  const principalPreferences = isMailSession(session)
+    ? { ...savedPreferences, approvalMode: 'ask_before_acting' as const }
+    : savedPreferences;
 
   const maxTurns = deps.generationTurnQuantum ?? env.AGENT_MAX_TURNS;
 
@@ -505,6 +519,7 @@ async function driveSessionWithAdmission(
     // Resolve after entering the generation's settlement scope. An expired personal grant can
     // refuse before the first model call; that must release the claimed run instead of leaving it
     // in "running" until the lease expires. Resolution never falls back to a cloud model.
+    if (!(await mailSessionAuthorized(session))) return await settleOwned('canceled');
     const triageBrief = await notificationTriageBrief(session);
     if (triageBrief === null) return await settleOwned('canceled');
     const turnRuntime = deps.turnRuntime ?? (await resolveOwnerTurnRuntime(session.ownerUserId));
@@ -525,6 +540,7 @@ async function driveSessionWithAdmission(
     });
 
     for (;;) {
+      if (!(await mailSessionAuthorized(session))) return await settleOwned('canceled');
       if ((await notificationTriageBrief(session)) === null) return await settleOwned('canceled');
       const execution = await executeApprovedActions(orgId, sessionId, lease, deps);
       if (execution !== 'settled') {
@@ -850,6 +866,7 @@ export async function executeApprovedActions(
     throw new NotFoundError('Session not found');
   }
   assertHostedExecutionSurface(session);
+  if (!(await mailSessionAuthorized(session))) return 'canceled';
   if ((await notificationTriageBrief(session)) === null) return 'canceled';
   const executor = toolboxExecutor(session);
 
@@ -894,6 +911,7 @@ export async function executeApprovedActions(
   try {
     toolbox = withCalls.length > 0 ? await openToolbox(executor, session.id) : null;
     for (const action of approved) {
+      if (!(await mailSessionAuthorized(session))) return 'canceled';
       const claimed = await persistGenerationEffect(lease, deps, 'action-claim', async (tx) => {
         const [row] = await tx
           .update(sessionActivity)

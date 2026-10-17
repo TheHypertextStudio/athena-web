@@ -1,3 +1,4 @@
+import { registerAthenaMailTools } from './athena-mail-tools';
 /**
  * `@docket/api` — MCP mutation tools.
  *
@@ -72,6 +73,7 @@ export function registerTools(
 ): void {
   const server = new ProvenanceRegistrar(registrar, provenance);
   registerContentTools(server, ctx);
+  registerAthenaMailTools(server, ctx, sessionId);
   registerSessionTools(server, ctx);
   registerViewPlanTools(server, ctx);
   registerWriteTools(server, ctx);

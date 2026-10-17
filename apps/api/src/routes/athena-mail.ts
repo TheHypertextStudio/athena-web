@@ -1,3 +1,4 @@
+import { athenaMailChannel } from './athena-mail-channel';
 /**
  * `@docket/api` — the owner-facing Athena inbox API, mounted at `/v1/me/athena/mail`.
  *
@@ -120,6 +121,7 @@ async function requireSubject(
 
 /** Athena inbox router: the caller's address, their received messages, and what they attach to. */
 const athenaMail = new Hono<AppEnv>()
+  .route('/channel', athenaMailChannel)
   .get(
     '/address',
     apiDoc({

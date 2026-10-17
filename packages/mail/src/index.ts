@@ -12,6 +12,16 @@
 
 /** An outbound email message. */
 export interface OutboundMessage {
+  /** Sender override for an authorized channel identity. */
+  readonly from?: string;
+  /** Address used for replies. */
+  readonly replyTo?: string;
+  /** RFC message headers, including thread references. */
+  readonly headers?: Readonly<Record<string, string>>;
+  /** Provider transport deduplication key; never a message body field. */
+  readonly idempotencyKey?: string;
+  /** Base64 bytes of validated private attachments, never URLs or local file paths. */
+  readonly attachments?: readonly { filename: string; content: string; content_type: string }[];
   /** Recipient address. */
   readonly to: string;
   /** Subject line. */
@@ -46,7 +56,9 @@ export interface Mailer {
    *
    * @param message - The recipient, subject, and body.
    */
-  send(message: OutboundMessage): Promise<void>;
+  // Existing application test doubles return Promise<void>; preserve their port compatibility.
+  // eslint-disable-next-line @typescript-eslint/no-invalid-void-type
+  send(message: OutboundMessage): Promise<SentMessage | void>;
 }
 
 export { CaptureMailer, ConsoleMailer } from './capture';
@@ -73,6 +85,8 @@ export type { MailerEnv } from './transport';
 export { htmlToText, mailboxHostOf, mailboxKeyOf, parseAddress, snippetOf } from './inbound';
 export type {
   InboundAttachment,
+  InboundAuthentication,
+  InboundContent,
   InboundBodyStatus,
   InboundMailReceiver,
   InboundMessage,
@@ -107,3 +121,12 @@ export { FixtureInboundReceiver, buildInboundFixturePayload } from './fixture-in
 export type { FixtureInboundConfig, InboundFixtureBody } from './fixture-inbound';
 export { buildInboundReceiverFromEnv } from './inbound-transport';
 export type { InboundMailEnv } from './inbound-transport';
+
+export {
+  MAIL_ATTACHMENT_MAX_BYTES,
+  MAIL_ATTACHMENT_MAX_COUNT,
+  supportedTextAttachment,
+  validateTextAttachment,
+} from './attachments';
+
+export { MailSendError } from './send-error';

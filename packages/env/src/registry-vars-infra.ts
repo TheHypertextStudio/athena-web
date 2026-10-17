@@ -45,6 +45,16 @@ export const INFRA_VARS: readonly VarSpec[] = [
     sensitive: true,
   },
   {
+    name: 'RESEND_RECEIVING_API_KEY',
+    slice: 'ops',
+    scope: 'server',
+    targets: ['api'],
+    required: false,
+    zod: opsServer.RESEND_RECEIVING_API_KEY,
+    where: 'Dedicated Resend receiving API key; absent uses RESEND_API_KEY for compatibility.',
+    sensitive: true,
+  },
+  {
     name: 'RESEND_INBOUND_WEBHOOK_SECRET',
     slice: 'ops',
     scope: 'server',
@@ -52,7 +62,7 @@ export const INFRA_VARS: readonly VarSpec[] = [
     required: false,
     zod: opsServer.RESEND_INBOUND_WEBHOOK_SECRET,
     where:
-      "Svix signing secret (whsec_…) for Athena's inbound-mail webhook. Required in production with RESEND_API_KEY; absent ⇒ the offline fixture receiver.",
+      "Svix signing secret (whsec_…) for Athena's inbound-mail webhook. Required in production with RESEND_RECEIVING_API_KEY (or RESEND_API_KEY); absent ⇒ the offline fixture receiver.",
     sensitive: true,
   },
   {

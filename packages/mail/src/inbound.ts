@@ -45,8 +45,34 @@ export interface InboundAttachment {
  */
 export type InboundBodyStatus = 'complete' | 'metadata-only';
 
+/** Receiving-server computed authentication, independent of sender-supplied headers. */
+export interface InboundAuthentication {
+  /** Provider SPF result; unknown values are preserved without granting authority. */
+  readonly spf: string;
+  /** Provider DKIM result. */
+  readonly dkim: string;
+  /** Provider DMARC alignment result. */
+  readonly dmarc: string;
+}
+
+/** Hydrated content and receiving-server metadata; fixture adapters can provide the same shape. */
+export interface InboundContent {
+  /** Plain-text message body. */
+  readonly text: string | null;
+  /** HTML message body. */
+  readonly html: string | null;
+  /** Receiving-server authentication, not sender header text. */
+  readonly authentication?: InboundAuthentication;
+  /** Retrieved RFC headers with normalized lowercase names. */
+  readonly headers?: Readonly<Record<string, string>>;
+}
+
 /** A message that arrived at a Docket-owned address, normalized across providers. */
 export interface InboundMessage {
+  /** Authentication reported by the receiving server, never parsed from email headers. */
+  readonly authentication?: InboundAuthentication;
+  /** Lowercase RFC headers retrieved from provider metadata; still sender-controlled content. */
+  readonly headers?: Readonly<Record<string, string>>;
   /** The receiving provider's own id for this message — the idempotency key. */
   readonly providerMessageId: string;
   /** RFC 5322 `Message-ID`, when the provider surfaces it. */
@@ -139,6 +165,10 @@ export type InboundProviderId = 'resend' | 'fixture';
 export interface InboundMailReceiver {
   /** Which provider this adapter speaks for. */
   readonly providerId: InboundProviderId;
+  /** Retry receiving-server hydration without replaying a webhook. Returns null on retrieval failure. */
+  retrieve?(providerMessageId: string): Promise<InboundContent | null>;
+  /** Retrieve bounded bytes by provider identities; arbitrary download URLs are never accepted. */
+  retrieveAttachment?(emailId: string, attachmentId: string): Promise<Uint8Array>;
   /**
    * Authenticate and normalize one inbound webhook request.
    *

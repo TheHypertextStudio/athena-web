@@ -57,7 +57,7 @@ function message(to: readonly string[]): InboundMessage {
 }
 
 describe('the stream write not producing a findable event', () => {
-  it('still delivers into the Athena conversation, leaving streamEventId unset', async () => {
+  it('retains captured mail when stream emission fails without admitting external execution', async () => {
     const userId = await seedUserWithHub(db, schema, 'EmitGapOwner');
     const { orgId } = await seedBaseOrg(db, schema);
     const key = `key${Math.random().toString(36).slice(2, 10)}`;
@@ -67,13 +67,13 @@ describe('the stream write not producing a findable event', () => {
 
     const outcome = await deliverInboundMail(message([`${key}@${HOST}`]), 'fixture');
     expect(outcome.status).toBe('delivered');
-    expect((outcome as { sessionId: string | null }).sessionId).not.toBeNull();
+    expect((outcome as { sessionId: string | null }).sessionId).toBeNull();
 
     const [row] = await db
       .select()
       .from(schema.athenaInboundMessage)
       .where(eq(schema.athenaInboundMessage.ownerUserId, userId));
     expect(row?.streamEventId).toBeNull();
-    expect(row?.sessionId).not.toBeNull();
+    expect(row?.sessionId).toBeNull();
   });
 });

@@ -127,6 +127,11 @@ describe('countAttachmentsFor', () => {
 describe('toMailMessageOut', () => {
   const baseRow: AthenaMailStoreModule.AthenaInboundMessageRow = {
     id: 'msg_test',
+    headers: {},
+    authentication: null,
+    threadId: null,
+    processingStatus: 'captured',
+    channelRevision: null,
     organizationId: 'org_test',
     createdBy: null,
     createdAt: new Date('2026-01-01T00:00:00.000Z'),

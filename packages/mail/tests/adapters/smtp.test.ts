@@ -20,6 +20,38 @@ import {
 } from '../../src/smtp';
 
 describe('RealMailer', () => {
+  it('keeps transport idempotency outside the payload and returns the accepted provider id', async () => {
+    let request: RequestInit | undefined;
+    const mailer = new RealMailer(
+      { endpoint: RESEND_EMAIL_ENDPOINT, apiKey: 're_secret', from: 'default@example.com' },
+      async (_url, init) => {
+        request = init;
+        return new Response(JSON.stringify({ id: 'accepted-1' }));
+      },
+    );
+    const message = {
+      to: 'owner@example.com',
+      subject: 'Re: Help',
+      text: 'Done',
+      from: 'Athena <athena@example.com>',
+      replyTo: 'athena@example.com',
+      headers: { 'In-Reply-To': '<original@example.com>' },
+      idempotencyKey: 'reply-1',
+    };
+    const receipt = await mailer.send(message);
+    expect(request?.headers).toMatchObject({ 'Idempotency-Key': 'reply-1' });
+    expect(request?.signal).toBeInstanceOf(AbortSignal);
+    expect(JSON.parse(request?.body as string)).toEqual({
+      from: message.from,
+      to: message.to,
+      subject: message.subject,
+      text: message.text,
+      reply_to: message.replyTo,
+      headers: message.headers,
+    });
+    expect(receipt).toMatchObject({ ...message, id: 'accepted-1' });
+  });
+
   it('posts a Resend-compatible payload with bearer authentication', async () => {
     const requests: { input: string; init?: RequestInit }[] = [];
     const mailer = new RealMailer(
@@ -40,6 +72,7 @@ describe('RealMailer', () => {
       {
         input: RESEND_EMAIL_ENDPOINT,
         init: {
+          signal: expect.any(AbortSignal),
           method: 'POST',
           headers: {
             Authorization: 'Bearer re_secret',
@@ -169,6 +202,27 @@ describe('smtpConfigFromEnv', () => {
 });
 
 describe('toSendMailOptions', () => {
+  it('preserves conversational sender and threading without leaking transport options', () => {
+    expect(
+      toSendMailOptions('default@example.com', {
+        to: 'owner@example.com',
+        subject: 'Re: Help',
+        text: 'Done',
+        from: 'athena@example.com',
+        replyTo: 'athena@example.com',
+        headers: { References: '<original@example.com>' },
+        idempotencyKey: 'reply-1',
+      }),
+    ).toEqual({
+      from: 'athena@example.com',
+      to: 'owner@example.com',
+      subject: 'Re: Help',
+      text: 'Done',
+      replyTo: 'athena@example.com',
+      headers: { References: '<original@example.com>' },
+    });
+  });
+
   it('forwards only the body fields that are present (html + text)', () => {
     const message: OutboundMessage = {
       to: 'a@b.com',
@@ -205,6 +259,16 @@ describe('toSendMailOptions', () => {
 });
 
 describe('SmtpMailer', () => {
+  it('returns a receipt when SMTP supplies an accepted message id', async () => {
+    const mailer = new SmtpMailer(
+      { host: 'localhost', port: 1025, secure: false, from: 'athena@example.com' },
+      () => ({ sendMail: async () => ({ messageId: '<accepted@example.com>' }) }),
+    );
+    expect(
+      await mailer.send({ to: 'owner@example.com', subject: 'Hi', text: 'Done' }),
+    ).toMatchObject({ id: '<accepted@example.com>', to: 'owner@example.com' });
+  });
+
   const config: SmtpMailerConfig = {
     host: 'localhost',
     port: 1025,

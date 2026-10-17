@@ -30,8 +30,9 @@ import { snippetOf } from '@docket/mail';
 import { and, eq } from 'drizzle-orm';
 
 import { emitInboundEmail } from './event-emit';
-import { resolveCanonicalConversation } from './agent-dispatch';
-import { postReplyAndResume } from './agent-session-runner';
+import { mailChannelAuthority } from '../services/athena-mail/channel';
+import { automaticMail, ownerMailEligible } from '../services/athena-mail/policy';
+
 import {
   messagePermalink,
   resolveMailboxForRecipients,
@@ -183,34 +184,12 @@ export async function deliverInboundMail(
   const organizationId = await resolveDeliveryOrganization(mailbox);
   if (!organizationId) return { status: 'unroutable' };
 
-  const title = message.subject.trim().length > 0 ? message.subject : NO_SUBJECT_TITLE;
-  const snippet = snippetOf(message.text);
-  const receivedAt = new Date(message.receivedAt);
-
+  const values = await inboundValues(message, provider, mailbox, resolved.address, organizationId);
+  const title = values.title;
+  const snippet = values.snippet ?? null;
   const [stored] = await db
     .insert(athenaInboundMessage)
-    .values({
-      organizationId,
-      ownerUserId: mailbox.ownerUserId,
-      mailboxId: mailbox.id,
-      provider,
-      providerMessageId: message.providerMessageId,
-      rfc822MessageId: message.rfc822MessageId,
-      fromAddress: message.fromAddress,
-      fromName: message.fromName,
-      toAddress: resolved.address,
-      title,
-      bodyText: message.text,
-      bodyHtml: message.html,
-      snippet,
-      bodyStatus: message.bodyStatus,
-      receivedAt: Number.isNaN(receivedAt.getTime()) ? new Date() : receivedAt,
-      attachments: message.attachments.map((file) => ({
-        id: file.id,
-        filename: file.filename,
-        contentType: file.contentType,
-      })),
-    })
+    .values(values)
     .onConflictDoNothing({
       target: [athenaInboundMessage.ownerUserId, athenaInboundMessage.providerMessageId],
     })
@@ -239,41 +218,15 @@ export async function deliverInboundMail(
   });
   const streamEventId = await findStreamEventId(organizationId, message.providerMessageId);
 
-  // The shared ingress. `resolveCanonicalConversation` is the one door every Athena entry point
-  // uses, and `postReplyAndResume` is the same write+resume the chat door performs — an email is
-  // a message on the conversation, so nothing here is email-specific.
-  let sessionId: string | null = null;
-  try {
-    const conversation = await resolveCanonicalConversation(mailbox.ownerUserId, organizationId);
-    // Enveloped as `email`, and the *whole* briefing goes inside it: the sender controls not just
-    // the body but the display name, the subject, and the To line, so there is no part of this
-    // string except Docket's own opening sentence that an attacker cannot write. That sentence
-    // riding along inside the envelope costs nothing.
-    await postReplyAndResume(
-      organizationId,
-      conversation.id,
-      null,
-      composeAthenaBriefing(message, stored.id),
-      'email',
-      message.fromAddress,
-    );
-    sessionId = conversation.id;
-  } catch {
-    // The message is stored and visible; a failed turn must not lose it. Athena picks the
-    // conversation up on the next message either way, because the append is what she reads.
-  }
-
-  if (streamEventId || sessionId) {
+  // External mail is context only. Verified owner requests are durably admitted by the sweep.
+  if (streamEventId) {
     await db
       .update(athenaInboundMessage)
-      .set({
-        ...(streamEventId ? { streamEventId } : {}),
-        ...(sessionId ? { sessionId } : {}),
-      })
+      .set({ streamEventId })
       .where(eq(athenaInboundMessage.id, stored.id));
   }
 
-  return { status: 'delivered', messageId: stored.id, sessionId };
+  return { status: 'delivered', messageId: stored.id, sessionId: null };
 }
 
 /**
@@ -298,4 +251,49 @@ async function findExistingByProviderId(
     )
     .limit(1);
   return row ?? null;
+}
+
+async function inboundValues(
+  message: InboundMessage,
+  provider: InboundProviderId,
+  mailbox: AthenaMailboxRow,
+  address: string,
+  organizationId: string,
+): Promise<typeof athenaInboundMessage.$inferInsert> {
+  const authority = await mailChannelAuthority(mailbox.id);
+  const receivedAt = new Date(message.receivedAt);
+  return {
+    organizationId,
+    ownerUserId: mailbox.ownerUserId,
+    mailboxId: mailbox.id,
+    provider,
+    providerMessageId: message.providerMessageId,
+    rfc822MessageId: message.rfc822MessageId,
+    processingStatus: inboundStatus(message, authority),
+    channelRevision: authority?.revision ?? null,
+    headers: { ...message.headers },
+    authentication: message.authentication ?? null,
+    fromAddress: message.fromAddress,
+    fromName: message.fromName,
+    toAddress: address,
+    title: message.subject.trim() || NO_SUBJECT_TITLE,
+    bodyText: message.text,
+    bodyHtml: message.html,
+    snippet: snippetOf(message.text),
+    bodyStatus: message.bodyStatus,
+    receivedAt: Number.isNaN(receivedAt.getTime()) ? new Date() : receivedAt,
+    attachments: message.attachments.map((file) => ({
+      id: file.id,
+      filename: file.filename,
+      contentType: file.contentType,
+    })),
+  };
+}
+function inboundStatus(message: InboundMessage, authority: AthenaMailboxRow | null): string {
+  if (message.fromAddress.toLowerCase() !== authority?.ownerAddress) return 'captured';
+  if (message.bodyStatus === 'metadata-only') return 'hydrating';
+  return ownerMailEligible(message.fromAddress, authority.ownerAddress, message.authentication) &&
+    !automaticMail(message.headers ?? {})
+    ? 'pending'
+    : 'captured';
 }

@@ -355,11 +355,13 @@ export const opsServer = {
     .optional(),
   /** Resend API key for production transactional email over HTTPS, and inbound body reads. */
   RESEND_API_KEY: z.string().min(1).optional(),
+  /** Dedicated receiving API key; absent uses the existing transactional key. */
+  RESEND_RECEIVING_API_KEY: z.string().min(1).optional(),
   /**
    * Signing secret (`whsec_…`) for Athena's inbound-mail webhook endpoint.
    *
    * @remarks
-   * Required in production alongside `RESEND_API_KEY` before inbound mail will run at all:
+   * Required in production alongside a receiving API key (or `RESEND_API_KEY`) before inbound mail will run at all:
    * an unauthenticated receiving endpoint would let anyone on the internet write into a
    * person's Athena inbox. Absent in local/test, where the fixture adapter runs offline.
    */

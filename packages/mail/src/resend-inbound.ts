@@ -1,3 +1,4 @@
+import { retrieveResendAttachment } from './attachments';
 /**
  * `@docket/mail` — the real Resend inbound adapter, and the payload shape both adapters read.
  *
@@ -6,7 +7,7 @@
  * sender, recipients, subject, attachment list — and explicitly not the body, headers, or
  * attachment bytes. Those are fetched afterwards from the receiving API
  * (`GET /emails/receiving/{email_id}`). That two-step is the whole shape of this adapter:
- * authenticate the notification, then go and get the content it is telling us about.
+ * authenticate and durably capture the notification, then retrieve its content in scheduled work.
  *
  * Everything network-facing is injected ({@link HttpClient}, and the clock through
  * {@link InboundWebhookRequest.now}) so the adapter is unit-testable end to end with no account,
@@ -21,6 +22,7 @@ import { defaultHttpClient, type HttpClient } from './http';
 import {
   htmlToText,
   type InboundAttachment,
+  type InboundContent,
   type InboundMailReceiver,
   type InboundMessage,
   type InboundProviderId,
@@ -40,6 +42,28 @@ export const RESEND_RECEIVING_ENDPOINT = 'https://api.resend.com/emails/receivin
 
 /** The webhook event type that means "a message arrived at one of your inbound domains". */
 export const RESEND_INBOUND_EVENT_TYPE = 'email.received';
+
+/** Read only structured server authentication and safe string-valued message headers. */
+function readContent(source: Record<string, unknown>): InboundContent {
+  const auth = asRecord(source['authentication']);
+  const spf = auth && str(auth, 'spf');
+  const dkim = auth && str(auth, 'dkim');
+  const dmarc = auth && str(auth, 'dmarc');
+  const rawHeaders = asRecord(source['headers']);
+  const headers: Record<string, string> = {};
+  for (const [name, value] of Object.entries(rawHeaders ?? {})) {
+    const key = name.toLowerCase();
+    if (typeof value !== 'string' || key === 'authentication-results' || key === 'received-spf')
+      continue;
+    headers[key] = value;
+  }
+  return {
+    text: str(source, 'text'),
+    html: str(source, 'html'),
+    ...(spf && dkim && dmarc ? { authentication: { spf, dkim, dmarc } } : {}),
+    ...(rawHeaders ? { headers } : {}),
+  };
+}
 
 /** The normalized notification carried by a `email.received` webhook (metadata only). */
 export interface ResendInboundNotification {
@@ -62,7 +86,7 @@ export interface ResendInboundNotification {
   /** Attachment metadata. */
   readonly attachments: readonly InboundAttachment[];
   /** A body carried inline, when the payload has one (the fixture adapter's path). */
-  readonly inline: { readonly text: string | null; readonly html: string | null } | null;
+  readonly inline: InboundContent | null;
 }
 
 /** Narrow an unknown value to a plain JSON object. */
@@ -169,8 +193,7 @@ export function readResendInboundPayload(rawBody: string): ResendPayloadRead {
       subject: str(data, 'subject') ?? '',
       createdAt: str(data, 'created_at') ?? str(envelope, 'created_at') ?? new Date().toISOString(),
       attachments: readAttachments(data),
-      inline:
-        inlineText !== null || inlineHtml !== null ? { text: inlineText, html: inlineHtml } : null,
+      inline: inlineText !== null || inlineHtml !== null ? readContent(data) : null,
     },
   };
 }
@@ -190,7 +213,7 @@ export function readResendInboundPayload(rawBody: string): ResendPayloadRead {
  */
 export function toInboundMessage(
   notification: ResendInboundNotification,
-  body: { readonly text: string | null; readonly html: string | null } | null,
+  body: InboundContent | null,
 ): InboundMessage {
   const sender = parseAddress(notification.from);
   const html = body?.html ?? null;
@@ -201,6 +224,8 @@ export function toInboundMessage(
     address.trim().toLowerCase(),
   );
   return {
+    ...(body?.authentication ? { authentication: body.authentication } : {}),
+    ...(body?.headers ? { headers: body.headers } : {}),
     providerMessageId: notification.emailId,
     rfc822MessageId: notification.messageId,
     fromAddress: sender.address,
@@ -229,7 +254,7 @@ export interface ResendInboundConfig {
 }
 
 /**
- * The production inbound adapter: verify Resend's signature, then fetch the body it describes.
+ * The production inbound adapter: verify and normalize metadata without blocking on body retrieval.
  *
  * @remarks
  * Holds the signing secret and API key privately; neither appears in a returned value, a thrown
@@ -263,13 +288,12 @@ export class ResendInboundReceiver implements InboundMailReceiver {
    * @param emailId - Resend's id for the received message.
    * @returns the body, or `null` when it could not be retrieved.
    */
-  private async fetchBody(
-    emailId: string,
-  ): Promise<{ text: string | null; html: string | null } | null> {
+  async retrieve(emailId: string): Promise<InboundContent | null> {
     const base = this.config.apiBase ?? RESEND_RECEIVING_ENDPOINT;
     try {
       const response = await this.http(`${base}/${encodeURIComponent(emailId)}`, {
         method: 'GET',
+        signal: AbortSignal.timeout(10_000),
         headers: { Authorization: `Bearer ${this.config.apiKey}` },
       });
       if (!response.ok) return null;
@@ -279,10 +303,15 @@ export class ResendInboundReceiver implements InboundMailReceiver {
       // The receiving read has been observed both flat and wrapped in `data`; accept either
       // rather than losing a body to an envelope change.
       const source = asRecord(record['data']) ?? record;
-      return { text: str(source, 'text'), html: str(source, 'html') };
+      return readContent(source);
     } catch {
       return null;
     }
+  }
+
+  /** {@inheritDoc InboundMailReceiver.retrieveAttachment} */
+  async retrieveAttachment(emailId: string, attachmentId: string): Promise<Uint8Array> {
+    return retrieveResendAttachment(this.config, emailId, attachmentId, this.http);
   }
 
   /** {@inheritDoc InboundMailReceiver.receive} */
@@ -304,8 +333,8 @@ export class ResendInboundReceiver implements InboundMailReceiver {
     if (read.kind === 'malformed') return { status: 'rejected', code: 'malformed-payload' };
     if (read.kind === 'other') return { status: 'ignored', eventType: read.eventType };
 
-    const inline = read.notification.inline;
-    const body = inline ?? (await this.fetchBody(read.notification.emailId));
-    return { status: 'received', message: toInboundMessage(read.notification, body) };
+    // Acknowledge only after the caller stores metadata. Provider retrieval belongs to the
+    // recoverable hydration sweep, so a slow receiving API cannot time out the webhook.
+    return { status: 'received', message: toInboundMessage(read.notification, null) };
   }
 }

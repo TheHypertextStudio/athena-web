@@ -28,14 +28,24 @@
  * production data.
  */
 import { sql } from 'drizzle-orm';
-import { check, index, jsonb, pgTable, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-core';
+import {
+  boolean,
+  check,
+  index,
+  integer,
+  jsonb,
+  pgTable,
+  text,
+  timestamp,
+  uniqueIndex,
+} from 'drizzle-orm/pg-core';
 
 import { genId } from '../id';
 import { agentSession } from './agents';
 import { user } from './auth';
 import { auditColumns, organization } from './identity';
 
-/** A file that arrived with a message: metadata only, bytes stay at the provider. */
+/** A received file and its bounded inert-text processing result. */
 export interface AthenaMailAttachmentMeta {
   /** The provider's id for the attachment. */
   id: string;
@@ -43,6 +53,23 @@ export interface AthenaMailAttachmentMeta {
   filename: string;
   /** Declared MIME type, when the provider reported one. */
   contentType: string | null;
+  /** Ready content is privately stored under a digest-bound immutable key. */
+  status?: 'ready' | 'rejected' | 'unavailable';
+  digest?: string;
+  size?: number;
+  blobKey?: string;
+  extractedText?: string;
+  errorCode?: string;
+}
+
+/** Immutable approved attachment identity; never a URL or filesystem path. */
+export interface AthenaMailAttachmentSnapshot {
+  messageId: string;
+  id: string;
+  digest: string;
+  filename: string;
+  contentType: string;
+  size: number;
 }
 
 /**
@@ -72,6 +99,10 @@ export const athenaMailbox = pgTable(
       .references(() => user.id, { onDelete: 'cascade' }),
     /** The address's local part. Lowercase, unguessable, stable for the mailbox's lifetime. */
     key: text('key').notNull(),
+    enabled: boolean('enabled').notNull().default(false),
+    ownerRepliesEnabled: boolean('owner_replies_enabled').notNull().default(false),
+    ownerAddress: text('owner_address'),
+    revision: integer('revision').notNull().default(0),
     organizationId: text('organization_id').references(() => organization.id, {
       onDelete: 'set null',
     }),
@@ -123,6 +154,11 @@ export const athenaInboundMessage = pgTable(
     provider: text('provider').notNull(),
     /** The provider's id for the message: the idempotency key for redelivery. */
     providerMessageId: text('provider_message_id').notNull(),
+    processingStatus: text('processing_status').notNull().default('captured'),
+    channelRevision: integer('channel_revision'),
+    threadId: text('thread_id'),
+    headers: jsonb('headers').$type<Record<string, string>>().notNull().default({}),
+    authentication: jsonb('authentication').$type<{ spf: string; dkim: string; dmarc: string }>(),
     /** RFC 5322 `Message-ID`, when the provider surfaced it. */
     rfc822MessageId: text('rfc822_message_id'),
     fromAddress: text('from_address').notNull(),
@@ -154,3 +190,58 @@ export const athenaInboundMessage = pgTable(
     check('athena_inbound_message_provider_check', sql`${t.provider} in ('resend', 'fixture')`),
   ],
 );
+
+/** Immutable outgoing messages with leased delivery and bounded provider retries. */
+export const athenaMailOutbox = pgTable(
+  'athena_mail_outbox',
+  {
+    id: text('id').primaryKey().$defaultFn(genId),
+    ownerUserId: text('owner_user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    mailboxId: text('mailbox_id')
+      .notNull()
+      .references(() => athenaMailbox.id, { onDelete: 'cascade' }),
+    inboundMessageId: text('inbound_message_id').references(() => athenaInboundMessage.id, {
+      onDelete: 'cascade',
+    }),
+    sessionId: text('session_id').references(() => agentSession.id, { onDelete: 'set null' }),
+    channelRevision: integer('channel_revision').notNull(),
+    toAddress: text('to_address').notNull(),
+    subject: text('subject').notNull(),
+    bodyText: text('body_text').notNull(),
+    attachments: jsonb('attachments').$type<AthenaMailAttachmentSnapshot[]>().notNull().default([]),
+    headers: jsonb('headers').$type<Record<string, string>>().notNull().default({}),
+    responseStage: text('response_stage').notNull().default('settled'),
+    externalRecipient: boolean('external_recipient').notNull().default(false),
+    status: text('status').notNull().default('queued'),
+    providerMessageId: text('provider_message_id'),
+    errorCode: text('error_code'),
+    attempts: integer('attempts').notNull().default(0),
+    leaseToken: text('lease_token'),
+    leaseExpiresAt: timestamp('lease_expires_at'),
+    availableAt: timestamp('available_at').notNull().defaultNow(),
+    firstAttemptAt: timestamp('first_attempt_at'),
+    sentAt: timestamp('sent_at'),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex('athena_mail_outbox_inbound_uq').on(t.inboundMessageId, t.responseStage),
+    index('athena_mail_outbox_status_idx').on(t.status, t.availableAt),
+  ],
+);
+/** Signed provider receipts survive callbacks racing ahead of send acknowledgment. */
+export const athenaMailProviderEvent = pgTable('athena_mail_provider_event', {
+  id: text('id').primaryKey(),
+  providerMessageId: text('provider_message_id').notNull(),
+  kind: text('kind').notNull(),
+  receivedAt: timestamp('received_at').notNull().defaultNow(),
+});
+
+/** Durable blob ownership survives message/account cascades for recoverable private cleanup. */
+export const athenaMailBlob = pgTable('athena_mail_blob', {
+  key: text('key').primaryKey(),
+  ownerUserId: text('owner_user_id').notNull(),
+  messageId: text('message_id').notNull(),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+});

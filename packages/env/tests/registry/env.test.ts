@@ -318,6 +318,8 @@ describe('slices', () => {
     expect(opsServer.SENTRY_DSN.parse(undefined)).toBeUndefined();
     expect(opsServer.GCS_BLOB_BUCKET.parse(undefined)).toBeUndefined();
     expect(opsServer.RESEND_API_KEY.parse(undefined)).toBeUndefined();
+    expect(opsServer.RESEND_RECEIVING_API_KEY.parse(undefined)).toBeUndefined();
+    expect(opsServer.RESEND_RECEIVING_API_KEY.parse('re_receiving')).toBe('re_receiving');
 
     expect(() => clientShared.NEXT_PUBLIC_API_URL.parse(undefined)).toThrow();
     expect(clientShared.NEXT_PUBLIC_API_URL.parse('https://api.example.com')).toBe(

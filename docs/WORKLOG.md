@@ -30,6 +30,17 @@
   - [x] Studio hosting configuration uses Workers without active Pages or Vercel dependencies.
   - [x] The plugin defines registration, CI/local setup, diagnosis and runtime acceptance.
   - [x] Retained user storage and unrelated work are preserved; local unpublished source remains unpublished.
+### [ATHENA-TWO-WAY-MAIL] Complete native email conversations
+
+- **Status**: IN_PROGRESS
+- **Started**: 2026-10-16
+- **Description**: Complete native Athena receiving and owner replies, with authenticated approval for external recipients and real-mail acceptance while clients are closed.
+- **Plan**: Extend existing provider/mail contracts and personal mailbox configuration; persist recoverable inbound stages and exact per-message execution; send immutable replies through a durable outbox; integrate setup/status controls with the existing inbox; verify sender trust, revocation, approval, retry, bounce and loop behavior.
+- **Validation**: Focused behavioral tests and affected package checks, ordinary browser setup/reply/approval paths, then actual inbound and outbound delivery through the selected provider with all Docket clients closed. Keep component, deployed-provider and recipient-mailbox evidence distinct.
+- **Blockers**: Production publication and real closed-client mailbox acceptance remain outstanding. The receiving domain and signed webhook are provisioned with dedicated server credentials.
+- **Review**: Independent source review identified queue starvation, cross-workspace thread context, approval payload comparison, membership revocation and clarification-continuation gaps. Correct each before accepting the feature; inspect generation recovery after worker termination as well as output retry.
+- **Runtime validation**: The ordinary local stack caught missing migration statement separators before startup. The corrected migration applied through the existing launcher. The authenticated unconfigured inbox was captured at desktop and narrow widths in both themes; labeled delivery-state simulations passed overflow checks. Ten focused UI tests, web typecheck and changed-file lint pass. API typecheck/runtime build, 98 mail adapter tests, 21 workflow tests and two continuation transcript tests pass; the final schema applies to a fresh database. Hosted mailbox acceptance remains in progress.
+
 ### [ATHENA-CAPABILITY-AUDIT] Assess personal-assistant and chief-of-staff capabilities
 
 - **Status**: COMPLETE

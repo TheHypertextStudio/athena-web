@@ -1,3 +1,5 @@
+import { sweepMailIngress } from '../services/athena-mail/ingress';
+import { prepareMailReplies, sweepMailOutbox } from '../services/athena-mail/outbox';
 /** Signed machine-only routes used by the Cloudflare Athena execution runner. */
 import { workflowIdFor } from '@docket/athena/execution-protocol';
 import type { ExecutionRequestDirection } from '@docket/db';
@@ -166,7 +168,13 @@ const internalAthenaExecution = createInternalAthenaExecutionRoutes({
   secret: env.CLOUDFLARE_TO_DOCKET_HMAC_SECRET,
   claimNonce: claimExecutionNonce,
   advance: advanceCloudflareGeneration,
-  sweep: () => sweepAthenaDispatches(),
+  sweep: async () => {
+    await sweepMailIngress();
+    const result = await sweepAthenaDispatches();
+    await prepareMailReplies();
+    await sweepMailOutbox();
+    return result;
+  },
 });
 
 export default internalAthenaExecution;

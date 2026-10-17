@@ -22,6 +22,8 @@
  */
 import {
   type InboundMailReceiver,
+  type InboundAuthentication,
+  type InboundContent,
   type InboundProviderId,
   type InboundReceiveResult,
   type InboundWebhookRequest,
@@ -36,6 +38,10 @@ import {
 
 /** A body the fixture adapter serves in place of the receiving API. */
 export interface InboundFixtureBody {
+  /** Simulated receiving-server authentication for offline channel tests. */
+  readonly authentication?: InboundAuthentication;
+  /** Message headers used by offline thread and loop tests. */
+  readonly headers?: Readonly<Record<string, string>>;
   /** Plain-text body. */
   readonly text: string | null;
   /** HTML body. */
@@ -65,6 +71,8 @@ export interface FixtureInboundConfig {
  * @returns the JSON body to POST at the inbound webhook.
  */
 export function buildInboundFixturePayload(input: {
+  readonly authentication?: InboundAuthentication;
+  readonly headers?: Readonly<Record<string, string>>;
   readonly emailId: string;
   readonly from: string;
   readonly to: readonly string[];
@@ -85,6 +93,8 @@ export function buildInboundFixturePayload(input: {
     created_at: createdAt,
     data: {
       email_id: input.emailId,
+      ...(input.authentication ? { authentication: input.authentication } : {}),
+      ...(input.headers ? { headers: input.headers } : {}),
       created_at: createdAt,
       from: input.from,
       to: [...input.to],
@@ -122,6 +132,11 @@ export class FixtureInboundReceiver implements InboundMailReceiver {
   /** @param config - Optional signing secret and fixture bodies. */
   constructor(config: FixtureInboundConfig = {}) {
     this.config = config;
+  }
+
+  /** {@inheritDoc InboundMailReceiver.retrieve} */
+  async retrieve(providerMessageId: string): Promise<InboundContent | null> {
+    return this.config.bodies?.[providerMessageId] ?? null;
   }
 
   /** {@inheritDoc InboundMailReceiver.receive} */

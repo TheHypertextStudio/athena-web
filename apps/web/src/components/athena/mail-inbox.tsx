@@ -1,23 +1,7 @@
 'use client';
 
-/**
- * Athena's inbox: the address people write to, and the messages that arrived there.
- *
- * @remarks
- * Two things a person needs from this surface, and nothing else. The first is the address —
- * useless if it is hidden, so it is the first thing on the page with a one-press copy. The
- * second is what has arrived, as a list of *context objects*: each row reads sender, subject,
- * time and what it is already attached to, because "what is this and where does it belong" is
- * the only question anyone asks of a received message.
- *
- * There is deliberately no reply, no folders, and no unread count. Docket is not a mail client;
- * these messages are context Athena reads and work hangs off. Everything that happens *to* a
- * message happens through attachment, which is why the only action on a row is "Attach to work".
- *
- * When no receiving domain is configured the surface says so plainly rather than printing an
- * address that would bounce — a promise the product cannot keep is worse than an absent feature.
- */
-import { Inbox, Link as LinkIcon, Mail, Plus, Trash2 } from '@docket/ui/icons';
+/** Athena's email enrollment, delivery receipts and received context. */
+import { Inbox, Link as LinkIcon, Plus, Trash2 } from '@docket/ui/icons';
 import { cn } from '@docket/ui/lib/utils';
 import {
   Badge,
@@ -36,6 +20,8 @@ import { userErrorMessage } from '@/lib/problem';
 import { unwrap } from '@/lib/query-core';
 import { useApiListQuery, useApiMutation, useApiQuery } from '@/lib/query';
 
+import { MailChannelCard } from './mail-channel-card';
+import { MailOutbox } from './mail-outbox';
 import { MailAttachDialog } from './mail-attach-dialog';
 import {
   detachMessage,
@@ -44,7 +30,6 @@ import {
   mailListDef,
   mailListKey,
   mailMessageKey,
-  mailboxDef,
 } from './mail-query-defs';
 
 /** One received message as the list renders it. */
@@ -65,66 +50,6 @@ function receivedLabel(iso: string): string {
     hour: 'numeric',
     minute: '2-digit',
   });
-}
-
-/** The card that shows (and copies) the caller's Athena address. */
-function AddressCard(): JSX.Element {
-  const mailboxQ = useApiQuery(mailboxDef());
-  const [copied, setCopied] = useState(false);
-  const error = mailboxQ.error
-    ? userErrorMessage(mailboxQ.error, 'Could not load your Athena inbox address.')
-    : null;
-
-  // placeholder: the reader's own Athena inbox address.
-  if (mailboxQ.isPending) return <Skeleton className="h-20 w-full rounded-xl" />;
-  if (error) {
-    return (
-      <Text as="p" token="body-small" tone="error" role="alert">
-        {error}
-      </Text>
-    );
-  }
-
-  const mailbox = mailboxQ.data;
-  const address = mailbox?.address ?? null;
-
-  return (
-    <Surface tone="card" shape="medium" pad="roomy" className="flex flex-col gap-2">
-      <ControlGroup controlSize="sm">
-        <Mail aria-hidden="true" className="text-on-surface-variant" />
-        <Text token="title-small">Athena’s address</Text>
-      </ControlGroup>
-      {address ? (
-        <>
-          <Text as="p" token="body-large" className="font-mono break-all">
-            {address}
-          </Text>
-          <div className="flex items-center justify-between gap-3">
-            <Text as="p" token="body-small" tone="muted">
-              Anything sent here reaches Athena directly. No mailbox to connect, nothing to import.
-            </Text>
-            <Button
-              variant="secondary"
-              controlSize="sm"
-              className="shrink-0"
-              onClick={() => {
-                void navigator.clipboard.writeText(address).then(() => {
-                  setCopied(true);
-                });
-              }}
-            >
-              {copied ? 'Copied' : 'Copy'}
-            </Button>
-          </div>
-        </>
-      ) : (
-        <Text as="p" token="body-small" tone="muted">
-          Athena does not have a receiving domain yet, so there is no address to give out. Once one
-          is configured, your address appears here.
-        </Text>
-      )}
-    </Surface>
-  );
 }
 
 /** The list of entities one message is attached to, with a way to detach each. */
@@ -246,7 +171,7 @@ export function MailInbox(): JSX.Element {
   const messages = listQ.data?.items ?? [];
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-4 p-4">
+    <div className="flex h-full min-h-0 flex-col gap-4 overflow-auto p-4">
       <Toolbar
         leading={
           <>
@@ -265,7 +190,8 @@ export function MailInbox(): JSX.Element {
         }
       />
 
-      <AddressCard />
+      <MailChannelCard />
+      <MailOutbox />
 
       {error ? (
         <Text as="p" token="body-small" tone="error" role="alert">
@@ -281,17 +207,12 @@ export function MailInbox(): JSX.Element {
         <Surface tone="card" shape="medium" pad="roomy" className="flex flex-col gap-1 py-6">
           <Text token="title-small">Nothing has arrived yet</Text>
           <Text as="p" token="body-small" tone="muted">
-            Forward something to the address above and it will show up here, in your activity
-            stream, and in Athena’s conversation.
+            Messages received at your Athena address appear here as context you can attach to work.
+            Enable email conversations above to send requests from your verified email.
           </Text>
         </Surface>
       ) : (
-        <Surface
-          as="ul"
-          tone="card"
-          shape="medium"
-          className="flex min-h-0 flex-1 flex-col gap-1 overflow-auto p-1"
-        >
+        <Surface as="ul" tone="card" shape="medium" className="flex shrink-0 flex-col gap-1 p-1">
           {messages.map((message) => (
             <MailRowView
               key={message.id}

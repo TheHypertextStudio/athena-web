@@ -97,12 +97,19 @@ export const ContextObjectOut = z
 /** Context-object representation value. */
 export type ContextObjectOut = z.infer<typeof ContextObjectOut>;
 
-/** One file that arrived with a received message (metadata only). */
+/** One file with honest bounded processing status and immutable content identity. */
 export const AthenaMailAttachmentOut = z
   .object({
     id: z.string().describe("The receiving provider's id for the file."),
     filename: z.string().describe('Filename as the sender supplied it.'),
     contentType: z.string().nullable().describe('Declared MIME type, when the provider gave one.'),
+    status: z.enum(['ready', 'rejected', 'unavailable']).optional(),
+    digest: z
+      .string()
+      .regex(/^[a-f0-9]{64}$/)
+      .optional(),
+    size: z.number().int().nonnegative().optional(),
+    errorCode: z.string().optional(),
   })
   .meta({ id: 'AthenaMailAttachmentOut', description: 'A file attached to a received message.' });
 /** Received-message attachment value. */
@@ -188,3 +195,46 @@ export const AthenaMailAttachmentTargetOut = z
   });
 /** Attachment-target value. */
 export type AthenaMailAttachmentTargetOut = z.infer<typeof AthenaMailAttachmentTargetOut>;
+
+/** Explicit consent and workspace for the native owner email channel. */
+export const AthenaMailChannelUpdate = z.object({
+  enabled: z.boolean(),
+  ownerRepliesEnabled: z.boolean(),
+  organizationId: OrganizationId.nullable(),
+});
+/** Native email channel configuration, never inferred from an open browser. */
+export const AthenaMailChannelOut = AthenaMailChannelUpdate.extend({
+  organizationId: OrganizationId.nullable(),
+  ownerAddress: z.string().nullable(),
+  address: z.string().nullable(),
+  configured: z.boolean(),
+});
+/** Provider acceptance and recipient delivery are distinct states. */
+export const AthenaMailOutboxStatus = z.enum([
+  'queued',
+  'sending',
+  'sent',
+  'delivered',
+  'bounced',
+  'failed',
+  'uncertain',
+  'canceled',
+]);
+/** Owner-visible immutable outgoing email receipt. */
+export const AthenaMailOutboxOut = z.object({
+  id: z.string(),
+  inboundMessageId: z.string().nullable(),
+  sessionId: z.string().nullable(),
+  toAddress: z.string(),
+  subject: z.string(),
+  status: AthenaMailOutboxStatus,
+  errorCode: z.string().nullable(),
+  createdAt: z.string(),
+  sentAt: z.string().nullable(),
+});
+/** Native mail update input. */
+export type AthenaMailChannelUpdate = z.infer<typeof AthenaMailChannelUpdate>;
+/** Native mail settings representation. */
+export type AthenaMailChannelOut = z.infer<typeof AthenaMailChannelOut>;
+/** Native mail delivery representation. */
+export type AthenaMailOutboxOut = z.infer<typeof AthenaMailOutboxOut>;

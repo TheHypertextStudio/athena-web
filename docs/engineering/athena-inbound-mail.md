@@ -1,275 +1,187 @@
-# Athena's inbound mail
-
-> Athena receives email natively. No mailbox to connect, no import step, and no relationship to
-> the mail Docket syncs out of a connected Gmail or Outlook account.
-
-This document covers what was built, how to configure the receiving domain at the provider, and
-how to exercise the whole path offline.
-
----
-
-## 1. What a received message is
-
-A message that arrives at Athena's address becomes a row in **`athena_inbound_message`** — Athena's
-own store — and that row is modelled as a **context object**, not as an email.
-
-The context-object contract (`domains/athena/src/contracts/athena-mail.ts`, `ContextObjectOut`) is:
-
-| field           | meaning                                                               |
-| --------------- | --------------------------------------------------------------------- |
-| `id`            | stable opaque id; the value attachments reference                     |
-| `kind`          | `athena_email` today; the discriminator a generic surface switches on |
-| `title`         | the subject line                                                      |
-| `content`       | the plain-text body                                                   |
-| `contentStatus` | `complete`, or `metadata-only` when the body could not be retrieved   |
-| `source`        | `{ system, provider, reference, label }` — its provenance             |
-| `occurredAt`    | when it was received                                                  |
-| `createdAt`     | when Docket stored it                                                 |
-| `permalink`     | its in-app surface                                                    |
-
-Nothing in that list is email-shaped. `AthenaMailMessageOut` extends it with the envelope a
-_message_ additionally has (sender, recipient address, HTML body, files). A surface that renders a
-context object, a picker that lists them, or an agent that reads one needs no knowledge of mail.
-
-### Why a separate table
-
-`attachment{kind:'email'}` and `email_suggestion` are **connector** constructs: both are keyed by
-an `integration_id`, both describe content that lives in Gmail, and both cascade away when that
-integration is disconnected. A message Athena received belongs to no integration — Docket received
-it and Docket holds every byte. Putting it in those tables would mean a single query could not
-answer "did this arrive natively or did we sync it", and Athena's mail would vanish when somebody
-disconnected an unrelated mailbox.
-
-The separation is structural, and there is a test for each direction:
-`apps/api/tests/routes/inbound-mail.test.ts` → _separation from mail Docket syncs_.
-
-### How it attaches to work
-
-Through the ordinary polymorphic `attachment` table, with `kind = 'athena_email'` and
-`external_id` = the message's id. There is **no mail-specific join table**, which is what makes
-"attachable to stuff, not just emails" true rather than aspirational: a task, a project and an
-initiative accept one through the same table every other attachable resource uses.
-
----
-
-## 2. Addresses
-
-An address is `{key}@{ATHENA_INBOUND_MAIL_HOST}`.
-
-The **host is never stored** — only the local part is, on `athena_mailbox.key`. Moving Athena to
-her final receiving domain is therefore one environment variable and zero rows.
-
-`key` is 12 symbols over a 32-symbol Crockford-style alphabet (no `i`/`l`/`o`/`u`), minted with
-`crypto.randomBytes`. It is random rather than derived from a name or user id for two reasons: an
-inbox address is public by construction, so a derived form would leak the owner's identity to
-everyone they give it to, and a sequential form would let a stranger enumerate every mailbox.
-
-Sub-addressing works: `key+newsletters@host` reaches the same mailbox as `key@host`.
-
-A mailbox is minted on the first read of `GET /v1/me/athena/mail/address`, so a person who never
-opens the inbox never gets a row.
-
----
-
-## 3. The receiving path
-
-```
-provider  ──POST──▶  /webhooks/mail/inbound          (public, signature-authenticated)
-                          │
-                          ▼
-                   InboundMailReceiver               (packages/mail — port)
-                     ├─ ResendInboundReceiver        real: Svix signature + body read
-                     └─ FixtureInboundReceiver       offline: same parser, fixture bodies
-                          │  InboundMessage
-                          ▼
-                   deliverInboundMail                (apps/api/src/routes/inbound-mail-delivery.ts)
-                          ├─ 1. store    athena_inbound_message   (idempotent)
-                          ├─ 2. announce emitInboundEmail → the universal event stream
-                          ├─ 3. deliver  postReplyAndResume → Athena's one conversation
-                          └─ 4. link     stream event id + session id back onto the row
-```
-
-Steps 2–4 are best-effort **around a committed row**. If the stream write or Athena's turn fails,
-the message is still stored, still visible and still attachable. The opposite order — announce then
-store — could show a person an email that does not exist.
-
-### The mount
-
-`POST {API_URL}/webhooks/mail/inbound`
-
-It sits beside `/webhooks/calendar` rather than under `/internal/*` for the same reason that one
-does: Docket registers this exact URL _with the provider_, so it is a public machine edge that
-authenticates itself.
-
-Status codes are chosen for what a provider does with them:
-
-| status | meaning                                                                                    |
-| ------ | ------------------------------------------------------------------------------------------ |
-| `204`  | accepted — delivered, a duplicate redelivery, unroutable, or an event type we don't handle |
-| `401`  | not signed by us (`missing-signature`, `invalid-signature`, `stale-timestamp`)             |
-| `400`  | signed by us but unreadable (`malformed-payload`)                                          |
-
-The response body carries a stable machine code and never provider or exception text. A delivered
-request also carries `x-docket-inbound-outcome: delivered | duplicate | unroutable`.
-
-### Signature verification
-
-Resend signs with Svix. `packages/mail/src/svix-signature.ts` implements the published scheme
-manually rather than pulling the SDK — the algorithm is ~30 lines, and a signature check is the
-last place to want an extra runtime dependency:
-
-1. secret is `whsec_<base64>`; the bytes after the prefix are the HMAC key
-2. signed content is `{svix-id}.{svix-timestamp}.{raw body}`
-3. signature is `base64(HMAC-SHA256(key, content))`
-4. `svix-signature` is a space-delimited list of `v1,<sig>`; **any** match passes (secret rotation)
-5. `svix-timestamp` must be within ±300s (replay guard)
-
-The handler reads the **raw bytes** and never a re-parsed object; the signature is over the exact
-body received.
-
-### Why the body needs a second call
-
-Resend's `email.received` webhook carries **metadata only** — sender, recipients, subject,
-attachment list — and explicitly not the body. `ResendInboundReceiver` fetches it from
-`GET https://api.resend.com/emails/receiving/{email_id}` with the API key.
-
-A failed body read does not fail the delivery. The message genuinely arrived, so it is stored with
-`body_status = 'metadata-only'` and every surface says the body has not been retrieved rather than
-implying the sender wrote nothing.
-
----
-
-## 4. Configuration
-
-| variable                        | required          | meaning                                             |
-| ------------------------------- | ----------------- | --------------------------------------------------- |
-| `ATHENA_INBOUND_MAIL_HOST`      | to receive at all | the receiving domain. **Never derived.**            |
-| `RESEND_API_KEY`                | production        | reads message bodies (and sends transactional mail) |
-| `RESEND_INBOUND_WEBHOOK_SECRET` | production        | the `whsec_…` endpoint signing secret               |
-| `RESEND_RECEIVING_API_BASE`     | no                | receiving-API base override                         |
-
-`ATHENA_INBOUND_MAIL_HOST` is never derived from `PUBLIC_ROOT_DOMAIN` on purpose: a derived value
-would claim a host with no MX records, and every message sent to it would bounce while the config
-looked healthy. Absent, the API reports `configured: false` and the inbox surface says Athena has
-no address yet rather than printing one that would fail.
-
-In production the container **refuses to build the receiver** without both credentials
-(`buildInboundReceiverFromEnv`). An unauthenticated receiving endpoint is worse than no receiving
-endpoint: anyone who learned the URL could write into a person's Athena.
-
-Local and test always get the offline fixture receiver, so the whole path runs with no account.
-
----
-
-## 5. Provider setup (operator checklist)
-
-Not yet performed — no Resend credential exists in this environment and the final domain is not
-chosen. When it is:
-
-1. **Add the receiving domain** in Resend → Domains, using the value you will set as
-   `ATHENA_INBOUND_MAIL_HOST`.
-2. **Publish the MX record** Resend shows for that domain. Resend's own requirement: the MX record
-   must carry the **lowest priority value** in the zone, or mail will not route to them. Verify
-   with `dig <host> MX +short` — an empty answer means every message bounces.
-3. **Publish the domain-verification records** (SPF/DKIM) Resend lists, and wait for the domain to
-   report verified.
-4. **Create the webhook** subscribed to `email.received`, pointing at
-   `https://<api host>/webhooks/mail/inbound`. Copy the `whsec_…` signing secret into
-   `RESEND_INBOUND_WEBHOOK_SECRET`.
-5. **Set `ATHENA_INBOUND_MAIL_HOST`** and redeploy. No code changes at any step — the address is
-   composed from configuration at request time.
-6. **Verify** by sending a message from an outside mailbox and watching it appear in
-   `/athena/mail`, in the activity stream, and in Athena's conversation.
-
-Moving to the final domain later is step 1–5 again with a different value. Nothing stored changes.
-
----
-
-## 6. Exercising it offline
-
-The fixture receiver reads the same payload shape through the same parser the production adapter
-uses, so an offline exercise is an exercise of the real normalization.
-
-```bash
-eval "$(./scripts/dev-stack.sh env)"
-COOKIE=…                       # a signed-in session cookie
-
-# 1. Ask Athena for her address (mints the mailbox on first read).
-ADDR=$(curl -sS "$API_URL/v1/me/athena/mail/address" -H "Cookie: $COOKIE" \
-        | python3 -c "import sys,json;print(json.load(sys.stdin)['address'])")
-
-# 2. Deliver a message through the real webhook.
-curl -sS -X POST "$API_URL/webhooks/mail/inbound" -H 'content-type: application/json' -d "$(cat <<JSON
-{"type":"email.received","created_at":"2026-08-02T20:05:00.000Z",
- "data":{"email_id":"e_demo_001","created_at":"2026-08-02T20:05:00.000Z",
-         "from":"Nadia Okoro <nadia@northwind.example>","to":["$ADDR"],
-         "cc":[],"bcc":[],"received_for":["$ADDR"],
-         "message_id":"<e_demo_001@example.com>",
-         "subject":"Signed vendor contract for the Q3 refresh",
-         "text":"Renewal date is 14 October.","attachments":[]}}
-JSON
-)" -D - -o /dev/null | grep -i x-docket-inbound-outcome
-
-# 3. Read it back.
-curl -sS "$API_URL/v1/me/athena/mail" -H "Cookie: $COOKIE"
-```
-
-`buildInboundFixturePayload` (`@docket/mail`) constructs that body from TypeScript, and is what the
-tests use.
-
-Set `RESEND_INBOUND_WEBHOOK_SECRET` locally and the fixture receiver verifies signatures with the
-real algorithm, so the crypto path can be exercised before production is ever touched
-(`signSvixPayload` mints a valid header set).
-
----
-
-## 7. Surfaces
-
-| surface               | what it is                                                              |
-| --------------------- | ----------------------------------------------------------------------- |
-| `/athena/mail`        | the address (with copy) and every received message                      |
-| `/athena/mail/[id]`   | one message in full, what it is attached to, and the attach action      |
-| `/stream`, org stream | the message as an `email_received` entry, interleaved with everything   |
-| task / project detail | an "Email" section listing what is attached, via `MailAttachmentsPanel` |
-
-The message detail renders the **plain-text** body, never the sender's HTML: rendering
-stranger-supplied HTML inside the app would hand them a styling and tracking surface inside
-somebody's workspace.
-
----
-
-## 8. API
-
-All owner-scoped and cross-workspace, under `/v1/me/athena/mail`:
-
-| route                                                | does                                              |
-| ---------------------------------------------------- | ------------------------------------------------- |
-| `GET /address`                                       | the caller's address (mints the mailbox)          |
-| `GET /`                                              | received messages, newest first                   |
-| `GET /attached?subjectType&subjectId&organizationId` | messages attached to one entity                   |
-| `GET /:id`                                           | one message in full                               |
-| `GET /:id/attachments`                               | what it is attached to, with the entities' titles |
-| `POST /:id/attachments`                              | attach it to a task / project / initiative        |
-| `DELETE /:id/attachments/:attachmentId`              | detach (never deletes the message)                |
-
-Ownership comes from the session on every route; another person's message id reads as **absent**,
-not forbidden. The attach route's tenant check is membership in the _target_ workspace.
-
----
-
-## 9. Files
-
-| path                                           | what                                                        |
-| ---------------------------------------------- | ----------------------------------------------------------- |
-| `packages/mail/src/inbound.ts`                 | the `InboundMailReceiver` port + shared helpers             |
-| `packages/mail/src/svix-signature.ts`          | manual Svix verification                                    |
-| `packages/mail/src/resend-inbound.ts`          | the real adapter + the shared payload parser                |
-| `packages/mail/src/fixture-inbound.ts`         | the offline adapter + payload builder                       |
-| `packages/mail/src/inbound-transport.ts`       | env-driven selection (fails closed in production)           |
-| `packages/db/src/schema/athena-mail.ts`        | `athena_mailbox`, `athena_inbound_message`                  |
-| `domains/athena/src/contracts/athena-mail.ts`  | the context-object contract + the mail DTOs                 |
-| `apps/api/src/routes/inbound-mail.ts`          | the public webhook                                          |
-| `apps/api/src/routes/inbound-mail-delivery.ts` | store → announce → deliver → link                           |
-| `apps/api/src/routes/athena-mail-store.ts`     | mailbox minting, address resolution, projections            |
-| `apps/api/src/routes/athena-mail.ts`           | the owner-facing API                                        |
-| `apps/web/src/components/athena/mail-*.tsx`    | the inbox, the message, the attach picker, the entity panel |
+# Athena's native email channel
+
+Athena has a dedicated receiving address independent of connected Gmail or Outlook accounts. The
+owner can enable automatic replies to their verified account email in `/athena/mail`. Email to
+other recipients requires approval of the exact message in signed-in Docket. Closing Docket does
+not stop receiving, execution or sending: scheduled server work owns these operations.
+
+## Addresses and enrollment
+
+An address is `{key}@{ATHENA_INBOUND_MAIL_HOST}`. Only the random local part is stored on
+`athena_mailbox`; the host is explicit deployment configuration, never inferred from a website
+hostname. The 12-symbol key is not an identity secret or authorization credential. Sub-addresses
+such as `key+notes@host` route to the same inbox.
+
+Reading the address or channel creates a mailbox without enabling automation. Enrollment requires
+a verified account email, an active human membership in the selected workspace, and explicit
+consent to owner replies. The channel stores the enrolled email and a revision. Disabling it or
+changing settings increments the revision, cancels queued sends and cancels active email jobs.
+Current verification, consent, revision and membership are checked again before execution,
+continuation and sending. Already accepted provider mail cannot be recalled.
+
+## Durable receiving and execution
+
+`POST {API_URL}/webhooks/mail/inbound` is public and authenticates the exact raw body with the
+Resend endpoint's Svix signing secret. It is outside the session-authenticated `/v1` API. A valid
+signature authenticates the provider notification, not the sender of the email.
+
+The production receiver normalizes metadata without making a receiving-API request in the
+webhook. `deliverInboundMail` stores an idempotent `athena_inbound_message` before acknowledging.
+Duplicate redelivery does not create another message. Stream announcement remains ancillary to
+the durable row. An accepted message with missing content is `metadata-only`, never interpreted
+as a blank request.
+
+Scheduled `sweepMailIngress` retrieves content from Resend's receiving API and retries failures
+from the stored provider message ID. It reads structured receiving-server `authentication`
+results; sender-supplied `Authentication-Results` and `Received-SPF` headers cannot grant trust.
+Automatic execution requires an exact enrolled From address, passing DMARC and DKIM, and no
+automatic/bulk-mail loop indicators. Other senders and uncertain authentication remain captured
+context and cannot start privileged generation or trigger a reply.
+
+An eligible message creates an isolated job on the existing Athena runtime, with an immutable
+`athena-mail:<inbound id>` reference and a canonical conversation parent. It gets the specific
+message and bounded authorized thread context, rather than unrelated canonical history. Email
+jobs always ask before acting regardless of the owner's general autonomy setting. Received or
+forwarded text cannot approve an action. Ordinary non-destructive text questions may be answered
+by a correlated owner reply; destructive questions and action approval remain in signed-in
+Docket. Continuations recheck current channel authority before recording an answer or waking work.
+
+Every sweep processes a bounded batch; running work rotates fairly, and restart recovery can
+resume hydrated messages, admission, execution and text answers. The existing server scheduler
+must be configured and firing in the deployed environment; a browser poll is not a scheduler.
+
+## Replies and approved external email
+
+A settled response, question or approval request is correlated to the specific email job and
+stored once in `athena_mail_outbox`. Owner replies always go to the currently enrolled address;
+`Reply-To`, Cc and addresses mentioned in content cannot choose the destination. Message IDs and
+thread headers link subsequent replies to the right operation. Automatic responses identify
+themselves with `Auto-Submitted` to prevent reply loops.
+
+The `send_email` tool proposes a message and optional supported private attachments for authenticated review. Execution
+queues the reviewed recipient, subject, body and attachment identities as an immutable snapshot. Sending rechecks the
+approval and rejects snapshot changes or revoked authority. Repeated approval cannot create a
+second outbox intent. External recipients do not get automatic conversational replies.
+
+The outbox uses leases and a stable provider idempotency key. Confirmed permanent provider
+rejection becomes `failed`; rate limits, transient failures and lost responses use bounded
+retries without claiming delivery. Resend's 24-hour idempotency lifetime is a hard boundary: an unresolved operation
+becomes `uncertain` rather than blindly resending after deduplication expires. Provider acceptance
+is displayed as **Provider accepted**, distinct from **Delivered**. Signed `email.delivered` and
+`email.bounced` callbacks are durably recorded, including callbacks that race the send receipt,
+and reconciled without downgrading a bounce. Disabling the channel cancels work not yet sent.
+
+### Supported content
+
+Inbound bodies are converted to plain text for execution and message display; raw sender HTML
+is not rendered inside Docket. Subject/body and per-owner admission budgets bound automatic work.
+Attachments are restricted to inert UTF-8 `.txt`, `.md` and `.csv` files with matching MIME
+metadata, at most five files of 64 KiB each. The receiving API authorizes retrieval before a
+bounded download from the exact provider CDN origin/path; redirects, excessive sizes, mismatched
+metadata, invalid UTF-8 and unsafe controls are rejected. No document engine, scripts, formulas
+or remote links are evaluated. Supported bytes are stored privately with a server-computed
+SHA-256 digest. Each extracted preview admits at most the first 12,000 characters and labels
+that limit; continuation context is capped at 20,000 characters with an explicit truncation notice.
+Extracted text is marked untrusted; unsupported or unavailable files
+are explicitly explained. This is an inert-text boundary, not a claim of antivirus scanning or
+PDF/Office support or process sandboxing. UTF-8 decoding is isolated from active-content
+engines by admitting only inert text; no external parser is started.
+
+Outgoing attachments refer to owner-held message/attachment identities and exact digests. The
+reviewed snapshot includes filenames, types, sizes and hashes; dispatch rechecks ownership,
+channel consent and private bytes before sending. Changes invalidate approval. An authenticated
+owner download endpoint streams bytes as a download without exposing a public storage URL.
+
+## Storage and work context
+
+`athena_inbound_message` is a first-class owner-scoped context object with stable ID, title,
+content status, provenance and timestamps. It is separate from connector email, so disconnecting
+Gmail does not delete native mail. Ordinary polymorphic attachments use `kind = 'athena_email'`
+and the message ID to attach it to tasks, projects or initiatives. No special mail join table is
+needed. Ownership and target-workspace authorization apply on every API read or attachment write.
+
+`athena_mail_outbox` stores immutable send intents, leases, retries and provider receipts.
+`athena_mail_provider_event` stores signed delivery callbacks for race recovery. A separate
+`athena_mail_blob` cleanup ledger survives source-message/account deletion; scheduled cleanup
+removes unreferenced private bytes after a grace period and retains failed deletion intents for
+retry. Upload intent is recorded before private storage writes so a crash cannot orphan bytes. Migration
+`0168_athena_email_channel.sql` adds channel consent, processing state and these durable tables.
+
+## Configuration
+
+| Variable                        | Purpose                                                                    |
+| ------------------------------- | -------------------------------------------------------------------------- |
+| `ATHENA_INBOUND_MAIL_HOST`      | Explicit verified sending/receiving domain for Athena addresses            |
+| `RESEND_API_KEY`                | Existing sending credential; preserve restrictions for account mail        |
+| `RESEND_RECEIVING_API_KEY`      | Separate key authorized to retrieve received messages                      |
+| `RESEND_INBOUND_WEBHOOK_SECRET` | Secret issued for this exact webhook endpoint                              |
+| `RESEND_RECEIVING_API_BASE`     | Optional receiving-API override                                            |
+| `MAIL_FROM`                     | Existing account-mail configuration, required by production mail transport |
+
+The receiving adapter prefers the dedicated receiving key; fallback to the sending key only
+works if that key actually has receiving permission. Do not silently replace a restricted
+account-mail key with an unrestricted one. Production receiver construction fails closed without
+the required credentials. Local/test use the fixture adapter and captured outbound mail.
+`configured` reflects runtime configuration, not DNS verification or successful mailbox delivery.
+
+## Provider and deployment acceptance
+
+1. Add a dedicated Athena subdomain in the Studio Resend account. Configure sending and receiving;
+   publish its MX, SPF and DKIM records and verify domain state. Preserve existing account-mail DNS.
+2. Create an environment-specific webhook at `/webhooks/mail/inbound`, subscribed to
+   `email.received`, `email.delivered` and `email.bounced`. Keep its signing secret in Secret Manager.
+3. Bind the dedicated receiving credential and endpoint signing secret to the API deployment.
+   Set `ATHENA_INBOUND_MAIL_HOST`; apply the migration and deploy the server scheduler/runtime.
+4. Enroll the verified owner through ordinary UI and send a real outside-mailbox request.
+   Close all Docket clients and verify a real response arrives with correct sender and threading.
+5. Reply from the owner mailbox and verify thread continuation while clients remain closed.
+   Verify no external email sends before signed-in review, and exercise revocation and recovery.
+
+Provider acceptance, unit tests and UI screenshots are separate evidence. None substitutes for
+actual recipient delivery with Docket closed. Keep deployment receipts and mailbox proof in
+operational records rather than hard-coding transient environment status into this specification.
+
+## Owner API and surfaces
+
+All owner endpoints are under `/v1/me/athena/mail`:
+
+| Route                                                | Behavior                                        |
+| ---------------------------------------------------- | ----------------------------------------------- |
+| `GET /address`                                       | Read/mint address without enabling automation   |
+| `GET /channel`                                       | Read setup and provider-configuration state     |
+| `PUT /channel`                                       | Explicit enrollment/settings change or disable  |
+| `GET /attachments/:messageId/:attachmentId`          | Download an authorized immutable private file   |
+| `GET /channel/outbox`                                | Owner send and delivery state                   |
+| `GET /`                                              | Received messages, newest first                 |
+| `GET /attached?subjectType&subjectId&organizationId` | Messages attached to authorized work            |
+| `GET /:id`                                           | One owned message                               |
+| `GET /:id/attachments`                               | Attached work and titles                        |
+| `POST /:id/attachments`                              | Attach to an authorized task/project/initiative |
+| `DELETE /:id/attachments/:attachmentId`              | Detach without deleting the message             |
+
+`/athena/mail` offers setup, copying the address, composing a real test email, inbox and delivery
+state. `/athena/mail/[id]` shows plain text and work attachments. Approval uses the existing
+Athena session approval surface. Polling these screens only observes work; it cannot drive it.
+
+## Offline verification
+
+Use the existing dev-stack and authenticated-session tools documented in
+[`ui-verification.md`](ui-verification.md). Seed a verified owner and workspace membership, then
+enroll through the channel endpoint or UI. `buildInboundFixturePayload` supplies a receiving
+notification with fixture content and explicit structured authentication for deterministic tests.
+Fixture authentication is development-only and does not replace real provider trust.
+
+`packages/mail/tests/inbound/resend-inbound.test.ts` covers real Svix verification, metadata-only
+acknowledgment and separate receiving-API hydration. API tests under
+`apps/api/tests/services/athena-mail` cover durable admission, isolated runtime execution,
+continuations, approvals, revocation, retries, loop prevention and delivery reconciliation. Tests
+use deterministic model/provider adapters; they do not claim real email delivery.
+
+### Attachment retention
+
+Supported attachment bytes remain private for the lifetime of their received message. Disabling
+email immediately revokes downloads and outgoing file use but preserves received work context.
+A durable blob intent is stored before upload and survives message/account cascades. The existing
+server scheduler reclaims at most 100 source-orphaned objects per pass after a one-hour writer
+grace, deleting the intent only after storage confirms deletion. Failed deletions retain their
+intent for retry. Retention of live received messages is not shortened by an arbitrary file TTL.

@@ -64,6 +64,31 @@ and complete Settings link → Studio selection → interactive Athena reply →
 and sealed proposal. Correlate the Docket request, Lattice work ID, Studio daemon, and LM Studio
 inference. A health check or a successful deploy alone is insufficient.
 
+### Native Athena email readiness
+
+Native email uses a dedicated Resend receiving and sending subdomain. Keep its MX, DKIM and SPF
+records separate from account-verification mail. Configure `ATHENA_INBOUND_MAIL_HOST` only after
+the provider verifies the domain; the production workflow reads the matching environment variable.
+Set `RESEND_RECEIVING_API_KEY` to a dedicated credential that can retrieve received messages.
+Keep the transactional `RESEND_API_KEY` and `MAIL_FROM` bindings separate; the sending key must
+allow Athena's verified sending domain. A sending-only credential cannot hydrate inbound mail.
+Store credentials in Secret Manager and include their bindings in `API_SECRET_BINDINGS`; never put
+values in repository variables or logs.
+
+Register the API's `/webhooks/mail/inbound` endpoint for `email.received`, `email.delivered` and
+`email.bounced`, with `RESEND_INBOUND_WEBHOOK_SECRET` bound to that endpoint's signing secret.
+Webhook authentication and sender authentication are separate: a valid provider signature alone
+does not authorize a message to act as the account owner. Preserve the normal API deployment,
+migration and scheduler gates. Receiving must continue independently of browser connections.
+
+Accept the channel only after the owner explicitly enables it in Athena's inbox, sends a harmless
+request from the enrolled verified address, and receives a real response with every Docket client
+closed. Reply to that response and verify conversational context and threading. Confirm that an
+external-recipient request waits for authenticated approval, that duplicate approval does not send
+twice, and that disabling the channel cancels queued authority. Report provider acceptance and
+recipient delivery separately. Local captures, signed fixture callbacks and a green deployment do
+not establish mailbox delivery.
+
 ### Manual Lattice acceptance audit
 
 The `Lattice acceptance audit` workflow reuses the production environment's deployment WIF identity

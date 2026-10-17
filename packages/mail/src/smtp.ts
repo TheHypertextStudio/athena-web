@@ -16,10 +16,11 @@
  *
  * Secrets (provider key, SMTP password) are never logged.
  */
+import { MailSendError } from './send-error';
 import { realEnvValue } from '@docket/env';
 import nodemailer from 'nodemailer';
 
-import type { Mailer, OutboundMessage } from './index';
+import type { Mailer, OutboundMessage, SentMessage } from './index';
 import { defaultHttpClient, type HttpClient } from './http';
 
 /** Validated configuration for {@link RealMailer} (sourced from env). */
@@ -57,16 +58,33 @@ export class RealMailer implements Mailer {
   }
 
   /** {@inheritDoc Mailer.send} */
-  async send(message: OutboundMessage): Promise<void> {
+  async send(message: OutboundMessage): Promise<SentMessage> {
+    const { idempotencyKey, replyTo, ...payload } = message;
     const res = await this.http(this.config.endpoint, {
       method: 'POST',
+      signal: AbortSignal.timeout(15_000),
       headers: {
         Authorization: `Bearer ${this.config.apiKey}`,
         'Content-Type': 'application/json',
+        ...(idempotencyKey === undefined ? {} : { 'Idempotency-Key': idempotencyKey }),
       },
-      body: JSON.stringify({ from: this.config.from, ...message }),
+      body: JSON.stringify({
+        from: this.config.from,
+        ...payload,
+        ...(replyTo === undefined ? {} : { reply_to: replyTo }),
+      }),
     });
-    if (!res.ok) throw new Error(`RealMailer send failed: ${res.status}`);
+    if (!res.ok) throw new MailSendError(res.status);
+    const result: unknown = await res.json();
+    if (
+      typeof result !== 'object' ||
+      result === null ||
+      !('id' in result) ||
+      typeof result.id !== 'string'
+    ) {
+      throw new Error('RealMailer accepted response missing message id');
+    }
+    return { ...message, id: result.id, sentAt: new Date().toISOString() };
   }
 }
 
@@ -160,6 +178,12 @@ export function smtpConfigFromEnv(env: SmtpEnv): SmtpMailerConfig | null {
  * so the mapping is fully typed without depending on nodemailer's whole option surface.
  */
 export interface SendMailOptions {
+  /** Validated inert private file bytes. */
+  readonly attachments?: { filename: string; content: Buffer; contentType: string }[];
+  /** Address used for replies. */
+  readonly replyTo?: string;
+  /** RFC message headers, including thread references. */
+  readonly headers?: Readonly<Record<string, string>>;
   /** From address (the configured {@link SmtpMailerConfig.from}). */
   readonly from: string;
   /** Recipient address. */
@@ -191,7 +215,18 @@ export function toSendMailOptions(from: string, message: OutboundMessage): SendM
     throw new Error('SmtpMailer: message must set at least one of `html`/`text`');
   }
   return {
-    from,
+    ...(message.attachments
+      ? {
+          attachments: message.attachments.map((file) => ({
+            filename: file.filename,
+            content: Buffer.from(file.content, 'base64'),
+            contentType: file.content_type,
+          })),
+        }
+      : {}),
+    from: message.from ?? from,
+    ...(message.replyTo === undefined ? {} : { replyTo: message.replyTo }),
+    ...(message.headers === undefined ? {} : { headers: message.headers }),
     to: message.to,
     subject: message.subject,
     ...(message.html !== undefined ? { html: message.html } : {}),
@@ -209,7 +244,9 @@ export function toSendMailOptions(from: string, message: OutboundMessage): SendM
  */
 export interface SmtpTransport {
   /** Send one message; resolves once the SMTP server accepts (or rejects) it. */
-  sendMail(options: SendMailOptions): Promise<{ readonly rejected?: readonly unknown[] }>;
+  sendMail(
+    options: SendMailOptions,
+  ): Promise<{ readonly messageId?: string; readonly rejected?: readonly unknown[] }>;
 }
 
 /** Factory that builds a {@link SmtpTransport} from a validated config. */
@@ -270,9 +307,9 @@ export class SmtpMailer implements Mailer {
   }
 
   /** {@inheritDoc Mailer.send} */
-  async send(message: OutboundMessage): Promise<void> {
+  async send(message: OutboundMessage): Promise<SentMessage | undefined> {
     const options = toSendMailOptions(this.config.from, message);
-    let info: { readonly rejected?: readonly unknown[] };
+    let info: { readonly messageId?: string; readonly rejected?: readonly unknown[] };
     try {
       /* v8 ignore next */
       info = await this.transport.sendMail(options);
@@ -284,5 +321,7 @@ export class SmtpMailer implements Mailer {
     if (info.rejected && info.rejected.length > 0) {
       throw new Error(`SmtpMailer send to ${message.to} was rejected by the SMTP server`);
     }
+    if (info.messageId) return { ...message, id: info.messageId, sentAt: new Date().toISOString() };
+    return undefined;
   }
 }

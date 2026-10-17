@@ -27,6 +27,7 @@ import { userErrorMessage } from '@/lib/problem';
 import { useApiQuery } from '@/lib/query';
 
 import { MailAttachDialog } from './mail-attach-dialog';
+import { MailFiles } from './mail-files';
 import { mailAttachmentsDef, mailMessageDef } from './mail-query-defs';
 
 /** Props for {@link MailMessageView}. */
@@ -141,16 +142,7 @@ export function MailMessageView({ messageId }: MailMessageViewProps): JSX.Elemen
         </ControlGroup>
       ) : null}
 
-      {message.attachments.length > 0 ? (
-        <ControlGroup controlSize="xs" wrap>
-          <Text token="label-small" tone="muted">
-            Files
-          </Text>
-          {message.attachments.map((file) => (
-            <Badge key={file.id}>{file.filename}</Badge>
-          ))}
-        </ControlGroup>
-      ) : null}
+      <MailFiles messageId={messageId} files={message.attachments} />
 
       <Surface tone="card" shape="medium" pad="roomy">
         {message.content ? (

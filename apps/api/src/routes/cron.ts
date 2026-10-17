@@ -1,3 +1,7 @@
+import { sweepMailAttachmentBlobs } from '../services/athena-mail/attachments';
+import { sweepMailIngress } from '../services/athena-mail/ingress';
+import { prepareMailReplies, sweepMailOutbox } from '../services/athena-mail/outbox';
+import { sweepAthenaDispatches } from '../agent/async-runner';
 import { sweepNotificationTriage } from '../services/device-notifications/triage-dispatch';
 /**
  * `@docket/api` — the lifecycle-sweep cron handler (mounted OUTSIDE the RPC `AppType`).
@@ -309,6 +313,11 @@ const cron = new Hono()
   .post('/athena-triggers', async (c) => {
     if (!authorized(c)) return c.json({ error: 'unauthorized' }, 401);
     const now = new Date();
+    await sweepMailAttachmentBlobs();
+    const mailIngress = await sweepMailIngress();
+    await sweepAthenaDispatches();
+    await prepareMailReplies();
+    const mailOutbox = await sweepMailOutbox();
     const notificationTriage = await sweepNotificationTriage(now);
     const triggers = await sweepAthenaAssignmentTriggers(now);
     const delegations = await sweepLatticeDelegations(
@@ -318,7 +327,14 @@ const cron = new Hono()
       latticeDelegationDependencies,
       await readLatticeServiceControls(),
     );
-    return c.json({ swept: true, ...triggers, delegations, notificationTriage });
+    return c.json({
+      swept: true,
+      ...triggers,
+      delegations,
+      notificationTriage,
+      mailIngress,
+      mailOutbox,
+    });
   })
   // Expired-session sweep: deletes every `session` row past its `expiresAt` — Better Auth itself
   // only prunes a row lazily (when that exact expired cookie comes back), so an abandoned browser

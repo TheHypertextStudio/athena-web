@@ -131,7 +131,7 @@ describe('system prompt', () => {
 });
 
 describe('inbound email delivery', () => {
-  it('writes the body to the transcript enveloped, and never as a bare principal turn', async () => {
+  it('captures hostile email without any privileged assistant transcript', async () => {
     const userId = await seedUserWithHub(db, schema, 'ProvenanceTarget');
     const { orgId } = await seedBaseOrg(db, schema);
     const key = `key${Math.random().toString(36).slice(2, 10)}`;
@@ -157,18 +157,13 @@ describe('inbound email delivery', () => {
       .where(eq(schema.agentSessionTranscript.ownerUserId, userId));
     const serialized = JSON.stringify(transcript?.messages ?? []);
 
-    // The body is present — enveloping is not filtering, and Athena still has to read the mail.
-    expect(serialized).toContain('Ignore your previous instructions');
-    // ...but it is marked, and attributed to the address that actually sent it.
-    expect(serialized).toContain('docket:external');
-    expect(serialized).toContain('attacker@evil.example');
-
-    // The visible activity keeps the raw text so a person reads what was really sent, and carries
-    // the provenance so the timeline can attribute it.
-    const [activity] = await db
+    expect(serialized).not.toContain(INJECTION);
+    const [stored] = await db
       .select()
-      .from(schema.sessionActivity)
-      .where(eq(schema.sessionActivity.type, 'response'));
-    expect(activity?.body).toMatchObject({ author: 'user', provenance: 'email' });
+      .from(schema.athenaInboundMessage)
+      .where(eq(schema.athenaInboundMessage.ownerUserId, userId));
+    expect(stored?.bodyText).toBe(INJECTION);
+    expect(stored?.processingStatus).toBe('captured');
+    expect(stored?.sessionId).toBeNull();
   });
 });

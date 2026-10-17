@@ -10,12 +10,16 @@
  * means a single coarse invalidation after an attach refreshes the list, the open message and its
  * attachment list together — the three things an attach actually changes.
  */
-import type { AthenaMailAttachBody } from '@docket/athena/athena-mail-contract';
+import type {
+  AthenaMailAttachBody,
+  AthenaMailChannelUpdate,
+} from '@docket/athena/athena-mail-contract';
 
 import { api } from '@/lib/api';
 import {
   fetchAllAthenaMail,
   fetchAllAthenaMailAttachmentTargets,
+  fetchAllOrganizations,
 } from '@/lib/org-collection-pages';
 import { apiQueryOptions, STALE } from '@/lib/query-core';
 
@@ -86,4 +90,49 @@ export function detachMessage(id: string, attachmentId: string) {
   return api.v1.me.athena.mail[':id'].attachments[':attachmentId'].$delete({
     param: { id, attachmentId },
   });
+}
+
+/** Same-origin download navigation; the server checks ownership and active email consent. */
+export function mailFileDownloadHref(messageId: string, attachmentId: string): string {
+  return `/v1/me/athena/mail/channel/attachments/${encodeURIComponent(messageId)}/${encodeURIComponent(attachmentId)}`;
+}
+
+/** Query key for explicit email enrollment and consent. */
+export const mailChannelKey = ['me', 'athena', 'mail', 'channel'] as const;
+/** Query key for outbound delivery receipts. */
+export const mailOutboxKey = ['me', 'athena', 'mail', 'outbox'] as const;
+
+/** Load the owner's verified email and channel readiness without enabling it. */
+export function mailChannelDef() {
+  return apiQueryOptions(
+    mailChannelKey,
+    () => api.v1.me.athena.mail.channel.$get(),
+    'Could not load your email settings.',
+    { staleTime: STALE.volatile },
+  );
+}
+
+/** Load memberships available for email requests. */
+export function mailWorkspacesDef() {
+  return apiQueryOptions(
+    ['orgs'],
+    () => fetchAllOrganizations(api),
+    'Could not load your workspaces.',
+    { staleTime: STALE.static },
+  );
+}
+
+/** Save explicit channel consent; disabling also revokes queued owner replies. */
+export function updateMailChannel(body: AthenaMailChannelUpdate) {
+  return api.v1.me.athena.mail.channel.$put({ json: body });
+}
+
+/** Load outbound receipts; reading never advances email processing. */
+export function mailOutboxDef() {
+  return apiQueryOptions(
+    mailOutboxKey,
+    () => api.v1.me.athena.mail.channel.outbox.$get(),
+    'Could not load outgoing email.',
+    { staleTime: STALE.volatile },
+  );
 }

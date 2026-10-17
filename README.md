@@ -27,6 +27,11 @@ composer to start a private assignment using the runtime selected in Settings. E
 and start work; any returned proposal waits for review before the task changes. If the selected
 runtime is unavailable, the prompt retains the objective and links to Athena Settings for recovery.
 
+Athena's inbox can enroll the verified account email for two-way conversations. Authenticated owner
+mail receives automatic replies through the server scheduler even while Docket is closed; emailing
+any other recipient requires signed-in approval of the exact message and files. Setup, delivery
+recovery and supported text attachments are described in [native email](docs/engineering/athena-inbound-mail.md).
+
 Today opens a daily planning flow with an ordered schedule based on commitments, available work, events, and the time left in the workday. New suggestions must fit the remaining capacity. Calendar events marked free stay visible without blocking work. People can review earlier work, edit tasks and blocks, confirm the day, and start the next accepted task from Today. Drafts resume where they stopped, accepted changes retain earlier versions, and recorded time stays in the time ledger. Athena can assess the plan but is optional. The data and recovery rules are in [the daily planning engineering spec](docs/engineering/specs/daily-planning.md).
 
 MCP agents creating tasks, projects, initiatives, or programs should generally discover a relevant

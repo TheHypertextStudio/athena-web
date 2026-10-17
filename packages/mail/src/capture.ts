@@ -38,13 +38,15 @@ export class CaptureMailer implements Mailer {
   }
 
   /** {@inheritDoc Mailer.send} */
-  async send(message: OutboundMessage): Promise<void> {
+  async send(message: OutboundMessage): Promise<SentMessage> {
     this.counter += 1;
-    this.outbox.push({
+    const sent = {
       ...message,
       id: `msg_${this.counter.toString().padStart(6, '0')}`,
       sentAt: this.now,
-    });
+    };
+    this.outbox.push(sent);
+    return sent;
   }
 
   /** The most recently captured message, or `undefined` when the outbox is empty. */

@@ -20,6 +20,8 @@ export interface InboundMailEnv {
   readonly APP_MODE: 'local' | 'test' | 'staging' | 'production';
   /** Resend API key — production reads message bodies from the receiving API with it. */
   readonly RESEND_API_KEY?: string;
+  /** Dedicated receiving API key; takes precedence over the transactional sending key. */
+  readonly RESEND_RECEIVING_API_KEY?: string;
   /** The `whsec_…` signing secret for the inbound webhook endpoint. */
   readonly RESEND_INBOUND_WEBHOOK_SECRET?: string;
   /** Receiving API base override (tests / a provider-side migration). */
@@ -37,7 +39,7 @@ export interface InboundMailEnv {
  *
  * @param env - Inbound-mail runtime environment values.
  * @returns the selected inbound receiver.
- * @throws {Error} When production is missing `RESEND_API_KEY` or `RESEND_INBOUND_WEBHOOK_SECRET`.
+ * @throws {Error} When production has neither receiving nor sending API key, or is missing `RESEND_INBOUND_WEBHOOK_SECRET`.
  */
 export function buildInboundReceiverFromEnv(env: InboundMailEnv): InboundMailReceiver {
   const signingSecret = realEnvValue(env.RESEND_INBOUND_WEBHOOK_SECRET);
@@ -46,10 +48,10 @@ export function buildInboundReceiverFromEnv(env: InboundMailEnv): InboundMailRec
     return new FixtureInboundReceiver(signingSecret ? { signingSecret } : {});
   }
 
-  const apiKey = realEnvValue(env.RESEND_API_KEY);
+  const apiKey = realEnvValue(env.RESEND_RECEIVING_API_KEY) ?? realEnvValue(env.RESEND_API_KEY);
   if (!apiKey || !signingSecret) {
     throw new Error(
-      'Missing required production inbound mail config: RESEND_API_KEY and RESEND_INBOUND_WEBHOOK_SECRET',
+      'Missing required production inbound mail config: RESEND_RECEIVING_API_KEY (or RESEND_API_KEY) and RESEND_INBOUND_WEBHOOK_SECRET',
     );
   }
   const apiBase = realEnvValue(env.RESEND_RECEIVING_API_BASE);

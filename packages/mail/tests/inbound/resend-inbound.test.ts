@@ -4,7 +4,7 @@
  * without an account; the fixture one is exercised on the same payloads to prove the offline path
  * is the production parser rather than a lookalike.
  */
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { FixtureInboundReceiver, buildInboundFixturePayload } from '../../src/fixture-inbound';
 import { buildInboundReceiverFromEnv } from '../../src/inbound-transport';
@@ -126,13 +126,67 @@ describe('toInboundMessage', () => {
 });
 
 describe('ResendInboundReceiver', () => {
-  it('verifies the signature, then fetches the body from the receiving API', async () => {
-    const calls: { url: string; auth: string | undefined }[] = [];
+  it('uses receiving-server authentication and headers, never webhook inline metadata', async () => {
+    const payload = JSON.parse(WEBHOOK);
+    payload.data.text = 'Forged inline body';
+    payload.data.authentication = { spf: 'pass', dkim: 'pass', dmarc: 'pass' };
+    payload.data.headers = { 'In-Reply-To': '<forged@example.com>' };
+    const rawBody = JSON.stringify(payload);
+    const receiver = new ResendInboundReceiver(
+      { signingSecret: SECRET, apiKey: 're_key' },
+      async () =>
+        new Response(
+          JSON.stringify({
+            text: 'Actual body',
+            authentication: { spf: 'fail', dkim: 'pass', dmarc: 'fail' },
+            headers: {
+              'In-Reply-To': '<actual@example.com>',
+              'Authentication-Results': 'forged',
+              invalid: 12,
+            },
+          }),
+        ),
+    );
+    const result = await receiver.receive({ rawBody, headers: signedHeaders(rawBody), now: NOW });
+    expect(result.status).toBe('received');
+    if (result.status !== 'received') return;
+    expect(result.message.text).toBeNull();
+    expect(result.message.authentication).toBeUndefined();
+    expect(await receiver.retrieve('e_9001')).toMatchObject({
+      text: 'Actual body',
+      authentication: { spf: 'fail', dkim: 'pass', dmarc: 'fail' },
+      headers: { 'in-reply-to': '<actual@example.com>' },
+    });
+  });
+
+  it('does not invent authentication when the provider supplies malformed results', async () => {
+    const receiver = new ResendInboundReceiver(
+      { signingSecret: SECRET, apiKey: 're_key' },
+      async () =>
+        new Response(
+          JSON.stringify({ text: 'Body', authentication: { spf: 'pass', dkim: 1, dmarc: 'pass' } }),
+        ),
+    );
+    const result = await receiver.receive({
+      rawBody: WEBHOOK,
+      headers: signedHeaders(WEBHOOK),
+      now: NOW,
+    });
+    expect(result.status === 'received' && result.message.authentication).toBeUndefined();
+  });
+
+  it('verifies and captures metadata before separately fetching the body from the receiving API', async () => {
+    const calls: {
+      url: string;
+      auth: string | undefined;
+      signal: AbortSignal | null | undefined;
+    }[] = [];
     const receiver = new ResendInboundReceiver(
       { signingSecret: SECRET, apiKey: 're_key' },
       (url, init) => {
         calls.push({
           url,
+          signal: init?.signal,
           auth: (init?.headers as Record<string, string> | undefined)?.['Authorization'],
         });
         return Promise.resolve(
@@ -149,7 +203,16 @@ describe('ResendInboundReceiver', () => {
       now: NOW,
     });
 
-    expect(calls).toEqual([{ url: `${RESEND_RECEIVING_ENDPOINT}/e_9001`, auth: 'Bearer re_key' }]);
+    expect(calls).toEqual([]);
+    const content = await receiver.retrieve('e_9001');
+    expect(content?.text).toBe('Signed and returned.');
+    expect(calls).toEqual([
+      {
+        url: `${RESEND_RECEIVING_ENDPOINT}/e_9001`,
+        auth: 'Bearer re_key',
+        signal: expect.any(AbortSignal),
+      },
+    ]);
     expect(result.status).toBe('received');
     if (result.status !== 'received') return;
     expect(result.message).toMatchObject({
@@ -158,8 +221,8 @@ describe('ResendInboundReceiver', () => {
       fromAddress: 'jane@example.com',
       fromName: 'Jane Rivera',
       subject: 'Contract for the Q3 refresh',
-      text: 'Signed and returned.',
-      bodyStatus: 'complete',
+      text: null,
+      bodyStatus: 'metadata-only',
       receivedAt: '2026-08-02T09:15:00.000Z',
     });
     expect(result.message.to).toEqual(['k7x9qm2b4r8t@inbox.athena.example']);
@@ -199,7 +262,8 @@ describe('ResendInboundReceiver', () => {
       headers: signedHeaders(WEBHOOK),
       now: NOW,
     });
-    expect(result.status === 'received' && result.message.text).toBe('Wrapped.');
+    expect(result.status === 'received' && result.message.bodyStatus).toBe('metadata-only');
+    expect((await receiver.retrieve('e_9001'))?.text).toBe('Wrapped.');
   });
 
   it('derives readable text when the message has only an HTML part', async () => {
@@ -216,7 +280,9 @@ describe('ResendInboundReceiver', () => {
       headers: signedHeaders(WEBHOOK),
       now: NOW,
     });
-    expect(result.status === 'received' && result.message.text).toBe('Hi there\nSecond&last');
+    expect(result.status === 'received' && result.message.bodyStatus).toBe('metadata-only');
+    const content = await receiver.retrieve('e_9001');
+    expect(htmlToText(content?.html ?? '')).toBe('Hi there\nSecond&last');
   });
 
   it('refuses an unsigned request without ever calling the provider', async () => {
@@ -257,6 +323,23 @@ describe('ResendInboundReceiver', () => {
 });
 
 describe('FixtureInboundReceiver', () => {
+  it('supports simulated authentication and threading metadata offline', async () => {
+    const rawBody = buildInboundFixturePayload({
+      emailId: 'fixture-auth',
+      from: 'owner@example.com',
+      to: ['athena@example.com'],
+      subject: 'Help',
+      text: 'Request',
+      authentication: { spf: 'pass', dkim: 'pass', dmarc: 'pass' },
+      headers: { References: '<thread@example.com>' },
+    });
+    const result = await new FixtureInboundReceiver().receive({ rawBody, headers: {} });
+    expect(result.status === 'received' && result.message.authentication?.dmarc).toBe('pass');
+    expect(result.status === 'received' && result.message.headers?.['references']).toBe(
+      '<thread@example.com>',
+    );
+  });
+
   it('reads the same payload shape offline, with the body inline', async () => {
     const payload = buildInboundFixturePayload({
       emailId: 'e_1',
@@ -318,6 +401,31 @@ describe('FixtureInboundReceiver', () => {
 });
 
 describe('buildInboundReceiverFromEnv', () => {
+  it('prefers the dedicated receiving key and supports it without a sending key', async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ text: 'Retrieved' })));
+    vi.stubGlobal('fetch', fetchMock);
+    try {
+      for (const sending of [undefined, 're_sending']) {
+        const receiver = buildInboundReceiverFromEnv({
+          APP_MODE: 'production',
+          RESEND_RECEIVING_API_KEY: 're_receiving',
+          RESEND_INBOUND_WEBHOOK_SECRET: SECRET,
+          ...(sending ? { RESEND_API_KEY: sending } : {}),
+        });
+        await receiver.retrieve?.('message-1');
+      }
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      expect(fetchMock).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          headers: { Authorization: 'Bearer re_receiving' },
+        }),
+      );
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it('uses the offline receiver in local and test', () => {
     for (const mode of ['local', 'test'] as const) {
       expect(buildInboundReceiverFromEnv({ APP_MODE: mode }).providerId).toBe('fixture');

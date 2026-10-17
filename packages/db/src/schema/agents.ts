@@ -209,7 +209,7 @@ export const agentSession = pgTable(
     check(
       'agent_session_work_linkage_check',
       sql`(${t.workLinkage} = 'task' AND ${t.taskId} IS NOT NULL)
-        OR (${t.workLinkage} = 'conversation' AND ${t.kind} = 'chat') OR (${t.workLinkage} = 'observation' AND ${t.kind} = 'job' AND ${t.externalRunRef} LIKE 'notification-triage:%')
+        OR (${t.workLinkage} = 'conversation' AND ${t.kind} = 'chat') OR (${t.workLinkage} = 'observation' AND ${t.kind} = 'job' AND (${t.externalRunRef} LIKE 'notification-triage:%' OR ${t.externalRunRef} LIKE 'athena-mail:%'))
         OR ${t.workLinkage} = 'unclassified'`,
     ),
     check(

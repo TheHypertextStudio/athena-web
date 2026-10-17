@@ -15,7 +15,9 @@ such as `key+notes@host` route to the same inbox.
 Reading the address or channel creates a mailbox without enabling automation. Enrollment requires
 a verified account email, an active human membership in the selected workspace, and explicit
 consent to owner replies. The channel stores the enrolled email and a revision. Disabling it or
-changing settings increments the revision, cancels queued sends and cancels active email jobs.
+changing settings increments the revision, cancels never-attempted sends and cancels active email jobs.
+Started attempts retain provider receipt tracking; unresolved attempts become uncertain and are not
+retried after revocation.
 Current verification, consent, revision and membership are checked again before execution,
 continuation and sending. Already accepted provider mail cannot be recalled.
 
@@ -69,7 +71,8 @@ retries without claiming delivery. Resend's 24-hour idempotency lifetime is a ha
 becomes `uncertain` rather than blindly resending after deduplication expires. Provider acceptance
 is displayed as **Provider accepted**, distinct from **Delivered**. Signed `email.delivered` and
 `email.bounced` callbacks are durably recorded, including callbacks that race the send receipt,
-and reconciled without downgrading a bounce. Disabling the channel cancels work not yet sent.
+and reconciled without downgrading a bounce. Disabling the channel cancels work whose sending has not started. In-flight provider acceptance
+remains observable, and prior attempts with unknown delivery remain uncertain without another send.
 
 ### Supported content
 

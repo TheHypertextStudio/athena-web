@@ -175,6 +175,7 @@ export async function editPlanningTouchWork(
   title: string,
   minutes: string,
 ): Promise<void> {
+  await showPlanningPanel(page, 'Work');
   const actions = page.getByRole('button', { name: `Actions for ${title}`, exact: true });
   for (const control of [
     actions,

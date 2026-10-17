@@ -125,12 +125,7 @@ function attachmentUrl(meta: Record<string, unknown>, id: string, path: string):
   )
     throw new Error('attachment_invalid_metadata');
   const url = providerDownloadUrl(meta['download_url']);
-  if (
-    url.origin !== 'https://inbound-cdn.resend.com' ||
-    url.username ||
-    url.password ||
-    url.pathname !== `/${path}`
-  )
+  if (url.username || url.password || !permittedDownloadPath(url, path))
     throw new Error('attachment_invalid_url');
   return url;
 }
@@ -141,4 +136,13 @@ function providerDownloadUrl(value: string): URL {
   } catch {
     throw new Error('attachment_invalid_url');
   }
+}
+
+function permittedDownloadPath(url: URL, path: string): boolean {
+  // Resend's docs show inbound-cdn; live receiving metadata also uses the pinned
+  // cdn.resend.app origin with a /receiving prefix. Neither permits arbitrary hosts.
+  const documented = url.origin === 'https://inbound-cdn.resend.com' && url.pathname === `/${path}`;
+  const receiving =
+    url.origin === 'https://cdn.resend.app' && url.pathname === `/receiving/${path}`;
+  return documented || receiving;
 }

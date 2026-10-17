@@ -51,6 +51,16 @@ export const athenaMailChannel = new Hono<AppEnv>()
       summary: 'Download a private received email attachment',
       description:
         'Streams validated inert text as an owner-only download. Current channel consent is required. Bytes are never rendered inline or exposed through a public storage URL.',
+      extra: {
+        responses: {
+          200: {
+            description: 'Private validated file bytes, downloaded rather than rendered inline.',
+            content: {
+              'application/octet-stream': { schema: { type: 'string', format: 'binary' } },
+            },
+          },
+        },
+      },
     }),
     zParam(z.object({ messageId: z.string().min(1), attachmentId: z.string().min(1) })),
     async (c) => {

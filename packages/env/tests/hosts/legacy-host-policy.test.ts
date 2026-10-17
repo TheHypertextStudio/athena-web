@@ -4,7 +4,9 @@
  * @remarks
  * Production must leave no user-facing Docket or Athena URL under `hypertext.studio`.
  * The official Studio legal mailbox is a separate operator contact, not a product host.
- * Only that exact mailbox may appear as plain text or a mailto address. The interim Athena
+ * Only that exact mailbox may appear as plain text or a mailto address. The separately deployed
+ * Studio build cache has one exact infrastructure hostname in its deployment configuration;
+ * that exception never grants product code a legacy host. The interim Athena
  * inbound-mail host must remain a configuration value so it can change without a code edit.
  *
  * An unapproved hostname in source is what makes that impossible to honour. It survives every environment
@@ -123,7 +125,8 @@ function shippedSourceFiles(): string[] {
 function legacyHits(file: string): string[] {
   const contents = readFileSync(file, 'utf8');
   if (!contents.includes(LEGACY_APEX)) return [];
-  return legacyReferenceLines(contents).map((line) => `${relative(REPO_ROOT, file)}:${line}`);
+  const path = relative(REPO_ROOT, file);
+  return legacyReferenceLines(contents, path).map((line) => `${path}:${line}`);
 }
 
 /** Match only the approved mailbox, excluding other local parts, domain suffixes, and URL users. */
@@ -132,11 +135,24 @@ const OFFICIAL_MAILBOX_REFERENCE = new RegExp(
   'gu',
 );
 
+/** Studio infrastructure has its own public identity, independent of Docket's product cutover. */
+const STUDIO_CACHE_CONFIG_PATH = 'apps/turbo-cache/src/config.ts';
+const STUDIO_CACHE_HOST = `turbo-cache.${LEGACY_APEX}`;
+/** Match only exact quoted cache-domain or audience literals, never paths, users or suffixes. */
+const STUDIO_CACHE_REFERENCE = new RegExp(
+  `(['"\x60])(?:https://)?${STUDIO_CACHE_HOST.replaceAll('.', '\\.')}\\1`,
+  'gu',
+);
+
 /** One-based lines containing an unapproved reference to the former product apex. */
-function legacyReferenceLines(contents: string): number[] {
+function legacyReferenceLines(contents: string, path?: string): number[] {
   return contents.split('\n').flatMap((line, index) => {
     const withoutOfficialMailbox = line.replaceAll(OFFICIAL_MAILBOX_REFERENCE, '');
-    return withoutOfficialMailbox.includes(LEGACY_APEX) ? [index + 1] : [];
+    const remaining =
+      path === STUDIO_CACHE_CONFIG_PATH
+        ? withoutOfficialMailbox.replaceAll(STUDIO_CACHE_REFERENCE, '')
+        : withoutOfficialMailbox;
+    return remaining.includes(LEGACY_APEX) ? [index + 1] : [];
   });
 }
 
@@ -185,6 +201,28 @@ describe('official legal mailbox boundary', () => {
         `Allowed: ${OFFICIAL_LEGAL_MAILBOX}\n${OFFICIAL_LEGAL_MAILBOX} https://${LEGACY_APEX}`,
       ),
     ).toEqual([2]);
+  });
+});
+
+describe('Studio cache infrastructure boundary', () => {
+  it.each([`domain: '${STUDIO_CACHE_HOST}',`, `OIDC_AUDIENCE: 'https://${STUDIO_CACHE_HOST}',`])(
+    'allows the exact infrastructure identity only in its deployment config: %s',
+    (source) => {
+      expect(legacyReferenceLines(source, STUDIO_CACHE_CONFIG_PATH)).toEqual([]);
+      expect(legacyReferenceLines(source, 'apps/web/src/page.ts')).toEqual([1]);
+      expect(legacyReferenceLines(source)).toEqual([1]);
+    },
+  );
+  it.each([
+    `url: 'https://${STUDIO_CACHE_HOST}.evil.test'`,
+    `url: 'https://${STUDIO_CACHE_HOST}/terms'`,
+    `url: 'https://${STUDIO_CACHE_HOST}@evil.test'`,
+    `url: 'https://other.${STUDIO_CACHE_HOST}'`,
+    `url: 'http://${STUDIO_CACHE_HOST}'`,
+    `email: 'owner@${STUDIO_CACHE_HOST}'`,
+    `domain: '${STUDIO_CACHE_HOST}', bad: 'https://${LEGACY_APEX}'`,
+  ])('rejects lookalikes and unrelated hosts even in cache config: %s', (source) => {
+    expect(legacyReferenceLines(source, STUDIO_CACHE_CONFIG_PATH)).toEqual([1]);
   });
 });
 

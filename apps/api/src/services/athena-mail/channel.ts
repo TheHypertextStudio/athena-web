@@ -91,7 +91,15 @@ export async function configureMailChannel(
       .where(eq(athenaMailbox.id, mailbox.id));
     await tx
       .update(athenaMailOutbox)
-      .set({ status: 'canceled', errorCode: 'channel_changed' })
+      .set({
+        // Attempts cannot prove a send was rejected: an HTTP response may have been lost.
+        // Keep a live sender's lease so its eventual provider receipt can still be recorded.
+        status: sql`case
+          when ${athenaMailOutbox.status} = 'queued' and ${athenaMailOutbox.attempts} = 0 then 'canceled'
+          when ${athenaMailOutbox.status} = 'sending' and ${athenaMailOutbox.leaseExpiresAt} > now() then 'sending'
+          else 'uncertain' end`,
+        errorCode: 'channel_changed',
+      })
       .where(
         and(
           eq(athenaMailOutbox.mailboxId, mailbox.id),

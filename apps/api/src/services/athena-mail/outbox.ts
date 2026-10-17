@@ -62,28 +62,19 @@ async function deliverMail(row: Outbox, now: Date): Promise<void> {
   const authority = await mailChannelAuthority(row.mailboxId, row.channelRevision);
   const current = and(
     eq(athenaMailOutbox.id, row.id),
-    eq(athenaMailOutbox.status, 'sending'),
+    inArray(athenaMailOutbox.status, ['sending', 'uncertain']),
     eq(athenaMailOutbox.leaseToken, row.leaseToken ?? ''),
   );
   if (!(await operationAllowsDelivery(row))) {
-    await db
-      .update(athenaMailOutbox)
-      .set({ status: 'canceled', errorCode: 'operation_canceled' })
-      .where(current);
+    await revokeMailAttempt(row, current, 'operation_canceled');
     return;
   }
   if (row.externalRecipient && !(await externalSendStillApproved(row))) {
-    await db
-      .update(athenaMailOutbox)
-      .set({ status: 'canceled', errorCode: 'approval_revoked' })
-      .where(current);
+    await revokeMailAttempt(row, current, 'approval_revoked');
     return;
   }
   if (!authority || (!row.externalRecipient && row.toAddress !== authority.ownerAddress)) {
-    await db
-      .update(athenaMailOutbox)
-      .set({ status: 'canceled', errorCode: 'channel_revoked' })
-      .where(current);
+    await revokeMailAttempt(row, current, 'channel_revoked');
     return;
   }
   if (row.firstAttemptAt && !outboundRetryAllowed(row.firstAttemptAt, now)) {
@@ -94,6 +85,22 @@ async function deliverMail(row: Outbox, now: Date): Promise<void> {
     return;
   }
   await sendMailAttempt(row, authority, now, current);
+}
+async function revokeMailAttempt(
+  row: Outbox,
+  current: SQL | undefined,
+  errorCode: string,
+): Promise<void> {
+  await db
+    .update(athenaMailOutbox)
+    .set({
+      // The current claim has not sent yet; earlier attempts may already have reached the provider.
+      status: row.attempts > 1 ? 'uncertain' : 'canceled',
+      errorCode,
+      leaseToken: null,
+      leaseExpiresAt: null,
+    })
+    .where(current);
 }
 async function sendMailAttempt(
   row: Outbox,
@@ -129,18 +136,30 @@ async function sendMailAttempt(
       })
       .where(current);
   } catch (error) {
-    const rejected = error instanceof MailSendError && error.disposition === 'rejected';
+    const authority = await mailChannelAuthority(row.mailboxId, row.channelRevision);
+    const failure = sendFailureState(row, error, Boolean(authority));
     await db
       .update(athenaMailOutbox)
       .set({
-        status: rejected ? 'failed' : row.attempts >= 8 ? 'uncertain' : 'queued',
-        errorCode: rejected ? 'provider_rejected' : 'send_failed',
+        ...failure,
         availableAt: new Date(now.getTime() + Math.min(30_000 * 2 ** row.attempts, 3600_000)),
         leaseToken: null,
         leaseExpiresAt: null,
       })
       .where(current);
   }
+}
+function sendFailureState(
+  row: Outbox,
+  error: unknown,
+  authorized: boolean,
+): Pick<Outbox, 'status' | 'errorCode'> {
+  if (error instanceof MailSendError && error.disposition === 'rejected')
+    return { status: 'failed', errorCode: 'provider_rejected' };
+  return {
+    status: row.attempts >= 8 || !authorized ? 'uncertain' : 'queued',
+    errorCode: 'send_failed',
+  };
 }
 /** Drain bounded leased mail intents from scheduled server work, with no open app dependency. */
 export async function sweepMailOutbox(now = new Date()): Promise<number> {

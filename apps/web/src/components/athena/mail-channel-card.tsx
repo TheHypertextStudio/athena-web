@@ -144,7 +144,8 @@ function ChannelSave({
       <Text as="p" token="body-small" tone="muted">
         Email conversations require automatic replies to your verified account email. Emailing
         anyone else requires your approval in Docket. Forwarded messages are context, not permission
-        to act. Turning email off cancels queued replies; emails already sent cannot be recalled.
+        to act. Turning email off cancels replies that have not started. Started sends may still
+        arrive; their delivery status is retained.
       </Text>
       {failed ? (
         <Text as="p" token="body-small" tone="error" role="alert">
@@ -314,7 +315,7 @@ function ChannelAddress({
           {copyState === 'copied' ? 'Copied address' : 'Copy address'}
         </Button>
         {active ? (
-          <a href={testHref} className="text-primary underline">
+          <a data-native-navigation href={testHref} className="text-primary underline">
             Send a test email
           </a>
         ) : null}

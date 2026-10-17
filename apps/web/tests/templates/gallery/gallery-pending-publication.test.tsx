@@ -73,7 +73,7 @@ it('keeps the exact reserved pin and names its authorized unpublished draft with
     />,
   );
   expect(
-    within(screen.getByRole('combobox', { name: 'Nested template' })).getByRole('option', {
+    within(screen.getByRole('combobox', { name: 'Start from template' })).getByRole('option', {
       name: 'Unpublished Vendor booking',
     }),
   ).toBeInTheDocument();
@@ -115,7 +115,7 @@ it('does not match another reserved identity or offer unrelated private drafts f
     screen.queryByRole('option', { name: 'Unpublished Vendor booking' }),
   ).not.toBeInTheDocument();
   expect(screen.queryByRole('link', { name: 'Review Vendor booking' })).not.toBeInTheDocument();
-  expect(screen.getAllByText(/Publication unavailable/).length).toBeGreaterThan(0);
+  expect(screen.getAllByText(/Version unavailable/).length).toBeGreaterThan(0);
 });
 it('shows a numbered publication only when the exact returned version exists', () => {
   const reference = step().template;
@@ -133,5 +133,5 @@ it('shows a numbered publication only when the exact returned version exists', (
       name="Vendor booking"
     />,
   );
-  expect(screen.getByText('Vendor booking · Fixed at Version 2')).toBeVisible();
+  expect(screen.getByText('Vendor booking · Keep Version 2')).toBeVisible();
 });

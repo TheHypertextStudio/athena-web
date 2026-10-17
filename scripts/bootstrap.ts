@@ -136,7 +136,7 @@ export const REQUIRED_GCP_APIS: readonly string[] = [
   'cloudscheduler.googleapis.com', // drives the secret-guarded cron endpoints (pnpm scheduler:setup)
   'cloudidentity.googleapis.com', // reads Workspace group membership for operator SSO
   'aiplatform.googleapis.com', // runs Athena turns through Vertex with the API service account
-  'storage.googleapis.com', // private API artifacts and the signed Turbo remote cache
+  'storage.googleapis.com', // private API artifacts; Turbo artifacts use Cloudflare R2
 ];
 
 /** Project roles the CI deploy account needs. */
@@ -728,9 +728,9 @@ function setupGcp(cfg: Config): {
   }
   note([...created, ...skipped].join('\n') || '(none)', 'Secret Manager');
 
-  section('GCP — Private artifacts and signed Turbo cache');
+  section('GCP — Private artifacts and Turbo cache client identity');
   const storage = setupDocketStorage({ ...cfg, apiRuntimeSaEmail, wifPool: WIF_POOL });
-  ok('Private storage, cache identity and signed remote cache configured');
+  ok('Private API storage, cache identity and client signing key configured');
 
   return { saEmail, apiRuntimeSaEmail, wifProvider, storage };
 }

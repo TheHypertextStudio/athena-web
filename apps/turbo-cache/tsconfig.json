@@ -1,0 +1,19 @@
+{
+  "extends": "@docket/tsconfig/base.json",
+  "compilerOptions": {
+    "composite": false,
+    "declaration": false,
+    "declarationMap": false,
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
+    "types": ["./.cloudflare/types/index.d.ts", "@cloudflare/vitest-pool-workers/types"]
+  },
+  "include": [
+    "src/**/*.ts",
+    "tests/**/*.ts",
+    "vitest.config.ts",
+    "cloudflare.config.ts",
+    "wrangler.config.ts"
+  ],
+  "exclude": ["node_modules", "dist", ".wrangler", "coverage"]
+}

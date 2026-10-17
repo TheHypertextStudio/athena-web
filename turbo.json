@@ -18,12 +18,12 @@
   ],
   "globalPassThroughEnv": ["VERCEL", "VERCEL_*", "PORTLESS_*"],
   // Remote artifacts are signed with HMAC. CI defaults to local-only caching, then mints a
-  // short-lived Cloud Run ID token for the configured Studio endpoint immediately before tasks.
+  // short-lived Google ID token for the configured Studio endpoint immediately before tasks.
   // Local runs use the same Studio endpoint and namespace by default; TURBO_API and TURBO_TEAM
   // can override them for another bootstrapped project. The signing key comes from
   // TURBO_REMOTE_CACHE_SIGNATURE_KEY; see .github/actions/turbo-cache.
   "remoteCache": {
-    "apiUrl": "https://docket-turbo-cache-mdchlo736a-uc.a.run.app",
+    "apiUrl": "https://turbo-cache.hypertext.studio",
     "teamSlug": "docket",
     "signature": true
   },

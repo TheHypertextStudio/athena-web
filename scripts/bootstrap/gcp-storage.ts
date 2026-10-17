@@ -1,17 +1,13 @@
 import { execFileSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { cacheConfig } from '../../apps/turbo-cache/src/config';
 
-/** Maintained upstream cache server, pinned to the verified 2.14.3 image index. */
-export const TURBO_CACHE_IMAGE =
-  'docker.io/ducktors/turborepo-remote-cache@sha256:781b0549dca80cf5aca27bf416fc766d44cad57333a7368098a755c5f12b8822';
-/** Dedicated IAM-protected cache service and runtime identity. */
-export const TURBO_CACHE_SERVICE = 'docket-turbo-cache';
-/** Identity CI and local operators impersonate to invoke the cache. */
+/** R2 storage and the native Worker endpoint used by the shared Studio cache. */
+export const TURBO_CACHE_BUCKET = cacheConfig.bucketName;
+export const TURBO_CACHE_URL = cacheConfig.bindings.OIDC_AUDIENCE;
+/** Identity CI and local operators impersonate to authenticate to the cache Worker. */
 export const TURBO_CACHE_CLIENT = 'docket-turbo-cache-client';
-/** HMAC key shared by Turbo clients and the cache server. */
+/** Client-only signing-key distribution for local operators; the Worker never reads it. */
 export const TURBO_CACHE_SIGNING_SECRET = 'docket-turbo-cache-signing-key';
 
 /** Existing production foundation used to provision Docket's private storage. */
@@ -50,8 +46,8 @@ function resourceNames(value: string): Set<string> {
   );
 }
 
-/** Create each dedicated cache account only when it is absent. */
-function ensureCacheAccounts(cfg: StorageBootstrapConfig, command: StorageCommand): void {
+/** Reuse the dedicated client identity without provisioning a Google cache runtime. */
+function ensureCacheClient(cfg: StorageBootstrapConfig, command: StorageCommand): void {
   const existing = resourceNames(
     command('gcloud', [
       'iam',
@@ -61,7 +57,7 @@ function ensureCacheAccounts(cfg: StorageBootstrapConfig, command: StorageComman
       '--format=value(email)',
     ]),
   );
-  for (const name of [TURBO_CACHE_SERVICE, TURBO_CACHE_CLIENT]) {
+  for (const name of [TURBO_CACHE_CLIENT]) {
     if (!existing.has(`${name}@${cfg.project}.iam.gserviceaccount.com`)) {
       command('gcloud', [
         'iam',
@@ -130,43 +126,17 @@ function ensureBucket(
   ]);
 }
 
-/** Apply age cleanup only to the disposable cache bucket using gcloud's lifecycle format. */
-function configureCacheLifecycle(
-  cfg: StorageBootstrapConfig,
-  bucket: string,
-  command: StorageCommand,
-): void {
-  const directory = mkdtempSync(join(tmpdir(), 'docket-cache-lifecycle-'));
-  const path = join(directory, 'lifecycle.json');
-  try {
-    writeFileSync(
-      path,
-      JSON.stringify({ rule: [{ action: { type: 'Delete' }, condition: { age: 14 } }] }),
-      { mode: 0o600 },
-    );
-    command('gcloud', [
-      'storage',
-      'buckets',
-      'update',
-      `gs://${bucket}`,
-      `--project=${cfg.project}`,
-      `--lifecycle-file=${path}`,
-    ]);
-  } finally {
-    rmSync(directory, { recursive: true, force: true });
-  }
-}
-
-/** Retain an existing key, synchronize its pinned version to GitHub, and scope server access. */
-function configureSigningKey(
-  cfg: StorageBootstrapConfig,
-  runtimeAccount: string,
-  command: StorageCommand,
-): string {
-  const existing = resourceNames(
+/** Preserve client signing bytes and distribute the existing operator key to GitHub. */
+function ensureClientSigningKey(cfg: StorageBootstrapConfig, command: StorageCommand): void {
+  const secrets = resourceNames(
     command('gcloud', ['secrets', 'list', `--project=${cfg.project}`, '--format=value(name)']),
   );
-  if (!existing.has(TURBO_CACHE_SIGNING_SECRET)) {
+  if (!secrets.has(TURBO_CACHE_SIGNING_SECRET)) {
+    const githubSecrets = JSON.parse(
+      command('gh', ['secret', 'list', '--repo', cfg.repo, '--json', 'name']),
+    ) as { name: string }[];
+    // GitHub values cannot be read back: preserve an existing key rather than replacing it.
+    if (githubSecrets.some(({ name }) => name === 'TURBO_REMOTE_CACHE_SIGNATURE_KEY')) return;
     command(
       'gcloud',
       [
@@ -180,40 +150,16 @@ function configureSigningKey(
       randomBytes(32).toString('hex'),
     );
   }
-  const version =
-    command('gcloud', [
-      'secrets',
-      'versions',
-      'describe',
-      'latest',
-      `--secret=${TURBO_CACHE_SIGNING_SECRET}`,
-      `--project=${cfg.project}`,
-      '--format=value(name)',
-    ])
-      .split('/')
-      .at(-1) ?? '';
-  if (!/^\d+$/.test(version)) throw new Error('Could not resolve the cache signing key version');
   const key = command('gcloud', [
     'secrets',
     'versions',
     'access',
-    version,
+    'latest',
     `--secret=${TURBO_CACHE_SIGNING_SECRET}`,
     `--project=${cfg.project}`,
   ]);
   if (key === '') throw new Error('The cache signing key is empty');
   command('gh', ['secret', 'set', 'TURBO_REMOTE_CACHE_SIGNATURE_KEY', '--repo', cfg.repo], key);
-  command('gcloud', [
-    'secrets',
-    'add-iam-policy-binding',
-    TURBO_CACHE_SIGNING_SECRET,
-    `--project=${cfg.project}`,
-    `--member=serviceAccount:${runtimeAccount}`,
-    '--role=roles/secretmanager.secretAccessor',
-    '--condition=None',
-    '--quiet',
-  ]);
-  return version;
 }
 
 /** Give GitHub main and the active operator permission to impersonate only the cache client. */
@@ -249,46 +195,10 @@ function configureCacheIdentity(
   ]);
 }
 
-/** Remove service-level public invoker bindings without replacing the rest of its IAM policy. */
-function removePublicInvokers(cfg: StorageBootstrapConfig, command: StorageCommand): void {
-  const policy = JSON.parse(
-    command('gcloud', [
-      'run',
-      'services',
-      'get-iam-policy',
-      TURBO_CACHE_SERVICE,
-      `--project=${cfg.project}`,
-      `--region=${cfg.region}`,
-      '--format=json',
-    ]),
-  ) as {
-    bindings?: { role: string; members?: string[] }[];
-  };
-  for (const binding of policy.bindings ?? []) {
-    if (binding.role !== 'roles/run.invoker') continue;
-    for (const member of binding.members ?? []) {
-      if (member === 'allUsers' || member === 'allAuthenticatedUsers') {
-        command('gcloud', [
-          'run',
-          'services',
-          'remove-iam-policy-binding',
-          TURBO_CACHE_SERVICE,
-          `--project=${cfg.project}`,
-          `--region=${cfg.region}`,
-          `--member=${member}`,
-          '--role=roles/run.invoker',
-          '--condition=None',
-          '--quiet',
-        ]);
-      }
-    }
-  }
-}
-
 /**
- * Provision private API artifacts and a signed upstream Turbo cache through native provider CLIs.
- * Existing resources and signing keys are reused; provider failures stop setup rather than
- * selecting a public endpoint or replacing application storage with a local fallback.
+ * Reconcile private API artifacts and the client identity for the Studio R2 cache.
+ * The cache Worker and its R2 binding deploy through the native Cloudflare configuration;
+ * this Google foundation never creates a second cache server or storage credentials.
  * @param cfg The production project and existing WIF foundation.
  * @param command Native process boundary, injectable for infrastructure contract checks.
  * @returns Non-secret bucket, endpoint and client identity configuration.
@@ -298,60 +208,15 @@ export function setupDocketStorage(
   command: StorageCommand = nativeCommand,
 ): StorageBootstrapResult {
   const artifactBucket = `${cfg.project}-docket-artifacts`;
-  const cacheBucket = `${cfg.project}-docket-turbo-cache`;
-  const runtime = `${TURBO_CACHE_SERVICE}@${cfg.project}.iam.gserviceaccount.com`;
   const client = `${TURBO_CACHE_CLIENT}@${cfg.project}.iam.gserviceaccount.com`;
-  ensureCacheAccounts(cfg, command);
   ensureBucket(cfg, artifactBucket, cfg.apiRuntimeSaEmail, command);
-  ensureBucket(cfg, cacheBucket, runtime, command);
-  configureCacheLifecycle(cfg, cacheBucket, command);
-  const signingVersion = configureSigningKey(cfg, runtime, command);
+  ensureCacheClient(cfg, command);
   configureCacheIdentity(cfg, client, command);
-  command('gcloud', [
-    'run',
-    'deploy',
-    TURBO_CACHE_SERVICE,
-    `--project=${cfg.project}`,
-    `--region=${cfg.region}`,
-    `--image=${TURBO_CACHE_IMAGE}`,
-    `--service-account=${runtime}`,
-    '--no-allow-unauthenticated',
-    '--invoker-iam-check',
-    '--use-http2',
-    '--port=3000',
-    '--min=0',
-    '--max=1',
-    '--cpu-throttling',
-    '--cpu=1',
-    '--memory=512Mi',
-    '--timeout=300',
-    `--set-env-vars=AUTH_MODE=none,STORAGE_PROVIDER=google-cloud-storage,STORAGE_PATH=${cacheBucket},HTTP2=true,BODY_LIMIT=1073741824`,
-    `--set-secrets=TURBO_REMOTE_CACHE_SIGNATURE_KEY=${TURBO_CACHE_SIGNING_SECRET}:${signingVersion}`,
-    '--quiet',
-  ]);
-  removePublicInvokers(cfg, command);
-  command('gcloud', [
-    'run',
-    'services',
-    'add-iam-policy-binding',
-    TURBO_CACHE_SERVICE,
-    `--project=${cfg.project}`,
-    `--region=${cfg.region}`,
-    `--member=serviceAccount:${client}`,
-    '--role=roles/run.invoker',
-    '--condition=None',
-    '--quiet',
-  ]);
-  const cacheUrl = command('gcloud', [
-    'run',
-    'services',
-    'describe',
-    TURBO_CACHE_SERVICE,
-    `--project=${cfg.project}`,
-    `--region=${cfg.region}`,
-    '--format=value(status.url)',
-  ]);
-  if (!cacheUrl.startsWith('https://'))
-    throw new Error('The Turbo cache service has no HTTPS endpoint');
-  return { artifactBucket, cacheBucket, cacheClientSaEmail: client, cacheUrl };
+  ensureClientSigningKey(cfg, command);
+  return {
+    artifactBucket,
+    cacheBucket: TURBO_CACHE_BUCKET,
+    cacheClientSaEmail: client,
+    cacheUrl: TURBO_CACHE_URL,
+  };
 }

@@ -1,0 +1,36 @@
+{
+  "name": "@docket/turbo-cache",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "license": "UNLICENSED",
+  "description": "Private Studio Turbo remote cache backed by Cloudflare R2.",
+  "scripts": {
+    "build": "cf build",
+    "dev": "cf dev",
+    "deploy": "cf deploy",
+    "typecheck": "cf workers types && tsc --noEmit",
+    "lint": "cf workers types && eslint .",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "clean": "rm -rf dist .turbo .wrangler .cloudflare coverage *.tsbuildinfo",
+    "cf:types": "cf workers types"
+  },
+  "dependencies": {
+    "hono": "catalog:",
+    "@hono/valibot-validator": "0.6.1",
+    "valibot": "1.4.1",
+    "jose": "6.2.3"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "0.18.5",
+    "@docket/eslint-config": "workspace:*",
+    "@docket/tsconfig": "workspace:*",
+    "@vitest/coverage-istanbul": "4.1.11",
+    "typescript": "catalog:",
+    "vite": "catalog:",
+    "vitest": "catalog:",
+    "wrangler": "4.148.0",
+    "cf": "1.0.0-beta.17"
+  }
+}

@@ -163,8 +163,8 @@ See [Docket web setup](apps/web/README.md) and
 [Workers compatibility](docs/engineering/workers-compatibility.md) for local isolation, native
 staging commands and the required production approval. The frontend uses the native production Worker;
 private API artifacts use Google Cloud Storage with the Cloud Run runtime identity. Signed Turbo
-artifacts use the maintained Ducktors cache server on IAM-protected Cloud Run with a separate GCS
-bucket. CI authenticates through short-lived Workload Identity Federation tokens; local developers
+artifacts use a private Cloudflare Worker with direct R2 storage and short-lived Google identity
+tokens. No cache artifact traffic passes through Google. CI authenticates through short-lived Workload Identity Federation tokens; local developers
 use native `gcloud` identity tokens. See [storage and cache setup](docs/engineering/deployment.md#private-storage-and-signed-turbo-cache).
 Ordinary CI and backend/native publication retain their existing triggers and mandatory checks;
 there are no custom candidate/promote workflows or temporary publication-hold flags.

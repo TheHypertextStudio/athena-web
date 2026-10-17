@@ -18,7 +18,7 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-# The build uses the same signed Cloud Run cache as CI. Only a trusted main dispatch enables
+# The build uses the same signed Workers/R2 cache as CI. Only a trusted main dispatch enables
 # remote access; migrations and browser shards keep local-only caching.
 env:
   TURBO_CACHE: local:rw

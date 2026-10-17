@@ -26,7 +26,7 @@ function cacheAction(): CacheAction {
   return existsSync(path) ? (parseYaml(readFileSync(path, 'utf8')) as CacheAction) : {};
 }
 
-describe('signed Cloud Run Turbo cache authentication', () => {
+describe('signed Workers/R2 Turbo cache authentication', () => {
   it('defaults local Turbo runs to the signed Studio cache endpoint and namespace', () => {
     const source = readFileSync(join(REPO_ROOT, 'turbo.json'), 'utf8');
     const remoteCache = JSON.parse(
@@ -34,7 +34,7 @@ describe('signed Cloud Run Turbo cache authentication', () => {
     ) as unknown;
 
     expect(remoteCache).toEqual({
-      apiUrl: 'https://docket-turbo-cache-mdchlo736a-uc.a.run.app',
+      apiUrl: 'https://turbo-cache.hypertext.studio',
       teamSlug: 'docket',
       signature: true,
     });

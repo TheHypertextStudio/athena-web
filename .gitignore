@@ -16,6 +16,7 @@ build/
 .turbo-*/
 .scratch-fm/
 .wrangler/
+.cloudflare/
 out/
 *.tsbuildinfo
 *.cpuprofile

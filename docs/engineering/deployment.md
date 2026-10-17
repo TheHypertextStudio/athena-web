@@ -125,9 +125,10 @@ Prompts for: GCP project ID, region, GitHub repo (`owner/repo`), passkey domain,
    `API_SECRET_BINDINGS`
 10. Writes a `.env.local` skeleton with independent generated development secrets
 
-The production infrastructure pass also provisions private API artifacts and the signed Turbo
-cache described below. `--skip-infrastructure` skips these resources; use the ordinary production
-bootstrap pass to reconcile them.
+The production infrastructure pass provisions private API artifacts and the Turbo cache client
+identity/signing-key distribution described below. `--skip-infrastructure` skips these resources.
+The cache Worker and private R2 bucket deploy separately through the native Cloudflare commands in
+[the cache package](../../apps/turbo-cache/README.md#deployment).
 
 ### Prerequisites
 
@@ -189,7 +190,7 @@ Set by `pnpm bootstrap`. Add missing ones with `gh variable set NAME --body "VAL
 | `GCP_SERVICE_ACCOUNT`              | bootstrap                          | Full SA email: `docket-deploy@<project>.iam.gserviceaccount.com`                                                          |
 | `GCP_WIF_PROVIDER`                 | bootstrap                          | Full WIF provider resource name: `projects/<num>/locations/global/workloadIdentityPools/github/providers/github-actions`  |
 | `GCP_TURBO_CACHE_SERVICE_ACCOUNT`  | bootstrap                          | Dedicated cache invoker: `docket-turbo-cache-client@<project>.iam.gserviceaccount.com`                                    |
-| `TURBO_API`                        | bootstrap                          | HTTPS URL of the IAM-protected `docket-turbo-cache` Cloud Run service                                                     |
+| `TURBO_API`                        | bootstrap                          | Private Workers/R2 endpoint: `https://turbo-cache.hypertext.studio`                                                       |
 | `TURBO_TEAM`                       | bootstrap                          | `docket`; an artifact namespace within this repository's dedicated cache                                                  |
 | `GCS_BLOB_BUCKET`                  | bootstrap (production environment) | Private API artifact bucket: `<project>-docket-artifacts`                                                                 |
 | `PASSKEY_RP_ID`                    | bootstrap/manual                   | WebAuthn relying-party domain. Production uses `clearthedocket.com`.                                                      |
@@ -236,20 +237,25 @@ Everything created by `pnpm bootstrap`:
 | Cloud Run: API                    | `docket-api`                                                                                                                 |
 | Cloud Run: admin                  | `docket-admin`                                                                                                               |
 | GCS: API artifacts                | `<project>-docket-artifacts`; private, uniform access, public access prevention, soft delete disabled                        |
-| GCS: Turbo cache                  | `<project>-docket-turbo-cache`; same privacy settings, 14-day age cleanup                                                    |
-| Cloud Run: Turbo cache            | `docket-turbo-cache`; pinned upstream container, required IAM, HTTP/2                                                        |
-| Cache runtime service account     | `docket-turbo-cache@<project>.iam.gserviceaccount.com`                                                                       |
+| R2: Turbo cache                   | `studio-turbo-cache`; private Standard storage, native 14-day expiration                                                     |
+| Worker: Turbo cache               | `studio-turbo-cache`; direct R2 binding and short-lived Google OIDC                                                          |
 | Cache client service account      | `docket-turbo-cache-client@<project>.iam.gserviceaccount.com`                                                                |
-| Secret Manager: cache signing key | `docket-turbo-cache-signing-key`; numeric version pinned on the cache service                                                |
+| Secret Manager: cache signing key | `docket-turbo-cache-signing-key`; client-only signing-key distribution                                                       |
 
 ---
 
 ## Private storage and signed Turbo cache
 
-The existing production bootstrap owns both storage resources through
-`scripts/bootstrap/gcp-storage.ts`. It uses native `gcloud` and `gh` commands and preserves existing
-resources and signing keys. Run the production infrastructure pass with the selected Studio
-accounts and project; no separate cache lifecycle runner or publication workflow is required.
+The Hypertext Studio plugin provides the discoverable `remote-cache-doctor` skill and its native-CLI
+setup/diagnostic script. Its [runbook](https://github.com/TheHypertextStudio/product-standards/tree/main/skills/remote-cache-doctor)
+explains credentials, costs, diagnosis and repair; this repository's native configuration remains
+canonical for deployment values.
+
+The production bootstrap provisions private API storage and cache-client identity/signing-key
+distribution through `scripts/bootstrap/gcp-storage.ts`, using native `gcloud` and `gh` commands.
+The cache package owns its native Cloudflare deployment and R2 lifecycle configuration; follow
+[its deployment commands](../../apps/turbo-cache/README.md#deployment) with the Studio account.
+Existing resources and signing keys are preserved.
 
 The API runs as `docket-api@athena-services.iam.gserviceaccount.com` and receives
 `GCS_BLOB_BUCKET=athena-services-docket-artifacts`. Its bucket grants that runtime identity
@@ -260,46 +266,41 @@ public download links. Retained artifacts have no automatic age cleanup. When mo
 storage, copy every retained object and verify bytes and database references before retiring the
 old store or its credentials.
 
-The cache is [Ducktors Turborepo Remote Cache 2.14.3](https://github.com/ducktors/turborepo-remote-cache/releases/tag/v2.14.3),
-pinned to image index `sha256:781b0549dca80cf5aca27bf416fc766d44cad57333a7368098a755c5f12b8822`.
-Its native `google-cloud-storage` backend uses its dedicated runtime identity through ADC. The
-container sets `AUTH_MODE=none` because Cloud Run requires IAM authentication before forwarding
-any request. Bootstrap enables the invoker IAM check and removes public invoker bindings. Never
-disable that check or grant `allUsers` or `allAuthenticatedUsers` access to this service.
+The Turbo cache runs at `https://turbo-cache.hypertext.studio` as the `studio-turbo-cache`
+Cloudflare Worker with a direct private R2 binding. Its protocol/storage implementation is based
+on the pinned MIT-licensed upstream recorded in `apps/turbo-cache/UPSTREAM.md`; the managed
+adaptations provide Google OIDC authentication, exact Docket namespace isolation and private
+streaming responses. No upload or download passes through Google Cloud or Vercel.
 
-The service enables HTTP/2 on both Cloud Run and the container, streams artifacts, sets a 1 GiB
-upload limit, and uses request-based billing with zero minimum and one maximum instance. Its
-private bucket grants only the cache runtime `roles/storage.objectUser`. A native GCS lifecycle
-rule deletes cache objects older than 14 days; deletion is asynchronous. The API artifact bucket
-is separate and does not receive this rule.
+The Worker verifies RS256 Google ID tokens against Google's JWKS, the exact endpoint audience,
+expiry and the dedicated cache-client service-account numeric subject. CI impersonates that
+identity through the exact WIF subject `repo:TheHypertextStudio/athena-web:ref:refs/heads/main`.
+Local operators receive Token Creator only on that identity. The Worker has no static access token,
+S3 key or signing secret. R2 is accessed through its binding, and artifact tags are preserved in
+object metadata for Turbo clients to verify with HMAC.
 
-CI impersonates the cache client using the exact WIF subject
-`repo:TheHypertextStudio/athena-web:ref:refs/heads/main` in pool `github` of project `770668668034`.
-That service account has `roles/run.invoker` only on the cache service. The shared cache action
-mints an audience-bound ID token immediately before each cacheable task after installation.
-Pull requests, other refs, other repositories and incomplete configuration keep `TURBO_CACHE=local:rw`;
-they receive neither a cache token nor the HMAC signing secret. An unset `TURBO_API` cannot select
-Vercel's default remote endpoint in these workflows. Root `turbo.json` also defaults local runs to
-`https://docket-turbo-cache-mdchlo736a-uc.a.run.app` and namespace `docket`, including when a machine
-has global Turbo authentication. `TURBO_API` and `TURBO_TEAM` override those native defaults for
-another bootstrapped project. `TURBO_TEAM=docket` selects an object namespace;
-the dedicated endpoint, identities and bucket enforce the repository boundary.
+The shared cache action mints an audience-bound token immediately before each cacheable task.
+Untrusted refs remain local-only and receive neither the cache token nor the HMAC key. Trusted
+main with incomplete cache configuration stays local-only; it cannot mint a cache token. Native `turbo.json` defaults select the Studio endpoint and `docket` namespace;
+`TURBO_API` and `TURBO_TEAM` can override those addresses for a separately provisioned cache.
 
-The server receives `TURBO_REMOTE_CACHE_SIGNATURE_KEY` from its pinned version of
-`docket-turbo-cache-signing-key`; GitHub holds the same value under the existing signing-secret name.
-Bootstrap creates a key only when absent and synchronizes the selected version without rotating it
-on ordinary reruns. Rotate the server and client configuration together. The runtime gets a
-secret-level accessor binding. Existing project-level secret-access grants remain separate and
-must be considered when auditing who can read the key.
+The R2 Standard bucket is private and applies native 14-day expiration. There is no cleanup cron,
+Cloud Run cache instance, Google cache bucket or public bucket URL. Storage/read/write usage
+shares the account's R2 allowance; R2 and Workers charge no Internet egress. This design targets
+zero additional cost within existing allowances, not unlimited free service. Cloudflare's current
+zone limit bounds uploads to 100 MB; larger artifacts cannot be uploaded through this endpoint.
+Cache writes stream directly to R2 and reads stream back without buffering entire artifacts.
 
-For local cache access, the operator needs `roles/iam.serviceAccountTokenCreator` on the cache
-client account and permission to read the signing secret. Bootstrap scopes impersonation to that
-account. Authenticate the Studio account, then use native commands in the current shell:
+The existing `docket-turbo-cache-signing-key` Secret Manager entry distributes the client HMAC key
+to local operators; GitHub holds the same value in `TURBO_REMOTE_CACHE_SIGNATURE_KEY`. Bootstrap
+reuses the key without rotating it. The Worker never reads it. A missing Google copy alongside an
+existing unknown GitHub value is preserved rather than silently rotating the key.
+
+For local cache access, authenticate the Studio account and mint a short-lived token using native
+commands in the current shell:
 
 ```sh
-export TURBO_API="$(gcloud run services describe docket-turbo-cache \
-  --project=athena-services --region=us-central1 --account=willie@hypertext.studio \
-  --format='value(status.url)')"
+export TURBO_API=https://turbo-cache.hypertext.studio
 export TURBO_TEAM=docket
 export TURBO_REMOTE_CACHE_SIGNATURE_KEY="$(gcloud secrets versions access latest \
   --secret=docket-turbo-cache-signing-key --project=athena-services \
@@ -309,20 +310,17 @@ export TURBO_TOKEN="$(gcloud auth print-identity-token \
   --impersonate-service-account=docket-turbo-cache-client@athena-services.iam.gserviceaccount.com \
   --audiences="$TURBO_API" --include-email)"
 export TURBO_CACHE=local:rw,remote:rw
-pnpm turbo run build --filter=@docket/api
+pnpm turbo run build --filter=@docket/turbo-cache
 ```
 
-Do not print or commit either secret. The signing version must match the server's pinned version;
-bootstrap synchronizes `latest` at reconciliation time. Google service-account ID tokens expire
-after one hour; mint a fresh token before another invocation when needed. Local-only work can set
-`TURBO_CACHE=local:rw` and unset `TURBO_TOKEN` and `TURBO_REMOTE_CACHE_SIGNATURE_KEY`.
+Do not print or commit either value. Google ID tokens expire after one hour; mint a fresh token
+when needed. Local-only work can set `TURBO_CACHE=local:rw` and unset both secret variables.
 
-Cache acceptance requires two runs of the same cacheable task and hash with distinct empty local
-cache directories and `--cache=remote:rw --summarize`, a remote HIT on the second run, restored
-artifacts, a matching signature, and correlated hosted requests. Also check that an unauthenticated
-request is rejected, a mismatched signing key produces a miss, and an artifact larger than 32 MiB
-survives the actual HTTP/2 path. Local cache hits and a healthy server do not establish remote cache
-acceptance. `CI` is part of the task hash, so local and CI runs can intentionally have different hashes.
+Cache acceptance requires two real Turbo runs of the same cacheable task/hash using distinct
+empty local caches, a remote HIT, restored matching output and native R2 object readback. Check
+wrong-principal/expired-token rejection, missing or invalid signature rejection, namespace isolation
+and a streamed artifact larger than 32 MiB. `CI` is part of the task hash, so local and CI artifacts
+can intentionally differ.
 
 ---
 

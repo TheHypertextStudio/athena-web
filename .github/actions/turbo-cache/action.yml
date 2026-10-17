@@ -1,5 +1,5 @@
 name: Authenticate the signed Turbo cache
-description: Mint a short-lived Cloud Run ID token for trusted Studio main workflows.
+description: Mint a short-lived Google ID token for trusted Studio main workflows.
 
 inputs:
   workload-identity-provider:

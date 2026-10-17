@@ -12,8 +12,8 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-# Signed artifacts are shared through the Studio's IAM-protected Cloud Run cache. Each cache
-# job mints an audience-bound ID token after installation, immediately before its Turbo task.
+# Signed artifacts are shared through the Studio's private Workers/R2 cache. Each cache
+# job mints an audience-bound Google ID token after installation, immediately before its Turbo task.
 # Missing configuration and untrusted refs use only local cache, including when TURBO_API is
 # unset: they cannot select Vercel's default endpoint. No separate .turbo actions/cache is needed.
 env:

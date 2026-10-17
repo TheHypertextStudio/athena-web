@@ -86,6 +86,7 @@ export const baseConfig = tseslint.config(
       '**/.next.*/**',
       '**/.turbo/**',
       '**/.wrangler/**',
+      '**/.cloudflare/**',
       '**/.open-next/**',
       '**/.artifact/**',
       '**/.studio-engine/**',

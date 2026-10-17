@@ -7,6 +7,32 @@
 
 ## Active Tasks
 
+### [STUDIO-R2-CACHE] Keep shared caching within existing Cloudflare allowances
+
+- **Status**: DONE
+- **Description**: Replace the Google cache data path with private Workers/R2 caching to avoid
+  artifact egress charges while retaining signed artifacts and short-lived identity authentication.
+- **Approach**: Adapt the pinned MIT Turbo protocol and streamed R2 adapter in a normal workspace
+  app. Deploy through native cf configuration and apply declarative R2 lifecycle rules. Preserve
+  Google WIF only for cache-client identity and existing client HMAC-key distribution.
+- **Files changed**: Cache Worker package, bootstrap storage helper, CI/cache configuration,
+  generated-output ignores, focused infrastructure checks and deployment documentation.
+- **Validation**: 27 workerd checks with real RSA verification and R2 bindings pass (over 98% line
+  coverage); 94 infrastructure/CI checks, affected TypeScript/ESLint, actionlint, formatting and
+  native cf build pass. Actual native Turbo runs with separate empty local caches produce a signed
+  remote HIT and restore identical deployable output; the wrong signing key produces a MISS.
+  A 40 MiB upload/download preserves bytes and metadata; unauthenticated, wrong-audience and
+  wrong-namespace requests are rejected. Native provider readback confirms private Standard R2
+  storage and 14-day expiration.
+- **Outcome**: CI and local defaults select the authenticated Studio Worker. The old Google cache
+  service, disposable bucket, runtime identity and server secret-access grant are deleted. The
+  production API revision and four retained user objects are unchanged. No new subscription or
+  static cache/R2 access credential is introduced; usage shares existing Cloudflare allowances.
+- **Learnings**: Moving only storage would retain Google's proxy egress. Cache acceptance must use
+  a cacheable task; API builds intentionally bypass caching to stamp their source revision. Native
+  cf delegates bundling to Wrangler, whose Docker-image cleanup can hang on a broken Docker host
+  even without Containers; the local supported binary override was not saved in any workflow.
+
 ### [STUDIO-PROVIDER-EXIT] Preserve storage and shared caching without Vercel
 
 - **Status**: DONE

@@ -2,7 +2,7 @@ CREATE TABLE "athena_mail_blob" (
 	"key" text PRIMARY KEY NOT NULL,
 	"owner_user_id" text NOT NULL,
 	"message_id" text NOT NULL,
-	"created_at" timestamp DEFAULT now() NOT NULL
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
 CREATE TABLE "athena_mail_outbox" (
@@ -24,18 +24,18 @@ CREATE TABLE "athena_mail_outbox" (
 	"error_code" text,
 	"attempts" integer DEFAULT 0 NOT NULL,
 	"lease_token" text,
-	"lease_expires_at" timestamp,
-	"available_at" timestamp DEFAULT now() NOT NULL,
-	"first_attempt_at" timestamp,
-	"sent_at" timestamp,
-	"created_at" timestamp DEFAULT now() NOT NULL
+	"lease_expires_at" timestamp with time zone,
+	"available_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"first_attempt_at" timestamp with time zone,
+	"sent_at" timestamp with time zone,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
 CREATE TABLE "athena_mail_provider_event" (
 	"id" text PRIMARY KEY NOT NULL,
 	"provider_message_id" text NOT NULL,
 	"kind" text NOT NULL,
-	"received_at" timestamp DEFAULT now() NOT NULL
+	"received_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
 ALTER TABLE "agent_session" DROP CONSTRAINT "agent_session_work_linkage_check";--> statement-breakpoint

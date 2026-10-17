@@ -219,11 +219,11 @@ export const athenaMailOutbox = pgTable(
     errorCode: text('error_code'),
     attempts: integer('attempts').notNull().default(0),
     leaseToken: text('lease_token'),
-    leaseExpiresAt: timestamp('lease_expires_at'),
-    availableAt: timestamp('available_at').notNull().defaultNow(),
-    firstAttemptAt: timestamp('first_attempt_at'),
-    sentAt: timestamp('sent_at'),
-    createdAt: timestamp('created_at').notNull().defaultNow(),
+    leaseExpiresAt: timestamp('lease_expires_at', { withTimezone: true }),
+    availableAt: timestamp('available_at', { withTimezone: true }).notNull().defaultNow(),
+    firstAttemptAt: timestamp('first_attempt_at', { withTimezone: true }),
+    sentAt: timestamp('sent_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
     uniqueIndex('athena_mail_outbox_inbound_uq').on(t.inboundMessageId, t.responseStage),
@@ -235,7 +235,7 @@ export const athenaMailProviderEvent = pgTable('athena_mail_provider_event', {
   id: text('id').primaryKey(),
   providerMessageId: text('provider_message_id').notNull(),
   kind: text('kind').notNull(),
-  receivedAt: timestamp('received_at').notNull().defaultNow(),
+  receivedAt: timestamp('received_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
 /** Durable blob ownership survives message/account cascades for recoverable private cleanup. */
@@ -243,5 +243,5 @@ export const athenaMailBlob = pgTable('athena_mail_blob', {
   key: text('key').primaryKey(),
   ownerUserId: text('owner_user_id').notNull(),
   messageId: text('message_id').notNull(),
-  createdAt: timestamp('created_at').notNull().defaultNow(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });

@@ -131,14 +131,15 @@ it('applies copy storage through the real canonical PGlite runner and preserves 
         'select hash,created_at from drizzle.__drizzle_migrations order by id',
       );
       before = journal.rows;
-      expect(journal.rows).toHaveLength(168);
-      const sql = readFileSync(
-        resolve(
-          import.meta.dirname,
-          '../../drizzle/0167_work_template_copy_reference_integrity.sql',
-        ),
+      const manifest = JSON.parse(
+        readFileSync(resolve(import.meta.dirname, '../../drizzle/meta/_journal.json'), 'utf8'),
+      ) as { entries: { tag: string }[] };
+      const expectedHashes = manifest.entries.map(({ tag }) =>
+        createHash('sha256')
+          .update(readFileSync(resolve(import.meta.dirname, '../../drizzle', `${tag}.sql`)))
+          .digest('hex'),
       );
-      expect(journal.rows.at(-1)?.hash).toBe(createHash('sha256').update(sql).digest('hex'));
+      expect(journal.rows.map((row) => row.hash)).toEqual(expectedHashes);
       const actual = await client.query<{ epoch: boolean; guard: boolean }>(
         `select exists(select 1 from information_schema.columns where table_name='work_template_copy_entry' and column_name='reference_epoch') as epoch,exists(select 1 from pg_proc where proname='docket_copy_bundle_member_in_use') as guard`,
       );

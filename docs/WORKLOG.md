@@ -47,6 +47,8 @@
 
 - **Coverage closure**: The full API run passes all 7,957 tests; its 87.86% branch result exposed remaining authority and recovery cases. Add 56 behavior cases for live consent, source ownership, exact approved files, partial checkpoints, send leases and signed receipt shape. All 146 focused workflow/catalog tests, final API typecheck and changed-test lint pass. Production source is unchanged from the full run; Istanbul merging verifies identical statement/function/branch maps and measures 88.01% branches with every existing 88% threshold satisfied. The normal full CI gate remains required before backend publication.
 
+- **Migration release correction**: The normal CI gate caught seven newly added naive timestamp columns. Store all new send-lease, delivery-receipt and blob-cleanup times as timezone-aware instants, with matching undeployed SQL and snapshot metadata. Keep the existing timestamp-debt allowance intact. The migration replay test now checks every saved manifest hash rather than assuming the previous migration remains last. All 26 remaining package coverage tasks pass locally, including 488 database tests; timestamp policy, DB/API typechecks, changed-code lint, fresh migration smoke and all 161 affected API workflow/public HTTP tests pass. Production backend publication and real closed-client mailbox acceptance remain outstanding.
+
 ### [ATHENA-CAPABILITY-AUDIT] Assess personal-assistant and chief-of-staff capabilities
 
 - **Status**: COMPLETE

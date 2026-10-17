@@ -189,9 +189,10 @@ Set by `pnpm bootstrap`. Add missing ones with `gh variable set NAME --body "VAL
 | `GCP_REGION`                       | bootstrap                          | Deployment region (e.g. `us-central1`)                                                                                    |
 | `GCP_SERVICE_ACCOUNT`              | bootstrap                          | Full SA email: `docket-deploy@<project>.iam.gserviceaccount.com`                                                          |
 | `GCP_WIF_PROVIDER`                 | bootstrap                          | Full WIF provider resource name: `projects/<num>/locations/global/workloadIdentityPools/github/providers/github-actions`  |
+| `GCP_TURBO_CACHE_WIF_PROVIDER`     | bootstrap                          | Dedicated cache federation provider; kept separate from application deployment WIF                                        |
 | `GCP_TURBO_CACHE_SERVICE_ACCOUNT`  | bootstrap                          | Dedicated cache invoker: `docket-turbo-cache-client@<project>.iam.gserviceaccount.com`                                    |
 | `TURBO_API`                        | bootstrap                          | Private Workers/R2 endpoint: `https://turbo-cache.hypertext.studio`                                                       |
-| `TURBO_TEAM`                       | bootstrap                          | `docket`; an artifact namespace within this repository's dedicated cache                                                  |
+| `TURBO_TEAM`                       | bootstrap                          | `docket`; an artifact namespace within the shared Studio cache                                                            |
 | `GCS_BLOB_BUCKET`                  | bootstrap (production environment) | Private API artifact bucket: `<project>-docket-artifacts`                                                                 |
 | `PASSKEY_RP_ID`                    | bootstrap/manual                   | WebAuthn relying-party domain. Production uses `clearthedocket.com`.                                                      |
 | `BETTER_AUTH_PASSKEY_LEGACY_RP_ID` | manual                             | Temporary previous RP for native passkey migration. Unset removes the bridge.                                             |
@@ -269,17 +270,20 @@ old store or its credentials.
 The Turbo cache runs at `https://turbo-cache.hypertext.studio` as the `studio-turbo-cache`
 Cloudflare Worker with a direct private R2 binding. Its protocol/storage implementation is based
 on the pinned MIT-licensed upstream recorded in `apps/turbo-cache/UPSTREAM.md`; the managed
-adaptations provide Google OIDC authentication, exact Docket namespace isolation and private
+adaptations provide Google OIDC authentication, exact registered-client namespace isolation and private
 streaming responses. No upload or download passes through Google Cloud or Vercel.
 
 The Worker verifies RS256 Google ID tokens against Google's JWKS, the exact endpoint audience,
-expiry and the dedicated cache-client service-account numeric subject. CI impersonates that
+expiry and the registered cache-client service-account numeric subject. CI impersonates that
 identity through the exact WIF subject `repo:TheHypertextStudio/athena-web:ref:refs/heads/main`.
 Local operators receive Token Creator only on that identity. The Worker has no static access token,
 S3 key or signing secret. R2 is accessed through its binding, and artifact tags are preserved in
 object metadata for Turbo clients to verify with HMAC.
 
-The shared cache action mints an audience-bound token immediately before each cacheable task.
+The pinned `TheHypertextStudio/release-engineering/actions/turbo-cache` action mints an audience-bound token immediately before each cacheable task. Callers supply `GCP_TURBO_CACHE_WIF_PROVIDER`, `GCP_TURBO_CACHE_SERVICE_ACCOUNT`, `TURBO_API`, and `TURBO_TEAM`; application deployment keeps its own `GCP_WIF_PROVIDER`.
+
+`apps/turbo-cache/cache-clients.json` registers each Studio namespace and its distinct identity, repository trust and signing-key reference. Docket uses `docket`, Curfew web uses `curfew-web`, LogDate web uses `logdate-web`, and unpublished product administration uses `studio-product-admin` with local owner impersonation only. No client can read or write another client's artifact prefix. See the plugin runbook for registration and local setup.
+
 Untrusted refs remain local-only and receive neither the cache token nor the HMAC key. Trusted
 main with incomplete cache configuration stays local-only; it cannot mint a cache token. Native `turbo.json` defaults select the Studio endpoint and `docket` namespace;
 `TURBO_API` and `TURBO_TEAM` can override those addresses for a separately provisioned cache.

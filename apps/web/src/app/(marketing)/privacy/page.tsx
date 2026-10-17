@@ -93,11 +93,11 @@ const sections: readonly LegalPolicySection[] = [
         </p>
         <p>
           We use service providers to host and store information, protect Docket, process payments,
-          send service emails, and provide maps. These include Google Cloud, Neon, Vercel,
-          Cloudflare, Stripe, Resend, and Mapbox. Information also goes to services you connect when
-          you use their features. Authorized Hypertext Studio operators may access hosted
-          information for support, security, and running the service. We may disclose information
-          when legally required or needed to protect people and the service.
+          send service emails, and provide maps. These include Google Cloud, Neon, Cloudflare,
+          Stripe, Resend, and Mapbox. Information also goes to services you connect when you use
+          their features. Authorized Hypertext Studio operators may access hosted information for
+          support, security, and running the service. We may disclose information when legally
+          required or needed to protect people and the service.
         </p>
         <p>
           When you use Athena or another AI feature, the provider receives your request and the

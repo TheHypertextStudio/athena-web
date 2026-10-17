@@ -10,9 +10,11 @@ The source is vendored so dependency and protocol updates can be reviewed normal
 
 Studio adaptations:
 
-- Google OIDC authentication replaces the static bearer secret; the configured service-account
-  numeric subject and audience are mandatory. GitHub Actions continues using WIF.
-- Only Docket's configured team namespace is accepted; artifact IDs cannot contain path separators.
+- Google OIDC authentication replaces the static bearer secret; a registered service-account
+  numeric subject and the exact audience are mandatory. GitHub Actions continues using WIF.
+- Each verified Google identity maps to one unique registered namespace. Request-scoped Hono context
+  selects its R2 prefix; cross-client GET/PUT requests are denied before storage access. Artifact IDs
+  cannot contain path separators.
 - Signed artifact tags are required on upload and missing tags are treated as cache misses.
 - R2 reads and writes stream directly. The optional edge Cache API layer is removed, avoiding
   cloned response-body buffering and intermediary caching of private build artifacts.

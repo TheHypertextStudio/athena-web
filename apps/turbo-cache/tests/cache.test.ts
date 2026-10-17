@@ -3,11 +3,24 @@ import { env } from 'cloudflare:workers';
 import { exportJWK, generateKeyPair, SignJWT } from 'jose';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import worker from '../src/index';
+import type { CacheEnv } from '../src/types';
 import { R2Storage } from '../src/upstream/storage/r2-storage';
 
 const audience = 'https://turbo-cache.hypertext.studio';
 const issuer = 'https://accounts.google.com';
 const subject = '104950679521072783940';
+const clients = [
+  { subject, namespace: 'docket' },
+  { subject: '111111111111111111111', namespace: 'curfew-web' },
+  { subject: '222222222222222222222', namespace: 'logdate-web' },
+  { subject: '333333333333333333333', namespace: 'studio-product-admin' },
+];
+const testBindings = {
+  ...env,
+  CACHE_CLIENTS: JSON.stringify(
+    Object.fromEntries(clients.map((client) => [client.subject, client.namespace])),
+  ),
+};
 let signingKey: CryptoKey;
 let unrelatedKey: CryptoKey;
 
@@ -44,13 +57,18 @@ async function token(claims: Record<string, unknown> = {}, key = signingKey): Pr
     .sign(key);
 }
 
-async function call(path: string, options: RequestInit = {}, bearer?: string): Promise<Response> {
+async function call(
+  path: string,
+  options: RequestInit = {},
+  bearer?: string,
+  bindings: CacheEnv = testBindings,
+): Promise<Response> {
   const headers = new Headers(options.headers);
   headers.set('Authorization', `Bearer ${bearer ?? (await token())}`);
   const context = createExecutionContext();
   const response = await worker.fetch(
     new Request(audience + path, { ...options, headers }),
-    env,
+    bindings,
     context,
   );
   await waitOnExecutionContext(context);
@@ -136,6 +154,135 @@ describe('Google workload identity authentication', () => {
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ status: 'enabled' });
   });
+});
+
+describe('repository identity and namespace isolation', () => {
+  it('accepts a second registered Google subject only in its own namespace', async () => {
+    const response = await call(
+      '/v8/artifacts/status?teamId=curfew-web',
+      {},
+      await token({ sub: clients[1]?.subject }),
+    );
+    expect(response.status).toBe(200);
+  });
+
+  it.each(clients)('accepts $namespace identity only for its own namespace', async (client) => {
+    const response = await call(
+      `/v8/artifacts/status?teamId=${client.namespace}`,
+      {},
+      await token({ sub: client.subject }),
+    );
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ status: 'enabled' });
+  });
+
+  const crossClients = clients.flatMap((source) =>
+    clients
+      .filter((target) => target.subject !== source.subject)
+      .map((target) => ({ source, target })),
+  );
+  it.each(crossClients)(
+    '$source.namespace cannot GET or PUT $target.namespace artifacts',
+    async ({ source, target }) => {
+      const key = `${target.namespace}/isolated-hash`;
+      await env.R2_STORE.put(key, 'target-original', {
+        customMetadata: { artifactTag: 'target-tag' },
+      });
+      const read = vi.spyOn(R2Storage.prototype, 'readWithMetadata');
+      const write = vi.spyOn(R2Storage.prototype, 'write');
+      try {
+        const credential = await token({ sub: source.subject });
+        const path = `/v8/artifacts/isolated-hash?teamId=${target.namespace}`;
+        expect((await call(path, {}, credential)).status).toBe(403);
+        expect((await call(path, upload('cross-client-overwrite'), credential)).status).toBe(403);
+        expect(read).not.toHaveBeenCalled();
+        expect(write).not.toHaveBeenCalled();
+        const retained = await env.R2_STORE.get(key);
+        expect(await retained?.text()).toBe('target-original');
+        expect(retained?.customMetadata?.['artifactTag']).toBe('target-tag');
+      } finally {
+        read.mockRestore();
+        write.mockRestore();
+      }
+    },
+  );
+
+  it('stores identical artifact hashes with distinct bytes and tags for every namespace', async () => {
+    for (const client of clients) {
+      const credential = await token({ sub: client.subject });
+      const path = `/v8/artifacts/shared-hash?teamId=${client.namespace}`;
+      const bytes = `${client.namespace} private artifact`;
+      const tag = `${client.namespace}-tag`;
+      expect(
+        (
+          await call(
+            path,
+            {
+              method: 'PUT',
+              body: bytes,
+              headers: {
+                'content-type': 'application/octet-stream',
+                'x-artifact-tag': tag,
+              },
+            },
+            credential,
+          )
+        ).status,
+      ).toBe(202);
+    }
+    for (const client of clients) {
+      const credential = await token({ sub: client.subject });
+      const response = await call(
+        `/v8/artifacts/shared-hash?teamId=${client.namespace}`,
+        {},
+        credential,
+      );
+      expect(response.status).toBe(200);
+      expect(await response.text()).toBe(`${client.namespace} private artifact`);
+      expect(response.headers.get('x-artifact-tag')).toBe(`${client.namespace}-tag`);
+      const stored = await env.R2_STORE.get(`${client.namespace}/shared-hash`);
+      expect(await stored?.text()).toBe(`${client.namespace} private artifact`);
+    }
+  });
+
+  it('uses request-local identity context without mutating frozen shared bindings', async () => {
+    const frozen = Object.freeze({ ...testBindings });
+    const originalKeys = Object.keys(frozen);
+    const responses = await Promise.all(
+      clients.map(async (client) =>
+        call(
+          `/v8/artifacts/status?teamId=${client.namespace}`,
+          {},
+          await token({ sub: client.subject }),
+          frozen,
+        ),
+      ),
+    );
+    expect(responses.map((response) => response.status)).toEqual([200, 200, 200, 200]);
+    expect(Object.keys(frozen)).toEqual(originalKeys);
+    expect(Object.hasOwn(frozen, 'cacheTeam')).toBe(false);
+  });
+
+  it('rejects an unknown or non-string verified subject with no storage access', async () => {
+    const read = vi.spyOn(R2Storage.prototype, 'readWithMetadata');
+    try {
+      for (const sub of ['444444444444444444444', [subject]]) {
+        expect((await call(artifact(), {}, await token({ sub }))).status).toBe(401);
+      }
+      expect(read).not.toHaveBeenCalled();
+    } finally {
+      read.mockRestore();
+    }
+  });
+
+  it.each(['{}', '[]', 'null', 'invalid-json', '{"123":"docket","456":"docket"}'])(
+    'fails closed for invalid runtime identity mapping %s',
+    async (serialized) => {
+      expect(
+        (await call(artifact(), {}, await token(), { ...env, CACHE_CLIENTS: serialized })).status,
+      ).toBe(401);
+    },
+  );
 });
 
 describe('signed Turbo HTTP v8 artifacts', () => {

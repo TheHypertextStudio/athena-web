@@ -112,7 +112,7 @@ export const CORE_VARS: readonly VarSpec[] = [
     required: false,
     zod: authServer.BETTER_AUTH_ALLOWED_HOSTS,
     where:
-      'CSV of host patterns Better Auth issues cookies/redirects for (wildcards ok, e.g. *.vercel.app); enables dynamic base URL when set',
+      'CSV of host patterns Better Auth issues cookies/redirects for (wildcards ok, e.g. *.example.com); enables dynamic base URL when set',
   },
   {
     name: 'BETTER_AUTH_COOKIE_DOMAIN',

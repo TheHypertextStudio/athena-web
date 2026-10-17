@@ -75,9 +75,9 @@ jobs:
 
       # A cold apps shard must first build API and Admin dependencies before Web ESLint starts.
       # The old 180-second cap killed Web lint at startup whenever remote Turbo caching was down.
-      - uses: ./.github/actions/turbo-cache
+      - uses: TheHypertextStudio/release-engineering/actions/turbo-cache@a6dfdc28ff1dfbb4de567d813bfbee4208145367
         with:
-          workload-identity-provider: ${{ vars.GCP_WIF_PROVIDER }}
+          workload-identity-provider: ${{ vars.GCP_TURBO_CACHE_WIF_PROVIDER }}
           service-account: ${{ vars.GCP_TURBO_CACHE_SERVICE_ACCOUNT }}
           api: ${{ vars.TURBO_API }}
           team: ${{ vars.TURBO_TEAM }}
@@ -115,9 +115,9 @@ jobs:
 
       - uses: ./.github/actions/setup
 
-      - uses: ./.github/actions/turbo-cache
+      - uses: TheHypertextStudio/release-engineering/actions/turbo-cache@a6dfdc28ff1dfbb4de567d813bfbee4208145367
         with:
-          workload-identity-provider: ${{ vars.GCP_WIF_PROVIDER }}
+          workload-identity-provider: ${{ vars.GCP_TURBO_CACHE_WIF_PROVIDER }}
           service-account: ${{ vars.GCP_TURBO_CACHE_SERVICE_ACCOUNT }}
           api: ${{ vars.TURBO_API }}
           team: ${{ vars.TURBO_TEAM }}
@@ -232,9 +232,9 @@ jobs:
 
       - uses: ./.github/actions/setup
 
-      - uses: ./.github/actions/turbo-cache
+      - uses: TheHypertextStudio/release-engineering/actions/turbo-cache@a6dfdc28ff1dfbb4de567d813bfbee4208145367
         with:
-          workload-identity-provider: ${{ vars.GCP_WIF_PROVIDER }}
+          workload-identity-provider: ${{ vars.GCP_TURBO_CACHE_WIF_PROVIDER }}
           service-account: ${{ vars.GCP_TURBO_CACHE_SERVICE_ACCOUNT }}
           api: ${{ vars.TURBO_API }}
           team: ${{ vars.TURBO_TEAM }}
@@ -308,9 +308,9 @@ jobs:
 
       - run: pnpm docs:check
 
-      - uses: ./.github/actions/turbo-cache
+      - uses: TheHypertextStudio/release-engineering/actions/turbo-cache@a6dfdc28ff1dfbb4de567d813bfbee4208145367
         with:
-          workload-identity-provider: ${{ vars.GCP_WIF_PROVIDER }}
+          workload-identity-provider: ${{ vars.GCP_TURBO_CACHE_WIF_PROVIDER }}
           service-account: ${{ vars.GCP_TURBO_CACHE_SERVICE_ACCOUNT }}
           api: ${{ vars.TURBO_API }}
           team: ${{ vars.TURBO_TEAM }}
@@ -381,9 +381,9 @@ jobs:
         # invoke db:up and try to start a second Docker Compose database inside the runner.
         run: pnpm exec dotenv -e .env.local -- pnpm --filter @docket/db db:migrate
 
-      - uses: ./.github/actions/turbo-cache
+      - uses: TheHypertextStudio/release-engineering/actions/turbo-cache@a6dfdc28ff1dfbb4de567d813bfbee4208145367
         with:
-          workload-identity-provider: ${{ vars.GCP_WIF_PROVIDER }}
+          workload-identity-provider: ${{ vars.GCP_TURBO_CACHE_WIF_PROVIDER }}
           service-account: ${{ vars.GCP_TURBO_CACHE_SERVICE_ACCOUNT }}
           api: ${{ vars.TURBO_API }}
           team: ${{ vars.TURBO_TEAM }}

@@ -1,0 +1,46 @@
+[
+  {
+    "namespace": "docket",
+    "repository": "TheHypertextStudio/athena-web",
+    "root": ".",
+    "packageName": "@docket/root",
+    "serviceAccount": "docket-turbo-cache-client@athena-services.iam.gserviceaccount.com",
+    "subject": "104950679521072783940",
+    "wifProvider": "projects/770668668034/locations/global/workloadIdentityPools/github/providers/github-actions",
+    "wifCondition": "assertion.repository=='TheHypertextStudio/athena-web'",
+    "signingSecret": "docket-turbo-cache-signing-key"
+  },
+  {
+    "namespace": "curfew-web",
+    "repository": "TheHypertextStudio/curfew",
+    "root": "web",
+    "packageName": "curfew-monorepo",
+    "serviceAccount": "studio-cache-curfew@athena-services.iam.gserviceaccount.com",
+    "subject": "117361364152327976664",
+    "wifProvider": "projects/770668668034/locations/global/workloadIdentityPools/github/providers/github-actions-curfew-cache",
+    "wifCondition": "assertion.repository=='TheHypertextStudio/curfew' && assertion.repository_id=='1165282307' && assertion.repository_owner_id=='170363390' && assertion.ref=='refs/heads/main'",
+    "signingSecret": "studio-turbo-cache-curfew-web-signing-key"
+  },
+  {
+    "namespace": "logdate-web",
+    "repository": "TheHypertextStudio/logdate-web",
+    "root": ".",
+    "packageName": "logdate",
+    "serviceAccount": "studio-cache-logdate@athena-services.iam.gserviceaccount.com",
+    "subject": "109085072636319761190",
+    "wifProvider": "projects/770668668034/locations/global/workloadIdentityPools/github/providers/github-actions-logdate-cache",
+    "wifCondition": "assertion.repository=='TheHypertextStudio/logdate-web' && assertion.repository_id=='429209675' && assertion.repository_owner_id=='170363390' && assertion.ref=='refs/heads/main'",
+    "signingSecret": "studio-turbo-cache-logdate-web-signing-key"
+  },
+  {
+    "namespace": "studio-product-admin",
+    "repository": null,
+    "root": ".",
+    "packageName": "@hypertext/admin-workspace",
+    "serviceAccount": "studio-cache-product-admin@athena-services.iam.gserviceaccount.com",
+    "subject": "102992198824375895059",
+    "wifProvider": null,
+    "wifCondition": null,
+    "signingSecret": "studio-turbo-cache-studio-product-admin-signing-key"
+  }
+]

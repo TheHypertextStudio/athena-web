@@ -7,24 +7,8 @@ import { assertDefined } from '@docket/test-utils';
 
 import { parseWorkflow, parseYaml, REPO_ROOT } from '../../scripts/ci-gate-policy';
 
-/** Cache identity and endpoint configuration that every trusted cache job must use. */
-interface CacheAction {
-  runs?: {
-    steps: {
-      id?: string;
-      if?: string;
-      uses?: string;
-      with?: Record<string, unknown>;
-      run?: string;
-    }[];
-  };
-}
-
-/** Reads the composite without turning an absent implementation into a setup error. */
-function cacheAction(): CacheAction {
-  const path = join(REPO_ROOT, '.github/actions/turbo-cache/action.yml');
-  return existsSync(path) ? (parseYaml(readFileSync(path, 'utf8')) as CacheAction) : {};
-}
+const sharedCacheAction =
+  'TheHypertextStudio/release-engineering/actions/turbo-cache@a6dfdc28ff1dfbb4de567d813bfbee4208145367';
 
 describe('signed Workers/R2 Turbo cache authentication', () => {
   it('defaults local Turbo runs to the signed Studio cache endpoint and namespace', () => {
@@ -61,37 +45,8 @@ describe('signed Workers/R2 Turbo cache authentication', () => {
     expect(signingSecret).toContain("&& secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY || ''");
   });
 
-  it('mints an audience-bound ID token only for configured Studio main workflows', () => {
-    const authentication = assertDefined(
-      cacheAction().runs?.steps.find((step) => step.id === 'auth'),
-    );
-
-    expect(authentication.uses).toBe(
-      'google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093',
-    );
-    expect(authentication.with).toMatchObject({
-      workload_identity_provider: '${{ inputs.workload-identity-provider }}',
-      service_account: '${{ inputs.service-account }}',
-      token_format: 'id_token',
-      id_token_audience: '${{ inputs.api }}',
-      id_token_include_email: true,
-      create_credentials_file: false,
-    });
-    expect(authentication.if).toContain("github.repository == 'TheHypertextStudio/athena-web'");
-    expect(authentication.if).toContain("github.ref == 'refs/heads/main'");
-    expect(authentication.if).toContain("github.event_name == 'push'");
-    expect(authentication.if).toContain("github.event_name == 'workflow_dispatch'");
-    expect(authentication.if).toContain("inputs.api != ''");
-    expect(authentication.if).toContain("inputs.team != ''");
-    expect(authentication.if).toContain("inputs.workload-identity-provider != ''");
-    expect(authentication.if).toContain("inputs.service-account != ''");
-    expect(authentication.if).toContain("env.TURBO_REMOTE_CACHE_SIGNATURE_KEY != ''");
-  });
-
-  it('keeps repository variable resolution in callers, outside the composite manifest', () => {
-    const source = readFileSync(join(REPO_ROOT, '.github/actions/turbo-cache/action.yml'), 'utf8');
-
-    expect(source).not.toMatch(/\bvars\./);
+  it('uses the shared pinned action instead of a repository copy', () => {
+    expect(existsSync(join(REPO_ROOT, '.github/actions/turbo-cache/action.yml'))).toBe(false);
   });
 
   it.each(['ci', 'e2e'])(
@@ -113,9 +68,9 @@ describe('signed Workers/R2 Turbo cache authentication', () => {
           expect(
             job.steps[index - 1]?.uses,
             `${job.id}: cache auth must precede ${step.label}`,
-          ).toBe('./.github/actions/turbo-cache');
+          ).toBe(sharedCacheAction);
           expect(job.steps[index - 1]?.with).toEqual({
-            'workload-identity-provider': '${{ vars.GCP_WIF_PROVIDER }}',
+            'workload-identity-provider': '${{ vars.GCP_TURBO_CACHE_WIF_PROVIDER }}',
             'service-account': '${{ vars.GCP_TURBO_CACHE_SERVICE_ACCOUNT }}',
             api: '${{ vars.TURBO_API }}',
             team: '${{ vars.TURBO_TEAM }}',

@@ -3,9 +3,8 @@
  *
  * @remarks
  * A production deployment that points `API_URL` at the browser-facing app recursively rewrites
- * `/api/auth/*` and `/v1/*` back into itself. Vercel eventually terminates that recursion with
- * `508 INFINITE_LOOP_DETECTED`. Failing the build makes the configuration mistake impossible to
- * promote.
+ * `/api/auth/*` and `/v1/*` back into itself. Failing the build prevents this proxy recursion
+ * from reaching the deployed application.
  *
  * @param apiUrl - The configured API origin.
  * @param appUrl - The browser-facing application origin, when configured.

@@ -21,7 +21,7 @@ const API_ORIGIN = WORKERS_BUILD
 
 if (!WORKERS_BUILD) {
   assertPublishingHostConfigured(
-    process.env['STUDIO_DEPLOYMENT_ENV'] ?? process.env['VERCEL_ENV'],
+    process.env['STUDIO_DEPLOYMENT_ENV'],
     process.env['NEXT_PUBLIC_BRIEF_HOST'],
   );
 }

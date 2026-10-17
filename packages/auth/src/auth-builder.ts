@@ -817,7 +817,7 @@ export function buildAuthOptions(e: AuthEnv, deps: AuthDeps): BetterAuthOptions 
   // When `BETTER_AUTH_ALLOWED_HOSTS` lists one or more host patterns, switch `baseURL` to
   // Better Auth's dynamic config: the per-request base URL is derived from the incoming
   // request host (validated against this allowlist), so one instance serves preview
-  // deployments (`*.vercel.app`) and multiple custom domains. `BETTER_AUTH_URL` stays the
+  // deployments and multiple custom domains. `BETTER_AUTH_URL` stays the
   // `fallback` for unmatched/header-less requests. Unset ⇒ the static-string behavior is
   // byte-identical to before (no proxy-header trust). See the dynamic-base-url guide.
   const allowedHosts = parseTrustedOrigins(e.BETTER_AUTH_ALLOWED_HOSTS);

@@ -1,9 +1,9 @@
 import { Hono } from 'hono/tiny';
 import { HTTPException } from 'hono/http-exception';
 import { artifactRouter } from './upstream/routes/v8/artifacts';
-import type { CacheEnv } from './types';
+import type { CacheEnv, CacheHonoEnv } from './types';
 
-const app = new Hono<{ Bindings: CacheEnv }>();
+const app = new Hono<CacheHonoEnv>();
 app.get('/ping', (c) => c.text('pong'));
 app.route('/v8/artifacts', artifactRouter);
 app.onError((error, c) => {

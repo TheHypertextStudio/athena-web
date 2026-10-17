@@ -15,8 +15,7 @@ export default defineConfig({
     domains: [cacheConfig.domain],
     env: {
       OIDC_AUDIENCE: bindings.text(cacheConfig.bindings.OIDC_AUDIENCE),
-      OIDC_SUBJECT: bindings.text(cacheConfig.bindings.OIDC_SUBJECT),
-      CACHE_TEAM: bindings.text(cacheConfig.bindings.CACHE_TEAM),
+      CACHE_CLIENTS: bindings.text(cacheConfig.bindings.CACHE_CLIENTS),
       R2_STORE: bindings.r2({ name: cacheConfig.bucketName }),
     },
   },

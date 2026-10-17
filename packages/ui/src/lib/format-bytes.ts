@@ -8,7 +8,7 @@ const STEP = 1000;
  * Render a byte count at a scale a person can read.
  *
  * @remarks
- * Decimal units, because every provider this console reports on — Vercel Blob, Neon, Cloud Run —
+ * Decimal units, because every provider this console reports on — Google Cloud Storage, Neon, Cloud Run —
  * bills and reports in them, and a console that disagreed with the invoice by 7% per step would be
  * worse than useless.
  *

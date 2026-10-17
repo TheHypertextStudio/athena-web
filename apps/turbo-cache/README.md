@@ -1,15 +1,24 @@
 # Studio Turbo cache
 
-Private Turbo HTTP v8 remote cache on Cloudflare Workers and R2, scoped to Docket.
+Private Turbo HTTP v8 remote cache on Cloudflare Workers and R2, with a separate identity and namespace for each registered Studio workspace.
 Deploy configuration binds the private `studio-turbo-cache` bucket directly and exposes only
 `https://turbo-cache.hypertext.studio`. R2 public access must remain disabled.
 
-Authentication accepts Google-issued RS256 ID tokens for the exact configured numeric service-account
-subject and endpoint audience. GitHub Actions obtains these with WIF; local developers use the existing
-service-account impersonation flow. No static cache authentication secret or R2 key is required.
+Authentication accepts Google-issued RS256 ID tokens for a registered numeric service-account subject
+and the exact endpoint audience. `cache-clients.json` is the canonical identity/namespace registry:
+Docket (`docket`), Curfew web (`curfew-web`), LogDate web (`logdate-web`) and local product administration
+(`studio-product-admin`). Namespace and numeric subject uniqueness are validated during native builds;
+invalid registries fail before deployment. Only the minimal subject-to-namespace map reaches the Worker.
 
-Set `TURBO_API=https://turbo-cache.hypertext.studio`, `TURBO_TEAM=docket`, a fresh ID token as
-`TURBO_TOKEN`, and the private client-side `TURBO_REMOTE_CACHE_SIGNATURE_KEY`. Keep Turbo's
+Published repositories obtain their own identity through repository-restricted GitHub WIF. The
+unpublished local administration workspace has no GitHub repository or WIF provider; its existing
+Studio operator uses service-account impersonation. Each identity can read/write only its own
+`namespace/artifact-hash` prefix, even when two repositories produce the same artifact hash. The
+request's team selector never grants access to another client's prefix. No static cache authentication
+secret, shared bearer token or R2 key is required.
+
+Set `TURBO_API=https://turbo-cache.hypertext.studio`, `TURBO_TEAM` to the registered namespace, a fresh
+ID token for that client as `TURBO_TOKEN`, and its own private `TURBO_REMOTE_CACHE_SIGNATURE_KEY`. Keep Turbo's
 `remoteCache.signature` enabled. The server stores signed tags but does not know the signing key.
 
 The native R2 lifecycle configuration expires cached objects after 14 days and unfinished multipart
@@ -17,8 +26,9 @@ uploads after seven days. Build artifacts are disposable; no Google cache migrat
 
 ## Deployment
 
-The production bootstrap provisions the Google cache-client identity and distributes its signing
-key. Cloudflare deployment is separate: use an authenticated Studio `cf` profile with Worker,
+Docket's native bootstrap provisions its own cache-client identity and signing key. Additional
+clients require explicit registration and reviewed identity/key provisioning as described in the Studio
+plugin runbook. Cloudflare deployment is separate: use an authenticated Studio `cf` profile with Worker,
 Worker routing, zone-read and R2 read/write permissions. From this directory, create the bucket
 once, apply its native lifecycle configuration, and deploy with the ordinary package commands:
 
@@ -36,7 +46,8 @@ pnpm exec cf --profile hypertext-studio-turbo-cache r2 buckets domains managed l
 
 On later deployments, reuse the bucket rather than creating it again. Confirm public R2 access is
 disabled. The authenticated Worker custom domain is the only artifact endpoint. Before changing
-the client identity, read its immutable numeric subject and update `src/config.ts` accordingly:
+a client identity, read its immutable numeric subject and update only its reviewed `cache-clients.json`
+entry accordingly:
 
 ```sh
 gcloud iam service-accounts describe \
@@ -44,9 +55,12 @@ gcloud iam service-accounts describe \
   --project=athena-services --account=willie@hypertext.studio --format='value(uniqueId)'
 ```
 
-This configuration belongs to the Studio account and existing Docket Google project. A separately
-provisioned project needs its own endpoint and trusted subject; bootstrap does not rewrite this
-shared Worker's trust or grant other repositories access.
+This shared Worker belongs to the Studio account and its existing Google identity foundation.
+Adding a client requires an explicit registry entry, distinct namespace, distinct service-account
+subject, reviewed repository trust (or local-only operator access), and separate signing-key
+provisioning. Changing a request's team parameter or installing a shared package cannot grant access.
+The Worker stores opaque client signature tags; it has no HMAC signing secret and does not use Google
+storage for cache artifacts.
 
 ## Development
 
@@ -63,7 +77,8 @@ pnpm --filter @docket/turbo-cache typecheck
 pnpm --filter @docket/turbo-cache build
 ```
 
-Tests run in workerd with real R2 bindings and RSA-signed JWTs. The Google JWKS HTTP boundary is
+Tests run in workerd with real R2 bindings and RSA-signed JWTs, including every pair of distinct
+client namespaces, forbidden reads/writes and identical-hash artifact isolation. The Google JWKS HTTP boundary is
 intercepted with public test keys; identity verification itself is not mocked.
 
 Cloudflare Free/Pro zones limit incoming request bodies to 100 MB. Keep each Turbo task's compressed

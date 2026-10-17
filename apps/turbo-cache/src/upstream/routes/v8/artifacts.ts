@@ -2,13 +2,13 @@ import { vValidator } from '@hono/valibot-validator';
 import { Hono } from 'hono/tiny';
 import * as v from 'valibot';
 
-import type { CacheEnv } from '../../../types';
+import type { CacheEnv, CacheHonoEnv } from '../../../types';
 
 import { authorize } from '../../../auth';
 import { R2Storage } from '../../storage/r2-storage';
 
-/** Maintained Turbo HTTP v8 artifact protocol, authenticated for one Studio namespace. */
-export const artifactRouter = new Hono<{ Bindings: CacheEnv }>();
+/** Maintained Turbo HTTP v8 artifact protocol, authenticated for a registered Studio namespace. */
+export const artifactRouter = new Hono<CacheHonoEnv>();
 
 artifactRouter.use('*', authorize);
 
@@ -58,7 +58,7 @@ artifactRouter.put(
   ),
   async (c) => {
     const { artifactId } = c.req.valid('param');
-    const teamId = c.env.CACHE_TEAM;
+    const teamId = c.get('cacheTeam');
     const validatedHeaders = c.req.valid('header');
 
     const storage = getActiveStorage(c.env);
@@ -93,7 +93,7 @@ artifactRouter.get(
   ),
   async (c) => {
     const { artifactId } = c.req.valid('param');
-    const teamId = c.env.CACHE_TEAM;
+    const teamId = c.get('cacheTeam');
     const storage = getActiveStorage(c.env);
     const objectKey = `${teamId}/${artifactId}`;
 

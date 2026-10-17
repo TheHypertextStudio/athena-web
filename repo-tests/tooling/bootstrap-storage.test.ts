@@ -50,7 +50,12 @@ describe('native storage bootstrap contract', () => {
     expect(REQUIRED_GCP_APIS).toContain('storage.googleapis.com');
     expect(PRODUCTION_VAR_NAMES).toContain('GCS_BLOB_BUCKET');
     expect(REPO_VAR_NAMES).toEqual(
-      expect.arrayContaining(['TURBO_API', 'TURBO_TEAM', 'GCP_TURBO_CACHE_SERVICE_ACCOUNT']),
+      expect.arrayContaining([
+        'TURBO_API',
+        'TURBO_TEAM',
+        'GCP_TURBO_CACHE_SERVICE_ACCOUNT',
+        'GCP_TURBO_CACHE_WIF_PROVIDER',
+      ]),
     );
     const fixture = provider();
     expect(setupDocketStorage(CONFIG, fixture.command)).toEqual({

@@ -7,6 +7,21 @@
 
 ## Active Tasks
 
+### [STUDIO-CACHE-ROLLOUT] Share private caching across Studio repositories
+
+- **Status**: DONE
+- **Description**: Configure every Studio Turborepo consumer to use the private Workers/R2 cache,
+  retaining repository-scoped workload identity, isolated namespaces and signed artifacts.
+- **Approach**: Enumerate Studio sources and provider inventories; extend the cache's explicit
+  client registry, reconcile dedicated identities and native CI/local configuration, and update
+  the plugin doctor/runbook. Remove obsolete hosting dependencies within Studio scope.
+- **Acceptance**:
+  - [x] Registered Studio Turbo consumers use isolated identities and signed remote cache entries.
+  - [x] Real remote hits and cross-namespace rejection are verified.
+  - [x] Studio hosting configuration uses Workers without active Pages or Vercel dependencies.
+  - [x] The plugin defines registration, CI/local setup, diagnosis and runtime acceptance.
+  - [x] Retained user storage and unrelated work are preserved; local unpublished source remains unpublished.
+
 ### [STUDIO-R2-CACHE] Keep shared caching within existing Cloudflare allowances
 
 - **Status**: DONE

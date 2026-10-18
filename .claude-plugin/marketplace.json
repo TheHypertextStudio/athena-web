@@ -1,0 +1,48 @@
+{
+  "name": "docket",
+  "description": "Docket’s MCP connection and skills for managing predefined work, planning a day, and bringing distracted agents back to their assignments.",
+  "owner": {
+    "name": "The Hypertext Studio",
+    "email": "hello@hypertext.studio",
+    "url": "https://hypertext.studio"
+  },
+  "plugins": [
+    {
+      "name": "docket",
+      "source": "./plugins/docket",
+      "description": "Align agent work with Docket tasks and projects, coordinate broader outcomes, and record verified results.",
+      "category": "productivity",
+      "author": {
+        "name": "The Hypertext Studio",
+        "email": "hello@hypertext.studio",
+        "url": "https://hypertext.studio"
+      },
+      "homepage": "https://clearthedocket.com",
+      "repository": "https://github.com/TheHypertextStudio/athena-web",
+      "license": "UNLICENSED",
+      "keywords": [
+        "docket",
+        "work-management",
+        "tasks",
+        "projects",
+        "planning",
+        "mcp",
+        "agent-recovery",
+        "initiatives",
+        "programs",
+        "subagents"
+      ],
+      "tags": [
+        "productivity",
+        "task-management",
+        "planning",
+        "agent-recovery",
+        "agent-coordination"
+      ],
+      "displayName": "Docket",
+      "strict": true,
+      "defaultEnabled": true
+    }
+  ],
+  "version": "0.4.0"
+}

@@ -1,0 +1,4 @@
+interface:
+  display_name: 'Work from Docket'
+  short_description: 'Align agent work with its Docket assignment'
+  default_prompt: 'Use $work-on to resolve my Docket assignment, work at the right responsibility level, and verify its result.'

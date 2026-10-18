@@ -1,0 +1,37 @@
+{
+  "name": "docket",
+  "version": "0.4.0",
+  "description": "Align agent work with Docket tasks and projects, coordinate broader outcomes, and record verified results.",
+  "author": {
+    "name": "The Hypertext Studio",
+    "email": "hello@hypertext.studio",
+    "url": "https://hypertext.studio"
+  },
+  "homepage": "https://clearthedocket.com",
+  "repository": "https://github.com/TheHypertextStudio/athena-web",
+  "license": "UNLICENSED",
+  "keywords": [
+    "docket",
+    "work-management",
+    "tasks",
+    "projects",
+    "planning",
+    "mcp",
+    "agent-recovery",
+    "initiatives",
+    "programs",
+    "subagents"
+  ],
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json",
+  "displayName": "Docket",
+  "defaultEnabled": true,
+  "icon": "./assets/logo.png",
+  "documentationUrl": "https://clearthedocket.com/docs/developers/connect-an-agent-mcp",
+  "supportUrl": "https://clearthedocket.com/about",
+  "privacyPolicyUrl": "https://clearthedocket.com/privacy",
+  "termsOfServiceUrl": "https://clearthedocket.com/terms",
+  "metadata": {
+    "releaseNotes": "Align substantive work with existing Docket tasks or projects unless the user requests otherwise. Define task, project, initiative, and program agent responsibilities, explain the behavior during onboarding, and add focused references for subagent handoffs, shared changes, reporting, and combined acceptance."
+  }
+}

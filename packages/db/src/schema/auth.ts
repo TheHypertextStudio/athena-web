@@ -497,7 +497,8 @@ export const jwks = pgTable('jwks', {
  * the per-path `customRules` on sign-in / sign-up / consent / recovery) hold across serverless
  * instances rather than living in each instance's memory. Better Auth's rate-limiter reads/writes
  * this model by its `key` field; `lastRequest` is an epoch-ms bigint. The plugin manages all
- * rows — Docket never writes here directly.
+ * IP buckets. Docket also stores per-grant OAuth refresh budgets here, serialized by the
+ * OAuth client row lock in a separate admission transaction.
  */
 export const rateLimit = pgTable(
   'rate_limit',

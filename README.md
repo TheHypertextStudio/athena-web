@@ -249,6 +249,11 @@ Managers can link external identities and combine duplicate person records while
 references. The [People specification](docs/engineering/specs/people.md) defines these interactions and
 their authorization and sync rules.
 
+MCP access tokens renew through refresh grants. Recognized public-client refresh credentials use
+an independent, database-backed budget per authorization grant, so simultaneous chats sharing an
+IP address do not compete with sign-in traffic. See [MCP connection troubleshooting](apps/docs/developers/connect-an-agent-mcp.mdx)
+for client coordination and recovery after interrupted credential persistence.
+
 ## Daily workload in MCP
 
 `view_workload` opens a read-only daily workload App in an MCP Apps-capable host, with plans,

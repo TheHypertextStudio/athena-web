@@ -1710,7 +1710,7 @@ describe('buildAuthOptions env-gating', () => {
     // Sensitive surfaces get their own tighter ceilings.
     const rules = opts.rateLimit?.customRules ?? {};
     expect(rules['/sign-in/passkey']).toEqual({ window: 60, max: 20 });
-    expect(rules['/oauth2/token']).toEqual({ window: 60, max: 30 });
+    expect(rules['/oauth2/token']).toBeTypeOf('function');
     expect(rules['/oauth2/register']).toEqual({ window: 60, max: 5 });
   });
 

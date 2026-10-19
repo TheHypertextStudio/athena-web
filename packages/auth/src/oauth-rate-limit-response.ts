@@ -1,9 +1,20 @@
+import { OAuthRefreshThrottle } from './oauth-refresh-rate-limit';
+
 /** Adapt the auth library's token-endpoint throttle response to the OAuth wire format. */
 export function withOAuthRateLimitResponse(
   handler: (request: Request) => Promise<Response>,
 ): (request: Request) => Promise<Response> {
   return async (request) => {
-    const response = await handler(request);
+    let response: Response;
+    try {
+      response = await handler(request);
+    } catch (error) {
+      if (!(error instanceof OAuthRefreshThrottle)) throw error;
+      response = new Response(null, {
+        status: 429,
+        headers: { 'Retry-After': String(error.retryAfter) },
+      });
+    }
     const path = new URL(request.url).pathname.replace(/\/$/, '');
     if (path !== '/api/auth/oauth2/token' || response.status !== 429) return response;
 

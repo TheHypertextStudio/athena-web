@@ -43,6 +43,7 @@ import {
 } from './restore-credential';
 import { createDocketAuthDatabase, createDocketOAuthProvider } from './oauth-resource-provider';
 import { resolveRestResourceUrl } from './oauth-resource-contract';
+import { oauthTokenRateLimit } from './oauth-refresh-rate-limit';
 import { signupChallenge } from './signup-challenge';
 import { INTENT_IDENTIFIER_PREFIX, type SignupIntent } from './signup-intent';
 
@@ -985,7 +986,7 @@ export function buildAuthOptions(e: AuthEnv, deps: AuthDeps): BetterAuthOptions 
         '/sign-in/passkey': { window: 60, max: 20 },
         '/passkey/verify-authentication': { window: 60, max: 20 },
         '/oauth2/consent': { window: 60, max: 20 },
-        '/oauth2/token': { window: 60, max: 30 },
+        '/oauth2/token': oauthTokenRateLimit,
         '/oauth2/register': { window: 60, max: 5 },
       },
     },

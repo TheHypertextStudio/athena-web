@@ -273,6 +273,10 @@ async function initializeLegacySchema(): Promise<void> {
   `;
   if (!database) throw new Error('The migration acceptance database was not resolved.');
   await sql`alter database ${sql(database.name)} set timezone to 'UTC'`;
+  // Every migration acceptance file shares this disposable database; reset regardless of file order.
+  await sql.unsafe(
+    'drop schema if exists drizzle cascade; drop schema public cascade; create schema public',
+  );
   await applyMigrationsBefore0130(sql);
   await recordMigrationsBefore0130(sql);
   await seedPre0130Rows(sql);

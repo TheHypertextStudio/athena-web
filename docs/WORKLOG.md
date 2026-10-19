@@ -7,6 +7,21 @@
 
 ## Active Tasks
 
+### [MCP-REFRESH-RELIABILITY] Preserve MCP authorization through token renewal
+
+- **Status**: REVIEW
+- **Started**: 2026-10-18
+- **Description**: Eliminate repeated MCP sign-in prompts caused by refresh throttling and rotation recovery failures while preserving client, resource, consent and revocation checks.
+- **Plan**: Trace actual client errors and the pinned provider limiter/rotation path; reproduce the failing burst and retry behavior; implement the smallest complete correction; validate affected auth/API behavior, document operation and commit the coherent fix.
+- **Validation**: Real handler regressions for bursts, rotation retries, expiration and revocation; affected package tests, typecheck and lint; production verification only after validated delivery.
+- **Risks**: Shared proxy identities can collapse limiter buckets; stale credentials must never bypass explicit revocation or grant boundaries. Client behavior outside this repository needs separate evidence.
+- **Findings**: Today's desktop logs contain 33 token-refresh throttle errors. A real-handler regression reproduces rejection on the 31st valid request. The pinned provider keys its limiter by IP and path, with a shared fallback when an IP is missing. Earlier native-client investigation also reproduced 40 refresh exchanges for 40 coordinated chats. Existing 30-second encrypted rotation recovery is correct within its bounds; losing the successor before client persistence remains a separate client failure.
+- **Approach selected**: Identify a live public-client refresh credential by its stored digest and exact client, then enforce a 120-request fixed-window budget per grant in a client-locked admission transaction before issuance. Keep unknown credentials, confidential clients and other token grants under IP protection. Never bypass endpoint authentication, consent, resource, scope, expiration, replay or revocation checks.
+- **Tracking**: A narrow Docket search found prior GitHub activity but no matching task record. Continue the authorized fix here without inventing an assignment or creating an unrelated planning record.
+- **Review and validation**: Independent review caught rejected-request budget rollback; admission now commits separately before provider validation, with a regression proving 120 invalid-resource attempts remain charged. The full auth coverage run passes 589 tests (99.47% statements, 99.06% branches). All 56 affected API authorization tests, 28 affected graph typecheck/lint tasks, the 52-page documentation checks and PostgreSQL acceptance pass, including 40 simultaneous refreshes with an exact durable count of 40. PostgreSQL validation also exposed an existing migration-fixture file-order dependency; resetting its disposable schema before replay makes both orders safe.
+- **Remaining acceptance**: Production rollout and actual desktop renewal after rollout remain outstanding. The separate Codex crash-before-persistence failure cannot be repaired by this server change without weakening delayed-replay revocation; retain that explicit limitation.
+- **Retrospective**: Real enabled-limiter handler tests caught the burst failure; PGlite and PostgreSQL establish different concurrency guarantees. Charge admission outside operations that can roll back. Preserve a precise distinction between automatic renewal under load and recovery after the client loses its rotated credential.
+
 ### [PRODUCT-ADMIN-CACHE-CI] Register private Product Admin CI
 
 - **Status**: DONE

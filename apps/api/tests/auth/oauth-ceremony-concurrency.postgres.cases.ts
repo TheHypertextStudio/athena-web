@@ -465,3 +465,32 @@ it('rolls back late JWKS failure and leaves the authorization code redeemable', 
   const retry = await exchangeCode(client, ceremony, resource);
   expect(typeof retry.accessToken).toBe('string');
 });
+
+it('shares a durable grant budget across forty concurrent refreshes behind the same IP', async () => {
+  const client = await registerPublicClient();
+  const resource = `${origin}/mcp`;
+  const code = await authorizationCode(client, resource, 'refresh-budget-burst', true);
+  const initial = await exchangeCode(client, code, resource);
+  const { auth } = await import('@docket/auth');
+  const context = await auth.$context;
+  const wasEnabled = context.rateLimit.enabled;
+  context.rateLimit.enabled = true;
+  try {
+    const responses = await Promise.all(
+      Array.from({ length: 40 }, () => refreshTokens(client, initial.refreshToken, resource)),
+    );
+    for (const { response, tokens } of responses) {
+      expect(response.status, await response.clone().text()).toBe(200);
+      expect(tokens).toEqual(responses[0]?.tokens);
+    }
+    const grantId = decodeAccessClaims(initial.accessToken)[
+      'https://clearthedocket.com/oauth/grant'
+    ];
+    const rows = await controlB<{ count: number }[]>`
+      select count from rate_limit where key = ${`docket:oauth-refresh-budget:${grantId}`}
+    `;
+    expect(rows).toEqual([{ count: 40 }]);
+  } finally {
+    context.rateLimit.enabled = wasEnabled;
+  }
+});

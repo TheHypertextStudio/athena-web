@@ -95,6 +95,16 @@ describe('OAuth token endpoint throttling', () => {
     expect(response.headers.get('pragma')).toBe('no-cache');
   });
 
+  it('preserves unrelated handler failures', async () => {
+    const failure = new Error('fixture failure');
+    const handler = withOAuthRateLimitResponse(async () => {
+      throw failure;
+    });
+    await expect(
+      handler(new Request('https://api.example.test/api/auth/oauth2/token')),
+    ).rejects.toBe(failure);
+  });
+
   it('does not invent a retry delay when the provider omits it', async () => {
     const handler = withOAuthRateLimitResponse(async () => new Response(null, { status: 429 }));
     const response = await handler(new Request('https://api.example.test/api/auth/oauth2/token'));

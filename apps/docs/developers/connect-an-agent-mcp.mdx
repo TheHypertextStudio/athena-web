@@ -37,6 +37,14 @@ Some Codex builds keep an older refresh token in each running chat. After anothe
 that token, using the older token can revoke the Docket connection. Signing in again restores
 access but does not correct how those chats share refreshed credentials.
 
+Docket separates recognized public-client refreshes from the shared IP token-endpoint limit.
+Each authorization grant permits 120 refresh requests per fixed 60-second window across API
+instances, including recoverable retries. Separate grants have independent budgets. Unknown,
+expired and revoked credentials, confidential-client exchanges and authorization-code exchanges
+retain the ordinary IP limit. A grant-budget rejection returns HTTP 429, OAuth
+`temporarily_unavailable` and `Retry-After`; clients should wait and retry with their latest
+persisted refresh token. Throttling does not rotate or revoke credentials.
+
 If your build lists `mcp_oauth_refresh_coordination` in `codex features list`, enable it:
 
 ```sh

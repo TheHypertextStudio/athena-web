@@ -4,8 +4,9 @@ import { admitMailBudget } from './budget';
 import { prepareMailContinuation, continueMailQuestion } from './continuation';
 /** Durable native mail admission on the existing Athena execution substrate. */
 import { actor, agentSession, athenaInboundMessage, db, sessionActivity } from '@docket/db';
-import { and, asc, eq, inArray, isNull, sql } from 'drizzle-orm';
-import { htmlToText } from '@docket/mail';
+import { and, asc, eq, inArray, isNull, or, sql } from 'drizzle-orm';
+import { htmlToText, snippetOf } from '@docket/mail';
+import { projectMailInboxItem, recoverMailInboxItems } from './inbox';
 import { getContainer } from '../../container';
 import { admitAthenaGeneration, asynchronousRunnerEnabled } from '../../agent/async-runner';
 import { runSession } from '../../routes/agent-session-runner';
@@ -166,26 +167,41 @@ async function hydrateMessage(message: Inbound): Promise<void> {
       .where(eq(athenaInboundMessage.id, message.id));
     return;
   }
-  await db
-    .update(athenaInboundMessage)
-    .set({
-      bodyText: content.text ?? (content.html ? htmlToText(content.html) : null),
-      bodyHtml: content.html,
-      bodyStatus: 'complete',
-      headers: { ...content.headers },
-      authentication: content.authentication ?? null,
-      processingStatus: 'pending',
-    })
-    .where(eq(athenaInboundMessage.id, message.id));
+  await db.transaction(async (tx) => {
+    const bodyText = content.text ?? (content.html ? htmlToText(content.html) : null);
+    const [hydrated] = await tx
+      .update(athenaInboundMessage)
+      .set({
+        bodyText,
+        snippet: snippetOf(bodyText),
+        bodyHtml: content.html,
+        bodyStatus: 'complete',
+        headers: { ...content.headers },
+        authentication: content.authentication ?? null,
+        processingStatus: message.processingStatus === 'captured' ? 'captured' : 'pending',
+      })
+      .where(eq(athenaInboundMessage.id, message.id))
+      .returning();
+    if (hydrated) await projectMailInboxItem(hydrated, tx);
+  });
 }
 /** Recover accepted messages and drive isolated jobs independently of any connected client. */
 export async function sweepMailIngress(
   dependencies: { run?: typeof runSession } = {},
 ): Promise<number> {
+  await recoverMailInboxItems();
   const receipts = await db
     .select()
     .from(athenaInboundMessage)
-    .where(inArray(athenaInboundMessage.processingStatus, ['hydrating', 'pending', 'answering']))
+    .where(
+      or(
+        inArray(athenaInboundMessage.processingStatus, ['hydrating', 'pending', 'answering']),
+        and(
+          eq(athenaInboundMessage.processingStatus, 'captured'),
+          eq(athenaInboundMessage.bodyStatus, 'metadata-only'),
+        ),
+      ),
+    )
     .orderBy(asc(athenaInboundMessage.updatedAt))
     .limit(25);
   const active = await db
@@ -219,7 +235,7 @@ async function processMailMessage(
       await continueMailQuestion(message);
       return;
     }
-    if (message.processingStatus === 'hydrating') {
+    if (needsMessageContent(message)) {
       await hydrateMessage(message);
       return;
     }
@@ -242,4 +258,11 @@ async function processMailMessage(
       .set({ updatedAt: new Date() })
       .where(eq(athenaInboundMessage.id, message.id));
   }
+}
+
+function needsMessageContent(message: Inbound): boolean {
+  return (
+    message.processingStatus === 'hydrating' ||
+    (message.processingStatus === 'captured' && message.bodyStatus === 'metadata-only')
+  );
 }

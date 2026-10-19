@@ -1,28 +1,10 @@
 /**
- * `@docket/api` — what happens to a message after it has been authenticated.
+ * Store authenticated mail before projecting it into the owner's shared Inbox.
  *
- * @remarks
- * One function, {@link deliverInboundMail}, and it does four things in a fixed order, each of
- * which is allowed to fail without losing the ones before it:
- *
- * 1. **Store it.** The message becomes a row in `athena_inbound_message` — Athena's own store,
- *    deliberately not the connector tables synced mail lives in. Idempotent on
- *    `(owner, provider message id)`, so a provider retry is a no-op rather than a duplicate.
- * 2. **Announce it.** `emitInboundEmail` puts it in the universal inbox stream through the same
- *    event substrate every other channel uses — one feed, chronologically interleaved, not an
- *    email-only tab.
- * 3. **Deliver it to Athena.** The message is appended to the caller's one open Athena
- *    conversation through {@link postReplyAndResume} — the *same* shared ingress the chat door
- *    uses. There is no email-specific handler, no email-specific queue and no bypass around tool
- *    dispatch: from the loop's point of view a received email is a message on the conversation,
- *    so everything Athena can do about a chat message she can do about an email.
- * 4. **Record the links back.** The stream event id and the session id are stamped onto the
- *    stored row so the context object, its inbox entry and the conversation all point at each
- *    other.
- *
- * Steps 2–4 are best-effort *around a committed row*: if the stream write or Athena's turn fails,
- * the message is still stored, still visible and still attachable. The opposite order — announce
- * then store — would be able to show a person an email that does not exist.
+ * The canonical message survives a failed projection or stream announcement. Provider retries
+ * reuse that message and repair its Inbox item; the scheduled sweep also recovers missing items.
+ * Email remains context until scheduled admission verifies the enrolled sender and current
+ * workspace authority. Eligible requests run as isolated Athena jobs, independently of clients.
  */
 import { actor, agentSession, athenaInboundMessage, db, event } from '@docket/db';
 import type { InboundMessage, InboundProviderId } from '@docket/mail';
@@ -31,6 +13,7 @@ import { and, eq } from 'drizzle-orm';
 
 import { emitInboundEmail } from './event-emit';
 import { mailChannelAuthority } from '../services/athena-mail/channel';
+import { projectMailInboxItem } from '../services/athena-mail/inbox';
 import { automaticMail, ownerMailEligible } from '../services/athena-mail/policy';
 
 import {
@@ -196,14 +179,15 @@ export async function deliverInboundMail(
     .returning();
 
   if (!stored) {
-    // A provider retry, or the same message delivered twice. The first delivery already stored,
-    // announced and delivered it; repeating any of that would double-post to the conversation.
+    // Repair visibility after a partial delivery without duplicating the message or its runtime job.
     const previous = await findExistingByProviderId(mailbox.ownerUserId, message.providerMessageId);
     /* v8 ignore next -- @preserve the conflict target guarantees the earlier row is present */
     if (!previous) throw new Error('inbound message conflicted with no visible row');
+    await projectMailInboxItem(previous);
     return { status: 'duplicate', messageId: previous.id };
   }
 
+  await projectMailInboxItem(stored);
   await emitInboundEmail({
     organizationId,
     userId: mailbox.ownerUserId,

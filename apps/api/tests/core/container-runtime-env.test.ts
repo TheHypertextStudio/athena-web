@@ -28,6 +28,7 @@ const FULL_ENV = {
   LINEAR_WEBHOOK_SECRET: 'linear-secret',
   GITHUB_APP_WEBHOOK_SECRET: 'github-secret',
   RESEND_API_KEY: 'resend-key',
+  RESEND_RECEIVING_API_KEY: 'resend-receiving-key',
   RESEND_INBOUND_WEBHOOK_SECRET: 'resend-inbound-secret',
   RESEND_RECEIVING_API_BASE: 'https://resend.example/api',
   SMTP_HOST: 'smtp.example.com',

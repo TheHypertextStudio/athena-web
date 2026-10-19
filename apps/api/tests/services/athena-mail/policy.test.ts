@@ -6,6 +6,18 @@ import {
 } from '../../../src/services/athena-mail/policy';
 
 describe('Athena email channel boundaries', () => {
+  it.each(['fail', 'none', 'temperror'])(
+    'keeps owner mail captured when DKIM reports %s despite DMARC passing',
+    (dkim) => {
+      expect(
+        ownerMailEligible('me@example.com', 'me@example.com', {
+          spf: 'pass',
+          dkim,
+          dmarc: 'pass',
+        }),
+      ).toBe(false);
+    },
+  );
   it('requires exact enrolled sender and trusted DMARC success', () => {
     expect(
       ownerMailEligible('me@example.com', 'me@example.com', {

@@ -4,7 +4,11 @@ export function ownerMailEligible(
   enrolled: string,
   authentication?: { spf: string; dkim: string; dmarc: string },
 ): boolean {
-  return from.toLowerCase() === enrolled.toLowerCase() && authentication?.dmarc === 'pass';
+  return (
+    from.toLowerCase() === enrolled.toLowerCase() &&
+    authentication?.dmarc === 'pass' &&
+    authentication.dkim === 'pass'
+  );
 }
 /** Identify robot mail before admitting paid assistant execution. */
 export function automaticMail(headers: Readonly<Record<string, string>>): boolean {

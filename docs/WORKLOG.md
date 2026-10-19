@@ -20,6 +20,8 @@
 - **Validation so far**: The affected mail/API suite passes 168 tests, the focused web suite passes 20 tests, and notification/database/web typechecks pass. Populated desktop and phone captures pass in both themes without overflow. A regression checks the serialized Inbox contract, read-state preservation and recovery. The native staging Worker build passes. Release and actual automatic-reply acceptance remain open.
 - **Rollout**: Publish the compatible reader and additive notification-kind migration first, then the receiving/projection changes. This avoids exposing the new email kind to a reader that cannot render it. Cloudflare's Studio profile is available through `cf`; use its account-scoped provider path.
 - **Live acceptance**: The owner approved and saved owner-only enrollment for Hypertext Studio through the normal UI. A harmless real email reached the webhook with both browser clients away from Docket. Its body retrieval and correlated response remain open until the correction is deployed and verified.
+- **Receiving correction**: The dedicated receiving credential now reaches the adapter. Captured mail hydrates without gaining execution authority; the canonical message and Inbox preview commit together, preserving retries and read state. Owner execution requires both DMARC and DKIM success as documented.
+- **Backend validation**: 174 affected mail/notification tests passed, followed by 31 focused workflow and recovery tests after the atomic hydration correction. The affected API typecheck and lint pass. A deliberately failed preview write rolls back hydration and recovers on the next sweep.
 
 ### [MCP-REFRESH-RELIABILITY] Preserve MCP authorization through token renewal
 

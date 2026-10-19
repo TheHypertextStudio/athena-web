@@ -56,6 +56,9 @@ function agentRuntimeEnv(): Partial<AppRuntimeEnv> {
 function mailRuntimeEnv(): Partial<AppRuntimeEnv> {
   return {
     ...(env.RESEND_API_KEY ? { RESEND_API_KEY: env.RESEND_API_KEY } : {}),
+    ...(env.RESEND_RECEIVING_API_KEY
+      ? { RESEND_RECEIVING_API_KEY: env.RESEND_RECEIVING_API_KEY }
+      : {}),
     ...(env.RESEND_INBOUND_WEBHOOK_SECRET
       ? { RESEND_INBOUND_WEBHOOK_SECRET: env.RESEND_INBOUND_WEBHOOK_SECRET }
       : {}),

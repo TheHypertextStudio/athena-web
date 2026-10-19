@@ -16,6 +16,7 @@ import {
 } from '../../../src/services/athena-mail/channel';
 import { mailSessionAuthorized } from '../../../src/services/athena-mail/session-auth';
 import { sweepMailIngress } from '../../../src/services/athena-mail/ingress';
+import * as inboxProjection from '../../../src/services/athena-mail/inbox';
 
 vi.mock('../../../src/env', async (importOriginal) => {
   const actual = await importOriginal<typeof Environment>();
@@ -307,5 +308,79 @@ it('requires complete deployed receiving and sending settings before enrollment 
     expect(mailChannelConfigured()).toBe(false);
   } finally {
     Object.assign(env, original);
+  }
+});
+
+it.each(['disabled', 'other-sender'] as const)(
+  'retrieves captured %s email without granting execution after enrollment changes',
+  async (kind) => {
+    const { owner, orgId, mailbox } = await enrolled(schema);
+    if (kind === 'disabled')
+      await configureMailChannel(owner, {
+        enabled: false,
+        ownerRepliesEnabled: false,
+        organizationId: OrganizationId.parse(orgId),
+      });
+    const message = await receive(mailbox, {
+      text: null,
+      bodyStatus: 'metadata-only',
+      ...(kind === 'other-sender' ? { fromAddress: 'someone@example.com' } : {}),
+    });
+    expect(message.processingStatus).toBe('captured');
+    const receiver = getContainer().inboundMail;
+    const original = receiver.retrieve?.bind(receiver);
+    Object.assign(receiver, {
+      retrieve: vi.fn(async () => ({
+        text: 'Readable captured context',
+        html: null,
+        authentication: { spf: 'pass', dkim: 'pass', dmarc: 'pass' },
+      })),
+    });
+    try {
+      await configureMailChannel(owner, {
+        enabled: true,
+        ownerRepliesEnabled: true,
+        organizationId: OrganizationId.parse(orgId),
+      });
+      await sweep();
+      await sweep();
+      const saved = await reload(message.id);
+      expect(saved.bodyStatus).toBe('complete');
+      expect(saved.bodyText).toBe('Readable captured context');
+      expect(saved.processingStatus).toBe('captured');
+      expect(saved.sessionId).toBeNull();
+    } finally {
+      Object.assign(receiver, { retrieve: original });
+    }
+  },
+);
+
+it('retries message content and its Inbox preview together after a projection failure', async () => {
+  const { mailbox } = await enrolled(schema);
+  const message = await receive(mailbox, { text: null, bodyStatus: 'metadata-only' });
+  const receiver = getContainer().inboundMail;
+  const original = receiver.retrieve?.bind(receiver);
+  Object.assign(receiver, {
+    retrieve: vi.fn(async () => ({
+      text: 'Recovered Inbox preview',
+      html: null,
+      authentication: { spf: 'pass', dkim: 'pass', dmarc: 'pass' },
+    })),
+  });
+  vi.spyOn(inboxProjection, 'projectMailInboxItem').mockRejectedValueOnce(
+    new Error('Temporary write failure'),
+  );
+  try {
+    await sweep();
+    expect((await reload(message.id)).bodyStatus).toBe('metadata-only');
+    await sweep();
+    expect((await reload(message.id)).bodyStatus).toBe('complete');
+    const [item] = await schema.db
+      .select()
+      .from(schema.notification)
+      .where(eq(schema.notification.id, message.id));
+    expect(assertDefined(item).body.summary).toContain('Recovered Inbox preview');
+  } finally {
+    Object.assign(receiver, { retrieve: original });
   }
 });

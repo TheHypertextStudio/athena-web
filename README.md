@@ -27,7 +27,8 @@ composer to start a private assignment using the runtime selected in Settings. E
 and start work; any returned proposal waits for review before the task changes. If the selected
 runtime is unavailable, the prompt retains the objective and links to Athena Settings for recovery.
 
-Athena's inbox can enroll the verified account email for two-way conversations. Authenticated owner
+Inbox combines received email with work updates, sharing unread state and read actions. Email
+settings can enroll the verified account email for two-way conversations. Authenticated owner
 mail receives automatic replies through the server scheduler even while Docket is closed; emailing
 any other recipient requires signed-in approval of the exact message and files. Setup, delivery
 recovery and supported text attachments are described in [native email](docs/engineering/athena-inbound-mail.md).

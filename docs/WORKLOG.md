@@ -7,6 +7,16 @@
 
 ## Active Tasks
 
+### [DOCS-PRODUCTION-VERIFICATION] Restore public documentation delivery checks
+
+- **Status**: IN_PROGRESS
+- **Started**: 2026-10-19
+- **Description**: Make public documentation verification succeed from the production verification runner and preserve correct immutable asset delivery.
+- **Plan**: Trace the runner's HTTP 403 response through the active provider and compare the successful local request; correct the exact delivery or request defect without hiding failures. Trace the native Worker asset cache policy separately, validate affected behavior, publish authorized corrections and complete hosted verification.
+- **Validation**: Public docs, canonical identity and LLM endpoints must pass from the hosted runner. Hashed application assets must retain immutable caching. Preserve authentication and unrelated host/security configuration.
+- **Local acceptance**: Six real Workers asset-binding tests, root typecheck, focused lint and the native production build pass. The built asset directory includes the source header declaration. An independent source review found no release-blocking issues.
+- **Findings**: Cloudflare Security Events identify Bot Fight Mode managed challenges for the exact GitHub verification user agent and docs path; the docs origin is healthy. This free-plan feature has no path-specific exemption. Correct native static caching with the standard public/_headers declaration; keep the unchanged verifier and mutable-asset revalidation. Browser automation requires owner confirmation before changing the bot-protection setting.
+
 ### [PRODUCT-ADMIN-CACHE-CI] Register private Product Admin CI
 
 - **Status**: DONE

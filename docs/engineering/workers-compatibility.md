@@ -95,6 +95,11 @@ to its canonical HTTPS origin, retaining path and query. Preserve that hostname
 with the frontend so canonicalization remains application-owned. Publishing,
 API/admin and unrelated custom hosts retain their separate routing.
 
+Fingerprint-addressed Next assets use the cache policy in `apps/web/public/_headers`.
+OpenNext copies that declaration into `.open-next/assets`; preserve it when rebuilding and
+publishing so `/_next/static/*` retains one-year immutable caching. Mutable public files
+keep the platform's revalidation policy.
+
 Native OpenNext `deploy:worker` and `upload:worker` both write remote cache and
 provider state. `deploy` serves the new version; `upload` alone does not accept
 the application. Use native version/deployment history for code rollback and

@@ -252,7 +252,7 @@ their authorization and sync rules.
 MCP access tokens renew through refresh grants. Recognized public-client refresh credentials use
 an independent, database-backed budget per authorization grant, so simultaneous chats sharing an
 IP address do not compete with sign-in traffic. See [MCP connection troubleshooting](apps/docs/developers/connect-an-agent-mcp.mdx)
-for client coordination and recovery after interrupted credential persistence.
+for client coordination and device-bound recovery after interrupted credential persistence.
 
 ## Daily workload in MCP
 

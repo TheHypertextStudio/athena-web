@@ -8,6 +8,8 @@ import {
 import type { DBAdapter, DBTransactionAdapter } from '@better-auth/core/db/adapter';
 import { createAuthEndpoint } from 'better-auth/api';
 
+import { settleRefreshRetry } from './oauth-refresh-settlement';
+
 import { rejectRepeatedFields } from './oauth-provider-authorization-state';
 import {
   assertReturnedAccess,
@@ -24,7 +26,6 @@ import {
   liveIntrospectionResult,
   presentedRevocationToken,
   revokeGrant,
-  revokeStaleRefresh,
   verifyRevocableJwt,
 } from './oauth-provider-live-state';
 import { coordinatingAdapter, rawInput } from './oauth-provider-transaction';
@@ -55,7 +56,7 @@ import {
   singletonTokenFields,
 } from './oauth-provider-types';
 import { hashOAuthToken } from './oauth-resource-contract';
-import { rememberRefreshResponse, replayRefreshResponse } from './oauth-refresh-retry';
+import { rememberRefreshResponse } from './oauth-refresh-retry';
 
 async function invokeCodeProviderInSavepoint(
   ctx: AuthEndpointContext,
@@ -145,7 +146,8 @@ interface TokenEndpointDependencies {
   readonly refreshLifetimeSeconds: number;
 }
 
-type TokenTransactionResult =
+/** Internal outcome shared by issuance and device-bound recovery settlement. */
+export type TokenTransactionResult =
   | CommittedTokenError
   | { readonly kind: 'issued' | 'provider'; readonly response: unknown }
   | { readonly kind: 'stale' };
@@ -232,13 +234,10 @@ async function finishTokenRequest(
       : { kind: 'provider', response: invocation.response };
   }
   if (prepared.kind === 'stale-refresh') {
-    const clientOwnsRefresh = clientIdFromRequest(ctx, body) === prepared.refresh.clientId;
-    if (clientOwnsRefresh) {
-      const response = await replayRefreshResponse(ctx, adapter, body, prepared.refresh, resources);
-      if (response) return { kind: 'issued', response };
-      await revokeStaleRefresh(adapter, prepared.refresh);
-    }
-    return { kind: 'stale' };
+    return settleRefreshRetry(
+      { ctx, adapter, body, refresh: prepared.refresh, resources },
+      (successorBody) => runTokenTransaction(ctx, adapter, successorBody, dependencies),
+    );
   }
   await issuanceState.set(prepared.state);
   const invocation = await invokePreparedProvider(ctx, adapter, prepared, raw);

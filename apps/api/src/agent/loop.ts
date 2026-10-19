@@ -137,7 +137,9 @@ async function principalAthenaPreferences(session: SessionRow): Promise<{
   const preferences = HubPreferences.parse(rows[0]?.preferences ?? {});
   const instructions = preferences.athena?.instructions?.trim();
   return {
-    approvalMode: preferences.athena?.approvalMode ?? 'ask_before_acting',
+    approvalMode: isMailSession(session)
+      ? 'ask_before_acting'
+      : (preferences.athena?.approvalMode ?? 'ask_before_acting'),
     instructions: instructions && instructions.length > 0 ? instructions : null,
   };
 }
@@ -433,6 +435,26 @@ function latticeFailureActivity(
   };
 }
 
+/** Reconcile a turn's tool calls in order, stopping at the first unresolved approval or reply. */
+async function reconcileToolUses(
+  sessionId: string,
+  uses: readonly ToolUse[],
+): Promise<TurnContentBlock[] | 'awaiting_approval' | 'awaiting_input'> {
+  const results: TurnContentBlock[] = [];
+  for (const use of uses) {
+    const outcome = await reconcileToolUse(sessionId, use);
+    if (outcome.kind === 'await_approval') return 'awaiting_approval';
+    if (outcome.kind === 'await_input') return 'awaiting_input';
+    results.push({
+      type: 'tool_result',
+      toolUseId: use.id,
+      content: outcome.result.content,
+      isError: outcome.result.isError,
+    });
+  }
+  return results;
+}
+
 /** Drive a session only after its entry-point states win durable admission atomically. */
 async function driveSessionWithAdmission(
   orgId: string,
@@ -466,10 +488,7 @@ async function driveSessionWithAdmission(
         .limit(1)
     : [];
   const contextName = orgRows[0]?.name ?? null;
-  const savedPreferences = await principalAthenaPreferences(session);
-  const principalPreferences = isMailSession(session)
-    ? { ...savedPreferences, approvalMode: 'ask_before_acting' as const }
-    : savedPreferences;
+  const principalPreferences = await principalAthenaPreferences(session);
 
   const maxTurns = deps.generationTurnQuantum ?? env.AGENT_MAX_TURNS;
 
@@ -552,22 +571,8 @@ async function driveSessionWithAdmission(
       if (last?.role === 'assistant') {
         const uses = toolUsesOf(last);
         if (uses.length > 0) {
-          const results: TurnContentBlock[] = [];
-          for (const use of uses) {
-            const outcome = await reconcileToolUse(sessionId, use);
-            if (outcome.kind === 'await_approval') {
-              return await settleOwned('awaiting_approval');
-            }
-            if (outcome.kind === 'await_input') {
-              return await settleOwned('awaiting_input');
-            }
-            results.push({
-              type: 'tool_result',
-              toolUseId: use.id,
-              content: outcome.result.content,
-              isError: outcome.result.isError,
-            });
-          }
+          const results = await reconcileToolUses(sessionId, uses);
+          if (typeof results === 'string') return await settleOwned(results);
           messages = [...messages, { role: 'user', content: results }];
           await persistGenerationEffect(lease, deps, 'reconciled-transcript', async (tx) =>
             saveTranscript(
@@ -585,17 +590,12 @@ async function driveSessionWithAdmission(
       }
 
       // ── Between turns: honor pause/cancel/takeover flips made while we worked.
-      const statusRows = await db
-        .select({ status: agentSession.status })
+      const [current] = await db
+        .select()
         .from(agentSession)
         .where(eq(agentSession.id, sessionId))
         .limit(1);
-      if (statusRows[0]?.status !== 'running') {
-        const [current] = await db
-          .select()
-          .from(agentSession)
-          .where(eq(agentSession.id, sessionId))
-          .limit(1);
+      if (current?.status !== 'running') {
         /* v8 ignore next -- @preserve defensive: the session row exists */
         if (!current) throw new Error('session vanished mid-run');
         if (current.status === 'canceled') return await settleOwned('canceled');

@@ -568,6 +568,22 @@ async function gatherConfig(): Promise<Config> {
 
 // ── gcp ───────────────────────────────────────────────────────────────────────
 
+/** Create a deployment service account only when it does not already exist. */
+function ensureServiceAccount(project: string, name: string, displayName: string): void {
+  const email = `${name}@${project}.iam.gserviceaccount.com`;
+  const existing = tryRun(
+    `gcloud iam service-accounts describe ${email} --project=${project} --format='value(email)'`,
+  );
+  if (existing) {
+    ok(`service account exists: ${email}`);
+    return;
+  }
+  exec(
+    `gcloud iam service-accounts create ${name} --project=${project} --display-name="${displayName}"`,
+  );
+  ok(`created: ${email}`);
+}
+
 function setupGcp(cfg: Config): {
   saEmail: string;
   apiRuntimeSaEmail: string;
@@ -583,30 +599,10 @@ function setupGcp(cfg: Config): {
   section('GCP — Service Account');
 
   const saEmail = `${SA_NAME}@${cfg.project}.iam.gserviceaccount.com`;
-  const saExists = tryRun(
-    `gcloud iam service-accounts describe ${saEmail} --project=${cfg.project} --format='value(email)'`,
-  );
-  if (saExists) {
-    ok(`service account exists: ${saEmail}`);
-  } else {
-    exec(`gcloud iam service-accounts create ${SA_NAME} \
-      --project=${cfg.project} \
-      --display-name="Docket GitHub Deploy"`);
-    ok(`created: ${saEmail}`);
-  }
+  ensureServiceAccount(cfg.project, SA_NAME, 'Docket GitHub Deploy');
 
   const apiRuntimeSaEmail = `${API_RUNTIME_SA_NAME}@${cfg.project}.iam.gserviceaccount.com`;
-  const apiRuntimeSaExists = tryRun(
-    `gcloud iam service-accounts describe ${apiRuntimeSaEmail} --project=${cfg.project} --format='value(email)'`,
-  );
-  if (apiRuntimeSaExists) {
-    ok(`service account exists: ${apiRuntimeSaEmail}`);
-  } else {
-    exec(`gcloud iam service-accounts create ${API_RUNTIME_SA_NAME} \
-      --project=${cfg.project} \
-      --display-name="Docket API runtime"`);
-    ok(`created: ${apiRuntimeSaEmail}`);
-  }
+  ensureServiceAccount(cfg.project, API_RUNTIME_SA_NAME, 'Docket API runtime');
 
   grantProjectRoles(cfg.project, saEmail, DEPLOY_SA_ROLES, exec, ok);
   grantProjectRoles(cfg.project, apiRuntimeSaEmail, API_RUNTIME_SA_ROLES, exec, ok);

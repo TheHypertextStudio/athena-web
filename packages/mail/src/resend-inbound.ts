@@ -50,6 +50,17 @@ function readContent(source: Record<string, unknown>): InboundContent {
   const dkim = auth && str(auth, 'dkim');
   const dmarc = auth && str(auth, 'dmarc');
   const rawHeaders = asRecord(source['headers']);
+  const headers = readHeaders(rawHeaders);
+  return {
+    text: str(source, 'text'),
+    html: str(source, 'html'),
+    ...(spf && dkim && dmarc ? { authentication: { spf, dkim, dmarc } } : {}),
+    ...(rawHeaders ? { headers } : {}),
+  };
+}
+
+/** Keep string headers while excluding authentication claims supplied in message content. */
+function readHeaders(rawHeaders: Record<string, unknown> | null): Record<string, string> {
   const headers: Record<string, string> = {};
   for (const [name, value] of Object.entries(rawHeaders ?? {})) {
     const key = name.toLowerCase();
@@ -57,12 +68,7 @@ function readContent(source: Record<string, unknown>): InboundContent {
       continue;
     headers[key] = value;
   }
-  return {
-    text: str(source, 'text'),
-    html: str(source, 'html'),
-    ...(spf && dkim && dmarc ? { authentication: { spf, dkim, dmarc } } : {}),
-    ...(rawHeaders ? { headers } : {}),
-  };
+  return headers;
 }
 
 /** The normalized notification carried by a `email.received` webhook (metadata only). */

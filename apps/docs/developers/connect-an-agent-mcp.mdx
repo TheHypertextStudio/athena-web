@@ -45,6 +45,21 @@ retain the ordinary IP limit. A grant-budget rejection returns HTTP 429, OAuth
 `temporarily_unavailable` and `Retry-After`; clients should wait and retry with their latest
 persisted refresh token. Throttling does not rotate or revoke credentials.
 
+For clients that can lose a rotated response before saving it, Docket supports a private device
+recovery key through the `Docket-Refresh-Recovery` header. Codex forwards configured `http_headers`
+to same-origin OAuth endpoints. Generate a separate random 32-byte base64url key per device, save
+it in that device's private Codex configuration, and keep it stable across restarts. Never publish
+or log the key, share it between computers, or send it to a different issuer origin.
+
+The issuer binds the key's digest to the encrypted rotation receipt when the rotation succeeds.
+After the ordinary 30-second replay grace, recovery requires both the predecessor refresh token
+and the matching device key. The original refresh deadline stays fixed; a consumed successor,
+revocation, changed authority, or expired original credential prevents recovery. If the recovered
+access token has expired or is nearly expired, Docket renews the active successor through ordinary
+token issuance and updates the receipt atomically. A failed local save can therefore be retried
+without another interactive authorization. A key added after a response was lost cannot recover
+an earlier unbound receipt.
+
 If your build lists `mcp_oauth_refresh_coordination` in `codex features list`, enable it:
 
 ```sh

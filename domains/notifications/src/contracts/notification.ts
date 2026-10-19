@@ -27,6 +27,7 @@ export const NotificationType = z
     'automation',
     'service_announcement',
     'phone_call',
+    'email',
   ])
   .describe(
     'The kind of event a notification represents, which drives its icon, grouping, and inline actions. Values include work updates, agent sessions, service notices, and `phone_call` for a completed Athena call or callback action.',

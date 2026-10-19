@@ -428,6 +428,7 @@ export const notificationType = pgEnum('notification_type', [
   'automation',
   'service_announcement',
   'phone_call',
+  'email',
 ]);
 
 /** Principal kind that created a notification service intent. */

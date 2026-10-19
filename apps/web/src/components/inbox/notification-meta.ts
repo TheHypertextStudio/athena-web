@@ -23,6 +23,7 @@ import {
   Shield,
   Workflow,
   MessageSquare,
+  Mail,
   type LucideIcon,
   User,
   Users,
@@ -51,6 +52,7 @@ const NOTIFICATION_KIND: Record<NotificationType, NotificationKindMeta> = {
   automation: { icon: Workflow, label: 'Automation' },
   service_announcement: { icon: MessageSquare, label: 'Service announcement' },
   phone_call: { icon: Phone, label: 'Athena phone call' },
+  email: { icon: Mail, label: 'Email' },
 };
 
 /**

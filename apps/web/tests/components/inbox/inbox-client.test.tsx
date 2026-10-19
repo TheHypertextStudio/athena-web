@@ -219,3 +219,29 @@ describe('InboxClient notification UX', () => {
     expect(onUndoPhoneChange).toHaveBeenCalledWith(NOTICE_ID, 'voice_1', 'change_1');
   });
 });
+
+it('shows email alongside work updates with the same read action and no channel tab', () => {
+  renderInbox([
+    notification({
+      body: { title: 'Review the launch checklist' },
+    }),
+    notification({
+      id: APPROVAL_ID,
+      type: 'email',
+      body: {
+        title: 'Decisions from the launch review',
+        summary: 'Morgan · Two decisions need review.',
+        url: '/athena/mail/message_1',
+      },
+    }),
+  ]);
+  expect(screen.getByText('Review the launch checklist')).toBeInTheDocument();
+  expect(screen.getByRole('link', { name: 'Decisions from the launch review' })).toHaveAttribute(
+    'href',
+    '/athena/mail/message_1',
+  );
+  expect(screen.getByText('Email')).toBeInTheDocument();
+  expect(screen.getAllByRole('button', { name: 'Mark read' })).toHaveLength(2);
+  expect(screen.queryByRole('tab', { name: 'Inputs' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('tab', { name: 'Messages' })).not.toBeInTheDocument();
+});

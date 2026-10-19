@@ -51,14 +51,13 @@ export default function InboxClient(): JSX.Element {
       <header className="flex flex-col gap-1">
         <div className="flex flex-col gap-1">
           <h1 className="text-on-surface text-title-large">Inbox</h1>
-          <p className="text-on-surface-variant text-xs">Everything that needs a response.</p>
         </div>
       </header>
 
       <div className="flex min-w-0 items-center gap-3">
         <div className="min-w-0 flex-1">
           <SegmentedTabs
-            label="Inbox feeds"
+            label="Inbox filters"
             segments={segments}
             value={tab}
             onChange={setTab}

@@ -1184,6 +1184,13 @@
       "when": 1792114912587,
       "tag": "0168_athena_email_channel",
       "breakpoints": true
+    },
+    {
+      "idx": 169,
+      "version": "7",
+      "when": 1792433550738,
+      "tag": "0169_inbox_email",
+      "breakpoints": true
     }
   ]
 }

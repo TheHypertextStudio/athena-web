@@ -100,6 +100,7 @@
     "@types/react-dom": "catalog:",
     "@vitejs/plugin-react": "catalog:",
     "axe-core": "^4.13.0",
+    "cf": "1.0.0-beta.18",
     "eslint": "catalog:",
     "jsdom": "^29.1.1",
     "prettier": "3.9.6",

@@ -9,6 +9,20 @@
 
 ### [DOCS-PRODUCTION-VERIFICATION] Restore public documentation delivery checks
 
+### [INBOX-EMAIL-INPUTS] Unify email with the personal Inbox
+
+- **Status**: IN_PROGRESS
+- **Started**: 2026-10-19
+- **Description**: Make received Athena email discoverable as typed input from the main Inbox and verify the deployed owner-email-to-Athena-response journey.
+- **Plan**: Project canonical received email into the existing personal Inbox with the same row, unread state, timestamp, workspace context and read actions as work updates. Email is a source label within the shared feed. Detail returns to Inbox; channel setup remains separate. Recover missing entries durably and retain read state on body hydration and provider retries. Verify provider receiving and a correlated automatic reply with Docket closed.
+- **Validation**: Focused Inbox/mail component tests, affected web typecheck/lint/build, rendered narrow/wide layouts, deployed receipt, runtime and recipient-mailbox evidence. Local tests and provider acceptance do not establish recipient delivery.
+- **Findings**: The receiver persisted envelopes, but the runtime projection omitted the dedicated receiving key. Separately, captured messages were excluded from body retrieval. Pass the configured receiving key into the existing adapter and hydrate captured context without changing its execution status or enrolling older requests retroactively.
+- **Validation so far**: The affected mail/API suite passes 168 tests, the focused web suite passes 20 tests, and notification/database/web typechecks pass. Populated desktop and phone captures pass in both themes without overflow. A regression checks the serialized Inbox contract, read-state preservation and recovery. The native staging Worker build passes. Release and actual automatic-reply acceptance remain open.
+- **Rollout**: Publish the compatible reader and additive notification-kind migration first, then the receiving/projection changes. This avoids exposing the new email kind to a reader that cannot render it. Cloudflare's Studio profile is available through `cf`; use its account-scoped provider path.
+- **Live acceptance**: The owner approved and saved owner-only enrollment for Hypertext Studio through the normal UI. A harmless real email reached the webhook with both browser clients away from Docket. Its body retrieval and correlated response remain open until the correction is deployed and verified.
+
+### [MCP-REFRESH-RELIABILITY] Preserve MCP authorization through token renewal
+
 - **Status**: IN_PROGRESS
 - **Started**: 2026-10-19
 - **Description**: Make public documentation verification succeed from the production verification runner and preserve correct immutable asset delivery.

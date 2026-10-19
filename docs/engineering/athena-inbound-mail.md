@@ -5,6 +5,21 @@ owner can enable automatic replies to their verified account email in `/athena/m
 other recipients requires approval of the exact message in signed-in Docket. Closing Docket does
 not stop receiving, execution or sending: scheduled server work owns these operations.
 
+## Personal Inbox
+
+Received email appears alongside work updates in `/inbox`, using the same unread state, counts,
+read actions, workspace context and row presentation. Email is a source label, rather than a
+separate feed. Its detail view returns to Inbox and retains the canonical message's work attachments.
+The `/athena/mail` route remains the channel setup and delivery-status surface.
+
+Each message projects to one Inbox item using its existing stable identifier. Provider retries
+and content retrieval update the presentation without resetting read state. Scheduled recovery
+fills missing entries in bounded batches, including older received messages. Retrieving captured
+context does not give it permission to execute, even if the owner enables conversations later.
+
+Deploy the frontend that recognizes the email Inbox kind before the backend begins projecting it.
+The additive notification enum migration must run before the new backend writes email items.
+
 ## Addresses and enrollment
 
 An address is `{key}@{ATHENA_INBOUND_MAIL_HOST}`. Only the random local part is stored on

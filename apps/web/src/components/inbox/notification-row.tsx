@@ -23,6 +23,7 @@ import { Check, Mail, MessageSquare } from '@docket/ui/icons';
 import { STRETCHED_LINK } from '@docket/ui/lib/stretched-link';
 import { cn } from '@docket/ui/lib/utils';
 import { Button } from '@docket/ui/primitives';
+import { RelativeTime } from '@docket/ui/components';
 import Link from '@/components/docket-link';
 import { type JSX, type ReactNode } from 'react';
 
@@ -117,9 +118,7 @@ export function NotificationRow({
       <div className="flex min-w-0 flex-1 flex-col gap-1">
         <div className="flex items-center gap-2">
           <span className="text-on-surface-variant text-xs font-medium">{label}</span>
-          <span className="text-on-surface-variant text-xs">
-            {relativeTime(notification.createdAt)}
-          </span>
+          <InboxTimestamp at={notification.createdAt} />
           {unread ? <span className="sr-only">Unread</span> : null}
         </div>
 
@@ -219,6 +218,15 @@ export function NotificationRow({
         </div>
       ) : null}
     </div>
+  );
+}
+
+/** Only the relative clock text may differ between server render and browser hydration. */
+function InboxTimestamp({ at }: { readonly at: string }): JSX.Element {
+  return (
+    <RelativeTime iso={at} suppressHydrationWarning className="text-on-surface-variant text-xs">
+      {relativeTime(at)}
+    </RelativeTime>
   );
 }
 

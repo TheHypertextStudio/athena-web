@@ -87,11 +87,11 @@ export function MailMessageView({ messageId }: MailMessageViewProps): JSX.Elemen
     <div className="flex h-full min-h-0 flex-col gap-4 overflow-auto p-4">
       <Toolbar
         leading={
-          <Link href="/athena/mail" className="cursor-pointer">
+          <Link href="/inbox" className="cursor-pointer">
             <ControlGroup controlSize="sm">
               <Mail aria-hidden="true" className="text-on-surface-variant" />
               <Text token="label-large" tone="muted">
-                Athena’s inbox
+                Inbox
               </Text>
             </ControlGroup>
           </Link>

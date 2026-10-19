@@ -177,7 +177,7 @@ export function MailInbox(): JSX.Element {
           <>
             <Inbox aria-hidden="true" className="text-on-surface-variant" />
             <Text as="h1" token="headline-small">
-              Athena’s inbox
+              Email
             </Text>
           </>
         }

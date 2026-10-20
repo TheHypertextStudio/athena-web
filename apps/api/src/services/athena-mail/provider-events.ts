@@ -1,7 +1,13 @@
 /** Authenticate Resend delivery receipts independently of inbound-message parsing. */
 import { verifySvixSignature } from '@docket/mail';
+import { z } from 'zod';
 import { env } from '../../env';
 import { recordMailProviderEvent } from './outbox';
+const ProviderEvent = z.object({
+  type: z.string(),
+  data: z.object({ email_id: z.string().min(1).max(256), message_id: z.unknown().optional() }),
+});
+
 /** Only signed provider events may change email delivery state. */
 export async function receiveMailProviderEvent(
   rawBody: string,
@@ -17,13 +23,29 @@ export async function receiveMailProviderEvent(
     payload: rawBody,
   });
   if (!verified.ok) return false;
-  const payload: unknown = JSON.parse(rawBody);
-  if (!payload || typeof payload !== 'object') return false;
-  const event = payload as { type?: unknown; data?: { email_id?: unknown } };
-  if (typeof event.data?.email_id !== 'string') return false;
-  if (event.type === 'email.delivered')
-    await recordMailProviderEvent(event.data.email_id, 'delivered', headers['svix-id']);
-  else if (event.type === 'email.bounced')
-    await recordMailProviderEvent(event.data.email_id, 'bounced', headers['svix-id']);
+  let payload: unknown;
+  try {
+    payload = JSON.parse(rawBody);
+  } catch {
+    return false;
+  }
+  const parsed = ProviderEvent.safeParse(payload);
+  if (!parsed.success) return false;
+  const event = parsed.data;
+  const kind =
+    event.type === 'email.sent'
+      ? 'sent'
+      : event.type === 'email.delivered'
+        ? 'delivered'
+        : event.type === 'email.bounced'
+          ? 'bounced'
+          : null;
+  if (kind)
+    await recordMailProviderEvent(
+      event.data.email_id,
+      kind,
+      headers['svix-id'],
+      typeof event.data.message_id === 'string' ? event.data.message_id : undefined,
+    );
   return true;
 }

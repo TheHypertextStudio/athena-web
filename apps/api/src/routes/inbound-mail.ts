@@ -65,8 +65,8 @@ const inboundMail = new Hono().post(INBOUND_MAIL_WEBHOOK_PATH, async (c) => {
     return c.json({ received: false, code: result.code }, REJECTION_STATUS[result.code]);
   }
   if (result.status === 'ignored') {
-    if (result.eventType === 'email.delivered' || result.eventType === 'email.bounced')
-      await receiveMailProviderEvent(rawBody, headers);
+    // The receipt handler owns its supported event kinds, including accepted-send identities.
+    await receiveMailProviderEvent(rawBody, headers);
     // Authentic, and about something else. A `204` stops the provider retrying an event we will
     // never handle, without pretending we acted on it.
     return c.body(null, 204);

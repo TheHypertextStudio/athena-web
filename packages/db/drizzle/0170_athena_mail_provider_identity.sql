@@ -1,0 +1,1 @@
+ALTER TABLE "athena_mail_provider_event" ADD COLUMN "rfc822_message_id" text;

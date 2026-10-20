@@ -11,7 +11,10 @@ import {
   continueMailQuestion,
   prepareMailContinuation,
 } from '../../../src/services/athena-mail/continuation';
-import { prepareMailReplies } from '../../../src/services/athena-mail/outbox';
+import {
+  prepareMailReplies,
+  recordMailProviderEvent,
+} from '../../../src/services/athena-mail/outbox';
 import { sweepMailIngress } from '../../../src/services/athena-mail/ingress';
 let schema: Awaited<ReturnType<typeof getDb>>;
 beforeAll(async () => {
@@ -206,4 +209,49 @@ it('threads replies to invalid-answer notices back to the same pending question'
     .where(eq(schema.athenaInboundMessage.id, assertDefined(retry).id));
   expect(assertDefined(correlated).threadId).toBe(question.id);
   expect(assertDefined(correlated).sessionId).toBe(session.id);
+});
+
+it('routes a reply naming only the provider-assigned Message-ID to its exact pending question', async () => {
+  const { original, session, question, mailbox } = await waitingQuestion();
+  const providerId = `question-provider-${session.id}`;
+  const actualId = `<provider-question-${session.id}@example.com>`;
+  await schema.db
+    .update(schema.athenaMailOutbox)
+    .set({ providerMessageId: providerId, status: 'sent' })
+    .where(eq(schema.athenaMailOutbox.inboundMessageId, original.id));
+  await recordMailProviderEvent(
+    providerId,
+    'delivered',
+    `question-delivered-${session.id}`,
+    actualId,
+  );
+  const [answer] = await schema.db
+    .insert(schema.athenaInboundMessage)
+    .values({
+      ownerUserId: original.ownerUserId,
+      mailboxId: mailbox.id,
+      organizationId: original.organizationId,
+      provider: 'fixture',
+      providerMessageId: `answer-${session.id}`,
+      fromAddress: original.fromAddress,
+      toAddress: original.toAddress,
+      title: 'Re: Help',
+      bodyText: 'Downtown',
+      headers: { 'in-reply-to': actualId },
+      processingStatus: 'pending',
+      channelRevision: mailbox.revision,
+      authentication: { spf: 'pass', dkim: 'pass', dmarc: 'pass' },
+      receivedAt: new Date(),
+    })
+    .returning();
+  expect(await prepareMailContinuation(assertDefined(answer), mailbox)).toBe(true);
+  const [saved] = await schema.db
+    .select()
+    .from(schema.athenaInboundMessage)
+    .where(eq(schema.athenaInboundMessage.id, assertDefined(answer).id));
+  expect(saved).toMatchObject({
+    sessionId: session.id,
+    threadId: question.id,
+    processingStatus: 'answering',
+  });
 });

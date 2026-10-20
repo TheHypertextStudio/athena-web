@@ -89,6 +89,22 @@ is displayed as **Provider accepted**, distinct from **Delivered**. Signed `emai
 and reconciled without downgrading a bounce. Disabling the channel cancels work whose sending has not started. In-flight provider acceptance
 remains observable, and prior attempts with unknown delivery remain uncertain without another send.
 
+### Provider-assigned reply identity
+
+The provider's acceptance ID and the RFC Message-ID are different identifiers
+([Resend's Message-ID contract](https://resend.com/changelog/message-id-for-sent-emails)). The sending
+provider may replace the Message-ID supplied by Docket. Signed `email.sent`, `email.delivered`
+and `email.bounced` callbacks therefore retain the provider-assigned `message_id` in the durable
+receipt ledger. Reconciliation copies that identity into the saved outbound headers even when
+the callback arrived before the send acknowledgement. Acceptance callbacks do not imply delivery,
+and later callbacks cannot downgrade a confirmed bounce.
+
+Thread context and pending text questions match the actual RFC Message-ID referenced by the
+owner's reply, within the same mailbox and enrollment revision. Unauthenticated callbacks and
+malformed identities cannot change that correlation. Migration
+`0170_athena_mail_provider_identity.sql` adds nullable receipt metadata and is compatible with
+previously stored callbacks.
+
 ### Supported content
 
 Inbound bodies are converted to plain text for execution and message display; raw sender HTML
@@ -147,7 +163,7 @@ the required credentials. Local/test use the fixture adapter and captured outbou
 1. Add a dedicated Athena subdomain in the Studio Resend account. Configure sending and receiving;
    publish its MX, SPF and DKIM records and verify domain state. Preserve existing account-mail DNS.
 2. Create an environment-specific webhook at `/webhooks/mail/inbound`, subscribed to
-   `email.received`, `email.delivered` and `email.bounced`. Keep its signing secret in Secret Manager.
+   `email.received`, `email.sent`, `email.delivered` and `email.bounced`. Keep its signing secret in Secret Manager.
 3. Bind the dedicated receiving credential and endpoint signing secret to the API deployment.
    Set `ATHENA_INBOUND_MAIL_HOST`; apply the migration and deploy the server scheduler/runtime.
 4. Enroll the verified owner through ordinary UI and send a real outside-mailbox request.

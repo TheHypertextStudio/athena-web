@@ -2,6 +2,7 @@ import type * as Environment from '../../../src/env';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { eq } from 'drizzle-orm';
 import { signSvixPayload } from '@docket/mail';
+import { Hono } from 'hono';
 import { assertDefined } from '@docket/test-utils';
 import { getDb } from '../../support/routes-harness';
 import { enrolled } from './fixtures';
@@ -25,8 +26,8 @@ let schema: Awaited<ReturnType<typeof getDb>>;
 beforeAll(async () => {
   schema = await getDb();
 });
-function event(type: string, providerId: string) {
-  const body = JSON.stringify({ type, data: { email_id: providerId } });
+function event(type: string, providerId: string, messageId?: string) {
+  const body = JSON.stringify({ type, data: { email_id: providerId, message_id: messageId } });
   const id = `event-${Math.random()}`;
   const timestamp = String(Math.floor(Date.now() / 1000));
   return {
@@ -138,4 +139,79 @@ describe('authenticated delivery receipts', () => {
     expect(await receiveMailProviderEvent(unsupported.body, unsupported.headers)).toBe(true);
     expect(await status(target.id)).toBe('bounced');
   });
+});
+
+it('recovers the provider-assigned reply identity when its signed callback beats the send receipt', async () => {
+  const provider = `identity-${Math.random()}`;
+  const target = await intent(null);
+  const other = await intent(`other-identity-${Math.random()}`);
+  const messageId = '<provider-assigned-message@example.com>';
+  const callback = event('email.sent', provider, messageId);
+  await schema.db.insert(schema.athenaMailProviderEvent).values({
+    id: callback.headers['svix-id'],
+    providerMessageId: provider,
+    kind: 'sent',
+  });
+  expect(await receiveMailProviderEvent(callback.body, {})).toBe(false);
+  expect(await receiveMailProviderEvent(callback.body, callback.headers)).toBe(true);
+  await schema.db
+    .update(schema.athenaMailOutbox)
+    .set({ providerMessageId: provider })
+    .where(eq(schema.athenaMailOutbox.id, target.id));
+  await reconcileMailProviderEvents();
+  const rows = await schema.db.select().from(schema.athenaMailOutbox);
+  expect(rows.find((row) => row.id === target.id)?.headers['Message-ID']).toBe(messageId);
+  expect(rows.find((row) => row.id === other.id)?.headers['Message-ID']).toBeUndefined();
+  expect(await status(target.id)).toBe('sent');
+  await reconcileMailProviderEvents();
+  expect(await status(target.id)).toBe('sent');
+});
+
+it('ignores malformed provider identities without changing reply headers or delivery authority', async () => {
+  const provider = `invalid-identity-${Math.random()}`;
+  const target = await intent(provider);
+  const callback = event('email.sent', provider, '<valid@example.com>\r\nBcc: other@example.com');
+  expect(await receiveMailProviderEvent(callback.body, callback.headers)).toBe(true);
+  const [saved] = await schema.db
+    .select()
+    .from(schema.athenaMailOutbox)
+    .where(eq(schema.athenaMailOutbox.id, target.id));
+  expect(saved?.headers['Message-ID']).toBeUndefined();
+  expect(saved?.status).toBe('sent');
+});
+
+it('rejects a signed invalid JSON callback without throwing or changing delivery state', async () => {
+  const target = await intent(`invalid-json-${Math.random()}`);
+  const body = '{';
+  const id = `invalid-json-event-${Math.random()}`;
+  const timestamp = String(Math.floor(Date.now() / 1000));
+  expect(
+    await receiveMailProviderEvent(body, {
+      'svix-id': id,
+      'svix-timestamp': timestamp,
+      'svix-signature': `v1,${signSvixPayload(signingSecret, id, timestamp, body)}`,
+    }),
+  ).toBe(false);
+  expect(await status(target.id)).toBe('sent');
+});
+
+it('records accepted-send identities through the public signed webhook route', async () => {
+  const provider = `route-identity-${Math.random()}`;
+  const target = await intent(provider);
+  const actualId = '<route-provider-message@example.com>';
+  const callback = event('email.sent', provider, actualId);
+  const { default: router } = await import('../../../src/routes/inbound-mail');
+  const app = new Hono().route('/', router);
+  const response = await app.request('/inbound', {
+    method: 'POST',
+    headers: { ...callback.headers, 'content-type': 'application/json' },
+    body: callback.body,
+  });
+  expect(response.status).toBe(204);
+  const [saved] = await schema.db
+    .select()
+    .from(schema.athenaMailOutbox)
+    .where(eq(schema.athenaMailOutbox.id, target.id));
+  expect(saved?.headers['Message-ID']).toBe(actualId);
+  expect(saved?.status).toBe('sent');
 });

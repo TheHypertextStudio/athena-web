@@ -234,6 +234,8 @@ export const athenaMailOutbox = pgTable(
 export const athenaMailProviderEvent = pgTable('athena_mail_provider_event', {
   id: text('id').primaryKey(),
   providerMessageId: text('provider_message_id').notNull(),
+  /** Provider-assigned RFC Message-ID, retained even when its callback beats the send receipt. */
+  rfc822MessageId: text('rfc822_message_id'),
   kind: text('kind').notNull(),
   receivedAt: timestamp('received_at', { withTimezone: true }).notNull().defaultNow(),
 });

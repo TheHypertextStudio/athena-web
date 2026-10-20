@@ -11,6 +11,10 @@
 
 ### [INBOX-EMAIL-INPUTS] Unify email with the personal Inbox
 
+- **Provider threading plan**: The outbound provider assigns its own RFC Message-ID. Retain that authenticated identity on durable provider receipts and reconcile it onto the saved outbound headers, including callbacks that race the send acknowledgment. Keep delivery-state transitions monotonic. Verify owner follow-ups match the exact pending question through the provider-assigned ID, without using another owner, enrollment revision, or the latest canonical chat. Add an additive database migration, focused callback/continuation regressions, and provider-contract documentation before releasing the backend correction.
+- **Provider threading validation**: The affected mail suite and focused replay verify exact pending-question routing, legacy callback backfill, malformed identity rejection and signed malformed JSON handling. API build/typecheck, the database and dependent application typechecks, and affected lint pass. The additive migration preserves compatibility with the existing reader and server.
+- **Runtime acceptance**: The deployed receiving path produces a hydrated Email item in the owner's existing Inbox. After correcting the selected local runtime's streaming decoder, a real reply recovered the original thread reference and reached the owner's mailbox while Docket was closed. Live provider-assigned identity correlation remains open until this backend correction is deployed.
+
 - **Status**: IN_PROGRESS
 - **Started**: 2026-10-19
 - **Description**: Make received Athena email discoverable as typed input from the main Inbox and verify the deployed owner-email-to-Athena-response journey.

@@ -5,7 +5,7 @@ import type { SQL } from 'drizzle-orm';
 import { AthenaMailOutboxOut } from '@docket/athena/athena-mail-contract';
 /** Durable mail output with fixed owner destinations and immutable external-send approval. */
 import { randomUUID } from 'node:crypto';
-import { athenaMailOutbox, athenaMailProviderEvent, db } from '@docket/db';
+import { athenaMailOutbox, db } from '@docket/db';
 import { and, asc, eq, inArray, lte, or, isNull } from 'drizzle-orm';
 import { getContainer } from '../../container';
 import { mailboxAddress } from '../../routes/athena-mail-store';
@@ -28,6 +28,8 @@ export function mailOutboxView(row: Outbox): AthenaMailOutboxOut {
   });
 }
 export { prepareMailReplies } from './replies';
+export { recordMailProviderEvent, reconcileMailProviderEvents } from './delivery-events';
+import { reconcileMailProviderEvents } from './delivery-events';
 async function claimMail(now: Date): Promise<Outbox | null> {
   return db.transaction(async (tx) => {
     const [row] = await tx
@@ -171,56 +173,6 @@ export async function sweepMailOutbox(now = new Date()): Promise<number> {
     await deliverMail(row, now);
   }
   return count;
-}
-/** Apply authenticated delivery callbacks idempotently without downgrading a later event. */
-export async function recordMailProviderEvent(
-  providerId: string,
-  type: 'delivered' | 'bounced',
-  eventId = `${providerId}:${type}`,
-): Promise<void> {
-  await db
-    .insert(athenaMailProviderEvent)
-    .values({ id: eventId, providerMessageId: providerId, kind: type })
-    .onConflictDoNothing();
-  await db
-    .update(athenaMailOutbox)
-    .set({ status: type, errorCode: type === 'bounced' ? 'recipient_bounced' : null })
-    .where(
-      and(
-        eq(athenaMailOutbox.providerMessageId, providerId),
-        type === 'delivered'
-          ? inArray(athenaMailOutbox.status, ['sent', 'uncertain'])
-          : inArray(athenaMailOutbox.status, ['sent', 'delivered', 'uncertain']),
-      ),
-    );
-}
-
-/** Reconcile durable callbacks that arrived before the provider receipt was saved. */
-export async function reconcileMailProviderEvents(): Promise<void> {
-  const rows = await db
-    .select({ event: athenaMailProviderEvent })
-    .from(athenaMailProviderEvent)
-    .innerJoin(
-      athenaMailOutbox,
-      and(
-        eq(athenaMailOutbox.providerMessageId, athenaMailProviderEvent.providerMessageId),
-        or(
-          and(
-            eq(athenaMailProviderEvent.kind, 'delivered'),
-            inArray(athenaMailOutbox.status, ['sent', 'uncertain']),
-          ),
-          and(
-            eq(athenaMailProviderEvent.kind, 'bounced'),
-            inArray(athenaMailOutbox.status, ['sent', 'uncertain', 'delivered']),
-          ),
-        ),
-      ),
-    )
-    .limit(100);
-  for (const { event } of rows) {
-    if (event.kind === 'bounced' || event.kind === 'delivered')
-      await recordMailProviderEvent(event.providerMessageId, event.kind, event.id);
-  }
 }
 
 async function externalSendStillApproved(row: Outbox): Promise<boolean> {

@@ -7,6 +7,7 @@
  * change lands here rather than across five call sites.
  */
 import { and, asc, eq, inArray } from 'drizzle-orm';
+import { enqueueSearchUpsert } from '../search/write-through';
 import type { MentionEntityKind, MentionSubjectType } from '../contracts/mention';
 
 import type {
@@ -33,6 +34,42 @@ function readProse(
     if (typeof value === 'string') prose[field] = value;
   }
   return prose;
+}
+
+/** Save a link and announce its pending metadata independently of provider unfurling. */
+async function findOrCreateResource(draft: ResourceDraft): Promise<string | undefined> {
+  const schema = await import('@docket/db');
+  const inserted = await schema.db
+    .insert(schema.externalResource)
+    .values({
+      organizationId: draft.organizationId,
+      createdBy: draft.createdBy,
+      provider: draft.provider,
+      canonicalKey: draft.canonicalKey,
+      canonicalUrl: draft.canonicalUrl,
+      externalId: draft.externalId ?? null,
+      resourceType: draft.resourceType,
+    })
+    .onConflictDoNothing({
+      target: [schema.externalResource.organizationId, schema.externalResource.canonicalKey],
+    })
+    .returning({ id: schema.externalResource.id });
+  // Saved metadata belongs in the Library even while provider resolution is pending.
+  if (inserted[0]) {
+    await enqueueSearchUpsert(draft.organizationId, 'external_resource', inserted[0].id);
+  }
+
+  const rows = await schema.db
+    .select({ id: schema.externalResource.id })
+    .from(schema.externalResource)
+    .where(
+      and(
+        eq(schema.externalResource.organizationId, draft.organizationId),
+        eq(schema.externalResource.canonicalKey, draft.canonicalKey),
+      ),
+    )
+    .limit(1);
+  return rows[0]?.id;
 }
 
 /** Build the slice's storage over the app database. */
@@ -111,35 +148,7 @@ export function createDrizzleMentionStorage(): MentionStorage {
   };
 
   const resources: ExternalResourceRepository = {
-    async findOrCreate(draft: ResourceDraft): Promise<string | undefined> {
-      const schema = await import('@docket/db');
-      await schema.db
-        .insert(schema.externalResource)
-        .values({
-          organizationId: draft.organizationId,
-          createdBy: draft.createdBy,
-          provider: draft.provider,
-          canonicalKey: draft.canonicalKey,
-          canonicalUrl: draft.canonicalUrl,
-          externalId: draft.externalId ?? null,
-          resourceType: draft.resourceType,
-        })
-        .onConflictDoNothing({
-          target: [schema.externalResource.organizationId, schema.externalResource.canonicalKey],
-        });
-
-      const rows = await schema.db
-        .select({ id: schema.externalResource.id })
-        .from(schema.externalResource)
-        .where(
-          and(
-            eq(schema.externalResource.organizationId, draft.organizationId),
-            eq(schema.externalResource.canonicalKey, draft.canonicalKey),
-          ),
-        )
-        .limit(1);
-      return rows[0]?.id;
-    },
+    findOrCreate: findOrCreateResource,
 
     async findByIds(organizationId, ids): Promise<readonly StoredResource[]> {
       if (ids.length === 0) return [];

@@ -1,4 +1,6 @@
 /** Project URL-resource route coverage. */
+import { eq } from 'drizzle-orm';
+import { processSearchIndexJobs } from '../../src/search/process-jobs';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import type * as DbModule from '@docket/db';
@@ -45,6 +47,13 @@ describe('Project resources', () => {
     const resource = (await created.json()) as { id: string; subjectType: string; title: string };
     expect(resource).toMatchObject({ subjectType: 'project', title: 'Campaign brief' });
 
+    await processSearchIndexJobs({ limit: 100 });
+    const [indexed] = await db
+      .select()
+      .from(schema.searchDocument)
+      .where(eq(schema.searchDocument.entityId, resource.id));
+    expect(indexed).toMatchObject({ kind: 'attachment', archivedAt: null });
+
     const listed = await app.request(`/${projectId}/resources`);
     expect(listed.status).toBe(200);
     const page = (await listed.json()) as { items: { id: string }[] };
@@ -55,6 +64,12 @@ describe('Project resources', () => {
     });
     expect(removed.status).toBe(200);
     expect(await removed.json()).toEqual({ id: resource.id, removed: true });
+    await processSearchIndexJobs({ limit: 100 });
+    const [archived] = await db
+      .select()
+      .from(schema.searchDocument)
+      .where(eq(schema.searchDocument.entityId, resource.id));
+    expect(archived?.archivedAt).toBeInstanceOf(Date);
   });
 
   it('does not expose a Project from another workspace', async () => {

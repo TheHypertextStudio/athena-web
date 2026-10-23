@@ -13647,6 +13647,17 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
 
 ## Completed Tasks
 
+### [MCP-LIBRARY-LIVE-ACCEPTANCE] Restore Library discovery and verify production reads
+
+- **Status**: DONE
+- **Completed**: 2026-10-23
+- **Summary**: Traced empty discovery to missing search projections. Pending linked resources waited on a failing unfurl job, the default recovery corpus omitted linked resources, and Project/Initiative URL attachment writes omitted indexing announcements. Enqueue links at creation, include them in recovery, announce attachment creation/removal, and serialize the unfurl subquery timestamp explicitly.
+- **Files changed**: Mention storage, unfurl sweep, search backfill defaults, Project/Initiative resource routes, focused regressions and the MCP engineering specification.
+- **Validation**: Six behavior regressions failed before the corrections; a seventh failure was a consequence of the interrupted unfurl fixture. All 325 affected content/search/attachment/MCP tests pass. After extracting the storage helper and moving recovery coverage into a separate file to respect existing complexity limits, the 12 reconciliation and two recovery tests pass again. API build, typecheck, lint and the complexity ratchet pass. Independent read-only review found no actionable issues.
+- **Production acceptance**: Scoped repair used the existing projectors to insert only missing Library search documents for the caller's accessible workspaces. Discovery enumerated 958 unique resources across ten pages, including the authorized harmless upload; one workspace has no Library source material. Current reads fetched existing linked metadata and visible usage, an item beyond the first page and an indistinguishable missing reference in a mixed batch. Tool and canonical URI file details matched; the content URI returned the exact 44 uploaded bytes as `text/plain`.
+- **Learnings**: A successful empty response does not establish the corpus is empty. Compare authoritative source counts with the projection, then test direct reads separately. PGlite accepts a raw Date parameter that Drizzle's PostgreSQL serializer rejects; a read-only production SELECT reproduced that failure and verified ISO encoding. Pending metadata belongs in discovery independently of provider availability.
+- **Delivery boundary**: Runtime reads and the scoped derived-index repair are verified. The permanent source correction follows the normal validated main delivery and production deployment gates; no provider credential, membership, source record or existing uploaded bytes were changed by the repair.
+
 ### [MCP-LIBRARY-READS] Discover and fetch Library material through MCP
 
 - **Status**: DONE

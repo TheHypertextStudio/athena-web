@@ -4,6 +4,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import type * as DbModule from '@docket/db';
 import { formatMentionLink } from '../../src/contracts/mention';
 
+import { processSearchIndexJobs } from '../../src/search/process-jobs';
 import { createDrizzleMentionStorage } from '../../src/content/drizzle-mention-storage';
 import { createMentionReconciler } from '../../src/content/reconcile-mentions';
 import { getDb, one, seedBaseOrg, seedStatuses } from '../support/routes-harness';
@@ -84,6 +85,14 @@ describe('reconcileMentions', () => {
     // invent one from the URL.
     expect(resource.unfurlStatus).toBe('pending');
     expect(resource.title).toBeNull();
+    await processSearchIndexJobs({ limit: 100 });
+    const indexed = await db
+      .select()
+      .from(schema.searchDocument)
+      .where(eq(schema.searchDocument.entityId, resource.id));
+    expect(indexed).toMatchObject([
+      { kind: 'external_resource', facet: { unfurlStatus: 'pending' } },
+    ]);
   });
 
   it('dedupes two spellings of the same file onto one resource row', async () => {

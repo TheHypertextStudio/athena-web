@@ -22,6 +22,7 @@ const DEFAULT_SOURCE_TABLES = [
   'comment',
   'update',
   'attachment',
+  'external_resource',
   'calendar_event',
   'event',
 ] as const;

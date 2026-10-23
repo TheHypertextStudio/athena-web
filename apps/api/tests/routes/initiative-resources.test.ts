@@ -1,4 +1,6 @@
 /** Initiative URL-resource route coverage. */
+import { eq } from 'drizzle-orm';
+import { processSearchIndexJobs } from '../../src/search/process-jobs';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import type * as DbModule from '@docket/db';
@@ -44,6 +46,13 @@ describe('Initiative resources', () => {
       title: 'Access plan',
     });
 
+    await processSearchIndexJobs({ limit: 100 });
+    const [indexed] = await db
+      .select()
+      .from(schema.searchDocument)
+      .where(eq(schema.searchDocument.entityId, resource.id));
+    expect(indexed).toMatchObject({ kind: 'attachment', archivedAt: null });
+
     const listed = await app.request(`/${initiative.id}/resources`);
     expect(listed.status).toBe(200);
     expect(await listed.json()).toMatchObject({ items: [{ id: resource.id }] });
@@ -53,6 +62,12 @@ describe('Initiative resources', () => {
     });
     expect(removed.status).toBe(200);
     expect(await removed.json()).toEqual({ id: resource.id, removed: true });
+    await processSearchIndexJobs({ limit: 100 });
+    const [archived] = await db
+      .select()
+      .from(schema.searchDocument)
+      .where(eq(schema.searchDocument.entityId, resource.id));
+    expect(archived?.archivedAt).toBeInstanceOf(Date);
     expect(
       (
         await app.request(`/${initiative.id}/resources/${resource.id}`, {

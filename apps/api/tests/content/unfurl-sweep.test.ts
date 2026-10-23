@@ -61,7 +61,16 @@ describe('sweepResourceUnfurls', () => {
     const id = await seedPending(orgId, 'https://example.com/handbook/onboarding');
 
     const now = new Date('2026-08-04T12:00:00Z');
-    const result = await sweepResourceUnfurls(new MockUnfurler(), now);
+    // PGlite accepts raw Date parameters that the production postgres-js boundary rejects.
+    schema.setDatabaseQueryObserver((_query, params) => {
+      expect(params.some((value) => value instanceof Date)).toBe(false);
+    });
+    let result;
+    try {
+      result = await sweepResourceUnfurls(new MockUnfurler(), now);
+    } finally {
+      schema.setDatabaseQueryObserver(undefined);
+    }
     expect(result.resolved).toBeGreaterThanOrEqual(1);
 
     const row = await load(id);

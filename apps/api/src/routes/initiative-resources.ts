@@ -14,6 +14,7 @@ import { created, ok } from '../lib/ok';
 import { pageResult, pageResultById, seekAfter, seekAfterId } from '../lib/list-cursor';
 import { apiDoc } from '../lib/openapi-route';
 import { zJson, zParam, zQuery } from '../lib/validate';
+import { enqueueSearchDelete, enqueueSearchUpsert } from '../search/write-through';
 import { capabilityGuard } from '../permissions/capability-guard';
 import { idParam, loadInitiative } from './initiative-helpers';
 
@@ -154,6 +155,7 @@ const initiativeResources = new Hono<AppEnv>()
       const row = rows[0];
       /* v8 ignore next -- @preserve defensive: insert always returns one row */
       if (!row) throw new Error('Initiative resource insert returned no row');
+      await enqueueSearchUpsert(orgId, 'attachment', row.id);
       return created(c, AttachmentOut, attachmentOut(row), null);
     },
   )
@@ -187,6 +189,7 @@ const initiativeResources = new Hono<AppEnv>()
         .returning({ id: attachment.id });
       const row = rows[0];
       if (!row) throw new NotFoundError('Initiative resource not found');
+      await enqueueSearchDelete(orgId, 'attachment', row.id);
       return ok(c, AttachmentRemoved, { id: row.id, removed: true });
     },
   );

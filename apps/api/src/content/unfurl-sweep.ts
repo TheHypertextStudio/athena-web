@@ -74,7 +74,7 @@ export async function sweepResourceUnfurls(
         ),
         sql`${schema.externalResource.id} in (
           select id from ${schema.externalResource}
-          where unfurl_status = 'pending' and unfurl_after <= ${now}
+          where unfurl_status = 'pending' and unfurl_after <= ${now.toISOString()}
           order by unfurl_after asc
           limit ${BATCH}
         )`,

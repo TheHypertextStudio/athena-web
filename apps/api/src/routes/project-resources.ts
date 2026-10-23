@@ -14,6 +14,7 @@ import { pageResult, seekAfter } from '../lib/list-cursor';
 import { assertProjectInOrg } from '../lib/project-guard';
 import { apiDoc } from '../lib/openapi-route';
 import { zJson, zParam, zQuery } from '../lib/validate';
+import { enqueueSearchDelete, enqueueSearchUpsert } from '../search/write-through';
 import { capabilityGuard } from '../permissions/capability-guard';
 
 const idParam = z.object({ id: z.string() });
@@ -110,6 +111,7 @@ const projectResources = new Hono<AppEnv>()
       const row = rows[0];
       /* v8 ignore next -- @preserve the insert returns its single created row */
       if (!row) throw new Error('Project resource insert returned no row');
+      await enqueueSearchUpsert(orgId, 'attachment', row.id);
       return created(c, AttachmentOut, attachmentOut(row), null);
     },
   )
@@ -142,6 +144,7 @@ const projectResources = new Hono<AppEnv>()
         .returning({ id: attachment.id });
       const row = rows[0];
       if (!row) throw new NotFoundError('Project resource not found');
+      await enqueueSearchDelete(orgId, 'attachment', row.id);
       return ok(c, AttachmentRemoved, { id: row.id, removed: true });
     },
   );

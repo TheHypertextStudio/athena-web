@@ -550,6 +550,9 @@ and current MCP product access. Discovery reuses the Library search corpus (`ext
 and `attachment`); omitting `orgId` searches the authenticated caller's accessible workspaces.
 Registered-agent identity never expands into the owner's user scope. Source reads recheck active,
 unarchived membership and live source/subject state independently of search-index freshness.
+New linked resources enqueue discovery projections before unfurling finishes; pending provider
+metadata must not prevent Library discovery. Project and Initiative URL attachment creation and
+removal also enqueue projections, and the default backfill/repair corpus includes linked resources.
 Linked metadata retains workspace visibility; attachments use canonical subject permissions and
 usage remains filtered. Missing and inaccessible batch references both return `not_found`.
 Only uploaded files expose contents, as bounded MCP blobs after declared and actual size checks

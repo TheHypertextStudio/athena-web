@@ -7,6 +7,17 @@
 
 ## Active Tasks
 
+### [APPLE-APP-IDENTITY] Keep native Apple identity references consistent
+
+- **Status**: REVIEW
+- **Started**: 2026-10-23
+- **Description**: Use the canonical Studio native Docket identity in current examples and credential association while preserving previously signed clients and explicitly configured OAuth audiences.
+- **Plan**: Add the canonical same-team AASA identity alongside the legacy association, align native authentication fixtures and environment guidance, and verify the affected web/auth/env packages. Keep Web Services IDs and Android identifiers unchanged; provider registration and runtime audience changes require separate acceptance.
+- **Validation**: Observe the canonical AASA regression fail before the data update, then verify both associations, configured native audience handling, package checks and documentation formatting.
+- **Outcome**: The canonical AASA regression failed first and now passes alongside the retained credential association and Android association checks. All 605 auth tests and 201 environment tests pass; affected package typechecks and lint pass. The four association checks and 85 focused auth checks also pass under the repository's Node 24 runtime. Web Services IDs and Android package identity remain unchanged; no runtime environment or Apple provider configuration was updated.
+- **Learnings**: AASA credential trust and OAuth ID-token audiences are separate contracts. Retaining an old same-team credential association does not authorize accepting its audience automatically, and a new example does not prove a registered signed app exists.
+- **Remaining acceptance**: Verify the registered native App ID, provider primary-app association and signed-client sign-in before changing a live native audience or retiring the old association.
+
 ### [DOCS-PRODUCTION-VERIFICATION] Restore public documentation delivery checks
 
 ### [INBOX-EMAIL-INPUTS] Unify email with the personal Inbox

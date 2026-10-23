@@ -205,8 +205,26 @@ that field is non-null.
 
 The Apple target claims both `webcredentials:clearthedocket.com` and
 `webcredentials:hypertext.studio` while migration is available. Each domain must return an
-AASA document with `T95VDD3A4W.studio.hypertext.docket` directly at
+AASA document with `T95VDD3A4W.studio.hypertext.apps.docket` directly at
 `/.well-known/apple-app-site-association`. Apple does not accept a redirect for either AASA path.
+
+New native Apple app identities use `studio.hypertext.apps.docket` under the Studio
+team `T95VDD3A4W`, with development and extension identities beneath that app. This
+web repository contains the credential association and server authentication
+configuration, not an Apple app target. The AASA document also retains
+`T95VDD3A4W.studio.hypertext.docket` for the previously signed same-team internal
+app; remove it only after signed replacement and credential recovery acceptance.
+That compatibility association does not certify either app's entitlements or
+registration. Existing Android package `studio.hypertext.docket` is unchanged.
+
+`APPLE_APP_CLIENT_ID` is the native ID-token audience and must match the actual
+primary signed app and its Apple registration. Keep the currently configured
+audience until the replacement's Studio App ID, profiles, Sign in with Apple
+primary-app/Services ID association and signed sign-in acceptance are verified.
+Examples do not rewrite a live audience or automatically accept both native IDs.
+`APPLE_CLIENT_ID` remains the separately registered web Services ID; keep its
+existing value and associated signing-key material. An AASA update does not
+authorize a provider change, publication or retirement of an old registration.
 
 ### Rollout and removal
 

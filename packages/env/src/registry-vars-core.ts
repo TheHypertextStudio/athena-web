@@ -505,7 +505,7 @@ export const CORE_VARS: readonly VarSpec[] = [
     required: false,
     zod: authServer.APPLE_APP_CLIENT_ID,
     where:
-      'Native Apple app identifier e.g. studio.hypertext.docket; accepted as a Sign in with Apple ID-token audience',
+      'Registered primary native Apple app identifier e.g. studio.hypertext.apps.docket; must match the actual signed app and provider association before changing the accepted ID-token audience',
   },
   {
     name: 'APPLE_TEAM_ID',

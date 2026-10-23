@@ -13,13 +13,13 @@ vi.hoisted(() => {
 import nextConfig from '../../next.config';
 
 describe('Apple app-site association', () => {
-  it('publishes the native Docket application as a web credential app', () => {
+  it('publishes the canonical Docket app while preserving the previous same-team credential app', () => {
     const path = resolve(process.cwd(), 'public/.well-known/apple-app-site-association');
     const association = JSON.parse(readFileSync(path, 'utf8')) as unknown;
 
     expect(association).toEqual({
       webcredentials: {
-        apps: ['T95VDD3A4W.studio.hypertext.docket'],
+        apps: ['T95VDD3A4W.studio.hypertext.apps.docket', 'T95VDD3A4W.studio.hypertext.docket'],
       },
     });
   });

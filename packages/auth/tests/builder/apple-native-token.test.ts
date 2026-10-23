@@ -36,12 +36,12 @@ describe('native Apple identity token verification', () => {
     const rawNonce = 'raw-native-nonce';
     const hashedNonce = createHash('sha256').update(rawNonce).digest('hex');
     const provider = apple({
-      clientId: ['studio.hypertext.docket.web', 'studio.hypertext.docket'],
+      clientId: ['studio.hypertext.docket.web', 'studio.hypertext.apps.docket'],
       clientSecret: 'test-secret',
     });
 
     const result = await provider.verifyIdToken(
-      appleToken('studio.hypertext.docket', hashedNonce),
+      appleToken('studio.hypertext.apps.docket', hashedNonce),
       rawNonce,
     );
     const keyRequest = vi.mocked(fetch).mock.calls[0]?.[0];
@@ -54,7 +54,7 @@ describe('native Apple identity token verification', () => {
 
   it('rejects an unrecognized audience and a mismatched nonce', async () => {
     const provider = apple({
-      clientId: ['studio.hypertext.docket.web', 'studio.hypertext.docket'],
+      clientId: ['studio.hypertext.docket.web', 'studio.hypertext.apps.docket'],
       clientSecret: 'test-secret',
     });
 
@@ -66,9 +66,22 @@ describe('native Apple identity token verification', () => {
     ).resolves.toBe(false);
     await expect(
       provider.verifyIdToken(
-        appleToken('studio.hypertext.docket', 'different-nonce'),
+        appleToken('studio.hypertext.apps.docket', 'different-nonce'),
         'raw-native-nonce',
       ),
+    ).resolves.toBe(false);
+  });
+
+  it('does not accept the legacy app audience when only the canonical native app is configured', async () => {
+    const rawNonce = 'raw-native-nonce';
+    const hashedNonce = createHash('sha256').update(rawNonce).digest('hex');
+    const provider = apple({
+      clientId: ['studio.hypertext.docket.web', 'studio.hypertext.apps.docket'],
+      clientSecret: 'test-secret',
+    });
+
+    await expect(
+      provider.verifyIdToken(appleToken('studio.hypertext.docket', hashedNonce), rawNonce),
     ).resolves.toBe(false);
   });
 });

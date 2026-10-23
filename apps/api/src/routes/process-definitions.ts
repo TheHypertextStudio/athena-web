@@ -16,7 +16,6 @@ import {
   appendPublishedProcessRevision,
   archiveProcessDefinition,
   createPublishedProcessDefinition,
-  createProcessDefinitionFromProject,
   listProcessDefinitions,
   loadProcessDefinitionDetail,
   updateProcessDefinitionMetadata,
@@ -26,6 +25,12 @@ import { pageResultById } from '../lib/list-cursor';
 import { apiDoc } from '../lib/openapi-route';
 import { zJson, zParam, zQuery } from '../lib/validate';
 import { capabilityGuard } from '../permissions/capability-guard';
+import { captureIdempotencyBody, idempotencyFor } from '../lib/idempotency';
+import {
+  authorizeProjectSnapshot,
+  createProjectSnapshotWithReceipt,
+  resumeProjectSnapshot,
+} from './process-definition-creation';
 
 const idParam = z.object({ id: z.string() });
 
@@ -57,17 +62,27 @@ const processDefinitions = new Hono<AppEnv>()
       capability: 'contribute',
       response: ProcessDefinitionDetailOut,
       description:
-        'Snapshot one fully readable project tree, its milestones, tasks, labels, hierarchy, dependencies, and relative dates into a private published process revision.',
+        'Snapshot one fully readable project tree, its milestones, tasks, labels, hierarchy, dependencies, and relative dates into a private published process revision. An optional Idempotency-Key atomically retains the original snapshot for 48 hours. Reuse it with the identical request to recover a lost response without creating another definition.',
+      extra: {
+        'x-docket-idempotency': 'atomic-receipt',
+        parameters: [
+          {
+            name: 'Idempotency-Key',
+            in: 'header',
+            required: false,
+            description: 'Caller-owned retry identity retained for 48 hours.',
+            schema: { type: 'string', minLength: 1 },
+          },
+        ],
+      },
     }),
+    captureIdempotencyBody,
     zJson(ProcessDefinitionFromProjectCreate),
+    authorizeProjectSnapshot,
+    resumeProjectSnapshot,
+    idempotencyFor('atomic-receipt'),
     async (c) => {
-      const { orgId, actorId } = c.get('actorCtx');
-      const created = await createProcessDefinitionFromProject(db, {
-        organizationId: orgId,
-        actorId,
-        input: c.req.valid('json'),
-      });
-      const detail = await loadProcessDefinitionDetail(db, orgId, created.definitionId, actorId);
+      const detail = await createProjectSnapshotWithReceipt(c, c.req.valid('json'));
       return ok(c, ProcessDefinitionDetailOut, detail);
     },
   )

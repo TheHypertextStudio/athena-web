@@ -16,12 +16,12 @@
     "script": "dev:app"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.build.json && pnpm build:runtime",
+    "build": "NODE_OPTIONS=--max-old-space-size=4096 tsc -p tsconfig.build.json && pnpm build:runtime",
     "build:runtime": "node scripts/build-runtime.mjs",
     "dev": "portless run --force",
     "dev:app": "tsx ../../scripts/portless-env.ts tsx watch --include .env.local --import ./src/dev-env.ts src/server.ts",
     "start": "node dist/server.mjs",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "NODE_OPTIONS=--max-old-space-size=4096 tsc --noEmit",
     "lint": "pnpm lint:src && pnpm lint:tests",
     "lint:fix": "pnpm lint:src --fix && pnpm lint:tests --fix",
     "lint:src": "NODE_OPTIONS=--max-old-space-size=4096 eslint src --cache --cache-location ../../node_modules/.cache/eslint/api-src --cache-strategy content",

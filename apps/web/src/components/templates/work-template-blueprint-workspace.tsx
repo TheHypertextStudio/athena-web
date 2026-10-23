@@ -5,7 +5,6 @@ import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
-  Separator,
   Surface,
 } from '@docket/ui/primitives';
 import { ChevronDown } from '@docket/ui/icons';
@@ -151,7 +150,7 @@ function IncludedWorkOutline({
           Included work
         </h2>
         <p className="text-body-medium text-on-surface-variant">
-          Decide what comes with each new {rootName}. Open one item at a time to define its work.
+          Add the work you want to include. Open an item to edit its details.
         </p>
       </div>
       <CreatedTogether
@@ -162,12 +161,7 @@ function IncludedWorkOutline({
         onSelect={onSelect}
         onAdd={onAdd}
       />
-      {routines ? (
-        <>
-          <Separator />
-          {routines}
-        </>
-      ) : null}
+      {routines}
     </div>
   );
 }

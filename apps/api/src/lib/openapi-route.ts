@@ -29,7 +29,7 @@ import {
   type ApiOperationContract,
   type ApiSuccess,
 } from './api-operation-contract';
-import { idempotencyFor } from './idempotency';
+import { idempotencyFor, type IdempotencyReceiptMode } from './idempotency';
 import { operationMediaTypes } from './media-types';
 import { conditionalWriteFor } from './work-schedule-conditional';
 
@@ -68,7 +68,7 @@ export interface ApiDocOptions {
   /** Description of the success response body (default 'Success.'). */
   responseDescription?: string;
   /** Extra `describeRoute` fields such as operation-specific response headers or extensions. */
-  extra?: DescribeRouteOptions;
+  extra?: DescribeRouteOptions & { readonly 'x-docket-idempotency'?: IdempotencyReceiptMode };
 }
 
 /**

@@ -211,6 +211,78 @@ test('a project repeats through persisted setup and future revisions preserve oc
   for (const occurrence of past) expect(after.occurrences).toContainEqual(occurrence);
 });
 
+test('repeat setup recovers lost committed responses without duplicating definitions or series', async ({
+  page,
+}) => {
+  const initial = await workspace(page);
+  const fixture = initial.fixture ?? (await createMobileAuditFixture(page));
+  const orgId = fixture.orgId;
+  const project = await apiJson<{ id: string; name: string }>(page, `/v1/orgs/${orgId}/projects`, {
+    method: 'POST',
+    body: {
+      name: `Weekly review recovery ${Date.now()}`,
+      teamId: fixture.teamId,
+      leadId: fixture.ownerActorId,
+    },
+  });
+  await apiJson(page, `/v1/orgs/${orgId}/tasks`, {
+    method: 'POST',
+    body: { title: 'Review progress', teamId: fixture.teamId, projectId: project.id },
+  });
+  const committed = new Map<string, string>();
+  for (const endpoint of ['process-definitions/from-project', 'recurrence-series']) {
+    await page.route(
+      `**/v1/orgs/${orgId}/${endpoint}`,
+      async (route) => {
+        const response = await route.fetch();
+        expect(response.ok()).toBe(true);
+        const result = (await response.json()) as { id: string };
+        committed.set(endpoint, result.id);
+        // The server has committed, but the caller receives no response to acknowledge it.
+        await route.abort('failed');
+      },
+      { times: 1 },
+    );
+  }
+  await page.goto(`/orgs/${orgId}/projects/${project.id}`, {
+    waitUntil: 'commit',
+    timeout: TIMEOUTS.pageReady,
+  });
+  await page.getByRole('button', { name: 'Project actions', exact: true }).click();
+  await page.getByRole('menuitem', { name: 'Repeat project', exact: true }).click();
+  const setup = page.getByRole('dialog').last();
+  await setup.getByRole('button', { name: 'Continue', exact: true }).click();
+  await changeCadence(page, 'daily');
+  await setup.getByRole('button', { name: 'Continue', exact: true }).click();
+  const start = setup.getByRole('button', { name: 'Start repeating', exact: true });
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    await start.click();
+    await expect(setup.getByText('Could not finish setup', { exact: true })).toBeVisible();
+    await expect(start).toBeEnabled();
+  }
+  expect(committed.size).toBe(2);
+  await start.click();
+  await expect(page).toHaveURL(
+    new RegExp(`/recurrence-series/${committed.get('recurrence-series')}$`),
+  );
+  const definitions = await apiJson<{ items: { id: string; name: string }[] }>(
+    page,
+    `/v1/orgs/${orgId}/process-definitions?limit=100`,
+  );
+  expect(
+    definitions.items
+      .filter((item) => item.name === `${project.name} series`)
+      .map((item) => item.id),
+  ).toEqual([committed.get('process-definitions/from-project')]);
+  const series = await apiJson<{ items: { id: string; name: string }[] }>(
+    page,
+    `/v1/orgs/${orgId}/recurrence-series?limit=100`,
+  );
+  expect(
+    series.items.filter((item) => item.name === `${project.name} series`).map((item) => item.id),
+  ).toEqual([committed.get('recurrence-series')]);
+});
+
 test('generated work opens schedule management in place and restores focus after discarding a draft', async ({
   page,
 }) => {

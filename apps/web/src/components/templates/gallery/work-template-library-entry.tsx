@@ -31,7 +31,7 @@ export function LibraryEmptyState(): JSX.Element {
   return (
     <Surface as="section" shape="large" pad="roomy" className="flex flex-col gap-3 sm:p-6">
       <Text as="h2" token="headline-small">
-        What work does your organization do?
+        What work do you do?
       </Text>
       <p className="text-body-large text-on-surface-variant max-w-prose">
         A one-off project or an ongoing program can start with a clear purpose and a plan for what

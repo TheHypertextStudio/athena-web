@@ -1,6 +1,6 @@
 import { writeFileSync } from 'node:fs';
 import type { Locator, Page } from '@playwright/test';
-import type { WorkTemplateOut } from '@docket/work/work-template-contract';
+import { WorkTemplateDefinition, type WorkTemplateOut } from '@docket/work/work-template-contract';
 import { expect, test } from './helpers/fixtures';
 import { apiJson, waitForApiResponse } from './helpers/net';
 import { TIMEOUTS, myWorkHref } from './helpers/constants';
@@ -183,5 +183,89 @@ for (const kind of ['initiative', 'program', 'project', 'task'] as const) {
         }),
       );
     }
+  });
+}
+
+test('rejects a stale nested publication preview and retains the authored Project and optional choices', async ({
+  page,
+}) => {
+  const workspace = await blueprintWorkspace(page);
+  const orgId = workspace.orgId;
+  const nested = await seedBlueprintTemplate(page, orgId, 'task');
+  const seeded = await seedBlueprintTemplate(page, orgId, 'project');
+  const definition = WorkTemplateDefinition.parse(seeded.publication.definition);
+  const required = definition.blueprint.steps.find((step) => step.key === 'prepare');
+  if (!required) throw new Error('The required child fixture must exist.');
+  required.template = { workTypeId: nested.publication.id, selection: { kind: 'latest' } };
+  const root = await publishNextBlueprint(page, orgId, seeded.publication, definition);
+  await page.goto(`/orgs/${orgId}/projects`, { waitUntil: 'commit', timeout: TIMEOUTS.pageReady });
+  await page.getByRole('button', { name: 'New project', exact: true }).first().click();
+  const composer = page.getByRole('dialog', { name: 'New project', exact: true });
+  await composer
+    .getByRole('group', { name: 'Work template', exact: true })
+    .getByRole('button')
+    .first()
+    .click();
+  await page.getByRole('menuitem', { name: new RegExp(`^${root.definition.name}`) }).click();
+  await page.getByRole('button', { name: 'Apply starting fields', exact: true }).click();
+  const name = `Retained stale review ${Date.now()}`;
+  await composer.getByPlaceholder('Project name', { exact: true }).fill(name);
+  await composer.getByRole('button', { name: 'Review included work', exact: true }).click();
+  const review = page.getByRole('dialog', { name: 'Included work', exact: true });
+  await expect(review.getByText(seeded.childTitle, { exact: true })).toBeVisible();
+  const team = review.getByRole('combobox', { name: 'Team for included work', exact: true });
+  if (await team.isVisible()) await team.selectOption(workspace.teamId);
+  const optional = review.getByRole('checkbox', {
+    name: `Include ${seeded.optionalTitle}`,
+    exact: true,
+  });
+  await optional.uncheck();
+  await review.getByRole('button', { name: 'Keep these choices', exact: true }).click();
+  const nestedDefinition = WorkTemplateDefinition.parse({
+    ...nested.publication.definition,
+    payload: {
+      ...nested.publication.definition.payload,
+      description: 'A newly published preparation outline.',
+    },
+  });
+  await publishNextBlueprint(page, orgId, nested.publication, nestedDefinition);
+  const before = await childRows(page, orgId, 'project');
+  const rejected = waitForApiResponse(page, /\/projects$/, { method: 'POST' });
+  await composer.getByRole('button', { name: 'Create Project', exact: true }).click();
+  expect((await rejected).status()).toBe(409);
+  await expect(review).toBeVisible();
+  await expect(optional).not.toBeChecked();
+  expect((await childRows(page, orgId, 'project')).map((row) => row.id).sort()).toEqual(
+    before.map((row) => row.id).sort(),
+  );
+  await review.getByRole('button', { name: 'Keep these choices', exact: true }).click();
+  await expect(composer.getByPlaceholder('Project name', { exact: true })).toHaveValue(name);
+  const accepted = waitForApiResponse(page, /\/projects$/, { method: 'POST' });
+  await composer.getByRole('button', { name: 'Create Project', exact: true }).click();
+  expect((await accepted).ok()).toBe(true);
+  const created = (await (await accepted).json()) as WorkRow;
+  expect(created.name).toBe(name);
+  expect(created.workTypeId).toBe(root.id);
+  expect(
+    (await childRows(page, orgId, 'task')).some(
+      (row) => row.projectId === created.id && row.title === seeded.optionalTitle,
+    ),
+  ).toBe(false);
+});
+
+async function publishNextBlueprint(
+  page: Page,
+  orgId: string,
+  publication: WorkTemplateOut,
+  definition: WorkTemplateDefinition,
+): Promise<WorkTemplateOut> {
+  const path = `/v1/orgs/${orgId}/templates/definitions/${publication.id}`;
+  const draft = await apiJson<WorkTemplateOut>(page, `${path}/draft`, {
+    method: 'PATCH',
+    body: { expectedRevision: publication.revision, definition },
+  });
+  return apiJson<WorkTemplateOut>(page, `${path}/publish`, {
+    method: 'POST',
+    body: { expectedRevision: draft.revision },
   });
 }

@@ -1,6 +1,6 @@
 /** Save an existing project as a process and start its recurrence through the current API. */
 import { ProcessDefinitionId } from '@docket/work/ids';
-import { useRef, useState } from 'react';
+import { useRef, useState, type RefObject } from 'react';
 import { api } from '@/lib/api';
 import { queryKeys, unwrap, useApiMutation } from '@/lib/query';
 import type { ProjectOut } from '@/lib/contracts/project';
@@ -8,6 +8,7 @@ import {
   AfterCompletionSchedule,
   CalendarProcessTrigger,
   type ProcessCreationMode,
+  type ProcessTrigger,
 } from '@/lib/contracts/recurrence';
 import type { TaskRepeatDraft } from './repeat-task-control';
 
@@ -42,6 +43,8 @@ export function useRepeatProjectMutation({
 }: RepeatProjectMutationOptions): RepeatProjectMutation {
   const [failure, setFailure] = useState<string | null>(null);
   const definitionSaved = useRef(false);
+  const scheduleRequest = useRef<RequestIdentity | null>(null);
+  const definitionRequest = useRef<RequestIdentity | null>(null);
   const savedDefinition = useRef<{ key: string; definition: { id: string } } | null>(null);
   const definitionKey = JSON.stringify({
     orgId,
@@ -58,42 +61,38 @@ export function useRepeatProjectMutation({
       const definition =
         savedDefinition.current?.key === definitionKey
           ? savedDefinition.current.definition
-          : await createProjectDefinition({ orgId, project, projectNoun, creationMode });
+          : await createProjectDefinition({
+              orgId,
+              project,
+              projectNoun,
+              creationMode,
+              requestKey: stableRequestKey(definitionRequest, definitionKey),
+            });
       savedDefinition.current = { key: definitionKey, definition };
       definitionSaved.current = true;
-      const trigger =
-        repeat.kind === 'calendar'
-          ? {
-              kind: 'calendar' as const,
-              schedule: repeat.schedule,
-              missedPolicy: repeat.missedPolicy,
-              materialization: repeat.materialization,
-            }
-          : {
-              kind: 'after_completion' as const,
-              interval: repeat.schedule.interval,
-              unit: repeat.schedule.unit,
-            };
+      const json = {
+        processDefinitionId: ProcessDefinitionId.parse(definition.id),
+        name: `${project.name} series`,
+        trigger: projectRepeatTrigger(repeat),
+        effectiveFrom: repeat.kind === 'calendar' ? repeat.schedule.startDate : effectiveFrom,
+      };
+      const payload = JSON.stringify({ orgId, json });
+      const requestKey = stableRequestKey(scheduleRequest, payload);
       return unwrap(
         () =>
-          api.v1.orgs[':orgId']['recurrence-series'].$post({
-            param: { orgId },
-            json: {
-              processDefinitionId: ProcessDefinitionId.parse(definition.id),
-              name: `${project.name} series`,
-              trigger,
-              effectiveFrom: repeat.kind === 'calendar' ? repeat.schedule.startDate : effectiveFrom,
-            },
-          }),
-        `The reusable ${projectNoun.toLowerCase()} was saved, but its schedule could not be started.`,
+          api.v1.orgs[':orgId']['recurrence-series'].$post(
+            { param: { orgId }, json },
+            { headers: { 'Idempotency-Key': requestKey } },
+          ),
+        `The reusable ${projectNoun.toLowerCase()} was saved. Could not finish setting up this repeating ${projectNoun.toLowerCase()}. Try again.`,
       );
     },
     invalidateKeys: [queryKeys.processDefinitions(orgId), queryKeys.recurrenceSeries(orgId)],
-    failureTitle: `Could not start this repeating ${projectNoun.toLowerCase()}.`,
+    failureTitle: 'Could not finish setup',
     onError: () => {
       setFailure(
         definitionSaved.current
-          ? `The reusable ${projectNoun.toLowerCase()} was saved, but its schedule could not be started.`
+          ? `The reusable ${projectNoun.toLowerCase()} was saved. Could not finish setting up this repeating ${projectNoun.toLowerCase()}. Try again.`
           : `Could not make this ${projectNoun.toLowerCase()} repeatable. Try again.`,
       );
     },
@@ -111,16 +110,19 @@ function createProjectDefinition({
   project,
   projectNoun,
   creationMode,
-}: Pick<
-  RepeatProjectMutationOptions,
-  'orgId' | 'project' | 'projectNoun' | 'creationMode'
->): Promise<{ id: string }> {
+  requestKey,
+}: Pick<RepeatProjectMutationOptions, 'orgId' | 'project' | 'projectNoun' | 'creationMode'> & {
+  readonly requestKey: string;
+}): Promise<{ id: string }> {
   return unwrap(
     () =>
-      api.v1.orgs[':orgId']['process-definitions']['from-project'].$post({
-        param: { orgId },
-        json: { projectId: project.id, name: `${project.name} series`, creationMode },
-      }),
+      api.v1.orgs[':orgId']['process-definitions']['from-project'].$post(
+        {
+          param: { orgId },
+          json: { projectId: project.id, name: `${project.name} series`, creationMode },
+        },
+        { headers: { 'Idempotency-Key': requestKey } },
+      ),
     `Could not make this ${projectNoun.toLowerCase()} repeatable.`,
   );
 }
@@ -131,4 +133,27 @@ export function isValidProjectRepeat(repeat: TaskRepeatDraft): boolean {
   return (
     repeat.kind === 'after_completion' && AfterCompletionSchedule.safeParse(repeat.schedule).success
   );
+}
+
+function projectRepeatTrigger(
+  repeat: Exclude<TaskRepeatDraft, { readonly kind: 'none' }>,
+): ProcessTrigger {
+  if (repeat.kind === 'calendar') return repeat;
+  return {
+    kind: 'after_completion',
+    interval: repeat.schedule.interval,
+    unit: repeat.schedule.unit,
+  };
+}
+
+interface RequestIdentity {
+  readonly payload: string;
+  readonly key: string;
+}
+
+function stableRequestKey(identity: RefObject<RequestIdentity | null>, payload: string): string {
+  if (identity.current?.payload !== payload) {
+    identity.current = { payload, key: crypto.randomUUID() };
+  }
+  return identity.current.key;
 }

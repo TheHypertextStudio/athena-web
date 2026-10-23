@@ -256,20 +256,18 @@ function effectiveExpiry(record: {
   return record.expiresAt;
 }
 
-/**
- * Deduplicate retried `POST`s that carry an `Idempotency-Key`.
- *
- * @remarks
- * Requests without the header are untouched, so this is purely opt-in and costs an
- * un-keyed request nothing but a header lookup.
- *
- * The key is claimed with an `ON CONFLICT DO NOTHING` insert, which is what makes two
- * simultaneous retries safe: exactly one of them writes the row and proceeds, and the loser
- * sees an `in_progress` record and gets `409` with `Retry-After: 1` rather than executing the
- * same create twice. That header distinguishes this temporary refusal from a domain `409`.
- * A process death can leave a row `in_progress` until the first request after its five-minute lease
- * conditionally removes and reclaims it.
- */
+/** Preserve exact request bytes before a route-local JSON validator consumes the body. */
+export const captureIdempotencyBody: MiddlewareHandler<AppEnv> = async (c, next) => {
+  if (c.req.header('Idempotency-Key') !== undefined) await c.req.arrayBuffer();
+  await next();
+};
+
+/** Read original bytes, including the buffer retained before route-local validation. */
+async function exactRequestBytes(c: Parameters<MiddlewareHandler<AppEnv>>[0]): Promise<Uint8Array> {
+  const bytes = c.req.bodyCache.arrayBuffer ?? c.req.raw.clone().arrayBuffer();
+  return new Uint8Array(await bytes);
+}
+
 /** The retry behavior one operation declares in its public contract. */
 export type IdempotencyReceiptMode = false | 'json-receipt' | 'atomic-receipt';
 
@@ -367,7 +365,20 @@ function unsupportedIdempotencyKey(): ValidationError {
   ]);
 }
 
-/** Build an idempotency middleware for one declared response persistence guarantee. */
+/**
+ * Deduplicate retried `POST`s that carry an `Idempotency-Key`.
+ *
+ * @remarks
+ * Requests without the header are untouched, so this is purely opt-in and costs an
+ * un-keyed request nothing but a header lookup.
+ *
+ * The key is claimed with an `ON CONFLICT DO NOTHING` insert, which is what makes two
+ * simultaneous retries safe: exactly one of them writes the row and proceeds, and the loser
+ * sees an `in_progress` record and gets `409` with `Retry-After: 1` rather than executing the
+ * same create twice. That header distinguishes this temporary refusal from a domain `409`.
+ * A process death can leave a row `in_progress` until the first request after its five-minute lease
+ * conditionally removes and reclaims it.
+ */
 export function idempotencyFor(receiptMode: IdempotencyReceiptMode): MiddlewareHandler<AppEnv> {
   return async (c, next) => {
     const key = c.req.header('Idempotency-Key');
@@ -381,7 +392,7 @@ export function idempotencyFor(receiptMode: IdempotencyReceiptMode): MiddlewareH
 
     const url = new URL(c.req.url);
     const path = url.pathname;
-    const requestBytes = new Uint8Array(await c.req.raw.clone().arrayBuffer());
+    const requestBytes = await exactRequestBytes(c);
     const requestBody = new TextDecoder().decode(requestBytes);
     const hash = fingerprintRequestBytes(c.req.raw, requestBytes);
     const completedExpiresAt = new Date(Date.now() + retentionMs(c.req.method, path));
@@ -484,10 +495,7 @@ export function idempotencyFor(receiptMode: IdempotencyReceiptMode): MiddlewareH
       eq(apiIdempotencyReceipt.key, key),
       eq(apiIdempotencyReceipt.claimId, claimId),
     );
-    if (receiptMode === 'atomic-receipt') {
-      await db.delete(apiIdempotencyReceipt).where(identity);
-      throw new Error('An atomic idempotency operation did not complete its receipt transaction.');
-    }
+    if (receiptMode === 'atomic-receipt') return finishUncompletedAtomicResponse(c, identity);
 
     const isJson = /\bapplication\/(?:[^;+]+\+)?json\b/iu.test(
       c.res.headers.get('Content-Type') ?? '',
@@ -513,6 +521,16 @@ export function idempotencyFor(receiptMode: IdempotencyReceiptMode): MiddlewareH
   };
 }
 
+/** Release an uncommitted claim without replacing its original failure response. */
+async function finishUncompletedAtomicResponse(
+  c: Parameters<MiddlewareHandler<AppEnv>>[0],
+  identity: ReturnType<typeof and>,
+): Promise<void> {
+  await db.delete(apiIdempotencyReceipt).where(identity);
+  if (c.error || c.res.status >= 400) return;
+  throw new Error('An atomic idempotency operation did not complete its receipt transaction.');
+}
+
 /**
  * Reject retry keys on undeclared operations while object commands enforce them after org access.
  *
@@ -525,5 +543,11 @@ export function idempotencyFor(receiptMode: IdempotencyReceiptMode): MiddlewareH
 export const idempotency: MiddlewareHandler<AppEnv> = async (c, next) => {
   const path = new URL(c.req.url).pathname;
   if (isReplayOwnerRequest(c.req.method, path)) return next();
+  // This legacy route claims its receipt only after workspace and capability checks.
+  if (
+    c.req.method === 'POST' &&
+    /^\/v1\/orgs\/[^/]+\/(?:recurrence-series|process-definitions\/from-project)\/?$/u.test(path)
+  )
+    return next();
   return idempotencyFor(false)(c, next);
 };

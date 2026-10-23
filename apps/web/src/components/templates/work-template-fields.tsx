@@ -86,7 +86,7 @@ function TemplateSampleWork({ orgId, form }: { orgId: string; form: Form }): JSX
     >
       <div>
         <h2 tabIndex={-1} className="text-title-large">
-          Starting {form.definition.name.trim() || 'work'}
+          Starting work
         </h2>
         <p className="text-body-medium text-on-surface-variant">
           Set the starting contents of one new item. Add the work that comes with it in the next

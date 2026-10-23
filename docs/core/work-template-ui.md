@@ -74,6 +74,11 @@ release mode, schedule, and supported behavior before Start repeating saves the 
 schedule. Calendar materialization controls how far ahead Docket maintains generated work. It
 does not specify how many days before each occurrence to create it.
 
+If setup fails, keep the dialog open and retry. For 48 hours, unchanged requests reuse the saved
+definition and schedule, including when the server saved them but the browser lost its response. The retry
+checks current access before resuming initial work. Changing the reviewed input starts a new
+request. Closing the dialog discards its retry identity; this recovery does not survive a reload.
+
 Open Manage repeating work from a generated task or project to change its future schedule,
 review upcoming occurrences and history, or pause, resume, or end the series. The direct series
 route presents the same controls. A future schedule revision retains recorded occurrence history.

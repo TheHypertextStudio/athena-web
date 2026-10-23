@@ -1,6 +1,7 @@
 import '@testing-library/jest-dom/vitest';
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { SidebarNavItem } from '@docket/ui/components';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import type { ComponentProps } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -78,6 +79,7 @@ vi.mock('../../src/lib/offline-availability', () => ({
 }));
 
 import DocketLink from '../../src/components/docket-link';
+import { renderLink } from '../../src/components/app-shell-utils';
 
 beforeEach(() => {
   navigateWithoutRouter.mockReset();
@@ -94,6 +96,32 @@ afterEach(() => {
 });
 
 describe('DocketLink', () => {
+  it.each([
+    { active: true, pending: false },
+    { active: true, pending: true },
+    { active: false, pending: false },
+  ])(
+    'retains current navigation semantics through the shell Slot for $active/$pending',
+    ({ active, pending }) => {
+      const href = '/orgs/org-1/work-templates';
+      responsiveRouter.current = {
+        requestedHref: pending ? href : null,
+        push: vi.fn().mockReturnValue(true),
+        replace: vi.fn().mockReturnValue(true),
+      };
+      render(
+        <SidebarNavItem label="Work templates" active={active} asChild>
+          {renderLink(href, 'Work templates')}
+        </SidebarNavItem>,
+      );
+      const link = screen.getByRole('link', { name: 'Work templates' });
+      if (active && !pending) expect(link).toHaveAttribute('aria-current', 'page');
+      else expect(link).not.toHaveAttribute('aria-current');
+      if (pending) expect(link).toHaveAttribute('aria-busy', 'true');
+      else expect(link).not.toHaveAttribute('aria-busy');
+    },
+  );
+
   it.each(['new', '01ARZ3NDEKTSV4RRFFQ69G5FAW'])(
     'recognizes authoring %s as an activity without a caller flag',
     (leaf) => {

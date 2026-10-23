@@ -328,6 +328,7 @@ describe('Repeat project setup lifetime and submission', () => {
       expect.objectContaining({
         json: expect.objectContaining({ creationMode: 'when_ready', projectId: PROJECT.id }),
       }),
+      expect.objectContaining({ headers: { 'Idempotency-Key': expect.any(String) } }),
     );
     expect(requests.series).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -339,6 +340,7 @@ describe('Repeat project setup lifetime and submission', () => {
           }),
         }),
       }),
+      expect.objectContaining({ headers: { 'Idempotency-Key': expect.any(String) } }),
     );
     expect(screen.getByRole('button', { name: 'Starting…' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Back' })).toBeDisabled();
@@ -379,7 +381,33 @@ describe('Repeat project setup lifetime and submission', () => {
           trigger: { kind: 'after_completion', interval: 2, unit: 'week' },
         }),
       }),
+      expect.objectContaining({ headers: { 'Idempotency-Key': expect.any(String) } }),
     );
+  });
+
+  it('retries a lost definition response with the same durable request identity', async () => {
+    requests.definition
+      .mockRejectedValueOnce(new Error('Definition committed but response was lost'))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ id: '01ARZ3NDEKTSV4RRFFQ69G5FAV' })));
+    requests.series.mockResolvedValueOnce(new Response(JSON.stringify({ id: 'series_recovered' })));
+    const onCreated = vi.fn();
+    setup(vi.fn(), onCreated);
+    review();
+    fireEvent.click(screen.getByRole('button', { name: 'Start repeating' }));
+    await screen.findByText('Could not make this project repeatable. Try again.');
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Start repeating' })).toBeEnabled(),
+    );
+    expect(requests.series).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Start repeating' }));
+    await waitFor(() => {
+      expect(onCreated).toHaveBeenCalledWith('series_recovered');
+    });
+    expect(requests.definition).toHaveBeenCalledTimes(2);
+    const firstOptions = requests.definition.mock.calls[0]?.[1];
+    expect(firstOptions).toEqual({ headers: { 'Idempotency-Key': expect.any(String) } });
+    expect(requests.definition.mock.calls[1]?.[1]).toEqual(firstOptions);
+    expect(requests.definition.mock.calls[1]?.[0]).toEqual(requests.definition.mock.calls[0]?.[0]);
   });
 
   it('reuses the saved definition when a failed schedule is retried', async () => {
@@ -394,7 +422,7 @@ describe('Repeat project setup lifetime and submission', () => {
     review();
     fireEvent.click(screen.getByRole('button', { name: 'Start repeating' }));
     await screen.findByText(
-      'The reusable project was saved, but its schedule could not be started.',
+      'The reusable project was saved. Could not finish setting up this repeating project. Try again.',
     );
     await waitFor(() => {
       expect(screen.getByRole('button', { name: 'Start repeating' })).toBeEnabled();
@@ -405,12 +433,15 @@ describe('Repeat project setup lifetime and submission', () => {
     });
     expect(requests.definition).toHaveBeenCalledOnce();
     expect(requests.series).toHaveBeenCalledTimes(2);
+    const firstOptions = requests.series.mock.calls[0]?.[1];
+    expect(firstOptions).toEqual({ headers: { 'Idempotency-Key': expect.any(String) } });
+    expect(requests.series.mock.calls[1]?.[1]).toEqual(firstOptions);
   });
 
   it('saves a new definition when work release settings change after a failed schedule', async () => {
-    requests.definition.mockImplementation(() =>
-      Promise.resolve(new Response(JSON.stringify({ id: '01ARZ3NDEKTSV4RRFFQ69G5FAV' }))),
-    );
+    requests.definition
+      .mockResolvedValueOnce(new Response(JSON.stringify({ id: '01ARZ3NDEKTSV4RRFFQ69G5FAV' })))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ id: '01ARZ3NDEKTSV4RRFFQ69G5FAW' })));
     requests.series
       .mockRejectedValueOnce(new Error('Transient schedule failure'))
       .mockResolvedValueOnce(new Response(JSON.stringify({ id: 'series_changed' })));
@@ -419,7 +450,7 @@ describe('Repeat project setup lifetime and submission', () => {
     review();
     fireEvent.click(screen.getByRole('button', { name: 'Start repeating' }));
     await screen.findByText(
-      'The reusable project was saved, but its schedule could not be started.',
+      'The reusable project was saved. Could not finish setting up this repeating project. Try again.',
     );
     await waitFor(() => {
       expect(screen.getByRole('button', { name: 'Edit work settings' })).toBeEnabled();
@@ -432,8 +463,10 @@ describe('Repeat project setup lifetime and submission', () => {
       expect(onCreated).toHaveBeenCalledWith('series_changed');
     });
     expect(requests.definition).toHaveBeenCalledTimes(2);
+    expect(requests.series.mock.calls[1]?.[1]).not.toEqual(requests.series.mock.calls[0]?.[1]);
     expect(requests.definition).toHaveBeenLastCalledWith(
       expect.objectContaining({ json: expect.objectContaining({ creationMode: 'when_ready' }) }),
+      expect.objectContaining({ headers: { 'Idempotency-Key': expect.any(String) } }),
     );
   });
 
@@ -455,7 +488,7 @@ describe('Repeat project setup lifetime and submission', () => {
     });
     expect(screen.getByText('Show tasks when ready')).toBeInTheDocument();
     expect(screen.getByRole('alert')).toHaveTextContent(
-      'The reusable project was saved, but its schedule could not be started.',
+      'The reusable project was saved. Could not finish setting up this repeating project. Try again.',
     );
     expect(onOpenChange).not.toHaveBeenCalled();
     expect(screen.queryByText('Provider internals must stay private')).not.toBeInTheDocument();

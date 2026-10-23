@@ -27,7 +27,6 @@ import {
 import { ActorId, TeamId } from '@docket/identity-access/ids';
 import { LabelId, ProgramId } from '@docket/work/ids';
 import {
-  ProcessDefinitionCreate,
   ProcessDefinitionDetailOut,
   ProcessDefinitionSummaryOut,
   type ProcessDefinitionCreate as ProcessDefinitionCreateValue,
@@ -37,7 +36,7 @@ import {
 import { and, desc, eq, inArray, isNull } from 'drizzle-orm';
 import type { z } from 'zod';
 
-import { ConflictError, CycleError, NotFoundError } from '../../error';
+import { ConflictError, NotFoundError } from '../../error';
 import { calendarDaysBetween } from '@docket/planning/calendar-date';
 import { prepareProcessTemplates, type PreparedProcessDefinition } from './task-template-identity';
 import { projectProcessTasks, timingFromRow } from './process-task-projection';
@@ -48,6 +47,8 @@ import { canonicalDefinitionDetail } from './canonical-definition';
 import { registerCanonicalPublication } from './canonical-definition-publication';
 import { archiveLegacyDefinition } from './legacy-definition-archive';
 import { captureLegacyProjectSource } from './legacy-source-capture';
+import { validateProcessDefinitionGraph } from './process-definition-graph';
+export { validateProcessDefinitionGraph } from './process-definition-graph';
 import {
   reconcileTemplateCreationEffects,
   type TemplateCreationEffect,
@@ -104,67 +105,6 @@ function civilDate(value: Date): string {
 /** Offset one optional timestamp from the source project's snapshot anchor. */
 function relativeOffset(anchor: string, value: Date | null): number | undefined {
   return value === null ? undefined : calendarDaysBetween(anchor, civilDate(value));
-}
-
-/** One directed edge used by process graph validation. */
-interface GraphEdge {
-  readonly from: string;
-  readonly to: string;
-}
-
-/** Add the readiness edge represented by completion timing, if present. */
-function timingEdge(stepKey: string, timing: ProcessStepTiming): GraphEdge | null {
-  return timing.kind === 'after_step_completion' ? { from: timing.stepKey, to: stepKey } : null;
-}
-
-/**
- * Reject cycles across task dependencies, completion timing, and parent-task hierarchy.
- *
- * @param definition - Parsed process definition to inspect.
- * @throws {CycleError} When no topological execution order exists.
- */
-export function validateProcessDefinitionGraph(definition: ProcessDefinitionCreateValue): void {
-  const parsed = ProcessDefinitionCreate.parse(definition);
-  const keys = [
-    ...(parsed.project ? [parsed.project.key] : []),
-    ...parsed.milestones.map((step) => step.key),
-    ...parsed.tasks.map((step) => step.key),
-  ];
-  const edges: GraphEdge[] = parsed.dependencies.map((edge) => ({
-    from: edge.blockingStepKey,
-    to: edge.blockedStepKey,
-  }));
-  for (const step of [
-    ...(parsed.project ? [parsed.project] : []),
-    ...parsed.milestones,
-    ...parsed.tasks,
-  ]) {
-    const edge = timingEdge(step.key, step.timing);
-    if (edge) edges.push(edge);
-  }
-  for (const step of parsed.tasks) {
-    if (step.parentTaskKey) edges.push({ from: step.parentTaskKey, to: step.key });
-  }
-
-  const outgoing = new Map(keys.map((key) => [key, [] as string[]]));
-  const incoming = new Map(keys.map((key) => [key, 0]));
-  for (const edge of edges) {
-    outgoing.get(edge.from)?.push(edge.to);
-    incoming.set(edge.to, (incoming.get(edge.to) ?? 0) + 1);
-  }
-  const ready = keys.filter((key) => incoming.get(key) === 0);
-  let visited = 0;
-  while (ready.length > 0) {
-    const key = ready.shift();
-    if (key === undefined) break;
-    visited += 1;
-    for (const dependent of outgoing.get(key) ?? []) {
-      const remaining = (incoming.get(dependent) ?? 0) - 1;
-      incoming.set(dependent, remaining);
-      if (remaining === 0) ready.push(dependent);
-    }
-  }
-  if (visited !== keys.length) throw new CycleError('Process graph contains a dependency cycle');
 }
 
 /** Require every referenced row to belong to the definition's organization. */
@@ -495,6 +435,36 @@ async function persistRevision(
   };
 }
 
+/** Publication rows and template effects owned by the enclosing authoring transaction. */
+export interface PublishedProcessRevisionWithEffects extends PublishedProcessRevision {
+  readonly templateEffects: readonly TemplateCreationEffect[];
+}
+
+async function publishProcessDefinitionInTransaction(
+  tx: Transaction,
+  command: CreatePublishedProcessDefinitionCommand,
+  definition: PreparedProcessDefinition,
+): Promise<PublishedProcessRevisionWithEffects> {
+  validateProcessDefinitionGraph(definition);
+  await validateReferenceOwnership(tx, command.organizationId, definition);
+  const definitionId = genId();
+  await tx.insert(processDefinition).values({
+    id: definitionId,
+    organizationId: command.organizationId,
+    name: definition.name,
+    description: definition.description,
+    status: 'published',
+    createdBy: command.actorId,
+  });
+  return persistRevision(tx, {
+    organizationId: command.organizationId,
+    actorId: command.actorId,
+    definitionId,
+    revisionNumber: 1,
+    definition,
+  });
+}
+
 /** Create a named process and atomically publish its first immutable revision. */
 export async function createPublishedProcessDefinition(
   database: Database,
@@ -505,26 +475,9 @@ export async function createPublishedProcessDefinition(
     command.organizationId,
     command.definition,
   );
-  validateProcessDefinitionGraph(definition);
-  const result = await database.transaction(async (tx) => {
-    await validateReferenceOwnership(tx, command.organizationId, definition);
-    const definitionId = genId();
-    await tx.insert(processDefinition).values({
-      id: definitionId,
-      organizationId: command.organizationId,
-      name: definition.name,
-      description: definition.description,
-      status: 'published',
-      createdBy: command.actorId,
-    });
-    return persistRevision(tx, {
-      organizationId: command.organizationId,
-      actorId: command.actorId,
-      definitionId,
-      revisionNumber: 1,
-      definition,
-    });
-  });
+  const result = await database.transaction((tx) =>
+    publishProcessDefinitionInTransaction(tx, command, definition),
+  );
   const { templateEffects, ...published } = result;
   await reconcileTemplateCreationEffects(templateEffects);
   return published;
@@ -535,16 +488,37 @@ export async function createProcessDefinitionFromProject(
   database: Database,
   command: CreateProcessDefinitionFromProjectCommand,
 ): Promise<PublishedProcessRevision> {
-  const definition = await captureLegacyProjectSource(
+  const result = await captureLegacyProjectSource(
     database,
     { ...command, projectId: command.input.projectId },
-    (tx) => captureProcessDefinitionFromProject(tx, command),
+    (tx) => createProcessDefinitionFromProjectInTransaction(tx, command),
   );
-  return createPublishedProcessDefinition(database, {
-    organizationId: command.organizationId,
-    actorId: command.actorId,
+  const { templateEffects, ...published } = result;
+  await reconcileTemplateCreationEffects(templateEffects);
+  return published;
+}
+
+/**
+ * Publish a project snapshot while its existing source-capture transaction holds tree locks.
+ * @param tx - Transaction owned by captureLegacyProjectSource after its source authorization.
+ * @param command - Workspace, author, and project snapshot options.
+ * @returns Publication identity and effects that the transaction owner must drain after commit.
+ */
+export async function createProcessDefinitionFromProjectInTransaction(
+  tx: Transaction,
+  command: CreateProcessDefinitionFromProjectCommand,
+): Promise<PublishedProcessRevisionWithEffects> {
+  const captured = await captureProcessDefinitionFromProject(tx, command);
+  const definition = await prepareProcessTemplates(tx, command.organizationId, captured);
+  return publishProcessDefinitionInTransaction(
+    tx,
+    {
+      organizationId: command.organizationId,
+      actorId: command.actorId,
+      definition: captured,
+    },
     definition,
-  });
+  );
 }
 async function captureProcessDefinitionFromProject(
   database: Database,

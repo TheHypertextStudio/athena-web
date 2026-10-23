@@ -22,7 +22,8 @@ import { AuthError } from '../error';
 import { created, ok } from '../lib/ok';
 import { pageResultById } from '../lib/list-cursor';
 import { apiDoc } from '../lib/openapi-route';
-import { createScheduledProcess } from '../lib/recurrence/authoring';
+import { createSeriesWithReceipt, materializeCreatedSeries } from './recurrence-series-creation';
+import { captureIdempotencyBody, idempotencyFor } from '../lib/idempotency';
 import { bindProcessToCalendarItem } from '../lib/recurrence/calendar-binding';
 import { createRecurringTask } from '../lib/recurrence/recurring-task';
 import {
@@ -78,17 +79,27 @@ const recurrenceSeriesRoutes = new Hono<AppEnv>()
       capability: 'contribute',
       response: RecurrenceSeriesOut,
       description:
-        'Create a calendar, completion-anchored, manual, or event-driven series over the current published revision of a reusable process.',
+        'Create a calendar, completion-anchored, manual, or event-driven series over the current published revision of a reusable process. An optional Idempotency-Key atomically retains the created series for 48 hours. Retrying the same request resumes initial materialization without creating a second series. Reusing the key with changed input returns 422.',
+      extra: {
+        'x-docket-idempotency': 'atomic-receipt',
+        parameters: [
+          {
+            name: 'Idempotency-Key',
+            in: 'header',
+            required: false,
+            description:
+              'Caller-owned retry identity retained for 48 hours. Reuse it only with the identical request.',
+            schema: { type: 'string', minLength: 1 },
+          },
+        ],
+      },
     }),
+    captureIdempotencyBody,
     zJson(RecurrenceSeriesCreate),
+    materializeCreatedSeries,
+    idempotencyFor('atomic-receipt'),
     async (c) => {
-      const { orgId, actorId } = c.get('actorCtx');
-      const body = c.req.valid('json');
-      const detail = await createScheduledProcess(db, {
-        organizationId: orgId,
-        actorId,
-        series: body,
-      });
+      const detail = await createSeriesWithReceipt(c, c.req.valid('json'));
       return created(c, RecurrenceSeriesOut, detail);
     },
   )

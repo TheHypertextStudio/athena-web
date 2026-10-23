@@ -16,7 +16,7 @@ export function WorkTemplatesWorkspace({ orgId }: { readonly orgId: string }): J
     <WorkTemplateWorkspaceFrame
       orgId={orgId}
       title="Work templates"
-      description="Decide how your organization’s work starts and what it includes."
+      description="Decide how your work starts and what it includes."
       action={<LibraryDefineEntry orgId={orgId} />}
       loading={query.isPending}
     >

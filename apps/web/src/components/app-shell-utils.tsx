@@ -170,8 +170,13 @@ export function renderLink(
   className?: string,
   current?: 'page',
 ): ReactNode {
+  // Explicit undefined would override the active state supplied by the parent Slot.
   return (
-    <DocketLink href={href} className={className} aria-current={current}>
+    <DocketLink
+      href={href}
+      className={className}
+      {...(current === undefined ? {} : { 'aria-current': current })}
+    >
       {content}
     </DocketLink>
   );

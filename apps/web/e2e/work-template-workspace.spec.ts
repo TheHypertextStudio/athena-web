@@ -1,3 +1,5 @@
+import type { Page } from '@playwright/test';
+import type { WorkTemplateOut } from '@docket/work/work-template-contract';
 import type {
   WorkTemplateCopyReceipt,
   WorkTemplateGalleryPreview,
@@ -13,15 +15,16 @@ if (session) test.use({ storageState: session });
 test('opens work definitions from workspace navigation and replaces legacy review links without a Back loop', async ({
   page,
 }) => {
+  const { orgId } = await blueprintWorkspace(page);
+  const organization = await apiJson<{ name: string }>(page, `/v1/orgs/${orgId}`);
+  const seeded = await seedBlueprintTemplate(page, orgId, 'project');
+  const base = `/orgs/${orgId}/work-templates`;
+  // Signup fixtures retry throttled auth requests before this navigation audit begins.
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
   page.on('console', (message) => {
     if (message.type() === 'error') errors.push(message.text());
   });
-  const { orgId } = await blueprintWorkspace(page);
-  const organization = await apiJson<{ name: string }>(page, `/v1/orgs/${orgId}`);
-  const seeded = await seedBlueprintTemplate(page, orgId, 'project');
-  const base = `/orgs/${orgId}/work-templates`;
   await page.goto(`${base}/gallery`, { waitUntil: 'commit', timeout: TIMEOUTS.pageReady });
   const expand = page.getByRole('button', { name: 'Expand navigation', exact: true });
   if (await expand.isVisible()) await expand.click();
@@ -31,7 +34,9 @@ test('opens work definitions from workspace navigation and replaces legacy revie
   await expect(destination).toHaveAttribute('href', base);
   await destination.click();
   await expect(page).toHaveURL(new RegExp(`${base}$`));
-  await expect(page.getByRole('heading', { name: 'Work templates', exact: true })).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'Work templates', exact: true, level: 1 }),
+  ).toBeVisible();
   await expect(page.getByRole('main')).toHaveCount(1);
   await expect(destination).toHaveAttribute('aria-current', 'page');
   await expect
@@ -68,7 +73,9 @@ test('opens work definitions from workspace navigation and replaces legacy revie
   await expect(page.getByLabel('Workspace', { exact: true })).toHaveText(organization.name);
   await page.goBack({ waitUntil: 'commit' });
   await expect(page).toHaveURL(new RegExp(`${base}$`));
-  await expect(page.getByRole('heading', { name: 'Work templates', exact: true })).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'Work templates', exact: true, level: 1 }),
+  ).toBeVisible();
   const definition = page.getByRole('link', {
     name: `Open ${seeded.publication.definition.name}`,
     exact: true,
@@ -123,7 +130,9 @@ test('offers personal work definitions through the phone workspace drawer', asyn
     .getByRole('link', { name: 'Work templates', exact: true })
     .click();
   await expect(page).toHaveURL(new RegExp(`${base}$`));
-  await expect(page.getByRole('heading', { name: 'Work templates', exact: true })).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'Work templates', exact: true, level: 1 }),
+  ).toBeVisible();
   await expect(page.getByRole('main')).toHaveCount(1);
   await expect(page.getByRole('dialog', { name: 'Settings', exact: true })).toHaveCount(0);
   await expect(
@@ -170,6 +179,7 @@ test.describe('touch work-definition journeys', () => {
     await page.goto(route, { waitUntil: 'commit', timeout: TIMEOUTS.pageReady });
     await expect(page.getByRole('navigation', { name: 'Workspace', exact: true })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Open navigation', exact: true })).toHaveCount(0);
+    await assertPhoneDefinitionSteps(page);
     const prerequisite = page
       .getByRole('link', { name: 'Review Vendor booking', exact: true })
       .first();
@@ -251,3 +261,113 @@ test.describe('touch work-definition journeys', () => {
     }
   });
 });
+
+test.describe('touch archive impact', () => {
+  test.use({ hasTouch: true });
+  test('keeps archive impact pagination usable on narrow and short phones', async ({ page }) => {
+    const { orgId } = await blueprintWorkspace(page);
+    const child = await seedBlueprintTemplate(page, orgId, 'task');
+    await seedArchiveParents(page, orgId, child.publication);
+    await page.setViewportSize({ width: 320, height: 600 });
+    await page.goto(`/orgs/${orgId}/work-templates/${child.publication.id}?section=review`, {
+      waitUntil: 'commit',
+      timeout: TIMEOUTS.pageReady,
+    });
+    await page.getByRole('button', { name: 'Manage template', exact: true }).click();
+    await page.getByRole('button', { name: 'Archive template', exact: true }).click();
+    const dialog = page.getByRole('dialog', { name: 'Archive this template?', exact: true });
+    const more = dialog.getByRole('button', { name: 'More templates using this', exact: true });
+    const previous = dialog.getByRole('button', {
+      name: 'Previous templates using this',
+      exact: true,
+    });
+    for (const colorScheme of ['light', 'dark'] as const) {
+      await page.emulateMedia({ colorScheme });
+      await more.scrollIntoViewIfNeeded();
+      await expect(more).toBeInViewport();
+      await expect(previous).toBeInViewport();
+      const bounds = await more.boundingBox();
+      expect(bounds?.height).toBeGreaterThanOrEqual(40);
+      expect(bounds?.x).toBeGreaterThanOrEqual(0);
+      expect((bounds?.x ?? 0) + (bounds?.width ?? 0)).toBeLessThanOrEqual(320);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+        true,
+      );
+    }
+    await more.click();
+    await expect(dialog.getByText('Accounts checklist 21', { exact: true })).toBeVisible();
+    await expect(more).toBeDisabled();
+    await previous.click();
+    await expect(dialog.getByText('Accounts checklist 01', { exact: true })).toBeVisible();
+    await expect(previous).toBeDisabled();
+  });
+});
+
+async function seedArchiveParents(
+  page: Page,
+  orgId: string,
+  child: WorkTemplateOut,
+): Promise<void> {
+  const path = `/v1/orgs/${orgId}/templates/definitions`;
+  const versionId = child.latestVersion?.id;
+  if (!versionId) throw new Error('The archive child fixture must have a published version.');
+  for (let index = 1; index <= 21; index += 1) {
+    const draft = await apiJson<{ id: string; revision: number }>(page, path, {
+      method: 'POST',
+      body: {
+        targetType: 'project',
+        scope: 'personal',
+        offeredTeamIds: [],
+        definition: {
+          name: `Accounts checklist ${String(index).padStart(2, '0')}`,
+          payload: { targetType: 'project' },
+          blueprint: {
+            steps: [
+              {
+                key: 'accounts',
+                kind: 'task',
+                parentStepKey: null,
+                sort: 0,
+                fields: { title: 'Review accounts' },
+                template: {
+                  workTypeId: child.id,
+                  selection: {
+                    kind: 'pinned',
+                    workTypeVersionId: versionId,
+                  },
+                },
+                optional: { enabled: false, selectedByDefault: true },
+                teamRule: 'creation_team',
+                actorRule: 'creator',
+                cycleRule: 'none',
+                dates: {},
+              },
+            ],
+            dependencies: [],
+          },
+        },
+      },
+    });
+    await apiJson(page, `${path}/${draft.id}/publish`, {
+      method: 'POST',
+      body: { expectedRevision: draft.revision },
+    });
+  }
+}
+
+async function assertPhoneDefinitionSteps(page: Page): Promise<void> {
+  const stepMenu = page.getByRole('button', { name: 'Change definition step', exact: true });
+  await expect(stepMenu).toHaveText('4 of 4 · Review');
+  await stepMenu.click();
+  for (const label of ['Purpose', 'Starting work', 'Included work', 'Review']) {
+    const choice = page.getByRole('menuitemradio', { name: label, exact: true });
+    await expect(choice).toBeInViewport();
+    const bounds = await choice.boundingBox();
+    if (!bounds) throw new Error('Definition step geometry is missing.');
+    expect(bounds.height).toBeGreaterThanOrEqual(40);
+    expect(bounds.x).toBeGreaterThanOrEqual(0);
+    expect(bounds.x + bounds.width).toBeLessThanOrEqual(320);
+  }
+  await page.keyboard.press('Escape');
+  await expect(stepMenu).toBeFocused();
+}

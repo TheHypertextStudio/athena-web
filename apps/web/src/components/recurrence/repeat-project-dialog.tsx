@@ -179,7 +179,7 @@ function RepeatProjectComposer({
               </InlineBanner>
             ) : null}
             {failure ? (
-              <InlineBanner tone="critical" title="Could not start repeating">
+              <InlineBanner tone="critical" title="Could not finish setup">
                 {failure}
               </InlineBanner>
             ) : null}

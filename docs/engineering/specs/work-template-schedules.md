@@ -166,3 +166,46 @@ source remains required until exact aliases, accepted receipts and migration ord
 
 The [canonical cutover engineering specification](work-schedule-canonical-cutover.md) defines the
 immutable alias registry, guarded read adapter, conversion receipts and activation prerequisites.
+
+## Recovering standalone project setup
+
+Reader: A maintainer changing the existing Repeat project authoring or retry path.
+
+Repeat project retains separate in-memory retry identities for the source snapshot and the
+series request. Each identity covers the exact request payload. Both legacy POST routes accept
+an optional `Idempotency-Key`; callers without a key retain the existing per-call behavior.
+The existing receipt table retains a completed response for 48 hours. This delivery adds no
+migration or request-body schema.
+
+Each writer commits its resource and completed receipt in one transaction. Image reconciliation
+and initial work materialization run after that commit. A lost response or post-commit failure
+therefore resumes the original resource. Snapshot replay rechecks the readable source tree and
+saved private definition. Series replay rechecks current management access and uses the original
+creation clock for the initial materialization window. A receipt never grants access.
+
+This sequence diagram shows the two persisted operations and a lost series response:
+
+```mermaid
+sequenceDiagram
+    participant Browser
+    participant API
+    participant Database
+    Browser->>API: Save source snapshot with key A
+    API->>Database: Commit definition and receipt together
+    Database-->>API: Definition saved
+    API-->>Browser: Original definition ID
+    Browser->>API: Create series with key B
+    API->>Database: Commit series and receipt together
+    Database-->>API: Series saved
+    API->>API: Ensure initial work for that series
+    Note over API,Browser: The response is lost
+    Browser->>API: Retry identical series request with key B
+    API->>Database: Read completed receipt
+    Database-->>API: Original series response
+    API->>API: Recheck access and ensure the same initial work
+    API-->>Browser: Original series ID
+```
+
+Changing input starts a distinct request. Closing or reloading discards the browser's retry
+identities. Do not describe this as recovery across browser restarts or exactly-once creation for
+all future inputs. Permission revocation can refuse a replay even when the original write saved.

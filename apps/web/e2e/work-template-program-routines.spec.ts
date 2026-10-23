@@ -14,6 +14,7 @@ import {
   selectWorkDefinitionSection,
 } from './helpers/work-template-blueprints';
 import { TIMEOUTS } from './helpers/constants';
+import { verifyCanonicalProgramSchedule } from './helpers/work-template-schedule-management';
 
 const session = process.env['E2E_WORK_TEMPLATE_SESSION'];
 if (session) test.use({ storageState: session });
@@ -54,6 +55,12 @@ test('authors reusable Program routines and keeps created Program schedules inde
       ),
     );
 });
+test('manages canonical Program schedules and recovers a lost committed run response', async ({
+  page,
+}) => {
+  await verifyCanonicalProgramSchedule(page);
+});
+
 async function authorRoutine(
   page: Page,
   orgId: string,
@@ -211,6 +218,27 @@ async function verifyIndependentCopies(
     body: { ...body, name: 'Future neighborhood' },
   });
   expect((await list(third.id)).items[0]?.name).toBe('A different future routine');
+  await page.goto(`/orgs/${path.split('/').at(-1)}/programs/${first.id}`, {
+    waitUntil: 'commit',
+    timeout: TIMEOUTS.pageReady,
+  });
+  await page.getByRole('tab', { name: 'Schedules', exact: true }).click();
+  await page
+    .getByRole('button', { name: 'Edit future runs for Monthly community dinner', exact: true })
+    .click();
+  const editor = page.getByRole('dialog', { name: 'Edit future runs', exact: true });
+  await editor
+    .getByRole('textbox', { name: 'Schedule name', exact: true })
+    .fill('First neighborhood only');
+  await editor.getByRole('tab', { name: 'Review', exact: true }).click();
+  const revised = waitForApiResponse(page, /\/work-schedules\/[^/]+\/revisions$/, {
+    method: 'POST',
+  });
+  await editor.getByRole('button', { name: 'Save future runs', exact: true }).click();
+  expect((await revised).ok()).toBe(true);
+  await expect(editor).not.toBeVisible();
+  expect((await list(first.id)).items[0]?.name).toBe('First neighborhood only');
+  expect((await list(second.id)).items).toEqual(right);
   return { programIds: [first.id, second.id, third.id], scheduleIds: [left[0]?.id, right[0]?.id] };
 }
 

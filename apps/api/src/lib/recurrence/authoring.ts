@@ -21,6 +21,8 @@ import {
   utcCalendarDate,
 } from './series';
 import { materializeRecurrenceSeriesWindow } from './sweep';
+import { requireScheduleAccess } from './schedule-access';
+import { requireLegacyActor } from './legacy-definition-access';
 
 /** Command for authoring a series and materializing its initial planning window. */
 export interface CreateScheduledProcessCommand {
@@ -51,12 +53,37 @@ export async function createScheduledProcess(
     actorId: command.actorId,
     series: body,
   });
+  return materializeScheduledProcess(database, command, series.id);
+}
+
+/**
+ * Resume the initial materialization for a durably created series.
+ * @param database - Docket database handle.
+ * @param command - Original authoring input and the original creation clock.
+ * @param seriesId - The existing series whose work must be ensured.
+ * @returns The series with its current occurrence history.
+ */
+export async function materializeScheduledProcess(
+  database: Database,
+  command: CreateScheduledProcessCommand,
+  seriesId: string,
+): Promise<RecurrenceSeriesDetailOut> {
+  const body = RecurrenceSeriesCreate.parse(command.series);
+  await requireScheduleAccess(
+    database,
+    {
+      organizationId: command.organizationId,
+      actorId: requireLegacyActor(command.actorId),
+      seriesId,
+    },
+    'manage',
+  );
   const today = utcCalendarDate(command.now);
   if (body.trigger.kind === 'calendar') {
     await materializeRecurrenceSeriesWindow(database, {
       organizationId: command.organizationId,
       actorId: command.actorId,
-      seriesId: series.id,
+      seriesId,
       asOf:
         compareCalendarDates(body.trigger.schedule.startDate, today) > 0
           ? body.trigger.schedule.startDate
@@ -67,11 +94,11 @@ export async function createScheduledProcess(
     await materializeSeriesOccurrence(database, {
       organizationId: command.organizationId,
       actorId: command.actorId,
-      seriesId: series.id,
+      seriesId,
       scheduledFor: body.effectiveFrom ?? today,
     });
   }
   return RecurrenceSeriesDetailOut.parse(
-    await loadRecurrenceSeriesDetail(database, command.organizationId, series.id, command.actorId),
+    await loadRecurrenceSeriesDetail(database, command.organizationId, seriesId, command.actorId),
   );
 }

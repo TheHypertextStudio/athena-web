@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs';
-import type { Page } from '@playwright/test';
+import type { BrowserContext, Page } from '@playwright/test';
 import { WorkTemplateDefinition, type WorkTemplateOut } from '@docket/work/work-template-contract';
 import type { TemplateTargetType } from '@docket/work/template-contract';
 import type { ComposerDraftOut } from '@docket/work/composer-draft-contract';
@@ -8,7 +8,7 @@ import { signUpAndOnboard } from './app';
 import { createMobileAuditFixture, type MobileAuditFixture } from './mobile-audit-fixture';
 import { TIMEOUTS } from './constants';
 
-let fixture: MobileAuditFixture | undefined;
+const fixtures = new WeakMap<BrowserContext, MobileAuditFixture>();
 /** Enter or revisit a definition step through its responsive navigation. */
 export async function selectWorkDefinitionSection(
   page: Page,
@@ -40,14 +40,20 @@ export async function visitBlueprintDailyPlanner(page: Page): Promise<void> {
 async function populatedBlueprintWorkspace(page: Page): Promise<MobileAuditFixture> {
   const session = process.env['E2E_WORK_TEMPLATE_SESSION'];
   await page.goto('/', { waitUntil: 'commit', timeout: TIMEOUTS.pageReady });
-  if (fixture) return fixture;
+  const context = page.context();
+  const existing = fixtures.get(context);
+  if (existing) return existing;
   if (session) {
     const metadata = JSON.parse(readFileSync(`${session}.meta.json`, 'utf8')) as {
       mobileAuditFixture?: MobileAuditFixture;
     };
-    if (metadata.mobileAuditFixture) return (fixture = metadata.mobileAuditFixture);
+    if (metadata.mobileAuditFixture) {
+      fixtures.set(context, metadata.mobileAuditFixture);
+      return metadata.mobileAuditFixture;
+    }
   } else await signUpAndOnboard(page, 'WorkBlueprints');
-  fixture = await createMobileAuditFixture(page);
+  const fixture = await createMobileAuditFixture(page);
+  fixtures.set(context, fixture);
   return fixture;
 }
 /** A published root with one required and one optional child, distinguishable in a populated workspace. */

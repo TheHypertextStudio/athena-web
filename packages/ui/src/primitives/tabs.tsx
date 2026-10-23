@@ -5,8 +5,8 @@ import { cn } from '../lib/utils';
 import { focusRingInset } from './focus';
 import { Separator } from './separator';
 
-/** Material content-tab hierarchy; mode choices use ExclusiveChoice instead. */
-export type TabsVariant = 'primary' | 'secondary';
+/** Content-tab presentation; contained tabs use surface and shape instead of an underline. */
+export type TabsVariant = 'primary' | 'secondary' | 'contained';
 /** Layout resolves automatically from the available width unless explicitly scrollable. */
 export type TabsLayout = 'auto' | 'scrollable';
 /** Source of a selection, so editors can preserve keyboard navigation focus. */
@@ -93,6 +93,11 @@ interface TabsContextValue {
   readonly scope: string;
 }
 const TabsContext = React.createContext<TabsContextValue | null>(null);
+const SELECTED_TAB_CLASSES: Record<TabsVariant, string> = {
+  primary: 'text-primary',
+  secondary: 'text-on-surface',
+  contained: 'bg-secondary-container text-on-secondary-container',
+};
 
 function useTabsContext(): TabsContextValue {
   const context = React.useContext(TabsContext);
@@ -197,7 +202,7 @@ function handleTabKey(
 
 /** Lay out up to four equal-width tabs when they fit; otherwise keep all destinations scrollable. */
 export function TabList({ label, className, children }: TabListProps): React.JSX.Element {
-  const { value, layout, onValueChange } = useTabsContext();
+  const { value, variant, layout, onValueChange } = useTabsContext();
   const ref = React.useRef<HTMLDivElement>(null);
   const [scrollable, setScrollable] = React.useState(layout === 'scrollable');
   React.useLayoutEffect(() => {
@@ -209,21 +214,23 @@ export function TabList({ label, className, children }: TabListProps): React.JSX
         0,
         ...tabs.map((tab) => {
           const content = tab.querySelector<HTMLElement>('[data-tab-content]');
-          return (content?.getBoundingClientRect().width ?? 0) + 48;
+          return (
+            (content?.getBoundingClientRect().width ?? 0) + (variant === 'contained' ? 32 : 48)
+          );
         }),
       );
       const selected = list.querySelector<HTMLElement>('[aria-selected="true"]');
       if (selected) revealTab(list, selected);
-      setScrollable(
-        layout === 'scrollable' || tabs.length > 4 || widest * tabs.length > list.clientWidth,
-      );
+      const available =
+        list.clientWidth - (variant === 'contained' ? 8 + 4 * Math.max(0, tabs.length - 1) : 0);
+      setScrollable(layout === 'scrollable' || tabs.length > 4 || widest * tabs.length > available);
     };
     measure();
     const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure);
     observer?.observe(list);
     list.querySelectorAll('[data-tab-content]').forEach((content) => observer?.observe(content));
     return () => observer?.disconnect();
-  }, [children, layout]);
+  }, [children, layout, variant]);
   React.useLayoutEffect(() => {
     const list = ref.current;
     const selected = list?.querySelector<HTMLElement>('[aria-selected="true"]');
@@ -245,13 +252,16 @@ export function TabList({ label, className, children }: TabListProps): React.JSX
         }}
         className={cn(
           'relative flex h-12 w-full min-w-0 shrink-0 scrollbar-none overflow-x-auto overflow-y-hidden',
-          scrollable ? 'ps-[52px] [&>[role=tab]]:flex-none' : '[&>[role=tab]]:flex-1',
+          scrollable ? '[&>[role=tab]]:flex-none' : '[&>[role=tab]]:flex-1',
+          variant === 'contained' ? 'gap-1 p-1' : scrollable && 'ps-[52px]',
           className,
         )}
       >
         {children}
       </div>
-      <Separator className="pointer-events-none absolute inset-x-0 bottom-0" />
+      {variant === 'contained' ? null : (
+        <Separator className="pointer-events-none absolute inset-x-0 bottom-0" />
+      )}
     </div>
   );
 }
@@ -281,7 +291,7 @@ function accessibleTabName(
   return label === undefined ? undefined : count === undefined ? label : `${label} ${count}`;
 }
 
-/** Render a tab with a primary label-width or secondary full-width indicator. */
+/** Render a tab with its chosen indicator or contained selected surface. */
 export function Tab({
   value,
   count,
@@ -311,11 +321,8 @@ export function Tab({
       }}
       className={cn(
         'text-label-large hover:bg-on-surface/8 active:bg-on-surface/12 relative inline-flex h-full min-w-0 shrink-0 items-center justify-center px-6 whitespace-nowrap transition-colors disabled:opacity-50',
-        selected
-          ? context.variant === 'primary'
-            ? 'text-primary'
-            : 'text-on-surface'
-          : 'text-on-surface-variant',
+        context.variant === 'contained' && 'rounded-full px-4',
+        selected ? SELECTED_TAB_CLASSES[context.variant] : 'text-on-surface-variant',
         focusRingInset,
         className,
       )}

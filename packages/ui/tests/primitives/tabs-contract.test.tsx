@@ -2,14 +2,21 @@ import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useState } from 'react';
 import { describe, expect, it } from 'vitest';
-import { Tabs, TabsScope, LazyTabPanels, TabPanel } from '../../src/primitives/tabs';
+import {
+  Tabs,
+  TabsScope,
+  LazyTabPanels,
+  TabPanel,
+  type TabsVariant,
+} from '../../src/primitives/tabs';
 import { ExclusiveChoice } from '../../src/primitives/exclusive-choice';
 
-function Sections() {
+function Sections({ variant = 'primary' }: { readonly variant?: TabsVariant }) {
   const [value, setValue] = useState('overview');
   return (
     <TabsScope>
       <Tabs
+        variant={variant}
         label="Sections"
         value={value}
         onValueChange={setValue}
@@ -42,19 +49,35 @@ describe('content tab contract', () => {
       expect(panel).toHaveAttribute('aria-labelledby', tab.id);
     }
   });
-  it('moves selection and focus past disabled tabs and retains full accessible counts', async () => {
-    const user = userEvent.setup();
-    render(<Sections />);
-    const first = screen.getByRole('tab', { name: 'Overview' });
-    first.focus();
-    await user.keyboard('{ArrowRight}');
-    const work = screen.getByRole('tab', { name: 'Work 12345' });
-    expect(work).toHaveFocus();
-    expect(work).toHaveAttribute('aria-selected', 'true');
-    expect(within(work).getByText('999+')).toBeVisible();
-    expect(screen.getByRole('tabpanel')).toHaveTextContent('work content');
-    await user.keyboard('{ArrowRight}');
-    expect(first).toHaveFocus();
+  it.each(['primary', 'secondary', 'contained'] as const)(
+    'moves %s selection and focus past disabled tabs and retains full accessible counts',
+    async (variant) => {
+      const user = userEvent.setup();
+      render(<Sections variant={variant} />);
+      const first = screen.getByRole('tab', { name: 'Overview' });
+      first.focus();
+      await user.keyboard('{ArrowRight}');
+      const work = screen.getByRole('tab', { name: 'Work 12345' });
+      expect(work).toHaveFocus();
+      expect(work).toHaveAttribute('aria-selected', 'true');
+      expect(within(work).getByText('999+')).toBeVisible();
+      expect(screen.getByRole('tabpanel')).toHaveTextContent('work content');
+      await user.keyboard('{ArrowRight}');
+      expect(first).toHaveFocus();
+    },
+  );
+
+  it('contains navigation without decorative lines or a reserved leading scroll inset', () => {
+    const { container } = render(<Sections variant="contained" />);
+    const list = screen.getByRole('tablist');
+    expect(list).toHaveAttribute('data-layout', 'scrollable');
+    expect(list).not.toHaveClass('ps-[52px]');
+    expect(container.querySelector('[data-tab-indicator]')).toBeNull();
+    expect(container.querySelector('[data-orientation="horizontal"]')).toBeNull();
+    expect(screen.getByRole('tab', { selected: true })).toHaveClass(
+      'rounded-full',
+      'bg-secondary-container',
+    );
   });
 });
 

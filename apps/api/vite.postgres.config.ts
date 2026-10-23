@@ -10,7 +10,7 @@ export default docketVitest({
       process.env['DATABASE_URL'] ??
       API_TEST_ENV.DATABASE_URL,
   },
-  include: ['tests/**/*.postgres.acceptance.ts'],
+  include: ['tests/**/*.postgres.acceptance.ts', 'tests/**/*-postgres.acceptance.ts'],
   fileParallelism: false,
   maxWorkers: 1,
   pool: 'forks',

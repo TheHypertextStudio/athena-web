@@ -1,5 +1,6 @@
 'use client';
 
+import { LazyTabPanels } from '@docket/ui/primitives';
 /**
  * The task page's active section: one tab panel at a time.
  *
@@ -13,7 +14,7 @@ import type { JSX } from 'react';
 import type { EntityMentionsData } from '@/lib/use-entity-mentions';
 
 import { TaskGraphTab } from './task-graph-tab';
-import type { TaskTab } from './task-masthead-slots';
+import { TASK_TABS, type TaskTab } from './task-masthead-slots';
 import { TaskOverviewPanel, type TaskOverviewMutations } from './task-overview-panel';
 import { TaskResourcesPanel } from './task-resources-panel';
 import type { DescriptionExpansion } from './use-description-expansion';
@@ -61,13 +62,8 @@ function ActiveSection({ tab, mentions, ...section }: TaskSectionsProps): JSX.El
  */
 export function TaskSections(props: TaskSectionsProps): JSX.Element {
   return (
-    <section
-      role="tabpanel"
-      id={`tabpanel-${props.tab}`}
-      aria-labelledby={`tab-${props.tab}`}
-      className="min-w-0"
-    >
+    <LazyTabPanels values={TASK_TABS} as="section" value={props.tab} className="min-w-0">
       <ActiveSection {...props} />
-    </section>
+    </LazyTabPanels>
   );
 }

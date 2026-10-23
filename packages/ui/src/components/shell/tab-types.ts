@@ -66,6 +66,7 @@ export type TabRenderLink = (
   href: string,
   children: React.ReactNode,
   className?: string,
+  current?: 'page',
 ) => React.ReactNode;
 
 /** Glyph for each document kind. */

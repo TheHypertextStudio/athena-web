@@ -32,8 +32,8 @@ export function TabItem({ tab, active, renderLink, onClose }: TabItemProps): Rea
   const unresolved = tab.title === null;
   return (
     <div
-      role="tab"
-      aria-selected={active}
+      data-document-tab=""
+      data-active={active || undefined}
       className={cn(
         'group text-label-large relative flex h-8 max-w-60 min-w-24 flex-1 shrink items-center rounded-md transition-colors',
         active
@@ -51,6 +51,7 @@ export function TabItem({ tab, active, renderLink, onClose }: TabItemProps): Rea
           'flex h-full min-w-0 flex-1 items-center gap-1.5 rounded-md py-1.5 pr-1 pl-2.5',
           focusRingInset,
         ),
+        active ? 'page' : undefined,
       )}
       <Tooltip>
         <TooltipTrigger asChild>

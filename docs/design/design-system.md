@@ -1124,3 +1124,43 @@ in [Entity display glyph architecture](../engineering/entity-display-glyphs.md).
 7. Delete every `hover:scale-*` / `active:scale-*`.
 8. Run `pnpm exec tsx tests/design-policies/emit-ledger.ts` from `packages/test-utils` and confirm
    your files left the ledger.
+
+## Content tabs, choices and document navigation
+
+Content tabs categorize peer content within one pane. Use the Material 3
+[tab specifications](https://m3.material.io/components/tabs/specs) and
+[guidelines](https://m3.material.io/components/tabs/guidelines): primary tabs have a label-width,
+3px indicator; secondary tabs have a full-width, 2px indicator. Text-only tracks are 48px high,
+including the divider. Use secondary tabs for a subordinate content group, not simply because its
+container is small. Freely revisitable editing sections may use content tabs; a section called
+Review does not turn the interaction into a mandatory sequence.
+
+`Tabs` defaults to primary. Its `layout="auto"` uses equal-width fixed tabs when up to four fit;
+otherwise it uses a horizontally scrollable lane with consistent padding and a 52px leading inset.
+`layout="scrollable"` explicitly selects that lane. Keep destination order stable and labels readable;
+do not hide content tabs in a More menu. Keyboard and selection reveal only the tab lane, preserving
+the surrounding page's scroll position. Use the inset focus convention inside these clipped tracks.
+
+Wrap a tablist and its sibling panels in `TabsScope`, nesting a new scope for an independent set.
+Use `TabPanel` for retained content (or its `render` callback for lazy content) and `LazyTabPanels` for stable hidden panel shells whose
+contents mount only when selected. All tab targets must exist, including inactive destinations.
+`useTabPanelProps` supports custom markup; `tabIds` shares the same identity with focus-restoration
+hooks. An explicit scope must be unique per instance. Selection callbacks provide their activation
+source so keyboard navigation can retain focus in the tablist while explicit continuation actions
+may enter the selected editor. Display counts stop at `999+`; accessible names retain exact counts.
+
+```tsx
+<TabsScope>
+  <Tabs label="Project sections" value={section} onValueChange={setSection} items={sections} />
+  <LazyTabPanels value={section} values={sections.map((item) => item.value)}>
+    {renderSection(section)}
+  </LazyTabPanels>
+</TabsScope>
+```
+
+Use `ExclusiveChoice` for one selected mode or exclusive collection filter. It exposes a named
+radio group with arrow-key selection and has no tab/panel relationship. Saved-view filter buttons,
+favorite actions and destination links retain their separate roles. The shell's open-document strip
+is a navigation landmark containing real links and independent close controls; the current document
+link has `aria-current="page"`. Its browser-like styling and searchable switcher are independent
+of Material content tabs.

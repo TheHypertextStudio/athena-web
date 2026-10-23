@@ -1,3 +1,4 @@
+import { TabsScope, TabPanel } from '@docket/ui/primitives';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -12,23 +13,23 @@ vi.mock('@/lib/app-location', () => ({
 function NavigationHarness() {
   const navigation = useTemplateSectionNavigation('purpose');
   return (
-    <>
+    <TabsScope scope={navigation.scope}>
       <TemplateDefinitionNavigation
         section={navigation.section}
         onValueChange={navigation.selectSection}
       />
       {(['purpose', 'work', 'structure', 'review'] as const).map((section) => (
-        <div
+        <TabPanel
           key={section}
-          id={`tabpanel-${section}`}
+          value={section}
           hidden={navigation.section !== section}
           onFocusCapture={navigation.rememberFocus}
         >
           <h2 tabIndex={-1}>{section} decision</h2>
           <input aria-label={`${section} draft`} />
-        </div>
+        </TabPanel>
       ))}
-    </>
+    </TabsScope>
   );
 }
 
@@ -39,42 +40,28 @@ beforeEach(() => {
   });
 });
 
-describe('definition step navigation', () => {
-  it('shows the current step and returns to a remembered field after choosing another decision', async () => {
+describe('definition section navigation', () => {
+  it('returns to remembered draft input after revisiting a peer section', async () => {
     const user = userEvent.setup();
     render(<NavigationHarness />);
-    const chooser = screen.getByRole('button', { name: 'Change definition step' });
-    expect(chooser).toHaveTextContent('1 of 4 · Purpose');
     const draft = screen.getByLabelText('purpose draft');
     await user.type(draft, 'Keep the purpose');
-    await user.click(chooser);
-    expect(screen.getByRole('menuitemradio', { name: 'Purpose' })).toBeChecked();
-    await user.click(screen.getByRole('menuitemradio', { name: 'Included work' }));
-    expect(chooser).toHaveTextContent('3 of 4 · Included work');
+    await user.click(screen.getByRole('tab', { name: 'Included work' }));
     await waitFor(() =>
       expect(screen.getByRole('heading', { name: 'structure decision' })).toHaveFocus(),
     );
-    await user.click(chooser);
-    await user.click(screen.getByRole('menuitemradio', { name: 'Purpose' }));
+    await user.click(screen.getByRole('tab', { name: 'Purpose' }));
     await waitFor(() => expect(draft).toHaveFocus());
     expect(draft).toHaveValue('Keep the purpose');
   });
-
-  it('opens with the keyboard and returns to the chooser when dismissed without changing steps', async () => {
+  it('keeps keyboard focus in the tablist while changing sections', async () => {
     const user = userEvent.setup();
     render(<NavigationHarness />);
-    const chooser = screen.getByRole('button', { name: 'Change definition step' });
-    chooser.focus();
-    await user.keyboard('{Enter}');
-    await screen.findByRole('menuitemradio', { name: 'Review' });
-    await user.keyboard('{End}{Enter}');
-    expect(chooser).toHaveTextContent('4 of 4 · Review');
-    await waitFor(() =>
-      expect(screen.getByRole('heading', { name: 'review decision' })).toHaveFocus(),
-    );
-    chooser.focus();
-    await user.keyboard('{Enter}{Escape}');
-    await waitFor(() => expect(chooser).toHaveFocus());
-    expect(chooser).toHaveTextContent('4 of 4 · Review');
+    screen.getByRole('tab', { name: 'Purpose' }).focus();
+    await user.keyboard('{End}');
+    const review = screen.getByRole('tab', { name: 'Review' });
+    expect(review).toHaveFocus();
+    expect(review).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tabpanel')).toHaveTextContent('review decision');
   });
 });

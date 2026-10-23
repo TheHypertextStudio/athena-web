@@ -1,5 +1,6 @@
 'use client';
-import { useRef, useState } from 'react';
+import { useId, useRef, useState } from 'react';
+import { tabIds } from '@docket/ui/primitives';
 import type { WorkScheduleCreate, WorkScheduleOut } from '@docket/work/work-schedule-management';
 import { useApiQuery, useApiListQuery } from '@/lib/query';
 import { userErrorMessage } from '@/lib/problem';
@@ -25,6 +26,7 @@ export interface ScheduleEditorProps {
 }
 /** Keep all sections' input and the exact reviewed revision while handling failed saves. */
 export function useScheduleEditor(props: ScheduleEditorProps) {
+  const scope = useId();
   const [today] = useState(() => scheduleToday(props.schedule));
   const minimumDate = scheduleRevisionMinimumDate(today, props.schedule);
   const [draft, setDraft] = useState(() =>
@@ -63,10 +65,7 @@ export function useScheduleEditor(props: ScheduleEditorProps) {
   );
   const selectSection = (next: string, focus = false): void => {
     setSection(next);
-    if (focus)
-      requestAnimationFrame(() => {
-        document.querySelector<HTMLElement>(`#tabpanel-${next} h2`)?.focus();
-      });
+    if (focus) focusScheduleSection(scope, next);
   };
   const submit = async (): Promise<void> => {
     if (!input || !ready || saving) return;
@@ -84,6 +83,7 @@ export function useScheduleEditor(props: ScheduleEditorProps) {
     }
   };
   return {
+    scope,
     today,
     minimumDate,
     draft,
@@ -125,4 +125,11 @@ function scheduleToday(schedule: WorkScheduleOut | undefined): string {
     month: '2-digit',
     day: '2-digit',
   }).format(new Date());
+}
+
+/** Enter the requested section after its panel has committed. */
+function focusScheduleSection(scope: string, next: string): void {
+  requestAnimationFrame(() => {
+    document.getElementById(tabIds(scope, next).panelId)?.querySelector<HTMLElement>('h2')?.focus();
+  });
 }

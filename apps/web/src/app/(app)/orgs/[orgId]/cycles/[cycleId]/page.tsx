@@ -1,5 +1,6 @@
 'use client';
 
+import { TabPanel, Button, Skeleton, Tabs, type TabsItem } from '@docket/ui/primitives';
 import type { CycleTaskGroupBy } from '@docket/work/cycle-contract';
 import type { TaskOut } from '@docket/work/task-model';
 import { CycleId } from '@docket/work/ids';
@@ -7,7 +8,7 @@ import { TeamId } from '@docket/identity-access/ids';
 import { EmptyState, type EntityTableGroup } from '@docket/ui/components';
 import { useVocabulary } from '@docket/ui/hooks';
 import { Activity, RefreshCw } from '@docket/ui/icons';
-import { Button, Skeleton, Tabs, type TabsItem } from '@docket/ui/primitives';
+
 import { useTypedRoute } from '@/lib/app-location';
 import { type JSX, useMemo, useState } from 'react';
 
@@ -391,7 +392,7 @@ export default function CycleDetailPage(): JSX.Element {
       }
       tabs={
         <Tabs
-          variant="underline"
+          variant="primary"
           value={tab}
           onValueChange={(value) => {
             setTab(value as TabId);
@@ -401,72 +402,71 @@ export default function CycleDetailPage(): JSX.Element {
         />
       }
     >
-      {tab === 'tasks' ? (
-        // The trailing space is deliberate and belongs to the panel rather than to the floating
-        // Athena button: the button is fixed to the viewport, so content scrolled to its end needs
-        // clearance of its own or the last row sits underneath it.
-        <div
-          role="tabpanel"
-          id="tabpanel-tasks"
-          aria-labelledby="tab-tasks"
-          className="flex flex-col gap-4 pb-32"
-        >
-          <div className="flex items-center justify-between gap-3">
-            <GroupByMenu
-              value={groupBy}
-              onChange={setGroupBy}
-              projectNoun={projectNoun}
-              programNoun={programNoun}
-            />
-            <p className="text-on-surface-variant text-label-large flex h-8 items-center tabular-nums">
-              {orderedTasks.length} {orderedTasks.length === 1 ? taskNoun : taskNounPlural}
-            </p>
-          </div>
+      <TabPanel
+        hidden={!(tab === 'tasks')}
+        as="div"
+        value="tasks"
+        className="flex flex-col gap-4 pb-32"
+        render={() => (
+          <>
+            <div className="flex items-center justify-between gap-3">
+              <GroupByMenu
+                value={groupBy}
+                onChange={setGroupBy}
+                projectNoun={projectNoun}
+                programNoun={programNoun}
+              />
+              <p className="text-on-surface-variant text-label-large flex h-8 items-center tabular-nums">
+                {orderedTasks.length} {orderedTasks.length === 1 ? taskNoun : taskNounPlural}
+              </p>
+            </div>
 
-          {orderedTasks.length === 0 ? (
-            <EmptyState
-              icon={RefreshCw}
-              title="Nothing is committed yet"
-              body={`Add the work this ${cycleNounLower} is meant to deliver and it will show up here, grouped by ${projectNoun.toLowerCase()}.`}
-            />
-          ) : (
-            <TaskTable
-              label={`${cycle.displayName} ${taskNounPlural}`}
-              columns={columns}
-              groups={taskGroups}
-              taskHref={(task) => `/orgs/${orgId}/tasks/${task.id}`}
-              onOpenTask={openTaskRecord}
-              bleed
-            />
-          )}
+            {orderedTasks.length === 0 ? (
+              <EmptyState
+                icon={RefreshCw}
+                title="Nothing is committed yet"
+                body={`Add the work this ${cycleNounLower} is meant to deliver and it will show up here, grouped by ${projectNoun.toLowerCase()}.`}
+              />
+            ) : (
+              <TaskTable
+                label={`${cycle.displayName} ${taskNounPlural}`}
+                columns={columns}
+                groups={taskGroups}
+                taskHref={(task) => `/orgs/${orgId}/tasks/${task.id}`}
+                onOpenTask={openTaskRecord}
+                bleed
+              />
+            )}
 
-          <QuickAddRow
-            canEdit={canEditNow}
-            noun={taskNoun}
-            placeholder={`Add a ${taskNoun} to this ${cycleNounLower}…`}
-            onAdd={(title) => createCycleTask.mutateAsync(title).then(() => undefined)}
-          />
-        </div>
-      ) : null}
-
-      {tab === 'pace' ? (
-        <div
-          role="tabpanel"
-          id="tabpanel-pace"
-          aria-labelledby="tab-pace"
-          className="flex flex-col gap-4 pb-32"
-        >
-          {burnup ? (
-            <CyclePacePanel burnup={burnup} window={win} cycleNoun={cycleNounLower} />
-          ) : (
-            <EmptyState
-              icon={Activity}
-              title="Pace is unavailable"
-              body={`The burn-up for this ${cycleNounLower} could not be read. Reload the page to try again.`}
+            <QuickAddRow
+              canEdit={canEditNow}
+              noun={taskNoun}
+              placeholder={`Add a ${taskNoun} to this ${cycleNounLower}…`}
+              onAdd={(title) => createCycleTask.mutateAsync(title).then(() => undefined)}
             />
-          )}
-        </div>
-      ) : null}
+          </>
+        )}
+      />
+
+      <TabPanel
+        hidden={!(tab === 'pace')}
+        as="div"
+        value="pace"
+        className="flex flex-col gap-4 pb-32"
+        render={() => (
+          <>
+            {burnup ? (
+              <CyclePacePanel burnup={burnup} window={win} cycleNoun={cycleNounLower} />
+            ) : (
+              <EmptyState
+                icon={Activity}
+                title="Pace is unavailable"
+                body={`The burn-up for this ${cycleNounLower} could not be read. Reload the page to try again.`}
+              />
+            )}
+          </>
+        )}
+      />
 
       <CloseCycleDialog
         open={dialogOpen}

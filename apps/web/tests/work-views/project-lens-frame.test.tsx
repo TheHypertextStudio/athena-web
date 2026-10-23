@@ -47,21 +47,22 @@ describe('project lens frame', () => {
   it('switches to the roster through a link and marks Dependencies as the current page', () => {
     render(<ProjectLensSwitch orgId={ORG_ID} />);
 
-    const list = screen.getByRole('tab', { name: 'List' });
+    const list = screen.getByRole('link', { name: 'List' });
     expect(list).toHaveAttribute('href', `/orgs/${ORG_ID}/projects`);
-    expect(list).toHaveAttribute('aria-selected', 'false');
-    const dependencies = screen.getByRole('tab', { name: 'Dependencies' });
-    expect(dependencies).toHaveAttribute('aria-selected', 'true');
+    expect(list).not.toHaveAttribute('aria-current');
+    const dependencies = screen.getByRole('link', { name: 'Dependencies' });
     expect(dependencies).toHaveAttribute('aria-current', 'page');
   });
 
   it('morphs the switch into place when moving to the roster', () => {
     render(<ProjectLensSwitch orgId={ORG_ID} />);
 
-    expect(screen.getByRole('tab', { name: 'List' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'List' })).toHaveAttribute(
       'transition',
       'shared-element',
     );
-    expect(screen.getByRole('tablist').style.viewTransitionName).toBe(PROJECT_LENS_TRANSITION.lens);
+    expect(screen.getByRole('navigation').style.viewTransitionName).toBe(
+      PROJECT_LENS_TRANSITION.lens,
+    );
   });
 });

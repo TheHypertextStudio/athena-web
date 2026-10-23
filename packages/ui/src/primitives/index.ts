@@ -209,7 +209,17 @@ export { Switch, type SwitchProps } from './switch';
 export {
   Tab,
   TabList,
-  type TabsTone,
+  TabsScope,
+  TabPanel,
+  LazyTabPanels,
+  type LazyTabPanelsProps,
+  useTabPanelProps,
+  tabBadgeCount,
+  tabIds,
+  type TabPanelProps,
+  type TabsVariant,
+  type TabsActivation,
+  type TabsLayout,
   type TabListProps,
   type TabProps,
   Tabs,
@@ -228,3 +238,9 @@ export {
   typeClass,
 } from './text';
 export { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './tooltip';
+
+export {
+  ExclusiveChoice,
+  type ExclusiveChoiceProps,
+  type ExclusiveChoiceItem,
+} from './exclusive-choice';

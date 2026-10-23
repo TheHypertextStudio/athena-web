@@ -27,7 +27,7 @@ import { TeamId } from '@docket/identity-access/ids';
 import { EmptyState, InlineBanner } from '@docket/ui/components';
 import { useVocabulary } from '@docket/ui/hooks';
 import { ChevronLeft, Folder } from '@docket/ui/icons';
-import { Button, Skeleton, Tabs } from '@docket/ui/primitives';
+import { LazyTabPanels, Button, Skeleton, Tabs } from '@docket/ui/primitives';
 import Link from '@/components/docket-link';
 import { QueryLoadFailure } from '@/components/feedback';
 import { type JSX, useMemo, useState } from 'react';
@@ -106,9 +106,7 @@ function TeamDisplayError({ error }: { readonly error: unknown }): JSX.Element |
  * @returns the rendered page.
  */
 export default function TeamDetailClient(): JSX.Element {
-  const {
-    params: { orgId, teamId },
-  } = useTypedRoute('/orgs/[orgId]/teams/[teamId]');
+  const { orgId, teamId } = useTypedRoute('/orgs/[orgId]/teams/[teamId]').params;
   const [lens, setLens] = useState<ActivityLens>('capacity');
   const [weightByEstimate, setWeightByEstimate] = useState(false);
 
@@ -226,7 +224,7 @@ export default function TeamDetailClient(): JSX.Element {
       {...(team.summary ? { subtitle: team.summary } : {})}
       tabs={
         <Tabs
-          variant="underline"
+          variant="primary"
           value={tab}
           onValueChange={(value) => {
             setTab(value as TabId);
@@ -236,113 +234,118 @@ export default function TeamDetailClient(): JSX.Element {
         />
       }
     >
-      {tab === 'overview' ? (
-        <section className="flex flex-col gap-6">
-          <EntityDocument
-            value={team.description}
-            canEdit
-            // A team charter is a few short sections. A contents rail beside two headings is
-            // navigation for a distance nobody has to travel.
-            contents={false}
-            onSave={(value) => {
-              saveDescription.mutate(value);
-            }}
-            placeholder="What is this team for? Anything you reference here shows up in its Library."
-          />
-        </section>
-      ) : null}
-
-      {tab === 'activity' ? (
-        <section className="flex flex-col gap-5">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="bg-surface-container-low flex items-center gap-1 rounded-lg p-1">
-              <LensButton
-                active={lens === 'capacity'}
-                onClick={() => {
-                  setLens('capacity');
-                }}
-              >
-                Capacity
-              </LensButton>
-              <LensButton
-                active={lens === 'throughput'}
-                onClick={() => {
-                  setLens('throughput');
-                }}
-              >
-                Throughput
-              </LensButton>
-            </div>
-            {lens === 'capacity' ? (
-              <LensButton
-                active={weightByEstimate}
-                onClick={() => {
-                  setWeightByEstimate(!weightByEstimate);
-                }}
-              >
-                By points
-              </LensButton>
-            ) : null}
-          </div>
-
-          {activityQ.isPending ? (
-            // placeholder: the team's open work by state, and its 30-day open/completed trend.
-            <Skeleton aria-hidden="true" className="h-40 w-full rounded-xl" />
-          ) : activityQ.isError ? (
-            <QueryLoadFailure size="panel" title="Team activity" query={activityQ} />
-          ) : lens === 'capacity' ? (
-            <CapacityChart capacity={activityQ.data.capacity} weightByEstimate={weightByEstimate} />
-          ) : (
-            <ThroughputChart
-              throughput={activityQ.data.throughput}
-              windowDays={activityQ.data.windowDays}
-            />
-          )}
-        </section>
-      ) : null}
-
-      {tab === 'library' ? (
-        <section className="flex flex-col gap-6">
-          <MentionedResources
-            heading="Resources"
-            mentions={mentions.external}
-            pending={mentions.isPending}
-            hasProse={hasProse}
-          />
-          <MentionedResources
-            heading="Work referenced here"
-            mentions={mentions.entities}
-            pending={mentions.isPending}
-            hasProse={hasProse}
-          />
-          {referenceCount === 0 && !mentions.isPending ? (
-            <EmptyState
-              icon={Folder}
-              title="Nothing in the library yet"
-              body="Mention a document or a project in the team description and it appears here — nobody has to attach it separately."
-              cta={{
-                label: 'Write the description',
-                onClick: () => {
-                  setTab('overview');
-                },
+      <LazyTabPanels values={teamDetailTabs(canManage).map((item) => item.value)} value={tab}>
+        {tab === 'overview' ? (
+          <section className="flex flex-col gap-6">
+            <EntityDocument
+              value={team.description}
+              canEdit
+              // A team charter is a few short sections. A contents rail beside two headings is
+              // navigation for a distance nobody has to travel.
+              contents={false}
+              onSave={(value) => {
+                saveDescription.mutate(value);
               }}
+              placeholder="What is this team for? Anything you reference here shows up in its Library."
             />
-          ) : null}
-        </section>
-      ) : null}
+          </section>
+        ) : null}
 
-      {tab === 'people' ? (
-        <section className="flex flex-col gap-4">
-          {membersQ.isPending ? (
-            <TeamPeopleSkeleton />
-          ) : (
-            <TeamPeople members={members} taskNounPlural={taskNounPlural} />
-          )}
-        </section>
-      ) : null}
-      {teamSettingsContent(tab, canManage, orgId, team)}
+        {tab === 'activity' ? (
+          <section className="flex flex-col gap-5">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="bg-surface-container-low flex items-center gap-1 rounded-lg p-1">
+                <LensButton
+                  active={lens === 'capacity'}
+                  onClick={() => {
+                    setLens('capacity');
+                  }}
+                >
+                  Capacity
+                </LensButton>
+                <LensButton
+                  active={lens === 'throughput'}
+                  onClick={() => {
+                    setLens('throughput');
+                  }}
+                >
+                  Throughput
+                </LensButton>
+              </div>
+              {lens === 'capacity' ? (
+                <LensButton
+                  active={weightByEstimate}
+                  onClick={() => {
+                    setWeightByEstimate(!weightByEstimate);
+                  }}
+                >
+                  By points
+                </LensButton>
+              ) : null}
+            </div>
 
-      <TeamDisplayError error={entityDisplay.mutation.error} />
+            {activityQ.isPending ? (
+              // placeholder: the team's open work by state, and its 30-day open/completed trend.
+              <Skeleton aria-hidden="true" className="h-40 w-full rounded-xl" />
+            ) : activityQ.isError ? (
+              <QueryLoadFailure size="panel" title="Team activity" query={activityQ} />
+            ) : lens === 'capacity' ? (
+              <CapacityChart
+                capacity={activityQ.data.capacity}
+                weightByEstimate={weightByEstimate}
+              />
+            ) : (
+              <ThroughputChart
+                throughput={activityQ.data.throughput}
+                windowDays={activityQ.data.windowDays}
+              />
+            )}
+          </section>
+        ) : null}
+
+        {tab === 'library' ? (
+          <section className="flex flex-col gap-6">
+            <MentionedResources
+              heading="Resources"
+              mentions={mentions.external}
+              pending={mentions.isPending}
+              hasProse={hasProse}
+            />
+            <MentionedResources
+              heading="Work referenced here"
+              mentions={mentions.entities}
+              pending={mentions.isPending}
+              hasProse={hasProse}
+            />
+            {referenceCount === 0 && !mentions.isPending ? (
+              <EmptyState
+                icon={Folder}
+                title="Nothing in the library yet"
+                body="Mention a document or a project in the team description and it appears here — nobody has to attach it separately."
+                cta={{
+                  label: 'Write the description',
+                  onClick: () => {
+                    setTab('overview');
+                  },
+                }}
+              />
+            ) : null}
+          </section>
+        ) : null}
+
+        {tab === 'people' ? (
+          <section className="flex flex-col gap-4">
+            {membersQ.isPending ? (
+              <TeamPeopleSkeleton />
+            ) : (
+              <TeamPeople members={members} taskNounPlural={taskNounPlural} />
+            )}
+          </section>
+        ) : null}
+        {teamSettingsContent(tab, canManage, orgId, team)}
+
+        <TeamDisplayError error={entityDisplay.mutation.error} />
+      </LazyTabPanels>
     </EntityDetailLayout>
   );
 }

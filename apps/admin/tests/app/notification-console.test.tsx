@@ -217,6 +217,15 @@ describe('NotificationAnnouncementConsole', () => {
     expect(container.textContent).toContain('1,284');
   });
 
+  it('changing announcement sections never approves or sends', async () => {
+    const resolved = await render();
+    for (const name of ['Review', 'Send', 'Monitor', 'Compose']) await openStage(name);
+    expect(resolved.onApprove).not.toHaveBeenCalled();
+    expect(resolved.onSendNow).not.toHaveBeenCalled();
+    expect(resolved.onTestSend).not.toHaveBeenCalled();
+    expect(resolved.onCreateDraft).not.toHaveBeenCalled();
+  });
+
   it('does not send on the first click', async () => {
     const resolved = await render();
     await openStage('Send');

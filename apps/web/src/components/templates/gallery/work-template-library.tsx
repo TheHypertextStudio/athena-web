@@ -11,7 +11,7 @@ import {
   Field,
   Input,
   Select,
-  Tabs,
+  ExclusiveChoice,
   Text,
 } from '@docket/ui/primitives';
 import { useVocabulary } from '@docket/ui/hooks';
@@ -151,7 +151,7 @@ export function WorkTemplateLibrary({
             Work templates
           </Text>
           <LibraryFilters search={search} kind={kind} onSearch={setSearch} onKind={setKind} />
-          <Tabs
+          <ExclusiveChoice
             label="Definition state"
             value={state}
             onValueChange={(value) => {
@@ -163,7 +163,7 @@ export function WorkTemplateLibrary({
               { value: 'published', label: 'Published' },
             ]}
           />
-          <div role="tabpanel" id={`tabpanel-${state}`} aria-labelledby={`tab-${state}`}>
+          <div>
             {visible.length ? (
               <LibraryDefinitions items={visible} orgId={orgId} />
             ) : (

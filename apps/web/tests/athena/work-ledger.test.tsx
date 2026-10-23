@@ -71,9 +71,9 @@ describe('AthenaWorkLedger', () => {
       />,
     );
 
-    const tabs = screen.getAllByRole('tab');
+    const tabs = screen.getAllByRole('radio');
     expect(tabs).toHaveLength(2);
-    expect(screen.queryByRole('tab', { name: /needs you/i })).toBeNull();
+    expect(screen.queryByRole('radio', { name: /needs you/i })).toBeNull();
     for (const tab of tabs) expect(tab.textContent).not.toMatch(/\d/);
 
     const entries = screen.getAllByRole('button', { name: /Protect two hours/ });
@@ -112,7 +112,7 @@ describe('AthenaWorkLedger', () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole('tab', { name: /needs you/i }));
+    fireEvent.click(screen.getByRole('radio', { name: /needs you/i }));
 
     expect(onFilterChange).toHaveBeenCalledWith('needs_you');
   });
@@ -158,8 +158,8 @@ describe('AthenaWorkLedger', () => {
       />,
     );
 
-    const tablist = screen.getByRole('tablist');
-    expect(within(tablist).getByRole('tab', { selected: true })).toHaveTextContent(/needs you/i);
+    const tablist = screen.getByRole('radiogroup');
+    expect(within(tablist).getByRole('radio', { checked: true })).toHaveTextContent(/needs you/i);
     expect(screen.getByRole('button', { name: /Protect two hours/ })).toHaveAttribute(
       'data-athena-work-row',
       'needs_1',

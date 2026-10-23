@@ -1,9 +1,10 @@
 'use client';
 
+import { LazyTabPanels, TabsScope, Button, Skeleton } from '@docket/ui/primitives';
 import { ListView } from '@docket/ui/components';
 import { useVocabulary } from '@docket/ui/hooks';
 import { ListChecks, Plus } from '@docket/ui/icons';
-import { Button, Skeleton } from '@docket/ui/primitives';
+
 import { useTypedRoute } from '@/lib/app-location';
 import { type JSX, useCallback, useMemo, useRef, useState } from 'react';
 
@@ -118,121 +119,123 @@ export default function MyWorkClient(): JSX.Element {
       : { title: 'All clear' };
 
   return (
-    <div
-      ref={rootRef}
-      className="flex h-full w-full flex-col gap-4 px-3 py-4 @2xl:gap-5 @2xl:p-6 @4xl:p-8"
-    >
-      <header className="flex flex-col gap-3 @2xl:flex-row @2xl:items-start @2xl:justify-between">
-        <div className="flex flex-col gap-1">
-          <h1 className="text-on-surface text-title-large">My Work</h1>
-          <p className="text-on-surface-variant text-xs">
-            Your work and your agents&apos; work, grouped by {projectNoun.toLowerCase()}.
-          </p>
-        </div>
-        <div className="flex items-center gap-2 self-start">
-          <InPageFindButton onClick={openSearch} />
-          <CreateTaskAction ready={userId !== null} onCreate={openTaskComposer} />
-        </div>
-      </header>
-
-      <SplitTabs
-        label="Filter your work"
-        value={tab}
-        onChange={(nextTab) => {
-          search.setDraft('');
-          setTab(nextTab);
-        }}
-        tabs={[
-          { value: 'mine', label: 'Assigned to me', count: counts.mine },
-          {
-            value: 'delegated',
-            label: 'Delegated & approvals',
-            count: counts.delegated,
-            emphasis: pendingApprovals > 0,
-          },
-        ]}
-      />
-
-      {findOpen ? (
-        <InPageSearchField
-          inputRef={searchInputRef}
-          value={search.draft}
-          onValueChange={search.setDraft}
-          onEscapeEmpty={() => {
-            setFindOpen(false);
-            restoreFocus();
-          }}
-          label="Search My Work"
-          placeholder="Search My Work"
-          resultCount={search.items.length}
-          pending={search.draft !== search.settledQuery}
-        />
-      ) : null}
-
-      <section
-        id={`tabpanel-${tab}`}
-        role="tabpanel"
-        aria-labelledby={`tab-${tab}`}
-        className={
-          visible.length === 0 && !loading && !loadError ? undefined : 'flex-1 overflow-hidden'
-        }
+    <TabsScope>
+      <div
+        ref={rootRef}
+        className="flex h-full w-full flex-col gap-4 px-3 py-4 @2xl:gap-5 @2xl:p-6 @4xl:p-8"
       >
-        {/* placeholder: the rows for the selected tab — which items are assigned to, created by or
+        <header className="flex flex-col gap-3 @2xl:flex-row @2xl:items-start @2xl:justify-between">
+          <div className="flex flex-col gap-1">
+            <h1 className="text-on-surface text-title-large">My Work</h1>
+            <p className="text-on-surface-variant text-xs">
+              Your work and your agents&apos; work, grouped by {projectNoun.toLowerCase()}.
+            </p>
+          </div>
+          <div className="flex items-center gap-2 self-start">
+            <InPageFindButton onClick={openSearch} />
+            <CreateTaskAction ready={userId !== null} onCreate={openTaskComposer} />
+          </div>
+        </header>
+
+        <SplitTabs
+          label="Filter your work"
+          value={tab}
+          onChange={(nextTab) => {
+            search.setDraft('');
+            setTab(nextTab);
+          }}
+          tabs={[
+            { value: 'mine', label: 'Assigned to me', count: counts.mine },
+            {
+              value: 'delegated',
+              label: 'Delegated & approvals',
+              count: counts.delegated,
+              emphasis: pendingApprovals > 0,
+            },
+          ]}
+        />
+
+        {findOpen ? (
+          <InPageSearchField
+            inputRef={searchInputRef}
+            value={search.draft}
+            onValueChange={search.setDraft}
+            onEscapeEmpty={() => {
+              setFindOpen(false);
+              restoreFocus();
+            }}
+            label="Search My Work"
+            placeholder="Search My Work"
+            resultCount={search.items.length}
+            pending={search.draft !== search.settledQuery}
+          />
+        ) : null}
+
+        <LazyTabPanels
+          values={['mine', 'delegated']}
+          as="section"
+          value={tab}
+          className={
+            visible.length === 0 && !loading && !loadError ? undefined : 'flex-1 overflow-hidden'
+          }
+        >
+          {/* placeholder: the rows for the selected tab — which items are assigned to, created by or
             watched by the caller, and each one's title, state and workspace. The tab strip itself
             carries static labels and renders before the read. */}
-        {loading ? (
-          <div className="flex flex-col gap-2 p-3" aria-hidden="true">
-            <Skeleton className="h-8 w-full" />
-            <Skeleton className="h-8 w-full" />
-            <Skeleton className="h-8 w-full" />
-          </div>
-        ) : loadError ? (
-          <LoadFailure title="Your work" error={loadError} />
-        ) : visible.length === 0 ? (
-          <div className="flex flex-col items-center gap-3 p-10 text-center">
-            <span
-              aria-hidden="true"
-              className="bg-surface-container text-on-surface-variant flex size-10 items-center justify-center rounded-full"
-            >
-              <ListChecks className="size-5" />
-            </span>
-            <p className="text-on-surface text-body-medium font-medium">{empty.title}</p>
-            {tab === 'mine' ? (
-              <CreateTaskAction ready={userId !== null} onCreate={openTaskComposer} secondary />
-            ) : null}
-          </div>
-        ) : (
-          <div className="relative h-full min-h-0">
-            <ListView
-              stateKey={search.settledQuery.trim().length > 0 ? 'search' : 'browse'}
-              items={search.items}
-              label={tab === 'mine' ? 'Tasks assigned to me' : 'Delegated tasks and approvals'}
-              getItemKey={taskListKey}
-              groupBy={groupBy}
-              subGroupBy={subGroupBy}
-              rowHeight={40}
-              className={search.items.length === 0 ? 'invisible' : undefined}
-              renderRow={(task, ctx) => (
-                <AgentTaskRow
-                  task={toRow(task, tab)}
-                  active={ctx.active}
-                  onActivate={ctx.onActivate}
-                  rowProps={ctx.rowProps}
-                  canEdit={canEdit}
-                  onRename={rename}
-                />
-              )}
-              onActivateItem={openTaskRecord}
-            />
-            {search.items.length === 0 ? (
-              <p className="text-on-surface-variant text-body-medium absolute inset-0 flex items-center justify-center p-8 text-center">
-                No tasks in this tab match this search.
-              </p>
-            ) : null}
-          </div>
-        )}
-      </section>
-    </div>
+          {loading ? (
+            <div className="flex flex-col gap-2 p-3" aria-hidden="true">
+              <Skeleton className="h-8 w-full" />
+              <Skeleton className="h-8 w-full" />
+              <Skeleton className="h-8 w-full" />
+            </div>
+          ) : loadError ? (
+            <LoadFailure title="Your work" error={loadError} />
+          ) : visible.length === 0 ? (
+            <div className="flex flex-col items-center gap-3 p-10 text-center">
+              <span
+                aria-hidden="true"
+                className="bg-surface-container text-on-surface-variant flex size-10 items-center justify-center rounded-full"
+              >
+                <ListChecks className="size-5" />
+              </span>
+              <p className="text-on-surface text-body-medium font-medium">{empty.title}</p>
+              {tab === 'mine' ? (
+                <CreateTaskAction ready={userId !== null} onCreate={openTaskComposer} secondary />
+              ) : null}
+            </div>
+          ) : (
+            <div className="relative h-full min-h-0">
+              <ListView
+                stateKey={search.settledQuery.trim().length > 0 ? 'search' : 'browse'}
+                items={search.items}
+                label={tab === 'mine' ? 'Tasks assigned to me' : 'Delegated tasks and approvals'}
+                getItemKey={taskListKey}
+                groupBy={groupBy}
+                subGroupBy={subGroupBy}
+                rowHeight={40}
+                className={search.items.length === 0 ? 'invisible' : undefined}
+                renderRow={(task, ctx) => (
+                  <AgentTaskRow
+                    task={toRow(task, tab)}
+                    active={ctx.active}
+                    onActivate={ctx.onActivate}
+                    rowProps={ctx.rowProps}
+                    canEdit={canEdit}
+                    onRename={rename}
+                  />
+                )}
+                onActivateItem={openTaskRecord}
+              />
+              {search.items.length === 0 ? (
+                <p className="text-on-surface-variant text-body-medium absolute inset-0 flex items-center justify-center p-8 text-center">
+                  No tasks in this tab match this search.
+                </p>
+              ) : null}
+            </div>
+          )}
+        </LazyTabPanels>
+      </div>
+    </TabsScope>
   );
 }
 

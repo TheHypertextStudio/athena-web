@@ -193,7 +193,7 @@ describe('composer body editor parity', () => {
     const properties = screen.getByRole('group', { name: 'Project properties' });
     const submit = screen.getByRole('button', { name: 'Create Project' });
 
-    expect(sections).toHaveClass('bg-surface-container');
+    expect(descriptionTab.querySelector('[data-tab-indicator="secondary"]')).not.toBeNull();
     expect(descriptionTab).toHaveAttribute('aria-selected', 'true');
     expect(milestonesTab).toHaveAttribute('aria-selected', 'false');
     expect(milestonePanel).toHaveAttribute('aria-hidden', 'true');

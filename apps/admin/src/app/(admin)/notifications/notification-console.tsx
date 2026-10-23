@@ -1,8 +1,9 @@
 'use client';
 
+import { LazyTabPanels, TabsScope, Badge, Button, Stack, Tabs, Text } from '@docket/ui/primitives';
 import { EmptyState, InlineBanner } from '@docket/ui/components';
 import { Bell, RefreshCw } from '@docket/ui/icons';
-import { Badge, Button, Stack, Tabs, Text } from '@docket/ui/primitives';
+
 import { type JSX, useState } from 'react';
 
 import { QueryErrorBanner } from '@/components/admin-feedback';
@@ -103,7 +104,17 @@ export interface NotificationAnnouncementConsoleProps {
  * Intentionally presentational: the routed page owns the API calls and state, which keeps this
  * whole workflow testable without browser globals.
  */
-export function NotificationAnnouncementConsole({
+export function NotificationAnnouncementConsole(
+  props: NotificationAnnouncementConsoleProps,
+): JSX.Element {
+  return (
+    <TabsScope>
+      <AnnouncementConsole {...props} />
+    </TabsScope>
+  );
+}
+
+function AnnouncementConsole({
   intents,
   selectedIntent,
   estimate,
@@ -192,7 +203,15 @@ export function NotificationAnnouncementConsole({
 }
 
 /** Whichever stage is selected, or a prompt to select an announcement first. */
-function StagePanel({
+function StagePanel(props: Parameters<typeof StageContent>[0]): JSX.Element {
+  return (
+    <LazyTabPanels values={STAGES.map((item) => item.value)} value={props.stage}>
+      <StageContent {...props} />
+    </LazyTabPanels>
+  );
+}
+
+function StageContent({
   stage,
   selectedIntent,
   estimate,

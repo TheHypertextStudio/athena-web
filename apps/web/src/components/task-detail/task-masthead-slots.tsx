@@ -34,11 +34,10 @@ const TASK_TAB_LABEL: Readonly<Record<TaskTab, string>> = {
   graph: 'Graph',
 };
 
-/** The tab bar's items, in tab order; an earlier section stays visible longer as the pane narrows. */
-const TASK_TAB_ITEMS: readonly TabsItem[] = TASK_TABS.map((value, priority) => ({
+/** The content destinations in stable tab order. */
+const TASK_TAB_ITEMS: readonly TabsItem[] = TASK_TABS.map((value) => ({
   value,
   label: TASK_TAB_LABEL[value],
-  priority,
 }));
 
 /** Props for {@link TaskIcon}. */
@@ -119,13 +118,12 @@ export interface TaskTabsProps {
 export function TaskTabs({ tab, onTabChange }: TaskTabsProps): JSX.Element {
   return (
     <Tabs
-      variant="underline"
+      variant="primary"
       value={tab}
       onValueChange={(value) => {
         onTabChange(value as TaskTab);
       }}
       label="Task sections"
-      overflow={{ menuLabel: 'More Task sections' }}
       items={TASK_TAB_ITEMS}
     />
   );

@@ -1,6 +1,6 @@
 import '@testing-library/jest-dom/vitest';
 
-import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { useState } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -25,43 +25,23 @@ const ITEMS: TabsItem[] = [
 ];
 
 describe('Tabs variants', () => {
-  /**
-   * A segmented control and a page's section navigation are different components in M3, and were
-   * one treatment here until the seam showed: section nav is stretched across the measure, so a
-   * filled track left five labels huddled at the left of a wide empty pill.
-   */
-  it('gives a segmented control a filled track and a filled selected segment', () => {
-    render(<Tabs value="overview" onValueChange={vi.fn()} label="Sections" items={ITEMS} />);
-    const tablist = screen.getByRole('tablist', { name: 'Sections' });
-    expect(tablist.className).toContain('bg-surface-container');
-    const selected = within(tablist).getByRole('tab', { selected: true });
-    expect(selected.className).toContain('bg-surface-container-highest');
-    expect(selected.querySelector('span[aria-hidden="true"]')).toBeNull();
-  });
-
-  it('gives section navigation no track and marks the selected tab with an indicator', () => {
+  it.each(['primary', 'secondary'] as const)('uses the %s content indicator', (variant) => {
     render(
       <Tabs
+        variant={variant}
         value="overview"
         onValueChange={vi.fn()}
         label="Sections"
         items={ITEMS}
-        variant="underline"
       />,
     );
-    const tablist = screen.getByRole('tablist', { name: 'Sections' });
-    expect(tablist.className).not.toContain('bg-surface-container');
-    expect(tablist.className).not.toContain('p-0.5');
-
-    const selected = within(tablist).getByRole('tab', { selected: true });
-    // No fill in either state — the indicator is what says "selected", so the label row stays flat.
-    expect(selected.className).not.toContain('bg-surface-container-highest');
-    const indicator = selected.querySelector('span[aria-hidden="true"]');
-    expect(indicator).not.toBeNull();
-    expect(indicator?.className).toContain('bg-primary');
-
-    const unselected = within(tablist).getByRole('tab', { name: /^Tasks/ });
-    expect(unselected.querySelector('span[aria-hidden="true"]')).toBeNull();
+    const selected = screen.getByRole('tab', { selected: true });
+    expect(selected.querySelector(`[data-tab-indicator="${variant}"]`)).not.toBeNull();
+    expect(
+      screen
+        .getByRole('tab', { selected: false, name: /Tasks/ })
+        .querySelector('[data-tab-indicator]'),
+    ).toBeNull();
   });
 });
 
@@ -113,190 +93,23 @@ describe('Tabs (data-driven)', () => {
   it('wires aria-controls/id from the tab value, matching a caller-rendered tabpanel', () => {
     render(<DataDrivenTabs items={ITEMS} initial="overview" />);
     const tab = screen.getByRole('tab', { name: 'Overview' });
-    expect(tab).toHaveAttribute('id', 'tab-overview');
-    expect(tab).toHaveAttribute('aria-controls', 'tabpanel-overview');
+    expect(tab.id).toMatch(/-tab-overview$/);
+    expect(tab.getAttribute('aria-controls')).toMatch(/-panel-overview$/);
   });
 });
 
-describe('Tabs (adaptive overflow)', () => {
-  it('keeps each visible section label on one line and truncates it before the lane can wrap', () => {
-    render(
-      <Tabs
-        value="overview"
-        onValueChange={() => undefined}
-        label="Initiative sections"
-        overflow={{ menuLabel: 'More Initiative sections' }}
-        items={[{ value: 'overview', label: 'A deliberately long section label', priority: 0 }]}
-      />,
+describe('Tabs responsive navigation', () => {
+  it('keeps every destination available in order when five tabs require scrolling', () => {
+    const items = Array.from({ length: 5 }, (_, index) => ({
+      value: String(index),
+      label: `Section ${index}`,
+    }));
+    render(<Tabs value="4" onValueChange={vi.fn()} label="Sections" items={items} />);
+    expect(screen.getAllByRole('tab').map((tab) => tab.textContent)).toEqual(
+      items.map((item) => item.label),
     );
-
-    const tab = screen.getByRole('tab', { name: 'A deliberately long section label' });
-    expect(tab).toHaveClass('whitespace-nowrap');
-    expect(tab.querySelector('span')).toHaveClass('truncate');
-  });
-
-  it('keeps the selected section inline and exposes remaining sections in a named menu', () => {
-    render(
-      <Tabs
-        value="resources"
-        onValueChange={() => undefined}
-        label="Initiative sections"
-        overflow={{ menuLabel: 'More Initiative sections' }}
-        items={[
-          { value: 'overview', label: 'Overview', priority: 0 },
-          { value: 'subinitiatives', label: 'Sub-initiatives', priority: 1 },
-          { value: 'work', label: 'Connected work', priority: 2 },
-          { value: 'updates', label: 'Updates', priority: 3 },
-          { value: 'resources', label: 'Resources', priority: 4 },
-        ]}
-      />,
-    );
-
-    expect(screen.getByRole('tab', { name: 'Resources' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'More Initiative sections' })).toBeInTheDocument();
-  });
-
-  it('promotes a section selected from the menu into the tablist', () => {
-    function OverflowHost(): React.JSX.Element {
-      const [value, setValue] = useState('overview');
-      return (
-        <Tabs
-          value={value}
-          onValueChange={setValue}
-          label="Initiative sections"
-          overflow={{ menuLabel: 'More Initiative sections' }}
-          items={[
-            { value: 'overview', label: 'Overview', priority: 0 },
-            { value: 'subinitiatives', label: 'Sub-initiatives', priority: 1 },
-            { value: 'work', label: 'Connected work', priority: 2 },
-            { value: 'updates', label: 'Updates', priority: 3 },
-            { value: 'resources', label: 'Resources', priority: 4 },
-          ]}
-        />
-      );
-    }
-
-    render(<OverflowHost />);
-    expect(screen.queryByRole('tab', { name: 'Resources' })).toBeNull();
-    fireEvent.pointerDown(screen.getByRole('button', { name: 'More Initiative sections' }), {
-      button: 0,
-      ctrlKey: false,
-    });
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Resources' }));
-    expect(screen.getByRole('tab', { name: 'Resources' })).toHaveAttribute('aria-selected', 'true');
-  });
-
-  it('keeps priority sections inline and restores every section when the lane grows', () => {
-    let resize: ResizeObserverCallback | undefined;
-    const observe = vi.fn();
-    const disconnect = vi.fn();
-    class TestResizeObserver implements ResizeObserver {
-      constructor(callback: ResizeObserverCallback) {
-        resize = callback;
-      }
-
-      readonly observe = observe;
-      readonly unobserve = vi.fn();
-      readonly disconnect = disconnect;
-    }
-    vi.stubGlobal('ResizeObserver', TestResizeObserver);
-
-    const { container, unmount } = render(
-      <Tabs
-        value="overview"
-        onValueChange={() => undefined}
-        label="Project sections"
-        overflow={{ menuLabel: 'More Project sections' }}
-        items={[
-          { value: 'overview', label: 'Overview', priority: 0 },
-          { value: 'tasks', label: 'Tasks' },
-          { value: 'resources', label: 'Resources', count: 2, priority: 1 },
-        ]}
-      />,
-    );
-
-    const lane = screen.getByRole('tablist').parentElement;
-    if (!lane) throw new Error('expected the overflow lane');
-    let laneWidth = 210;
-    Object.defineProperty(lane, 'clientWidth', {
-      configurable: true,
-      get: () => laneWidth,
-    });
-    const measurements = container.querySelectorAll<HTMLButtonElement>(
-      '[aria-hidden="true"] button',
-    );
-    expect(measurements).toHaveLength(3);
-    for (const measurement of measurements) {
-      vi.spyOn(measurement, 'getBoundingClientRect').mockReturnValue({
-        width: 80,
-      } as DOMRect);
-    }
-    vi.spyOn(
-      screen.getByRole('button', { name: 'More Project sections' }),
-      'getBoundingClientRect',
-    ).mockReturnValue({ width: 40 } as DOMRect);
-
-    if (!resize) throw new Error('expected the overflow lane to register a resize observer');
-    act(() => resize?.([], {} as ResizeObserver));
-    expect(screen.getByRole('tab', { name: 'Overview' })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: /Resources/ })).toBeInTheDocument();
-    expect(screen.queryByRole('tab', { name: 'Tasks' })).toBeNull();
-
-    laneWidth = 300;
-    act(() => resize?.([], {} as ResizeObserver));
-    expect(screen.getAllByRole('tab')).toHaveLength(3);
-    expect(screen.queryByRole('button', { name: 'More Project sections' })).toBeNull();
-
-    unmount();
-    expect(observe).toHaveBeenCalledWith(lane);
-    expect(disconnect).toHaveBeenCalledOnce();
-    vi.unstubAllGlobals();
-  });
-
-  describe('measuring', () => {
-    /** The overflow bar for a set of items, as a caller writes it: a fresh array on every render. */
-    function overflowBar(items: readonly TabsItem[]): React.JSX.Element {
-      return (
-        <Tabs
-          value="overview"
-          onValueChange={() => undefined}
-          label="Project sections"
-          overflow={{ menuLabel: 'More Project sections' }}
-          items={items}
-        />
-      );
-    }
-
-    it('measures the tabs again only when what decides their widths changes', () => {
-      const measure = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect');
-      const initial = [
-        { value: 'overview', label: 'Overview', priority: 0 },
-        { value: 'tasks', label: 'Tasks', priority: 1 },
-      ];
-      const { rerender } = render(overflowBar(initial));
-      measure.mockClear();
-
-      rerender(overflowBar(initial.map((item) => ({ ...item }))));
-      expect(measure).not.toHaveBeenCalled();
-
-      rerender(overflowBar([...initial, { value: 'graph', label: 'Graph', priority: 2 }]));
-      expect(measure).toHaveBeenCalled();
-      measure.mockRestore();
-    });
-
-    it('measures the tabs again when a label or count changes', () => {
-      const measure = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect');
-      const { rerender } = render(overflowBar([{ value: 'tasks', label: 'Tasks', count: 1 }]));
-      measure.mockClear();
-
-      rerender(overflowBar([{ value: 'tasks', label: 'Tasks', count: 12 }]));
-      expect(measure).toHaveBeenCalled();
-      measure.mockClear();
-
-      rerender(overflowBar([{ value: 'tasks', label: 'Engagements', count: 12 }]));
-      expect(measure).toHaveBeenCalled();
-      measure.mockRestore();
-    });
+    expect(screen.getByRole('tablist')).toHaveAttribute('data-layout', 'scrollable');
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
   });
 });
 

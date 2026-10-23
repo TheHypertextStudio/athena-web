@@ -212,7 +212,7 @@ export function OverflowMenu({
                     leading={<Icon aria-hidden="true" />}
                     selected={active}
                     renderPrimary={(children, className) =>
-                      renderLink(tab.href, children, className)
+                      renderLink(tab.href, children, className, active ? 'page' : undefined)
                     }
                     actionLabel={`Close ${tabLabel(tab)}`}
                     actionIcon={<X aria-hidden="true" />}

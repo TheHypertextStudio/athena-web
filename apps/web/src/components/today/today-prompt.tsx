@@ -63,9 +63,7 @@ import {
   DropdownMenuTrigger,
   Input,
   Stack,
-  Tab,
-  TabList,
-  Tabs,
+  ExclusiveChoice,
   fieldSurface,
 } from '@docket/ui/primitives';
 import Link from '@/components/docket-link';
@@ -174,18 +172,17 @@ interface DestinationToggleProps {
 /** The Task/Athena segmented control. */
 function DestinationToggle({ mode, onModeChange }: DestinationToggleProps): JSX.Element {
   return (
-    <Tabs
+    <ExclusiveChoice
+      label="Send this to"
       value={mode}
-      tone="accent"
       onValueChange={(next) => {
         onModeChange(next as CaptureMode);
       }}
-    >
-      <TabList label="Send this to">
-        <Tab value="athena">Athena</Tab>
-        <Tab value="task">Task</Tab>
-      </TabList>
-    </Tabs>
+      items={[
+        { value: 'athena', label: 'Athena' },
+        { value: 'task', label: 'Task' },
+      ]}
+    />
   );
 }
 

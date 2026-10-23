@@ -104,7 +104,7 @@ export function TabBar({
 
   React.useLayoutEffect(() => {
     const selectedTab = tablistRef.current?.querySelector<HTMLElement>(
-      '[role="tab"][aria-selected="true"]',
+      '[data-document-tab][data-active="true"]',
     );
     // Browser engines provide this method, but the jsdom test runtime does not.
     // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
@@ -128,7 +128,7 @@ export function TabBar({
       >
         <div
           ref={tablistRef}
-          role="tablist"
+          role="navigation"
           aria-label="Open documents"
           className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto overflow-y-hidden"
         >

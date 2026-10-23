@@ -341,3 +341,22 @@ function ScheduleCollection({
     </div>
   );
 }
+
+/** Explain a program schedule and offer its ordinary details action. */
+
+export function ProgramScheduleContext({
+  label,
+  onDetails,
+}: {
+  readonly label: string;
+  readonly onDetails: () => void;
+}): JSX.Element {
+  return (
+    <div className="flex min-w-0 items-center justify-between gap-3">
+      <p className="text-body-small text-on-surface-variant">{label}</p>
+      <Button type="button" variant="ghost" size="sm" onClick={onDetails}>
+        Program details
+      </Button>
+    </div>
+  );
+}

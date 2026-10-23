@@ -1,3 +1,13 @@
+import {
+  TabsScope,
+  Button,
+  ControlGroup,
+  Popover,
+  PopoverBody,
+  PopoverContent,
+  PopoverTrigger,
+  surfaceToneVariable,
+} from '@docket/ui/primitives';
 /**
  * `views` — the one canonical entity-detail shell that task / project / initiative / program detail
  * pages compose.
@@ -19,15 +29,7 @@
 import { useOwnPageScroll } from '@docket/ui/components';
 import { Ellipsis } from '@docket/ui/icons';
 import { cn } from '@docket/ui/lib/utils';
-import {
-  Button,
-  ControlGroup,
-  Popover,
-  PopoverBody,
-  PopoverContent,
-  PopoverTrigger,
-  surfaceToneVariable,
-} from '@docket/ui/primitives';
+
 import {
   createContext,
   type CSSProperties,
@@ -327,45 +329,47 @@ export function EntityDetailLayout({
   const asideState = useMemo<EntityDetailAsideState>(() => ({ docked }), [docked]);
 
   return (
-    <EntityDetailObjectContext.Provider value={object ?? null}>
-      <EntityDetailAsideContext.Provider value={asideState}>
-        <div
-          ref={scrollRef}
-          data-detail-panel-scroll=""
-          data-detail-cover={cover ? 'present' : 'absent'}
-          data-detail-print={printSummary ? '' : undefined}
-          className={cn(
-            // Sections are rows of this grid, so the rhythm between them is declared once here rather
-            // than by each section spacing itself against its neighbours. The bottom inset is not one
-            // of them: it belongs to `.detail-body`, because this element declares its own container
-            // and so can never resolve the `--page-gutter` step its own descendants see.
-            'page-grid h-full min-h-0 w-full gap-y-4 overflow-y-auto @2xl:gap-y-5',
-            className,
-          )}
-        >
-          {/* Bleeds the full pane so the backdrop can reach both edges, and re-measures its own
+    <TabsScope>
+      <EntityDetailObjectContext.Provider value={object ?? null}>
+        <EntityDetailAsideContext.Provider value={asideState}>
+          <div
+            ref={scrollRef}
+            data-detail-panel-scroll=""
+            data-detail-cover={cover ? 'present' : 'absent'}
+            data-detail-print={printSummary ? '' : undefined}
+            className={cn(
+              // Sections are rows of this grid, so the rhythm between them is declared once here rather
+              // than by each section spacing itself against its neighbours. The bottom inset is not one
+              // of them: it belongs to `.detail-body`, because this element declares its own container
+              // and so can never resolve the `--page-gutter` step its own descendants see.
+              'page-grid h-full min-h-0 w-full gap-y-4 overflow-y-auto @2xl:gap-y-5',
+              className,
+            )}
+          >
+            {/* Bleeds the full pane so the backdrop can reach both edges, and re-measures its own
             children through the nested grid, so nothing inside has to know it sits in a bleeding
             section. */}
-          <DetailHeader
-            headerDensity={headerDensity}
-            headerRef={headerRef}
-            cover={cover}
-            eyebrow={eyebrow}
-            icon={icon}
-            title={title}
-            subtitle={subtitle}
-            metadata={metadata}
-            actions={actions}
-            tabs={tabs}
-            object={object}
-            hasPrintSummary={Boolean(printSummary)}
-          />
-          <DetailBody printSummary={printSummary} aside={aside} docked={docked}>
-            {children}
-          </DetailBody>
-        </div>
-      </EntityDetailAsideContext.Provider>
-    </EntityDetailObjectContext.Provider>
+            <DetailHeader
+              headerDensity={headerDensity}
+              headerRef={headerRef}
+              cover={cover}
+              eyebrow={eyebrow}
+              icon={icon}
+              title={title}
+              subtitle={subtitle}
+              metadata={metadata}
+              actions={actions}
+              tabs={tabs}
+              object={object}
+              hasPrintSummary={Boolean(printSummary)}
+            />
+            <DetailBody printSummary={printSummary} aside={aside} docked={docked}>
+              {children}
+            </DetailBody>
+          </div>
+        </EntityDetailAsideContext.Provider>
+      </EntityDetailObjectContext.Provider>
+    </TabsScope>
   );
 }
 

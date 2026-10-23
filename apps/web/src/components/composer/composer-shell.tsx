@@ -25,6 +25,9 @@
  * property pills, not from extra surfaces or outlines.
  */
 import {
+  tabIds,
+  type TabsActivation,
+  TabsScope,
   Button,
   Dialog,
   DialogContent,
@@ -296,16 +299,17 @@ export function ComposerShell({
   }, [open]);
 
   /** Select a body section and enter its first useful draft control. */
-  const selectSection = (value: string): void => {
+  const selectSection = (value: string, source?: TabsActivation): void => {
     const nextSection = [
       { id: 'description' },
       ...supplementalSections.map((section) => ({ id: section.id })),
     ].find((section) => sectionValue(section.id) === value);
     if (!nextSection) return;
     setActiveSectionId(nextSection.id);
+    if (source === 'keyboard') return;
     window.requestAnimationFrame(() => {
       document
-        .getElementById(`tabpanel-${value}`)
+        .getElementById(tabIds(formId, value).panelId)
         ?.querySelector<HTMLElement>(
           'input:not(:disabled), textarea:not(:disabled), button:not(:disabled), [contenteditable="true"]',
         )
@@ -332,129 +336,131 @@ export function ComposerShell({
     );
 
   return (
-    <Dialog
-      open={open}
-      onOpenChange={(next) => {
-        if (next) return;
-        prompt.requestClose();
-      }}
-    >
-      <DialogContent
-        presentation={composerPresentation(expanded)}
-        aria-describedby={undefined}
-        // The whole form goes inert while a create is in flight. Without this, assistive tech has
-        // no way to tell that apart from a form that is simply not editable.
-        aria-busy={creating}
-        onEscapeKeyDown={prompt.onEscapeKeyDown}
-        onKeyDownCapture={(event) => {
-          handleContinueChord(event, continuation, submittable);
+    <TabsScope scope={formId}>
+      <Dialog
+        open={open}
+        onOpenChange={(next) => {
+          if (next) return;
+          prompt.requestClose();
         }}
       >
-        {/* The dialog's accessible name — never shown; the title field is the only visible heading. */}
-        <DialogTitle className="sr-only">{heading}</DialogTitle>
-        <p role="status" aria-live="polite" className="sr-only">
-          {statusMessage ?? ''}
-        </p>
-
-        {bodyPlaceholder !== undefined ? (
-          <Button
-            type="button"
-            variant="ghost"
-            iconOnly
-            controlSize="sm"
-            aria-label={expanded ? 'Collapse editor' : 'Expand editor'}
-            aria-pressed={expanded}
-            disabled={editDisabled}
-            onClick={() => {
-              setExpanded((current) => !current);
-            }}
-            className="coarse:right-[3.75rem] absolute top-4 right-12 z-10 hidden sm:inline-flex"
-          >
-            {expanded ? <Minimize aria-hidden="true" /> : <Maximize aria-hidden="true" />}
-          </Button>
-        ) : null}
-
-        {/* A composer owns its destination context. Template actions belong inside the editor. */}
-        <form
-          id={formId}
-          onSubmit={(event) => {
-            event.preventDefault();
-            if (submittable) onSubmit();
+        <DialogContent
+          presentation={composerPresentation(expanded)}
+          aria-describedby={undefined}
+          // The whole form goes inert while a create is in flight. Without this, assistive tech has
+          // no way to tell that apart from a form that is simply not editable.
+          aria-busy={creating}
+          onEscapeKeyDown={prompt.onEscapeKeyDown}
+          onKeyDownCapture={(event) => {
+            handleContinueChord(event, continuation, submittable);
           }}
-          className="contents"
         >
-          <ComposerIdentityHeader
-            contextRow={contextRow}
-            icon={icon}
-            context={context}
-            legacyContextVisible={legacyContextVisible}
-            bodyPlaceholder={bodyPlaceholder}
-            leadingFields={leadingFields}
-            editDisabled={editDisabled}
-            title={title}
-            onTitleChange={onTitleChange}
-            titleInputRef={prompt.titleRef}
-            titlePlaceholder={titlePlaceholder}
-            summary={summary}
-            onSummaryChange={onSummaryChange}
-            summaryPlaceholder={summaryPlaceholder}
-            summaryMaxLength={summaryMaxLength}
-            hasSectionSwitcher={hasSectionSwitcher}
-            activeSectionValue={sectionValue(activeSectionId)}
-            onSectionValueChange={selectSection}
-            supplementalSections={supplementalSections}
-            sectionValue={sectionValue}
-          />
+          {/* The dialog's accessible name — never shown; the title field is the only visible heading. */}
+          <DialogTitle className="sr-only">{heading}</DialogTitle>
+          <p role="status" aria-live="polite" className="sr-only">
+            {statusMessage ?? ''}
+          </p>
 
-          {/* `@container` goes on the body region and the columns on the child, because a
-           *  container query never matches the element that declares the container. The rail needs
-           *  more width than the collapsed `large` tier has to spare, so `@2xl` is also what keeps
-           *  it to the expanded `detail` panel without the shell having to know which tier it is
-           *  in. */}
-          <ComposerBodyRegion
-            editor={bodyEditor}
-            mentionOrgId={mentionOrgId}
-            columnRef={bodyColumnRef}
-            contents={documentContents}
-            hasContents={hasContents}
-            freeformFields={propertyLayout === 'freeform' ? children : null}
-            supplementalSections={supplementalSections}
-            activeSectionId={activeSectionId}
-            sectionValue={sectionValue}
-            editDisabled={editDisabled}
-          />
+          {bodyPlaceholder !== undefined ? (
+            <Button
+              type="button"
+              variant="ghost"
+              iconOnly
+              controlSize="sm"
+              aria-label={expanded ? 'Collapse editor' : 'Expand editor'}
+              aria-pressed={expanded}
+              disabled={editDisabled}
+              onClick={() => {
+                setExpanded((current) => !current);
+              }}
+              className="coarse:right-[3.75rem] absolute top-4 right-12 z-10 hidden sm:inline-flex"
+            >
+              {expanded ? <Minimize aria-hidden="true" /> : <Maximize aria-hidden="true" />}
+            </Button>
+          ) : null}
 
-          {/* Action bar: pills, then error, then the single primary action — all pinned below the
-           *  scrolling body so a long AI-drafted description can never carry them out of view or
-           *  interleave them with its own text. */}
-          <DialogFooter
-            inset="responsive"
-            className="flex-col gap-3 sm:flex-col sm:items-stretch sm:justify-start"
+          {/* A composer owns its destination context. Template actions belong inside the editor. */}
+          <form
+            id={formId}
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (submittable) onSubmit();
+            }}
+            className="contents"
           >
-            {!confirmingDiscard && propertyLayout === 'compact' ? (
-              <PropertyStrip ariaLabel={propertyAriaLabel}>{children}</PropertyStrip>
-            ) : null}
-            {!confirmingDiscard && error ? (
-              <InlineBanner tone="critical" density="compact" title={errorTitle(draftCommitted)}>
-                {error}
-              </InlineBanner>
-            ) : null}
-            <ComposerActionRow
-              confirmingDiscard={confirmingDiscard}
-              onKeepEditing={prompt.keepEditing}
-              onDiscard={prompt.discard}
-              drafts={drafts}
-              draftNoun={draftNoun}
-              continuation={continuation}
+            <ComposerIdentityHeader
+              contextRow={contextRow}
+              icon={icon}
+              context={context}
+              legacyContextVisible={legacyContextVisible}
+              bodyPlaceholder={bodyPlaceholder}
+              leadingFields={leadingFields}
               editDisabled={editDisabled}
-              formId={formId}
-              creating={creating}
-              canSubmit={canSubmit}
-              submitLabel={submitLabel}
+              title={title}
+              onTitleChange={onTitleChange}
+              titleInputRef={prompt.titleRef}
+              titlePlaceholder={titlePlaceholder}
+              summary={summary}
+              onSummaryChange={onSummaryChange}
+              summaryPlaceholder={summaryPlaceholder}
+              summaryMaxLength={summaryMaxLength}
+              hasSectionSwitcher={hasSectionSwitcher}
+              activeSectionValue={sectionValue(activeSectionId)}
+              onSectionValueChange={selectSection}
+              supplementalSections={supplementalSections}
+              sectionValue={sectionValue}
             />
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
+
+            {/* `@container` goes on the body region and the columns on the child, because a
+             *  container query never matches the element that declares the container. The rail needs
+             *  more width than the collapsed `large` tier has to spare, so `@2xl` is also what keeps
+             *  it to the expanded `detail` panel without the shell having to know which tier it is
+             *  in. */}
+            <ComposerBodyRegion
+              editor={bodyEditor}
+              mentionOrgId={mentionOrgId}
+              columnRef={bodyColumnRef}
+              contents={documentContents}
+              hasContents={hasContents}
+              freeformFields={propertyLayout === 'freeform' ? children : null}
+              supplementalSections={supplementalSections}
+              activeSectionId={activeSectionId}
+              sectionValue={sectionValue}
+              editDisabled={editDisabled}
+            />
+
+            {/* Action bar: pills, then error, then the single primary action — all pinned below the
+             *  scrolling body so a long AI-drafted description can never carry them out of view or
+             *  interleave them with its own text. */}
+            <DialogFooter
+              inset="responsive"
+              className="flex-col gap-3 sm:flex-col sm:items-stretch sm:justify-start"
+            >
+              {!confirmingDiscard && propertyLayout === 'compact' ? (
+                <PropertyStrip ariaLabel={propertyAriaLabel}>{children}</PropertyStrip>
+              ) : null}
+              {!confirmingDiscard && error ? (
+                <InlineBanner tone="critical" density="compact" title={errorTitle(draftCommitted)}>
+                  {error}
+                </InlineBanner>
+              ) : null}
+              <ComposerActionRow
+                confirmingDiscard={confirmingDiscard}
+                onKeepEditing={prompt.keepEditing}
+                onDiscard={prompt.discard}
+                drafts={drafts}
+                draftNoun={draftNoun}
+                continuation={continuation}
+                editDisabled={editDisabled}
+                formId={formId}
+                creating={creating}
+                canSubmit={canSubmit}
+                submitLabel={submitLabel}
+              />
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+    </TabsScope>
   );
 }

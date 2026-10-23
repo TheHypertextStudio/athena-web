@@ -13,7 +13,7 @@
  * signed-in person rendered as `Unknown` with a `UN` avatar.
  */
 import type { TaskOut } from '@docket/work/task-model';
-import { Tabs } from '@docket/ui/primitives';
+import { ExclusiveChoice } from '@docket/ui/primitives';
 import { type JSX, useCallback, useState } from 'react';
 
 import TaskGraphPanel from '@/components/canvas/task-graph-panel';
@@ -158,16 +158,11 @@ export function ProjectTasksTab({
   const resolveActor = useProjectActorDirectory(orgId);
 
   return (
-    <section
-      role="tabpanel"
-      id="tabpanel-tasks"
-      aria-labelledby="tab-tasks"
-      className="flex flex-col gap-3"
-    >
+    <section className="flex flex-col gap-3">
       {workFailure ? (
         <PartialLoadBanner title={workFailure.title} onRetry={workFailure.onRetry} />
       ) : null}
-      <Tabs
+      <ExclusiveChoice
         label="Task layout"
         value={lens}
         onValueChange={(value) => {
@@ -177,7 +172,7 @@ export function ProjectTasksTab({
         className="self-start"
       />
       {lens === 'task-list' ? (
-        <div role="tabpanel" id="tabpanel-task-list" aria-labelledby="tab-task-list">
+        <div>
           <MilestoneTasks
             orgId={orgId}
             tasks={tasks}
@@ -196,12 +191,7 @@ export function ProjectTasksTab({
           />
         </div>
       ) : (
-        <div
-          role="tabpanel"
-          id="tabpanel-task-graph"
-          aria-labelledby="tab-task-graph"
-          className="bg-surface-container h-[32rem] overflow-hidden rounded-xl"
-        >
+        <div className="bg-surface-container h-[32rem] overflow-hidden rounded-xl">
           <TaskGraphPanel
             scope={{ orgId, projectId }}
             density="compact"

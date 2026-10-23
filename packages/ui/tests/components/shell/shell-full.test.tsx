@@ -1351,10 +1351,10 @@ describe('TabBar', () => {
       'href',
       '/orgs/o1/tasks/t1',
     );
-    const tabs = screen.getAllByRole('tab');
+    const tabs = screen.getAllByRole('link').filter((link) => link.closest('[data-document-tab]'));
     expect(tabs).toHaveLength(2);
-    const activeTab = screen.getByText('Q3 Launch').closest('[role="tab"]');
-    expect(activeTab).toHaveAttribute('aria-selected', 'true');
+    const activeTab = screen.getByText('Q3 Launch').closest('[data-document-tab]');
+    expect(activeTab).toHaveAttribute('data-active', 'true');
   });
 
   it('closes a tab by key', () => {
@@ -1384,10 +1384,10 @@ describe('TabBar', () => {
     expect(bar).toHaveClass('bg-surface-container');
     expect(bar).not.toHaveClass('bg-surface-container-low', 'border-b');
     const activeTab = assertDefined(
-      screen.getByText('Q3 Launch').closest<HTMLElement>('[role="tab"]'),
+      screen.getByText('Q3 Launch').closest<HTMLElement>('[data-document-tab]'),
     );
     const inactiveTab = assertDefined(
-      screen.getByText('Fix the build').closest<HTMLElement>('[role="tab"]'),
+      screen.getByText('Fix the build').closest<HTMLElement>('[data-document-tab]'),
     );
     for (const tab of [activeTab, inactiveTab]) {
       expect(tab).toHaveClass('rounded-md');
@@ -1409,7 +1409,7 @@ describe('TabBar', () => {
       />,
     );
     const tab = assertDefined(
-      screen.getByText('Fix the build').closest<HTMLElement>('[role="tab"]'),
+      screen.getByText('Fix the build').closest<HTMLElement>('[data-document-tab]'),
     );
     // A width RANGE rather than one rigid width: tabs shrink toward `min-w-24` so more of them fit
     // before the strip has to scroll on a phone, and stop at `max-w-60` so a lone tab is not
@@ -1442,7 +1442,7 @@ describe('TabBar', () => {
     expect(bar).toHaveClass('h-10', 'overflow-hidden');
     // The scroll track scrolls on X but CLIPS Y, so a tall tab never makes the chrome scroll
     // vertically or wrap to a second row.
-    const tablist = screen.getByRole('tablist', { name: 'Open documents' });
+    const tablist = screen.getByRole('navigation', { name: 'Open documents' });
     expect(tablist).toHaveClass('overflow-x-auto', 'overflow-y-hidden');
     expect(tablist).not.toHaveClass('overflow-y-auto', 'overflow-y-scroll', 'flex-wrap');
   });

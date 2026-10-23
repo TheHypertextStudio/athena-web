@@ -217,8 +217,8 @@ it('starts with organization context before an explicit all-work browse', () => 
   );
   expect(screen.queryByRole('checkbox', { name: 'Select Event' })).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Browse all starting points' }));
-  expect(screen.getByRole('tab', { name: 'All templates' })).toHaveAttribute(
-    'aria-selected',
+  expect(screen.getByRole('radio', { name: 'All templates' })).toHaveAttribute(
+    'aria-checked',
     'true',
   );
 });
@@ -236,8 +236,8 @@ it('restores the chosen all-work view instead of replacing it with suggestions a
       onReview={vi.fn()}
     />,
   );
-  expect(screen.getByRole('tab', { name: 'All templates' })).toHaveAttribute(
-    'aria-selected',
+  expect(screen.getByRole('radio', { name: 'All templates' })).toHaveAttribute(
+    'aria-checked',
     'true',
   );
   expect(screen.queryByRole('heading', { name: 'Ship a product' })).not.toBeInTheDocument();

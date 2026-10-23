@@ -1,12 +1,8 @@
 'use client';
 
-import type {
-  TemplateDraft,
-  TemplateOut,
-  TemplateTargetType,
-} from '@docket/work/template-contract';
-import { InlineBanner } from '@docket/ui/components';
 import {
+  LazyTabPanels,
+  TabsScope,
   Button,
   Dialog,
   DialogBody,
@@ -17,6 +13,13 @@ import {
   Tabs,
   fieldSurface,
 } from '@docket/ui/primitives';
+import type {
+  TemplateDraft,
+  TemplateOut,
+  TemplateTargetType,
+} from '@docket/work/template-contract';
+import { InlineBanner } from '@docket/ui/components';
+
 import { type JSX, useState } from 'react';
 
 import type { ComposerShellProps } from '@/components/composer/composer-shell';
@@ -52,6 +55,14 @@ const STEPS = [
 
 /** Render the template workflow with one scrolling body and the ordinary composer fields. */
 export function TemplateWorkflowShell(props: TemplateWorkflowProps): JSX.Element {
+  return (
+    <TabsScope>
+      <TemplateWorkflowContent {...props} />
+    </TabsScope>
+  );
+}
+
+function TemplateWorkflowContent(props: TemplateWorkflowProps): JSX.Element {
   const [step, setStep] = useState(props.editing ? 'work' : 'basics');
   const baseline = useTemplateBaseline(props);
   const prompt = useDiscardPrompt({
@@ -84,7 +95,7 @@ export function TemplateWorkflowShell(props: TemplateWorkflowProps): JSX.Element
           className="gap-4 sm:flex-row sm:items-center sm:justify-between"
         >
           <TemplateHeading props={props} />
-          <div className="shrink-0 self-start sm:self-center">
+          <div className="min-w-0 flex-1 self-stretch sm:self-center">
             <Tabs
               label="Template steps"
               value={step}
@@ -101,10 +112,10 @@ export function TemplateWorkflowShell(props: TemplateWorkflowProps): JSX.Element
           className="@container flex-auto"
           onFocusCapture={prompt.onDraftFocusCapture}
         >
-          <fieldset
-            role="tabpanel"
-            id={`tabpanel-${step}`}
-            aria-labelledby={`tab-${step}`}
+          <LazyTabPanels
+            values={STEPS.map((item) => item.value)}
+            as="fieldset"
+            value={step}
             disabled={disabled}
             className="flex min-w-0 flex-col gap-6"
           >
@@ -113,7 +124,7 @@ export function TemplateWorkflowShell(props: TemplateWorkflowProps): JSX.Element
             ) : null}
             {step === 'work' ? <TemplateWorkFields props={props} disabled={disabled} /> : null}
             {step === 'review' ? <TemplateReview props={props} /> : null}
-          </fieldset>
+          </LazyTabPanels>
         </DialogBody>
         <DialogFooter inset="responsive" className="flex-col gap-3 sm:flex-col sm:items-stretch">
           {props.error ? (

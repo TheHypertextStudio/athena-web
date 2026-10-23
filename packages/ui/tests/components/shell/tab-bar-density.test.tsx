@@ -7,9 +7,14 @@ import { describe, expect, it, vi } from 'vitest';
 import { TabBar, type OpenTab } from '../../../src/components/shell/TabBar';
 import { assertDefined } from '@docket/test-utils';
 
-function renderLink(href: string, content: React.ReactNode, className?: string): React.ReactNode {
+function renderLink(
+  href: string,
+  content: React.ReactNode,
+  className?: string,
+  current?: 'page',
+): React.ReactNode {
   return (
-    <a href={href} className={className}>
+    <a href={href} className={className} aria-current={current}>
       {content}
     </a>
   );
@@ -31,8 +36,8 @@ describe('TabBar crowded state', () => {
       <TabBar tabs={TABS} activeKey={TABS[31]?.key} renderLink={renderLink} onClose={onClose} />,
     );
 
-    const strip = screen.getByRole('tablist', { name: 'Open documents' });
-    expect(within(strip).getAllByRole('tab')).toHaveLength(3);
+    const strip = screen.getByRole('navigation', { name: 'Open documents' });
+    expect(within(strip).getAllByRole('link')).toHaveLength(3);
     expect(within(strip).getByRole('link', { name: 'Open document 30' })).toHaveAttribute(
       'href',
       '/orgs/o1/tasks/t30',
@@ -40,9 +45,10 @@ describe('TabBar crowded state', () => {
     expect(within(strip).getByRole('link', { name: 'Open document 31' })).toBeInTheDocument();
     expect(within(strip).queryByText('Open document 29')).not.toBeInTheDocument();
     const active = assertDefined(
-      within(strip).getByText('Open document 32').closest<HTMLElement>('[role="tab"]'),
+      within(strip).getByText('Open document 32').closest<HTMLElement>('[data-document-tab]'),
     );
-    expect(active).toHaveAttribute('aria-selected', 'true');
+    expect(active).toHaveAttribute('data-active', 'true');
+    expect(within(active).getByRole('link')).toHaveAttribute('aria-current', 'page');
     expect(
       within(active).getByRole('button', { name: 'Close Open document 32' }),
     ).toBeInTheDocument();
@@ -74,7 +80,7 @@ describe('TabBar crowded state', () => {
         onClose={() => undefined}
       />,
     );
-    const strip = screen.getByRole('tablist', { name: 'Open documents' });
+    const strip = screen.getByRole('navigation', { name: 'Open documents' });
     expect(
       within(strip)
         .getAllByRole('link')
@@ -93,11 +99,11 @@ describe('TabBar crowded state', () => {
     const { rerender } = render(
       <TabBar tabs={TABS.slice(0, 5)} renderLink={renderLink} onClose={() => undefined} />,
     );
-    const strip = screen.getByRole('tablist', { name: 'Open documents' });
-    expect(within(strip).getAllByRole('tab')).toHaveLength(5);
+    const strip = screen.getByRole('navigation', { name: 'Open documents' });
+    expect(within(strip).getAllByRole('link')).toHaveLength(5);
 
     rerender(<TabBar tabs={TABS.slice(0, 6)} renderLink={renderLink} onClose={() => undefined} />);
-    expect(within(strip).getAllByRole('tab')).toHaveLength(3);
+    expect(within(strip).getAllByRole('link')).toHaveLength(3);
     expect(screen.getByRole('button', { name: 'Open documents (6)' })).toBeInTheDocument();
   });
 
@@ -119,7 +125,9 @@ describe('TabBar crowded state', () => {
       );
       expect(scrollIntoView).toHaveBeenCalledWith({ block: 'nearest', inline: 'nearest' });
       expect(
-        screen.getByRole('tablist', { name: 'Open documents' }).querySelectorAll('[role="tab"]'),
+        screen
+          .getByRole('navigation', { name: 'Open documents' })
+          .querySelectorAll('[data-document-tab]'),
       ).toHaveLength(3);
       scrollIntoView.mockClear();
       rerender(
@@ -132,7 +140,7 @@ describe('TabBar crowded state', () => {
       );
       expect(scrollIntoView).toHaveBeenCalledTimes(1);
       expect(scrollIntoView.mock.contexts[0]).toBe(
-        screen.getByText('Open document 32').closest('[role="tab"]'),
+        screen.getByText('Open document 32').closest('[data-document-tab]'),
       );
     } finally {
       if (original) Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', original);

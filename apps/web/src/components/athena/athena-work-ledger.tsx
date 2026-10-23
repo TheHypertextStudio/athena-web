@@ -1,7 +1,12 @@
 'use client';
 
 /** Compact navigation to the selected work entry in the ongoing conversation. */
-import { Button, ControlGroup, Tabs, type TabsItem } from '@docket/ui/primitives';
+import {
+  Button,
+  ControlGroup,
+  ExclusiveChoice,
+  type ExclusiveChoiceItem,
+} from '@docket/ui/primitives';
 import { type JSX, useMemo } from 'react';
 
 import {
@@ -100,7 +105,7 @@ export function AthenaWorkLedger({
   onSelect,
 }: AthenaWorkLedgerProps): JSX.Element | null {
   const active = resolveLedgerFilter(jobs, filter);
-  const items: readonly TabsItem[] = useMemo(() => {
+  const items: readonly ExclusiveChoiceItem[] = useMemo(() => {
     const occupied = new Set(jobs.map(ledgerFilterOf));
     return FILTER_ORDER.filter((value) => occupied.has(value)).map((value) => ({
       value,
@@ -119,7 +124,7 @@ export function AthenaWorkLedger({
       {/* On a phone-width column the tab row scrolls inside itself rather than widening the page. */}
       <div className="overflow-x-auto">
         <ControlGroup controlSize="sm">
-          <Tabs
+          <ExclusiveChoice
             value={active}
             onValueChange={(next) => {
               onFilterChange(next as AthenaWorkLedgerFilter);

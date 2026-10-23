@@ -1,7 +1,8 @@
 'use client';
 
+import { LazyTabPanels, TabsScope, TabPanel, Button, Skeleton } from '@docket/ui/primitives';
 import { CheckCircle2, Inbox as InboxIcon } from '@docket/ui/icons';
-import { Button, Skeleton } from '@docket/ui/primitives';
+
 import type { NotificationOut } from '@docket/notifications/notification-contract';
 import { type JSX } from 'react';
 
@@ -34,10 +35,6 @@ export default function InboxClient(): JSX.Element {
     onMarkAllRead,
   } = useInboxPage();
 
-  // Match the shared Tabs primitive's wiring: it emits tab id `tab-<id>` and
-  // `aria-controls="tabpanel-<id>"`, so panels must be `tabpanel-<id>` and point back at `tab-<id>`.
-  const panelId = (id: InboxTab): string => `tabpanel-${id}`;
-  const tabId = (id: InboxTab): string => `tab-${id}`;
   const visibleInbox = orderedInbox.filter((notification) => filterNotification(tab, notification));
   const visibleUnreadCount = visibleInbox.filter((notification) => !notification.readAt).length;
   const needsAction = visibleInbox.filter(
@@ -47,102 +44,102 @@ export default function InboxClient(): JSX.Element {
   const empty = emptyStateForTab(tab);
 
   return (
-    <div className="mx-auto flex h-full w-full max-w-4xl flex-col gap-6 p-4 @2xl:p-6 @4xl:p-8">
-      <header className="flex flex-col gap-1">
-        <div className="flex flex-col gap-1">
-          <h1 className="text-on-surface text-title-large">Inbox</h1>
-        </div>
-      </header>
+    <TabsScope>
+      <div className="mx-auto flex h-full w-full max-w-4xl flex-col gap-6 p-4 @2xl:p-6 @4xl:p-8">
+        <header className="flex flex-col gap-1">
+          <div className="flex flex-col gap-1">
+            <h1 className="text-on-surface text-title-large">Inbox</h1>
+          </div>
+        </header>
 
-      <div className="flex min-w-0 items-center gap-3">
-        <div className="min-w-0 flex-1">
-          <SegmentedTabs
-            label="Inbox filters"
-            segments={segments}
-            value={tab}
-            onChange={setTab}
-            panelId={panelId}
-          />
-        </div>
-        {tab !== 'activity' && !loading && visibleUnreadCount > 0 ? (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="shrink-0"
-            disabled={markingAll}
-            onClick={() => {
-              void onMarkAllRead();
-            }}
-          >
-            <CheckCircle2 className="h-4 w-4" />
-            {markingAll ? 'Marking…' : 'Mark all read'}
-          </Button>
-        ) : null}
-      </div>
-
-      {error ? (
-        <PartialLoadBanner title="Inbox did not answer" onRetry={refetch}>
-          {error}
-        </PartialLoadBanner>
-      ) : null}
-
-      {/* ── Inbox feed (actionable) ───────────────────────────────────────── */}
-      <section
-        role="tabpanel"
-        id={panelId(tab === 'activity' ? 'all' : tab)}
-        aria-labelledby={tabId(tab === 'activity' ? 'all' : tab)}
-        hidden={tab === 'activity'}
-        className="flex min-w-0 flex-col gap-1.5"
-      >
-        {loading ? (
-          <FeedSkeleton />
-        ) : visibleInbox.length > 0 ? (
-          <div className="flex flex-col gap-5">
-            <NotificationGroup
-              title="Needs action"
-              notifications={needsAction}
-              orgName={orgName}
-              onApprove={onApprove}
-              onCallMe={onCallMe}
-              onUndoPhoneChange={onUndoPhoneChange}
-              onMarkRead={onMarkRead}
-              pendingIds={pendingIds}
-            />
-            <NotificationGroup
-              title="Updates"
-              notifications={updates}
-              orgName={orgName}
-              onApprove={onApprove}
-              onCallMe={onCallMe}
-              onUndoPhoneChange={onUndoPhoneChange}
-              onMarkRead={onMarkRead}
-              pendingIds={pendingIds}
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="min-w-0 flex-1">
+            <SegmentedTabs
+              label="Inbox filters"
+              segments={segments}
+              value={tab}
+              onChange={setTab}
             />
           </div>
-        ) : (
-          <EmptyState title={empty.title} body={empty.body} />
-        )}
-      </section>
+          {tab !== 'activity' && !loading && visibleUnreadCount > 0 ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="shrink-0"
+              disabled={markingAll}
+              onClick={() => {
+                void onMarkAllRead();
+              }}
+            >
+              <CheckCircle2 className="h-4 w-4" />
+              {markingAll ? 'Marking…' : 'Mark all read'}
+            </Button>
+          ) : null}
+        </div>
 
-      {/* ── Activity feed (passive awareness) ─────────────────────────────── */}
-      <section
-        role="tabpanel"
-        id={panelId('activity')}
-        aria-labelledby={tabId('activity')}
-        hidden={tab !== 'activity'}
-        className="flex min-w-0 flex-col gap-1.5"
-      >
-        {loading ? (
-          <FeedSkeleton />
-        ) : activity.length > 0 ? (
-          activity.map((event) => (
-            <ActivityRow key={event.id} event={event} orgName={orgName(event.organizationId)} />
-          ))
-        ) : (
-          <EmptyState title="Nothing yet" body="Activity will show up here as work happens." />
-        )}
-      </section>
-    </div>
+        {error ? (
+          <PartialLoadBanner title="Inbox did not answer" onRetry={refetch}>
+            {error}
+          </PartialLoadBanner>
+        ) : null}
+
+        {/* ── Inbox feed (actionable) ───────────────────────────────────────── */}
+        <LazyTabPanels
+          values={segments.filter((item) => item.id !== 'activity').map((item) => item.id)}
+          as="section"
+          value={tab}
+          hidden={tab === 'activity'}
+          className="flex min-w-0 flex-col gap-1.5"
+        >
+          {loading ? (
+            <FeedSkeleton />
+          ) : visibleInbox.length > 0 ? (
+            <div className="flex flex-col gap-5">
+              <NotificationGroup
+                title="Needs action"
+                notifications={needsAction}
+                orgName={orgName}
+                onApprove={onApprove}
+                onCallMe={onCallMe}
+                onUndoPhoneChange={onUndoPhoneChange}
+                onMarkRead={onMarkRead}
+                pendingIds={pendingIds}
+              />
+              <NotificationGroup
+                title="Updates"
+                notifications={updates}
+                orgName={orgName}
+                onApprove={onApprove}
+                onCallMe={onCallMe}
+                onUndoPhoneChange={onUndoPhoneChange}
+                onMarkRead={onMarkRead}
+                pendingIds={pendingIds}
+              />
+            </div>
+          ) : (
+            <EmptyState title={empty.title} body={empty.body} />
+          )}
+        </LazyTabPanels>
+
+        {/* ── Activity feed (passive awareness) ─────────────────────────────── */}
+        <TabPanel
+          as="section"
+          value={'activity'}
+          hidden={tab !== 'activity'}
+          className="flex min-w-0 flex-col gap-1.5"
+        >
+          {loading ? (
+            <FeedSkeleton />
+          ) : activity.length > 0 ? (
+            activity.map((event) => (
+              <ActivityRow key={event.id} event={event} orgName={orgName(event.organizationId)} />
+            ))
+          ) : (
+            <EmptyState title="Nothing yet" body="Activity will show up here as work happens." />
+          )}
+        </TabPanel>
+      </div>
+    </TabsScope>
   );
 }
 

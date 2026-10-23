@@ -1,13 +1,7 @@
 'use client';
 
-import type { AttachmentOut } from '@docket/work/attachment-contract';
-import type { Health } from '@docket/work/capability-contract';
-import type { UpdateOut } from '@docket/work/update-contract';
-import type { InitiativeConnectedWork } from '@docket/work/initiative-contract';
-import { InitiativeSubjectRef } from '@docket/work/subject-ref-contract';
-import { useVocabulary } from '@docket/ui/hooks';
-import { CornerDownLeft, Ellipsis, Trash2 } from '@docket/ui/icons';
 import {
+  TabPanel,
   Button,
   ControlGroup,
   DropdownMenu,
@@ -16,6 +10,14 @@ import {
   DropdownMenuTrigger,
   Tabs,
 } from '@docket/ui/primitives';
+import type { AttachmentOut } from '@docket/work/attachment-contract';
+import type { Health } from '@docket/work/capability-contract';
+import type { UpdateOut } from '@docket/work/update-contract';
+import type { InitiativeConnectedWork } from '@docket/work/initiative-contract';
+import { InitiativeSubjectRef } from '@docket/work/subject-ref-contract';
+import { useVocabulary } from '@docket/ui/hooks';
+import { CornerDownLeft, Ellipsis, Trash2 } from '@docket/ui/icons';
+
 import { useQueryClient } from '@tanstack/react-query';
 import Link from '@/components/docket-link';
 import { useTypedRoute } from '@/lib/app-location';
@@ -530,23 +532,18 @@ export default function InitiativeDetailPage(): JSX.Element {
       }
       tabs={
         <Tabs
-          variant="underline"
-          // Scroll rather than demote. Five section names do not fit a phone, and the two answers
-          // to that are a More menu that hides where you can go, or a lane you push sideways. The
-          // second is what a person already expects from a row of tabs on a phone, and it needs no
-          // measurement pass to decide what it is allowed to say.
-          className="no-print max-w-full [scrollbar-width:none] overflow-x-auto [&::-webkit-scrollbar]:hidden"
+          variant="primary"
           value={tab}
           onValueChange={(value) => {
             setTab(value as TabId);
           }}
           label={`${initiativeNoun} sections`}
           items={[
-            { value: 'overview', label: 'Overview', priority: 0 },
-            { value: 'subinitiatives', label: 'Sub-initiatives', priority: 1 },
-            { value: 'work', label: 'Connected work', priority: 2 },
-            { value: 'updates', label: 'Updates', priority: 3 },
-            { value: 'resources', label: 'Resources', priority: 4 },
+            { value: 'overview', label: 'Overview' },
+            { value: 'subinitiatives', label: 'Sub-initiatives' },
+            { value: 'work', label: 'Connected work' },
+            { value: 'updates', label: 'Updates' },
+            { value: 'resources', label: 'Resources' },
           ]}
         />
       }
@@ -575,50 +572,52 @@ export default function InitiativeDetailPage(): JSX.Element {
         }}
       />
 
-      {tab === 'updates' ? (
-        <div
-          className="no-print"
-          role="tabpanel"
-          id="tabpanel-updates"
-          aria-labelledby="tab-updates"
-        >
-          <UpdatesPanel
-            updates={updates}
-            loading={updatesLoading}
-            loadFailure={updatesQ.isError ? updatesQ : null}
-            resolveActor={resolveActor}
-            posting={postUpdate.isPending}
-            onPost={async (body, health) => {
-              await postUpdate.mutateAsync({ body, ...(health ? { health } : {}) });
-            }}
-            showHealthComposer
-          />
-        </div>
-      ) : null}
+      <TabPanel
+        hidden={!(tab === 'updates')}
+        as="div"
+        value="updates"
+        className="no-print"
+        render={() => (
+          <>
+            <UpdatesPanel
+              updates={updates}
+              loading={updatesLoading}
+              loadFailure={updatesQ.isError ? updatesQ : null}
+              resolveActor={resolveActor}
+              posting={postUpdate.isPending}
+              onPost={async (body, health) => {
+                await postUpdate.mutateAsync({ body, ...(health ? { health } : {}) });
+              }}
+              showHealthComposer
+            />
+          </>
+        )}
+      />
 
-      {tab === 'resources' ? (
-        <div
-          className="no-print"
-          role="tabpanel"
-          id="tabpanel-resources"
-          aria-labelledby="tab-resources"
-        >
-          <ResourcesTab
-            resources={resourcesQ.data?.items ?? []}
-            loading={resourcesQ.isPending}
-            canEdit={canEdit}
-            pending={addResource.isPending || removeResource.isPending}
-            error={resourcesQ.isError ? 'Could not load resources.' : null}
-            onAdd={addResource.mutate}
-            onRemove={removeResource.mutate}
-            subject={{ type: 'initiative', id: initiativeId, organizationId: orgId }}
-            mentionedExternal={entityMentions.external}
-            mentionedEntities={entityMentions.entities}
-            mentionsPending={entityMentions.isPending}
-            hasProse={(detail.description ?? '').trim().length > 0}
-          />
-        </div>
-      ) : null}
+      <TabPanel
+        hidden={!(tab === 'resources')}
+        as="div"
+        value="resources"
+        className="no-print"
+        render={() => (
+          <>
+            <ResourcesTab
+              resources={resourcesQ.data?.items ?? []}
+              loading={resourcesQ.isPending}
+              canEdit={canEdit}
+              pending={addResource.isPending || removeResource.isPending}
+              error={resourcesQ.isError ? 'Could not load resources.' : null}
+              onAdd={addResource.mutate}
+              onRemove={removeResource.mutate}
+              subject={{ type: 'initiative', id: initiativeId, organizationId: orgId }}
+              mentionedExternal={entityMentions.external}
+              mentionedEntities={entityMentions.entities}
+              mentionsPending={entityMentions.isPending}
+              hasProse={(detail.description ?? '').trim().length > 0}
+            />
+          </>
+        )}
+      />
 
       {isRelationshipTab && relationshipsQ.isError ? (
         <PartialLoadBanner
@@ -652,11 +651,10 @@ export default function InitiativeDetailPage(): JSX.Element {
         />
       )}
 
-      <div
+      <TabPanel
+        as="div"
+        value="overview"
         className={`${tab === 'overview' ? 'flex' : 'hidden'} initiative-overview min-w-0 flex-col gap-6`}
-        role="tabpanel"
-        id="tabpanel-overview"
-        aria-labelledby="tab-overview"
       >
         <TemplateAwareEntityDocument
           orgId={orgId}
@@ -690,7 +688,7 @@ export default function InitiativeDetailPage(): JSX.Element {
           loading={updatesLoading}
           resolveActor={(actorId) => resolveInitiativeActor([], initiativeOwner, actorId)}
         />
-      </div>
+      </TabPanel>
     </EntityDetailLayout>
   );
 }

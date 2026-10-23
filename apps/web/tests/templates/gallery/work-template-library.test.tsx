@@ -150,11 +150,11 @@ describe('organization work definition library', () => {
         items={[unchanged, changed, definition('Private event', 'draft', 'personal')]}
       />,
     );
-    fireEvent.click(screen.getByRole('tab', { name: 'Drafts' }));
+    fireEvent.click(screen.getByRole('radio', { name: 'Drafts' }));
     expect(screen.getByRole('link', { name: 'Open Changed dinner' })).toBeVisible();
     expect(screen.getByRole('link', { name: 'Open Private event' })).toBeVisible();
     expect(screen.queryByRole('link', { name: 'Open Unchanged dinner' })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('tab', { name: 'Published' }));
+    fireEvent.click(screen.getByRole('radio', { name: 'Published' }));
     expect(screen.getAllByRole('link', { name: /Open .* dinner/ })).toHaveLength(2);
     expect(screen.queryByRole('link', { name: 'Open Private event' })).not.toBeInTheDocument();
   });

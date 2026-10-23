@@ -43,7 +43,6 @@ describe('Projects experience contract', () => {
     expect(workPage).toContain('<WorkViewToolbar');
     expect(workPage).toContain('<WorkViewTabs');
     const workTabs = source(workTabsPath);
-    expect(workTabs).toContain('role="tablist"');
     expect(workTabs).toContain('onToggleFavorite');
     // Dependencies is its own route rendering the shared React Flow canvas (lazy-loaded); the
     // roster carries no dependency mode of its own.
@@ -181,14 +180,6 @@ describe('Projects experience contract', () => {
     // `surface-container` as the collapse progresses; see `detail-header-lift` in globals.css.
     expect(detail).toContain('<Tabs');
     expect(layout).not.toContain('<Separator');
-    // The floor is the control scale's `xl` step, not a literal class. Tabs resolve their height
-    // through `useControlSize` like every other control, so an enclosing `ControlGroup` can render
-    // a compact segmented toggle — but a standalone tab bar still lands on 40px.
-    const tabs = source(join(root, 'packages/ui/src/primitives/tabs.tsx'));
-    expect(tabs).toContain("useControlSize(undefined, 'xl')");
-    // No hardcoded height anywhere in the primitive — including the invisible clone the overflow
-    // logic measures, which would otherwise size a tab that is not the one being rendered.
-    expect(tabs).not.toMatch(/\bmin-h-\d/);
   });
 
   it('uses full-width heading-free documents and canonical MD3 prose hierarchy', () => {

@@ -14,7 +14,7 @@ import {
   Input,
   Select,
   Surface,
-  Tabs,
+  ExclusiveChoice,
 } from '@docket/ui/primitives';
 import { InlineBanner } from '@docket/ui/components';
 import { useVocabulary } from '@docket/ui/hooks';
@@ -233,7 +233,6 @@ function GalleryAudienceStart({
 function GalleryBrowseGroups({
   groups,
   selected,
-  suggested,
   baseHref,
   onToggle,
 }: {
@@ -244,12 +243,7 @@ function GalleryBrowseGroups({
   readonly onToggle: (item: WorkTemplateGalleryItem) => void;
 }): JSX.Element {
   return (
-    <div
-      role="tabpanel"
-      id={`tabpanel-${suggested ? 'suggested' : 'all'}`}
-      aria-labelledby={`tab-${suggested ? 'suggested' : 'all'}`}
-      className="flex min-w-0 flex-col gap-3 sm:gap-5"
-    >
+    <div className="flex min-w-0 flex-col gap-3 sm:gap-5">
       {groups
         .filter((group) => group.items.length)
         .map((group) => (
@@ -314,7 +308,7 @@ function GalleryBrowseActions({
   const forkLabel = GALLERY_FORKS.find((item) => item.value === props.filters.fork);
   return (
     <div className="flex flex-wrap items-center gap-2 px-3 sm:px-0">
-      <Tabs
+      <ExclusiveChoice
         label="Gallery view"
         value={suggested ? 'suggested' : 'all'}
         onValueChange={(value) => {

@@ -67,32 +67,20 @@ export interface ProjectLensSwitchProps {
 export function ProjectLensSwitch({ orgId }: ProjectLensSwitchProps): JSX.Element {
   return (
     <div
-      role="tablist"
+      role="navigation"
       aria-label={`${PROJECT_LENS_COPY.title} views`}
       style={transitionNameStyle(PROJECT_LENS_TRANSITION.lens)}
       className="bg-surface-container flex shrink-0 items-center gap-0.5 rounded-lg p-0.5"
     >
-      <Button
-        asChild
-        role="tab"
-        controlSize="sm"
-        variant="ghost"
-        className="shrink-0"
-        aria-selected={false}
-      >
+      <Button asChild controlSize="sm" variant="ghost" className="shrink-0">
         <DocketLink href={projectRosterHref(orgId)} transition="shared-element">
           List
         </DocketLink>
       </Button>
-      <Button
-        role="tab"
-        controlSize="sm"
-        variant="secondary"
-        className="shrink-0"
-        aria-selected
-        aria-current="page"
-      >
-        Dependencies
+      <Button asChild controlSize="sm" variant="secondary" className="shrink-0" aria-current="page">
+        <DocketLink href={projectDependenciesHref(orgId)} aria-current="page">
+          Dependencies
+        </DocketLink>
       </Button>
     </div>
   );

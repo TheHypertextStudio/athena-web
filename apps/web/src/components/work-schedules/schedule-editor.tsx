@@ -1,6 +1,8 @@
 'use client';
 import type { JSX } from 'react';
 import {
+  TabsScope,
+  TabPanel,
   Button,
   Dialog,
   DialogBody,
@@ -30,44 +32,46 @@ type EditorState = ReturnType<typeof useScheduleEditor>;
 export function ScheduleEditor(props: ScheduleEditorProps): JSX.Element {
   const state = useScheduleEditor(props);
   return (
-    <Dialog
-      open={props.open}
-      onOpenChange={(value) => {
-        if (!value) state.prompt.requestClose();
-      }}
-    >
-      <DialogContent
-        ref={state.prompt.focusRegionRef}
-        presentation={{ kind: 'responsive-fullscreen', size: 'wide', height: 'content' }}
-        aria-busy={state.saving}
-        onEscapeKeyDown={state.prompt.onEscapeKeyDown}
+    <TabsScope scope={state.scope}>
+      <Dialog
+        open={props.open}
+        onOpenChange={(value) => {
+          if (!value) state.prompt.requestClose();
+        }}
       >
-        <DialogHeader inset="responsive" className="gap-4">
-          <div className="flex min-w-0 flex-col gap-1">
-            <DialogTitle>{props.schedule ? 'Edit future runs' : 'Add a schedule'}</DialogTitle>
-            <DialogDescription className="break-words">{props.programName}</DialogDescription>
-          </div>
-          <Tabs
-            label="Schedule definition sections"
-            value={state.section}
-            onValueChange={(next) => {
-              state.selectSection(next);
-            }}
-            items={SECTIONS.map((item) => ({ ...item, disabled: state.prompt.editDisabled }))}
-          />
-        </DialogHeader>
-        <DialogBody
-          inset="responsive"
-          className="@container"
-          onFocusCapture={state.prompt.onDraftFocusCapture}
+        <DialogContent
+          ref={state.prompt.focusRegionRef}
+          presentation={{ kind: 'responsive-fullscreen', size: 'wide', height: 'content' }}
+          aria-busy={state.saving}
+          onEscapeKeyDown={state.prompt.onEscapeKeyDown}
         >
-          <Surface tone="card" shape="large" className="p-4 sm:p-6">
-            <ScheduleEditorPanels props={props} state={state} />
-          </Surface>
-        </DialogBody>
-        <ScheduleEditorFooter state={state} editing={Boolean(props.schedule)} />
-      </DialogContent>
-    </Dialog>
+          <DialogHeader inset="responsive" className="gap-4">
+            <div className="flex min-w-0 flex-col gap-1">
+              <DialogTitle>{props.schedule ? 'Edit future runs' : 'Add a schedule'}</DialogTitle>
+              <DialogDescription className="break-words">{props.programName}</DialogDescription>
+            </div>
+            <Tabs
+              label="Schedule definition sections"
+              value={state.section}
+              onValueChange={(next) => {
+                state.selectSection(next);
+              }}
+              items={SECTIONS.map((item) => ({ ...item, disabled: state.prompt.editDisabled }))}
+            />
+          </DialogHeader>
+          <DialogBody
+            inset="responsive"
+            className="@container"
+            onFocusCapture={state.prompt.onDraftFocusCapture}
+          >
+            <Surface tone="card" shape="large" className="p-4 sm:p-6">
+              <ScheduleEditorPanels props={props} state={state} />
+            </Surface>
+          </DialogBody>
+          <ScheduleEditorFooter state={state} editing={Boolean(props.schedule)} />
+        </DialogContent>
+      </Dialog>
+    </TabsScope>
   );
 }
 interface EditorPanelsProps {
@@ -89,20 +93,10 @@ function ScheduleEditorPanels({ props, state }: EditorPanelsProps): JSX.Element 
   } = state;
   return (
     <fieldset disabled={prompt.editDisabled} className="min-w-0">
-      <div
-        role="tabpanel"
-        id="tabpanel-schedule-work"
-        aria-labelledby="tab-schedule-work"
-        hidden={section !== 'schedule-work'}
-      >
+      <TabPanel as="div" value="schedule-work" hidden={section !== 'schedule-work'}>
         <EditorWorkSection props={props} state={state} />
-      </div>
-      <div
-        role="tabpanel"
-        id="tabpanel-schedule-repeat"
-        aria-labelledby="tab-schedule-repeat"
-        hidden={section !== 'schedule-repeat'}
-      >
+      </TabPanel>
+      <TabPanel as="div" value="schedule-repeat" hidden={section !== 'schedule-repeat'}>
         <ScheduleRepeatFields
           draft={draft}
           today={today}
@@ -111,13 +105,8 @@ function ScheduleEditorPanels({ props, state }: EditorPanelsProps): JSX.Element 
           onChange={setDraft}
           editing={Boolean(props.schedule)}
         />
-      </div>
-      <div
-        role="tabpanel"
-        id="tabpanel-schedule-review"
-        aria-labelledby="tab-schedule-review"
-        hidden={section !== 'schedule-review'}
-      >
+      </TabPanel>
+      <TabPanel as="div" value="schedule-review" hidden={section !== 'schedule-review'}>
         {input ? (
           <ScheduleReview
             orgId={props.orgId}
@@ -137,7 +126,7 @@ function ScheduleEditorPanels({ props, state }: EditorPanelsProps): JSX.Element 
             }}
           />
         )}
-      </div>
+      </TabPanel>
     </fieldset>
   );
 }

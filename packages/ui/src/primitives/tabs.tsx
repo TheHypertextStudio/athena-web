@@ -1,224 +1,144 @@
 'use client';
 
-/**
- * `@docket/ui` — Tabs primitive (the canonical, accessible tablist treatment).
- *
- * @remarks
- * The single shared tab bar for Docket. Before this primitive the app carried five hand-rolled
- * tab strips (project detail, program detail, and friends) that each re-implemented the WAI-ARIA
- * Tabs pattern with a slightly different look; this consolidates them behind one component with
- * one visual treatment.
- *
- * Accessibility follows the WAI-ARIA Tabs pattern with a manual (roving-tabindex) tablist:
- * the container is `role="tablist"`, each {@link Tab} is `role="tab"` with `aria-selected` and a
- * roving `tabIndex` (only the selected tab is in the Tab sequence), and each tab points at its
- * caller-rendered panel via `aria-controls={`tabpanel-${value}`}` / `id={`tab-${value}`}`.
- * `ArrowLeft`/`ArrowRight` move between tabs (wrapping at the ends) and `Home`/`End` jump to the
- * first/last; activation follows focus, so arrowing also selects. Only the tablist lives here —
- * the matching `role="tabpanel"` is rendered by the caller so panels stay owned by the screen.
- *
- * Two visual treatments, because a tablist does two different jobs and they are different
- * components in M3. See {@link TabsVariant}: `segmented` is the filled, content-sized track for a
- * compact choice (the agenda view switcher, a composer toggle); `underline` is M3 primary tabs for
- * a page's section navigation, with no track and an active indicator under the selected label.
- * Colours come from the semantic MD3 tokens in `@docket/ui/styles/globals.css`.
- *
- * Two ergonomics are supported so migration off the hand-rolled bars is clean:
- *
- * - **Data-driven** (matches every existing hand-rolled bar): pass `items` + `label` to
- *   {@link Tabs} and it renders the whole tablist.
- * - **Composable**: render {@link TabList} / {@link Tab} children yourself for custom content.
- *
- * @example
- * ```tsx
- * // Data-driven — the clean drop-in for the old hand-rolled strips.
- * <Tabs
- *   value={active}
- *   onValueChange={setActive}
- *   label="Project sections"
- *   items={[
- *     { value: 'overview', label: 'Overview' },
- *     { value: 'tasks', label: 'Tasks', count: 4 },
- *   ]}
- * />
- * <div role="tabpanel" id="tabpanel-overview" aria-labelledby="tab-overview">…</div>
- *
- * // Composable — full control over each tab's content.
- * <Tabs value={active} onValueChange={setActive}>
- *   <TabList label="Project sections">
- *     <Tab value="overview">Overview</Tab>
- *     <Tab value="tasks" count={4}>Tasks</Tab>
- *   </TabList>
- * </Tabs>
- * ```
- */
 import * as React from 'react';
-
-import { Ellipsis } from '../icons';
-import { CONTROL, CONTROL_RADIUS, useControlSize } from './control';
 import { cn } from '../lib/utils';
-import { Button } from './button';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from './dropdown-menu';
-import { focusRing } from './focus';
-import { typeClass } from './text';
+import { focusRingInset } from './focus';
+import { Separator } from './separator';
 
-/**
- * How a selected tab is coloured.
- *
- * @remarks
- * - `neutral` (default) — the selected segment takes a surface step. Right for a tab bar that
- *   switches what a page is showing, where the tabs are navigation and should not compete with the
- *   content under them.
- * - `accent` — the selected segment takes the MD3 secondary-container role. Right for a segmented
- *   control that sets *what an action will do*, where the current setting is a decision the person
- *   made and needs to read as one at a glance.
- */
-export type TabsTone = 'neutral' | 'accent';
+/** Material content-tab hierarchy; mode choices use ExclusiveChoice instead. */
+export type TabsVariant = 'primary' | 'secondary';
+/** Layout resolves automatically from the available width unless explicitly scrollable. */
+export type TabsLayout = 'auto' | 'scrollable';
+/** Source of a selection, so editors can preserve keyboard navigation focus. */
+export type TabsActivation = 'keyboard' | 'pointer';
 
-/**
- * Which of the two jobs this tablist is doing.
- *
- * @remarks
- * They were one treatment for a while, and the seam showed on the detail pages: a segmented
- * control is sized to its own content, and a page's section navigation is stretched across the
- * measure, so five labels ended up huddled at the left of a wide empty track with the rest of the
- * pill reading as dead space. They are different components in M3 and they are different here now.
- *
- * - `segmented` (default) — a compact, mutually-exclusive **choice**: a composer's two-position
- *   toggle, an agenda view switcher. A filled track with a raised selected segment, sized to its
- *   content. This is M3's segmented button.
- * - `underline` — a page's **section navigation**: Overview / Updates / Resources across an entity
- *   detail page. M3 primary tabs — no track, labels in a row, and an active indicator under the
- *   selected label. Nothing is drawn under the row itself; the header's own scrolled tone is what
- *   separates the bar from the content passing beneath it.
- */
-export type TabsVariant = 'segmented' | 'underline';
+const ScopeContext = React.createContext<string | null>(null);
 
-/** The shared selection state threaded from {@link Tabs} down to each {@link Tab}. */
-interface TabsContextValue {
-  /** The currently selected tab value. */
-  readonly value: string;
-  /** Select a tab by value. */
-  readonly onValueChange: (value: string) => void;
-  /** How the selected segment is coloured. */
-  readonly tone: TabsTone;
-  /** Which of the two tablist jobs this is. */
-  readonly variant: TabsVariant;
+/** Give one tablist and its sibling panels a unique, stable identity. Nest for independent sets. */
+export function TabsScope({
+  children,
+  scope,
+}: {
+  readonly children: React.ReactNode;
+  readonly scope?: string;
+}): React.JSX.Element {
+  const id = React.useId();
+  return <ScopeContext.Provider value={scope ?? id}>{children}</ScopeContext.Provider>;
 }
 
+/** Resolve stable trigger and panel IDs for focus restoration within one scope. */
+export function tabIds(scope: string, value: string): { id: string; panelId: string } {
+  const key = encodeURIComponent(value);
+  return { id: `${scope}-tab-${key}`, panelId: `${scope}-panel-${key}` };
+}
+
+/** Associate a caller-owned panel with its scoped tab, including panels with custom markup. */
+export function useTabPanelProps(value: string): {
+  id: string;
+  role: 'tabpanel';
+  'aria-labelledby': string;
+  tabIndex: number;
+} {
+  const scope = React.useContext(ScopeContext);
+  if (!scope) throw new Error('Tab panels must be rendered within a TabsScope.');
+  const ids = tabIds(scope, value);
+  return { id: ids.panelId, role: 'tabpanel', 'aria-labelledby': ids.id, tabIndex: 0 };
+}
+
+/** Props for a content panel; hidden panels may stay mounted to retain edited input. */
+export interface TabPanelProps extends React.HTMLAttributes<HTMLElement> {
+  readonly value: string;
+  readonly as?: 'div' | 'section' | 'fieldset';
+  /** Lazily render contents while visible, retaining the hidden panel shell. */
+  readonly render?: () => React.ReactNode;
+  readonly disabled?: boolean;
+}
+
+/** Render the associated panel without imposing layout or unmounting policy. */
+export function TabPanel({
+  value,
+  as = 'div',
+  render,
+  children,
+  ...props
+}: TabPanelProps): React.JSX.Element {
+  const association = useTabPanelProps(value);
+  return React.createElement(
+    as,
+    {
+      ...association,
+      ...props,
+      className: cn(props.className, props.hidden && 'hidden'),
+    },
+    render ? (props.hidden ? null : render()) : children,
+  );
+}
+
+/** One content destination in a tablist. */
+export interface TabsItem {
+  readonly value: string;
+  readonly label: React.ReactNode;
+  readonly ariaLabel?: string;
+  readonly count?: number;
+  readonly emphasis?: boolean;
+  readonly disabled?: boolean;
+}
+
+interface TabsContextValue {
+  readonly value: string;
+  readonly onValueChange: (value: string, source?: TabsActivation) => void;
+  readonly variant: TabsVariant;
+  readonly layout: TabsLayout;
+  readonly scope: string;
+}
 const TabsContext = React.createContext<TabsContextValue | null>(null);
 
-/**
- * Read the enclosing {@link Tabs} selection context.
- *
- * @returns the active {@link TabsContextValue}.
- * @throws {Error} When rendered outside a {@link Tabs} root.
- */
 function useTabsContext(): TabsContextValue {
   const context = React.useContext(TabsContext);
-  if (!context) {
-    throw new Error('Tabs.* subcomponents must be rendered within a <Tabs> root.');
-  }
+  if (!context) throw new Error('Tabs.* subcomponents must be rendered within a <Tabs> root.');
   return context;
 }
 
-/** One data-driven tab definition for {@link Tabs.items}. */
-export interface TabsItem {
-  /** Stable tab value (also the `aria-controls`/`id` stem). */
-  readonly value: string;
-  /** Visible tab label. */
-  readonly label: React.ReactNode;
-  /** Accessible label when it must be more explicit than the visible label. */
-  readonly ariaLabel?: string;
-  /** Optional count rendered as a trailing pill (e.g. an open-task count). */
-  readonly count?: number;
-  /** When `true`, the tab is present but not selectable. */
-  readonly disabled?: boolean;
-  /** Lower values remain visible first when an overflow-enabled tablist becomes constrained. */
-  readonly priority?: number;
-}
-
-/** Configuration for the opt-in compact section overflow menu. */
-export interface TabsOverflow {
-  /** Accessible name for the menu button, such as `More Initiative sections`. */
-  readonly menuLabel: string;
-}
-
-/** Props for {@link Tabs}. */
+/** Props for controlled, data-driven or composable content tabs. */
 export interface TabsProps {
-  /** The currently selected tab value (controlled). */
   readonly value: string;
-  /** Called with the new tab value when the selection changes. */
-  readonly onValueChange: (value: string) => void;
-  /**
-   * Accessible label for the tablist. Required in data-driven mode; in composable mode pass it to
-   * {@link TabList} instead.
-   */
+  readonly onValueChange: (value: string, source?: TabsActivation) => void;
   readonly label?: string;
-  /**
-   * Data-driven tabs. When provided, {@link Tabs} renders the whole {@link TabList} for you; omit
-   * it and render {@link TabList}/{@link Tab} children yourself for the composable API.
-   */
   readonly items?: readonly TabsItem[];
-  /** Composable children ({@link TabList} → {@link Tab}); ignored when `items` is provided. */
   readonly children?: React.ReactNode;
-  /** Extra classes for the tablist track. Applied to the auto-rendered {@link TabList} in items mode. */
   readonly className?: string;
-  /** Keep detail sections reachable in a named overflow menu when the tab lane is constrained. */
-  readonly overflow?: TabsOverflow;
-  /** How the selected segment is coloured. Defaults to `neutral`. */
-  readonly tone?: TabsTone;
-  /** Which of the two tablist jobs this is. Defaults to `segmented`. */
   readonly variant?: TabsVariant;
+  readonly layout?: TabsLayout;
 }
 
-/**
- * The Tabs root: provides selection context and, in data-driven mode, renders the full tablist.
- *
- * @param props - The {@link TabsProps}.
- * @returns the rendered tabs (data-driven) or the provided composable children.
- */
+/** Render content navigation. Wrap tabs and sibling panels in TabsScope. */
 export function Tabs({
   value,
   onValueChange,
   label,
   items,
-  tone = 'neutral',
-  variant = 'segmented',
   children,
   className,
-  overflow,
+  variant = 'primary',
+  layout = 'auto',
 }: TabsProps): React.JSX.Element {
-  const context = React.useMemo<TabsContextValue>(
-    () => ({ value, onValueChange, tone, variant }),
-    [value, onValueChange, tone, variant],
+  const inheritedScope = React.useContext(ScopeContext);
+  const ownScope = React.useId();
+  const scope = inheritedScope ?? ownScope;
+  const context = React.useMemo(
+    () => ({ value, onValueChange, variant, layout, scope }),
+    [value, onValueChange, variant, layout, scope],
   );
-
   return (
     <TabsContext.Provider value={context}>
       {items ? (
-        overflow ? (
-          <OverflowTabList label={label} className={className} items={items} overflow={overflow} />
-        ) : (
-          <TabList label={label} className={className}>
-            {items.map((item) => (
-              <Tab
-                key={item.value}
-                value={item.value}
-                count={item.count}
-                disabled={item.disabled}
-                ariaLabel={item.ariaLabel}
-              >
-                {item.label}
-              </Tab>
-            ))}
-          </TabList>
-        )
+        <TabList label={label} className={className}>
+          {items.map(({ label: text, ...item }) => (
+            <Tab key={item.value} {...item}>
+              {text}
+            </Tab>
+          ))}
+        </TabList>
       ) : (
         children
       )}
@@ -226,476 +146,225 @@ export function Tabs({
   );
 }
 
-/** Props for {@link TabList}. */
+/** Props for the track of a composable tablist. */
 export interface TabListProps {
-  /** Accessible label for the tablist (announced with the tab role). */
   readonly label?: string | undefined;
-  /** Extra classes merged onto the resting track. */
   readonly className?: string | undefined;
-  /** The {@link Tab} children. */
-  readonly children?: React.ReactNode | undefined;
+  readonly children?: React.ReactNode;
 }
 
-/** The set of keys the tablist handles for roving-tabindex navigation. */
-const NAV_KEYS = new Set(['ArrowRight', 'ArrowLeft', 'Home', 'End']);
+/** Scroll only the tab lane, preserving the surrounding page's position. */
+function revealTab(list: HTMLDivElement, tab: HTMLElement): void {
+  const lane = list.getBoundingClientRect();
+  const item = tab.getBoundingClientRect();
+  if (item.left < lane.left) list.scrollLeft -= lane.left - item.left;
+  else if (item.right > lane.right) list.scrollLeft += item.right - lane.right;
+}
 
-function moveTabFocus(
-  list: HTMLDivElement | null,
+function handleTabKey(
   event: React.KeyboardEvent<HTMLDivElement>,
-  onValueChange: (value: string) => void,
+  onChange: (value: string, source?: TabsActivation) => void,
 ): void {
-  if (!NAV_KEYS.has(event.key) || !list) return;
-  const tabs = Array.from(list.querySelectorAll<HTMLButtonElement>('[role="tab"]:not([disabled])'));
-  if (tabs.length === 0) return;
-  const currentIndex = tabs.findIndex((tab) => tab === document.activeElement);
-  let nextIndex: number;
-  switch (event.key) {
-    case 'ArrowRight':
-      nextIndex = currentIndex < 0 ? 0 : (currentIndex + 1) % tabs.length;
-      break;
-    case 'ArrowLeft':
-      nextIndex =
-        currentIndex < 0 ? tabs.length - 1 : (currentIndex - 1 + tabs.length) % tabs.length;
-      break;
-    case 'Home':
-      nextIndex = 0;
-      break;
-    default:
-      nextIndex = tabs.length - 1;
-  }
-  const next = tabs[nextIndex];
-  if (!next) return;
+  const list = event.currentTarget;
+  if (!(event.target instanceof HTMLElement) || event.target.closest('[role="tablist"]') !== list)
+    return;
+  const tabs = Array.from(list.querySelectorAll<HTMLButtonElement>('[role="tab"]:not(:disabled)'));
+  const current = tabs.findIndex((tab) => tab === document.activeElement);
+  const rtl = getComputedStyle(list).direction === 'rtl';
+  let next: number;
+  if (event.key === 'Home') next = 0;
+  else if (event.key === 'End') next = tabs.length - 1;
+  else if (event.key === 'ArrowRight')
+    next = (current + (rtl ? -1 : 1) + tabs.length) % tabs.length;
+  else if (event.key === 'ArrowLeft') next = (current + (rtl ? 1 : -1) + tabs.length) % tabs.length;
+  else return;
+  const tab = tabs[next];
+  if (!tab) return;
   event.preventDefault();
-  next.focus();
-  const nextValue = next.dataset['value'];
-  if (nextValue !== undefined) onValueChange(nextValue);
+  tab.focus({ preventScroll: true });
+  revealTab(list, tab);
+  if (tab.dataset['value'] !== undefined) onChange(tab.dataset['value'], 'keyboard');
 }
 
-/**
- * The tablist track that lays out its {@link Tab} children and wires arrow-key navigation.
- *
- * @remarks
- * Keyboard movement resolves the tab order from the DOM (`[role="tab"]`) so it stays correct for
- * any children/order without a registration step; activation follows focus.
- *
- * @param props - The {@link TabListProps}.
- * @returns the rendered `role="tablist"` track.
- */
+/** Lay out up to four equal-width tabs when they fit; otherwise keep all destinations scrollable. */
 export function TabList({ label, className, children }: TabListProps): React.JSX.Element {
-  const { onValueChange, variant } = useTabsContext();
+  const { value, layout, onValueChange } = useTabsContext();
   const ref = React.useRef<HTMLDivElement>(null);
-  // A standalone tab bar keeps its 40px touch-target floor; only an enclosing `ControlGroup`
-  // shrinks it, which is what lets a composer carry a compact two-position toggle without every
-  // existing tab bar in the app shrinking with it.
-  const size = useControlSize(undefined, 'xl');
-
-  function onKeyDown(event: React.KeyboardEvent<HTMLDivElement>): void {
-    moveTabFocus(ref.current, event, onValueChange);
-  }
-
-  return (
-    <div
-      ref={ref}
-      role="tablist"
-      aria-label={label}
-      onKeyDown={onKeyDown}
-      className={cn(
-        'inline-flex items-center',
-        variant === 'underline'
-          ? // No track and no fill: the row is labels, and the selected one carries an indicator.
-            // `gap-1` rather than the segmented `gap-0.5` because nothing separates these but air.
-            'gap-1'
-          : cn(
-              'bg-surface-container gap-0.5 p-0.5',
-              CONTROL[size].heightPx <= 32 ? 'rounded-md' : 'rounded-lg',
-            ),
-        className,
-      )}
-    >
-      {children}
-    </div>
-  );
-}
-
-interface OverflowTabListProps {
-  readonly label?: string | undefined;
-  readonly className?: string | undefined;
-  readonly items: readonly TabsItem[];
-  readonly overflow: TabsOverflow;
-}
-
-/**
- * What decides the widths of the measured tabs: each item's value, text label, count, priority, and
- * disabled state.
- *
- * @remarks
- * Callers pass `items` as a fresh array literal on every render, so the array's identity says
- * nothing about whether the tabs changed. Comparing this string does.
- */
-function measurementKey(items: readonly TabsItem[]): string {
-  return JSON.stringify(
-    items.map((item) => [
-      item.value,
-      typeof item.label === 'string' ? item.label : null,
-      item.count ?? null,
-      item.priority ?? null,
-      item.disabled === true,
-    ]),
-  );
-}
-
-/**
- * The tab values that fit the lane, in tab order.
- *
- * @remarks
- * The selected tab claims its room first, so it is never the one demoted. The rest follow by
- * priority, each only if it still leaves room for the overflow button while any tab stays hidden.
- *
- * @param tabs - Every tab, in order.
- * @param selectedValue - The selected tab's value.
- * @param widths - Each tab's measured width in px.
- * @param available - The lane's width in px.
- * @param moreWidth - The overflow button's width in px.
- */
-function fitVisibleValues(
-  tabs: readonly TabsItem[],
-  selectedValue: string,
-  widths: ReadonlyMap<string, number>,
-  available: number,
-  moreWidth: number,
-): string[] {
-  const selected = tabs.find((item) => item.value === selectedValue);
-  const candidates = [...tabs]
-    .filter((item) => item.value !== selected?.value)
-    .sort(
-      (left, right) =>
-        (left.priority ?? Number.MAX_SAFE_INTEGER) - (right.priority ?? Number.MAX_SAFE_INTEGER),
-    );
-  const next = new Set<string>(selected ? [selected.value] : []);
-  let used = selected ? (widths.get(selected.value) ?? 0) : 0;
-  for (const item of candidates) {
-    const width = widths.get(item.value) ?? 0;
-    const needsMore = next.size + 1 < tabs.length;
-    if (used + width + (needsMore ? moreWidth : 0) > available) continue;
-    next.add(item.value);
-    used += width;
-  }
-  if (next.size === 0 && tabs[0]) next.add(tabs[0].value);
-  return tabs.filter((item) => next.has(item.value)).map((item) => item.value);
-}
-
-/** Render the tabs that fit in the measured overflow lane. */
-function OverflowVisibleTabs({
-  items,
-}: {
-  readonly items: readonly TabsItem[];
-}): React.JSX.Element {
-  return (
-    <>
-      {items.map((item) => (
-        <Tab
-          key={item.value}
-          value={item.value}
-          count={item.count}
-          disabled={item.disabled}
-          ariaLabel={item.ariaLabel}
-          className="max-w-full min-w-0 shrink overflow-hidden whitespace-nowrap"
-        >
-          {item.label}
-        </Tab>
-      ))}
-    </>
-  );
-}
-
-/** A measured detail-section tab lane that promotes the selected section before hiding others. */
-function OverflowTabList({
-  label,
-  className,
-  items,
-  overflow,
-}: OverflowTabListProps): React.JSX.Element {
-  const { value, onValueChange } = useTabsContext();
-  const laneRef = React.useRef<HTMLDivElement>(null);
-  const moreRef = React.useRef<HTMLButtonElement>(null);
-  const measureRefs = React.useRef(new Map<string, HTMLButtonElement>());
-  const measureLaneRef = React.useRef<HTMLDivElement>(null);
-  // `recompute` reads the latest items through this ref and is re-created only when
-  // `itemsKey` changes, so an unchanged tab set does not re-measure every tab on each render.
-  const itemsRef = React.useRef(items);
-  const itemsKey = measurementKey(items);
-  const firstValue = items[0]?.value;
+  const [scrollable, setScrollable] = React.useState(layout === 'scrollable');
   React.useLayoutEffect(() => {
-    itemsRef.current = items;
-  });
-  const [visibleValues, setVisibleValues] = React.useState<readonly string[]>(() => {
-    const first = items[0]?.value;
-    return first && first !== value ? [first, value] : [value];
-  });
-
-  const visibleSet = React.useMemo(() => new Set(visibleValues), [visibleValues]);
-  const visibleItems = items.filter((item) => visibleSet.has(item.value));
-  const hiddenItems = items.filter((item) => !visibleSet.has(item.value));
-
-  const recompute = React.useCallback(() => {
-    const tabs = itemsRef.current;
-    const available = laneRef.current?.clientWidth ?? 0;
-    const moreWidth = moreRef.current?.getBoundingClientRect().width ?? 40;
-    const widths = new Map(
-      tabs.map((item) => [
-        item.value,
-        measureRefs.current.get(item.value)?.getBoundingClientRect().width ?? 0,
-      ]),
-    );
-    if (available <= 0 || [...widths.values()].some((width) => width <= 0)) return;
-
-    const ordered = fitVisibleValues(tabs, value, widths, available, moreWidth);
-    setVisibleValues((current) =>
-      current.length === ordered.length && current.every((item, index) => item === ordered[index])
-        ? current
-        : ordered,
-    );
-  }, [itemsKey, value]);
-
-  React.useLayoutEffect(() => {
-    recompute();
-    const lane = laneRef.current;
-    if (!lane || typeof ResizeObserver === 'undefined') return;
-    const observer = new ResizeObserver(recompute);
-    observer.observe(lane);
-    // A label's width also moves when its font loads, with no change to the lane or the tab set.
-    if (measureLaneRef.current) observer.observe(measureLaneRef.current);
-    return () => {
-      observer.disconnect();
+    const list = ref.current;
+    if (!list) return;
+    const measure = (): void => {
+      const tabs = Array.from(list.querySelectorAll<HTMLElement>('[role="tab"]'));
+      const widest = Math.max(
+        0,
+        ...tabs.map((tab) => {
+          const content = tab.querySelector<HTMLElement>('[data-tab-content]');
+          return (content?.getBoundingClientRect().width ?? 0) + 48;
+        }),
+      );
+      setScrollable(
+        layout === 'scrollable' || tabs.length > 4 || widest * tabs.length > list.clientWidth,
+      );
     };
-  }, [recompute]);
+    measure();
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure);
+    observer?.observe(list);
+    list.querySelectorAll('[data-tab-content]').forEach((content) => observer?.observe(content));
+    return () => observer?.disconnect();
+  }, [children, layout]);
   React.useLayoutEffect(() => {
-    if (visibleSet.has(value)) return;
-    setVisibleValues((current) =>
-      firstValue && firstValue !== value
-        ? [...new Set([firstValue, value, ...current])]
-        : [...new Set([value, ...current])],
-    );
-  }, [firstValue, value, visibleSet]);
-
+    const list = ref.current;
+    const selected = list?.querySelector<HTMLElement>('[aria-selected="true"]');
+    if (list && selected) revealTab(list, selected);
+  }, [value, scrollable]);
   return (
-    <div ref={laneRef} className="flex min-w-0 items-center gap-1">
-      <TabList label={label} className={cn('min-w-0 flex-1 overflow-hidden', className)}>
-        <OverflowVisibleTabs items={visibleItems} />
-      </TabList>
-      {hiddenItems.length > 0 ? (
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button ref={moreRef} variant="ghost" size="icon" aria-label={overflow.menuLabel}>
-              <Ellipsis className="size-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            {hiddenItems.map((item) => (
-              <DropdownMenuItem
-                key={item.value}
-                {...(item.disabled === undefined ? {} : { disabled: item.disabled })}
-                onSelect={() => {
-                  onValueChange(item.value);
-                }}
-              >
-                {item.label}
-              </DropdownMenuItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
-      ) : null}
+    <div className="relative w-full min-w-0">
       <div
-        ref={measureLaneRef}
-        aria-hidden="true"
-        className="pointer-events-none invisible absolute whitespace-nowrap"
+        ref={ref}
+        role="tablist"
+        aria-label={label}
+        data-layout={scrollable ? 'scrollable' : 'fixed'}
+        onKeyDown={(event) => {
+          handleTabKey(event, onValueChange);
+        }}
+        onFocus={(event) => {
+          if (event.target.getAttribute('role') === 'tab')
+            revealTab(event.currentTarget, event.target);
+        }}
+        className={cn(
+          'relative flex h-12 w-full min-w-0 shrink-0 overflow-x-auto overflow-y-hidden',
+          scrollable ? 'ps-[52px] [&>[role=tab]]:flex-none' : '[&>[role=tab]]:flex-1',
+          className,
+        )}
       >
-        {items.map((item) => (
-          <TabMeasurement key={item.value} item={item} refs={measureRefs} />
-        ))}
+        {children}
       </div>
+      <Separator className="pointer-events-none absolute inset-x-0 bottom-0" />
     </div>
   );
 }
 
-/**
- * An invisible clone of one tab, measured to decide what fits before overflow collapses the rest.
- *
- * @remarks
- * It resolves the same metrics {@link Tab} does. Hardcoding a size here would measure a tab that is
- * not the one being rendered as soon as an enclosing `ControlGroup` sets a different step, and the
- * overflow point would be computed from the wrong widths.
- */
-function TabMeasurement({
-  item,
-  refs,
-}: {
-  item: TabsItem;
-  refs: React.RefObject<Map<string, HTMLButtonElement>>;
-}): React.JSX.Element {
-  const metrics = CONTROL[useControlSize(undefined, 'xl')];
-  return (
-    <button
-      ref={(element) => {
-        if (element) {
-          refs.current.set(item.value, element);
-        } else {
-          refs.current.delete(item.value);
-        }
-      }}
-      type="button"
-      className={cn(
-        'inline-flex items-center py-1.5',
-        metrics.minHeight,
-        metrics.paddingX,
-        metrics.gap,
-        typeClass(metrics.labelToken),
-        CONTROL_RADIUS,
-      )}
-    >
-      <span>{item.label}</span>
-      {item.count !== undefined ? (
-        <span className="text-label-small min-w-5 px-1.5">{item.count}</span>
-      ) : null}
-    </button>
-  );
+/** Props for a single content-tab trigger. */
+export interface TabProps {
+  readonly value: string;
+  readonly count?: number | undefined;
+  readonly emphasis?: boolean | undefined;
+  readonly ariaLabel?: string | undefined;
+  readonly disabled?: boolean | undefined;
+  readonly className?: string | undefined;
+  readonly children?: React.ReactNode;
 }
 
-/**
- * The colour treatment for one tab, by variant and selection state.
- *
- * @remarks
- * An unselected tab is one treatment in both variants, and it is the same hover the `ghost` button
- * uses: a step on the surface ramp. It was briefly an `on-surface/8` tint here instead, on the
- * theory that a foreground tint survives the bar changing tone underneath it — which was inventing
- * a value to solve a problem the ramp already solves, and is how two controls that should look
- * identical drift apart.
- *
- * @param variant - Which tablist job this is.
- * @param tone - How a selected segment is coloured.
- * @param selected - Whether this tab is the selected one.
- * @returns the colour classes for that combination.
- */
-function tabStateClass(variant: TabsVariant, tone: TabsTone, selected: boolean): string {
-  if (!selected)
-    return 'text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface';
-  // Section navigation says "selected" with the indicator under the label, so the label itself
-  // takes no fill; a segmented control has no indicator and says it with one.
-  if (variant === 'underline') return 'text-on-surface';
-  if (tone === 'accent') return 'bg-secondary-container text-on-secondary-container';
-  return 'bg-surface-container-highest text-on-surface';
+/** Bound visual counts to four characters; accessible names retain the full count. */
+export function tabBadgeCount(count: number): string {
+  return count > 999 ? '999+' : String(count);
 }
 
-/**
- * The colour treatment for a tab's trailing count pill.
- *
- * @param tone - How a selected segment is coloured.
- * @param selected - Whether the owning tab is the selected one.
- * @returns the colour classes for that combination.
- */
-function tabCountClass(tone: TabsTone, selected: boolean): string {
-  if (selected && tone === 'accent')
-    return 'bg-on-secondary-container/12 text-on-secondary-container';
-  if (selected) return 'bg-surface-container text-on-surface';
-  return 'bg-surface-container-high text-on-surface-variant';
-}
-
-/** Resolve the optional explicit accessible name without stringifying arbitrary visible content. */
-function tabAccessibleLabel(
+function accessibleTabName(
   children: React.ReactNode,
   count: number | undefined,
-  ariaLabel: string | undefined,
+  explicit: string | undefined,
 ): string | undefined {
-  const label = ariaLabel ?? (typeof children === 'string' ? children : undefined);
-  if (label === undefined) return undefined;
-  return count === undefined ? label : `${label} ${String(count)}`;
+  const label = explicit ?? (typeof children === 'string' ? children : undefined);
+  return label === undefined ? undefined : count === undefined ? label : `${label} ${count}`;
 }
 
-/** Props for {@link Tab}. */
-export interface TabProps {
-  /** Stable tab value (also the `aria-controls`/`id` stem). */
-  readonly value: string;
-  /** Optional count rendered as a trailing pill. */
-  readonly count?: number | undefined;
-  /** Accessible label when it must be more explicit than the visible label. */
-  readonly ariaLabel?: string | undefined;
-  /** When `true`, the tab is present but not selectable. */
-  readonly disabled?: boolean | undefined;
-  /** Extra classes merged onto the tab button. */
-  readonly className?: string | undefined;
-  /** The visible tab label. */
-  readonly children?: React.ReactNode | undefined;
-}
-
-/**
- * A single tab trigger with the standard resting/hover/selected treatment.
- *
- * @param props - The {@link TabProps}.
- * @returns the rendered `role="tab"` button.
- */
+/** Render a tab with a primary label-width or secondary full-width indicator. */
 export function Tab({
   value,
   count,
+  emphasis,
   ariaLabel,
   disabled,
   className,
   children,
 }: TabProps): React.JSX.Element {
-  const { value: selectedValue, onValueChange, tone, variant } = useTabsContext();
-  const selected = value === selectedValue;
-  const metrics = CONTROL[useControlSize(undefined, 'xl')];
-  const underline = variant === 'underline';
-
+  const context = useTabsContext();
+  const selected = value === context.value;
+  const ids = tabIds(context.scope, value);
+  const label = accessibleTabName(children, count, ariaLabel);
   return (
     <button
       type="button"
       role="tab"
       data-value={value}
-      id={`tab-${value}`}
-      aria-controls={`tabpanel-${value}`}
+      id={ids.id}
+      aria-controls={ids.panelId}
       aria-selected={selected}
-      aria-label={tabAccessibleLabel(children, count, ariaLabel)}
+      aria-label={label}
       tabIndex={selected ? 0 : -1}
       disabled={disabled}
-      onClick={() => {
-        onValueChange(value);
+      onClick={(event) => {
+        context.onValueChange(value, event.detail === 0 ? 'keyboard' : 'pointer');
       }}
       className={cn(
-        // One type token for both states. Bolding the selected tab would change the label's
-        // rendered width, which shifts every tab after it — a size change on interaction, and the
-        // reason a tab strip appears to "breathe" as you click along it.
-        'relative inline-flex items-center transition-colors disabled:pointer-events-none disabled:opacity-50',
-        metrics.minHeight,
-        metrics.paddingX,
-        metrics.gap,
-        metrics.iconApply,
-        typeClass(metrics.labelToken),
-        underline ? 'rounded-t-lg' : CONTROL_RADIUS,
-        tabStateClass(variant, tone, selected),
-        focusRing,
+        'text-label-large hover:bg-on-surface/8 active:bg-on-surface/12 relative inline-flex h-full min-w-0 shrink-0 items-center justify-center px-6 whitespace-nowrap transition-colors disabled:opacity-50',
+        selected
+          ? context.variant === 'primary'
+            ? 'text-primary'
+            : 'text-on-surface'
+          : 'text-on-surface-variant',
+        focusRingInset,
         className,
       )}
     >
-      <span className="min-w-0 truncate">{children}</span>
-      {underline && selected ? (
-        // M3's active indicator. Inset from the tab's own padding so it sizes to the label rather
-        // than to the hit target, and rounded at the top so it reads as a mark under the word and
-        // not as a rule someone drew along the bottom of the bar.
+      <span data-tab-content="" className="inline-flex h-full items-center gap-1">
+        <span className="relative inline-flex h-full items-center">
+          {children}
+          {selected && context.variant === 'primary' ? (
+            <span
+              aria-hidden="true"
+              data-tab-indicator="primary"
+              className="bg-primary absolute bottom-0 left-1/2 z-10 h-[3px] w-[calc(100%-4px)] min-w-6 -translate-x-1/2 rounded-t-full"
+            />
+          ) : null}
+        </span>
+        {count === undefined ? null : (
+          <span
+            aria-hidden="true"
+            className={cn(
+              'text-label-small inline-flex min-w-4 items-center justify-center rounded-full px-1',
+              emphasis
+                ? 'bg-error text-on-error'
+                : 'bg-surface-container-high text-on-surface-variant',
+            )}
+          >
+            {tabBadgeCount(count)}
+          </span>
+        )}
+      </span>
+      {selected && context.variant === 'secondary' ? (
         <span
           aria-hidden="true"
-          className="bg-primary absolute inset-x-2.5 bottom-0 h-[3px] rounded-t-full"
+          data-tab-indicator="secondary"
+          className="bg-primary absolute inset-x-0 bottom-0 z-10 h-0.5"
         />
       ) : null}
-      {count !== undefined ? (
-        <span
-          className={cn(
-            'text-label-small inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 tabular-nums',
-            tabCountClass(tone, selected),
-          )}
-        >
-          {count}
-        </span>
-      ) : null}
     </button>
+  );
+}
+
+/** Props for stable panel shells whose expensive contents mount only while selected. */
+export interface LazyTabPanelsProps extends TabPanelProps {
+  readonly values: readonly string[];
+}
+
+/** Keep every trigger target present while preserving caller-owned lazy content and queries. */
+export function LazyTabPanels({
+  values,
+  value,
+  children,
+  hidden,
+  ...props
+}: LazyTabPanelsProps): React.JSX.Element {
+  return (
+    <>
+      {values.map((entry) => (
+        <TabPanel key={entry} {...props} value={entry} hidden={hidden === true || entry !== value}>
+          {entry === value ? children : null}
+        </TabPanel>
+      ))}
+    </>
   );
 }

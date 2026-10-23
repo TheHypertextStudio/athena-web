@@ -1,10 +1,11 @@
 'use client';
 
+import { TabPanel, Tabs, type TabsItem } from '@docket/ui/primitives';
 import type { UpdateOut } from '@docket/work/update-contract';
 import { ActorAvatar, type PickerOption } from '@docket/ui/components';
 import { useVocabulary } from '@docket/ui/hooks';
 import { useQueryClient } from '@tanstack/react-query';
-import { Button, Tabs, type TabsItem } from '@docket/ui/primitives';
+
 import { useTypedRoute } from '@/lib/app-location';
 import { type JSX, useEffect, useMemo, useState } from 'react';
 
@@ -29,7 +30,10 @@ import { programFlowMetrics } from '@/components/programs/flow-metrics';
 import { ProgramPropertiesPanel } from '@/components/programs/properties-panel';
 import { ProgramWorkView } from '@/components/programs/program-work-view';
 import { ProgramHeaderActions } from '@/components/programs/program-detail-header-actions';
-import { ProgramSchedules } from '@/components/work-schedules/program-schedules';
+import {
+  ProgramSchedules,
+  ProgramScheduleContext,
+} from '@/components/work-schedules/program-schedules';
 import { DetailUnavailable } from '@/components/entity-detail/detail-unavailable';
 import { type ResolveActor, UpdatesPanel } from '@/components/entity-detail/updates-panel';
 import { memberActorOptions } from '@/components/pickers/options';
@@ -56,11 +60,11 @@ type TabId = 'overview' | 'projects' | 'work' | 'schedules' | 'updates';
 const PROGRAM_TABS = ['overview', 'projects', 'work', 'schedules', 'updates'] as const;
 
 const PROGRAM_TAB_ITEMS: readonly TabsItem[] = [
-  { value: 'overview', label: 'Overview', priority: 0 },
-  { value: 'projects', label: 'Projects', priority: 1 },
-  { value: 'work', label: 'Work', priority: 2 },
-  { value: 'schedules', label: 'Schedules', priority: 3 },
-  { value: 'updates', label: 'Updates', priority: 4 },
+  { value: 'overview', label: 'Overview' },
+  { value: 'projects', label: 'Projects' },
+  { value: 'work', label: 'Work' },
+  { value: 'schedules', label: 'Schedules' },
+  { value: 'updates', label: 'Updates' },
 ];
 
 const PROGRAM_HEADER_DENSITY = {
@@ -382,13 +386,11 @@ export default function ProgramDetailPage(): JSX.Element {
       }
       tabs={
         <Tabs
-          variant="underline"
           value={tab}
           onValueChange={(value) => {
             setTab(value as TabId);
           }}
           label={`${programLabel} sections`}
-          overflow={{ menuLabel: `More ${programLabel} sections` }}
           items={PROGRAM_TAB_ITEMS}
         />
       }
@@ -396,81 +398,93 @@ export default function ProgramDetailPage(): JSX.Element {
       {aggregateQ.isError ? (
         <PartialLoadBanner title={refreshTitle} onRetry={() => void aggregateQ.refetch()} />
       ) : null}
-      {tab === 'overview' ? (
-        <div
-          role="tabpanel"
-          id="tabpanel-overview"
-          aria-labelledby="tab-overview"
-          className="flex min-w-0 flex-col gap-8"
-        >
-          {programWorkQ.isError ? (
-            <PartialLoadBanner
-              title={`${programLabel} flow could not load`}
-              onRetry={() => void programWorkQ.refetch()}
-            >
-              The rest of this {programLabel.toLowerCase()} still works.
-            </PartialLoadBanner>
-          ) : null}
-          <FlowSnapshot
-            health={health}
-            healthAsOf={healthAsOf}
-            metrics={{ ...flowMetrics, projects: program.rollup.projects }}
-            projectsLabel={projectNounCased}
-            cyclesLabel={cyclesLabel}
-          />
-          <LatestUpdateSummary
-            updates={updates}
-            loading={updatesQ.isPending}
-            resolveActor={resolveActor}
-          />
-          <TemplateAwareEntityDocument
-            orgId={orgId}
-            kind="program"
-            currentActorId={currentActorId ?? null}
-            value={program.description}
-            canEdit={canEdit}
-            onSave={(description) => {
-              patchProgram({ description });
-            }}
-            placeholder={`Describe this ${programLabel.toLowerCase()}…`}
-          />
-        </div>
-      ) : null}
+      <TabPanel
+        hidden={!(tab === 'overview')}
+        value="overview"
+        className="flex min-w-0 flex-col gap-8"
+        render={() => (
+          <>
+            {programWorkQ.isError ? (
+              <PartialLoadBanner
+                title={`${programLabel} flow could not load`}
+                onRetry={() => void programWorkQ.refetch()}
+              >
+                The rest of this {programLabel.toLowerCase()} still works.
+              </PartialLoadBanner>
+            ) : null}
+            <FlowSnapshot
+              health={health}
+              healthAsOf={healthAsOf}
+              metrics={{ ...flowMetrics, projects: program.rollup.projects }}
+              projectsLabel={projectNounCased}
+              cyclesLabel={cyclesLabel}
+            />
+            <LatestUpdateSummary
+              updates={updates}
+              loading={updatesQ.isPending}
+              resolveActor={resolveActor}
+            />
+            <TemplateAwareEntityDocument
+              orgId={orgId}
+              kind="program"
+              currentActorId={currentActorId ?? null}
+              value={program.description}
+              canEdit={canEdit}
+              onSave={(description) => {
+                patchProgram({ description });
+              }}
+              placeholder={`Describe this ${programLabel.toLowerCase()}…`}
+            />
+          </>
+        )}
+      />
 
-      {tab === 'projects' ? (
-        <div role="tabpanel" id="tabpanel-projects" aria-labelledby="tab-projects">
-          <ProgramProjectsPanel
-            orgId={orgId}
-            programId={programId}
-            projectNoun={projectNounCased}
-            canEdit={canEdit}
-            onOpenProject={(project) => {
-              openProjectRecord(project);
-            }}
-          />
-        </div>
-      ) : null}
+      <TabPanel
+        hidden={!(tab === 'projects')}
+        value="projects"
+        render={() => (
+          <>
+            <ProgramProjectsPanel
+              orgId={orgId}
+              programId={programId}
+              projectNoun={projectNounCased}
+              canEdit={canEdit}
+              onOpenProject={(project) => {
+                openProjectRecord(project);
+              }}
+            />
+          </>
+        )}
+      />
 
-      {tab === 'work' ? (
-        <div role="tabpanel" id="tabpanel-work" aria-labelledby="tab-work">
-          <ProgramWorkView orgId={orgId} programId={programId} />
-        </div>
-      ) : null}
+      <TabPanel
+        hidden={!(tab === 'work')}
+        value="work"
+        render={() => (
+          <>
+            <ProgramWorkView orgId={orgId} programId={programId} />
+          </>
+        )}
+      />
 
-      {tab === 'updates' ? (
-        <div role="tabpanel" id="tabpanel-updates" aria-labelledby="tab-updates">
-          <UpdatesPanel
-            updates={updates}
-            loading={updatesQ.isPending}
-            loadFailure={updatesQ.isError ? updatesQ : null}
-            resolveActor={resolveActor}
-            posting={updatePosting}
-            onPost={(body, postHealth) => {
-              return postUpdate(body, postHealth);
-            }}
-          />
-        </div>
-      ) : null}
+      <TabPanel
+        hidden={!(tab === 'updates')}
+        value="updates"
+        render={() => (
+          <>
+            <UpdatesPanel
+              updates={updates}
+              loading={updatesQ.isPending}
+              loadFailure={updatesQ.isError ? updatesQ : null}
+              resolveActor={resolveActor}
+              posting={updatePosting}
+              onPost={(body, postHealth) => {
+                return postUpdate(body, postHealth);
+              }}
+            />
+          </>
+        )}
+      />
 
       <ProgramSchedulePanel
         orgId={orgId}
@@ -511,7 +525,7 @@ function ProgramSchedulePanel({
   readonly active: boolean;
 }): JSX.Element {
   return (
-    <div role="tabpanel" id="tabpanel-schedules" aria-labelledby="tab-schedules" hidden={!active}>
+    <TabPanel value="schedules" hidden={!active}>
       <ProgramSchedules
         orgId={orgId}
         programId={programId}
@@ -519,23 +533,6 @@ function ProgramSchedulePanel({
         canEdit={canEdit}
         enabled={active}
       />
-    </div>
-  );
-}
-
-function ProgramScheduleContext({
-  label,
-  onDetails,
-}: {
-  readonly label: string;
-  readonly onDetails: () => void;
-}): JSX.Element {
-  return (
-    <div className="flex min-w-0 items-center justify-between gap-3">
-      <p className="text-body-small text-on-surface-variant">{label}</p>
-      <Button type="button" variant="ghost" size="sm" onClick={onDetails}>
-        Program details
-      </Button>
-    </div>
+    </TabPanel>
   );
 }

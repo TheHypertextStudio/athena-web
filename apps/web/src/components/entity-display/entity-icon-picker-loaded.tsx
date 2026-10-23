@@ -17,7 +17,10 @@ import {
 } from '@docket/ui/lib/browser-storage';
 import { cn } from '@docket/ui/lib/utils';
 import {
+  LazyTabPanels,
   focusRing,
+  TabsScope,
+  Tabs,
   Popover,
   PopoverBody,
   PopoverContent,
@@ -33,7 +36,6 @@ import {
   type KeyboardEvent,
   useCallback,
   useEffect,
-  useId,
   useMemo,
   useRef,
   useState,
@@ -437,10 +439,6 @@ export function LoadedEntityIconPicker({
   const triggerRef = useRef<HTMLButtonElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
-  const tabSeed = useId();
-  const symbolTabId = `${tabSeed}-symbols-tab`;
-  const emojiTabId = `${tabSeed}-emoji-tab`;
-  const tabPanelId = `${tabSeed}-panel`;
   const recentStorageKey = `docket.entity-glyph.recents.${workspaceId}`;
   const toneStorageKey = `docket.entity-glyph.skin-tone.${workspaceId}`;
 
@@ -561,16 +559,6 @@ export function LoadedEntityIconPicker({
     if (next) setSearch('');
     onOpenChange?.(next);
   };
-  const selectTab = (tab: 'symbol' | 'emoji'): void => {
-    setActiveTab(tab);
-    document.getElementById(tab === 'symbol' ? symbolTabId : emojiTabId)?.focus();
-  };
-  const handleTabKeyDown = (
-    event: KeyboardEvent<HTMLButtonElement>,
-    tab: 'symbol' | 'emoji',
-  ): void => {
-    handleGlyphTabKey(event, tab, selectTab);
-  };
   return (
     <Popover open={open} onOpenChange={changeOpen}>
       <PopoverTrigger asChild>
@@ -636,70 +624,52 @@ export function LoadedEntityIconPicker({
                 className="placeholder:text-on-surface-variant text-on-surface text-label-large h-10 min-w-0 flex-1 bg-transparent outline-none"
               />
             </label>
-            <div
-              role="tablist"
-              aria-label="Glyph catalog"
-              className="flex h-10 shrink-0 gap-1 px-2"
-            >
-              {(['symbol', 'emoji'] as const).map((tab) => (
-                <button
-                  key={tab}
-                  id={tab === 'symbol' ? symbolTabId : emojiTabId}
-                  type="button"
-                  role="tab"
-                  aria-selected={activeTab === tab}
-                  aria-controls={tabPanelId}
-                  tabIndex={activeTab === tab ? 0 : -1}
-                  className={cn(
-                    'text-on-surface-variant hover:text-on-surface text-label-large relative min-w-0 flex-1 rounded-md px-3',
-                    focusRing,
-                    activeTab === tab && 'bg-surface-container-highest text-on-surface',
-                  )}
-                  onClick={() => {
-                    setActiveTab(tab);
-                  }}
-                  onKeyDown={(event) => {
-                    handleTabKeyDown(event, tab);
-                  }}
-                >
-                  {tab === 'symbol' ? 'Icons' : 'Emoji'}
-                </button>
-              ))}
-            </div>
-            <div
-              id={tabPanelId}
-              role="tabpanel"
-              aria-labelledby={activeTab === 'symbol' ? symbolTabId : emojiTabId}
-              className="min-h-0 flex-1 overflow-hidden px-3 py-2"
-            >
-              <PickerCatalogContent
-                query={query}
-                activeTab={activeTab}
-                activeOptions={activeOptions}
-                suggestions={suggestions}
-                recents={recentOptions}
-                searchResults={activeSearchResults}
-                emojiCatalog={emojiCatalog}
-                emojiLoadFailed={emojiLoadFailed}
-                emojiGroup={emojiGroup}
-                skinTone={skinTone}
-                selectedGlyph={selectedGlyph}
-                subjectType={display.subjectType}
-                colorKey={display.colorKey}
-                customColor={display.customColor}
-                disabled={disabled}
-                onGroupChange={setEmojiGroup}
-                onSkinToneChange={(tone) => {
-                  setSkinTone(tone);
-                  if (tone === null) clearStoredValue(toneStorageKey);
-                  else writeStoredValue(toneStorageKey, tone);
+            <TabsScope>
+              <Tabs
+                label="Glyph catalog"
+                value={activeTab}
+                onValueChange={(value) => {
+                  setActiveTab(value === 'emoji' ? 'emoji' : 'symbol');
                 }}
-                onRetryEmoji={() => {
-                  setEmojiLoadAttempt((current) => current + 1);
-                }}
-                onSelect={chooseGlyph}
+                items={[
+                  { value: 'symbol', label: 'Icons' },
+                  { value: 'emoji', label: 'Emoji' },
+                ]}
               />
-            </div>
+              <LazyTabPanels
+                values={['symbol', 'emoji']}
+                value={activeTab}
+                className="min-h-0 flex-1 overflow-hidden px-3 py-2"
+              >
+                <PickerCatalogContent
+                  query={query}
+                  activeTab={activeTab}
+                  activeOptions={activeOptions}
+                  suggestions={suggestions}
+                  recents={recentOptions}
+                  searchResults={activeSearchResults}
+                  emojiCatalog={emojiCatalog}
+                  emojiLoadFailed={emojiLoadFailed}
+                  emojiGroup={emojiGroup}
+                  skinTone={skinTone}
+                  selectedGlyph={selectedGlyph}
+                  subjectType={display.subjectType}
+                  colorKey={display.colorKey}
+                  customColor={display.customColor}
+                  disabled={disabled}
+                  onGroupChange={setEmojiGroup}
+                  onSkinToneChange={(tone) => {
+                    setSkinTone(tone);
+                    if (tone === null) clearStoredValue(toneStorageKey);
+                    else writeStoredValue(toneStorageKey, tone);
+                  }}
+                  onRetryEmoji={() => {
+                    setEmojiLoadAttempt((current) => current + 1);
+                  }}
+                  onSelect={chooseGlyph}
+                />
+              </LazyTabPanels>
+            </TabsScope>
             <ColorSelector
               visible={showColorControls}
               colorKey={display.colorKey}
@@ -1268,23 +1238,3 @@ function capitalize(value: string): string {
 }
 
 export default LoadedEntityIconPicker;
-
-function handleGlyphTabKey(
-  event: KeyboardEvent<HTMLButtonElement>,
-  tab: 'symbol' | 'emoji',
-  selectTab: (tab: 'symbol' | 'emoji') => void,
-): void {
-  if (event.key === 'Home') {
-    event.preventDefault();
-    selectTab('symbol');
-    return;
-  }
-  if (event.key === 'End') {
-    event.preventDefault();
-    selectTab('emoji');
-    return;
-  }
-  if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
-  event.preventDefault();
-  selectTab(tab === 'symbol' ? 'emoji' : 'symbol');
-}

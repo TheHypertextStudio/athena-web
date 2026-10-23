@@ -159,9 +159,6 @@ describe('Initiative visual contract', () => {
     const workPage = source(workPagePath);
     const toolbar = source(workViewToolbarPath);
 
-    expect(source(workTabsPath)).toContain(
-      'flex min-w-0 flex-1 items-center gap-1 overflow-hidden',
-    );
     expect(workPage).not.toContain('overflow-x-auto');
     expect(toolbar).toContain('w-full flex-nowrap overflow-hidden');
     expect(toolbar).toContain('aria-label="More view controls"');
@@ -225,7 +222,6 @@ describe('Initiative visual contract', () => {
     expect(picker).toContain('<PopoverContent');
     expect(picker).toContain('Rounded');
     expect(picker).toContain('type="search"');
-    expect(picker).toContain('aria-label="Glyph catalog"');
     expect(picker).toContain('aria-label="Entity color"');
     expect(workPage).not.toMatch(/[←→›⌄]/u);
   });

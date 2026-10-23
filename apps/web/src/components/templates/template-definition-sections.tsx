@@ -1,6 +1,7 @@
 'use client';
+import { TabsScope, TabPanel, Button, Surface } from '@docket/ui/primitives';
 import { type JSX, type ReactNode } from 'react';
-import { Button, Surface } from '@docket/ui/primitives';
+
 import { TemplateDefinitionNavigation } from './template-definition-navigation';
 import type { WorkTemplateOut } from '@docket/work/work-template-contract';
 import type { useTemplateSectionNavigation } from './use-template-section-navigation';
@@ -29,52 +30,55 @@ export function TemplateDefinitionSections({
 }): JSX.Element {
   const { section, selectSection, rememberFocus } = navigation;
   return (
-    <>
-      <Surface
-        as="header"
-        data-template-definition-header=""
-        tone="prominent"
-        shape="medium"
-        pad="tight"
-        className="flex min-w-0 flex-col gap-1 px-3 sm:sticky sm:top-2 sm:z-10 sm:gap-2 sm:p-5"
-      >
-        {header}
-        <TemplateDefinitionNavigation section={section} onValueChange={selectSection} />
-      </Surface>
-      <DefinitionPurpose
-        orgId={orgId}
-        initial={initial}
-        form={form}
-        hidden={section !== 'purpose'}
-        onFocusCapture={rememberFocus}
-        onNext={() => {
-          selectSection('work');
-        }}
-      />
-      <DefinitionWork
-        orgId={orgId}
-        initial={initial}
-        form={form}
-        hidden={section !== 'work'}
-        onFocusCapture={rememberFocus}
-        onReview={() => {
-          selectSection('structure');
-        }}
-      />
-      <DefinitionStructure orgId={orgId} form={form} navigation={navigation} />
-      {section === 'review' ? (
-        <div
-          role="tabpanel"
-          id="tabpanel-review"
-          className="flex min-w-0 scroll-mt-48 flex-col gap-6"
-          aria-labelledby="tab-review"
+    <TabsScope scope={navigation.scope}>
+      <>
+        <Surface
+          as="header"
+          data-template-definition-header=""
+          tone="prominent"
+          shape="medium"
+          pad="tight"
+          className="flex min-w-0 flex-col gap-1 px-3 sm:sticky sm:top-2 sm:z-10 sm:gap-2 sm:p-5"
         >
-          <div className="px-3 sm:px-0">{reviewIntro}</div>
-          <WorkTemplateDefinitionReview orgId={orgId} form={form} templateId={initial?.id} />
-          <div className="flex min-w-0 flex-col gap-6 px-3 sm:px-0">{children}</div>
-        </div>
-      ) : null}
-    </>
+          {header}
+          <TemplateDefinitionNavigation section={section} onValueChange={selectSection} />
+        </Surface>
+        <DefinitionPurpose
+          orgId={orgId}
+          initial={initial}
+          form={form}
+          hidden={section !== 'purpose'}
+          onFocusCapture={rememberFocus}
+          onNext={() => {
+            selectSection('work');
+          }}
+        />
+        <DefinitionWork
+          orgId={orgId}
+          initial={initial}
+          form={form}
+          hidden={section !== 'work'}
+          onFocusCapture={rememberFocus}
+          onReview={() => {
+            selectSection('structure');
+          }}
+        />
+        <DefinitionStructure orgId={orgId} form={form} navigation={navigation} />
+        <TabPanel
+          hidden={!(section === 'review')}
+          as="div"
+          value="review"
+          className="flex min-w-0 scroll-mt-48 flex-col gap-6"
+          render={() => (
+            <>
+              <div className="px-3 sm:px-0">{reviewIntro}</div>
+              <WorkTemplateDefinitionReview orgId={orgId} form={form} templateId={initial?.id} />
+              <div className="flex min-w-0 flex-col gap-6 px-3 sm:px-0">{children}</div>
+            </>
+          )}
+        />
+      </>
+    </TabsScope>
   );
 }
 
@@ -94,11 +98,10 @@ function DefinitionWork({
   onFocusCapture: React.FocusEventHandler<HTMLElement>;
 }): JSX.Element {
   return (
-    <div
+    <TabPanel
+      as="div"
+      value="work"
       hidden={hidden}
-      role="tabpanel"
-      id="tabpanel-work"
-      aria-labelledby="tab-work"
       onFocusCapture={onFocusCapture}
       className="scroll-mt-48"
     >
@@ -113,7 +116,7 @@ function DefinitionWork({
       >
         Continue to included work
       </Button>
-    </div>
+    </TabPanel>
   );
 }
 
@@ -133,13 +136,12 @@ function DefinitionPurpose({
   onNext: () => void;
 }): JSX.Element {
   return (
-    <div
+    <TabPanel
+      as="div"
+      value="purpose"
       hidden={hidden}
-      role="tabpanel"
-      id="tabpanel-purpose"
       onFocusCapture={onFocusCapture}
       className="scroll-mt-48"
-      aria-labelledby="tab-purpose"
     >
       <Surface tone="card" shape="medium" pad="comfortable" className="sm:p-6">
         <WorkTemplatePurposeFields
@@ -159,7 +161,7 @@ function DefinitionPurpose({
           Continue to starting work
         </Button>
       </Surface>
-    </div>
+    </TabPanel>
   );
 }
 
@@ -173,11 +175,10 @@ function DefinitionStructure({
   navigation: ReturnType<typeof useTemplateSectionNavigation>;
 }): JSX.Element {
   return (
-    <div
+    <TabPanel
+      as="div"
+      value="structure"
       hidden={navigation.section !== 'structure'}
-      role="tabpanel"
-      id="tabpanel-structure"
-      aria-labelledby="tab-structure"
       onFocusCapture={navigation.rememberFocus}
       className="scroll-mt-48"
     >
@@ -192,6 +193,6 @@ function DefinitionStructure({
       >
         Review this definition
       </Button>
-    </div>
+    </TabPanel>
   );
 }

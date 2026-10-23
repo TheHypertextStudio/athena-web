@@ -1,6 +1,6 @@
 'use client';
-import { useLayoutEffect, useRef, useState, type FocusEventHandler } from 'react';
-import { useInputModality } from '@docket/ui/hooks';
+import { useId, useLayoutEffect, useRef, useState, type FocusEventHandler } from 'react';
+import { tabIds, type TabsActivation } from '@docket/ui/primitives';
 import { restoreShellScroll, shellScrollPosition } from '@/lib/app-location';
 
 /** The four freely revisitable parts of an organization work definition. */
@@ -8,11 +8,12 @@ export type TemplateDefinitionSection = 'purpose' | 'work' | 'structure' | 'revi
 
 /** Retain section position and input focus using the app's existing main scroll owner. */
 export function useTemplateSectionNavigation(initial: TemplateDefinitionSection): {
+  scope: string;
   section: TemplateDefinitionSection;
-  selectSection: (next: string) => void;
+  selectSection: (next: string, source?: TabsActivation) => void;
   rememberFocus: FocusEventHandler<HTMLElement>;
 } {
-  const modality = useInputModality();
+  const scope = useId();
   const moveFocus = useRef(true);
   const [section, setSection] = useState<TemplateDefinitionSection>(initial);
   const previous = useRef(section);
@@ -20,12 +21,10 @@ export function useTemplateSectionNavigation(initial: TemplateDefinitionSection)
     Partial<Record<TemplateDefinitionSection, ReturnType<typeof shellScrollPosition>>>
   >({});
   const focusedFields = useRef<Partial<Record<TemplateDefinitionSection, HTMLElement>>>({});
-  const selectSection = (next: string): void => {
+  const selectSection = (next: string, source?: TabsActivation): void => {
     if (next !== 'purpose' && next !== 'work' && next !== 'structure' && next !== 'review') return;
     if (next === section) return;
-    moveFocus.current = !(
-      modality === 'keyboard' && document.activeElement?.getAttribute('role') === 'tab'
-    );
+    moveFocus.current = source !== 'keyboard';
     positions.current[section] = shellScrollPosition();
     setSection(next);
   };
@@ -38,7 +37,7 @@ export function useTemplateSectionNavigation(initial: TemplateDefinitionSection)
   useLayoutEffect(() => {
     if (previous.current === section) return;
     previous.current = section;
-    const panel = document.getElementById(`tabpanel-${section}`);
+    const panel = document.getElementById(tabIds(scope, section).panelId);
     if (!panel) return;
     const position = positions.current[section];
     const remembered = focusedFields.current[section];
@@ -55,5 +54,5 @@ export function useTemplateSectionNavigation(initial: TemplateDefinitionSection)
       (stickyHeader ? panel : (header ?? panel)).scrollIntoView({ block: 'start' });
     }
   }, [section]);
-  return { section, selectSection, rememberFocus };
+  return { scope, section, selectSection, rememberFocus };
 }

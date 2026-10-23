@@ -1,6 +1,7 @@
 'use client';
 
 import {
+  TabPanel,
   Button,
   ControlGroup,
   DialogBody,
@@ -8,6 +9,7 @@ import {
   Field,
   Input,
   Tabs,
+  type TabsActivation,
 } from '@docket/ui/primitives';
 import { cn } from '@docket/ui/lib/utils';
 import { type JSX, type ReactNode, type RefObject } from 'react';
@@ -44,7 +46,7 @@ interface ComposerIdentityHeaderProps {
   readonly summaryMaxLength?: number | undefined;
   readonly hasSectionSwitcher: boolean;
   readonly activeSectionValue: string;
-  readonly onSectionValueChange: (value: string) => void;
+  readonly onSectionValueChange: (value: string, source?: TabsActivation) => void;
   readonly supplementalSections: readonly ComposerSupplementalSection[];
   readonly sectionValue: (sectionId: string) => string;
 }
@@ -103,8 +105,9 @@ function ComposerSectionTabs({
 >): JSX.Element | null {
   if (!hasSectionSwitcher) return null;
   return (
-    <ControlGroup controlSize="sm" className="mt-3 self-start">
+    <ControlGroup controlSize="sm" className="mt-3 w-full min-w-0">
       <Tabs
+        variant="secondary"
         value={activeSectionValue}
         onValueChange={onSectionValueChange}
         label="Composer sections"
@@ -337,10 +340,9 @@ export function ComposerBodyRegion({
       data-composer-body=""
       className="@container grid min-h-0 grid-cols-1 grid-rows-[minmax(0,1fr)]"
     >
-      <section
-        role="tabpanel"
-        id={`tabpanel-${descriptionValue}`}
-        aria-labelledby={`tab-${descriptionValue}`}
+      <TabPanel
+        as="section"
+        value={descriptionValue}
         aria-hidden={activeSectionId !== 'description'}
         inert={activeSectionId !== 'description'}
         className={cn(
@@ -369,16 +371,15 @@ export function ComposerBodyRegion({
             </div>
           ) : null}
         </div>
-      </section>
+      </TabPanel>
 
       {supplementalSections.map((section) => {
         const value = sectionValue(section.id);
         return (
-          <section
+          <TabPanel
+            as="section"
+            value={value}
             key={section.id}
-            role="tabpanel"
-            id={`tabpanel-${value}`}
-            aria-labelledby={`tab-${value}`}
             aria-hidden={activeSectionId !== section.id}
             inert={activeSectionId !== section.id}
             className={cn(
@@ -389,7 +390,7 @@ export function ComposerBodyRegion({
             <fieldset disabled={editDisabled} className="flex min-h-full flex-col">
               {section.body}
             </fieldset>
-          </section>
+          </TabPanel>
         );
       })}
     </DialogBody>

@@ -2,6 +2,11 @@
 
 Daily planning opens from Today into its own activity at `/plan/day`. Its centered workspace keeps the agenda and editable work together without the application sidebar. Panel controls show Work, Agenda, or both. Leaving saves the draft and returns to Today. The agenda keeps work hours and all-day details behind disclosures while retaining scheduling conflicts and proposed changes.
 
+Content navigation uses scoped Material primary and secondary tabs, with horizontal scrolling when
+space is constrained. Mode choices use radio semantics, and the open-document strip remains link
+navigation with independent close controls. See the [design system](docs/design/design-system.md#content-tabs-choices-and-document-navigation)
+for the shared control and panel contracts.
+
 Docket is a local-first workspace for planning and doing work. The repository contains the web
 application, operator console, API, background runner, shared packages, and deployment tooling.
 

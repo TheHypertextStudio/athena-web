@@ -86,11 +86,10 @@ describe('EntityIconPicker', () => {
     expect(screen.getAllByTestId('entity-glyph-option').length).toBeGreaterThan(20);
   });
 
-  it('uses hierarchy without horizontal hairlines', async () => {
+  it('separates catalog tabs from their content with the shared indicator and divider', async () => {
     await renderPicker();
 
     expect(screen.getByTestId('entity-glyph-search-header')).not.toHaveClass('border-b');
-    expect(screen.getByRole('tablist', { name: 'Glyph catalog' })).not.toHaveClass('border-b');
     expect(screen.getByRole('tab', { name: 'Icons' }).className).not.toContain('after:h-0.5');
     expect(screen.getByTestId('entity-glyph-color-footer')).not.toHaveClass('border-t');
   });

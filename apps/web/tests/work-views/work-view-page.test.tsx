@@ -490,7 +490,7 @@ describe('WorkViewPage failure altitudes', () => {
 
     // The surface still works without saved views, so the built-in tabs stay and recovery is one
     // named control rather than a sentence wedged into the row.
-    expect(screen.getByRole('tab', { name: /all tasks/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /all tasks/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /saved views.*retry/i })).toBeInTheDocument();
   });
 

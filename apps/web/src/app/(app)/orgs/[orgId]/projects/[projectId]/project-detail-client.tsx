@@ -1,5 +1,17 @@
 'use client';
 
+import {
+  TabPanel,
+  Button,
+  ControlGroup,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+  Surface,
+  Tabs,
+} from '@docket/ui/primitives';
 import type { AttachmentOut } from '@docket/work/attachment-contract';
 import type { Health } from '@docket/work/capability-contract';
 import type { LabelOut } from '@docket/work/label-contract';
@@ -13,17 +25,7 @@ import { ProjectSubjectRef } from '@docket/work/subject-ref-contract';
 import type { PickerOption } from '@docket/ui/components';
 import { useVocabulary } from '@docket/ui/hooks';
 import { Ellipsis, RefreshCw, Trash2, Undo } from '@docket/ui/icons';
-import {
-  Button,
-  ControlGroup,
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-  Surface,
-  Tabs,
-} from '@docket/ui/primitives';
+
 import {
   type FetchQueryOptions,
   type QueryClient,
@@ -758,18 +760,16 @@ export default function ProjectDetailPage(): JSX.Element {
       }
       tabs={
         <Tabs
-          variant="underline"
           value={tab}
           onValueChange={(value) => {
             setTab(value as TabId);
           }}
           label="Project sections"
-          overflow={{ menuLabel: 'More Project sections' }}
           items={[
-            { value: 'overview', label: 'Overview', priority: 0 },
-            { value: 'tasks', label: 'Tasks', priority: 1 },
-            { value: 'updates', label: 'Updates', priority: 2 },
-            { value: 'resources', label: 'Resources', priority: 3 },
+            { value: 'overview', label: 'Overview' },
+            { value: 'tasks', label: 'Tasks' },
+            { value: 'updates', label: 'Updates' },
+            { value: 'resources', label: 'Resources' },
           ]}
         />
       }
@@ -777,112 +777,125 @@ export default function ProjectDetailPage(): JSX.Element {
       {aggregateQ.isError ? (
         <PartialLoadBanner title={refreshTitle} onRetry={() => void aggregateQ.refetch()} />
       ) : null}
-      {tab === 'overview' ? (
-        <section
-          role="tabpanel"
-          id="tabpanel-overview"
-          aria-labelledby="tab-overview"
-          className="flex min-w-0 flex-col gap-8"
-        >
-          <LatestUpdateSummary
-            updates={updatesQ.data?.items ?? []}
-            loading={updatesQ.isPending}
-            resolveActor={(actorId) => ({
-              name:
-                projectLead !== null && projectLead.actorId === actorId
-                  ? projectLead.displayName
-                  : 'Unknown',
-              kind: 'human',
-            })}
-          />
-          <TemplateAwareEntityDocument
-            orgId={orgId}
-            kind="project"
-            currentActorId={aggregate?.viewer.actorId ?? null}
-            teamId={project.teamId ?? null}
-            value={project.description}
-            canEdit={canEdit}
-            onSave={(description) => {
-              mutations.patchProject({ description });
-            }}
-            placeholder="Add the Project brief…"
-          />
-          {workQ.isError ? (
-            <PartialLoadBanner title={workTitle} onRetry={() => void workQ.refetch()} />
-          ) : null}
-          <OverviewSummary tasks={milestoneTasks} />
-          <ProjectMilestonesPanel
+      <TabPanel
+        hidden={!(tab === 'overview')}
+        as="section"
+        value="overview"
+        className="flex min-w-0 flex-col gap-8"
+        render={() => (
+          <>
+            <LatestUpdateSummary
+              updates={updatesQ.data?.items ?? []}
+              loading={updatesQ.isPending}
+              resolveActor={(actorId) => ({
+                name:
+                  projectLead !== null && projectLead.actorId === actorId
+                    ? projectLead.displayName
+                    : 'Unknown',
+                kind: 'human',
+              })}
+            />
+            <TemplateAwareEntityDocument
+              orgId={orgId}
+              kind="project"
+              currentActorId={aggregate?.viewer.actorId ?? null}
+              teamId={project.teamId ?? null}
+              value={project.description}
+              canEdit={canEdit}
+              onSave={(description) => {
+                mutations.patchProject({ description });
+              }}
+              placeholder="Add the Project brief…"
+            />
+            {workQ.isError ? (
+              <PartialLoadBanner title={workTitle} onRetry={() => void workQ.refetch()} />
+            ) : null}
+            <OverviewSummary tasks={milestoneTasks} />
+            <ProjectMilestonesPanel
+              orgId={orgId}
+              projectId={projectId}
+              milestones={workQ.data?.milestones ?? []}
+              milestoneTasks={milestoneTasks}
+              taskNoun={taskNoun}
+              canEdit={canEdit}
+            />
+            <AgentsStrip agents={agentsHere} />
+            <AgentActivityFeed activities={agentActivity} />
+            <ProjectDependenciesPanel orgId={orgId} projectId={projectId} canEdit={canEdit} />
+          </>
+        )}
+      />
+      <TabPanel
+        value="tasks"
+        hidden={tab !== 'tasks'}
+        render={() => (
+          <ProjectTasksTab
             orgId={orgId}
             projectId={projectId}
-            milestones={workQ.data?.milestones ?? []}
-            milestoneTasks={milestoneTasks}
-            taskNoun={taskNoun}
-            canEdit={canEdit}
-          />
-          <AgentsStrip agents={agentsHere} />
-          <AgentActivityFeed activities={agentActivity} />
-          <ProjectDependenciesPanel orgId={orgId} projectId={projectId} canEdit={canEdit} />
-        </section>
-      ) : null}
-      {tab === 'tasks' ? (
-        <ProjectTasksTab
-          orgId={orgId}
-          projectId={projectId}
-          tasks={milestoneTasks}
-          milestones={(workQ.data?.milestones ?? []).map((milestone) => ({
-            id: milestone.id,
-            name: milestone.name,
-            targetDate: milestone.targetDate ?? null,
-          }))}
-          workFailure={
-            workQ.isError ? { title: workTitle, onRetry: () => void workQ.refetch() } : null
-          }
-          proposedByTaskId={proposedByTaskId}
-          highlightedIds={highlightedIds}
-          onOpenTask={(task) => {
-            openTaskRecord(task);
-          }}
-        />
-      ) : null}
-      {tab === 'updates' ? (
-        <div role="tabpanel" id="tabpanel-updates" aria-labelledby="tab-updates">
-          <UpdatesPanel
-            updates={updatesQ.data?.items ?? []}
-            loading={updatesQ.isPending}
-            loadFailure={updatesQ.isError ? updatesQ : null}
-            resolveActor={(actorId) => ({
-              name:
-                aggregate?.references.lead?.actorId === actorId
-                  ? (aggregate?.references.lead?.displayName ?? 'Unknown')
-                  : 'Unknown',
-              kind: 'human' as const,
-            })}
-            posting={postUpdate.isPending}
-            onPost={async (body) => {
-              await postUpdate.mutateAsync({ body });
+            tasks={milestoneTasks}
+            milestones={(workQ.data?.milestones ?? []).map((milestone) => ({
+              id: milestone.id,
+              name: milestone.name,
+              targetDate: milestone.targetDate ?? null,
+            }))}
+            workFailure={
+              workQ.isError ? { title: workTitle, onRetry: () => void workQ.refetch() } : null
+            }
+            proposedByTaskId={proposedByTaskId}
+            highlightedIds={highlightedIds}
+            onOpenTask={(task) => {
+              openTaskRecord(task);
             }}
-            showHealthComposer={false}
           />
-        </div>
-      ) : null}
-      {tab === 'resources' ? (
-        <div role="tabpanel" id="tabpanel-resources" aria-labelledby="tab-resources">
-          <ResourcesTab
-            resources={resourcesQ.data?.items ?? []}
-            loading={resourcesQ.isPending}
-            canEdit={canEdit}
-            pending={addResource.isPending || removeResource.isPending}
-            error={resourcesQ.isError ? 'Could not load resources.' : null}
-            onAdd={addResource.mutate}
-            onRemove={removeResource.mutate}
-            subject={{ type: 'project', id: projectId, organizationId: orgId }}
-            mentionedExternal={entityMentions.external}
-            mentionedEntities={entityMentions.entities}
-            mentionsPending={entityMentions.isPending}
-            hasProse={(project.description ?? '').trim().length > 0}
-          />
-        </div>
-      ) : null}
+        )}
+      />
+      <TabPanel
+        hidden={!(tab === 'updates')}
+        value="updates"
+        render={() => (
+          <>
+            <UpdatesPanel
+              updates={updatesQ.data?.items ?? []}
+              loading={updatesQ.isPending}
+              loadFailure={updatesQ.isError ? updatesQ : null}
+              resolveActor={(actorId) => ({
+                name:
+                  aggregate?.references.lead?.actorId === actorId
+                    ? (aggregate?.references.lead?.displayName ?? 'Unknown')
+                    : 'Unknown',
+                kind: 'human' as const,
+              })}
+              posting={postUpdate.isPending}
+              onPost={async (body) => {
+                await postUpdate.mutateAsync({ body });
+              }}
+              showHealthComposer={false}
+            />
+          </>
+        )}
+      />
+      <TabPanel
+        hidden={!(tab === 'resources')}
+        value="resources"
+        render={() => (
+          <>
+            <ResourcesTab
+              resources={resourcesQ.data?.items ?? []}
+              loading={resourcesQ.isPending}
+              canEdit={canEdit}
+              pending={addResource.isPending || removeResource.isPending}
+              error={resourcesQ.isError ? 'Could not load resources.' : null}
+              onAdd={addResource.mutate}
+              onRemove={removeResource.mutate}
+              subject={{ type: 'project', id: projectId, organizationId: orgId }}
+              mentionedExternal={entityMentions.external}
+              mentionedEntities={entityMentions.entities}
+              mentionsPending={entityMentions.isPending}
+              hasProse={(project.description ?? '').trim().length > 0}
+            />
+          </>
+        )}
+      />
       <ConfirmDestructiveDialog
         open={confirmDeleteOpen}
         onOpenChange={setConfirmDeleteOpen}

@@ -1,12 +1,13 @@
 'use client';
 
+import { LazyTabPanels, Button } from '@docket/ui/primitives';
 /** Dedicated Initiative relationship tabs composed from first-class object rows. */
 import type {
   InitiativeConnectedWork,
   InitiativeHierarchyReference,
 } from '@docket/work/initiative-contract';
 import { Plus } from '@docket/ui/icons';
-import { Button } from '@docket/ui/primitives';
+
 import Link from '@/components/docket-link';
 import type { JSX } from 'react';
 
@@ -78,7 +79,17 @@ function TruncationNotice({
 }
 
 /** Render the active relationship collection as standard interactive objects. */
-export function InitiativeRelationshipPanels({
+export function InitiativeRelationshipPanels(
+  props: InitiativeRelationshipPanelsProps,
+): JSX.Element {
+  return (
+    <LazyTabPanels value={props.tab} values={['subinitiatives', 'work']}>
+      <ActiveRelationshipContent {...props} />
+    </LazyTabPanels>
+  );
+}
+
+function ActiveRelationshipContent({
   tab,
   routeOrganizationId,
   initiativeId,
@@ -97,12 +108,7 @@ export function InitiativeRelationshipPanels({
 
   if (tab === 'subinitiatives') {
     return (
-      <div
-        role="tabpanel"
-        id="tabpanel-subinitiatives"
-        aria-labelledby="tab-subinitiatives"
-        className="no-print flex min-w-0 flex-col gap-3"
-      >
+      <div className="no-print flex min-w-0 flex-col gap-3">
         {truncated ? (
           <TruncationNotice
             organizationId={routeOrganizationId}
@@ -156,12 +162,7 @@ export function InitiativeRelationshipPanels({
 
   if (tab === 'work') {
     return (
-      <div
-        role="tabpanel"
-        id="tabpanel-work"
-        aria-labelledby="tab-work"
-        className="no-print flex min-w-0 flex-col gap-2"
-      >
+      <div className="no-print flex min-w-0 flex-col gap-2">
         {truncated ? (
           <TruncationNotice
             organizationId={routeOrganizationId}

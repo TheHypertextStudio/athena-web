@@ -60,11 +60,10 @@ function SavedViewTab({
   return (
     <div className="flex shrink-0 items-center">
       <Button
-        role="tab"
         controlSize="sm"
         className="shrink-0 rounded-full"
         variant={selected ? 'secondary' : 'ghost'}
-        aria-selected={selected}
+        aria-pressed={selected}
         onClick={onSelect}
       >
         {view.name}
@@ -107,18 +106,17 @@ export function WorkViewTabs({
   const allSelected = selectedViewId === null;
   return (
     <div
-      role="tablist"
+      role="group"
       aria-label={`${title} views`}
       style={transitionNameStyle(transitionName)}
-      className="flex min-w-0 flex-1 items-center gap-1 overflow-hidden"
+      className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto"
     >
       <Button
-        role="tab"
         controlSize="sm"
         className="shrink-0 rounded-full"
         aria-label={`All ${lower}`}
         variant={allSelected ? 'secondary' : 'ghost'}
-        aria-selected={allSelected}
+        aria-pressed={allSelected}
         onClick={() => {
           onSelect(null);
         }}
@@ -145,14 +143,7 @@ export function WorkViewTabs({
         />
       ))}
       {dependenciesHref === null ? null : (
-        <Button
-          asChild
-          role="tab"
-          controlSize="sm"
-          className="shrink-0 rounded-full"
-          variant="ghost"
-          aria-selected={false}
-        >
+        <Button asChild controlSize="sm" className="shrink-0 rounded-full" variant="ghost">
           <DocketLink href={dependenciesHref} transition="shared-element">
             Dependencies
           </DocketLink>

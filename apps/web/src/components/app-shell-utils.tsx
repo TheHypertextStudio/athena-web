@@ -164,9 +164,14 @@ export function resolveActiveOrg(
  * *first* when the connection drops. Offline, it preserves the existing history navigation; online,
  * its shared navigation owner publishes the requested destination before Next commits the route.
  */
-export function renderLink(href: string, content: ReactNode, className?: string): ReactNode {
+export function renderLink(
+  href: string,
+  content: ReactNode,
+  className?: string,
+  current?: 'page',
+): ReactNode {
   return (
-    <DocketLink href={href} className={className}>
+    <DocketLink href={href} className={className} aria-current={current}>
       {content}
     </DocketLink>
   );

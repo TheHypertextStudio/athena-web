@@ -300,16 +300,11 @@ export async function seedWorkRosterFixture(
   };
 }
 
-/** Select a saved roster tab whether it is visible in the clipped strip or only in overflow. */
+/** Select a saved view through its horizontally scrollable choice strip. */
 export async function selectRosterView(page: Page, name: string): Promise<void> {
-  const tab = page.getByRole('tab', { name, exact: true });
-  if (await tab.isVisible()) {
-    await tab.click();
-  } else {
-    await page.getByRole('button', { name: 'More view controls' }).click();
-    await page.getByRole('menuitem', { name, exact: true }).click();
-  }
-  await expect(tab).toHaveAttribute('aria-selected', 'true');
+  const choice = page.getByRole('button', { name, exact: true });
+  await choice.click();
+  await expect(choice).toHaveAttribute('aria-pressed', 'true');
 }
 
 /** Return the visible shared-table column keys in declaration order. */

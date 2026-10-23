@@ -6,6 +6,7 @@
  * first, what comes last, and which sections exist for which tab.
  */
 import '@testing-library/jest-dom/vitest';
+import { Tabs, TabsScope } from '@docket/ui/primitives';
 
 import type { TaskDetail } from '@docket/work/task-model';
 import { cleanup, render, screen } from '@testing-library/react';
@@ -74,23 +75,40 @@ function task(): TaskDetail {
 
 function renderSections(tab: TaskSectionsProps['tab']): void {
   render(
-    <TaskSections
-      tab={tab}
-      orgId="org_1"
-      task={task()}
-      currentActorId={null}
-      canEdit
-      canComment
-      mentions={{ external: [], entities: [], isPending: false }}
-      projectName={() => 'Atlas'}
-      mutations={{
-        patchTask: vi.fn(),
-        addSubtask: vi.fn(),
-        toggleSubtask: vi.fn(),
-        addComment: vi.fn(),
-      }}
-      expansion={{ pending: false, notice: null, undoToken: null, expand: vi.fn(), undo: vi.fn() }}
-    />,
+    <TabsScope>
+      <Tabs
+        value={tab}
+        onValueChange={() => undefined}
+        items={[
+          { value: 'overview', label: 'Overview' },
+          { value: 'graph', label: 'Graph' },
+          { value: 'resources', label: 'Resources' },
+        ]}
+      />
+      <TaskSections
+        tab={tab}
+        orgId="org_1"
+        task={task()}
+        currentActorId={null}
+        canEdit
+        canComment
+        mentions={{ external: [], entities: [], isPending: false }}
+        projectName={() => 'Atlas'}
+        mutations={{
+          patchTask: vi.fn(),
+          addSubtask: vi.fn(),
+          toggleSubtask: vi.fn(),
+          addComment: vi.fn(),
+        }}
+        expansion={{
+          pending: false,
+          notice: null,
+          undoToken: null,
+          expand: vi.fn(),
+          undo: vi.fn(),
+        }}
+      />
+    </TabsScope>,
   );
 }
 
@@ -110,7 +128,10 @@ describe('TaskSections overview', () => {
   it('names the tab panel by its tab', () => {
     renderSections('overview');
 
-    expect(screen.getByRole('tabpanel')).toHaveAttribute('aria-labelledby', 'tab-overview');
+    expect(screen.getByRole('tabpanel', { name: 'Overview' })).toHaveAttribute(
+      'aria-labelledby',
+      screen.getByRole('tab', { name: 'Overview' }).id,
+    );
   });
 });
 

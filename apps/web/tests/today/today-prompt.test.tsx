@@ -74,7 +74,7 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('TodayPrompt', () => {
-  it('puts both destinations in one segmented control, with Athena armed', () => {
+  it('puts both destinations in one exclusive destination choice, with Athena armed', () => {
     render(<TodayPrompt orgId={ORG} orgLabel="Space" />);
     expect(screen.getByLabelText('Ask Athena about today')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Send' })).toBeDisabled();
@@ -82,10 +82,10 @@ describe('TodayPrompt', () => {
     // One control with two positions, not two adjacent chips. The chevron this replaces kept the
     // armed destination off-screen, so the same Enter key inserted a row or started an agent
     // depending on state you had to infer.
-    const tabs = screen.getAllByRole('tab');
+    const tabs = screen.getAllByRole('radio');
     expect(tabs).toHaveLength(2);
-    expect(screen.getByRole('tab', { name: 'Athena' })).toHaveAttribute('aria-selected', 'true');
-    expect(screen.getByRole('tab', { name: 'Task' })).toHaveAttribute('aria-selected', 'false');
+    expect(screen.getByRole('radio', { name: 'Athena' })).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByRole('radio', { name: 'Task' })).toHaveAttribute('aria-checked', 'false');
   });
 
   it('routes the default draft to Athena and resets an explicit task-capture switch on revisit', async () => {
@@ -97,7 +97,7 @@ describe('TodayPrompt', () => {
     expect(openAthena).toHaveBeenCalledOnce();
     expect(capturePost).not.toHaveBeenCalled();
 
-    fireEvent.click(screen.getByRole('tab', { name: 'Task' }));
+    fireEvent.click(screen.getByRole('radio', { name: 'Task' }));
     first.unmount();
     render(<TodayPrompt orgId={ORG} orgLabel="Space" />);
     await waitFor(() => {
@@ -177,7 +177,7 @@ describe('TodayPrompt', () => {
 
     // A file can only hang off a task, so dropping one picks the destination that can hold it
     // rather than letting the armed destination silently drop it.
-    expect(screen.getByRole('tab', { name: 'Task' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('radio', { name: 'Task' })).toHaveAttribute('aria-checked', 'true');
 
     // Three stay visible; the rest collapse so the row cannot push the action bar off screen.
     expect(screen.getAllByRole('button', { name: /^Remove / })).toHaveLength(3);
@@ -191,7 +191,7 @@ describe('TodayPrompt', () => {
     fireEvent.drop(assertDefined(box), { dataTransfer: { files: [], types: ['text/plain'] } });
 
     // Dragging selected text over the composer must not switch what Enter does.
-    expect(screen.getByRole('tab', { name: 'Athena' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('radio', { name: 'Athena' })).toHaveAttribute('aria-checked', 'true');
     expect(screen.queryByRole('button', { name: /^Remove / })).not.toBeInTheDocument();
   });
 
@@ -254,7 +254,7 @@ describe('TodayPrompt', () => {
     render(<TodayPrompt orgId={ORG} orgLabel="Space" captureOnly />);
 
     // One composer per screen: no destination toggle, no send slab, no attach control.
-    expect(screen.queryByRole('tablist')).not.toBeInTheDocument();
+    expect(screen.queryByRole('radiogroup')).not.toBeInTheDocument();
     expect(screen.queryAllByRole('button')).toHaveLength(0);
 
     const field = screen.getByLabelText('Add a task');

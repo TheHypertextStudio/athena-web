@@ -39,7 +39,7 @@ describe('ProjectGraphBar', () => {
     const region = screen.getByRole('region', { name: 'Project dependencies' });
     expect(region).toContainElement(screen.getByRole('heading', { level: 1 }));
     expect(region).toContainElement(screen.getByRole('link', { name: /back to projects/i }));
-    expect(region).toContainElement(screen.getByRole('tablist', { name: 'Projects views' }));
+    expect(region).toContainElement(screen.getByRole('navigation', { name: 'Projects views' }));
     expect(region).toHaveTextContent('3 projects');
     expect(region).toHaveTextContent('2 dependencies');
   });
@@ -50,13 +50,13 @@ describe('ProjectGraphBar', () => {
     const back = screen.getByRole('link', { name: /back to projects/i });
     expect(back).toHaveAttribute('href', `/orgs/${ORG_ID}/projects`);
     expect(back).toHaveAttribute('transition', 'shared-element');
-    expect(screen.getByRole('tab', { name: 'List' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'List' })).toHaveAttribute(
       'href',
       `/orgs/${ORG_ID}/projects`,
     );
-    expect(screen.getByRole('tab', { name: 'Dependencies' })).toHaveAttribute(
-      'aria-selected',
-      'true',
+    expect(screen.getByRole('link', { name: 'Dependencies' })).toHaveAttribute(
+      'aria-current',
+      'page',
     );
   });
 

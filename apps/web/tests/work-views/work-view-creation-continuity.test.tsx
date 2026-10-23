@@ -269,7 +269,7 @@ describe('WorkViewPage creation continuity', () => {
   it('reaches the dependencies page from a link in the tab row', () => {
     render(<WorkViewPage organizationId={ALPHA_ID} target="project" />);
 
-    expect(screen.getByRole('tab', { name: 'Dependencies' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'Dependencies' })).toHaveAttribute(
       'href',
       `/orgs/${ALPHA_ID}/projects/dependencies`,
     );
@@ -278,13 +278,13 @@ describe('WorkViewPage creation continuity', () => {
   it('offers no dependencies page for a target without one', () => {
     render(<WorkViewPage organizationId={ALPHA_ID} target="task" />);
 
-    expect(screen.queryByRole('tab', { name: 'Dependencies' })).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Dependencies' })).toBeNull();
   });
 
   it('morphs into the dependencies page from the tab row', () => {
     render(<WorkViewPage organizationId={ALPHA_ID} target="project" />);
 
-    expect(screen.getByRole('tab', { name: 'Dependencies' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'Dependencies' })).toHaveAttribute(
       'transition',
       'shared-element',
     );
@@ -293,7 +293,7 @@ describe('WorkViewPage creation continuity', () => {
   it('names the tab row and New project for the dependencies page to morph from', () => {
     render(<WorkViewPage organizationId={ALPHA_ID} target="project" />);
 
-    expect(screen.getByRole('tablist', { name: 'Projects views' }).style.viewTransitionName).toBe(
+    expect(screen.getByRole('group', { name: 'Projects views' }).style.viewTransitionName).toBe(
       PROJECT_LENS_TRANSITION.lens,
     );
     expect(screen.getByRole('button', { name: 'New project' }).style.viewTransitionName).toBe(

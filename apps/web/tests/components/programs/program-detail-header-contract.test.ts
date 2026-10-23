@@ -14,12 +14,10 @@ function source(): string {
 }
 
 describe('Program detail header contract', () => {
-  it('uses the shared identity picker and adaptive section menu', () => {
+  it('uses the shared identity picker', () => {
     const detail = source();
     expect(detail).toContain('useEntityDisplay');
     expect(detail).toContain('<EntityIconPicker');
-    expect(detail).toContain('overflow={{ menuLabel: `More ${programLabel} sections` }}');
-    expect(detail).toContain('priority: 0');
   });
 
   it('shows health and flow in the document-first overview without a false percentage', () => {

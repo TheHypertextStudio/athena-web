@@ -92,7 +92,7 @@ describe('ProjectGraphRoute', () => {
       'href',
       `/orgs/${ORG_ID}/projects`,
     );
-    expect(within(bar).getByRole('tab', { name: 'List' })).toHaveAttribute(
+    expect(within(bar).getByRole('link', { name: 'List' })).toHaveAttribute(
       'href',
       `/orgs/${ORG_ID}/projects`,
     );

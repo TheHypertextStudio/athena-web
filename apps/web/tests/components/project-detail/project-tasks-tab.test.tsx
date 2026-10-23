@@ -123,7 +123,7 @@ describe('ProjectTasksTab', () => {
     expect(screen.getByTestId('task-list')).toBeInTheDocument();
     expect(screen.queryByTestId('task-graph')).not.toBeInTheDocument();
 
-    const tabs = screen.getAllByRole('tab');
+    const tabs = screen.getAllByRole('radio');
     expect(tabs).toHaveLength(2);
     fireEvent.click(assertDefined(tabs[1]));
 

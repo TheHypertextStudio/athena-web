@@ -203,8 +203,8 @@ describe('AthenaWorkspace', () => {
     elicitationsGet.mockResolvedValue(okResponse({ items: [] }));
     renderWorkspace();
 
-    await screen.findByRole('tab', { name: /running/i });
-    const tabs = screen.getAllByRole('tab');
+    await screen.findByRole('radio', { name: /running/i });
+    const tabs = screen.getAllByRole('radio');
     expect(tabs).toHaveLength(3);
     for (const tab of tabs) expect(tab.textContent).not.toMatch(/\d/);
   });
@@ -249,7 +249,7 @@ describe('AthenaWorkspace', () => {
     renderWorkspace({ initialSessionId: 'needs_1' });
 
     await screen.findByRole('article', { name: /Approve the recap email/ });
-    expect(screen.getByRole('tab', { selected: true })).toHaveTextContent(/needs you/i);
+    expect(screen.getByRole('radio', { checked: true })).toHaveTextContent(/needs you/i);
     await waitFor(() => {
       expect(
         scrollTargets.some((target) => target.getAttribute('data-athena-job') === 'needs_1'),
@@ -262,7 +262,7 @@ describe('AthenaWorkspace', () => {
     elicitationsGet.mockResolvedValue(okResponse({ items: [] }));
     renderWorkspace();
 
-    fireEvent.click(await screen.findByRole('tab', { name: /done/i }));
+    fireEvent.click(await screen.findByRole('radio', { name: /done/i }));
 
     expect(
       await screen.findByRole('article', { name: /Send the weekly recap/ }),

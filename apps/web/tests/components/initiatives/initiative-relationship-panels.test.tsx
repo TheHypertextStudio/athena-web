@@ -1,4 +1,5 @@
 import '@testing-library/jest-dom/vitest';
+import { TabsScope } from '@docket/ui/primitives';
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
@@ -62,7 +63,11 @@ const readOnlyActions: ConnectedWorkActions = {
 /** Render under a query client, which the Connected work panel's icon lookup needs. */
 function renderPanels(ui: Parameters<typeof render>[0]): ReturnType<typeof render> {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>);
+  return render(
+    <QueryClientProvider client={client}>
+      <TabsScope>{ui}</TabsScope>
+    </QueryClientProvider>,
+  );
 }
 
 afterEach(cleanup);

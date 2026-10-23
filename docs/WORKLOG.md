@@ -13657,6 +13657,7 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
 - **Production acceptance**: Scoped repair used the existing projectors to insert only missing Library search documents for the caller's accessible workspaces. Discovery enumerated 958 unique resources across ten pages, including the authorized harmless upload; one workspace has no Library source material. Current reads fetched existing linked metadata and visible usage, an item beyond the first page and an indistinguishable missing reference in a mixed batch. Tool and canonical URI file details matched; the content URI returned the exact 44 uploaded bytes as `text/plain`.
 - **Learnings**: A successful empty response does not establish the corpus is empty. Compare authoritative source counts with the projection, then test direct reads separately. PGlite accepts a raw Date parameter that Drizzle's PostgreSQL serializer rejects; a read-only production SELECT reproduced that failure and verified ISO encoding. Pending metadata belongs in discovery independently of provider availability.
 - **Delivery boundary**: Runtime reads and the scoped derived-index repair are verified. The permanent source correction follows the normal validated main delivery and production deployment gates; no provider credential, membership, source record or existing uploaded bytes were changed by the repair.
+
 ### [MATERIAL-TABS] Correct tab semantics, presentation and responsive behavior
 
 - **Completed**: 2026-10-23

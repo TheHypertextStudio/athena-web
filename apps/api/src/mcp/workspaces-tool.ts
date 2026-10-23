@@ -1,11 +1,9 @@
 /**
- * `@docket/api` — the `workspaces` tool: the one call that needs nothing to make.
+ * `@docket/api` — workspace discovery and the caller's identity within each workspace.
  *
  * @remarks
- * Every other tool on this surface takes an `orgId`, and until now nothing could supply one. The
- * list existed only as the `docket://orgs` resource, which meant the very first call an agent has
- * to make was the one call it could not make with a tool — so a client that surfaces tools more
- * readily than resources (most of them) simply guessed, or asked the person to paste a ULID.
+ * Supplies workspace ids for workspace-scoped calls. Library discovery can independently browse
+ * across the caller's workspaces without an `orgId`, but mutations still need an explicit destination.
  *
  * It also carries the caller's own actor id per workspace, because "assign it to me" is a sentence
  * an agent hears constantly, and every other route to that answer costs a round trip.
@@ -27,13 +25,13 @@ export function registerWorkspacesTool(server: McpRegistrar, ctx: McpContext): v
     {
       title: 'My workspaces',
       description:
-        'The organizations the caller belongs to, with the id every other tool needs. Start here — nothing else on this surface can be called without an orgId, and this is the only tool that does not need one. Also returns who the caller is in each workspace, so "assign it to me" needs no further lookup.',
+        'List accessible workspaces, the caller’s actor ID in each, and active teams. Use these IDs for workspace-scoped calls and assignments. Library discovery through list_resources can also browse across workspaces without orgId.',
       inputSchema: {},
       outputSchema: {
         workspaces: z
           .array(
             z.object({
-              id: z.string().describe('Pass this as `orgId` to every other tool.'),
+              id: z.string().describe('Use as `orgId` for workspace-scoped calls.'),
               name: z.string().describe('What the workspace is called.'),
               slug: z.string().describe('Its short handle.'),
               actorId: z

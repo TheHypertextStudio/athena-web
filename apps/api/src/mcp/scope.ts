@@ -123,6 +123,8 @@ export const TOOL_SCOPE: Readonly<Record<string, McpScope>> = {
   list_templates: 'work:read',
   list_work_schedules: 'work:read',
   find: 'work:read',
+  list_resources: 'work:read',
+  get_resources: 'work:read',
   get: 'work:read',
   brief: 'work:read',
   retrospect: 'work:read',

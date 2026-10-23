@@ -58,6 +58,7 @@ import {
 import { authorize, scopedActor } from './result';
 import { RESOURCE_READ_SCOPE, requireScope } from './scope';
 import { registerActiveWorkResource } from './active-work-resource';
+import { authorizeLibraryUri, registerLibraryResources } from './library';
 
 /** The entity types the `docket://{org}/{type}/{id}` template can read. */
 export const READABLE_TYPES = [
@@ -248,6 +249,7 @@ export async function authorizeEntity(
 export async function authorizeResourceUri(ctx: McpContext, uri: string): Promise<void> {
   const parsed = new URL(uri);
   if (parsed.protocol !== 'docket:') throw new NotFoundError();
+  if (parsed.pathname.startsWith('/library/')) return authorizeLibraryUri(ctx, parsed);
 
   if (parsed.host === 'hub') {
     // Hub resources resolve against the caller's own Hub, so there is no org to authorize
@@ -360,6 +362,7 @@ export function registerResources(server: McpRegistrar, ctx: McpContext): void {
   registerApps(server);
   registerStaticResources(server, ctx);
   registerActiveWorkResource(server, ctx);
+  registerLibraryResources(server, ctx);
 
   server.registerResource(
     'entity',

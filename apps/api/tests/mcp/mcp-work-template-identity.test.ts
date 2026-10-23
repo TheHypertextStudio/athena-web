@@ -304,14 +304,14 @@ describe('MCP published template identity', () => {
       await publishWorkTemplate(actor, saved.id, edited.draftRevision);
       await schema.db
         .update(schema.task)
-        .set({ completedAt: new Date('2026-10-15T12:00:00Z') })
+        .set({ state: 'done', statusId: seed.statusId('task', 'done'), completedAt: new Date() })
         .where(eq(schema.task.id, firstId));
       const { advanceCompletedProcessTask } = await import('../../src/lib/recurrence/advance');
       const advanced = await advanceCompletedProcessTask(schema.db, {
         organizationId: seed.orgId,
         actorId: seed.actorId,
         completedTaskId: firstId,
-        completedOn: '2026-10-15',
+        completedOn: new Date().toISOString().slice(0, 10),
       });
       expect(advanced.nextOccurrenceId).toEqual(expect.any(String));
       const rows = await schema.db

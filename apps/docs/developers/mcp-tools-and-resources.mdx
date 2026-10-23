@@ -1,6 +1,6 @@
 ---
-title: 'MCP tools and resources'
-description: 'Registered MCP tool names, read resources, prompts, and authority limits.'
+title: "MCP tools and resources"
+description: "Registered MCP tool names, read resources, prompts, and authority limits."
 ---
 
 Docket returns only the tools that the caller's current scopes and grants allow. Tool availability
@@ -8,7 +8,7 @@ can change after consent or grant changes, so handle `notifications/tools/list_c
 
 ## Tools
 
-The work and planning tools are `workspaces`, `find`, `list_work`, `brief`, `capture`, `organize`,
+The work and planning tools are `workspaces`, `find`, `list_work`, `list_resources`, `get_resources`, `brief`, `capture`, `organize`,
 `update`, `milestones`, `comment`, `report_status`, `link`, `archive`, `plan_day`, `undo`,
 `retrospect`, `view_workload`, `define_process`, `schedule_process`, `repeat_task`, `define_labels`,
 `define_template`, `list_templates`, `list_work_schedules`, `manage_work_schedule`, `plan_start`, `plan_read`, `plan_draft`, `plan_commit`, and `track`.
@@ -244,7 +244,7 @@ MCP callers cannot send directly. Received UTF-8 text, Markdown and CSV files ca
 
 | Scope             | Covers                                                                                                                                                                                                                                                                                                       |
 | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `work:read`       | `workspaces`, `find`, `list_work`, `list_templates`, `get`, `brief`, `milestones` with `list`, and every resource read                                                                                                                                                                                       |
+| `work:read`       | `workspaces`, `find`, `list_work`, `list_templates`, `list_resources`, `get_resources`, `get`, `brief`, `milestones` with `list`, and every resource read                                                                                                                                                    |
 | `work:write`      | `capture`, `organize`, `update`, `milestones` with `create`, `update`, or `delete`, `comment`, `report_status`, `link`, `archive`, `plan_day`, `undo`, `track`, `retrospect`, `acknowledge_directive`, `define_process`, `schedule_process`, `repeat_task`, `define_labels`, `define_template`, `send_email` |
 | `agents:run`      | `run_agent`, `manage_session`, `pause_athena_assignment_trigger`, `remove_athena_assignment_trigger`, `review_work_destination`                                                                                                                                                                              |
 | `connectors:link` | `link_external`                                                                                                                                                                                                                                                                                              |
@@ -255,6 +255,49 @@ See [Authentication](/developers/authentication#request-the-smallest-scope) for 
 agent sessions and Athena assignment controls. `connectors:link` gates external linking.
 `offline_access` only allows token refresh. Every call still checks the person's current Docket
 grant.
+
+### Library resources
+
+Use `list_resources` to discover linked resources and attachments. Supply `orgId` for one workspace,
+or omit it to search every workspace the authenticated user can access. Registered agents remain
+restricted to their own workspace and grants. These tools require `work:read` and the existing MCP
+product access in each workspace.
+
+`query` defaults to an empty string, which browses by recency; a nonempty query uses search ranking.
+`kinds` accepts `external_resource` and `attachment`; omitted or empty selects both. `limit` defaults
+to 50 and accepts 1–100. Pass `nextCursor` as `cursor` with the same workspace, query and filters.
+Search indexing can lag behind writes. A stale page can contain fewer items, including none;
+continue while `nextCursor` is present.
+
+Use `get_resources` with 1–10 `refs`, each containing `orgId`, `kind` and `id`, to read current
+details. Each result has `status: "ok"` with `resource`, or `status: "not_found"` for both missing
+and inaccessible resources. Details include saved metadata, a source URL, permission-filtered
+`usedIn` containers and `usedBy` references, and explicit `content` availability. These reads check
+live source rows and access even when the item has not been indexed yet. A batch scope or product
+access failure remains a tool error rather than a per-item miss.
+
+The `uri` on a result supports the same detail read through `resources/read`:
+
+```text
+docket://{org}/library/{kind}/{id}
+```
+
+Uploaded files with `content.status: "available"` provide a content URI and MIME type. Read that URI
+through `resources/read` to receive an MCP base64 blob:
+
+```text
+docket://{org}/library/attachment/{id}/content
+```
+
+Content reads recheck current access and enforce the 4 MiB upload ceiling against declared and actual
+file sizes. Details report `unavailable` for absent stored bytes and `too_large` for oversized files;
+their content URIs cannot be read. Linked resources and other attachment kinds report `unsupported`:
+saved previews do not grant access to the source document. This interface does not search providers
+live, scrape web pages, or convert documents.
+
+Linked metadata retains Library's workspace visibility. Attachments follow their current subject's
+visibility, and usage lists omit work the caller cannot read. Credentials, storage keys, arbitrary
+attachment metadata and internal integration identifiers are excluded.
 
 ## Resources
 

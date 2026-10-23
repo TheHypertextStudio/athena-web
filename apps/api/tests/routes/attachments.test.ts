@@ -359,6 +359,25 @@ describe('attachment routes', () => {
     expect((await w.request(`/${taskId}/attachments/${created.id}/download`)).status).toBe(404);
   });
 
+  it('keeps existing oversized legacy files downloadable through REST', async () => {
+    const { orgId, humanActorId, taskId } = await seedOrgWithTask();
+    const w = appWithActor(attachments, orgId, ['contribute'], humanActorId);
+    const created = await body<AttachmentOut>(
+      await uploadFile(w, taskId, fileOfSize('legacy.bin', 1)),
+    );
+    const key = blobKeyFor(orgId, created.id);
+    const bytes = new Uint8Array(4 * 1024 * 1024 + 1);
+    await getContainer().blob.put(key, bytes);
+    await db
+      .update(schema.attachment)
+      .set({ byteSize: bytes.length })
+      .where(eq(schema.attachment.id, created.id));
+    const response = await w.request(`/${taskId}/attachments/${created.id}/download`);
+    expect(response.status).toBe(200);
+    expect(new Uint8Array(await response.arrayBuffer())).toHaveLength(bytes.length);
+    await getContainer().blob.delete(key);
+  });
+
   it('rejects an over-limit upload (422)', async () => {
     const { orgId, humanActorId, taskId } = await seedOrgWithTask();
     const w = appWithActor(attachments, orgId, ['contribute'], humanActorId);

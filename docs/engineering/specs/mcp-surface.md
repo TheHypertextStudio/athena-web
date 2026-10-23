@@ -542,6 +542,22 @@ Each `{var}` is completable via the **completion API** (§5 capabilities). `mime
 
 **`resources/read` contract:** returns `contents: [{ uri, mimeType: "application/json", text: <JSON projection> }]`. The projection is a **Zod-validated** read DTO in the retired contract package (one per type) so the shape is stable. Not-found → JSON-RPC `-32002`; no-grant → `-32002` (do NOT leak existence to unauthorized callers — return not-found, not forbidden).
 
+### 4.3.1 Library resources
+
+Library discovery and retrieval use `list_resources`, `get_resources`, and
+`docket://{org}/library/{kind}/{id}` (plus `/content` for uploaded bytes). All require `work:read`
+and current MCP product access. Discovery reuses the Library search corpus (`external_resource`
+and `attachment`); omitting `orgId` searches the authenticated caller's accessible workspaces.
+Registered-agent identity never expands into the owner's user scope. Source reads recheck active,
+unarchived membership and live source/subject state independently of search-index freshness.
+Linked metadata retains workspace visibility; attachments use canonical subject permissions and
+usage remains filtered. Missing and inaccessible batch references both return `not_found`.
+Only uploaded files expose contents, as bounded MCP blobs after declared and actual size checks
+against the existing 4 MiB upload ceiling. Details report unavailable, oversized or unsupported
+contents explicitly; source URLs do not delegate provider credentials. The public
+[Library tool contract](../../../apps/docs/developers/mcp-tools-and-resources.mdx#library-resources)
+defines pagination, batch bounds and result fields.
+
 ### 4.4 Subscriptions
 
 > **RESOLVED: shipped — see [`mcp-notifications.md`](mcp-notifications.md), which supersedes this

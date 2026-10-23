@@ -13647,6 +13647,18 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
 
 ## Completed Tasks
 
+### [MCP-LIBRARY-READS] Discover and fetch Library material through MCP
+
+- **Status**: DONE
+- **Completed**: 2026-10-23
+- **Summary**: Added workspace and cross-workspace Library discovery, bounded batched detail reads, canonical detail/content URIs and uploaded-file retrieval. Reads recheck current membership, source/subject state, grants and MCP product access; linked material exposes saved metadata and explicit unsupported source content. Registered agents retain their own workspace boundary.
+- **Files changed**: Shared Library contracts/readers and attachment-file helpers; MCP tools, resource authorization and scope registration; search membership filtering; MCP/REST regressions; public MCP documentation, engineering contract and README.
+- **Validation**: The full API run passed 8,042 of 8,047 tests. Its five failures were corrected and verified in focused reruns: retain the local toolbox budget with concise lead descriptions, complete native recurring-task fixtures before advancing, and install the frontend consumer links needed by declaration-resolution checks. Final focused runs passed 288 tests, with 21 Library/catalog tests passing again after final discovery changes. API build, typecheck, complete source/test lint and the complexity ratchet pass. Documentation source checks pass for 52 pages, plus two configuration and eight coverage-policy tests.
+- **Review**: Read-only review identified a legacy REST download compatibility regression and repeated discovery queries. The size bound now applies only to MCP, a regression preserves existing oversized REST downloads, and discovery batches live source, subject and permission checks. Review of those corrections found no further issues.
+- **Learnings**: Search-index visibility is a discovery input, not authority for a later fetch. Read current source rows independently, preserve attachment-subject checks, and keep file transport limits at the boundary that requires them. Archived memberships must be excluded even if their status still says active.
+- **Tracking**: No matching saved Docket task was found; implementation is tracked here without creating a new external record.
+- **Acceptance boundary**: Local implementation and verification are complete. Hosted CI and production/client activation are separate from this evidence; no provider content reader, scraping or document conversion was added.
+
 ### [MCP-REFRESH-RELIABILITY] Preserve MCP authorization through token renewal
 
 - **Status**: DONE

@@ -992,7 +992,7 @@ describe('MCP list pagination', () => {
     );
 
     const templateUris = await collectResourceTemplateUris(client);
-    expect(templateUris).toEqual(['docket://{org}/{type}/{id}']);
+    expect(templateUris).toContain('docket://{org}/{type}/{id}');
 
     const promptNames = await collectPromptNames(client);
     expect(promptNames).toEqual([...new Set(promptNames)]);

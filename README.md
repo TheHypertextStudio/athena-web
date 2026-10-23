@@ -45,6 +45,13 @@ Catalog errors require `work:read` and return shared catalogs instead of repeati
 each item. Plan confirmation preserves applied template properties and explicit overrides.
 See [template use over MCP](apps/docs/developers/mcp-tools-and-resources.mdx#create-work-from-a-template-body).
 
+MCP agents can browse Library links and attachments through `list_resources`, within a workspace
+or across their accessible workspaces, and read current metadata and visible usage through
+`get_resources`. Uploaded files expose authenticated MCP content URIs; linked sources expose saved
+metadata and source URLs. These reads require `work:read`, retain current workspace and subject
+permissions, and keep registered agents within their own workspace. See
+[Library resources over MCP](apps/docs/developers/mcp-tools-and-resources.mdx#library-resources).
+
 MCP clients can link project dependencies, related tasks, subtasks, initiative contributions, and
 initiative hierarchy. Bulk updates can move tasks between cycles and change initiative membership.
 Initiative-rooted plans show visible existing work, reject dependency cycles, and record added links

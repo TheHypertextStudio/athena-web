@@ -24,6 +24,11 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 
 import { getContainer } from '../container';
+import {
+  loadReadableAttachment,
+  MAX_ATTACHMENT_BYTES,
+  readAttachmentFile,
+} from '../content/attachment-file';
 import type { AppEnv } from '../context';
 import { NotFoundError } from '../error';
 import { created, ok } from '../lib/ok';
@@ -98,7 +103,7 @@ function toOut(a: AttachmentRow): z.input<typeof AttachmentOut> {
 }
 
 /** Max size for an uploaded file attachment (bytes). Bounded to limit upload memory and request duration. */
-const MAX_UPLOAD_BYTES = 4 * 1024 * 1024;
+const MAX_UPLOAD_BYTES = MAX_ATTACHMENT_BYTES;
 /** The cap expressed in MB, for the user-facing over-limit message. */
 const MAX_UPLOAD_MB = MAX_UPLOAD_BYTES / (1024 * 1024);
 
@@ -338,28 +343,11 @@ The \`kind\` determines the required fields, enforced at the schema edge: a \`ur
     async (c) => {
       const { orgId, actorId } = c.get('actorCtx');
       const { id, attachmentId } = c.req.valid('param');
-      const target = await loadTask(orgId, id);
-      const canView = await buildTaskViewFilter(orgId, actorId);
-      if (!canView(target)) throw new NotFoundError('Task not found');
-
-      const rows = await db
-        .select()
-        .from(attachment)
-        .where(
-          and(
-            eq(attachment.id, attachmentId),
-            eq(attachment.organizationId, orgId),
-            eq(attachment.subjectType, 'task'),
-            eq(attachment.subjectId, id),
-            eq(attachment.kind, 'file'),
-            isNull(attachment.archivedAt),
-          ),
-        )
-        .limit(1);
-      const row = rows[0];
-      if (!row?.blobKey) throw new NotFoundError('Attachment not found');
-      const bytes = await getContainer().blob.get(row.blobKey);
-      if (!bytes) throw new NotFoundError('Attachment file is no longer available.');
+      const row = await loadReadableAttachment(orgId, actorId, attachmentId, id);
+      const file = await readAttachmentFile(row);
+      if (file.status !== 'available')
+        throw new NotFoundError('Attachment file is no longer available.');
+      const bytes = file.bytes;
       const filename = row.fileName ?? 'download';
       // Copy into a fresh `ArrayBuffer`-backed Uint8Array so the body is a valid `BodyInit`
       // (mirrors the account-export download).

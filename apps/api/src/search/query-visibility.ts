@@ -7,7 +7,7 @@
  * review. Every other module in `search/` that needs to know what a caller may see imports it
  * from here rather than reimplementing it.
  */
-import { and, eq, inArray, or, sql } from 'drizzle-orm';
+import { and, eq, inArray, isNull, or, sql } from 'drizzle-orm';
 import type { searchDocument } from '@docket/db';
 
 import {
@@ -92,7 +92,7 @@ export async function resolveCallerAccess(caller: SearchCaller): Promise<CallerO
         eq(schema.actor.organizationId, schema.role.organizationId),
       ),
     )
-    .where(and(identity, eq(schema.actor.status, 'active')));
+    .where(and(identity, eq(schema.actor.status, 'active'), isNull(schema.actor.archivedAt)));
   return rows.map((row) => ({
     organizationId: row.organizationId,
     actorId: row.actorId,

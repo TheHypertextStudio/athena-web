@@ -50,6 +50,8 @@ const APPLY: Record<Relation, (request: RelationRequest) => Promise<RelationResu
 
 /** What `link` tells a caller it can do, one line per relation. */
 const DESCRIPTION = [
+  'Link work with a typed relation; from is the subject and to the object. Use remove to unlink, and update for single-valued placements.',
+  '',
   'State that one piece of work stands in a relation to another; pass `remove: true` to take it back. The relations and the pairs each one joins:',
   '- `blocks`: task → task, or project → project. The first must finish before the second. Refused when it would close a cycle.',
   '- `relates_to`: task ↔ task, in no particular direction.',

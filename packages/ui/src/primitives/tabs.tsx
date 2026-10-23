@@ -86,6 +86,7 @@ export interface TabsItem {
 
 interface TabsContextValue {
   readonly value: string;
+  readonly focusValue: string;
   readonly onValueChange: (value: string, source?: TabsActivation) => void;
   readonly variant: TabsVariant;
   readonly layout: TabsLayout;
@@ -111,6 +112,13 @@ export interface TabsProps {
   readonly layout?: TabsLayout;
 }
 
+/** Retain a keyboard entry point when form validity disables the selected destination. */
+function tabFocusValue(items: readonly TabsItem[] | undefined, value: string): string {
+  if (!items) return value;
+  const current = items.find((item) => item.value === value && !item.disabled);
+  return current?.value ?? items.find((item) => !item.disabled)?.value ?? value;
+}
+
 /** Render content navigation. Wrap tabs and sibling panels in TabsScope. */
 export function Tabs({
   value,
@@ -125,9 +133,10 @@ export function Tabs({
   const inheritedScope = React.useContext(ScopeContext);
   const ownScope = React.useId();
   const scope = inheritedScope ?? ownScope;
+  const focusValue = tabFocusValue(items, value);
   const context = React.useMemo(
-    () => ({ value, onValueChange, variant, layout, scope }),
-    [value, onValueChange, variant, layout, scope],
+    () => ({ value, focusValue, onValueChange, variant, layout, scope }),
+    [value, focusValue, onValueChange, variant, layout, scope],
   );
   return (
     <TabsContext.Provider value={context}>
@@ -293,7 +302,7 @@ export function Tab({
       aria-controls={ids.panelId}
       aria-selected={selected}
       aria-label={label}
-      tabIndex={selected ? 0 : -1}
+      tabIndex={value === context.focusValue ? 0 : -1}
       disabled={disabled}
       onClick={(event) => {
         context.onValueChange(value, event.detail === 0 ? 'keyboard' : 'pointer');

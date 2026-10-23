@@ -108,3 +108,19 @@ it('retains a hidden panel shell without evaluating its lazy contents', () => {
   expect(shell).toHaveAttribute('aria-labelledby', later.id);
   expect(screen.getByRole('tabpanel')).toHaveTextContent('Ready');
 });
+
+it('keeps an enabled tab in the keyboard sequence when validation disables the selected section', () => {
+  render(
+    <Tabs
+      label="Editor sections"
+      value="work"
+      onValueChange={() => undefined}
+      items={[
+        { value: 'basics', label: 'Basics' },
+        { value: 'work', label: 'Work', disabled: true },
+      ]}
+    />,
+  );
+  expect(screen.getByRole('tab', { name: 'Basics' })).toHaveAttribute('tabindex', '0');
+  expect(screen.getByRole('tab', { name: 'Work' })).toHaveAttribute('aria-selected', 'true');
+});

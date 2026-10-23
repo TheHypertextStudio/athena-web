@@ -18,6 +18,7 @@ test('content tabs preserve panel associations and reach every destination at na
   await page.goto(`/plan/day?date=${today}`);
   await expect(page.getByRole('heading', { name: 'Plan today' })).toBeVisible();
   const routes = [
+    { path: '/inbox', label: 'Inbox filters' },
     { path: `tasks/${fixture.taskId}`, label: 'Task sections' },
     { path: `projects/${fixture.projectId}`, label: 'Project sections' },
     { path: `initiatives/${fixture.initiativeId}`, label: 'Initiative sections' },
@@ -26,20 +27,36 @@ test('content tabs preserve panel associations and reach every destination at na
   ];
   for (const route of routes) {
     await page.setViewportSize({ width: 1440, height: 900 });
-    await page.goto(orgHref(fixture.orgId, route.path));
+    await page.goto(route.path.startsWith('/') ? route.path : orgHref(fixture.orgId, route.path));
     const tabs = page.getByRole('tablist', { name: route.label });
     await expect(tabs).toBeVisible({ timeout: TIMEOUTS.pageReady });
     await expect
       .poll(() => tabs.evaluate((element) => element.getBoundingClientRect().height))
       .toBe(48);
+    await expect
+      .poll(() =>
+        tabs
+          .getByRole('tab')
+          .first()
+          .evaluate((element) => element.getBoundingClientRect().height),
+      )
+      .toBe(48);
+    const first = tabs.getByRole('tab', { selected: true });
+    await first.focus();
+    await first.press('End');
     await page.setViewportSize({ width: 320, height: 844 });
+    await expect
+      .poll(() =>
+        tabs
+          .getByRole('tab')
+          .first()
+          .evaluate((element) => element.getBoundingClientRect().height),
+      )
+      .toBe(48);
     for (const trigger of await tabs.getByRole('tab').all()) {
       const target = await trigger.getAttribute('aria-controls');
       await expect(page.locator(`[id="${target}"]`)).toHaveCount(1);
     }
-    const first = tabs.getByRole('tab', { selected: true });
-    await first.focus();
-    await first.press('End');
     const selected = tabs.getByRole('tab', { selected: true });
     await expect(selected).toBeFocused();
     const controls = await selected.getAttribute('aria-controls');

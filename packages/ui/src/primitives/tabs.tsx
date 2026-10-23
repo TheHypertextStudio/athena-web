@@ -212,6 +212,8 @@ export function TabList({ label, className, children }: TabListProps): React.JSX
           return (content?.getBoundingClientRect().width ?? 0) + 48;
         }),
       );
+      const selected = list.querySelector<HTMLElement>('[aria-selected="true"]');
+      if (selected) revealTab(list, selected);
       setScrollable(
         layout === 'scrollable' || tabs.length > 4 || widest * tabs.length > list.clientWidth,
       );
@@ -242,7 +244,7 @@ export function TabList({ label, className, children }: TabListProps): React.JSX
             revealTab(event.currentTarget, event.target);
         }}
         className={cn(
-          'relative flex h-12 w-full min-w-0 shrink-0 overflow-x-auto overflow-y-hidden',
+          'relative flex h-12 w-full min-w-0 shrink-0 scrollbar-none overflow-x-auto overflow-y-hidden',
           scrollable ? 'ps-[52px] [&>[role=tab]]:flex-none' : '[&>[role=tab]]:flex-1',
           className,
         )}

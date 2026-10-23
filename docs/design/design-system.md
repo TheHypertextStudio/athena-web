@@ -1131,7 +1131,8 @@ Content tabs categorize peer content within one pane. Use the Material 3
 [tab specifications](https://m3.material.io/components/tabs/specs) and
 [guidelines](https://m3.material.io/components/tabs/guidelines): primary tabs have a label-width,
 3px indicator; secondary tabs have a full-width, 2px indicator. Text-only tracks are 48px high,
-including the divider. Use secondary tabs for a subordinate content group, not simply because its
+including the divider. Hide native scrollbar chrome within the lane so classic scrollbars cannot
+reduce the trigger height. Use secondary tabs for a subordinate content group, not simply because its
 container is small. Freely revisitable editing sections may use content tabs; a section called
 Review does not turn the interaction into a mandatory sequence.
 
@@ -1139,7 +1140,7 @@ Review does not turn the interaction into a mandatory sequence.
 otherwise it uses a horizontally scrollable lane with consistent padding and a 52px leading inset.
 `layout="scrollable"` explicitly selects that lane. Keep destination order stable and labels readable;
 do not hide content tabs in a More menu. Keyboard and selection reveal only the tab lane, preserving
-the surrounding page's scroll position. Use the inset focus convention inside these clipped tracks.
+the surrounding page's scroll position, including when the lane resizes. Use the inset focus convention inside these clipped tracks.
 
 Wrap a tablist and its sibling panels in `TabsScope`, nesting a new scope for an independent set.
 Use `TabPanel` for retained content (or its `render` callback for lazy content) and `LazyTabPanels` for stable hidden panel shells whose

@@ -52,7 +52,7 @@ export default function InboxClient(): JSX.Element {
           </div>
         </header>
 
-        <div className="flex min-w-0 items-center gap-3">
+        <div className="flex min-w-0 flex-col items-stretch gap-3 sm:flex-row sm:items-center">
           <div className="min-w-0 flex-1">
             <SegmentedTabs
               label="Inbox filters"
@@ -65,7 +65,7 @@ export default function InboxClient(): JSX.Element {
             <Button
               variant="ghost"
               size="sm"
-              className="shrink-0"
+              className="shrink-0 self-end sm:self-auto"
               disabled={markingAll}
               onClick={() => {
                 void onMarkAllRead();

@@ -86,19 +86,17 @@ test('authors a private Project child outline and relative due date, reopens it,
   await page.keyboard.press('Space');
   await expect(optional).not.toBeChecked();
   const saved = waitForApiResponse(page, /\/templates\/definitions$/, { method: 'POST' });
-  await page.getByRole('button', { name: 'Save draft', exact: true }).click();
+  await page.getByRole('button', { name: /^Save (draft|changes)$/ }).click();
   const response = await saved;
   expect(response.ok()).toBe(true);
   const draft = (await response.json()) as WorkTemplateOut;
   expect(draft.scope).toBe('personal');
   expect(draft.latestVersion).toBeNull();
-  await expect(page).toHaveURL(new RegExp(`/work-templates/${draft.id}\\?section=structure$`));
+  await expect(page).toHaveURL(new RegExp(`/work-templates/${draft.id}(?:\\?|$)`));
   await page.reload({ waitUntil: 'commit' });
   await expect(page.getByRole('status').filter({ hasText: /^Saved draft$/ })).toBeVisible();
   await selectWorkDefinitionSection(page, 'Included work');
-  await expect(
-    page.getByRole('button', { name: 'Review this definition', exact: true }),
-  ).toBeEnabled();
+  await expect(page.getByRole('button', { name: 'Continue to review', exact: true })).toBeEnabled();
   await page.getByRole('button', { name: 'Edit Confirm the venue', exact: true }).click();
   await expect(child.getByRole('textbox', { name: 'Title', exact: true })).toHaveValue(
     'Confirm the venue',

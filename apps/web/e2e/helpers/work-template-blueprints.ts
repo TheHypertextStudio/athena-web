@@ -15,7 +15,16 @@ export async function selectWorkDefinitionSection(
   label: 'Purpose' | 'Starting work' | 'Included work' | 'Review',
 ): Promise<void> {
   await page.locator('[data-template-definition-header]').waitFor({ state: 'visible' });
-  const chooser = page.getByRole('button', { name: 'Change definition step', exact: true });
+  const creation = page.getByRole('navigation', { name: 'Create template', exact: true });
+  if (await creation.isVisible()) {
+    const destination = creation.getByRole('button', { name: label, exact: true });
+    for (let step = 0; step < 3 && (await destination.isDisabled()); step++) {
+      await page.getByRole('button', { name: /^Continue to / }).click();
+    }
+    await destination.click();
+    return;
+  }
+  const chooser = page.getByRole('button', { name: 'Change template section', exact: true });
   if (await chooser.isVisible()) {
     await chooser.click();
     await page.getByRole('menuitemradio', { name: label, exact: true }).click();

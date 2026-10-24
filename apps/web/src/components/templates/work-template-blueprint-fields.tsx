@@ -1,6 +1,6 @@
 'use client';
-import { useRef, useState, type JSX } from 'react';
-import { Surface } from '@docket/ui/primitives';
+import { useRef, type JSX } from 'react';
+import { useTemplateEditorSelection } from './template-editor-selection';
 import { useVocabulary } from '@docket/ui/hooks';
 import type { Blueprint, BlueprintStep } from '@docket/work/work-template-blueprint';
 import { useApiQuery } from '@/lib/query';
@@ -21,7 +21,7 @@ export function WorkTemplateBlueprintFields({
 }): JSX.Element {
   const childNouns = useBlueprintChildNouns();
   const query = useApiQuery(workTemplatesDef(orgId, { includeDrafts: true }));
-  const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  const [selectedKey, setSelectedKey] = useTemplateEditorSelection('child');
   const rowRefs = useRef(new Map<string, HTMLButtonElement>());
   const blueprint = form.definition.blueprint;
   const disabled = form.pending || !form.canEdit;
@@ -50,12 +50,8 @@ export function WorkTemplateBlueprintFields({
   };
   const selected = blueprint.steps.find((step) => step.key === selectedKey);
   return (
-    <Surface
-      as="section"
-      tone="card"
-      shape="medium"
-      pad="comfortable"
-      className="contents min-w-0 scroll-mt-48 flex-col gap-4 sm:flex sm:p-6"
+    <section
+      className="flex min-w-0 scroll-mt-48 flex-col gap-4"
       aria-label="Template children"
       id="template-children"
       tabIndex={-1}
@@ -69,7 +65,7 @@ export function WorkTemplateBlueprintFields({
         onSelect={setSelectedKey}
         form={form}
       />
-    </Surface>
+    </section>
   );
 }
 

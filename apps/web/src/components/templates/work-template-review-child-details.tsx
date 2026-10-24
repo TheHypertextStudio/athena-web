@@ -1,4 +1,5 @@
 'use client';
+import { useTemplateParentContext } from './template-authoring-context';
 import type { JSX } from 'react';
 import type { Blueprint, BlueprintStep } from '@docket/work/work-template-blueprint';
 import { useVocabulary } from '@docket/ui/hooks';
@@ -58,6 +59,7 @@ export function WorkTemplateReviewNestedVersion({
   selected?: WorkTemplateOut | undefined;
   returnTo?: string | undefined;
 }): JSX.Element {
+  const parentContext = useTemplateParentContext();
   const selection = template.selection;
   const pending = pendingTemplateReference(template, selected);
   const versions = useApiQuery({
@@ -78,7 +80,7 @@ export function WorkTemplateReviewNestedVersion({
         {pending.canEdit ? (
           <Button asChild variant="ghost" className="min-h-10 self-start">
             <Link
-              href={`${workTemplateHref(orgId)}/${pending.id}?section=review${returnTo ? `&returnTo=${returnTo}` : ''}`}
+              href={`${workTemplateHref(orgId)}/${pending.id}?section=review${returnTo ? `&returnTo=${returnTo}${parentContext}` : ''}`}
             >
               Review {pending.definition.name}
             </Link>

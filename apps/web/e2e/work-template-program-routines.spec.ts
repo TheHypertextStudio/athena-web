@@ -79,7 +79,7 @@ async function authorRoutine(
     .fill('Operate a regular neighborhood dinner with preparation and follow-up.');
   await page.getByRole('button', { name: 'Continue to starting work', exact: true }).click();
   await page
-    .getByRole('textbox', { name: 'Starting document', exact: true })
+    .getByRole('textbox', { name: 'Document', exact: true })
     .fill(
       '## Welcome the neighborhood\n\nPlan accessible gatherings and record what the next host needs.',
     );
@@ -127,9 +127,9 @@ async function authorRoutine(
     'Begins 7 days after Program creation',
   );
   const saving = waitForApiResponse(page, /\/templates\/definitions$/, { method: 'POST' });
-  await page.getByRole('button', { name: 'Save draft', exact: true }).click();
+  await page.getByRole('button', { name: /^Save (draft|changes)$/ }).click();
   const draft = (await (await saving).json()) as WorkTemplateOut;
-  await expect(page).toHaveURL(new RegExp(`/work-templates/${draft.id}\\?section=review$`));
+  await expect(page).toHaveURL(new RegExp(`/work-templates/${draft.id}(?:\\?|$)`));
   return draft;
 }
 async function reopenAndPublish(page: Page): Promise<void> {
@@ -205,7 +205,7 @@ async function verifyIndependentCopies(
     .getByRole('textbox', { name: 'Repeating work name', exact: true })
     .fill('A different future routine');
   const edit = waitForApiResponse(page, /\/draft$/, { method: 'PATCH' });
-  await page.getByRole('button', { name: 'Save draft', exact: true }).click();
+  await page.getByRole('button', { name: /^Save (draft|changes)$/ }).click();
   expect((await edit).ok()).toBe(true);
   await selectWorkDefinitionSection(page, 'Review');
   const republish = waitForApiResponse(page, /\/publish$/, { method: 'POST' });
@@ -363,9 +363,7 @@ test('keeps recurring work and the work outline reachable while reading a long P
     await expect(
       page.getByRole('list', { name: 'Child work outline', exact: true }),
     ).not.toBeVisible();
-    await expect(
-      page.getByRole('textbox', { name: 'Starting document', exact: true }),
-    ).not.toBeVisible();
+    await expect(page.getByRole('textbox', { name: 'Document', exact: true })).not.toBeVisible();
     await page.getByRole('button', { name: 'Back to included work', exact: true }).click();
     await expect(branch).toHaveAttribute('aria-expanded', 'true');
     await expect(routine).toBeFocused();
@@ -435,7 +433,7 @@ test('a copied private Program keeps its routine publication pin and returns fro
   ).toHaveCount(0);
   await page.getByRole('spinbutton', { name: 'Repeat interval', exact: true }).fill('2');
   const saved = waitForApiResponse(page, /\/draft$/, { method: 'PATCH' });
-  await page.getByRole('button', { name: 'Save draft', exact: true }).click();
+  await page.getByRole('button', { name: /^Save (draft|changes)$/ }).click();
   expect((await saved).ok()).toBe(true);
   const persisted = await apiJson<WorkTemplateOut>(page, `${api}/${program.id}`);
   expect(persisted.draftDefinition?.defaultSchedules[0]?.template.selection).toEqual(
@@ -444,13 +442,13 @@ test('a copied private Program keeps its routine publication pin and returns fro
   const review = page.getByRole('link', { name: `Review ${linked.definition.name}`, exact: true });
   await expect(review).toHaveAttribute(
     'href',
-    `/orgs/${orgId}/work-templates/${linked.id}?section=review&returnTo=${program.id}`,
+    `/orgs/${orgId}/work-templates/${linked.id}?section=review&returnTo=${program.id}&returnContext=section%3Dstructure`,
   );
   await review.click();
   await expect(
     page.getByRole('heading', { level: 1, name: linked.definition.name, exact: true }),
   ).toBeVisible();
-  await page.getByRole('link', { name: 'Back to parent definition', exact: true }).click();
+  await page.getByRole('link', { name: 'Back to parent template', exact: true }).click();
   await expect(
     page.getByRole('heading', { level: 1, name: program.definition.name, exact: true }),
   ).toBeVisible();

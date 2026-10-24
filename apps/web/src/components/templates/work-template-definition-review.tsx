@@ -1,6 +1,5 @@
 'use client';
 import type { JSX } from 'react';
-import { Surface } from '@docket/ui/primitives';
 import { useApiQuery } from '@/lib/query';
 import { StaticMarkdown } from '@/components/editor/static-markdown';
 import { workTemplatesDef } from './work-template-queries';
@@ -24,19 +23,10 @@ export function WorkTemplateDefinitionReview({
   const templates = useApiQuery(workTemplatesDef(orgId, { includeDrafts: true }));
   const blueprint = form.definition.blueprint;
   return (
-    <section
-      aria-label="Work definition review"
-      className="grid min-w-0 items-start gap-5 xl:grid-cols-2"
-    >
+    <section aria-label="Work definition review" className="flex min-w-0 flex-col gap-8">
+      <StartingWorkReview form={form} orgId={orgId} />
       <div className="flex min-w-0 flex-col gap-5">
-        <Surface
-          as="section"
-          tone="card"
-          shape="large"
-          pad="comfortable"
-          aria-label="Included work"
-          className="flex min-w-0 flex-col gap-4 sm:p-4"
-        >
+        <section aria-label="Included work" className="flex min-w-0 flex-col gap-4">
           <div className="flex flex-col gap-1">
             <h2 tabIndex={-1} className="text-title-large">
               Included work
@@ -57,14 +47,13 @@ export function WorkTemplateDefinitionReview({
               Creates this item without child work.
             </p>
           )}
-        </Surface>
+        </section>
         <ProgramDefaultScheduleReview
           orgId={orgId}
           values={form.definition.defaultSchedules}
           templates={templates.data?.items ?? []}
         />
       </div>
-      <StartingWorkReview form={form} orgId={orgId} />
     </section>
   );
 }
@@ -77,20 +66,10 @@ function StartingWorkReview({
   orgId: string;
 }): JSX.Element {
   return (
-    <Surface
-      as="section"
-      tone="card"
-      shape="large"
-      pad="comfortable"
-      aria-label="Starting work"
-      className="flex min-w-0 flex-col gap-4 sm:p-4"
-    >
+    <section aria-label="Starting work" className="flex min-w-0 flex-col gap-4">
       <h2 tabIndex={-1} className="text-title-large">
         Starting work
       </h2>
-      {form.definition.description?.trim() ? (
-        <p className="text-body-medium text-on-surface-variant">{form.definition.description}</p>
-      ) : null}
       <WorkTemplateReviewStartingValues
         orgId={orgId}
         payload={form.definition.payload}
@@ -99,13 +78,13 @@ function StartingWorkReview({
         compactProperties
       >
         {form.definition.payload.description ? (
-          <TemplateDisclosure title="Starting document">
+          <TemplateDisclosure title="Document">
             <StaticMarkdown value={form.definition.payload.description} />
           </TemplateDisclosure>
         ) : (
           <p className="text-body-small text-on-surface-variant">Starts with an empty document.</p>
         )}
       </WorkTemplateReviewStartingValues>
-    </Surface>
+    </section>
   );
 }

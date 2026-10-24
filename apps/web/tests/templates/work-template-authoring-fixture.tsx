@@ -4,6 +4,7 @@ import { WorkTemplateOut } from '@docket/work/work-template-contract';
 import type * as QueryModule from '@/lib/query';
 const mocks = vi.hoisted(() => ({
   draft: vi.fn(),
+  create: vi.fn(),
   publish: vi.fn(),
   owner: 0,
   sessionPending: false,
@@ -45,6 +46,10 @@ const nested = {
   definition: { ...template('task').definition, name: 'Vendor booking' },
   latestVersion: { id: versionId, number: 2 },
 };
+vi.mock('@tanstack/react-query', async (original) => ({
+  ...(await original()),
+  useQueryClient: () => ({ setQueryData: vi.fn() }),
+}));
 vi.mock('@/lib/auth-client', () => ({
   useSession: () => ({
     isPending: mocks.sessionPending,
@@ -75,7 +80,7 @@ vi.mock('@/components/templates/work-template-queries', () => ({
   workTemplateVersionsDef: () => ({ reviewKind: 'versions' }),
   workTemplatesDef: () => ({ reviewKind: 'catalog' }),
   useWorkTemplateWrites: () => ({
-    create: { mutateAsync: vi.fn(), isPending: false },
+    create: { mutateAsync: mocks.create, isPending: false },
     draft: { mutateAsync: mocks.draft, isPending: false },
     publish: { mutateAsync: mocks.publish, isPending: false },
     archive: { isPending: false },
@@ -152,8 +157,26 @@ export function change(label: string, value: string, scope: HTMLElement = docume
   }
   fireEvent.change(within(scope).getByLabelText(label), { target: { value } });
 }
+export function section(label: string): void {
+  const tab = screen.queryByRole('tab', { name: label });
+  if (tab) {
+    fireEvent.click(tab);
+    return;
+  }
+  const nav = screen.getByRole('navigation', { name: 'Create template' });
+  const destination = within(nav).getByRole('button', { name: label });
+  if (destination.hasAttribute('disabled')) {
+    const name = screen.queryByLabelText<HTMLInputElement>('Template name');
+    if (name && !name.value) change('Template name', 'Event');
+    for (let index = 0; index < 3 && destination.hasAttribute('disabled'); index += 1) {
+      const next = screen.getByRole('button', { name: /Continue to/ });
+      fireEvent.click(next);
+    }
+  }
+  fireEvent.click(destination);
+}
 export function add(kind: string): HTMLElement {
-  fireEvent.click(screen.getByRole('tab', { name: 'Included work' }));
+  section('Included work');
   const back = screen.queryByRole('button', { name: 'Back to included work' });
   if (back) fireEvent.click(back);
   const button = screen.getAllByRole('button', { name: `Add ${kind}` }).at(0);

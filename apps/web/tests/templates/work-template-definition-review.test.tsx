@@ -1,4 +1,5 @@
 import {
+  section,
   template,
   change,
   add,
@@ -12,36 +13,33 @@ import { WorkTemplateForm } from '@/components/templates/work-template-authoring
 describe('work definition publication review', () => {
   it('separates purpose, starting content, included work and publication into revisitable decisions', () => {
     render(<WorkTemplateForm orgId="org" initial={null} onCreated={vi.fn()} />);
-    expect(screen.getByRole('heading', { name: 'Name a kind of work' })).toBeVisible();
-    expect(screen.queryByRole('textbox', { name: 'Starting document' })).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'About this template' })).toBeVisible();
+    expect(screen.queryByRole('textbox', { name: 'Document' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Add task' })).not.toBeInTheDocument();
     change('Template name', 'Event');
     fireEvent.click(screen.getByRole('button', { name: 'Continue to starting work' }));
-    expect(screen.getByRole('textbox', { name: 'Starting document' })).toBeVisible();
+    expect(screen.getByRole('textbox', { name: 'Document' })).toBeVisible();
     expect(screen.queryByRole('button', { name: 'Add task' })).not.toBeInTheDocument();
-    change('Starting document', 'A welcoming event.');
+    change('Document', 'A welcoming event.');
     fireEvent.click(screen.getByRole('button', { name: 'Continue to included work' }));
     expect(screen.getByRole('button', { name: 'Add task' })).toBeVisible();
-    expect(screen.queryByRole('textbox', { name: 'Starting document' })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('tab', { name: 'Starting work' }));
-    expect(screen.getByRole('textbox', { name: 'Starting document' })).toHaveValue(
-      'A welcoming event.',
-    );
-    fireEvent.click(screen.getByRole('tab', { name: 'Purpose' }));
+    expect(screen.queryByRole('textbox', { name: 'Document' })).not.toBeInTheDocument();
+    section('Starting work');
+    expect(screen.getByRole('textbox', { name: 'Document' })).toHaveValue('A welcoming event.');
+    section('Purpose');
     expect(screen.getByRole('textbox', { name: 'Template name' })).toHaveValue('Event');
     expect(mocks.publish).not.toHaveBeenCalled();
   });
 
-  it('offers review for a saved draft and deliberate publication with its sharing consequence', () => {
+  it('offers deliberate publication only after opening Review', () => {
     render(<WorkTemplateForm orgId="org" initial={template()} onCreated={vi.fn()} />);
-    expect(screen.queryByRole('button', { name: 'Save draft' })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Review definition' }));
+    expect(screen.queryByRole('button', { name: 'Save changes' })).not.toBeInTheDocument();
+    section('Review');
     expect(screen.getByRole('tab', { name: 'Review' })).toHaveAttribute('aria-selected', 'true');
-    const header = screen.getByRole('banner');
-    expect(within(header).getByRole('button', { name: 'Publish to workspace' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Publish to workspace' })).toBeEnabled();
     expect(
       within(screen.getByRole('region', { name: 'Review and publish' })).getByText(
-        /Publishing shares this definition with everyone/,
+        /Publishing shares this template with everyone/,
       ),
     ).toBeVisible();
     expect(mocks.publish).not.toHaveBeenCalled();
@@ -53,19 +51,21 @@ describe('work definition publication review', () => {
       if (state === 'archived') initial.status = 'archived';
       else initial.canEdit = false;
       render(<WorkTemplateForm orgId="org" initial={initial} onCreated={vi.fn()} />);
-      fireEvent.click(screen.getByRole('button', { name: 'Review definition' }));
+      section('Review');
       const header = screen.getByRole('banner');
       expect(
         within(header).queryByRole('button', { name: 'Publish to workspace' }),
       ).not.toBeInTheDocument();
-      expect(within(header).queryByRole('button', { name: 'Save draft' })).not.toBeInTheDocument();
+      expect(
+        within(header).queryByRole('button', { name: 'Save changes' }),
+      ).not.toBeInTheDocument();
       expect(
         within(header).queryByRole('button', { name: 'Review definition' }),
       ).not.toBeInTheDocument();
       expect(within(header).getByRole('status')).toHaveTextContent('Saved draft');
       expect(screen.getByRole('tab', { name: 'Review' })).toHaveAttribute('aria-selected', 'true');
-      fireEvent.click(screen.getByRole('tab', { name: 'Starting work' }));
-      expect(within(header).getByRole('button', { name: 'Review definition' })).toBeEnabled();
+      section('Starting work');
+      expect(within(header).getByRole('tab', { name: 'Review' })).toBeEnabled();
     },
   );
   it.each([
@@ -77,7 +77,7 @@ describe('work definition publication review', () => {
     const child = add(kind);
     change('Name', `Sample ${kind}`, child);
     change('Document', body, child);
-    fireEvent.click(screen.getByRole('tab', { name: 'Review' }));
+    section('Review');
     const review = screen.getByRole('region', { name: 'Work definition review' });
     expect(
       within(review).getByText(`${kind.charAt(0).toLocaleUpperCase()}${kind.slice(1)}`),
@@ -103,7 +103,7 @@ describe('work definition publication review', () => {
     const child = screen.getByRole('group', { name: 'Child work: New task' });
     change('Title', 'Confirm the next host', child);
     change('Responsible person', 'parent_responsible', child);
-    fireEvent.click(screen.getByRole('tab', { name: 'Review' }));
+    section('Review');
     const review = screen.getByRole('region', { name: 'Work definition review' });
     const starting = within(review).getByRole('region', { name: 'Starting work' });
     expect(within(starting).getByText('Neighborhood gatherings')).toBeVisible();
@@ -154,7 +154,7 @@ describe('work definition publication review', () => {
     change('Start from template', nestedId, second);
     change('Template version', 'pinned', second);
     change('Version to keep', versionId, second);
-    fireEvent.click(screen.getByRole('tab', { name: 'Review' }));
+    section('Review');
     const review = screen.getByRole('region', { name: 'Work definition review' });
     expect(within(review).getByText('Community dinner sample')).toBeVisible();
     expect(within(review).getByText('An accessible neighborhood meal')).toBeVisible();
@@ -170,4 +170,19 @@ describe('work definition publication review', () => {
     expect(within(review).getByText('Current cycle for the selected team')).toBeVisible();
     expect(within(review).getByText('Vendor booking · Keep Version 2')).toBeVisible();
   });
+});
+
+it('keeps template purpose separate from the contents copied into new work', () => {
+  const initial = template();
+  initial.definition.description = 'Use this template for quarterly planning.';
+  render(
+    <WorkTemplateForm orgId="org" initial={initial} initialSection="review" onCreated={vi.fn()} />,
+  );
+  const starting = screen.getByRole('region', { name: 'Starting work' });
+  expect(within(starting).queryByText(initial.definition.description)).not.toBeInTheDocument();
+  expect(
+    within(screen.getByRole('region', { name: 'Review and publish' })).getByText(
+      initial.definition.description,
+    ),
+  ).toBeVisible();
 });

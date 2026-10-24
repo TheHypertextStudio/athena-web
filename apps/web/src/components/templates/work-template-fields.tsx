@@ -1,6 +1,6 @@
 'use client';
 import type { JSX } from 'react';
-import { Field, Input, Select, Surface, Textarea, fieldSurface } from '@docket/ui/primitives';
+import { Field, Input, Select, Textarea, fieldSurface } from '@docket/ui/primitives';
 import { EntityMultiPicker } from '@docket/ui/components';
 import { useVocabulary } from '@docket/ui/hooks';
 import { TemplateTargetType } from '@docket/work/template-contract';
@@ -36,10 +36,8 @@ export function WorkTemplateFields({
   const set = form.setDefinition;
   return (
     <div className="flex min-w-0 flex-col gap-4 sm:gap-5">
-      <Surface tone="card" shape="medium" pad="comfortable" className="sm:p-4">
-        <TemplateSampleWork orgId={orgId} form={form} />
-      </Surface>
-      <div className="min-w-0 px-3 sm:px-0">
+      <TemplateSampleWork orgId={orgId} form={form} />
+      <div className="min-w-0">
         <TemplateDisclosure title="Defaults and availability">
           <Field
             label="Starting status"
@@ -75,7 +73,6 @@ export function WorkTemplateFields({
 }
 
 function TemplateSampleWork({ orgId, form }: { orgId: string; form: Form }): JSX.Element {
-  const disabled = form.pending || !form.canEdit;
   const set = form.setDefinition;
   return (
     <section
@@ -89,31 +86,28 @@ function TemplateSampleWork({ orgId, form }: { orgId: string; form: Form }): JSX
           Starting work
         </h2>
         <p className="text-body-medium text-on-surface-variant">
-          Set the starting contents of one new item. Add the work that comes with it in the next
-          step.
+          Choose the details and document that new work starts with.
         </p>
       </div>
       <WorkTemplateSampleFields orgId={orgId} form={form} />
-      <Surface tone="well" shape="medium" pad="none" className="contents sm:block sm:p-4">
-        <Field label="Starting document">
-          <FreeformTextEditor
-            value={form.definition.payload.description ?? ''}
-            onChange={(description) => {
-              set((value) =>
-                (value.payload.description ?? '') === description
-                  ? value
-                  : { ...value, payload: { ...value.payload, description } },
-              );
-            }}
-            disabled={disabled}
-            readOnly={!form.canEdit}
-            placeholder="Write the structure people should start with…"
-            ariaLabel="Starting document"
-            mentionOrgId={orgId}
-            className={`${fieldSurface({ variant: 'plain', controlSize: 'md', multiline: true, ringOn: 'within' })} min-h-24 max-w-none`}
-          />
-        </Field>
-      </Surface>
+      <Field label="Document">
+        <FreeformTextEditor
+          value={form.definition.payload.description ?? ''}
+          onChange={(description) => {
+            set((value) =>
+              (value.payload.description ?? '') === description
+                ? value
+                : { ...value, payload: { ...value.payload, description } },
+            );
+          }}
+          disabled={form.pending}
+          readOnly={!form.canEdit}
+          placeholder="Add notes, instructions, or a checklist…"
+          ariaLabel="Document"
+          mentionOrgId={orgId}
+          className={`${fieldSurface({ variant: 'filled', controlSize: 'md', multiline: true, ringOn: 'within' })} min-h-48 max-w-none`}
+        />
+      </Field>
       <WorkTemplateSampleSummary form={form} />
       <WorkTemplateSampleProperties orgId={orgId} form={form} />
     </section>
@@ -228,17 +222,14 @@ export function WorkTemplatePurposeFields({
     <div className="flex max-w-2xl min-w-0 flex-col gap-4 sm:gap-5">
       <div>
         <h2 tabIndex={-1} className="text-title-large">
-          Name a kind of work
+          About this template
         </h2>
         <p className="text-body-medium text-on-surface-variant">
-          Give a kind of work a shared name, such as Event, client engagement, or volunteer
-          onboarding.
+          Choose a name and describe when to use this template.
         </p>
       </div>
       <Field label="Template name">
         <Input
-          variant="plain"
-          className="text-title-large"
           placeholder="Name this template"
           value={form.definition.name}
           disabled={disabled || isBase}
@@ -253,7 +244,7 @@ export function WorkTemplatePurposeFields({
           rows={2}
           value={form.definition.description ?? ''}
           disabled={disabled}
-          placeholder="What makes a piece of work an example of this?"
+          placeholder="Describe when this template is useful (optional)"
           onChange={(event) => {
             set((value) => ({ ...value, description: event.target.value }));
           }}

@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { WorkTemplateCreate } from '@docket/work/work-template-contract';
 import { WorkTemplateForm } from '@/components/templates/work-template-authoring';
 
@@ -8,7 +8,16 @@ const mocks = vi.hoisted(() => ({
   draft: vi.fn(),
   publish: vi.fn(),
   canManage: false,
+  owner: 0,
 }));
+vi.mock('@/lib/auth-client', () => ({
+  useSession: () => ({
+    data: { user: { id: String(mocks.owner) }, session: { id: String(mocks.owner) } },
+  }),
+}));
+beforeEach(() => {
+  mocks.owner += 1;
+});
 vi.mock('@/components/templates/work-template-queries', () => ({
   workTemplateDef: () => ({}),
   workTemplatesDef: () => ({}),
@@ -78,11 +87,11 @@ describe('work-template sample authoring', () => {
       render(<WorkTemplateForm orgId="org" initial={null} onCreated={onCreated} />);
       fireEvent.change(screen.getByLabelText('Kind of work'), { target: { value: kind } });
       fireEvent.change(screen.getByLabelText('Template name'), { target: { value: 'Event' } });
-      fireEvent.change(
-        screen.getByLabelText(kind === 'task' ? 'Starting title' : 'Starting name'),
-        { target: { value: 'Community dinner' } },
-      );
-      fireEvent.change(screen.getByLabelText('Starting document'), {
+      fireEvent.click(screen.getByRole('button', { name: 'Continue to starting work' }));
+      fireEvent.change(screen.getByLabelText('Name for new work'), {
+        target: { value: 'Community dinner' },
+      });
+      fireEvent.change(screen.getByLabelText('Document'), {
         target: { value: '## Preparation' },
       });
       fireEvent.click(screen.getByRole('button', { name: 'Save draft' }));
@@ -110,7 +119,8 @@ describe('work-template sample authoring', () => {
     (canManage) => {
       mocks.canManage = canManage;
       render(<WorkTemplateForm orgId="org" initial={null} onCreated={vi.fn()} />);
-      fireEvent.click(screen.getByRole('tab', { name: 'Starting work' }));
+      fireEvent.change(screen.getByLabelText('Template name'), { target: { value: 'Event' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Continue to starting work' }));
       fireEvent.click(screen.getByRole('button', { name: 'Defaults and availability' }));
       const control = screen.getByRole('button', { name: /Offer to teams/ });
       if (canManage) expect(control).toBeEnabled();

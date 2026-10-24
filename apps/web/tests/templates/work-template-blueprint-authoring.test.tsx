@@ -1,5 +1,6 @@
 import {
   mocks,
+  section,
   template,
   change,
   add,
@@ -36,19 +37,19 @@ describe('blueprint sample authoring', () => {
     change('When to use it', 'Community gatherings');
     fireEvent.click(screen.getByRole('button', { name: 'Continue to starting work' }));
     expect(screen.getByRole('heading', { name: 'Event' })).toBeVisible();
-    change('Starting name', 'Community dinner');
+    change('Name for new work', 'Community dinner');
     expect(screen.getByRole('heading', { name: 'Event' })).toBeVisible();
   });
   it('keeps populated purpose text accessible and editable by its visible label', () => {
     const initial = template();
     initial.definition.description = 'For neighborhood events.';
     render(<WorkTemplateForm orgId="org" initial={initial} onCreated={vi.fn()} />);
-    fireEvent.click(screen.getByRole('tab', { name: 'Purpose' }));
+    section('Purpose');
     const purpose = screen.getByRole('textbox', { name: 'When to use it' });
     expect(purpose).toHaveValue('For neighborhood events.');
     fireEvent.change(purpose, { target: { value: 'For community meals.' } });
-    fireEvent.click(screen.getByRole('tab', { name: 'Starting work' }));
-    fireEvent.click(screen.getByRole('tab', { name: 'Purpose' }));
+    section('Starting work');
+    section('Purpose');
     expect(screen.getByRole('textbox', { name: 'When to use it' })).toHaveValue(
       'For community meals.',
     );
@@ -61,7 +62,7 @@ describe('blueprint sample authoring', () => {
     const child = screen.getByRole('group', { name: 'Child work: New task' });
     change('Title', 'Confirm delivery', child);
     change('Responsible person', 'parent_responsible', child);
-    fireEvent.click(screen.getByRole('tab', { name: 'Review' }));
+    section('Review');
     expect(
       screen.getByText(
         'Vendor booking assignee · Same team as Vendor booking, or the team chosen for new work',
@@ -77,7 +78,7 @@ describe('blueprint sample authoring', () => {
     change('Title', 'Welcome guests', child);
     change('Responsible person', 'parent_responsible', child);
     change('Is due', 'parent', child);
-    fireEvent.click(screen.getByRole('tab', { name: 'Review' }));
+    section('Review');
     const review = screen.getByRole('region', { name: 'Work definition review' });
     expect(
       within(review).getByText(
@@ -89,44 +90,44 @@ describe('blueprint sample authoring', () => {
   });
   it('guides a new work definition and preserves child selection when revisiting sections', () => {
     render(<WorkTemplateForm orgId="org" initial={null} onCreated={vi.fn()} />);
-    expect(screen.getByRole('tab', { name: 'Purpose' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('button', { name: 'Purpose' })).toHaveAttribute('aria-current', 'step');
     change('Template name', 'Event');
     change('When to use it', 'Community events with preparation and follow-up');
     fireEvent.click(screen.getByRole('button', { name: 'Continue to starting work' }));
     const child = add('task');
     change('Title', 'Book venue', child);
-    fireEvent.click(screen.getByRole('tab', { name: 'Review' }));
+    section('Review');
     expect(
       within(screen.getByRole('region', { name: 'Work definition review' })).getByRole('heading', {
         name: 'Starting work',
       }),
     ).toBeVisible();
     expect(
-      within(screen.getByRole('region', { name: 'Work definition review' })).getByText(
+      within(screen.getByRole('region', { name: 'Review and publish' })).getByText(
         'Community events with preparation and follow-up',
       ),
     ).toBeVisible();
-    fireEvent.click(screen.getByRole('tab', { name: 'Purpose' }));
+    section('Purpose');
     expect(screen.getByLabelText('When to use it')).toHaveValue(
       'Community events with preparation and follow-up',
     );
-    fireEvent.click(screen.getByRole('tab', { name: 'Included work' }));
+    section('Included work');
     expect(screen.getByLabelText('Title')).toHaveValue('Book venue');
   });
   it('allows standalone work and keeps the starting document out of included-work decisions', () => {
     render(<WorkTemplateForm orgId="org" initial={template()} onCreated={vi.fn()} />);
-    expect(screen.getByLabelText('Starting document')).toBeVisible();
-    fireEvent.click(screen.getByRole('button', { name: 'Continue to included work' }));
-    expect(screen.getByLabelText('Starting document')).not.toBeVisible();
+    expect(screen.getByLabelText('Document')).toBeVisible();
+    section('Included work');
+    expect(screen.getByLabelText('Document')).not.toBeVisible();
     expect(screen.getByText('No included work yet')).toBeVisible();
     expect(screen.getByText(/A new project can stand on its own/)).toBeVisible();
     expect(screen.queryByRole('button', { name: /Edit parent/ })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Review this definition' }));
+    section('Review');
     expect(screen.getByRole('button', { name: 'Publish to workspace' })).toBeEnabled();
   });
   it('replaces the overview with one child editor and restores its row on return', async () => {
     render(<WorkTemplateForm orgId="org" initial={template()} onCreated={vi.fn()} />);
-    expect(screen.getByLabelText('Starting document')).toBeVisible();
+    expect(screen.getByLabelText('Document')).toBeVisible();
     expect(screen.queryByLabelText('Starting priority')).not.toBeInTheDocument();
     const first = add('task');
     change('Title', 'Book venue', first);
@@ -135,7 +136,7 @@ describe('blueprint sample authoring', () => {
     change('Title', 'Send invitations', second);
     expect(screen.getAllByLabelText('Title')).toHaveLength(1);
     expect(screen.queryByRole('list', { name: 'Child work outline' })).not.toBeInTheDocument();
-    expect(screen.queryByLabelText('Starting document')).not.toBeVisible();
+    expect(screen.getAllByLabelText('Document')[0]).not.toBeVisible();
     fireEvent.click(screen.getByRole('button', { name: 'Back to included work' }));
     fireEvent.click(screen.getByRole('button', { name: 'Edit Book venue' }));
     expect(screen.getByLabelText('Title')).toHaveValue('Book venue');
@@ -186,7 +187,7 @@ describe('blueprint sample authoring', () => {
         change('Starting point estimate', '3');
         change('Starting time estimate (minutes)', '45');
       }
-      fireEvent.click(screen.getByRole('button', { name: 'Save draft' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
       await waitFor(() => {
         expect(mocks.draft).toHaveBeenCalled();
       });
@@ -221,8 +222,8 @@ describe('blueprint sample authoring', () => {
     render(
       <WorkTemplateForm orgId="org" initial={WorkTemplateOut.parse(saved)} onCreated={vi.fn()} />,
     );
-    change('Starting name', 'Community gatherings');
-    fireEvent.click(screen.getByRole('button', { name: 'Save draft' }));
+    change('Name for new work', 'Community gatherings');
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
     await waitFor(() => {
       expect(mocks.draft).toHaveBeenCalled();
     });
@@ -254,7 +255,7 @@ describe('blueprint sample authoring', () => {
     change('Due: move to a weekday', 'next', task);
     change('Due: weekday', '1', task);
     fireEvent.click(within(task).getByLabelText('Due: allow the same day'));
-    fireEvent.click(screen.getByRole('button', { name: 'Save draft' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
     await waitFor(() => {
       expect(mocks.draft).toHaveBeenCalled();
     });
@@ -277,7 +278,7 @@ describe('blueprint sample authoring', () => {
     });
     view.unmount();
     render(<WorkTemplateForm orgId="org" initial={saved} onCreated={vi.fn()} />);
-    fireEvent.click(screen.getByRole('tab', { name: 'Included work' }));
+    section('Included work');
     fireEvent.click(screen.getByRole('button', { name: /Edit Book venue/ }));
     expect(screen.getByLabelText('Title')).toHaveValue('Book venue');
     fireEvent.click(screen.getByRole('button', { name: 'Dates' }));
@@ -299,7 +300,7 @@ describe('blueprint sample authoring', () => {
     change('Is due', 'after_completion', second);
     fireEvent.click(within(second).getByLabelText('Due: after Gather quotes finishes'));
     change('Due: days after finishing', '2', second);
-    fireEvent.click(screen.getByRole('button', { name: 'Save draft' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
     await waitFor(() => {
       expect(mocks.draft).toHaveBeenCalled();
     });
@@ -322,7 +323,7 @@ describe('blueprint sample authoring', () => {
   });
   it('allows only valid child kinds and removes a child branch with its stale references', async () => {
     render(<WorkTemplateForm orgId="org" initial={template('task')} onCreated={vi.fn()} />);
-    fireEvent.click(screen.getByRole('tab', { name: 'Included work' }));
+    section('Included work');
     expect(screen.queryByRole('button', { name: 'Add project' })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Add subtask' }));
     const first = screen.getByRole('group', { name: /Child work:/ });
@@ -363,7 +364,7 @@ describe('blueprint sample authoring', () => {
     change('Is due', `milestone:${milestoneKey}`, task);
     change('Included under', milestoneKey, task);
     expect(within(task).getByLabelText('Is due')).toHaveValue('none');
-    fireEvent.click(screen.getByRole('button', { name: 'Save draft' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
     await waitFor(() => {
       expect(mocks.draft).toHaveBeenCalled();
     });
@@ -389,7 +390,7 @@ describe('blueprint sample authoring', () => {
     expect(screen.getByLabelText('Kind of work')).toBeDisabled();
     view.unmount();
     render(<WorkTemplateForm orgId="org" initial={null} onCreated={vi.fn()} />);
-    fireEvent.click(screen.getByRole('tab', { name: 'Included work' }));
+    section('Included work');
     fireEvent.click(screen.getByRole('button', { name: 'Edit Keep unsaved child' }));
     expect(screen.getByLabelText('Title')).toHaveValue('Keep unsaved child');
   });
@@ -398,17 +399,17 @@ describe('blueprint sample authoring', () => {
     const child = add('task');
     change('Title', '', child);
     expect(screen.getByText('Review child work')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Save draft' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Save changes' })).toBeDisabled();
   });
   it('keeps child edits after a failed save and disables editing for publication-only readers', async () => {
     mocks.draft.mockRejectedValueOnce(new Error('private provider failure'));
     const view = render(<WorkTemplateForm orgId="org" initial={template()} onCreated={vi.fn()} />);
     const child = add('task');
     change('Title', 'Keep my child', child);
-    fireEvent.click(screen.getByRole('button', { name: 'Save draft' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
     await screen.findByText(/Your changes are still here/);
     expect(
-      within(screen.getByRole('banner')).getByText('Template could not be saved'),
+      within(screen.getByRole('banner')).getByText("Couldn't update the template"),
     ).toBeVisible();
     expect(screen.getByLabelText('Title')).toHaveValue('Keep my child');
     expect(screen.queryByText('private provider failure')).not.toBeInTheDocument();
@@ -420,7 +421,7 @@ describe('blueprint sample authoring', () => {
         onCreated={vi.fn()}
       />,
     );
-    fireEvent.click(screen.getByRole('tab', { name: 'Included work' }));
+    section('Included work');
     expect(screen.getByRole('button', { name: 'Add task' })).toBeDisabled();
   });
 });

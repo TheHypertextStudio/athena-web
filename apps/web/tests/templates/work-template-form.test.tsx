@@ -48,6 +48,29 @@ const initial = WorkTemplateOut.parse({
   updatedAt: '2026-10-14T00:00:00Z',
 });
 describe('revision-aware template authoring', () => {
+  it('prevents two saves before mutation pending state renders', async () => {
+    let complete: ((value: unknown) => void) | undefined;
+    mocks.draft.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          complete = resolve;
+        }),
+    );
+    const { result } = renderHook(() => useWorkTemplateForm('org', initial, vi.fn()));
+    let first: Promise<void>;
+    let second: Promise<void>;
+    act(() => {
+      first = result.current.save();
+      second = result.current.save();
+    });
+    expect(mocks.draft).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      complete?.(initial);
+      await first;
+      await second;
+    });
+  });
+
   it('keeps edited prose after a save fails and never publishes implicitly', async () => {
     mocks.draft.mockRejectedValueOnce(new Error('provider detail must stay hidden'));
     const { result } = renderHook(() => useWorkTemplateForm('org', initial, vi.fn()));
@@ -194,4 +217,40 @@ describe('revision-aware template authoring', () => {
     expect(result.current.definition.name).toBe('');
     expect(result.current.saved).toBe(false);
   });
+  it.each(['create', 'publish'] as const)(
+    'ignores a delayed %s response after the editor unmounts',
+    async (operation) => {
+      let complete: ((value: unknown) => void) | undefined;
+      mocks[operation].mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            complete = resolve;
+          }),
+      );
+      const onCreated = vi.fn();
+      const onPublished = vi.fn();
+      const editor = renderHook(() =>
+        useWorkTemplateForm('org', operation === 'create' ? null : initial, onCreated, onPublished),
+      );
+      if (operation === 'create')
+        act(() => {
+          editor.result.current.setDefinition({
+            ...editor.result.current.definition,
+            name: 'Private creation',
+          });
+        });
+      let pending: Promise<void> | undefined;
+      act(() => {
+        pending =
+          operation === 'create' ? editor.result.current.save() : editor.result.current.publish();
+      });
+      editor.unmount();
+      await act(async () => {
+        complete?.(initial);
+        await pending;
+      });
+      expect(onCreated).not.toHaveBeenCalled();
+      expect(onPublished).not.toHaveBeenCalled();
+    },
+  );
 });

@@ -34,8 +34,8 @@ it('shows the checked unpublished prerequisite beside the publication decision a
   };
   mocks.catalog = [child];
   render(<WorkTemplateForm orgId={orgId} initial={withReference()} onCreated={vi.fn()} />);
-  fireEvent.click(screen.getByRole('button', { name: 'Review definition' }));
-  const header = within(screen.getByRole('banner'));
+  fireEvent.click(screen.getByRole('tab', { name: 'Review' }));
+  const header = within(screen.getByRole('region', { name: 'Review and publish' }));
   expect(header.getByRole('button', { name: 'Publish to workspace' })).toBeDisabled();
   expect(screen.getByText('Publish Vendor booking before Event.')).toBeVisible();
   expect(
@@ -65,8 +65,8 @@ it('keeps an actual historical publication valid rather than treating a nonlates
   mocks.catalog = [child];
   mocks.versions = [{ id: versionId, number: 2 }];
   render(<WorkTemplateForm orgId={orgId} initial={withReference()} onCreated={vi.fn()} />);
-  fireEvent.click(screen.getByRole('button', { name: 'Review definition' }));
-  const header = within(screen.getByRole('banner'));
+  fireEvent.click(screen.getByRole('tab', { name: 'Review' }));
+  const header = within(screen.getByRole('region', { name: 'Review and publish' }));
   expect(header.getByRole('button', { name: 'Publish to workspace' })).toBeEnabled();
   expect(header.queryByRole('link', { name: 'Review Vendor booking' })).not.toBeInTheDocument();
   expect(screen.getByText('Vendor booking · Keep Version 2')).toBeVisible();
@@ -78,8 +78,8 @@ it.each(['loading', 'error'] as const)(
     mocks.catalogState = state;
     mocks.catalog = [];
     render(<WorkTemplateForm orgId={orgId} initial={withReference()} onCreated={vi.fn()} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Review definition' }));
-    const header = within(screen.getByRole('banner'));
+    fireEvent.click(screen.getByRole('tab', { name: 'Review' }));
+    const header = within(screen.getByRole('region', { name: 'Review and publish' }));
     expect(header.getByRole('button', { name: 'Publish to workspace' })).toBeDisabled();
     expect(header.queryByText(/Vendor booking/)).not.toBeInTheDocument();
     if (state === 'error') {
@@ -90,16 +90,16 @@ it.each(['loading', 'error'] as const)(
 );
 it('focuses the publication decision on entering Review before the included work and subordinate starting document', () => {
   render(<WorkTemplateForm orgId={orgId} initial={withReference()} onCreated={vi.fn()} />);
-  fireEvent.click(screen.getByRole('button', { name: 'Review definition' }));
+  fireEvent.click(screen.getByRole('tab', { name: 'Review' }), { detail: 1 });
   const review = within(screen.getByRole('region', { name: 'Work definition review' }));
   expect(screen.getByRole('heading', { name: 'Review & publish' })).toHaveFocus();
   expect(
     review
-      .getByRole('heading', { name: 'Included work' })
-      .compareDocumentPosition(review.getByRole('heading', { name: 'Starting work' })) &
+      .getByRole('heading', { name: 'Starting work' })
+      .compareDocumentPosition(review.getByRole('heading', { name: 'Included work' })) &
       Node.DOCUMENT_POSITION_FOLLOWING,
   ).toBeTruthy();
   expect(review.queryByRole('heading', { name: 'Preparation' })).not.toBeInTheDocument();
-  fireEvent.click(review.getByRole('button', { name: 'Starting document' }));
+  fireEvent.click(review.getByRole('button', { name: 'Document' }));
   expect(review.getByRole('heading', { name: 'Preparation' })).toBeVisible();
 });

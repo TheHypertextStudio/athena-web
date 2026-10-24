@@ -38,33 +38,47 @@ async function createDraft(
   await page.getByRole('button', { name: 'Continue to starting work', exact: true }).click();
   await page
     .getByRole('textbox', {
-      name: kind === 'task' ? 'Starting title' : 'Starting name',
+      name: 'Name for new work',
       exact: true,
     })
     .fill('Community dinner');
   await page
-    .getByRole('textbox', { name: 'Starting document', exact: true })
+    .getByRole('textbox', { name: 'Document', exact: true })
     .fill('Confirm the venue and welcome the neighbors.');
   const response = waitForApiResponse(page, /\/templates\/definitions$/, { method: 'POST' });
-  await page.getByRole('button', { name: 'Save draft', exact: true }).click();
+  await page.getByRole('button', { name: /^Save (draft|changes)$/ }).click();
   expect((await response).ok()).toBe(true);
   const draft = (await (await response).json()) as WorkTemplateOut;
-  await expect(page).toHaveURL(new RegExp(`/work-templates/${draft.id}$`));
-  await expect(page.locator('[role="tab"][aria-label="Starting work"]')).toHaveAttribute(
-    'aria-selected',
-    'true',
-  );
+  await expect(page).toHaveURL(new RegExp(`/work-templates/${draft.id}(?:\\?|$)`));
+  await expect(
+    page
+      .getByRole('navigation', { name: 'Create template', exact: true })
+      .getByRole('button', { name: 'Starting work', exact: true }),
+  ).toHaveAttribute('aria-current', 'step');
   return draft;
 }
 
 async function publish(page: Page): Promise<WorkTemplateOut> {
+  const creating = await page
+    .getByRole('navigation', { name: 'Create template', exact: true })
+    .isVisible();
   await selectWorkDefinitionSection(page, 'Review');
   const response = waitForApiResponse(page, /\/templates\/definitions\/[^/]+\/publish$/, {
     method: 'POST',
   });
   await page.getByRole('button', { name: /Publish (to workspace|next version)/ }).click();
   expect((await response).ok()).toBe(true);
-  return (await (await response).json()) as WorkTemplateOut;
+  const published = (await (await response).json()) as WorkTemplateOut;
+  if (creating) {
+    await page.waitForURL(
+      `/orgs/${published.organizationId}/work-templates#work-template-${published.id}`,
+    );
+    await page.goto(
+      `/orgs/${published.organizationId}/work-templates/${published.id}?section=review`,
+      { waitUntil: 'commit' },
+    );
+  }
+  return published;
 }
 
 for (const kind of ['initiative', 'program', 'project', 'task']) {
@@ -79,13 +93,13 @@ for (const kind of ['initiative', 'program', 'project', 'task']) {
     await page.reload({ waitUntil: 'commit' });
     await expect(
       page.getByRole('textbox', {
-        name: kind === 'task' ? 'Starting title' : 'Starting name',
+        name: 'Name for new work',
         exact: true,
       }),
     ).toHaveValue('Community dinner');
-    await expect(
-      page.getByRole('textbox', { name: 'Starting document', exact: true }),
-    ).toContainText('Confirm the venue');
+    await expect(page.getByRole('textbox', { name: 'Document', exact: true })).toContainText(
+      'Confirm the venue',
+    );
     const published = await publish(page);
     expect(published.scope).toBe('organization');
     expect(published.latestVersion?.number).toBe(1);
@@ -108,7 +122,7 @@ test.describe('canonical template editor accessibility and recovery', () => {
     await page.keyboard.press('Tab');
     await expect(page.getByRole('textbox', { name: 'When to use it', exact: true })).toBeFocused();
     await name.fill('Retained after a failed save');
-    const save = page.getByRole('button', { name: 'Save draft', exact: true });
+    const save = page.getByRole('button', { name: /^Save (draft|changes)$/ });
     await save.scrollIntoViewIfNeeded();
     const bounds = await save.boundingBox();
     expect(bounds?.height).toBeGreaterThanOrEqual(40);
@@ -136,7 +150,7 @@ test.describe('canonical template editor accessibility and recovery', () => {
       { times: 1 },
     );
     await save.click();
-    await expect(page.getByText('Template could not be saved', { exact: true })).toBeVisible();
+    await expect(page.getByText("Couldn't update the template", { exact: true })).toBeVisible();
     await expect(name).toHaveValue('Retained after a failed save');
     const captureOut = process.env['E2E_WORK_TEMPLATE_REVIEW_OUT'];
     if (captureOut) {
@@ -203,10 +217,10 @@ test('Event project retains its publication, then changes identity without repla
   await expect(page.getByRole('button', { name: 'Template actions', exact: true })).toBeVisible();
   await page.goto(`/orgs/${orgId}/work-templates/${draft.id}`, { waitUntil: 'commit' });
   await page
-    .getByRole('textbox', { name: 'Starting document', exact: true })
+    .getByRole('textbox', { name: 'Document', exact: true })
     .fill('A revised starting document for future dinners.');
   const saved = waitForApiResponse(page, /\/draft$/, { method: 'PATCH' });
-  await page.getByRole('button', { name: 'Save draft', exact: true }).click();
+  await page.getByRole('button', { name: /^Save (draft|changes)$/ }).click();
   expect((await saved).ok()).toBe(true);
   const versionTwo = await publish(page);
   await page.goto(`/orgs/${orgId}/projects/${project.id}`, { waitUntil: 'commit' });

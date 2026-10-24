@@ -1,5 +1,5 @@
 'use client';
-import { TabsScope, TabPanel, Button, Surface } from '@docket/ui/primitives';
+import { TabsScope, TabPanel } from '@docket/ui/primitives';
 import { type JSX, type ReactNode } from 'react';
 
 import { TemplateDefinitionNavigation } from './template-definition-navigation';
@@ -19,7 +19,11 @@ export function TemplateDefinitionSections({
   header,
   reviewIntro,
   navigation,
+  mode = 'edit',
+  reached,
 }: {
+  mode?: 'create' | 'edit';
+  reached?: number;
   orgId: string;
   initial: WorkTemplateOut | null;
   form: WorkTemplateFormState;
@@ -32,26 +36,23 @@ export function TemplateDefinitionSections({
   return (
     <TabsScope scope={navigation.scope}>
       <>
-        <Surface
-          as="header"
-          data-template-definition-header=""
-          tone="prominent"
-          shape="medium"
-          pad="tight"
-          className="flex min-w-0 flex-col gap-1 px-3 sm:sticky sm:top-2 sm:z-10 sm:gap-2 sm:p-5"
-        >
+        <header data-template-definition-header="" className="flex min-w-0 flex-col gap-4">
           {header}
-          <TemplateDefinitionNavigation section={section} onValueChange={selectSection} />
-        </Surface>
+          <TemplateDefinitionNavigation
+            section={section}
+            onValueChange={selectSection}
+            pending={form.pending}
+            mode={mode}
+            reached={reached}
+            scope={navigation.scope}
+          />
+        </header>
         <DefinitionPurpose
           orgId={orgId}
           initial={initial}
           form={form}
           hidden={section !== 'purpose'}
           onFocusCapture={rememberFocus}
-          onNext={() => {
-            selectSection('work');
-          }}
         />
         <DefinitionWork
           orgId={orgId}
@@ -59,9 +60,6 @@ export function TemplateDefinitionSections({
           form={form}
           hidden={section !== 'work'}
           onFocusCapture={rememberFocus}
-          onReview={() => {
-            selectSection('structure');
-          }}
         />
         <DefinitionStructure orgId={orgId} form={form} navigation={navigation} />
         <TabPanel
@@ -71,9 +69,9 @@ export function TemplateDefinitionSections({
           className="flex min-w-0 scroll-mt-48 flex-col gap-6"
           render={() => (
             <>
-              <div className="px-3 sm:px-0">{reviewIntro}</div>
+              <div>{reviewIntro}</div>
               <WorkTemplateDefinitionReview orgId={orgId} form={form} templateId={initial?.id} />
-              <div className="flex min-w-0 flex-col gap-6 px-3 sm:px-0">{children}</div>
+              <div className="flex min-w-0 flex-col gap-6">{children}</div>
             </>
           )}
         />
@@ -87,14 +85,12 @@ function DefinitionWork({
   initial,
   form,
   hidden,
-  onReview,
   onFocusCapture,
 }: {
   orgId: string;
   initial: WorkTemplateOut | null;
   form: WorkTemplateFormState;
   hidden: boolean;
-  onReview: () => void;
   onFocusCapture: React.FocusEventHandler<HTMLElement>;
 }): JSX.Element {
   return (
@@ -106,16 +102,6 @@ function DefinitionWork({
       className="scroll-mt-48"
     >
       <WorkTemplateFields orgId={orgId} form={form} isBase={initial?.isBase ?? false} />
-      <Button
-        type="button"
-        variant="secondary"
-        className="mt-6 ml-3 sm:ml-0"
-        onClick={() => {
-          onReview();
-        }}
-      >
-        Continue to included work
-      </Button>
     </TabPanel>
   );
 }
@@ -126,14 +112,12 @@ function DefinitionPurpose({
   form,
   hidden,
   onFocusCapture,
-  onNext,
 }: {
   orgId: string;
   initial: WorkTemplateOut | null;
   form: WorkTemplateFormState;
   hidden: boolean;
   onFocusCapture: React.FocusEventHandler<HTMLElement>;
-  onNext: () => void;
 }): JSX.Element {
   return (
     <TabPanel
@@ -143,24 +127,14 @@ function DefinitionPurpose({
       onFocusCapture={onFocusCapture}
       className="scroll-mt-48"
     >
-      <Surface tone="card" shape="medium" pad="comfortable" className="sm:p-6">
+      <div>
         <WorkTemplatePurposeFields
           orgId={orgId}
           form={form}
           existing={initial !== null}
           isBase={initial?.isBase ?? false}
         />
-        <Button
-          type="button"
-          variant="secondary"
-          className="mt-6"
-          onClick={() => {
-            onNext();
-          }}
-        >
-          Continue to starting work
-        </Button>
-      </Surface>
+      </div>
     </TabPanel>
   );
 }
@@ -183,16 +157,6 @@ function DefinitionStructure({
       className="scroll-mt-48"
     >
       <WorkTemplateBlueprintFields orgId={orgId} form={form} />
-      <Button
-        type="button"
-        variant="secondary"
-        className="mt-6 ml-3 sm:ml-0"
-        onClick={() => {
-          navigation.selectSection('review');
-        }}
-      >
-        Review this definition
-      </Button>
     </TabPanel>
   );
 }

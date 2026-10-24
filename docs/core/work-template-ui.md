@@ -1,20 +1,20 @@
 # Template and repeating-work setup
 
-Reader: A Docket contributor defining the kinds of work their organization does or repeating existing work.
+Reader: A Docket contributor creating reusable work templates or repeating existing work.
 
 Open Work templates in workspace navigation. The compact library lists each definition once with
 its purpose, kind and draft/publication state. Choose a definition to continue, Define work to
 start your own, or Browse starting points to adapt a gallery example. Settings contains only
 Template permissions.
 
-Opening or creating a definition replaces workspace navigation with a focused activity and an
-explicit way back. Purpose names the kind of work and when to use it. Starting work defines the
+Opening or creating a template replaces workspace navigation with a focused activity and an
+explicit way back. Purpose names the template and when to use it. Starting work defines the
 initial fields and document for one new item. Included work defines children, relative dates,
 responsibility and Program routines. Review explains the resulting structure, publication
 prerequisites and workspace visibility before sharing. For example, an Event project can include
 venue preparation, a Vendor booking definition and an event-day milestone.
 
-Save draft keeps a new definition private and your next-version edits separate from the
+Save draft keeps a new template private. Save changes keeps edits separate from the
 published version. Publish to workspace makes the reviewed body visible to workspace members;
 team offerings control where it is suggested. Existing team-only templates remain team-visible
 drafts until publication. Personal drafts remain author-only. Publishing a next version preserves
@@ -31,11 +31,21 @@ authored work. Explicitly edited or cleared dates stay manual.
 Work lists can filter and group by Template, including archived templates already used by work.
 
 The editor owns the full window on desktop and phones, without the workspace sidebar, global
-navigation or utility rail. All four sections are directly selectable. New definitions begin with
-Purpose; saved definitions normally open Starting work, and explicit review links open Review.
-Saving a new definition retains its current section. Switching sections preserves input, selected
-child, focus and editing position. Private visibility is the default; disclose Draft privacy to
-choose a team before saving.
+navigation or utility rail. New templates use four visible steps, beginning with Purpose. Continue
+checks the current step before advancing; completed steps remain available. Back and Continue stay
+in the activity footer while its content scrolls. A secondary Save draft action can save valid
+changes before Review. Saving the first draft retains creation mode, section, selected child or
+routine, focus and editing position. Review offers Save draft before the separate Publish action.
+Finish with private draft returns to the library without publishing. Successful publication also
+finishes creation.
+
+Opening a saved template from the library uses direct section navigation. It normally opens Starting
+work; explicit section links retain their destination. Save changes appears only for changed values.
+Review offers publication after those changes are saved. Publishing during editing keeps Review open
+so the author can inspect its history. Phones use a section chooser for editing and show the complete
+ordered sequence during creation. Private visibility is the default; disclose Draft privacy to choose
+a team before advancing. Values remain in memory between sections and after failed writes. There is
+no autosave or reload recovery.
 
 Included work shows its ordered outline or one selected child/routine editor at any width.
 Back to included work restores the relevant row. Collapse Created together to reach recurring
@@ -50,20 +60,24 @@ prior editing position. Keep weekday names readable, optional-work choices easy 
 archive pagination compact without losing its accessible reference-list context. Dialog bodies scroll independently of their title
 and consequential footer actions.
 
+The state diagram below shows authoring sections and their creation exits. Editing allows direct
+navigation among all four sections and keeps Review open after publication.
+
 ```mermaid
 stateDiagram-v2
-    [*] --> Purpose: New definition
-    [*] --> StartingWork: Reopen saved definition
-    Purpose --> StartingWork: Continue
-    StartingWork --> IncludedWork: Continue
-    IncludedWork --> Review: Review definition
+    [*] --> Purpose: Create template
+    [*] --> StartingWork: Edit saved template
+    Purpose --> StartingWork: Validate and continue
+    StartingWork --> IncludedWork: Validate and continue
+    IncludedWork --> Review: Validate and continue
     Review --> StartingWork: Refine starting content
     Review --> IncludedWork: Refine structure
     IncludedWork --> ChildEditor: Select one item
     ChildEditor --> IncludedWork: Back to included work
-    Review --> PrivateDraft: Save draft
-    PrivateDraft --> Review: Review saved draft
-    Review --> Published: Publish to workspace
+    Review --> Review: Save draft
+    Review --> [*]: Finish creation with private draft
+    Review --> [*]: Publish during creation
+    Review --> Review: Publish during editing
     Review --> Review: Save fails; draft retained
 ```
 

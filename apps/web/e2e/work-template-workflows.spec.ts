@@ -51,7 +51,11 @@ for (const kind of ['Task', 'Project', 'Initiative', 'Program'] as const) {
     const suffix = Date.now();
     const name = `${kind} workflow ${suffix}`;
     await page.getByRole('link', { name: 'Define work', exact: true }).click();
-    await expect(page.getByRole('button', { name: 'Save draft', exact: true })).toBeDisabled();
+    await expect(
+      page
+        .getByRole('navigation', { name: 'Create template' })
+        .getByRole('button', { name: 'Starting work', exact: true }),
+    ).toBeDisabled();
     await page
       .getByRole('combobox', { name: 'Kind of work', exact: true })
       .selectOption(kind.toLocaleLowerCase());
@@ -60,23 +64,24 @@ for (const kind of ['Task', 'Project', 'Initiative', 'Program'] as const) {
       .getByRole('textbox', { name: 'When to use it', exact: true })
       .fill(`Reusable ${kind.toLocaleLowerCase()} starting fields.`);
     await page.getByRole('button', { name: 'Continue to starting work', exact: true }).click();
-    const starting = kind === 'Task' ? 'Starting title' : 'Starting name';
+    const starting = 'Name for new work';
     await page.getByRole('textbox', { name: starting, exact: true }).fill(`${kind} starting name`);
     await page
-      .getByRole('textbox', { name: 'Starting document', exact: true })
+      .getByRole('textbox', { name: 'Document', exact: true })
       .fill('Record the goal, owner, and next action.');
     const saved = waitForApiResponse(page, /\/templates\/definitions$/, { method: 'POST' });
-    await page.getByRole('button', { name: 'Save draft', exact: true }).click();
+    await page.getByRole('button', { name: /^Save (draft|changes)$/ }).click();
     const response = await saved;
     expect(response.ok()).toBe(true);
     const draft = (await response.json()) as { id: string; scope: string; status: string };
     expect(draft.scope).toBe('personal');
     expect(draft.status).toBe('draft');
-    await expect(page).toHaveURL(new RegExp(`/work-templates/${draft.id}$`));
-    await expect(page.locator('[role="tab"][aria-label="Starting work"]')).toHaveAttribute(
-      'aria-selected',
-      'true',
-    );
+    await expect(page).toHaveURL(new RegExp(`/work-templates/${draft.id}(?:\\?|$)`));
+    await expect(
+      page
+        .getByRole('navigation', { name: 'Create template', exact: true })
+        .getByRole('button', { name: 'Starting work', exact: true }),
+    ).toHaveAttribute('aria-current', 'step');
     await expect(page.getByRole('textbox', { name: starting, exact: true })).toHaveValue(
       `${kind} starting name`,
     );
@@ -85,13 +90,14 @@ for (const kind of ['Task', 'Project', 'Initiative', 'Program'] as const) {
     await page.getByRole('textbox', { name: 'Template name', exact: true }).fill(renamed);
     await page.getByRole('textbox', { name: 'When to use it', exact: true }).fill('');
     const updated = waitForApiResponse(page, /\/draft$/, { method: 'PATCH' });
-    await page.getByRole('button', { name: 'Save draft', exact: true }).click();
+    await page.getByRole('button', { name: /^Save (draft|changes)$/ }).click();
     expect((await updated).ok()).toBe(true);
     await page.reload({ waitUntil: 'commit' });
-    await expect(page.locator('[role="tab"][aria-label="Starting work"]')).toHaveAttribute(
-      'aria-selected',
-      'true',
-    );
+    await expect(
+      page
+        .getByRole('navigation', { name: 'Create template', exact: true })
+        .getByRole('button', { name: 'Starting work', exact: true }),
+    ).toHaveAttribute('aria-current', 'step');
     await selectWorkDefinitionSection(page, 'Purpose');
     await expect(page.getByRole('textbox', { name: 'Template name', exact: true })).toHaveValue(
       renamed,
@@ -100,17 +106,70 @@ for (const kind of ['Task', 'Project', 'Initiative', 'Program'] as const) {
       '',
     );
     await selectWorkDefinitionSection(page, 'Starting work');
-    await expect(
-      page.getByRole('textbox', { name: 'Starting document', exact: true }),
-    ).toContainText('Record the goal, owner, and next action.');
+    await expect(page.getByRole('textbox', { name: 'Document', exact: true })).toContainText(
+      'Record the goal, owner, and next action.',
+    );
     await selectWorkDefinitionSection(page, 'Review');
     const publication = waitForApiResponse(page, /\/publish$/, { method: 'POST' });
     await page.getByRole('button', { name: 'Publish to workspace', exact: true }).click();
     expect((await publication).ok()).toBe(true);
+    await page.waitForURL(`/orgs/${orgId}/work-templates#work-template-${draft.id}`);
+    await page.goto(`/orgs/${orgId}/work-templates/${draft.id}?section=review`, {
+      waitUntil: 'commit',
+    });
     await page.getByRole('button', { name: 'Published history', exact: true }).click();
     await expect(page.getByRole('button', { name: 'Version 1', exact: true })).toBeVisible();
   });
 }
+
+test('guided creation validates its steps and finishes a saved private draft into direct editing', async ({
+  page,
+}) => {
+  const { orgId } = await workspace(page);
+  await page.goto(`/orgs/${orgId}/work-templates/new`, {
+    waitUntil: 'commit',
+    timeout: TIMEOUTS.pageReady,
+  });
+  await page.getByRole('button', { name: 'Continue to starting work', exact: true }).click();
+  await expect(
+    page.getByText('Enter a template name before continuing.', { exact: true }),
+  ).toBeVisible();
+  await page
+    .getByRole('textbox', { name: 'Template name', exact: true })
+    .fill(`Board preparation ${Date.now()}`);
+  await page.getByRole('button', { name: 'Continue to starting work', exact: true }).click();
+  await page
+    .getByRole('textbox', { name: 'Document', exact: true })
+    .fill('Record the decisions that need a vote.');
+  await page.getByRole('button', { name: 'Continue to included work', exact: true }).click();
+  await page.getByRole('button', { name: 'Continue to review', exact: true }).click();
+  const saving = waitForApiResponse(page, /\/templates\/definitions$/, { method: 'POST' });
+  await page.getByRole('button', { name: 'Save draft', exact: true }).click();
+  const saved = (await (await saving).json()) as { id: string };
+  const progress = page.getByRole('navigation', { name: 'Create template', exact: true });
+  await expect(progress.getByRole('button', { name: 'Review', exact: true })).toHaveAttribute(
+    'aria-current',
+    'step',
+  );
+  await expect(
+    page.getByRole('button', { name: 'Publish to workspace', exact: true }),
+  ).toBeVisible();
+  await page.getByRole('button', { name: 'Finish with private draft', exact: true }).click();
+  await expect(page).toHaveURL(`/orgs/${orgId}/work-templates#work-template-${saved.id}`);
+  const persisted = await apiJson<{ status: string; scope: string; latestVersion: unknown }>(
+    page,
+    `/v1/orgs/${orgId}/templates/definitions/${saved.id}`,
+  );
+  expect(persisted).toMatchObject({ status: 'draft', scope: 'personal', latestVersion: null });
+  await page.goto(`/orgs/${orgId}/work-templates/${saved.id}`, { waitUntil: 'commit' });
+  await expect(progress).toHaveCount(0);
+  await expect(
+    page.getByRole('button', { name: 'Continue to included work', exact: true }),
+  ).toHaveCount(0);
+  await expect(page.getByRole('textbox', { name: 'Document', exact: true })).toContainText(
+    'Record the decisions',
+  );
+});
 
 test('a project repeats through persisted setup and future revisions preserve occurrence history', async ({
   page,
@@ -346,7 +405,7 @@ test.describe('touch template layout', () => {
       .getByRole('textbox', { name: 'Template name', exact: true })
       .fill('Community dinner outline');
     await page.getByRole('button', { name: 'Continue to starting work', exact: true }).click();
-    const bodyEditor = page.getByRole('textbox', { name: 'Starting document', exact: true });
+    const bodyEditor = page.getByRole('textbox', { name: 'Document', exact: true });
     await bodyEditor.fill(
       Array.from(
         { length: 18 },
@@ -360,7 +419,7 @@ test.describe('touch template layout', () => {
       [390, 600],
     ] as const) {
       await page.setViewportSize({ width, height });
-      const next = page.getByRole('button', { name: 'Save draft', exact: true });
+      const next = page.getByRole('button', { name: /^Save (draft|changes)$/ });
       await next.scrollIntoViewIfNeeded();
       await expect(next).toBeInViewport();
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(

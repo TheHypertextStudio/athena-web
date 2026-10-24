@@ -45,10 +45,11 @@ export interface WorkTemplateFormState {
 export function useWorkTemplateForm(
   orgId: string,
   initial: WorkTemplateOut | null,
-  onCreated: (id: string) => void,
+  onCreated: (id: string, created: WorkTemplateOut) => void,
+  onPublished?: () => void,
 ): WorkTemplateFormState {
   const state = useTemplateDraftState(orgId, initial);
-  const actions = useTemplateActions(orgId, initial, state, onCreated);
+  const actions = useTemplateActions(orgId, initial, state, onCreated, onPublished);
   const dirty = templateDraftFingerprint(state) !== state.baseline;
   useEffect(() => {
     retainTemplateFormDraft(state.owner, state.cacheKey, state, dirty);
@@ -68,8 +69,7 @@ function useTemplateDraftState(orgId: string, initial: WorkTemplateOut | null) {
     initial?.canEdit ?? true,
     initial?.status === 'archived',
   ]);
-  const currentIdentity = useRef(identity);
-  currentIdentity.current = identity;
+  const ownership = useTemplateDraftOwnership(identity);
   const { draft, updateDraft } = useComposerDraft({
     identity,
     ...restoreTemplateFormDraft(owner, cacheKey, initial),
@@ -98,7 +98,7 @@ function useTemplateDraftState(orgId: string, initial: WorkTemplateOut | null) {
     ...state,
     owner,
     cacheKey,
-    isCurrent: () => currentIdentity.current === identity,
+    ...ownership,
     setDefinition: setter('definition'),
     setKind: setter('kind'),
     setScope: setter('scope'),
@@ -106,6 +106,25 @@ function useTemplateDraftState(orgId: string, initial: WorkTemplateOut | null) {
     setOfferedTeamIds: setter('offeredTeamIds'),
     setRevision: setter('revision'),
     setBaseline: setter('baseline'),
+  };
+}
+
+function useTemplateDraftOwnership(identity: string): {
+  isCurrent: () => boolean;
+  isMounted: () => boolean;
+} {
+  const mounted = useRef(false);
+  const currentIdentity = useRef(identity);
+  currentIdentity.current = identity;
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+  return {
+    isCurrent: () => mounted.current && currentIdentity.current === identity,
+    isMounted: () => mounted.current,
   };
 }
 
@@ -126,13 +145,19 @@ function useTemplateActions(
   orgId: string,
   initial: WorkTemplateOut | null,
   state: ReturnType<typeof useTemplateDraftState>,
-  onCreated: (id: string) => void,
+  onCreated: (id: string, created: WorkTemplateOut) => void,
+  onPublished?: () => void,
 ) {
   const writes = useWorkTemplateWrites(orgId);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
-  const pending = Object.values(writes).some((write) => write.isPending);
+  const writing = useRef(false);
+  const [locallyPending, setLocallyPending] = useState(false);
+  const pending = locallyPending || Object.values(writes).some((write) => write.isPending);
   async function save(): Promise<void> {
+    if (!state.isCurrent() || writing.current || pending) return;
+    writing.current = true;
+    setLocallyPending(true);
     setError(null);
     setSaved(false);
     try {
@@ -158,16 +183,21 @@ function useTemplateActions(
       state.setRevision(result.revision);
       state.setBaseline(templateDraftFingerprint(state));
       setSaved(true);
-      if (!initial) onCreated(result.id);
+      if (!initial) onCreated(result.id, result);
     } catch (caught) {
       if (!state.isCurrent()) return;
       setError(
         userErrorMessage(caught, 'Could not save the template draft. Your changes are still here.'),
       );
+    } finally {
+      writing.current = false;
+      if (state.isMounted()) setLocallyPending(false);
     }
   }
   async function publish(): Promise<void> {
-    if (!initial) return;
+    if (!state.isCurrent() || !initial || writing.current || pending) return;
+    writing.current = true;
+    setLocallyPending(true);
     setError(null);
     try {
       const result = WorkTemplateOut.parse(
@@ -176,9 +206,13 @@ function useTemplateActions(
       if (!state.isCurrent()) return;
       state.setRevision(result.revision);
       setSaved(true);
+      onPublished?.();
     } catch (caught) {
       if (!state.isCurrent()) return;
       setError(userErrorMessage(caught, 'Could not publish the template.'));
+    } finally {
+      writing.current = false;
+      if (state.isMounted()) setLocallyPending(false);
     }
   }
   return { save, publish, error, saved, pending };

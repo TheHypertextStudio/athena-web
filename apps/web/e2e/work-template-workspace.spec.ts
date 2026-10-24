@@ -92,15 +92,17 @@ test('opens work definitions from workspace navigation and replaces legacy revie
   await expect(page.getByRole('navigation', { name: 'Workspace', exact: true })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Open navigation', exact: true })).toHaveCount(0);
   await expect(page.getByRole('main')).toHaveCount(1);
-  await expect(page.locator('[role="tab"][aria-label="Purpose"]')).toHaveAttribute(
-    'aria-selected',
-    'true',
-  );
+  await expect(
+    page
+      .getByRole('navigation', { name: 'Create template', exact: true })
+      .getByRole('button', { name: 'Purpose', exact: true }),
+  ).toHaveAttribute('aria-current', 'step');
   await page.reload({ waitUntil: 'commit' });
-  await expect(page.locator('[role="tab"][aria-label="Purpose"]')).toHaveAttribute(
-    'aria-selected',
-    'true',
-  );
+  await expect(
+    page
+      .getByRole('navigation', { name: 'Create template', exact: true })
+      .getByRole('button', { name: 'Purpose', exact: true }),
+  ).toHaveAttribute('aria-current', 'step');
   await page
     .getByRole('navigation', { name: 'Work templates navigation', exact: true })
     .getByRole('link', { name: 'Back to Work templates', exact: true })
@@ -186,7 +188,7 @@ test.describe('touch work-definition journeys', () => {
     await expect(prerequisite).toBeInViewport();
     const included = page.getByRole('heading', { name: 'Included work', exact: true });
     const starting = page.getByRole('heading', { name: 'Starting work', exact: true });
-    expect((await included.boundingBox())?.y).toBeLessThan((await starting.boundingBox())?.y ?? 0);
+    expect((await starting.boundingBox())?.y).toBeLessThan((await included.boundingBox())?.y ?? 0);
     const publish = page.getByRole('button', { name: 'Publish to workspace', exact: true });
     if (await publish.count()) await expect(publish).toBeDisabled();
     await prerequisite.click();
@@ -198,7 +200,7 @@ test.describe('touch work-definition journeys', () => {
     expect((await vendorPublished).ok()).toBe(true);
     await page
       .getByRole('navigation', { name: 'Work templates navigation', exact: true })
-      .getByRole('link', { name: 'Back to parent definition', exact: true })
+      .getByRole('link', { name: 'Back to parent template', exact: true })
       .click();
     await expect(page).toHaveURL(`${new URL(route, page.url()).origin}${route}`);
     await expect(
@@ -356,8 +358,8 @@ async function seedArchiveParents(
 }
 
 async function assertPhoneDefinitionSteps(page: Page): Promise<void> {
-  const stepMenu = page.getByRole('button', { name: 'Change definition step', exact: true });
-  await expect(stepMenu).toHaveText('4 of 4 · Review');
+  const stepMenu = page.getByRole('button', { name: 'Change template section', exact: true });
+  await expect(stepMenu).toHaveText('Review');
   await stepMenu.click();
   for (const label of ['Purpose', 'Starting work', 'Included work', 'Review']) {
     const choice = page.getByRole('menuitemradio', { name: label, exact: true });

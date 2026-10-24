@@ -10,13 +10,19 @@ import {
   DropdownMenuTrigger,
   Tabs,
   type TabsActivation,
+  tabIds,
 } from '@docket/ui/primitives';
 import type { TemplateDefinitionSection } from './use-template-section-navigation';
 interface DefinitionNavigationProps {
+  readonly pending?: boolean;
+  readonly mode?: 'create' | 'edit';
+  readonly reached?: number | undefined;
+  readonly scope?: string;
   readonly section: TemplateDefinitionSection;
   readonly onValueChange: (next: string, source?: TabsActivation) => void;
 }
-const SECTIONS = [
+/** Ordered authoring destinations shared by navigation and creation actions. */
+export const TEMPLATE_SECTIONS = [
   { value: 'purpose', label: 'Purpose' },
   { value: 'work', label: 'Starting work' },
   { value: 'structure', label: 'Included work' },
@@ -24,8 +30,9 @@ const SECTIONS = [
 ] as const;
 /** Freely revisit definition sections without losing input or creating duplicate tab identities. */
 export function TemplateDefinitionNavigation(props: DefinitionNavigationProps): JSX.Element {
-  const selectedIndex = SECTIONS.findIndex((item) => item.value === props.section);
+  const selectedIndex = TEMPLATE_SECTIONS.findIndex((item) => item.value === props.section);
   const pendingSection = useRef<string | null>(null);
+  if (props.mode === 'create') return <TemplateCreationNavigation {...props} />;
   return (
     <>
       <div className="sm:hidden">
@@ -34,10 +41,10 @@ export function TemplateDefinitionNavigation(props: DefinitionNavigationProps): 
             <Button
               type="button"
               variant="secondary"
-              aria-label="Change definition step"
+              aria-label="Change template section"
               className="w-full justify-between"
             >
-              {selectedIndex + 1} of {SECTIONS.length} · {SECTIONS[selectedIndex]?.label}
+              {TEMPLATE_SECTIONS[selectedIndex]?.label}
               <ChevronDown aria-hidden="true" className="size-4" />
             </Button>
           </DropdownMenuTrigger>
@@ -59,7 +66,7 @@ export function TemplateDefinitionNavigation(props: DefinitionNavigationProps): 
                 pendingSection.current = next;
               }}
             >
-              {SECTIONS.map((item) => (
+              {TEMPLATE_SECTIONS.map((item) => (
                 <DropdownMenuRadioItem key={item.value} value={item.value}>
                   {item.label}
                 </DropdownMenuRadioItem>
@@ -71,12 +78,43 @@ export function TemplateDefinitionNavigation(props: DefinitionNavigationProps): 
       <div className="hidden sm:block">
         <Tabs
           variant="contained"
-          label="Work definition sections"
+          label="Template sections"
           value={props.section}
           onValueChange={props.onValueChange}
-          items={SECTIONS}
+          items={TEMPLATE_SECTIONS}
         />
       </div>
     </>
+  );
+}
+
+function TemplateCreationNavigation(props: DefinitionNavigationProps): JSX.Element {
+  const selectedIndex = TEMPLATE_SECTIONS.findIndex((item) => item.value === props.section);
+  return (
+    <nav aria-label="Create template">
+      <ol className="grid grid-cols-4 gap-1 sm:gap-3">
+        {TEMPLATE_SECTIONS.map((item, index) => (
+          <li key={item.value} className="min-w-0">
+            <Button
+              id={props.scope ? tabIds(props.scope, item.value).id : undefined}
+              type="button"
+              variant={props.section === item.value ? 'secondary' : 'ghost'}
+              aria-current={props.section === item.value ? 'step' : undefined}
+              aria-controls={props.scope ? tabIds(props.scope, item.value).panelId : undefined}
+              disabled={props.pending === true || index > (props.reached ?? selectedIndex)}
+              className="h-auto min-h-16 w-full min-w-0 flex-col gap-1 px-1 py-2 text-center whitespace-normal"
+              onClick={() => {
+                props.onValueChange(item.value);
+              }}
+            >
+              <span aria-hidden="true" className="text-label-small">
+                {index + 1}
+              </span>
+              <span className="text-label-small sm:text-label-large">{item.label}</span>
+            </Button>
+          </li>
+        ))}
+      </ol>
+    </nav>
   );
 }

@@ -42,7 +42,7 @@ it('hydrates the server loading frame before using an already cached real client
     expect(screen.getByRole('link', { name: 'Back to Work templates' })).toBeVisible();
     expect(screen.getByLabelText('Workspace')).toHaveTextContent('Neighborhood association');
     expect(screen.getByLabelText('Template name')).toBeVisible();
-    expect(screen.getByRole('heading', { name: 'Name a kind of work' })).toBeVisible();
+    expect(screen.getByRole('heading', { name: 'About this template' })).toBeVisible();
   } finally {
     await act(async () => {
       root?.unmount();

@@ -44,14 +44,9 @@ describe('definition section navigation', () => {
   it('shows the current step and selects every section from the phone menu', async () => {
     const user = userEvent.setup();
     render(<NavigationHarness />);
-    const trigger = screen.getByRole('button', { name: 'Change definition step' });
-    expect(trigger).toHaveTextContent('1 of 4 · Purpose');
-    for (const [index, label] of [
-      'Starting work',
-      'Included work',
-      'Review',
-      'Purpose',
-    ].entries()) {
+    const trigger = screen.getByRole('button', { name: 'Change template section' });
+    expect(trigger).toHaveTextContent('Purpose');
+    for (const label of ['Starting work', 'Included work', 'Review', 'Purpose']) {
       await user.click(trigger);
       const choices = screen.getAllByRole('menuitemradio');
       expect(choices).toHaveLength(4);
@@ -59,7 +54,7 @@ describe('definition section navigation', () => {
         choices.filter((choice) => choice.getAttribute('aria-checked') === 'true'),
       ).toHaveLength(1);
       await user.click(screen.getByRole('menuitemradio', { name: label }));
-      expect(trigger).toHaveTextContent(`${((index + 1) % 4) + 1} of 4 · ${label}`);
+      expect(trigger).toHaveTextContent(label);
     }
   });
 
@@ -68,7 +63,7 @@ describe('definition section navigation', () => {
     render(<NavigationHarness />);
     const draft = screen.getByLabelText('purpose draft');
     await user.type(draft, 'Keep the purpose');
-    const trigger = screen.getByRole('button', { name: 'Change definition step' });
+    const trigger = screen.getByRole('button', { name: 'Change template section' });
     trigger.focus();
     await user.keyboard('{Enter}{End}{Enter}');
     await waitFor(() =>
@@ -106,4 +101,42 @@ describe('definition section navigation', () => {
     expect(review).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByRole('tabpanel')).toHaveTextContent('review decision');
   });
+});
+
+function HandoffHarness({ existing = false }: { existing?: boolean }) {
+  const navigation = useTemplateSectionNavigation('purpose', existing ? 'org/created' : undefined);
+  return (
+    <TabsScope scope={navigation.scope}>
+      <TemplateDefinitionNavigation
+        section={navigation.section}
+        onValueChange={navigation.selectSection}
+      />
+      <button
+        onClick={() => {
+          navigation.retainPosition('org/created');
+        }}
+      >
+        Replace route
+      </button>
+      <TabPanel
+        value="purpose"
+        hidden={navigation.section !== 'purpose'}
+        onFocusCapture={navigation.rememberFocus}
+      >
+        <h2 tabIndex={-1}>Purpose</h2>
+        <label htmlFor="template-name">Template name</label>
+        <input id="template-name" />
+      </TabPanel>
+    </TabsScope>
+  );
+}
+
+it('restores the last edited field after the first save replaces the route', async () => {
+  const user = userEvent.setup();
+  const first = render(<HandoffHarness />);
+  await user.type(screen.getByLabelText('Template name'), 'Community dinner');
+  await user.click(screen.getByRole('button', { name: 'Replace route' }));
+  first.unmount();
+  render(<HandoffHarness existing />);
+  await waitFor(() => expect(screen.getByLabelText('Template name')).toHaveFocus());
 });

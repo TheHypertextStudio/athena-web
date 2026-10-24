@@ -1,4 +1,5 @@
 'use client';
+import { useTemplateParentContext } from './template-authoring-context';
 import { useState, type ComponentProps, type JSX } from 'react';
 import { ProgramDefaultSchedule } from '@docket/work/work-schedule-defaults';
 import type { WorkTemplateOut } from '@docket/work/work-template-contract';
@@ -325,6 +326,7 @@ function PendingRoutineVersion({
   readonly parentTemplateId?: string | undefined;
   readonly template: WorkTemplateOut;
 }): JSX.Element {
+  const parentContext = useTemplateParentContext();
   const name = (template.draftDefinition ?? template.definition).name;
   return (
     <section
@@ -342,7 +344,7 @@ function PendingRoutineVersion({
         <Button asChild variant="ghost" className="min-h-10 self-start">
           <Link
             navigation="activity"
-            href={`${workTemplateHref(orgId, `/${template.id}`)}?section=review${parentTemplateId ? `&returnTo=${parentTemplateId}` : ''}`}
+            href={`${workTemplateHref(orgId, `/${template.id}`)}?section=review${parentTemplateId ? `&returnTo=${parentTemplateId}${parentContext}` : ''}`}
           >
             Review {name}
           </Link>

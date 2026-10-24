@@ -26,14 +26,12 @@ export function WorkTemplateSampleFields({
   return (
     <div className="flex min-w-0 flex-col gap-5">
       <Field
-        label={payload.targetType === 'task' ? 'Starting title' : 'Starting name'}
+        label="Name for new work"
         description={
           title?.trim() ? undefined : 'Leave empty for the person creating work to supply.'
         }
       >
         <Input
-          variant="plain"
-          className="text-headline-small"
           value={title ?? ''}
           disabled={disabled}
           onChange={(event) => {

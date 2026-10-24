@@ -2,7 +2,7 @@
 
 **Reader:** The designer or engineer refining Docket's work-template authoring experience.
 **Action:** Implement the presentation changes below, verify them in the real app, and commit the validated result. Do not integrate, push, or deploy it.
-**Status:** Proposed implementation plan. Product code has not changed for this refinement.
+**Status:** Implemented and validated in the real app. The dated craft audit and checked handoff record the final evidence. Integration, push, and deployment remain outside this delivery.
 **Baseline:** `2b74301da600b89a6703a1892ad29dd5b4212373` on `codex/work-templates-ship-ready`, reviewed on October 23, 2026.
 
 ## Decision

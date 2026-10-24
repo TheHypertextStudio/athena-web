@@ -56,7 +56,7 @@ describe('honest copied Program routine pins', () => {
       `/orgs/${saved.organizationId}/work-templates/${nestedId}?section=review&returnTo=${saved.id}`,
     );
     change('Repeat interval', '2');
-    fireEvent.click(screen.getByRole('button', { name: 'Save draft' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
     await waitFor(() => {
       expect(mocks.draft).toHaveBeenCalled();
     });

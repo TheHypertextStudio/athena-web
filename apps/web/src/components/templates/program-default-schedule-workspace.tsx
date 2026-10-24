@@ -1,5 +1,6 @@
 'use client';
-import { useState, type ReactNode } from 'react';
+import { type ReactNode } from 'react';
+import { useTemplateEditorSelection } from './template-editor-selection';
 import type { ProgramDefaultSchedule } from '@docket/work/work-schedule-defaults';
 import type { BlueprintEditorProps } from './work-template-blueprint-child';
 import type { WorkTemplateFormState } from './use-work-template-form';
@@ -19,7 +20,7 @@ export function useProgramDefaultScheduleWorkspace(
   readonly outline: ReactNode;
   readonly editor: ReactNode;
 } {
-  const [key, setKey] = useState<string | null>(null);
+  const [key, setKey] = useTemplateEditorSelection('routine');
   const values = form.definition.defaultSchedules;
   const index = values.findIndex((value) => value.key === key);
   const value = values[index];

@@ -1,4 +1,5 @@
 'use client';
+import { useTemplateParentContext } from './template-authoring-context';
 import type { JSX } from 'react';
 import type { WorkTemplateDefinition, WorkTemplateOut } from '@docket/work/work-template-contract';
 import { authoredCopyReferences } from '@docket/work/template-copy';
@@ -65,6 +66,7 @@ export function TemplatePublicationReadiness({
   readonly parentId?: string | undefined;
   readonly readiness: ReturnType<typeof useTemplatePublicationReadiness>;
 }): JSX.Element | null {
+  const parentContext = useTemplateParentContext();
   if (readiness.loading)
     return (
       <p role="status" className="text-body-small">
@@ -99,7 +101,7 @@ export function TemplatePublicationReadiness({
             className="coarse:h-auto h-auto min-h-10 max-w-full py-2 whitespace-normal"
           >
             <Link
-              href={`${workTemplateHref(orgId)}/${item.id}?section=review${parentId ? `&returnTo=${parentId}` : ''}`}
+              href={`${workTemplateHref(orgId)}/${item.id}?section=review${parentId ? `&returnTo=${parentId}${parentContext}` : ''}`}
             >
               Review {item.draftDefinition?.name ?? item.definition.name}
             </Link>

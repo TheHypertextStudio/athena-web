@@ -1,12 +1,6 @@
 'use client';
 import { useLayoutEffect, useRef, useState, type JSX, type ReactNode } from 'react';
-import {
-  Button,
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-  Surface,
-} from '@docket/ui/primitives';
+import { Button, Collapsible, CollapsibleContent, CollapsibleTrigger } from '@docket/ui/primitives';
 import { ChevronDown } from '@docket/ui/icons';
 import { InlineBanner } from '@docket/ui/components';
 import { useVocabulary } from '@docket/ui/hooks';
@@ -91,7 +85,7 @@ export function BlueprintWorkspaceLayout({
     wasActive.current = active;
   }, [active]);
   return (
-    <div className="flex min-w-0 flex-col gap-4 p-3 sm:p-0">
+    <div className="flex min-w-0 flex-col gap-4">
       {!Blueprint.safeParse(editor.blueprint).success ? (
         <InlineBanner tone="critical" title="Review child work">
           Name each item, choose what must finish first, and check dates and estimates before
@@ -177,12 +171,7 @@ function CreatedTogether({
   const noun = useVocabulary(editor.rootKind).toLocaleLowerCase();
   const [childrenOpen, setChildrenOpen] = useState(true);
   return (
-    <Surface
-      tone="well"
-      shape="medium"
-      pad="none"
-      className="contents min-w-0 flex-col gap-4 sm:flex sm:p-3"
-    >
+    <div className="flex min-w-0 flex-col gap-4">
       <Collapsible open={childrenOpen} onOpenChange={setChildrenOpen} className="min-w-0">
         <div className="flex flex-col gap-1">
           <h3>
@@ -190,7 +179,7 @@ function CreatedTogether({
               <Button
                 type="button"
                 variant="ghost"
-                className="group text-title-medium h-auto w-full justify-between px-0 sm:px-4"
+                className="group text-title-medium h-auto w-full justify-between px-0"
               >
                 Created together
                 <ChevronDown
@@ -200,16 +189,17 @@ function CreatedTogether({
               </Button>
             </CollapsibleTrigger>
           </h3>
-          {editor.blueprint.steps.length ? (
+          {!childrenOpen && editor.blueprint.steps.length > 0 ? (
             <WorkTemplateBlueprintSummary blueprint={editor.blueprint} />
-          ) : (
+          ) : null}
+          {!editor.blueprint.steps.length ? (
             <>
               <p className="text-body-medium">No included work yet</p>
               <p className="text-body-small text-on-surface-variant">
                 {`A new ${noun} can stand on its own. Add work only when it belongs in every new ${noun}.`}
               </p>
             </>
-          )}
+          ) : null}
         </div>
         <CollapsibleContent className="pt-3">
           <div className="flex min-w-0 flex-col gap-4">
@@ -236,6 +226,6 @@ function CreatedTogether({
           </div>
         </CollapsibleContent>
       </Collapsible>
-    </Surface>
+    </div>
   );
 }

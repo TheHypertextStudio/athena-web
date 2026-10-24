@@ -17,7 +17,7 @@ export function WorkTemplateBlueprintSummary({ blueprint }: { blueprint: Bluepri
       `${blueprint.dependencies.length} ${blueprint.dependencies.length === 1 ? 'link' : 'links'} between tasks`,
     );
   return (
-    <p className="text-body-small text-on-surface-variant" aria-label="Included work summary">
+    <p className="text-body-medium text-on-surface-variant" aria-label="Included work summary">
       {details.join(' · ')}
     </p>
   );

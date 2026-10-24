@@ -1,6 +1,6 @@
 'use client';
 import type { JSX, ReactNode } from 'react';
-import { Field, Input, Select } from '@docket/ui/primitives';
+import { Field, Input, Select, Text } from '@docket/ui/primitives';
 import { LabelsPicker } from '@docket/ui/components';
 import { CanonicalTemplateDraft } from '@docket/work/template-contract';
 import { useComposerOptions } from '@/components/pickers/use-composer-options';
@@ -28,7 +28,9 @@ export function WorkTemplateSampleFields({
       <Field
         label="Name for new work"
         description={
-          title?.trim() ? undefined : 'Leave empty for the person creating work to supply.'
+          title?.trim() ? undefined : (
+            <Text token="body-medium">Leave empty for the person creating work to supply.</Text>
+          )
         }
       >
         <Input

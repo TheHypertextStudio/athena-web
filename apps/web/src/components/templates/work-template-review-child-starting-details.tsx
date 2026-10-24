@@ -22,7 +22,7 @@ export function WorkTemplateReviewChildStartingDetails({
   return (
     <TemplateDisclosure title={`Starting details for ${blueprintStepName(step)}`}>
       {step.template ? (
-        <p className="text-body-small text-on-surface-variant">
+        <p className="text-body-medium text-on-surface-variant">
           These details replace the matching details from the selected template.
         </p>
       ) : null}
@@ -33,9 +33,9 @@ export function WorkTemplateReviewChildStartingDetails({
         />
       ) : null}
       {step.fields.description ? (
-        <StaticMarkdown value={step.fields.description} />
+        <StaticMarkdown value={step.fields.description} className="text-body-large" />
       ) : (
-        <p className="text-body-small text-on-surface-variant">No starting document.</p>
+        <p className="text-body-medium text-on-surface-variant">No starting document.</p>
       )}
     </TemplateDisclosure>
   );

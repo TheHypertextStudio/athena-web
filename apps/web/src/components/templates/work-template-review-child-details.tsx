@@ -36,10 +36,12 @@ export function WorkTemplateReviewChildDetails({
   return (
     <>
       {blockers.length ? (
-        <p className="text-body-small text-on-surface-variant">Wait for {blockers.join(' and ')}</p>
+        <p className="text-body-medium text-on-surface-variant">
+          Wait for {blockers.join(' and ')}
+        </p>
       ) : null}
       {step.cycleRule !== 'none' ? (
-        <p className="text-body-small text-on-surface-variant">{cycles[step.cycleRule]}</p>
+        <p className="text-body-medium text-on-surface-variant">{cycles[step.cycleRule]}</p>
       ) : null}
     </>
   );

@@ -65,7 +65,7 @@ export function WorkTemplateBlueprintStepFields({
           ariaLabel="Document"
           mentionOrgId={orgId}
           placeholder="What should this work start with?"
-          className={`${fieldSurface({ variant: 'plain', controlSize: 'md', multiline: true, ringOn: 'within' })} min-h-24 max-w-none`}
+          className={`${fieldSurface({ variant: 'plain', controlSize: 'md', multiline: true, ringOn: 'within' })} [&_.ProseMirror]:text-body-large min-h-24 max-w-none`}
         />
       </Field>
     </>

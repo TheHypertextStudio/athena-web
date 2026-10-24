@@ -13,7 +13,9 @@ initial fields and document for one new item. On wide screens, the document and 
 outline occupy the main column, with defaults beside them. Phones show the work first and defaults
 below it. The inline outline shows names, optionality and relative dates; Edit included work opens
 the existing structure editor without losing the document. Review displays the starting document
-without a disclosure. Included work defines children, relative dates,
+without a disclosure. Documents and included-work names use 16px MD3 roles. Dates, helper copy
+and step labels use 14px roles; headings and control dimensions retain their existing scale.
+Included work defines children, relative dates,
 responsibility and Program routines. Review explains the resulting structure, publication
 prerequisites and workspace visibility before sharing. For example, an Event project can include
 venue preparation, a Vendor booking definition and an event-day milestone.

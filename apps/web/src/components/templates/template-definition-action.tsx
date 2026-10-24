@@ -190,7 +190,7 @@ export function TemplatePublicationConsequence({
 }): JSX.Element | null {
   if (section !== 'review' || !form.canEdit || initial?.status === 'archived') return null;
   return (
-    <p className="text-body-small text-on-surface-variant">
+    <p className="text-body-medium text-on-surface-variant">
       {form.dirty || !initial ? 'Save a private draft first. ' : ''}Publishing shares this template
       with everyone in the workspace. Existing work keeps its saved version and content.
     </p>

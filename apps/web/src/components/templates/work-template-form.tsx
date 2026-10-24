@@ -90,12 +90,12 @@ function TemplateFormContent({
   return (
     <div className="flex min-w-0 flex-col gap-6">
       {!form.canEdit ? (
-        <p className="text-body-small text-on-surface-variant">
+        <p className="text-body-medium text-on-surface-variant">
           You can read this template, but you don’t have permission to edit it.
         </p>
       ) : null}
       {initial?.isBase ? (
-        <p className="text-body-small text-on-surface-variant">
+        <p className="text-body-medium text-on-surface-variant">
           Every item of this kind can use the blank template. Its name follows your workspace’s
           terminology.
         </p>

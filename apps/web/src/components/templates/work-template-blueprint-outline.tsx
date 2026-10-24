@@ -118,14 +118,14 @@ function BlueprintOutlineRow({
       className="coarse:h-auto h-auto min-h-12 w-full scroll-mt-48 justify-start px-0 py-2 text-left sm:px-4"
     >
       <span className="flex min-w-0 flex-1 flex-col gap-0.5 break-words whitespace-normal">
-        <span className="text-label-large">{blueprintStepName(step)}</span>
-        <span className="text-body-small text-on-surface-variant">
+        <span className="text-title-medium">{blueprintStepName(step)}</span>
+        <span className="text-body-medium text-on-surface-variant">
           {step.kind === 'milestone' ? 'Milestone' : vocabulary}
           {step.optional.enabled
             ? ` · Optional${step.optional.selectedByDefault ? '' : ' (unchecked)'}`
             : ''}
         </span>
-        <span className="text-body-small text-on-surface-variant">
+        <span className="text-body-medium text-on-surface-variant">
           {blueprintStepTiming(step, blueprint, rootName, rootKind)}
         </span>
         {step.template ? (

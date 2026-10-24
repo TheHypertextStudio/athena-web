@@ -110,7 +110,7 @@ function TemplateCreationNavigation(props: DefinitionNavigationProps): JSX.Eleme
               <span aria-hidden="true" className="text-label-small">
                 {index + 1}
               </span>
-              <span className="text-label-small sm:text-label-large">{item.label}</span>
+              <span className="text-label-large">{item.label}</span>
             </Button>
           </li>
         ))}

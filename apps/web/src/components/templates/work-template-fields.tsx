@@ -1,6 +1,6 @@
 'use client';
 import type { JSX } from 'react';
-import { Field, Input, Select, Textarea, Surface, fieldSurface } from '@docket/ui/primitives';
+import { Field, Input, Select, Textarea, Surface, Text, fieldSurface } from '@docket/ui/primitives';
 import { EntityMultiPicker } from '@docket/ui/components';
 import { useVocabulary } from '@docket/ui/hooks';
 import { TemplateTargetType } from '@docket/work/template-contract';
@@ -61,9 +61,11 @@ export function WorkTemplateFields({
         <Field
           label="Starting status"
           description={
-            form.definition.defaultStatusKey
-              ? 'If this status is removed, new work uses its normal starting status.'
-              : undefined
+            form.definition.defaultStatusKey ? (
+              <Text token="body-medium">
+                If this status is removed, new work uses its normal starting status.
+              </Text>
+            ) : undefined
           }
         >
           <Select
@@ -119,7 +121,7 @@ function TemplateSampleWork({ orgId, form }: { orgId: string; form: Form }): JSX
           placeholder="Add notes, instructions, or a checklist…"
           ariaLabel="Document"
           mentionOrgId={orgId}
-          className={`${fieldSurface({ variant: 'filled', controlSize: 'md', multiline: true, ringOn: 'within' })} min-h-48 max-w-none lg:min-h-64`}
+          className={`${fieldSurface({ variant: 'filled', controlSize: 'md', multiline: true, ringOn: 'within' })} [&_.ProseMirror]:text-body-large min-h-48 max-w-none lg:min-h-64`}
         />
       </Field>
     </section>
@@ -144,9 +146,11 @@ function TeamOfferingField({
     <Field
       label="Offer to teams"
       description={
-        canManage
-          ? 'Leave empty to offer throughout the workspace. Published templates are visible to everyone.'
-          : 'Administrators choose team offerings. Published templates remain visible throughout the workspace.'
+        <Text token="body-medium">
+          {canManage
+            ? 'Leave empty to offer throughout the workspace. Published templates are visible to everyone.'
+            : 'Administrators choose team offerings. Published templates remain visible throughout the workspace.'}
+        </Text>
       }
     >
       <EntityMultiPicker
@@ -280,14 +284,16 @@ function TemplateKindField({ form, existing }: { form: Form; existing: boolean }
     <Field
       label="Kind of work"
       description={
-        form.definition.blueprint.steps.length || form.definition.defaultSchedules.length
-          ? 'Remove included and repeating work before changing the kind.'
-          : {
-              initiative: 'Connects related programs around an outcome.',
-              program: 'Organizes an ongoing area of work, including repeating work.',
-              project: 'Groups work with a shared goal and an end date.',
-              task: 'Defines a single action and any subtasks.',
-            }[form.kind]
+        <Text token="body-medium">
+          {form.definition.blueprint.steps.length || form.definition.defaultSchedules.length
+            ? 'Remove included and repeating work before changing the kind.'
+            : {
+                initiative: 'Connects related programs around an outcome.',
+                program: 'Organizes an ongoing area of work, including repeating work.',
+                project: 'Groups work with a shared goal and an end date.',
+                task: 'Defines a single action and any subtasks.',
+              }[form.kind]}
+        </Text>
       }
     >
       <Select

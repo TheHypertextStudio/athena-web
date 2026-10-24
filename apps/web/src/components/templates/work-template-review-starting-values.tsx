@@ -30,17 +30,17 @@ export function WorkTemplateReviewStartingValues({
       </p>
       {payload.summary ? <p className="text-body-medium break-words">{payload.summary}</p> : null}
       {payload.targetType === 'program' && payload.visibility === 'private' ? (
-        <p className="text-body-small">Private work — access must be granted explicitly.</p>
+        <p className="text-body-medium">Private work — access must be granted explicitly.</p>
       ) : null}
       {children}
       {compactProperties ? (
         defaults.length ? (
           <TemplateDisclosure title="Starting properties">
-            <p className="text-body-small text-on-surface-variant">{defaults.join(' · ')}</p>
+            <p className="text-body-medium text-on-surface-variant">{defaults.join(' · ')}</p>
           </TemplateDisclosure>
         ) : null
       ) : (
-        <p className="text-body-small text-on-surface-variant">
+        <p className="text-body-medium text-on-surface-variant">
           {defaults.length ? defaults.join(' · ') : 'Workspace starting defaults'}
         </p>
       )}

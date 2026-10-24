@@ -83,8 +83,8 @@ function ReviewChild({
   return (
     <>
       <div>
-        <h3 className="text-title-small break-words">{blueprintStepName(step)}</h3>
-        <p className="text-body-small text-on-surface-variant">
+        <h3 className="text-title-medium break-words">{blueprintStepName(step)}</h3>
+        <p className="text-body-medium text-on-surface-variant">
           {step.kind === 'milestone' ? 'Milestone' : kind}
           {step.optional.enabled
             ? ` · Optional${step.optional.selectedByDefault ? '' : ' (unchecked)'}`
@@ -92,7 +92,7 @@ function ReviewChild({
         </p>
       </div>
       {hasDates ? (
-        <p className="text-body-small text-on-surface-variant">
+        <p className="text-body-medium text-on-surface-variant">
           {blueprintStepTiming(step, blueprint, rootName, rootKind)}
         </p>
       ) : null}
@@ -166,7 +166,7 @@ function ReviewResponsibility({
     none: `No ${team}`,
   };
   return (
-    <p className="text-body-small text-on-surface-variant">
+    <p className="text-body-medium text-on-surface-variant">
       {actors[step.actorRule]} · {teams[step.teamRule]}
     </p>
   );

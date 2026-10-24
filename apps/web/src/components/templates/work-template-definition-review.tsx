@@ -83,10 +83,13 @@ function StartingWorkReview({
       >
         {form.definition.payload.description ? (
           <div className="min-w-0" aria-label="Starting document">
-            <StaticMarkdown value={form.definition.payload.description} />
+            <StaticMarkdown
+              value={form.definition.payload.description}
+              className="text-body-large"
+            />
           </div>
         ) : (
-          <p className="text-body-small text-on-surface-variant">Starts with an empty document.</p>
+          <p className="text-body-medium text-on-surface-variant">Starts with an empty document.</p>
         )}
       </WorkTemplateReviewStartingValues>
     </section>

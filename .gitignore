@@ -103,3 +103,6 @@ apps/api/openapi.json
 # Native OpenNext output.
 .open-next/
 worker-configuration.d.ts
+/.hypertext/formatter-tools/runtime.json
+/.hypertext/formatter-tools/bin/
+/.hypertext/formatter-tools/__pycache__/

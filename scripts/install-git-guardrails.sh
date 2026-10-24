@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
 
-if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+if ! git rev-parse --is-inside-work-tree > /dev/null 2>&1; then
   exit 0
 fi
 
@@ -18,7 +18,7 @@ esac
 # checkout overwrite this worktree's policy whenever it runs `pnpm install`. Worktree config gives
 # each checkout its own hook path under its own Git directory, so the hook always matches the code
 # that invoked it.
-if [ "$(git config --local --get extensions.worktreeConfig 2>/dev/null || true)" != true ]; then
+if [ "$(git config --local --get extensions.worktreeConfig 2> /dev/null || true)" != true ]; then
   git config --local extensions.worktreeConfig true
   guardrails_changed=1
 fi
@@ -29,7 +29,7 @@ write_hook() {
   hook_target=$1
   hook_temp="$hook_target.tmp.$$"
   trap 'rm -f "$hook_temp"' EXIT HUP INT TERM
-  cat >"$hook_temp"
+  cat > "$hook_temp"
   if [ -f "$hook_target" ] && cmp -s "$hook_temp" "$hook_target"; then
     rm -f "$hook_temp"
   else
@@ -43,7 +43,7 @@ write_hook() {
   trap - EXIT HUP INT TERM
 }
 
-write_hook "$hooks_dir/use-repo-node.sh" <<'HOOK'
+write_hook "$hooks_dir/use-repo-node.sh" << 'HOOK'
 #!/bin/sh
 set -eu
 
@@ -72,28 +72,28 @@ if [ -s "$repo_root/.nvmrc" ]; then
 fi
 HOOK
 
-if [ "$(git config --local --get pull.ff 2>/dev/null || true)" != only ]; then
+if [ "$(git config --local --get pull.ff 2> /dev/null || true)" != only ]; then
   git config --local pull.ff only
   guardrails_changed=1
 fi
-if [ "$(git config --local --get pull.rebase 2>/dev/null || true)" != true ]; then
+if [ "$(git config --local --get pull.rebase 2> /dev/null || true)" != true ]; then
   git config --local pull.rebase true
   guardrails_changed=1
 fi
-if [ "$(git config --local --get branch.main.rebase 2>/dev/null || true)" != true ]; then
+if [ "$(git config --local --get branch.main.rebase 2> /dev/null || true)" != true ]; then
   git config --local branch.main.rebase true
   guardrails_changed=1
 fi
-if [ "$(git config --local --get branch.main.mergeOptions 2>/dev/null || true)" != --ff-only ]; then
+if [ "$(git config --local --get branch.main.mergeOptions 2> /dev/null || true)" != --ff-only ]; then
   git config --local branch.main.mergeOptions --ff-only
   guardrails_changed=1
 fi
-if [ "$(git config --worktree --get core.hooksPath 2>/dev/null || true)" != "$hooks_dir" ]; then
+if [ "$(git config --worktree --get core.hooksPath 2> /dev/null || true)" != "$hooks_dir" ]; then
   git config --worktree core.hooksPath "$hooks_dir"
   guardrails_changed=1
 fi
 
-write_hook "$hooks_dir/pre-commit" <<'HOOK'
+write_hook "$hooks_dir/pre-commit" << 'HOOK'
 #!/bin/sh
 set -eu
 
@@ -109,7 +109,8 @@ pnpm secret-scan
 
 # Git snapshots the index after pre-commit but before commit-msg. Formatting any later leaves the
 # rewritten files staged for a second commit while the first commit records the unformatted input.
-pnpm lint:staged
+python3 "$repo_root/.hypertext/formatting/commit.py"
+node "$repo_root/scripts/check-staged-lint.mjs"
 
 # ESLint cannot detect raw visual utilities. Run the focused design-policy gate so a typography,
 # spacing, color, or shadow regression fails at the commit that introduced it instead of reaching
@@ -117,7 +118,7 @@ pnpm lint:staged
 pnpm --filter @docket/test-utils exec vitest run tests/design-policies/design-token-policy.test.ts --maxWorkers=1
 HOOK
 
-write_hook "$hooks_dir/commit-msg" <<'HOOK'
+write_hook "$hooks_dir/commit-msg" << 'HOOK'
 #!/bin/sh
 set -eu
 
@@ -126,14 +127,14 @@ set -eu
 node scripts/validate-commit-message.mjs "$1"
 HOOK
 
-write_hook "$hooks_dir/pre-merge-commit" <<'HOOK'
+write_hook "$hooks_dir/pre-merge-commit" << 'HOOK'
 #!/bin/sh
 
 echo "Merge commits are forbidden in this repository. Rebase, cherry-pick, or use git merge --ff-only." >&2
 exit 1
 HOOK
 
-write_hook "$hooks_dir/prepare-commit-msg" <<'HOOK'
+write_hook "$hooks_dir/prepare-commit-msg" << 'HOOK'
 #!/bin/sh
 set -eu
 
@@ -149,8 +150,8 @@ HOOK
 
 # Older installs replayed the complete validation graph at every push, including checks already
 # run while developing the change. Remove only that generated hook; leave a custom hook alone.
-if [ -f "$hooks_dir/pre-push" ] &&
-  grep -Fq '# A direct push is the repository' "$hooks_dir/pre-push"; then
+if [ -f "$hooks_dir/pre-push" ] \
+  && grep -Fq '# A direct push is the repository' "$hooks_dir/pre-push"; then
   rm "$hooks_dir/pre-push"
   guardrails_changed=1
 fi
@@ -159,4 +160,9 @@ if [ "$guardrails_changed" -eq 1 ]; then
   echo "CHANGE native Git guardrails reconciled in $hooks_dir"
 else
   echo "PASS native Git guardrails converged in $hooks_dir"
+fi
+
+# Install the index-safe formatter after native hooks so its chain preserves them.
+if [ -f "$repo_root/.hypertext/formatting/install.py" ]; then
+  python3 "$repo_root/.hypertext/formatting/install.py"
 fi

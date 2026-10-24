@@ -27,9 +27,10 @@ overrides:
 # release-age cooldown so the pinned 24.x typings resolve cleanly. The cooldown stays
 # in force for every other dependency. (pnpm supply-chain setting.)
 minimumReleaseAgeExclude:
-  # Exact published Studio candidate 38116243716-1, independently reviewed before publication.
+  # Reviewed shared formatter release; only this exact private package version is exempt.
   # Only these two company packages are consumed by this workspace.
-  - '@thehypertextstudio/web-config@0.0.1'
+  - '@thehypertextstudio/web-config@0.0.3'
+  - '@thehypertextstudio/format-config@0.0.1'
   - '@thehypertextstudio/web-docs@0.0.1'
   - '@types/node'
   # Wrangler and the current Workers Vitest integration resolve the compatibility-date

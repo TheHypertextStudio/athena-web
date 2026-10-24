@@ -50,3 +50,6 @@ apps/docs/docs.json
 packages/brand/src/embedded-icons.generated.ts
 
 apps/web/.open-next/
+
+# Vendored resolver is formatted in product-standards before distribution.
+/.hypertext/formatter-tools/prettier.mjs

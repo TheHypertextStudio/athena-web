@@ -1,0 +1,10 @@
+{
+  "setup": [["python3", "{root}/.hypertext/formatter-tools/document-formats.py", "setup-mermaid"]],
+  "rules": [
+    {
+      "name": "mermaid",
+      "patterns": ["**/*.mmd", "*.mmd"],
+      "argv": ["python3", "{root}/.hypertext/formatter-tools/document-formats.py", "mermaid"]
+    }
+  ]
+}

@@ -14,7 +14,7 @@
     "dev": "dotenv -e .env.local -- turbo run dev",
     "dev:stack": "sh scripts/dev-stack.sh",
     "lint": "turbo run lint --concurrency=2 && pnpm complexity:check",
-    "lint:staged": "lint-staged",
+    "lint:staged": "python3 .hypertext/formatting/commit.py && node scripts/check-staged-lint.mjs",
     "lint:fix": "turbo run lint:fix",
     "format": "prettier --write \"**/*.{ts,tsx,md,json}\"",
     "format:check": "prettier --check \"**/*.{ts,tsx,md,json}\"",
@@ -80,7 +80,8 @@
     "docs:config": "pnpm --filter @docket/docs docs:config",
     "docs:config:check": "pnpm --filter @docket/docs docs:config:check",
     "docs:dev": "pnpm --filter @docket/docs docs:dev",
-    "docs:source:check": "tsx scripts/docs-check.ts && pnpm --filter @docket/docs test && pnpm --filter @docket/test-utils exec vitest run tests/docs-policies/docs-site-coverage.test.ts"
+    "docs:source:check": "tsx scripts/docs-check.ts && pnpm --filter @docket/docs test && pnpm --filter @docket/test-utils exec vitest run tests/docs-policies/docs-site-coverage.test.ts",
+    "hooks:install": "python3 .hypertext/formatting/install.py"
   },
   "devDependencies": {
     "@clack/prompts": "^1.7.0",
@@ -98,14 +99,15 @@
     "lint-staged": "^17.0.8",
     "portless": "catalog:",
     "postgres": "catalog:",
-    "prettier": "3.9.5",
-    "prettier-plugin-tailwindcss": "^0.8.0",
+    "prettier": "3.9.10",
+    "prettier-plugin-tailwindcss": "0.8.0",
     "tsx": "^4.23.1",
     "turbo": "^2.10.4",
     "typescript": "catalog:",
     "typescript-eslint": "catalog:",
     "vite": "catalog:",
-    "vitest": "catalog:"
+    "vitest": "catalog:",
+    "@thehypertextstudio/format-config": "0.0.1"
   },
   "packageManager": "pnpm@11.9.0",
   "engines": {

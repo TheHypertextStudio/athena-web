@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "files": {
+    ".hypertext/formatting/core/__init__.py": "3858bfb4a4fa531ea1269e6e42cce86f0b7bfaf351600a755afc159def4c85d3",
+    ".hypertext/formatting/core/gate.py": "172510d10dc9a4f6d8623eb25d92991dd032c72ef81f62634c2a0715cbef93e6",
+    ".hypertext/formatting/core/runner.py": "bdd2d79fa3e00cdf8375da0fe3092e3dba67ec2f8462a9611182ea346f64a167",
+    ".hypertext/formatting/core/setup_files.py": "1f90c674fce827139df32df6c84763f643696ad453d2f4e1621897fff6c4de68",
+    ".hypertext/formatting/core/formatting.py": "51e74bf9a1bae3c05aa27c6a712b51897f2ea82ce0ebd7a06bb2e96b6f3d5d07",
+    ".hypertext/formatting/core/git_policy.py": "87337a7465e95df1d4da345a5ab9bf8c3f7dccadc38f88a41aec24e0ec21780d",
+    ".hypertext/formatting/LOCK.json": "531c1c7d08fa98c9813f477721e138a6cdf3b0d08bd9850d4a33dc904666a9e2",
+    ".hypertext/formatting/commit.py": "5745312af7089246e44ac8a2fd537db9c9b69203753eebfc83d8d2ab2604f8b4",
+    ".hypertext/formatting/install.py": "a67c1660c371f22a5befa5cf61c4b34f1cd37c477d6a9225ea3a34a272095df2",
+    ".hypertext/formatter-tools/setup.py": "2b681e562bd663ca1ce8a18e30efc5f669d07dfdae620e3aed6bd12b562722a3",
+    ".hypertext/formatter-tools/run.py": "d6fbab2bab923d03d8fa904d9e35d54436e0ee36ba471708931cd6d409fe421e",
+    ".hypertext/formatter-tools/prettier.mjs": "56ea416b45c56a09331009a3e1eecd261100d0262d3a8ae9ca134b502ddbe278",
+    ".hypertext/formatter-tools/preset.mjs": "0eba1bb6edbfbeb4101afb2e65c1b4120ebd94403808864de534dc60b25e06c0",
+    ".hypertext/formatter-tools/text.py": "0c0e7f27d6ec0b9e02ec330a7faa60f535f60fafb8a4eb5bf023af68acc6a149"
+  }
+}

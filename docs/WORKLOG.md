@@ -7,6 +7,17 @@
 
 ## Active Tasks
 
+### [STUDIO-FORMATTER-CONSISTENCY] Import one shared formatting baseline
+
+- **Status**: REVIEW
+- **Started**: 2026-10-24
+- **Description**: Import the shared Studio Prettier preset at the repository root, preserve Tailwind ordering and the web application's Wrangler JSON override, and align root/web/docs tool versions.
+- **Plan**: Add the root config dependency, replace copied scalar settings with the package import, update the exact package and Prettier versions, generate the lockfile from the private registry after package publication, and verify configuration resolution and affected repository checks.
+- **Validation**: Resolve representative root, web, and docs files using their nearest configuration and confirm shared style, preserved Markdown wrapping, Tailwind plugin loading, and the Wrangler override. Run affected tooling checks without rewriting unrelated source.
+
+- **Outcome**: Root formatting imports the small shared style package, and web/docs retain the shared frontend configuration exports. Exact Prettier pins agree across all three owners. Markdown wrapping, Tailwind loading, and Wrangler JSON behavior resolve as intended. The docs formatter/linter checks and all 421 repository tooling tests pass.
+- **Learnings**: Shared formatting can use its own small package while frontend compiler and linter presets retain their existing package; reexports keep both entry points on one style object.
+
 ### [APPLE-APP-IDENTITY] Keep native Apple identity references consistent
 
 - **Status**: REVIEW

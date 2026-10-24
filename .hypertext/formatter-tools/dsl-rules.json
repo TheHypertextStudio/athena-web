@@ -1,0 +1,10 @@
+{
+  "setup": [["python3", "{repo}/.hypertext/formatter-tools/dsl.py", "setup-docker"]],
+  "rules": [
+    {
+      "name": "dockerfmt 0.5.4",
+      "patterns": ["**/Dockerfile", "Dockerfile"],
+      "argv": ["python3", "{repo}/.hypertext/formatter-tools/dsl.py", "docker", "--path", "{path}"]
+    }
+  ]
+}

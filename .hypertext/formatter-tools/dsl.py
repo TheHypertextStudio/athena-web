@@ -134,6 +134,7 @@ def gawk(setup=False):
                         with bundle.extractfile(member) as source:
                             target.write_bytes(source.read())
                         target.chmod(member.mode & 0o777)
+                        os.utime(target, (member.mtime, member.mtime))
             source = build / "gawk-5.4.1"
             for command in [
                 [

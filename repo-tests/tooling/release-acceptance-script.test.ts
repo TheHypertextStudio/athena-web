@@ -1,5 +1,5 @@
 import { chmodSync, existsSync, mkdtempSync, readFileSync, statSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { devNull, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
@@ -201,7 +201,12 @@ run_release_env node -e "$4"`,
       {
         cwd: REPO_ROOT,
         encoding: 'utf8',
-        env: { ...process.env, BETTER_AUTH_COOKIE_DOMAIN: 'docket.localhost' },
+        env: {
+          ...process.env,
+          // This fixture checks cookie forwarding, independently of operator package credentials.
+          npm_config_userconfig: devNull,
+          BETTER_AUTH_COOKIE_DOMAIN: 'docket.localhost',
+        },
       },
     );
 

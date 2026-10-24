@@ -102,7 +102,7 @@ function TemplateCreationNavigation(props: DefinitionNavigationProps): JSX.Eleme
               aria-current={props.section === item.value ? 'step' : undefined}
               aria-controls={props.scope ? tabIds(props.scope, item.value).panelId : undefined}
               disabled={props.pending === true || index > (props.reached ?? selectedIndex)}
-              className="h-auto min-h-16 w-full min-w-0 flex-col gap-1 px-1 py-2 text-center whitespace-normal"
+              className="h-auto min-h-14 w-full min-w-0 flex-col gap-1 px-1 py-2 text-center whitespace-normal sm:min-h-12 sm:flex-row sm:gap-2"
               onClick={() => {
                 props.onValueChange(item.value);
               }}

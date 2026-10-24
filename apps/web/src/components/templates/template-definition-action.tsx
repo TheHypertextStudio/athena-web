@@ -86,7 +86,7 @@ function TemplateSaveStatus({
   form: WorkTemplateFormState;
   saved: boolean;
 }): JSX.Element {
-  const visibility = form.dirty || form.pending ? '' : 'sr-only sm:not-sr-only';
+  const visibility = form.dirty || form.pending ? '' : 'sr-only';
   return (
     <span role="status" className={`text-body-small text-on-surface-variant ${visibility}`}>
       {saveStatus(form, saved)}
@@ -114,7 +114,7 @@ export function TemplateCreationFooter({
 }): JSX.Element {
   const index = TEMPLATE_SECTIONS.findIndex((item) => item.value === section);
   return (
-    <div className="mx-auto flex w-full max-w-[760px] min-w-0 flex-wrap items-center justify-between gap-2">
+    <div className="mx-auto flex w-full max-w-[1120px] min-w-0 flex-wrap items-center justify-between gap-2">
       <Button type="button" variant="ghost" disabled={form.pending} onClick={onBack}>
         Back
       </Button>

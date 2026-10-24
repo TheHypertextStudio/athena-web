@@ -13,12 +13,13 @@ import { WorkTemplateForm } from '@/components/templates/work-template-authoring
 describe('work definition publication review', () => {
   it('separates purpose, starting content, included work and publication into revisitable decisions', () => {
     render(<WorkTemplateForm orgId="org" initial={null} onCreated={vi.fn()} />);
-    expect(screen.getByRole('heading', { name: 'About this template' })).toBeVisible();
+    expect(screen.getByRole('textbox', { name: 'Template name' })).toBeVisible();
     expect(screen.queryByRole('textbox', { name: 'Document' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Add task' })).not.toBeInTheDocument();
     change('Template name', 'Event');
     fireEvent.click(screen.getByRole('button', { name: 'Continue to starting work' }));
     expect(screen.getByRole('textbox', { name: 'Document' })).toBeVisible();
+    expect(screen.getByRole('textbox', { name: 'Name for new work' })).toHaveFocus();
     expect(screen.queryByRole('button', { name: 'Add task' })).not.toBeInTheDocument();
     change('Document', 'A welcoming event.');
     fireEvent.click(screen.getByRole('button', { name: 'Continue to included work' }));
@@ -29,6 +30,43 @@ describe('work definition publication review', () => {
     section('Purpose');
     expect(screen.getByRole('textbox', { name: 'Template name' })).toHaveValue('Event');
     expect(mocks.publish).not.toHaveBeenCalled();
+  });
+
+  it('shows the authored hierarchy next to the starting document and keeps edits when opening its editor', () => {
+    render(<WorkTemplateForm orgId="org" initial={template()} onCreated={vi.fn()} />);
+    const child = add('task');
+    change('Title', 'Reconcile accounts', child);
+    section('Starting work');
+    change(
+      'Document',
+      'Keep the supporting receipts.',
+      screen.getByRole('region', { name: 'Sample work' }),
+    );
+    const structure = screen.getByRole('region', { name: 'Starting work structure' });
+    expect(within(structure).getByRole('heading', { name: 'Reconcile accounts' })).toBeVisible();
+    expect(screen.getByRole('complementary', { name: 'Work defaults' })).toBeVisible();
+    expect(screen.getByLabelText('Starting priority')).toBeVisible();
+    fireEvent.click(within(structure).getByRole('button', { name: 'Edit included work' }));
+    expect(screen.getByRole('tab', { name: 'Included work' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    section('Starting work');
+    expect(screen.getByRole('textbox', { name: 'Document' })).toHaveValue(
+      'Keep the supporting receipts.',
+    );
+  });
+
+  it('advances through the validated creation flow from the included-work action', () => {
+    render(<WorkTemplateForm orgId="org" initial={null} onCreated={vi.fn()} />);
+    change('Template name', 'Quarterly finances');
+    fireEvent.click(screen.getByRole('button', { name: 'Continue to starting work' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add included work' }));
+    expect(screen.getByRole('button', { name: 'Included work' })).toHaveAttribute(
+      'aria-current',
+      'step',
+    );
+    expect(screen.getByRole('button', { name: 'Add task' })).toBeVisible();
   });
 
   it('offers deliberate publication only after opening Review', () => {

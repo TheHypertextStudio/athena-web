@@ -128,7 +128,7 @@ describe('blueprint sample authoring', () => {
   it('replaces the overview with one child editor and restores its row on return', async () => {
     render(<WorkTemplateForm orgId="org" initial={template()} onCreated={vi.fn()} />);
     expect(screen.getByLabelText('Document')).toBeVisible();
-    expect(screen.queryByLabelText('Starting priority')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Starting priority')).toBeVisible();
     const first = add('task');
     change('Title', 'Book venue', first);
     expect(screen.queryByLabelText('Team')).not.toBeInTheDocument();

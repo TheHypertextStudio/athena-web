@@ -1,6 +1,6 @@
 'use client';
 import type { JSX } from 'react';
-import { Field, Input, Select, Textarea, fieldSurface } from '@docket/ui/primitives';
+import { Field, Input, Select, Textarea, Surface, fieldSurface } from '@docket/ui/primitives';
 import { EntityMultiPicker } from '@docket/ui/components';
 import { useVocabulary } from '@docket/ui/hooks';
 import { TemplateTargetType } from '@docket/work/template-contract';
@@ -8,6 +8,7 @@ import { FreeformTextEditor } from '@/components/editor/freeform-text';
 import { useComposerOptions } from '@/components/pickers/use-composer-options';
 import { useCanManageOrg } from '@/components/settings/use-can-manage-org';
 import { useStatusRegistry } from '@/components/statuses/status-registry';
+import { TemplateStartingStructure } from './template-starting-structure';
 import { WorkTemplateGlyphField } from './work-template-glyph-field';
 import { TemplateDisclosure } from './template-disclosure';
 import {
@@ -24,10 +25,14 @@ export function WorkTemplateFields({
   orgId,
   form,
   isBase,
+  onEditStructure,
+  active = true,
 }: {
   orgId: string;
   form: Form;
   isBase: boolean;
+  onEditStructure?: (() => void) | undefined;
+  active?: boolean;
 }): JSX.Element {
   const disabled = form.pending || !form.canEdit;
   const options = useComposerOptions(orgId, ['teams'], true);
@@ -35,39 +40,56 @@ export function WorkTemplateFields({
   const statuses = statusRegistry.statusesFor(form.kind);
   const set = form.setDefinition;
   return (
-    <div className="flex min-w-0 flex-col gap-4 sm:gap-5">
-      <TemplateSampleWork orgId={orgId} form={form} />
-      <div className="min-w-0">
-        <TemplateDisclosure title="Defaults and availability">
-          <Field
-            label="Starting status"
-            description="If this status is removed, new work uses its normal starting status."
-          >
-            <Select
-              value={form.definition.defaultStatusKey ?? ''}
-              disabled={disabled}
-              onChange={(event) => {
-                set((value) => ({ ...value, defaultStatusKey: event.target.value || null }));
-              }}
-            >
-              <option value="">Workspace default</option>
-              {statuses.map((status) => (
-                <option key={status.key} value={status.key}>
-                  {status.name}
-                </option>
-              ))}
-            </Select>
-          </Field>
-          {!isBase && (form.kind === 'project' || form.kind === 'task') ? (
-            <TeamOfferingField
-              orgId={orgId}
-              form={form}
-              teams={options.teamOptions}
-              loading={options.loading}
-            />
-          ) : null}
-        </TemplateDisclosure>
+    <div className="grid min-w-0 items-start gap-8 lg:grid-cols-[minmax(0,1fr)_272px] lg:gap-10">
+      <div className="flex min-w-0 flex-col gap-8">
+        <TemplateSampleWork orgId={orgId} form={form} />
+        {active ? (
+          <TemplateStartingStructure orgId={orgId} form={form} onEdit={onEditStructure} />
+        ) : null}
       </div>
+      <Surface
+        as="aside"
+        tone="card"
+        shape="medium"
+        pad="comfortable"
+        aria-label="Work defaults"
+        className="flex flex-col gap-4"
+      >
+        <h2 className="text-title-medium">Defaults</h2>
+        <WorkTemplateSampleSummary form={form} />
+        <WorkTemplateSampleProperties orgId={orgId} form={form} expanded />
+        <Field
+          label="Starting status"
+          description={
+            form.definition.defaultStatusKey
+              ? 'If this status is removed, new work uses its normal starting status.'
+              : undefined
+          }
+        >
+          <Select
+            value={form.definition.defaultStatusKey ?? ''}
+            disabled={disabled}
+            onChange={(event) => {
+              set((value) => ({ ...value, defaultStatusKey: event.target.value || null }));
+            }}
+          >
+            <option value="">Workspace default</option>
+            {statuses.map((status) => (
+              <option key={status.key} value={status.key}>
+                {status.name}
+              </option>
+            ))}
+          </Select>
+        </Field>
+        {!isBase && (form.kind === 'project' || form.kind === 'task') ? (
+          <TeamOfferingField
+            orgId={orgId}
+            form={form}
+            teams={options.teamOptions}
+            loading={options.loading}
+          />
+        ) : null}
+      </Surface>
     </div>
   );
 }
@@ -81,14 +103,6 @@ function TemplateSampleWork({ orgId, form }: { orgId: string; form: Form }): JSX
       tabIndex={-1}
       className="flex min-w-0 scroll-mt-48 flex-col gap-4 sm:gap-5"
     >
-      <div>
-        <h2 tabIndex={-1} className="text-title-large">
-          Starting work
-        </h2>
-        <p className="text-body-medium text-on-surface-variant">
-          Choose the details and document that new work starts with.
-        </p>
-      </div>
       <WorkTemplateSampleFields orgId={orgId} form={form} />
       <Field label="Document">
         <FreeformTextEditor
@@ -105,11 +119,9 @@ function TemplateSampleWork({ orgId, form }: { orgId: string; form: Form }): JSX
           placeholder="Add notes, instructions, or a checklist…"
           ariaLabel="Document"
           mentionOrgId={orgId}
-          className={`${fieldSurface({ variant: 'filled', controlSize: 'md', multiline: true, ringOn: 'within' })} min-h-48 max-w-none`}
+          className={`${fieldSurface({ variant: 'filled', controlSize: 'md', multiline: true, ringOn: 'within' })} min-h-48 max-w-none lg:min-h-64`}
         />
       </Field>
-      <WorkTemplateSampleSummary form={form} />
-      <WorkTemplateSampleProperties orgId={orgId} form={form} />
     </section>
   );
 }
@@ -220,16 +232,9 @@ export function WorkTemplatePurposeFields({
   const set = form.setDefinition;
   return (
     <div className="flex max-w-2xl min-w-0 flex-col gap-4 sm:gap-5">
-      <div>
-        <h2 tabIndex={-1} className="text-title-large">
-          About this template
-        </h2>
-        <p className="text-body-medium text-on-surface-variant">
-          Choose a name and describe when to use this template.
-        </p>
-      </div>
       <Field label="Template name">
         <Input
+          data-template-section-focus=""
           placeholder="Name this template"
           value={form.definition.name}
           disabled={disabled || isBase}
@@ -280,7 +285,7 @@ function TemplateKindField({ form, existing }: { form: Form; existing: boolean }
           : {
               initiative: 'Connects related programs around an outcome.',
               program: 'Organizes an ongoing area of work, including repeating work.',
-              project: 'Organizes work toward a result with a finish.',
+              project: 'Groups work with a shared goal and an end date.',
               task: 'Defines a single action and any subtasks.',
             }[form.kind]
       }

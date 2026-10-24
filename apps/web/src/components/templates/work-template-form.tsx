@@ -114,6 +114,7 @@ function TemplateFormContent({
       ) : null}
       <TemplateDefinitionSections
         mode={mode}
+        onContinue={flow.next}
         reached={reached}
         orgId={orgId}
         initial={initial}
@@ -167,7 +168,10 @@ function TemplateAuthoringHeader({
     <>
       <div className="flex min-w-0 items-start justify-between gap-3">
         <div className="flex min-w-0 flex-1 flex-col gap-1">
-          <TemplateDefinitionIdentity form={form} />
+          <TemplateDefinitionIdentity
+            form={form}
+            naming={mode === 'create' && section === 'purpose'}
+          />
           <TemplateDraftHeader initial={initial} form={form} />
         </div>
         <TemplateDefinitionAction form={form} initial={initial} section={section} mode={mode} />
@@ -222,11 +226,17 @@ function TemplateReviewPublication({
   );
 }
 
-function TemplateDefinitionIdentity({ form }: { form: WorkTemplateFormState }): JSX.Element {
+function TemplateDefinitionIdentity({
+  form,
+  naming,
+}: {
+  form: WorkTemplateFormState;
+  naming: boolean;
+}): JSX.Element {
   return (
     <div className="min-w-0">
-      <h1 className="text-title-large sm:text-headline-large break-words">
-        {form.definition.name.trim() ? form.definition.name : 'New work template'}
+      <h1 className="text-title-large break-words">
+        {!naming && form.definition.name.trim() ? form.definition.name : 'New work template'}
       </h1>
     </div>
   );

@@ -121,7 +121,6 @@ describe('work-template sample authoring', () => {
       render(<WorkTemplateForm orgId="org" initial={null} onCreated={vi.fn()} />);
       fireEvent.change(screen.getByLabelText('Template name'), { target: { value: 'Event' } });
       fireEvent.click(screen.getByRole('button', { name: 'Continue to starting work' }));
-      fireEvent.click(screen.getByRole('button', { name: 'Defaults and availability' }));
       const control = screen.getByRole('button', { name: /Offer to teams/ });
       if (canManage) expect(control).toBeEnabled();
       else expect(control).toBeDisabled();

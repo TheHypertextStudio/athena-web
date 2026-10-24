@@ -88,7 +88,7 @@ it.each(['loading', 'error'] as const)(
     } else expect(screen.getByText('Checking included templates…')).toBeVisible();
   },
 );
-it('focuses the publication decision on entering Review before the included work and subordinate starting document', () => {
+it('focuses the publication decision on entering Review with the full starting document and included work', () => {
   render(<WorkTemplateForm orgId={orgId} initial={withReference()} onCreated={vi.fn()} />);
   fireEvent.click(screen.getByRole('tab', { name: 'Review' }), { detail: 1 });
   const review = within(screen.getByRole('region', { name: 'Work definition review' }));
@@ -99,7 +99,5 @@ it('focuses the publication decision on entering Review before the included work
       .compareDocumentPosition(review.getByRole('heading', { name: 'Included work' })) &
       Node.DOCUMENT_POSITION_FOLLOWING,
   ).toBeTruthy();
-  expect(review.queryByRole('heading', { name: 'Preparation' })).not.toBeInTheDocument();
-  fireEvent.click(review.getByRole('button', { name: 'Document' }));
   expect(review.getByRole('heading', { name: 'Preparation' })).toBeVisible();
 });

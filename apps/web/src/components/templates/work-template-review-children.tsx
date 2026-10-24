@@ -17,6 +17,7 @@ import { WorkTemplateReviewChildStartingDetails } from './work-template-review-c
 import type { WorkTemplateFormState } from './use-work-template-form';
 
 interface ReviewContext {
+  readonly compact?: boolean;
   readonly blueprint: Blueprint;
   readonly rootName: string;
   readonly rootKind: WorkTemplateFormState['kind'];
@@ -75,6 +76,7 @@ function ReviewChild({
   orgId,
   templates,
   rootId,
+  compact,
 }: ReviewContext & { readonly step: BlueprintStep }): JSX.Element {
   const kind = useVocabulary(step.kind === 'milestone' ? 'task' : step.kind);
   const hasDates = Object.values(step.dates).some((rule) => rule && rule.kind !== 'none');
@@ -94,6 +96,30 @@ function ReviewChild({
           {blueprintStepTiming(step, blueprint, rootName, rootKind)}
         </p>
       ) : null}
+      {!compact ? (
+        <ReviewChildContext
+          step={step}
+          blueprint={blueprint}
+          rootName={rootName}
+          rootKind={rootKind}
+          orgId={orgId}
+          templates={templates}
+          rootId={rootId}
+        />
+      ) : null}
+    </>
+  );
+}
+function ReviewChildContext({
+  step,
+  blueprint,
+  rootKind,
+  orgId,
+  templates,
+  rootId,
+}: ReviewContext & { readonly step: BlueprintStep }): JSX.Element {
+  return (
+    <>
       <ReviewResponsibility step={step} blueprint={blueprint} rootKind={rootKind} />
       <WorkTemplateReviewChildDetails step={step} blueprint={blueprint} />
       {step.template ? (

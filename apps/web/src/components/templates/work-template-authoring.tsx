@@ -124,7 +124,7 @@ export function WorkTemplateAuthoring({
     <ImmersiveShell header={header} footer={footer}>
       <div
         data-work-template-authoring=""
-        className="mx-auto flex w-full max-w-[760px] min-w-0 flex-col gap-6 px-3 pb-6 sm:px-0 sm:pb-8"
+        className="mx-auto flex w-full max-w-[1120px] min-w-0 flex-col gap-6 px-3 pb-6 sm:px-0 sm:pb-8"
       >
         {content}
       </div>

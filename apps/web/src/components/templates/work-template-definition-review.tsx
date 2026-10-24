@@ -6,7 +6,6 @@ import { workTemplatesDef } from './work-template-queries';
 import { WorkTemplateReviewStartingValues } from './work-template-review-starting-values';
 import { WorkTemplateReviewChildren } from './work-template-review-children';
 import { WorkTemplateBlueprintSummary } from './work-template-blueprint-summary';
-import { TemplateDisclosure } from './template-disclosure';
 import { ProgramDefaultScheduleReview } from './program-default-schedule-review';
 import type { WorkTemplateFormState } from './use-work-template-form';
 
@@ -22,8 +21,13 @@ export function WorkTemplateDefinitionReview({
 }): JSX.Element {
   const templates = useApiQuery(workTemplatesDef(orgId, { includeDrafts: true }));
   const blueprint = form.definition.blueprint;
+  const payload = form.definition.payload;
+  const name = payload.targetType === 'task' ? payload.title : payload.name;
   return (
-    <section aria-label="Work definition review" className="flex min-w-0 flex-col gap-8">
+    <section
+      aria-label="Work definition review"
+      className="grid min-w-0 items-start gap-8 lg:grid-cols-[minmax(0,1fr)_320px] lg:gap-10"
+    >
       <StartingWorkReview form={form} orgId={orgId} />
       <div className="flex min-w-0 flex-col gap-5">
         <section aria-label="Included work" className="flex min-w-0 flex-col gap-4">
@@ -36,7 +40,7 @@ export function WorkTemplateDefinitionReview({
           {blueprint.steps.length ? (
             <WorkTemplateReviewChildren
               blueprint={blueprint}
-              rootName={form.definition.name}
+              rootName={name?.trim() ? name : form.definition.name}
               rootKind={form.kind}
               orgId={orgId}
               templates={templates.data?.items ?? []}
@@ -78,9 +82,9 @@ function StartingWorkReview({
         compactProperties
       >
         {form.definition.payload.description ? (
-          <TemplateDisclosure title="Document">
+          <div className="min-w-0" aria-label="Starting document">
             <StaticMarkdown value={form.definition.payload.description} />
-          </TemplateDisclosure>
+          </div>
         ) : (
           <p className="text-body-small text-on-surface-variant">Starts with an empty document.</p>
         )}

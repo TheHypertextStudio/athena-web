@@ -133,7 +133,7 @@ function useRestoreSectionFocus({
     const remembered = focusedFields.current[section];
     const destination = remembered?.isConnected
       ? remembered
-      : panel.querySelector<HTMLElement>('h2');
+      : panel.querySelector<HTMLElement>('[data-template-section-focus], h2');
     if (moveFocus.current) destination?.focus({ preventScroll: true });
     if (position) restoreShellScroll(position);
     else {

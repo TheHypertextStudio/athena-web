@@ -1,5 +1,5 @@
 'use client';
-import type { JSX } from 'react';
+import type { JSX, ReactNode } from 'react';
 import { Field, Input, Select } from '@docket/ui/primitives';
 import { LabelsPicker } from '@docket/ui/components';
 import { CanonicalTemplateDraft } from '@docket/work/template-contract';
@@ -32,6 +32,8 @@ export function WorkTemplateSampleFields({
         }
       >
         <Input
+          data-template-section-focus=""
+          className="text-headline-small h-auto py-3"
           value={title ?? ''}
           disabled={disabled}
           onChange={(event) => {
@@ -43,7 +45,7 @@ export function WorkTemplateSampleFields({
   );
 }
 
-/** An optional summary follows the main starting document without competing with it. */
+/** Edit an optional starting summary without competing with the main document. */
 export function WorkTemplateSampleSummary({
   form,
 }: {
@@ -79,9 +81,11 @@ export function WorkTemplateSampleSummary({
 export function WorkTemplateSampleProperties({
   orgId,
   form,
+  expanded = false,
 }: {
   orgId: string;
   form: WorkTemplateFormState;
+  expanded?: boolean;
 }): JSX.Element {
   const payload = form.definition.payload;
   const disabled = form.pending || !form.canEdit;
@@ -92,7 +96,7 @@ export function WorkTemplateSampleProperties({
     }));
   };
   return (
-    <TemplateDisclosure title="Starting properties">
+    <SamplePropertiesLayout expanded={expanded}>
       {payload.targetType !== 'program' ? (
         <Field label="Starting priority">
           <Select
@@ -138,7 +142,7 @@ export function WorkTemplateSampleProperties({
         <SampleEffort payload={payload} disabled={disabled} change={change} />
       ) : null}
       <OngoingDefaults payload={payload} disabled={disabled} change={change} />
-    </TemplateDisclosure>
+    </SamplePropertiesLayout>
   );
 }
 
@@ -261,5 +265,19 @@ function SampleEffort({
         />
       </Field>
     </div>
+  );
+}
+
+function SamplePropertiesLayout({
+  expanded,
+  children,
+}: {
+  expanded: boolean;
+  children: ReactNode;
+}): JSX.Element {
+  return expanded ? (
+    <div className="flex min-w-0 flex-col gap-4">{children}</div>
+  ) : (
+    <TemplateDisclosure title="Starting properties">{children}</TemplateDisclosure>
   );
 }

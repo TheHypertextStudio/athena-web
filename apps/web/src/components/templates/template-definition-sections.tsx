@@ -21,7 +21,9 @@ export function TemplateDefinitionSections({
   navigation,
   mode = 'edit',
   reached,
+  onContinue,
 }: {
+  onContinue?: (() => void) | undefined;
   mode?: 'create' | 'edit';
   reached?: number;
   orgId: string;
@@ -60,6 +62,10 @@ export function TemplateDefinitionSections({
           form={form}
           hidden={section !== 'work'}
           onFocusCapture={rememberFocus}
+          onEditStructure={() => {
+            if (mode === 'create') onContinue?.();
+            else selectSection('structure');
+          }}
         />
         <DefinitionStructure orgId={orgId} form={form} navigation={navigation} />
         <TabPanel
@@ -86,7 +92,9 @@ function DefinitionWork({
   form,
   hidden,
   onFocusCapture,
+  onEditStructure,
 }: {
+  onEditStructure: () => void;
   orgId: string;
   initial: WorkTemplateOut | null;
   form: WorkTemplateFormState;
@@ -101,7 +109,13 @@ function DefinitionWork({
       onFocusCapture={onFocusCapture}
       className="scroll-mt-48"
     >
-      <WorkTemplateFields orgId={orgId} form={form} isBase={initial?.isBase ?? false} />
+      <WorkTemplateFields
+        orgId={orgId}
+        form={form}
+        isBase={initial?.isBase ?? false}
+        onEditStructure={onEditStructure}
+        active={!hidden}
+      />
     </TabPanel>
   );
 }

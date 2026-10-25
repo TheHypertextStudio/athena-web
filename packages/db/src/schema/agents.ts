@@ -41,7 +41,7 @@ import {
   sessionTrigger,
 } from '../enums';
 import { genId } from '../id';
-import type { AgentConnection, ApprovalRouting, SessionActivityBody, TurnMessage } from '../types';
+import type { AgentConnection, ApprovalRouting, SessionActivityBody } from '../types';
 import { user } from './auth';
 import { actor, auditColumns, organization } from './identity';
 import { task } from './work';
@@ -520,38 +520,7 @@ export const athenaConversationSegment = pgTable(
  * Adjacent to `agent_session` (the agent island), never woven into the event
  * substrate.
  */
-export const agentSessionTranscript = pgTable(
-  'agent_session_transcript',
-  {
-    sessionId: text('session_id')
-      .primaryKey()
-      .references(() => agentSession.id, { onDelete: 'cascade' }),
-    organizationId: text('organization_id').references(() => organization.id, {
-      onDelete: 'cascade',
-    }),
-    ownerUserId: text('owner_user_id').references(() => user.id, { onDelete: 'cascade' }),
-    messages: jsonb('messages').$type<TurnMessage[]>().notNull().default([]),
-    updatedAt: timestamp('updated_at').notNull().defaultNow(),
-  },
-  (t) => [
-    index('agent_session_transcript_owner_idx').on(t.ownerUserId),
-    foreignKey({
-      columns: [t.sessionId, t.ownerUserId],
-      foreignColumns: [agentSession.id, agentSession.ownerUserId],
-      name: 'agent_session_transcript_parent_owner_fk',
-    }).onDelete('cascade'),
-    foreignKey({
-      columns: [t.sessionId, t.organizationId],
-      foreignColumns: [agentSession.id, agentSession.organizationId],
-      name: 'agent_session_transcript_parent_org_fk',
-    }).onDelete('cascade'),
-    check(
-      'agent_session_transcript_attribution_check',
-      sql`(${t.ownerUserId} IS NOT NULL AND ${t.organizationId} IS NULL)
-        OR (${t.ownerUserId} IS NULL AND ${t.organizationId} IS NOT NULL)`,
-    ),
-  ],
-);
+export { agentSessionTranscript } from './agent-transcript';
 
 /**
  * Per-provider bookkeeping for one agent session that also lives as a native session on an

@@ -120,8 +120,10 @@ export interface ProvenanceRef {
   readonly ruleId?: string;
   /** The inbound email accepted as work. */
   readonly messageId?: string;
-  /** The canvas command id. */
+  /** The reviewed command id, including canvas commands and confirmed label conversion. */
   readonly commandId?: string;
+  /** Digest of the exact reviewed command, used to reject changed retries without retaining its body. */
+  readonly commandFingerprint?: string;
 }
 
 /**

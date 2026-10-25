@@ -15,7 +15,7 @@ import {
 } from 'drizzle-orm/pg-core';
 
 import type {
-  BlueprintInvocationManifest,
+  StoredBlueprintInvocationManifest,
   BlueprintInvocationOverride,
 } from '../blueprint-invocation';
 import type { ScheduleSourceArchive } from './work-schedule-storage';
@@ -100,7 +100,7 @@ export const blueprintInvocation = pgTable(
       .notNull()
       .references(() => organization.id, { onDelete: 'cascade' }),
     ownerActorId: text('owner_actor_id').references(() => actor.id, { onDelete: 'set null' }),
-    manifest: jsonb('manifest').$type<BlueprintInvocationManifest>().notNull(),
+    manifest: jsonb('manifest').$type<StoredBlueprintInvocationManifest>().notNull(),
     overrides: jsonb('overrides').$type<readonly BlueprintInvocationOverride[]>().notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },

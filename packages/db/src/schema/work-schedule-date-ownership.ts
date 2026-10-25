@@ -10,7 +10,29 @@ export interface NativeScheduleDateOwnership {
   readonly field: 'startDate' | 'dueDate' | 'targetDate';
   readonly anchor:
     | { readonly kind: 'run' }
-    | { readonly kind: 'work'; readonly id: string; readonly offsetDays: number };
+    | { readonly kind: 'work'; readonly id: string; readonly offsetDays: number }
+    | { readonly kind: 'absent' }
+    | {
+        readonly kind: 'field';
+        readonly source:
+          | { readonly kind: 'run' }
+          | {
+              readonly kind: 'work_date';
+              readonly work: {
+                readonly kind: 'task' | 'project' | 'milestone';
+                readonly id: string;
+              };
+              readonly field: 'startDate' | 'dueDate' | 'targetDate';
+            }
+          | {
+              readonly kind: 'after_completion';
+              readonly works: readonly {
+                readonly kind: 'task' | 'project' | 'milestone';
+                readonly id: string;
+              }[];
+            };
+        readonly offset: { readonly days: number; readonly unit: 'calendar' | 'working' };
+      };
   readonly manual: boolean;
   readonly lastDerivedDate: string | null;
 }

@@ -12,8 +12,9 @@ export interface ScheduleArchiveBatchResult {
   readonly after: string | null;
 }
 /**
- * Archive a locked source page, deferring only explicit original-proof failures during ordinary upgrades.
- * @param archive - The existing source/instance writer on this same caller-owned transaction.
+ * Archive a bounded page, deferring only explicit original-proof failures during ordinary upgrades.
+ * Revision writers acquire definition then revision locks; selecting the page must not invert that order.
+ * @param archive - The existing source/instance writer, including its locks, on this caller-owned transaction.
  * @throws For strict proof failures or any storage/archival failure other than deferred source proof.
  */
 export async function archiveWorkScheduleSourceBatch(
@@ -29,7 +30,7 @@ export async function archiveWorkScheduleSourceBatch(
   const rows = await migrationRows<{ id: string }>(
     connection,
     input.kind === 'revisions'
-      ? sql`select r.id from process_revision r join work_template_blueprint_conversion c on c.legacy_process_revision_id=r.id where c.source_archive is null and (${input.after}::text is null or r.id>${input.after}) order by r.id limit ${input.size} for update of r skip locked`
+      ? sql`select r.id from process_revision r join work_template_blueprint_conversion c on c.legacy_process_revision_id=r.id where c.source_archive is null and (${input.after}::text is null or r.id>${input.after}) order by r.id limit ${input.size}`
       : sql`select i.id from process_instance i where (${input.after}::text is null or i.id>${input.after}) and not exists(select 1 from process_occurrence o where o.organization_id=i.organization_id and o.legacy_instance_id=i.id and o.historical_archive is not null) order by i.id limit ${input.size} for update of i skip locked`,
   );
   let archived = 0,

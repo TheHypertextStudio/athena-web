@@ -24,6 +24,10 @@ export const invocationHead = pgTable(
     status: text('status').$type<'draft' | 'published' | 'archived'>().notNull().default('draft'),
     revision: integer('revision').notNull().default(1),
     canonicalAuthoringAt: timestamp('canonical_authoring_at', { withTimezone: true }),
+    identityOrigin: text('identity_origin').$type<'retained' | 'authored'>().default('authored'),
+    identityReview: text('identity_review').$type<
+      'identity_collision' | 'retained_source_missing'
+    >(),
     draftInvocationId: text('draft_invocation_id'),
     publishedInvocationId: text('published_invocation_id'),
   },
@@ -34,6 +38,10 @@ export const invocationHead = pgTable(
       index('invocation_head_owner_idx').on(t.organizationId, t.ownerActorId, t.status),
       check('invocation_head_name', sql`length(btrim(${t.name}))>0`),
       check('invocation_head_revision', sql`${t.revision}>0`),
+      check(
+        'invocation_head_identity_origin_shape',
+        sql`(${t.identityOrigin} in('retained','authored') and ${t.identityReview} is null) or (${t.identityOrigin} is null and ${t.identityReview} in('identity_collision','retained_source_missing')) or (${t.identityOrigin} is null and ${t.identityReview} is null)`,
+      ),
       check(
         'invocation_head_status',
         sql`${t.status} in('draft','published','archived') and (${t.status}<>'published' or ${t.publishedInvocationId} is not null)`,

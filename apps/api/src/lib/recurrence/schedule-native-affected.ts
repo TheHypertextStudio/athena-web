@@ -3,6 +3,8 @@ import { BlueprintError, type BlueprintDateField } from '@docket/work/blueprints
 import type { TemplateTransaction } from '../templates/persistence';
 import { loadBlueprintSnapshot } from '../work-template-blueprints/snapshot';
 import { affectedBlueprintNodes } from '../work-template-blueprints/reflow-selection';
+import { affectedBlueprintDateFields } from '../work-template-blueprints/reflow-selection';
+import { loadNativeScheduleCompletionFacts } from './schedule-native-completion-facts';
 import type {
   AuthorizedBlueprintSnapshot,
   BlueprintWorkRef,
@@ -10,9 +12,10 @@ import type {
 import { requireNativeScheduleFacts, type NativeScheduleFacts } from './schedule-native-facts';
 import type { NativeScheduleSnapshot } from './schedule-native-snapshot';
 import {
-  readNativeDependentDisposition,
-  type NativeDependentDisposition,
-} from './schedule-native-dependent';
+  addNativePrivateDependents,
+  type NativePrivateDependentSelection,
+} from './schedule-native-field-dependent';
+import { loadNativeSchedulePrerequisites } from './schedule-native-prerequisites';
 
 /** Native foreground closure: affected writes plus read-only actual ancestors and date prerequisites. */
 export interface NativeScheduleAffectedSnapshot extends NativeScheduleSnapshot {
@@ -63,74 +66,74 @@ function combine(
     manualDivergences,
   };
 }
-async function loadPrivatePrerequisites(
+function initialSelection(
+  facts: NativeScheduleFacts,
+  reference: BlueprintWorkRef,
+  request: { readonly dates: readonly BlueprintDateField[]; readonly completion: boolean },
+): NativePrivateDependentSelection {
+  const v2 = facts.document.kind === 'forest' && facts.document.revision === 2;
+  const fieldChanges = v2
+    ? {
+        dates: new Map([[reference.id, new Set(request.dates)]]),
+        completions: new Set(request.completion ? [reference.id] : []),
+      }
+    : undefined;
+  const anchor = v2
+    ? request.dates.includes(reference.kind === 'task' ? 'dueDate' : 'targetDate')
+    : request.dates.length > 0;
+  return {
+    affected: new Set([reference.id]),
+    seeds: new Map([[reference.id, reference]]),
+    anchors: new Set(anchor ? [reference.id] : []),
+    manualDivergences: new Set(),
+    dispositions: new Map(),
+    ...(fieldChanges ? { fieldChanges } : {}),
+  };
+}
+function rememberPublicFields(
+  snapshot: AuthorizedBlueprintSnapshot,
+  seeds: ReadonlySet<string>,
+  selection: NativePrivateDependentSelection,
+): void {
+  if (selection.fieldChanges)
+    for (const [id, fields] of affectedBlueprintDateFields(
+      snapshot.nodes,
+      seeds,
+      selection.fieldChanges,
+    )) {
+      const previous = selection.fieldChanges.dates.get(id) ?? new Set<BlueprintDateField>();
+      for (const field of fields) previous.add(field);
+      selection.fieldChanges.dates.set(id, previous);
+    }
+  for (const id of affectedBlueprintNodes(
+    snapshot.nodes,
+    seeds,
+    selection.anchors,
+    selection.fieldChanges,
+  ))
+    selection.affected.add(id);
+}
+async function loadAffectedRoots(
   tx: TemplateTransaction,
   facts: NativeScheduleFacts,
-  initiating: {
-    readonly reference: BlueprintWorkRef;
-    readonly explicitDates: readonly BlueprintDateField[];
-  },
-  affected: ReadonlySet<string>,
+  selection: NativePrivateDependentSelection,
   snapshots: Map<string, AuthorizedBlueprintSnapshot>,
 ): Promise<void> {
-  const loaded = new Set(
-    [...snapshots.values()].flatMap((snapshot) => snapshot.nodes.map((node) => node.id)),
-  );
-  for (const entry of facts.occurrence.scheduleDateOwnership ?? []) {
-    if (entry.manual || !affected.has(entry.id) || entry.anchor.kind !== 'work') continue;
-    if (entry.id === initiating.reference.id && initiating.explicitDates.includes(entry.field))
-      continue;
-    if (loaded.has(entry.anchor.id)) continue;
-    const sourceId = entry.anchor.id;
-    const source = facts.roots
-      .flatMap((root) => [root, ...(root.selectedWork ?? [])])
-      .find((work) => work.id === sourceId);
-    if (!source)
-      throw new BlueprintError('blueprint_invalid', 'Missing accepted private prerequisite.');
-    const snapshot = await loadBlueprintSnapshot(tx, facts.authority, source, {
-      scope: 'reference',
+  for (const root of facts.roots) {
+    const local = [...selection.seeds.values()].filter((seed) => contains(root, seed.id));
+    if (!local.length) continue;
+    const snapshot = await loadBlueprintSnapshot(tx, facts.authority, root, {
+      scope: 'affected',
+      seeds: local,
+      dateAnchors: [...selection.anchors],
+      ...(selection.fieldChanges ? { fieldChanges: selection.fieldChanges } : {}),
+      ancestorIds: ancestorIds(root, local),
       forUpdate: true,
-      access: 'view',
+      access: 'edit',
     });
-    snapshots.set(`prerequisite:${source.id}`, snapshot);
-    loaded.add(source.id);
+    snapshots.set(root.id, snapshot);
+    rememberPublicFields(snapshot, new Set(local.map((seed) => seed.id)), selection);
   }
-}
-interface PrivateDependentSelection {
-  readonly affected: Set<string>;
-  readonly seeds: Map<string, BlueprintWorkRef>;
-  readonly anchors: Set<string>;
-  readonly manualDivergences: Set<string>;
-  readonly dispositions: Map<string, NativeDependentDisposition>;
-}
-async function addPrivateDependents(
-  tx: TemplateTransaction,
-  facts: NativeScheduleFacts,
-  selection: PrivateDependentSelection,
-): Promise<boolean> {
-  const { affected, seeds, anchors, manualDivergences, dispositions } = selection;
-  let expanded = false;
-  for (const entry of facts.occurrence.scheduleDateOwnership ?? []) {
-    if (
-      entry.manual ||
-      entry.anchor.kind !== 'work' ||
-      !affected.has(entry.anchor.id) ||
-      seeds.has(entry.id)
-    )
-      continue;
-    const key = `${entry.id}:${entry.field}`;
-    const disposition =
-      dispositions.get(key) ??
-      (await readNativeDependentDisposition(tx, facts.organizationId, entry));
-    dispositions.set(key, disposition);
-    if (disposition === 'manual') manualDivergences.add(key);
-    if (disposition !== 'write') continue;
-    seeds.set(entry.id, { kind: entry.kind, id: entry.id });
-    anchors.add(entry.id);
-    affected.add(entry.id);
-    expanded = true;
-  }
-  return expanded;
 }
 /** Discover only the initiating closure and private dependents; unrelated roots never require edit authority.
  * @throws When actual affected writes exceed500 or required current work permissions fail.
@@ -139,46 +142,37 @@ export async function loadNativeScheduleAffectedSnapshot(
   tx: TemplateTransaction,
   facts: NativeScheduleFacts,
   reference: BlueprintWorkRef,
-  explicitDates: readonly BlueprintDateField[],
+  change:
+    | readonly BlueprintDateField[]
+    | { readonly dates: readonly BlueprintDateField[]; readonly completion: boolean },
 ): Promise<NativeScheduleAffectedSnapshot> {
   requireNativeScheduleFacts(tx, facts.authority);
-  const seeds = new Map([[reference.id, reference]]);
-  const anchors = new Set(explicitDates.length ? [reference.id] : []);
+  const request = 'dates' in change ? change : { dates: change, completion: true };
+  const selection = initialSelection(facts, reference, request);
   const snapshots = new Map<string, AuthorizedBlueprintSnapshot>();
-  const affected = new Set([reference.id]);
-  const manualDivergences = new Set<string>();
-  const dispositions = new Map<string, NativeDependentDisposition>();
   let expanded = true;
   while (expanded) {
-    for (const root of facts.roots) {
-      const local = [...seeds.values()].filter((seed) => contains(root, seed.id));
-      if (!local.length) continue;
-      const snapshot = await loadBlueprintSnapshot(tx, facts.authority, root, {
-        scope: 'affected',
-        seeds: local,
-        dateAnchors: [...anchors],
-        ancestorIds: ancestorIds(root, local),
-        forUpdate: true,
-        access: 'edit',
-      });
-      snapshots.set(root.id, snapshot);
-      for (const id of affectedBlueprintNodes(
-        snapshot.nodes,
-        new Set(local.map((seed) => seed.id)),
-        anchors,
-      ))
-        affected.add(id);
-    }
-    expanded = await addPrivateDependents(tx, facts, {
-      affected,
-      seeds,
-      anchors,
-      manualDivergences,
-      dispositions,
-    });
-    if (affected.size > 500)
+    await loadAffectedRoots(tx, facts, selection, snapshots);
+    expanded = await addNativePrivateDependents(tx, facts, selection);
+    if (selection.affected.size > 500)
       throw new BlueprintError('blueprint_limit', 'Reflow at most500 affected work items.');
   }
-  await loadPrivatePrerequisites(tx, facts, { reference, explicitDates }, affected, snapshots);
-  return combine([...snapshots.values()], affected, manualDivergences);
+  await loadNativeSchedulePrerequisites(tx, {
+    facts,
+    reference,
+    explicitDates: request.dates,
+    affected: selection.affected,
+    snapshots,
+  });
+  const snapshot = combine(
+    [...snapshots.values()],
+    selection.affected,
+    selection.manualDivergences,
+  );
+  const privateCompletions = await loadNativeScheduleCompletionFacts(tx, facts);
+  return {
+    ...snapshot,
+    context: snapshot.context ? { ...snapshot.context, timezone: facts.timezone } : null,
+    ...(privateCompletions ? { privateCompletions } : {}),
+  };
 }

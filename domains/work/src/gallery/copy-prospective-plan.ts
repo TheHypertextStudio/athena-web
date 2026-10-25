@@ -75,6 +75,10 @@ export async function previewTemplateCopySources(
       previewDefinition: requireBlueprintValue(rewritten.get(copyIdentityKey(source.identity)))
         .definition,
       offeredTeamIds: prospectiveOfferingTeams(input, source.identity),
+      referenceBindings: authoredCopyReferences(source).map((entry) => ({
+        slot: entry.slot,
+        target: catalog.resolve(source, entry.slot).identity,
+      })),
       dependencies: [
         ...new Map(
           authoredCopyReferences(source).map((entry) => {

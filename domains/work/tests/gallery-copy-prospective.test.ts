@@ -8,6 +8,7 @@ import {
 } from '../src/gallery/copy-prospective-plan';
 import { copyIdentityKey } from '../src/gallery/copy-identity';
 import { WorkTemplateDefinition } from '../src/contracts/work-template';
+import { WorkTypeVersionId } from '../src/ids';
 import { step } from './blueprint-fixtures';
 import {
   prospectiveSource,
@@ -16,6 +17,35 @@ import {
   prospectiveReference,
   prospectiveDestination,
 } from './gallery-prospective-fixture';
+it('exposes exact authored slots when latest and pinned references use different versions of one template', async () => {
+  const pinned = prospectiveSource(2, 'task', [], 'publication');
+  if (pinned.identity.kind !== 'publication') throw new Error('Missing publication');
+  const latest = {
+    ...pinned,
+    identity: {
+      ...pinned.identity,
+      workTypeVersionId: WorkTypeVersionId.parse('01ARZ3NDEKTSV4RRFFQ0000099'),
+    },
+  };
+  const root = prospectiveSource(3, 'project', [
+    step('pinned', 'task', { template: prospectiveReference(pinned) }),
+    step('latest', 'task', {
+      template: { workTypeId: latest.identity.workTypeId, selection: { kind: 'latest' } },
+    }),
+  ]);
+  const preview = await previewTemplateCopySources(
+    prospectiveInput(
+      [root, pinned, latest],
+      [prospectiveBinding(root, pinned, 'pinned'), prospectiveBinding(root, latest, 'latest')],
+    ),
+  );
+  expect(
+    preview.copies.find((copy) => copy.source.workTypeId === root.identity.workTypeId),
+  ).toHaveProperty('referenceBindings', [
+    { slot: { kind: 'blueprint_step', key: 'pinned' }, target: pinned.identity },
+    { slot: { kind: 'blueprint_step', key: 'latest' }, target: latest.identity },
+  ]);
+});
 describe('prospective copy source planning', () => {
   it('previews revision-zero drafts with inline work before any destination IDs exist', async () => {
     const root = prospectiveSource(3, 'project', [step('child')]);
@@ -28,6 +58,7 @@ describe('prospective copy source planning', () => {
         previewDefinition: root.definition,
         offeredTeamIds: [],
         dependencies: [],
+        referenceBindings: [],
       },
     ]);
     expect(preview).not.toHaveProperty('destinations');

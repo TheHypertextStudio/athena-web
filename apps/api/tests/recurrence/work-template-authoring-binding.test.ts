@@ -19,10 +19,15 @@ async function invocation(orgId: string, revisionId: string) {
     .select()
     .from(schema.blueprintInvocation)
     .where(eq(schema.blueprintInvocation.organizationId, orgId));
-  const row = rows.find((value) => value.manifest.legacyProcessRevisionId === revisionId);
+  const row = rows.find(
+    (value) =>
+      (value.manifest.kind === 'published' || value.manifest.kind === 'pending_draft') &&
+      value.manifest.legacyProcessRevisionId === revisionId,
+  );
   expect(row).toBeDefined();
-  if (!row) throw new Error('Missing canonical binding');
-  return row;
+  if (!row || (row.manifest.kind !== 'published' && row.manifest.kind !== 'pending_draft'))
+    throw new Error('Missing canonical binding');
+  return { ...row, manifest: row.manifest };
 }
 describe('canonical binding during compatibility process authoring', () => {
   it('retains an explicit standalone Task publication and keeps authored prose private', async () => {

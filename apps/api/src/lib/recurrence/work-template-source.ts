@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { canonicalSourceKey, privateDefinitionFields } from './private-definition-source-fields';
 import {
   processStep,
   processProjectSpec,
@@ -21,22 +21,6 @@ export interface RecurrenceBlueprintSource {
   readonly parentId: string | null;
   readonly rootId: string;
   readonly preset: BlueprintInvocationOverride;
-}
-function canonicalKey(key: string): string {
-  return /^[a-z][a-z0-9_-]{0,63}$/.test(key)
-    ? key
-    : `legacy_${createHash('sha256').update(key).digest('hex').slice(0, 48)}`;
-}
-function privateFields(
-  spec: Readonly<Record<string, unknown>>,
-  labelIds: readonly string[],
-): BlueprintInvocationOverride['fields'] {
-  const fields: Record<string, string | number | null | readonly string[]> = {};
-  for (const [key, value] of Object.entries(spec))
-    if (typeof value === 'string' || typeof value === 'number' || value === null)
-      fields[key.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`)] = value;
-  if (labelIds.length) fields['labelIds'] = labelIds;
-  return fields;
 }
 function parentId(
   kind: RecurrenceBlueprintSource['kind'],
@@ -150,7 +134,7 @@ export async function loadRecurrenceBlueprintSources(
         : taskLabels.filter((label) => label.taskStepId === step.id);
     return {
       id: step.id,
-      key: canonicalKey(step.key),
+      key: canonicalSourceKey(step.key),
       sourceKey: step.key,
       kind: step.kind,
       sort: step.sort,
@@ -158,7 +142,7 @@ export async function loadRecurrenceBlueprintSources(
       preset: {
         sourceStepId: step.id,
         kind: step.kind,
-        fields: privateFields(
+        fields: privateDefinitionFields(
           spec,
           labels.map((label) => label.labelId),
         ),

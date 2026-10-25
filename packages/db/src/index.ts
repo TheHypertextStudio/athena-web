@@ -73,3 +73,13 @@ export * from './invocation-revision-backfill';
 export * from './invocation-revision-proof';
 
 export { backfillWorkTemplateBlueprints } from './work-template-blueprint-backfill';
+export {
+  preparePrivateIdentityNamespace,
+  type PrivateIdentityNamespaceOptions,
+  type PrivateIdentityNamespaceProgress,
+} from './work-template-identity-namespace';
+export {
+  preparePrivateAliasReferences,
+  type PrivateAliasReferenceOptions,
+  type PrivateAliasReferenceProgress,
+} from './work-template-alias-reference-checkpoint';

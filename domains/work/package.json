@@ -70,7 +70,9 @@
     "./schedule-legacy-title": "./src/schedule-legacy-title.ts",
     "./schedule-legacy-completion": "./src/schedule-legacy-completion.ts",
     "./work-schedule-import-receipt": "./src/contracts/work-schedule-import-receipt.ts",
-    "./schedule-import-receipt": "./src/schedule-import-receipt.ts"
+    "./schedule-import-receipt": "./src/schedule-import-receipt.ts",
+    "./work-schedule-forest-v2": "./src/contracts/work-schedule-forest-v2.ts",
+    "./work-private-definition": "./src/contracts/work-private-definition.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

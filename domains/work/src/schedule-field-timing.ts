@@ -13,6 +13,20 @@ import {
   validateScheduleTimingSnapshots,
 } from './schedule-field-timing-validation';
 
+/** Checked pure timing inputs and results shared by creation and managed reflow. */
+export type {
+  DerivedScheduleField,
+  ScheduleFieldTimingInput,
+  ScheduleTimingCompletionFact,
+  ScheduleTimingDates,
+  ScheduleTimingDependency,
+  ScheduleTimingMapping,
+  ScheduleTimingPin,
+  ScheduleTimingSelection,
+} from './schedule-field-timing-types';
+/** Validate selected timing semantics and exact supplied snapshots before any shared calculation. */
+export { validateScheduleFieldTiming, validateScheduleTimingSnapshots };
+
 function actualCompletions(
   input: ScheduleFieldTimingInput,
   rule: WorkScheduleFieldRule,

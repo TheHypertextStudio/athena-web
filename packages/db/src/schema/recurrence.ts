@@ -44,6 +44,7 @@ import { actor, auditColumns, organization, team } from './identity';
 import { cycle, milestone, program, project, task } from './work';
 import {
   scheduleRevisionColumns,
+  scheduleConversionConstraints,
   scheduleSeriesColumns,
   scheduleOccurrenceColumns,
   scheduleOccurrenceConstraints,
@@ -401,6 +402,7 @@ export const recurrenceSeriesRevision = pgTable(
     ...seriesBlueprintConstraints(t),
     scheduleRevisionPrivatePolicy(t),
     ...scheduleRevisionIdentityConstraints(t, recurrenceSeries),
+    ...scheduleConversionConstraints(t),
     uniqueIndex('recurrence_series_revision_series_number_uq').on(t.seriesId, t.number),
     uniqueIndex('recurrence_series_revision_series_effective_uq').on(t.seriesId, t.effectiveFrom),
     index('recurrence_series_revision_org_series_idx').on(t.organizationId, t.seriesId),

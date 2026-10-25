@@ -8,10 +8,12 @@ import type {
 import { ConflictError } from '../../error';
 import type { OrdinaryWorkCommand, WorkCreationBatchCommand } from '../work-creation/types';
 import type { WorkScheduleDraft } from '@docket/work/work-schedule';
+import { compileScheduleFieldTiming } from './schedule-field-timing-compile';
 
 /** Read-only root facts and the same pure blueprint planner used by ordinary creation. */
 export interface ScheduleTimingPlan {
   readonly tree: PlannedWorkTree;
+  readonly workingWeekdays?: readonly number[];
   readonly replan: (command: OrdinaryWorkCommand) => PlannedWorkTree;
 }
 function qualified(ref: { readonly rootKey: string; readonly path: readonly string[] }): string {
@@ -131,6 +133,7 @@ export function compileScheduleTiming(
   command: WorkCreationBatchCommand,
   initial: readonly ScheduleTimingPlan[],
 ): WorkCreationBatchCommand {
+  if (command.scheduleFieldTiming) return compileScheduleFieldTiming(command, initial);
   const order = timingOrder(command, initial);
   let output = command;
   const trees = initial.map((plan) => plan.tree);

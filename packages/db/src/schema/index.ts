@@ -57,3 +57,7 @@ export * from './work-schedule-storage';
 export * from './work-template-invocation-revision';
 
 export * from './work-template-copy';
+
+export * from './template-proposals';
+export * from './work-template-identity-namespace';
+export * from './work-template-alias-reference-checkpoint';

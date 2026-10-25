@@ -118,13 +118,14 @@ function providerReservationDates(
 }
 async function reserveAttempt(database: Database, input: ExecuteScheduleOccurrenceCommand) {
   return database.transaction(async (tx) => {
-    await lockedRevision(tx, input);
+    const { revision } = await lockedRevision(tx, input);
     await tx
       .insert(processOccurrence)
       .values({
         organizationId: input.organizationId,
         seriesId: input.seriesId,
         seriesRevisionId: input.seriesRevisionId,
+        blueprintInvocationId: revision.blueprintInvocationId,
         scheduledFor: input.scheduledFor,
         originalScheduledFor: input.originalScheduledFor,
         externalOccurrenceKey: input.externalOccurrenceKey,
@@ -166,6 +167,7 @@ async function reserveAttempt(database: Database, input: ExecuteScheduleOccurren
         failureCode: null,
         failedAt: null,
         retryAvailableAt: null,
+        blueprintInvocationId: revision.blueprintInvocationId,
         ...providerReservationDates(row, input),
       })
       .where(and(eq(processOccurrence.id, row.id), eq(processOccurrence.attempt, row.attempt)))

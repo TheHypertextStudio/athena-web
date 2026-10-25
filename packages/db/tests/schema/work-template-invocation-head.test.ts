@@ -18,6 +18,8 @@ describe('private compatibility invocation heads', () => {
       'status',
       'revision',
       'canonicalAuthoringAt',
+      'identityOrigin',
+      'identityReview',
       'draftInvocationId',
       'publishedInvocationId',
     ]);

@@ -1,4 +1,20 @@
 import {
+  preparePrivateIdentityNamespace,
+  type PrivateIdentityNamespaceOptions,
+} from './work-template-identity-namespace';
+import {
+  preparePrivateAliasReferences,
+  type PrivateAliasReferenceOptions,
+} from './work-template-alias-reference-checkpoint';
+import {
+  backfillScheduleHistoryImports,
+  type ScheduleHistoryImportOptions,
+} from './work-schedule-history-import';
+import {
+  backfillScheduleConversions,
+  type ScheduleConversionOptions,
+} from './work-schedule-conversion-prepare';
+import {
   backfillInvocationRevisionAliases,
   type InvocationRevisionBackfillOptions,
 } from './invocation-revision-backfill';
@@ -35,11 +51,61 @@ export interface WorkTemplateMigrationOptions
     BlueprintBackfillOptions,
     RetainedDateBackfillOptions,
     ScheduleArchiveOptions,
-    InvocationRevisionBackfillOptions {
+    InvocationRevisionBackfillOptions,
+    ScheduleHistoryImportOptions,
+    ScheduleConversionOptions,
+    PrivateIdentityNamespaceOptions,
+    PrivateAliasReferenceOptions {
   readonly migrationsFolder: string;
   readonly applySqlMigrations: (folder: string) => Promise<void>;
 }
 
+async function prepareFinalCheckpoints(
+  database: Database,
+  options: WorkTemplateMigrationOptions,
+  entries: readonly { readonly tag: string }[],
+): Promise<void> {
+  await backfillRetainedDateOwnership(database, options);
+  const identityNamespace = entries.some(
+    (entry) => entry.tag === '0179_private_definition_identity_namespace',
+  );
+  if (identityNamespace) {
+    const namespace = await preparePrivateIdentityNamespace(database, options);
+    if (!namespace.ready) {
+      console.warn(
+        `Private identity namespace deferred for ${namespace.deferred} source identities; canonical preparation remains closed until actual reservations resolve.`,
+      );
+      return;
+    }
+    if (namespace.deferred)
+      console.warn(
+        `Private identity classification deferred for ${namespace.deferred} heads; namespace readiness does not authorize those heads.`,
+      );
+  }
+  if (entries.some((entry) => entry.tag === '0160_schedule_invocation_heads_expand')) {
+    const progress = await backfillWorkScheduleArchives(database, {
+      ...options,
+      verification: 'checkpoint',
+    });
+    if (progress.deferredRevisions)
+      console.warn(
+        `Schedule source proof deferred for ${progress.deferredRevisions} revisions; legacy sources remain retained until explicit retirement verification.`,
+      );
+  }
+  if (entries.some((entry) => entry.tag === '0165_invocation_revision_aliases'))
+    await backfillInvocationRevisionAliases(database, options);
+  if (entries.some((entry) => entry.tag === '0171_schedule_history_import_receipts'))
+    await backfillScheduleHistoryImports(database, options);
+  if (entries.some((entry) => entry.tag === '0175_schedule_conversion_preparation'))
+    await backfillScheduleConversions(database, options);
+  if (entries.some((entry) => entry.tag === '0180_private_definition_alias_references')) {
+    const aliases = await preparePrivateAliasReferences(database, options);
+    if (!aliases.enforced)
+      console.warn(
+        `Private alias references deferred: ${aliases.reason}; ${aliases.unresolvedHeads} heads, ${aliases.unresolvedRevisions} revisions, ${aliases.unresolvedSeries} series and ${aliases.unresolvedCalendars} calendar bindings remain explicitly source-dependent.`,
+      );
+  }
+}
 /** Apply expansion, committed data batches, and enforcement through the standard SQL migrator. */
 export async function migrateWithWorkTemplateCheckpoint(
   database: Database,
@@ -87,17 +153,5 @@ export async function migrateWithWorkTemplateCheckpoint(
     .limit(1);
   if (blueprintApplied.length === 0) await backfillWorkTemplateBlueprints(database, options);
   await options.applySqlMigrations(options.migrationsFolder);
-  await backfillRetainedDateOwnership(database, options);
-  if (journal.entries.some((entry) => entry.tag === '0160_schedule_invocation_heads_expand')) {
-    const progress = await backfillWorkScheduleArchives(database, {
-      ...options,
-      verification: 'checkpoint',
-    });
-    if (progress.deferredRevisions)
-      console.warn(
-        `Schedule source proof deferred for ${progress.deferredRevisions} revisions; legacy sources remain retained until explicit retirement verification.`,
-      );
-  }
-  if (journal.entries.some((entry) => entry.tag === '0165_invocation_revision_aliases'))
-    await backfillInvocationRevisionAliases(database, options);
+  await prepareFinalCheckpoints(database, options, journal.entries);
 }

@@ -198,3 +198,41 @@ export const WorkTemplateArchiveImpact = z.strictObject({
 });
 /** Authorized template archive impact projection. */
 export type WorkTemplateArchiveImpact = z.infer<typeof WorkTemplateArchiveImpact>;
+
+/** Recipient-private exact template review and canonical editor continuation. */
+export const TemplateProposalReview = z.strictObject({
+  activityId: z.string(),
+  sessionId: z.string(),
+  proposerName: z.string(),
+  state: z.enum(['pending', 'kept', 'dismissed', 'undone']),
+  revision: z.number().int().nonnegative(),
+  definition: WorkTemplateDefinition,
+  templateId: z.string().nullable(),
+  templateRevision: z.number().int().nonnegative().nullable(),
+  publicationState: z.enum(['draft', 'published', 'archived']).nullable(),
+  hasReceipt: z.boolean(),
+  visibility: z.literal('personal'),
+  labelConversion: z
+    .strictObject({
+      labelGroupId: z.ulid(),
+      labelId: z.ulid(),
+      workTypeId: z.ulid(),
+      workTypeVersionId: z.ulid(),
+    })
+    .optional(),
+});
+/** Authorized review projection. */
+export type TemplateProposalReview = z.infer<typeof TemplateProposalReview>;
+/** A decision is bound to both the proposal and the editable draft the person actually reviewed. */
+export const TemplateProposalDecision = z.strictObject({
+  action: z.enum(['keep', 'adjust', 'dismiss', 'undo']),
+  expectedRevision: z.number().int().nonnegative(),
+  expectedTemplateRevision: z.number().int().nonnegative().nullable(),
+});
+
+export {
+  LabelTemplateConversionChoices,
+  LabelTemplateConversionReview,
+  LabelTemplateConversionConfirm,
+  LabelTemplateConversionReceipt,
+} from './work-template-label-conversion';

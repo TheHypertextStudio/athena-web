@@ -26,6 +26,11 @@ import { triggerStorage } from './series-trigger-storage';
 import { requireScheduleAccess } from './schedule-access';
 import { firstScheduleRunDate } from './schedule-review-date';
 import { requireFutureScheduleBoundary } from './schedule-future-boundary';
+import {
+  bindCanonicalPrivateSchedule,
+  requireCanonicalPrivatePublication,
+  type CanonicalPrivatePublicationBinding,
+} from './private-definition-binding';
 
 /** Native schedule authoring command; only this private service receives the location draft. */
 export interface CreateWorkScheduleCommand {
@@ -122,13 +127,35 @@ export async function prepareWorkScheduleRevisionCommand(
     runDate: input.runDate,
   });
 }
-async function insertRevision(
+interface ScheduleRevisionSource {
+  readonly revisionId?: string;
+  readonly publication?: CanonicalPrivatePublicationBinding;
+}
+function checkedPrivateRevisionSource(
+  tx: TemplateTransaction,
+  caller: Awaited<ReturnType<typeof loadCreationActor>>,
+  document: ScheduleDocument,
+  publication: CanonicalPrivatePublicationBinding | undefined,
+) {
+  if (!publication) return null;
+  const aliases = requireCanonicalPrivatePublication(tx, caller, publication);
+  const timezone = scheduleDocumentRoots(document)[0]?.draft.timezone;
+  if (
+    !timezone ||
+    scheduleDraftFingerprint(bindCanonicalPrivateSchedule(tx, caller, publication, timezone)) !==
+      scheduleDraftFingerprint(document)
+  )
+    throw new ConflictError('The private schedule publication changed.');
+  return aliases;
+}
+async function prepareRevisionInput(
   tx: TemplateTransaction,
   input: CreateWorkScheduleCommand,
   seriesId: string,
-  number: number,
-  sourceRevisionId?: string,
+  source?: ScheduleRevisionSource,
 ) {
+  const sourceRevisionId = source?.revisionId,
+    publication = source?.publication;
   const document = parseScheduleDocument(input.document);
   const trigger = ProcessTrigger.parse(input.trigger);
   if (
@@ -138,6 +165,7 @@ async function insertRevision(
   )
     throw new ConflictError('The schedule cadence and draft must share their saved timezone.');
   const caller = await loadCreationActor(tx, input.organizationId, input.actorId);
+  const aliases = checkedPrivateRevisionSource(tx, caller, document, publication);
   if (input.ownerProgramId) await requireWorkAccess(tx, caller, 'program', input.ownerProgramId);
   const runDate = firstScheduleRunDate(trigger, input.effectiveFrom);
   if (!runDate) throw new ConflictError('The selected cadence has no future run.');
@@ -159,6 +187,21 @@ async function insertRevision(
         runDate,
       });
   const roots = await preflightScheduleClaim(tx, command, document);
+  return { document, trigger, roots, aliases };
+}
+async function insertRevision(
+  tx: TemplateTransaction,
+  input: CreateWorkScheduleCommand,
+  seriesId: string,
+  number: number,
+  source?: ScheduleRevisionSource,
+) {
+  const { document, trigger, roots, aliases } = await prepareRevisionInput(
+    tx,
+    input,
+    seriesId,
+    source,
+  );
   const stored = triggerStorage(trigger);
   const [revision] = await tx
     .insert(recurrenceSeriesRevision)
@@ -168,6 +211,9 @@ async function insertRevision(
       number,
       effectiveFrom: input.effectiveFrom,
       createdBy: input.actorId,
+      ...(aliases
+        ? { processRevisionId: aliases.revisionId, blueprintInvocationId: aliases.invocationId }
+        : {}),
       scheduleDraft: document,
       ...stored.values,
     })
@@ -177,7 +223,7 @@ async function insertRevision(
     kind: 'schedule_fallback',
     revision: 1,
     seriesRevisionId: revision.id,
-    sourceInvocationId: null,
+    sourceInvocationId: aliases?.invocationId ?? null,
     draftFingerprint: scheduleDraftFingerprint(document),
     roots,
   });
@@ -193,6 +239,20 @@ async function insertRevision(
       .values(stored.weekdays.map((weekday) => ({ seriesRevisionId: revision.id, weekday })));
   return saved;
 }
+/** Append an exact private publication through the same current preflight, cadence and fallback writer. */
+export async function appendBoundPrivateScheduleRevision(
+  tx: TemplateTransaction,
+  input: CreateWorkScheduleCommand,
+  target: {
+    readonly seriesId: string;
+    readonly number: number;
+    readonly publication: CanonicalPrivatePublicationBinding;
+  },
+): Promise<WorkScheduleAuthoringResult['revision']> {
+  return insertRevision(tx, input, target.seriesId, target.number, {
+    publication: target.publication,
+  });
+}
 /** Create a real schedule and its authoring-time exact fallback in the same transaction. */
 export async function createWorkSchedule(
   database: Database,
@@ -204,7 +264,15 @@ export async function createWorkSchedule(
 export async function createWorkScheduleInTransaction(
   tx: TemplateTransaction,
   input: CreateWorkScheduleCommand,
+  publication?: CanonicalPrivatePublicationBinding,
 ): Promise<WorkScheduleAuthoringResult> {
+  const aliases = publication
+    ? requireCanonicalPrivatePublication(
+        tx,
+        { orgId: input.organizationId, actorId: input.actorId },
+        publication,
+      )
+    : null;
   const [series] = await tx
     .insert(recurrenceSeries)
     .values({
@@ -212,10 +280,17 @@ export async function createWorkScheduleInTransaction(
       ownerProgramId: input.ownerProgramId ?? null,
       name: input.name.trim(),
       createdBy: input.actorId,
+      ...(aliases ? { definitionId: aliases.definitionId } : {}),
     })
     .returning();
   if (!series) throw new ConflictError('The schedule could not be created.');
-  const revision = await insertRevision(tx, input, series.id, 1);
+  const revision = await insertRevision(
+    tx,
+    input,
+    series.id,
+    1,
+    publication ? { publication } : undefined,
+  );
   return { series, revision };
 }
 /** Append an independently validated future revision without modifying accepted past runs. */
@@ -255,7 +330,7 @@ export async function reviseWorkSchedule(
       { ...input, name: input.name ?? series.name, ownerProgramId: series.ownerProgramId },
       series.id,
       latest.number + 1,
-      latest.id,
+      { revisionId: latest.id },
     );
     if (input.name !== undefined)
       await tx

@@ -52,12 +52,28 @@ export interface ScheduleArchiveOptions {
   readonly onScheduleArchiveBatch?: (progress: ScheduleArchiveProgress) => void | Promise<void>;
 }
 
-/** Read and independently prove current or frozen original source without changing its conversion evidence. */
+async function lockScheduleSource(
+  connection: BlueprintMigrationConnection,
+  id: string,
+): Promise<void> {
+  // Match history import and alias registration: never hold a revision before its definition.
+  // NO KEY UPDATE permits registered creation's source-FK KEY SHARE without a later upgrade.
+  await connection.execute(sql`select d.id from process_revision r join process_definition d
+    on d.id=r.definition_id and d.organization_id=r.organization_id where r.id=${id} for no key update of d`);
+  await connection.execute(sql`select id from process_revision where id=${id} for no key update`);
+}
+
+/**
+ * Read and independently prove current or frozen original source without changing its conversion evidence.
+ * @param lockSource Disable only after acquiring source locks before the canonical head/series locks.
+ */
 export async function readProvedScheduleSource(
   connection: BlueprintMigrationConnection,
   id: string,
   archived = false,
+  lockSource = true,
 ): Promise<ScheduleArchiveSource> {
+  if (lockSource) await lockScheduleSource(connection, id);
   const [row] = await migrationRows<ScheduleArchiveSource>(
     connection,
     sql`
@@ -79,7 +95,7 @@ export async function readProvedScheduleSource(
     from process_revision r join process_definition d on d.id=r.definition_id and d.organization_id=r.organization_id
       join work_template_blueprint_conversion c on c.legacy_process_revision_id=r.id and c.organization_id=r.organization_id
       join work_template_blueprint_invocation i on i.id=c.invocation_id and i.organization_id=r.organization_id
-    where r.id=${id} for update of r,d`,
+    where r.id=${id}`,
   );
   if (!row)
     throw new ScheduleSourceProofError('Schedule source lacks its original conversion receipt.');

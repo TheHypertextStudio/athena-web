@@ -191,3 +191,76 @@ export const WorkTemplateCopyUndoResult = z.strictObject({
 });
 /** Terminal copy Undo with safe reasons and no identities/counts of hidden protecting work. */
 export type WorkTemplateCopyUndoResult = z.infer<typeof WorkTemplateCopyUndoResult>;
+
+/** Explicit saved context for an optional Athena starting-work request. */
+export const TemplateTailoringSelection = z.strictObject({
+  fork: GalleryFork,
+  sessionIds: z.array(z.ulid()).max(5),
+  importedTaskIds: z.array(z.ulid()).max(30),
+});
+/** Selected saved records, never caller-supplied source bodies. */
+export type TemplateTailoringSelection = z.infer<typeof TemplateTailoringSelection>;
+/** Exact context checkpoint accepted by the person before generation. */
+export const TemplateTailoringRequest = TemplateTailoringSelection.extend({
+  fingerprint: z.string().regex(/^[a-f0-9]{64}$/),
+});
+/** Exact checkpointed tailoring request. */
+export type TemplateTailoringRequest = z.infer<typeof TemplateTailoringRequest>;
+/** Current readable sources and capability availability; no private context bodies. */
+export const TemplateTailoringSources = z.strictObject({
+  availability: z.enum(['available', 'requires_pro', 'authoring_unavailable']),
+  conversations: z.array(z.strictObject({ id: z.string(), label: z.string() })),
+  importedWork: z.array(z.strictObject({ id: z.string(), label: z.string() })),
+});
+/** Server-checked source checkpoint, without duplicating retained context. */
+export const TemplateTailoringPreview = z.strictObject({
+  fingerprint: z.string(),
+  conversationCount: z.number().int().nonnegative(),
+  importedWorkCount: z.number().int().nonnegative(),
+});
+/** Actual persisted request status and safe links to resulting Inbox proposals. */
+export const TemplateTailoringStatus = z.strictObject({
+  sessionId: z.string(),
+  status: z.string(),
+  proposalIds: z.array(z.string()),
+});
+
+/** Explicit examples for one stand-in label; source bodies and authority are server-owned. */
+export const LabelTemplateSuggestionSelection = z.strictObject({
+  labelGroupId: z.ulid(),
+  labelId: LabelId,
+  kind: TemplateTargetType,
+  workIds: z
+    .array(z.ulid())
+    .min(1)
+    .max(100)
+    .refine((ids) => new Set(ids).size === ids.length, 'Choose each example once.'),
+});
+/** Selected saved label usage, without inferred or background work selection. */
+export type LabelTemplateSuggestionSelection = z.infer<typeof LabelTemplateSuggestionSelection>;
+/** Current checked examples accepted before a private review-only suggestion. */
+export const LabelTemplateSuggestionRequest = LabelTemplateSuggestionSelection.extend({
+  fingerprint: z.string().regex(/^[a-f0-9]{64}$/),
+});
+/** Exact reviewed label usage request. */
+export type LabelTemplateSuggestionRequest = z.infer<typeof LabelTemplateSuggestionRequest>;
+/** Only authorized example names appear in the context review. */
+export const LabelTemplateSuggestionPreview = z.strictObject({
+  fingerprint: z.string().regex(/^[a-f0-9]{64}$/),
+  labelGroup: z.strictObject({ id: z.ulid(), name: z.string() }),
+  label: z.strictObject({ id: LabelId, name: z.string() }),
+  work: z
+    .array(z.strictObject({ id: z.ulid(), kind: TemplateTargetType, name: z.string() }))
+    .min(1)
+    .max(100),
+});
+/** Server-checked selected examples and their source checkpoint. */
+export type LabelTemplateSuggestionPreview = z.infer<typeof LabelTemplateSuggestionPreview>;
+/** Only current authorized group/label metadata is offered for explicit example selection. */
+export const LabelTemplateSuggestionSources = z.strictObject({
+  availability: z.enum(['available', 'requires_pro', 'authoring_unavailable']),
+  groups: z.array(z.strictObject({ id: z.ulid(), name: z.string() })),
+  labels: z.array(z.strictObject({ id: LabelId, groupId: z.ulid(), name: z.string() })),
+});
+/** Source picker metadata without aggregate usage counts or hidden team vocabulary. */
+export type LabelTemplateSuggestionSources = z.infer<typeof LabelTemplateSuggestionSources>;

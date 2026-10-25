@@ -1,5 +1,9 @@
 import { WorkScheduleDraft } from '@docket/work/work-schedule';
 import { WorkScheduleForest } from '@docket/work/work-schedule-forest';
+import {
+  WorkScheduleForestV2,
+  orderPrivateScheduleRoots,
+} from '@docket/work/work-schedule-forest-v2';
 import type { AcceptedScheduleRoot } from '@docket/work/work-schedule-claim';
 import { renderScheduleTitlePattern } from '@docket/work/schedule-title-pattern';
 import { BlueprintCivilDate } from '@docket/work/work-template-blueprint';
@@ -18,13 +22,21 @@ import { ProjectCreate } from '../../contracts/project';
 import type { WorkCreationBatchCommand, OrdinaryWorkCommand } from '../work-creation/types';
 import { originFor, ruleProvenance } from '../provenance/context';
 import { blueprintFingerprint } from '../work-template-blueprints/fingerprint';
+import {
+  legacyScheduleNodeTitles,
+  legacyScheduleRootTitle,
+  legacyScheduleTitles,
+  legacyScheduleDocument,
+} from './schedule-v2';
 
 /** Canonical private revision document; this data alone confers no execution authority. */
-export type ScheduleDocument = WorkScheduleDraft | WorkScheduleForest;
+export type ScheduleDocument = WorkScheduleDraft | WorkScheduleForest | WorkScheduleForestV2;
 /** Normalize a private document without exposing legacy source identities or fabricating a root. */
 export function parseScheduleDocument(value: unknown): ScheduleDocument {
   const native = WorkScheduleDraft.safeParse(value);
-  return native.success ? native.data : WorkScheduleForest.parse(value);
+  if (native.success) return native.data;
+  const forest = WorkScheduleForest.safeParse(value);
+  return forest.success ? forest.data : WorkScheduleForestV2.parse(value);
 }
 /** Stable exact private draft identity used by both persisted fallback and immutable run claim. */
 export function scheduleDraftFingerprint(value: ScheduleDocument): string {
@@ -34,7 +46,10 @@ export function scheduleDraftFingerprint(value: ScheduleDocument): string {
 export function scheduleDocumentRoots(
   value: ScheduleDocument,
 ): readonly { readonly key: string; readonly draft: WorkScheduleDraft }[] {
-  return value.kind === 'schedule' ? [{ key: 'root', draft: value }] : value.roots;
+  if (value.kind === 'schedule') return [{ key: 'root', draft: value }];
+  return value.revision === 2
+    ? orderPrivateScheduleRoots(value.roots, value.placements)
+    : value.roots;
 }
 /** Pure input to the ordinary shared creation forest, still subject to live creation preflight. */
 export interface CompileScheduleCommand {
@@ -76,14 +91,19 @@ export function scheduleAssignmentOverrides(draft: WorkScheduleDraft): Blueprint
     })),
   ];
 }
-function compileRoot(
+function compileRootInvocation(
   input: CompileScheduleCommand,
   key: string,
   draft: WorkScheduleDraft,
-): OrdinaryWorkCommand {
-  const accepted = input.acceptedRoots?.find((root) => root.key === key);
-  assertAcceptedSelection(draft, accepted);
-  const title = renderScheduleTitlePattern(draft.titlePattern, input.runDate);
+) {
+  const legacy = legacyScheduleDocument(input.document);
+  const placement =
+    input.document.kind === 'forest' && input.document.revision === 2
+      ? input.document.placements?.find((entry) => entry.rootKey === key)
+      : undefined;
+  const title = legacy
+    ? legacyScheduleRootTitle(legacy, key, draft.root.kind, input.runDate)
+    : renderScheduleTitlePattern(draft.titlePattern, input.runDate);
   const origin = originFor(
     'recurrence_materialize',
     {},
@@ -92,8 +112,23 @@ function compileRoot(
   const invocation = {
     origin,
     placement: { programId: input.ownerProgramId },
-    scheduleContext: { draft, runDate: input.runDate },
+    scheduleContext: {
+      draft,
+      runDate: input.runDate,
+      ...(legacy ? { legacyTitles: legacyScheduleTitles(legacy, key) } : {}),
+      ...(placement ? { rootPlacement: placement } : {}),
+    },
   };
+  return { title, invocation };
+}
+function compileRoot(
+  input: CompileScheduleCommand,
+  key: string,
+  draft: WorkScheduleDraft,
+): OrdinaryWorkCommand {
+  const accepted = input.acceptedRoots?.find((root) => root.key === key);
+  assertAcceptedSelection(draft, accepted);
+  const { title, invocation } = compileRootInvocation(input, key, draft);
   const common = rootValues(draft, input.runDate, accepted);
   const blueprint = { optionalChoices: accepted?.optionalChoices ?? draft.optionalChoices };
   if (draft.root.kind === 'task')
@@ -199,7 +234,12 @@ export function compileScheduleCommand(input: CompileScheduleCommand): WorkCreat
     roots,
     edges: document.kind === 'forest' ? document.dependencies : [],
     invocation: first.command.invocation,
-    ...(document.kind === 'forest' ? { scheduleTiming: document.timing } : {}),
+    ...(document.kind === 'forest' && document.revision === 1
+      ? { scheduleTiming: document.timing }
+      : {}),
+    ...(document.kind === 'forest' && document.revision === 2
+      ? { scheduleFieldTiming: { timing: document.timing, absentFields: document.absentFields } }
+      : {}),
   };
 }
 /** Merge private partial fields onto the exact planned kind and reject unknown or unselected paths. */
@@ -250,7 +290,12 @@ export function planScheduleBlueprint<T extends BlueprintCreationContext>(
   const finalContext = {
     ...context,
     overrides: mergeScheduleTiming(
-      scheduleNodeOverrides(schedule.draft, first),
+      legacyScheduleNodeTitles(
+        first,
+        schedule.legacyTitles ?? [],
+        schedule.runDate,
+        scheduleNodeOverrides(schedule.draft, first),
+      ),
       schedule.timingOverrides,
     ),
   };

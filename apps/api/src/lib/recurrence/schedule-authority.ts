@@ -30,16 +30,24 @@ interface BoundRoot {
   readonly signature: string;
 }
 function bindingSignature(command: OrdinaryWorkCommand): string {
+  const placement = command.invocation.scheduleContext?.rootPlacement;
+  const derived = new Set([
+    'startDate',
+    'dueDate',
+    'targetDate',
+    ...(placement?.project ? ['projectId'] : []),
+    ...(placement?.milestone ? ['milestoneId'] : []),
+    ...(placement?.parentTask ? ['parentTaskId'] : []),
+  ]);
   const body = Object.fromEntries(
-    Object.entries(command.body).filter(
-      ([key]) => !['startDate', 'dueDate', 'targetDate'].includes(key),
-    ),
+    Object.entries(command.body).filter(([key]) => !derived.has(key)),
   );
   return blueprintFingerprint({
     body,
     draft: command.invocation.scheduleContext?.draft,
     runDate: command.invocation.scheduleContext?.runDate,
     optionalChoices: command.blueprint?.optionalChoices ?? [],
+    rootPlacement: placement,
   });
 }
 function assertExecutable(

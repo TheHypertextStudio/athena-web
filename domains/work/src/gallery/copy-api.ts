@@ -30,3 +30,9 @@ export type {
 } from './copy-prospective-types';
 export type { CopyLabelMapping } from './copy-types';
 export { authoredCopyReferences } from './copy-prospective-source';
+export {
+  WorkTemplateCopySourceSelection,
+  WorkTemplateSourceCopyPreviewRequest,
+  WorkTemplateSourceCopyPreview,
+  WorkTemplateSourceCopyAcceptRequest,
+} from '../contracts/template-source-copy';

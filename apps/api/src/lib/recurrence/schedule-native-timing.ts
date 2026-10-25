@@ -8,8 +8,11 @@ import {
   type BlueprintDateReferences,
   type ExistingBlueprintNode,
   type PlannedDateChange,
+  type BlueprintCompletionFact,
 } from '@docket/work/blueprints';
 import { scheduleDocumentRoots, type ScheduleDocument } from './schedule-compiler';
+import { nativeFieldDateOwnership } from './schedule-native-field-ownership';
+import { planNativeScheduleFieldReflow } from './schedule-native-field-reflow';
 
 export type { NativeScheduleDateOwnership } from '@docket/db';
 /** A concrete derived write, including roots which have no reusable step binding. */
@@ -18,6 +21,12 @@ export interface NativeScheduleDateChange {
   readonly field: BlueprintDateField;
   readonly value: string | null;
 }
+type V1Ownership = Omit<NativeScheduleDateOwnership, 'anchor'> & {
+  readonly anchor: Extract<
+    NativeScheduleDateOwnership['anchor'],
+    { readonly kind: 'run' | 'work' }
+  >;
+};
 function anchorField(kind: string): BlueprintDateField {
   return kind === 'task' ? 'dueDate' : 'targetDate';
 }
@@ -65,6 +74,8 @@ export function nativeDateOwnership(
   roots: readonly BlueprintOccurrenceRoot[],
   nodes: readonly ExistingBlueprintNode[],
 ): NativeScheduleDateOwnership[] {
+  if (document.kind === 'forest' && document.revision === 2)
+    return nativeFieldDateOwnership(document, roots, nodes);
   const rules = document.kind === 'forest' ? document.timing : [];
   const targets = [
     ...roots
@@ -211,19 +222,13 @@ function applyPublicReflow(state: NativeReflowState): void {
     state.nodes = state.nodes.map((node) => updateNodeDate(node, change, change.binding));
   }
 }
-function privateAnchorDate(
-  state: NativeReflowState,
-  entry: NativeScheduleDateOwnership,
-): string | null {
+function privateAnchorDate(state: NativeReflowState, entry: V1Ownership): string | null {
   if (entry.anchor.kind === 'run') return state.runDate;
   const sourceId = entry.anchor.id;
   const source = state.nodes.find((node) => node.id === sourceId);
   return source?.dates[anchorField(source.kind)] ?? null;
 }
-function privateDerivedValue(
-  state: NativeReflowState,
-  entry: NativeScheduleDateOwnership,
-): string | null {
+function privateDerivedValue(state: NativeReflowState, entry: V1Ownership): string | null {
   const anchor = privateAnchorDate(state, entry);
   if (anchor === null) return null;
   return offsetBlueprintDate(
@@ -234,7 +239,7 @@ function privateDerivedValue(
 }
 function applyPrivateAnchor(
   state: NativeReflowState,
-  entry: { -readonly [K in keyof NativeScheduleDateOwnership]: NativeScheduleDateOwnership[K] },
+  entry: { -readonly [K in keyof V1Ownership]: V1Ownership[K] },
 ): void {
   const node = state.nodes.find((value) => value.id === entry.id);
   if (!node) return;
@@ -258,15 +263,24 @@ export function planNativeScheduleReflow(input: {
   readonly ownership: readonly NativeScheduleDateOwnership[];
   readonly runDate: string;
   readonly context: BlueprintCreationContext;
+  readonly privateCompletions?: readonly BlueprintCompletionFact[];
   readonly affectedNodeIds?: ReadonlySet<string>;
 }): {
   readonly dates: readonly NativeScheduleDateChange[];
   readonly publicChanges: readonly PlannedDateChange[];
   readonly ownership: readonly NativeScheduleDateOwnership[];
 } {
+  if (
+    input.ownership.some((entry) => entry.anchor.kind === 'field' || entry.anchor.kind === 'absent')
+  )
+    return planNativeScheduleFieldReflow(input);
   if ((input.affectedNodeIds?.size ?? input.nodes.length) > 500)
     throw new BlueprintError('blueprint_limit', 'Reflow at most 500 affected work items.');
-  const ownership = input.ownership.map((entry) => ({ ...entry }));
+  const ownership = input.ownership.map((entry) => {
+    if (entry.anchor.kind !== 'run' && entry.anchor.kind !== 'work')
+      throw new BlueprintError('blueprint_invalid', 'Unknown private date policy.');
+    return { ...entry, anchor: entry.anchor };
+  });
   const state: NativeReflowState = {
     nodes: maskPrivateDates(input.nodes, ownership),
     context: input.context,

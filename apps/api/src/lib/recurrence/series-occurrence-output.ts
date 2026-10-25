@@ -1,55 +1,9 @@
-import {
-  processInstance,
-  processInstanceProject,
-  processInstanceTask,
-  processOccurrence,
-  type Database,
-} from '@docket/db';
-import { and, eq, inArray } from 'drizzle-orm';
+import { processOccurrence, recurrenceSeriesRevision, type Database } from '@docket/db';
+import { and, eq, sql } from 'drizzle-orm';
 import type { z } from 'zod';
 import { OccurrenceOut } from '../../contracts/recurrence';
 import { readableLegacyWork } from './legacy-work-visibility';
-
-interface GeneratedReference {
-  readonly instanceId: string;
-  readonly id: string;
-  readonly kind: 'task' | 'project';
-}
-
-async function generatedReferences(
-  database: Database,
-  organizationId: string,
-  instanceIds: string[],
-): Promise<GeneratedReference[]> {
-  if (instanceIds.length === 0) return [];
-  const [tasks, projects] = await Promise.all([
-    database
-      .select({ instanceId: processInstanceTask.instanceId, id: processInstanceTask.taskId })
-      .from(processInstanceTask)
-      .where(
-        and(
-          eq(processInstanceTask.organizationId, organizationId),
-          inArray(processInstanceTask.instanceId, instanceIds),
-        ),
-      ),
-    database
-      .select({
-        instanceId: processInstanceProject.instanceId,
-        id: processInstanceProject.projectId,
-      })
-      .from(processInstanceProject)
-      .where(
-        and(
-          eq(processInstanceProject.organizationId, organizationId),
-          inArray(processInstanceProject.instanceId, instanceIds),
-        ),
-      ),
-  ]);
-  return [
-    ...tasks.map((row) => ({ ...row, kind: 'task' as const })),
-    ...projects.map((row) => ({ ...row, kind: 'project' as const })),
-  ];
-}
+import { occurrenceReferenceFacts } from './series-history-references';
 
 /** Serialize occurrence history with authorized links to generated projects and tasks. */
 export async function occurrenceOutputs(
@@ -59,13 +13,26 @@ export async function occurrenceOutputs(
   actorId: string,
 ): Promise<z.input<typeof OccurrenceOut>[]> {
   const rows = await database
-    .select({ occurrence: processOccurrence, instanceId: processInstance.id })
+    .select({
+      id: processOccurrence.id,
+      seriesId: processOccurrence.seriesId,
+      scheduledFor: processOccurrence.scheduledFor,
+      originalScheduledFor: processOccurrence.originalScheduledFor,
+      status: processOccurrence.status,
+      resolvedAt: processOccurrence.resolvedAt,
+      legacyInstanceId: processOccurrence.legacyInstanceId,
+      blueprintAppliedAt: processOccurrence.blueprintAppliedAt,
+      blueprintRootRefs: processOccurrence.blueprintRootRefs,
+      native: sql<boolean>`${recurrenceSeriesRevision.scheduleDraft} is not null`,
+      historical: sql<boolean>`${processOccurrence.historicalArchive} is not null`,
+    })
     .from(processOccurrence)
     .leftJoin(
-      processInstance,
+      recurrenceSeriesRevision,
       and(
-        eq(processInstance.occurrenceId, processOccurrence.id),
-        eq(processInstance.organizationId, organizationId),
+        eq(recurrenceSeriesRevision.id, processOccurrence.seriesRevisionId),
+        eq(recurrenceSeriesRevision.seriesId, processOccurrence.seriesId),
+        eq(recurrenceSeriesRevision.organizationId, organizationId),
       ),
     )
     .where(
@@ -75,11 +42,7 @@ export async function occurrenceOutputs(
       ),
     )
     .orderBy(processOccurrence.scheduledFor);
-  const references = await generatedReferences(
-    database,
-    organizationId,
-    rows.flatMap((row) => (row.instanceId ? [row.instanceId] : [])),
-  );
+  const { instances, references } = await occurrenceReferenceFacts(database, organizationId, rows);
   const visible = await readableLegacyWork(database, { organizationId, actorId }, references);
   const firstVisible = new Map<string, string>();
   for (const reference of references) {
@@ -88,8 +51,9 @@ export async function occurrenceOutputs(
       firstVisible.set(key, reference.id);
     }
   }
-  return rows.map(({ occurrence, instanceId }) =>
-    OccurrenceOut.parse({
+  return rows.map((occurrence) => {
+    const instanceId = instances.get(occurrence.id) ?? null;
+    return OccurrenceOut.parse({
       id: occurrence.id,
       seriesId: occurrence.seriesId,
       scheduledFor: occurrence.scheduledFor,
@@ -99,6 +63,6 @@ export async function occurrenceOutputs(
       taskId: firstVisible.get(`${instanceId}:task`) ?? null,
       projectId: firstVisible.get(`${instanceId}:project`) ?? null,
       resolvedAt: occurrence.resolvedAt?.toISOString() ?? null,
-    }),
-  );
+    });
+  });
 }

@@ -14,6 +14,7 @@ import { BlueprintCivilDate, BlueprintCreationPreview } from './work-template-bl
 import { TITLE_MAX } from '../task-titles';
 import { WorkScheduleDraft } from './work-schedule';
 import { WorkScheduleForest } from './work-schedule-forest';
+import { WorkScheduleForestV2 } from './work-schedule-forest-v2';
 import { WorkScheduleTrigger } from './work-schedule-trigger';
 
 const name = z
@@ -139,12 +140,12 @@ export const WorkScheduleRunOut = z.strictObject({
 });
 /** Authorized run representation. */
 export type WorkScheduleRunOut = z.infer<typeof WorkScheduleRunOut>;
-/** Current private revision; historical forests remain readable without becoming new authoring input. */
+/** Current private revision; bound forests remain readable without becoming generic authoring input. */
 export const WorkScheduleRevisionOut = z.strictObject({
   id: RecurrenceSeriesRevisionId,
   number: z.number().int().positive(),
   effectiveFrom: BlueprintCivilDate,
-  document: z.union([WorkScheduleDraft, WorkScheduleForest]).nullable(),
+  document: z.union([WorkScheduleDraft, WorkScheduleForest, WorkScheduleForestV2]).nullable(),
   trigger: WorkScheduleTrigger,
   createdAt: z.string(),
 });

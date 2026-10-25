@@ -1,7 +1,11 @@
 import { z } from 'zod';
 import { WorkScheduleRootDraft } from './work-schedule-fields';
 import { ScheduleTemplateSelection } from './work-schedule-defaults';
-import { WorkScheduleOptionalChoices, WorkScheduleStepOverrides } from './work-schedule';
+import {
+  ScheduleTimezone,
+  WorkScheduleOptionalChoices,
+  WorkScheduleStepOverrides,
+} from './work-schedule';
 import {
   WorkScheduleFieldTiming,
   WorkScheduleFieldTarget,
@@ -154,3 +158,34 @@ export type CanonicalImportedSchedule = z.infer<typeof CanonicalImportedSchedule
 export type LegacyScheduleImportResult =
   | { readonly kind: 'compiled_import'; readonly candidate: CanonicalImportedSchedule }
   | { readonly kind: 'nonexecuting_import'; readonly pending: PendingPrivateWorkDefinition };
+
+/** An immutable publication fact used only to prepare a nonexecuting conversion candidate. */
+export const ScheduleConversionPublication = z.strictObject({
+  rootKey: z.string().min(1),
+  path: z.array(z.string()),
+  workTypeId: z.string().min(1),
+  versionId: z.string().min(1),
+  definitionHash: z.string().regex(/^sha256:[a-f0-9]{64}$/),
+});
+/** Exact original publication fact; it is distinct from a pre-work native accepted claim. */
+export type ScheduleConversionPublication = z.infer<typeof ScheduleConversionPublication>;
+/** Immutable descriptive conversion metadata; runtime never dispatches from this receipt. */
+export const ScheduleConversionReceipt = z.strictObject({
+  kind: z.literal('schedule_conversion'),
+  revision: z.literal(1),
+  execution: z.literal('nonexecuting'),
+  compiler: z.literal('legacy_schedule_v2.1'),
+  identity: z.strictObject({
+    organizationId: z.string().min(1),
+    seriesId: z.string().min(1),
+    seriesRevisionId: z.string().min(1),
+    headId: z.string().min(1),
+    revisionAlias: z.string().min(1),
+    invocationId: z.string().min(1),
+  }),
+  candidate: CanonicalImportedSchedule,
+  publications: z.array(ScheduleConversionPublication).min(1).max(500),
+  timezone: z.strictObject({ kind: z.literal('calendar_revision'), timezone: ScheduleTimezone }),
+});
+/** Parsing records facts only; activation requires separate checked registration and revalidation. */
+export type ScheduleConversionReceipt = z.infer<typeof ScheduleConversionReceipt>;

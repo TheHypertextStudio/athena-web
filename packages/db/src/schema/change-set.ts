@@ -1,3 +1,4 @@
+import { sql } from 'drizzle-orm';
 /**
  * `@docket/db` — change-set island: what an agent did, and how to take it back.
  *
@@ -17,7 +18,16 @@
  * Authorship is a different axis and lives here, shaped by the provenance contract.
  */
 import type { ChangeOrigin } from '@docket/work/provenance-contract';
-import { index, jsonb, pgTable, primaryKey, text, timestamp } from 'drizzle-orm/pg-core';
+import {
+  check,
+  index,
+  jsonb,
+  pgPolicy,
+  pgTable,
+  primaryKey,
+  text,
+  timestamp,
+} from 'drizzle-orm/pg-core';
 
 import { changeSetOp } from '../enums';
 import { actor, organization } from './identity';
@@ -43,16 +53,29 @@ export const changeSet = pgTable(
     actorId: text('actor_id')
       .notNull()
       .references(() => actor.id, { onDelete: 'cascade' }),
+    /** Immutable author-private marker for template-review receipts, retained after proposal purge. */
+    templateReviewActorId: text('template_review_actor_id').references(() => actor.id, {
+      onDelete: 'cascade',
+    }),
     origin: jsonb('origin').$type<ChangeOrigin>().notNull(),
     summary: text('summary').notNull(),
     createdAt: timestamp('created_at').notNull().defaultNow(),
     undoneAt: timestamp('undone_at'),
   },
   (t) => [
+    check(
+      'template_review_receipt_owner',
+      sql`${t.templateReviewActorId} is null or ${t.templateReviewActorId}=${t.actorId}`,
+    ),
+    pgPolicy('template_review_receipt_private', {
+      for: 'all',
+      using: sql`docket_template_review_receipt_access(${t.organizationId},${t.templateReviewActorId})`,
+      withCheck: sql`docket_template_review_receipt_access(${t.organizationId},${t.templateReviewActorId})`,
+    }),
     index('change_set_org_created_idx').on(t.organizationId, t.createdAt),
     index('change_set_actor_idx').on(t.actorId),
   ],
-);
+).enableRLS();
 
 /**
  * One entity touched by a change set, with enough state to reverse it.
@@ -78,9 +101,14 @@ export const changeSetEntry = pgTable(
     after: jsonb('after').$type<Record<string, unknown>>(),
   },
   (t) => [
+    pgPolicy('template_review_snapshot_private', {
+      for: 'all',
+      using: sql`exists(select 1 from change_set s where s.id=${t.changeSetId})`,
+      withCheck: sql`exists(select 1 from change_set s where s.id=${t.changeSetId})`,
+    }),
     primaryKey({ columns: [t.changeSetId, t.entityKind, t.entityId] }),
     // The provenance lookup is entity-first ("where did THIS come from?"), so this index is what
     // keeps that question off a sequential scan of every change ever made.
     index('change_set_entry_entity_idx').on(t.entityKind, t.entityId),
   ],
-);
+).enableRLS();

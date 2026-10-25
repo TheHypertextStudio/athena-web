@@ -1,5 +1,9 @@
 import { occurrenceOutputs } from './series-occurrence-output';
 import {
+  loadOccurrenceRetirementCandidates,
+  retireGeneratedOccurrenceWork,
+} from './series-retirement';
+import {
   lockRegisteredSeriesDefinition,
   insertCanonicalCompatibilitySeries,
   registeredPublishedRevisionId,
@@ -18,8 +22,6 @@ import {
   recurrenceSeries,
   recurrenceSeriesRevision,
   recurrenceSeriesWeekday,
-  project,
-  task,
   type Database,
 } from '@docket/db';
 import {
@@ -37,7 +39,7 @@ import {
   type RecurrenceSeriesLifecycle as RecurrenceSeriesLifecycleValue,
   type SeriesEdit as SeriesEditValue,
 } from '../../contracts/recurrence';
-import { and, desc, eq, gte, inArray, isNull, lte, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNull, lte, sql } from 'drizzle-orm';
 import type { z } from 'zod';
 
 import { ApiError, ConflictError, NotFoundError } from '../../error';
@@ -49,6 +51,11 @@ import { loadNativeGeneratedWorkRecurrence } from './schedule-native-backlinks';
 import { requireLegacyActor, requireLegacyDefinitionAccess } from './legacy-definition-access';
 import { requireScheduleAccess } from './schedule-access';
 import { visibleLegacyWorkReference } from './legacy-work-visibility';
+import {
+  createCanonicalPrivateScheduleInTransaction,
+  hasAuthoredPrivatePublication,
+  appendCanonicalPrivateScheduleInTransaction,
+} from './private-definition-schedule';
 
 /** Database transaction surface shared by atomic recurrence authoring operations. */
 export type RecurrenceTransaction = Parameters<Parameters<Database['transaction']>[0]>[0];
@@ -323,6 +330,13 @@ export async function createRecurrenceSeriesInTransaction(
     actorId: command.actorId,
     definitionId: body.processDefinitionId,
   });
+  if (await hasAuthoredPrivatePublication(tx, command.organizationId, body.processDefinitionId))
+    return createCanonicalPrivateScheduleInTransaction(tx, {
+      organizationId: command.organizationId,
+      actorId: requireLegacyActor(command.actorId),
+      series: body,
+      effectiveFrom: effectiveDate(body),
+    });
   const revision = await latestProcessRevision(
     tx,
     command.organizationId,
@@ -668,6 +682,7 @@ async function appendFutureSeriesRevision(
   },
 ): Promise<void> {
   const retired = await database.transaction(async (tx) => {
+    const initialDefinitionId = await lockFutureSeriesDefinition(tx, input);
     const rows = await tx
       .select()
       .from(recurrenceSeries)
@@ -681,6 +696,8 @@ async function appendFutureSeriesRevision(
       .limit(1);
     const series = rows[0];
     if (!series) throw new NotFoundError('Recurrence series not found');
+    if (series.definitionId !== initialDefinitionId)
+      throw new ConflictError('The schedule definition changed.');
     if (series.status === 'ended') throw new ConflictError('Ended recurrence series cannot change');
     const latest = await tx
       .select({
@@ -705,24 +722,60 @@ async function appendFutureSeriesRevision(
       actorId: input.actorId,
       definitionId: series.definitionId,
     });
-    const process = await latestProcessRevision(tx, input.organizationId, series.definitionId);
-    await persistSeriesRevision(tx, {
-      organizationId: input.organizationId,
-      actorId: input.actorId,
-      seriesId: input.seriesId,
-      processRevisionId: process.id,
-      number: (latest[0]?.number ?? 0) + 1,
-      effectiveFrom: input.effectiveFrom,
-      trigger: input.trigger,
-    });
+    if (await hasAuthoredPrivatePublication(tx, input.organizationId, series.definitionId))
+      await appendCanonicalPrivateScheduleInTransaction(tx, {
+        ...input,
+        actorId: requireLegacyActor(input.actorId),
+        definitionId: series.definitionId,
+        seriesName: series.name,
+        ownerProgramId: series.ownerProgramId,
+        number: (latest[0]?.number ?? 0) + 1,
+      });
+    else {
+      const process = await latestProcessRevision(tx, input.organizationId, series.definitionId);
+      await persistSeriesRevision(tx, {
+        organizationId: input.organizationId,
+        actorId: input.actorId,
+        seriesId: input.seriesId,
+        processRevisionId: process.id,
+        number: (latest[0]?.number ?? 0) + 1,
+        effectiveFrom: input.effectiveFrom,
+        trigger: input.trigger,
+      });
+    }
     return retireUnfinishedFutureOccurrences(tx, {
       organizationId: input.organizationId,
       seriesId: input.seriesId,
       effectiveFrom: input.effectiveFrom,
+      actorId: input.actorId,
     });
   });
   await finishRetiredTaskCascades(retired.cascades);
   await input.onRetired?.({ taskIds: retired.taskIds, projectIds: retired.projectIds });
+}
+
+async function lockFutureSeriesDefinition(
+  tx: Transaction,
+  input: {
+    readonly organizationId: string;
+    readonly actorId?: string | undefined;
+    readonly seriesId: string;
+  },
+): Promise<string | null> {
+  const [initial] = await tx
+    .select({ definitionId: recurrenceSeries.definitionId })
+    .from(recurrenceSeries)
+    .where(
+      and(
+        eq(recurrenceSeries.id, input.seriesId),
+        eq(recurrenceSeries.organizationId, input.organizationId),
+      ),
+    )
+    .limit(1);
+  if (!initial) throw new NotFoundError('Recurrence series not found');
+  if (initial.definitionId)
+    await lockRegisteredSeriesDefinition(tx, { ...input, definitionId: initial.definitionId });
+  return initial.definitionId;
 }
 
 /** Retired generated entities from superseded unfinished future occurrences. */
@@ -734,70 +787,6 @@ interface RetiredFutureWork {
 /** Retired work plus task-parent state transitions that commit with the retirement. */
 interface RetiredFutureWorkWithCascades extends RetiredFutureWork {
   readonly cascades: TaskStateMutation[];
-}
-
-/** One occurrence and its optional generated instance selected for retirement. */
-interface OccurrenceRetirementCandidate {
-  readonly occurrenceId: string;
-  readonly instanceId: string | null;
-}
-
-/** Internal retirement result including occurrences protected by completed work. */
-interface OccurrenceRetirementResult extends RetiredFutureWorkWithCascades {
-  readonly completedOccurrenceIds: string[];
-}
-
-/** Archive generated work and cancel instances without deciding the occurrence's final outcome. */
-async function retireGeneratedOccurrenceWork(
-  tx: Transaction,
-  organizationId: string,
-  candidates: readonly OccurrenceRetirementCandidate[],
-  now: Date,
-): Promise<OccurrenceRetirementResult> {
-  const taskIds: string[] = [];
-  const projectIds: string[] = [];
-  const parentTaskIds: (string | null)[] = [];
-  const completedOccurrenceIds: string[] = [];
-  for (const candidate of candidates) {
-    const mappedTasks = candidate.instanceId
-      ? await tx
-          .select({ id: task.id, completedAt: task.completedAt, parentTaskId: task.parentTaskId })
-          .from(processInstanceTask)
-          .innerJoin(task, eq(task.id, processInstanceTask.taskId))
-          .where(eq(processInstanceTask.instanceId, candidate.instanceId))
-      : [];
-    if (mappedTasks.some((row) => row.completedAt !== null)) {
-      completedOccurrenceIds.push(candidate.occurrenceId);
-      continue;
-    }
-    const mappedProjects = candidate.instanceId
-      ? await tx
-          .select({ id: project.id })
-          .from(processInstanceProject)
-          .innerJoin(project, eq(project.id, processInstanceProject.projectId))
-          .where(eq(processInstanceProject.instanceId, candidate.instanceId))
-      : [];
-    if (mappedTasks.length > 0) {
-      const ids = mappedTasks.map((row) => row.id);
-      await tx.update(task).set({ archivedAt: now }).where(inArray(task.id, ids));
-      taskIds.push(...ids);
-      parentTaskIds.push(...mappedTasks.map((row) => row.parentTaskId));
-    }
-    if (mappedProjects.length > 0) {
-      const ids = mappedProjects.map((row) => row.id);
-      await tx.update(project).set({ archivedAt: now }).where(inArray(project.id, ids));
-      projectIds.push(...ids);
-    }
-    if (candidate.instanceId) {
-      await tx
-        .update(processInstance)
-        .set({ status: 'canceled' })
-        .where(eq(processInstance.id, candidate.instanceId));
-    }
-  }
-  const { applySubtaskCompletionPolicyForParents } = await import('../task-state');
-  const cascades = await applySubtaskCompletionPolicyForParents(tx, organizationId, parentTaskIds);
-  return { taskIds, projectIds, completedOccurrenceIds, cascades };
 }
 
 /** Publish task-parent transitions after their recurrence retirement transaction commits. */
@@ -820,24 +809,17 @@ async function retireUnfinishedFutureOccurrences(
   tx: Transaction,
   input: {
     readonly organizationId: string;
+    readonly actorId?: string | undefined;
     readonly seriesId: string;
     readonly effectiveFrom: string;
   },
 ): Promise<RetiredFutureWorkWithCascades> {
-  const candidates = await tx
-    .select({ occurrenceId: processOccurrence.id, instanceId: processInstance.id })
-    .from(processOccurrence)
-    .leftJoin(processInstance, eq(processInstance.occurrenceId, processOccurrence.id))
-    .where(
-      and(
-        eq(processOccurrence.organizationId, input.organizationId),
-        eq(processOccurrence.seriesId, input.seriesId),
-        gte(processOccurrence.scheduledFor, input.effectiveFrom),
-        inArray(processOccurrence.status, ['expected', 'materialized', 'needs_resolution']),
-      ),
-    );
+  const candidates = await loadOccurrenceRetirementCandidates(tx, {
+    ...input,
+    from: input.effectiveFrom,
+  });
   const now = new Date();
-  const retired = await retireGeneratedOccurrenceWork(tx, input.organizationId, candidates, now);
+  const retired = await retireGeneratedOccurrenceWork(tx, { ...input, candidates, now });
   const supersededIds = candidates
     .map((candidate) => candidate.occurrenceId)
     .filter((id) => !retired.completedOccurrenceIds.includes(id));
@@ -898,19 +880,17 @@ export async function editRecurrenceSeries(
   } else {
     const kind = edit.resolution.kind === 'reschedule' ? 'reschedule' : 'exclude';
     const retired = await database.transaction(async (tx) => {
-      const candidates = await tx
-        .select({ occurrenceId: processOccurrence.id, instanceId: processInstance.id })
-        .from(processOccurrence)
-        .leftJoin(processInstance, eq(processInstance.occurrenceId, processOccurrence.id))
-        .where(
-          and(
-            eq(processOccurrence.organizationId, organizationId),
-            eq(processOccurrence.seriesId, seriesId),
-            eq(processOccurrence.scheduledFor, edit.scheduledFor),
-            inArray(processOccurrence.status, ['expected', 'materialized', 'needs_resolution']),
-          ),
-        );
-      const retirement = await retireGeneratedOccurrenceWork(tx, organizationId, candidates, now);
+      const candidates = await loadOccurrenceRetirementCandidates(tx, {
+        organizationId,
+        seriesId,
+        on: edit.scheduledFor,
+      });
+      const retirement = await retireGeneratedOccurrenceWork(tx, {
+        organizationId,
+        actorId,
+        candidates,
+        now,
+      });
       if (retirement.completedOccurrenceIds.length > 0) {
         throw new ConflictError('Completed occurrence work cannot be skipped or moved');
       }

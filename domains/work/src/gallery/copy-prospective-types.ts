@@ -92,6 +92,8 @@ export interface ProspectiveCopyUnit {
   readonly previewDefinition: WorkTemplateDefinition;
   readonly offeredTeamIds: readonly TeamId[];
   readonly dependencies: readonly CopySourceIdentity[];
+  /** Exact checked references, so multiple versions of one template remain distinguishable. */
+  readonly referenceBindings: readonly Pick<CopyReferenceBinding, 'slot' | 'target'>[];
 }
 /** Safe semantic preview; it contains no invented publication or physical projection identities. */
 export interface TemplateCopySourcesPreview {

@@ -126,6 +126,9 @@ function materializedMarker(
     completedAt: null,
     historicalArchive: null,
     historicalArchiveHash: null,
+    importedHistoryReceipt: null,
+    importedHistoryReceiptHash: null,
+    historyImportReview: null,
     scheduleDateOwnership: null,
     continuedFromOccurrenceId: null,
   };

@@ -57,6 +57,18 @@ export const template = pgTable(
     ),
   },
   (table) => [
+    pgPolicy('template_body_private', {
+      for: 'select',
+      using: sql`docket_template_draft_access(${table.organizationId},${table.scope}::text,${table.ownerActorId},${table.teamId},${table.latestPublishedVersionId})`,
+    }),
+    ...(['insert', 'update', 'delete'] as const).map((operation) => {
+      const authorized = sql`docket_template_draft_access(${table.organizationId},${table.scope}::text,${table.ownerActorId},${table.teamId},${table.latestPublishedVersionId}) and docket_template_author(${table.organizationId},nullif(current_setting('docket.actor_id',true),''))`;
+      return pgPolicy(`template_author_${operation}`, {
+        for: operation,
+        ...(operation !== 'insert' ? { using: authorized } : {}),
+        ...(operation !== 'delete' ? { withCheck: authorized } : {}),
+      });
+    }),
     index('template_org_target_idx').on(table.organizationId, table.targetType),
     check(
       'template_copy_origin_pair',
@@ -73,7 +85,7 @@ export const template = pgTable(
     ),
     notBlank('template_name_not_blank', table.name),
   ],
-);
+).enableRLS();
 
 /** Immutable published definition; no editable audit timestamp or archive state belongs here. */
 export const workTypeVersion = pgTable(
@@ -106,9 +118,20 @@ export const workTypeVersion = pgTable(
     }).onDelete('cascade'),
     check('work_type_version_number_positive', sql`${table.number} > 0`),
     pgPolicy('work_type_version_tenant', {
-      for: 'all',
-      using: sql`${table.organizationId} = nullif(current_setting('docket.organization_id', true), '') and exists (select 1 from template definition where definition.id = ${table.workTypeId} and definition.scope = 'organization' and definition.publication_state in ('published', 'archived'))`,
-      withCheck: sql`${table.organizationId} = nullif(current_setting('docket.organization_id', true), '')`,
+      for: 'select',
+      using: sql`docket_template_publication_visible(${table.organizationId},${table.workTypeId})`,
+    }),
+    pgPolicy('work_type_version_author_read', {
+      for: 'select',
+      using: sql`docket_template_author_publication_read(${table.organizationId},${table.workTypeId})`,
+    }),
+    ...(['insert', 'update', 'delete'] as const).map((operation) => {
+      const authorized = sql`docket_template_author(${table.organizationId},nullif(current_setting('docket.actor_id',true),'')) and docket_copy_definition_view(${table.organizationId},${table.workTypeId},nullif(current_setting('docket.actor_id',true),''))`;
+      return pgPolicy(`work_type_version_author_${operation}`, {
+        for: operation,
+        ...(operation !== 'insert' ? { using: authorized } : {}),
+        ...(operation !== 'delete' ? { withCheck: authorized } : {}),
+      });
     }),
   ],
 ).enableRLS();
@@ -136,9 +159,16 @@ export const workTypeTeam = pgTable(
       foreignColumns: [template.id, template.organizationId],
     }).onDelete('cascade'),
     pgPolicy('work_type_team_tenant', {
-      for: 'all',
-      using: sql`${table.organizationId} = nullif(current_setting('docket.organization_id', true), '') and exists (select 1 from template definition where definition.id = ${table.workTypeId} and definition.scope = 'organization' and definition.publication_state in ('published', 'archived'))`,
-      withCheck: sql`${table.organizationId} = nullif(current_setting('docket.organization_id', true), '')`,
+      for: 'select',
+      using: sql`docket_template_publication_visible(${table.organizationId},${table.workTypeId})`,
+    }),
+    ...(['insert', 'update', 'delete'] as const).map((operation) => {
+      const authorized = sql`docket_template_author(${table.organizationId},nullif(current_setting('docket.actor_id',true),'')) and docket_copy_definition_view(${table.organizationId},${table.workTypeId},nullif(current_setting('docket.actor_id',true),''))`;
+      return pgPolicy(`work_type_team_author_${operation}`, {
+        for: operation,
+        ...(operation !== 'insert' ? { using: authorized } : {}),
+        ...(operation !== 'delete' ? { withCheck: authorized } : {}),
+      });
     }),
   ],
 ).enableRLS();

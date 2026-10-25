@@ -1,4 +1,6 @@
 import type { ResolvedVersionAtPath } from '@docket/work/work-template-blueprint';
+import type { CanonicalPrivateWorkDefinition } from '@docket/work/work-private-definition';
+import type { WorkScheduleForest } from '@docket/work/work-schedule-forest';
 /** Restricted legacy/schedule context; never a reusable template definition. */
 export interface BlueprintInvocationRoot {
   readonly sourceStepId: string;
@@ -30,6 +32,9 @@ export interface BlueprintInvocationManifest {
     readonly blockedStepId: string;
   }[];
 }
+/** Stored private document discriminators; original retained envelopes remain unchanged and separately narrowed. */
+export type StoredBlueprintInvocationManifest =
+  BlueprintInvocationManifest | WorkScheduleForest | CanonicalPrivateWorkDefinition;
 
 /** Location-specific source fields, preserved privately without publishing literal references. */
 export interface BlueprintInvocationOverride {

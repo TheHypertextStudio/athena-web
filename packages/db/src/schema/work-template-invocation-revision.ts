@@ -39,9 +39,10 @@ export const invocationRevision = pgTable(
     number: integer('number').notNull(),
     state: text('state').$type<'published' | 'pending_draft'>().notNull(),
     creationMode: text('creation_mode').$type<'all_at_once' | 'when_ready'>().notNull(),
-    origin: text('origin').$type<'retained'>().notNull(),
-    originalSourceFingerprint: text('original_source_fingerprint').notNull(),
-    sourceArchiveHash: text('source_archive_hash').notNull(),
+    origin: text('origin').$type<'retained' | 'authored'>().notNull(),
+    originalSourceFingerprint: text('original_source_fingerprint'),
+    sourceArchiveHash: text('source_archive_hash'),
+    authoredPayloadHash: text('authored_payload_hash'),
     projection: jsonb('projection').$type<InvocationRevisionProjection>().notNull(),
     createdBy: text('created_by'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
@@ -50,9 +51,14 @@ export const invocationRevision = pgTable(
   (t) => [
     uniqueIndex('invocation_revision_head_number_unique').on(t.headId, t.organizationId, t.number),
     uniqueIndex('invocation_revision_alias_tenant_unique').on(t.id, t.organizationId, t.headId),
+    uniqueIndex('invocation_revision_alias_org_unique').on(t.id, t.organizationId),
     uniqueIndex('invocation_revision_document_unique').on(
       t.invocationId,
       t.headId,
+      t.organizationId,
+    ),
+    uniqueIndex('invocation_revision_invocation_tenant_unique').on(
+      t.invocationId,
       t.organizationId,
     ),
     foreignKey({
@@ -67,7 +73,7 @@ export const invocationRevision = pgTable(
     }).onDelete('restrict'),
     check(
       'invocation_revision_shape',
-      sql`${t.number}>0 and ${t.origin}='retained' and ${t.creationMode} in('all_at_once','when_ready') and ((${t.state}='published' and ${t.publishedAt} is not null) or (${t.state}='pending_draft' and ${t.publishedAt} is null)) and ${t.originalSourceFingerprint} ~ '^[a-f0-9]{32}$' and ${t.sourceArchiveHash} ~ '^sha256:[a-f0-9]{64}$'`,
+      sql`${t.number}>0 and ${t.creationMode} in('all_at_once','when_ready') and ((${t.state}='published' and ${t.publishedAt} is not null) or (${t.state}='pending_draft' and ${t.publishedAt} is null)) and ((${t.origin}='retained' and ${t.originalSourceFingerprint} is not null and ${t.sourceArchiveHash} is not null and ${t.originalSourceFingerprint} ~ '^[a-f0-9]{32}$' and ${t.sourceArchiveHash} ~ '^sha256:[a-f0-9]{64}$' and ${t.authoredPayloadHash} is null) or (${t.origin}='authored' and ${t.originalSourceFingerprint} is null and ${t.sourceArchiveHash} is null and ${t.authoredPayloadHash} is not null and ${t.authoredPayloadHash} ~ '^sha256:[a-f0-9]{64}$'))`,
     ),
     pgPolicy('invocation_revision_private', {
       for: 'all',

@@ -11,15 +11,24 @@ import type { WorkCreationBatchCommand } from '../work-creation/types';
 import { validatePreparedBlueprintForest } from '../work-template-blueprints/forest';
 import { lockBlueprintClosures } from '../work-template-blueprints/resolve';
 import type { ScheduleDocument } from './schedule-compiler';
+import { validateScheduleV2Completion } from './schedule-v2';
+import { prepareSchedulePlacementPreview } from './schedule-root-placement';
 
 /** Prove the full ordinary work preflight and freeze its exact selected publications before a claim. */
 export async function preflightScheduleClaim(
   tx: TemplateTransaction,
   command: WorkCreationBatchCommand,
-  _document: ScheduleDocument,
+  document: ScheduleDocument,
 ): Promise<AcceptedScheduleRoot[]> {
   validateCreationBatch(command);
-  const prepared = await prepareCreationForest(tx, command);
+  const prepared = await prepareCreationForest(
+    tx,
+    prepareSchedulePlacementPreview(tx, command, document),
+  );
+  validateScheduleV2Completion(
+    document,
+    prepared.map((root) => root.tree),
+  );
   const edges = validatePreparedBlueprintForest(command, prepared);
   await validateExistingCreationDependencies(tx, prepared, edges);
   await lockBlueprintClosures(

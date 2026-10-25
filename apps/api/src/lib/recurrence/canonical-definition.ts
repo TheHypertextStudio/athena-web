@@ -1,5 +1,6 @@
 import {
   blueprintConversion,
+  blueprintInvocation,
   invocationHead,
   invocationRevision,
   hashScheduleArchive,
@@ -9,6 +10,8 @@ import { and, desc, eq, isNotNull, lt, sql } from 'drizzle-orm';
 import { ProcessDefinitionDetailOut, type ProcessRevisionOut } from '../../contracts/recurrence';
 import { ConflictError, NotFoundError } from '../../error';
 import { projectCanonicalDefinitionRevision } from './canonical-definition-projection';
+import { CanonicalPrivateWorkDefinition } from '@docket/work/work-private-definition';
+import { projectPrivateDefinitionRevision } from './private-definition-projection';
 import {
   requireLegacyDefinitionAccess,
   type LegacyDefinitionAccessRequest,
@@ -45,14 +48,22 @@ async function revisionRows(
       archive: blueprintConversion.sourceArchive,
       hash: blueprintConversion.sourceArchiveHash,
       fingerprint: sql<string>`md5((${blueprintConversion.sourceArchive}->'source')::text)`,
+      manifest: blueprintInvocation.manifest,
     })
     .from(invocationRevision)
-    .innerJoin(
+    .leftJoin(
       blueprintConversion,
       and(
         eq(blueprintConversion.legacyProcessRevisionId, invocationRevision.id),
         eq(blueprintConversion.organizationId, invocationRevision.organizationId),
         eq(blueprintConversion.invocationId, invocationRevision.invocationId),
+      ),
+    )
+    .innerJoin(
+      blueprintInvocation,
+      and(
+        eq(blueprintInvocation.id, invocationRevision.invocationId),
+        eq(blueprintInvocation.organizationId, invocationRevision.organizationId),
       ),
     )
     .where(
@@ -66,6 +77,12 @@ async function revisionRows(
     .limit(limit);
 }
 function projectRow(row: Awaited<ReturnType<typeof revisionRows>>[number]): ProcessRevisionOut {
+  if (row.revision.origin === 'authored') {
+    const parsed = CanonicalPrivateWorkDefinition.safeParse(row.manifest);
+    if (!parsed.success || row.revision.authoredPayloadHash !== hashScheduleArchive(row.manifest))
+      throw new ConflictError('Private authored revision evidence is unavailable.');
+    return projectPrivateDefinitionRevision(row.revision, parsed.data);
+  }
   if (
     !row.archive ||
     row.hash !== row.revision.sourceArchiveHash ||

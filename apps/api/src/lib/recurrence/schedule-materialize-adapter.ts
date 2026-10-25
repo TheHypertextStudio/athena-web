@@ -5,6 +5,10 @@ import { deferWorkCreationEffects } from '../work-creation/effects';
 import type { MaterializedOccurrence, MaterializeOccurrenceCommand } from './materialize';
 import { moveNativeScheduleOccurrence } from './schedule-native-movement';
 import { executeScheduleOccurrence, type ScheduleRunResult } from './schedule-runtime';
+import {
+  authoredScheduleCompatibilityIdentity,
+  privateScheduleCompatibilityProjection,
+} from './schedule-private-compatibility';
 
 async function existingProviderOccurrence(
   database: Database,
@@ -48,6 +52,14 @@ function compatibilityIdentity(
     taskIdsByKey: tasks,
   };
 }
+function projectedIdentity(
+  result: Pick<ScheduleRunResult, 'occurrenceId' | 'roots'>,
+  projection: Awaited<ReturnType<typeof privateScheduleCompatibilityProjection>>,
+): MaterializedOccurrence {
+  return projection
+    ? authoredScheduleCompatibilityIdentity(result, projection)
+    : compatibilityIdentity(result);
+}
 /** Dispatch canonical revisions through durable claims while retaining existing provider and caller identities. */
 export async function materializeCanonicalSchedule(
   database: Database,
@@ -58,7 +70,11 @@ export async function materializeCanonicalSchedule(
   const externalOccurrenceKey = command.externalOccurrenceKey;
   const revisionId = existing?.seriesRevisionId ?? command.seriesRevisionId;
   const [revision] = await database
-    .select({ document: recurrenceSeriesRevision.scheduleDraft })
+    .select({
+      document: recurrenceSeriesRevision.scheduleDraft,
+      invocationId: recurrenceSeriesRevision.blueprintInvocationId,
+      revisionId: recurrenceSeriesRevision.processRevisionId,
+    })
     .from(recurrenceSeriesRevision)
     .where(
       and(
@@ -69,6 +85,11 @@ export async function materializeCanonicalSchedule(
     )
     .limit(1);
   if (!revision?.document) return null;
+  const projection = await privateScheduleCompatibilityProjection(database, {
+    organizationId: command.organizationId,
+    invocationId: revision.invocationId,
+    revisionId: revision.revisionId,
+  });
   if (existing?.blueprintAppliedAt && externalOccurrenceKey) {
     const effects = await database.transaction((tx) =>
       moveNativeScheduleOccurrence(tx, {
@@ -82,10 +103,11 @@ export async function materializeCanonicalSchedule(
       }),
     );
     deferWorkCreationEffects(effects);
-    return compatibilityIdentity({
+    const result = {
       occurrenceId: existing.id,
       roots: existing.blueprintRootRefs ?? [],
-    });
+    };
+    return projectedIdentity(result, projection);
   }
   const result = await executeScheduleOccurrence(database, {
     organizationId: command.organizationId,
@@ -98,5 +120,5 @@ export async function materializeCanonicalSchedule(
       : {}),
   });
   if (result.status === 'failed') throw new ConflictError('The scheduled run needs attention');
-  return compatibilityIdentity(result);
+  return projectedIdentity(result, projection);
 }

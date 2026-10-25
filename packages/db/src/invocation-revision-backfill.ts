@@ -1,3 +1,4 @@
+import { reconcilePrivateIdentityHead } from './work-template-identity-namespace';
 import { sql } from 'drizzle-orm';
 import type { Database } from './client';
 import { registerInvocationRevision } from './invocation-revision-proof';
@@ -19,6 +20,9 @@ export interface InvocationRevisionBackfillOptions {
   readonly onInvocationRevisionBatch?: (
     progress: InvocationRevisionProgress,
   ) => void | Promise<void>;
+}
+interface NamespaceInvocationOptions extends InvocationRevisionBackfillOptions {
+  readonly identityNamespace: boolean;
 }
 /** Lock existing source/head identity without replacing an explicitly private null owner. */
 export async function lockInvocationRevisionHead(
@@ -50,14 +54,33 @@ async function finalizeHead(tx: BlueprintMigrationConnection, id: string): Promi
   );
   return rows.length;
 }
+async function identityMayRegisterAliases(
+  tx: BlueprintMigrationConnection,
+  id: string,
+): Promise<boolean> {
+  const [head] = await migrationRows<{ organizationId: string }>(
+    tx,
+    sql`select organization_id as "organizationId" from work_template_invocation_head where id=${id}`,
+  );
+  if (!head) throw new Error('Private identity head disappeared.');
+  return (await reconcilePrivateIdentityHead(tx, id, head.organizationId)).deferred === 0;
+}
 async function registerHeadPage(
   database: Database,
   id: string,
   after: string | null,
   size: number,
+  options: NamespaceInvocationOptions,
 ) {
   return database.transaction(async (tx) => {
     await lockInvocationRevisionHead(tx, id);
+    if (options.identityNamespace && !(await identityMayRegisterAliases(tx, id))) {
+      const [pending] = await migrationRows<{ count: number }>(
+        tx,
+        sql`select count(*)::integer as count from process_revision r where r.definition_id=${id} and not exists(select 1 from work_template_invocation_revision v where v.id=r.id)`,
+      );
+      return { revisions: 0, heads: 0, deferred: pending?.count ?? 0, after: null };
+    }
     const rows = await migrationRows<{ id: string }>(
       tx,
       sql`select r.id from process_revision r where r.definition_id=${id} and (${after}::text is null or r.id>${after}) and not exists(select 1 from work_template_invocation_revision v where v.id=r.id) order by r.id limit ${size} for update of r`,
@@ -83,6 +106,14 @@ export async function backfillInvocationRevisionAliases(
   const size = options.batchSize ?? 100;
   if (!Number.isInteger(size) || size < 1 || size > 1000)
     throw new RangeError('Alias batches contain 1 through 1000 revisions.');
+  const [namespace] = await migrationRows<{ enabled: boolean }>(
+    database,
+    sql`select to_regclass('public.work_template_identity_namespace') is not null as enabled`,
+  );
+  const phase: NamespaceInvocationOptions = {
+    ...options,
+    identityNamespace: namespace?.enabled === true,
+  };
   const totals = { revisions: 0, heads: 0, deferred: 0 };
   let after: string | null = null;
   for (;;) {
@@ -92,7 +123,7 @@ export async function backfillInvocationRevisionAliases(
     );
     if (!ids.length) return totals;
     for (const { id } of ids) {
-      const progress = await backfillHeadAliases(database, id, size, options);
+      const progress = await backfillHeadAliases(database, id, size, phase);
       totals.revisions += progress.revisions;
       totals.heads += progress.heads;
       totals.deferred += progress.deferred;
@@ -105,12 +136,12 @@ async function backfillHeadAliases(
   database: Database,
   id: string,
   size: number,
-  options: InvocationRevisionBackfillOptions,
+  options: NamespaceInvocationOptions,
 ): Promise<InvocationRevisionProgress> {
   const totals = { revisions: 0, heads: 0, deferred: 0 };
   let after: string | null = null;
   for (;;) {
-    const page = await registerHeadPage(database, id, after, size);
+    const page = await registerHeadPage(database, id, after, size, options);
     totals.revisions += page.revisions;
     totals.heads += page.heads;
     totals.deferred += page.deferred;

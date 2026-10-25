@@ -76,13 +76,17 @@ export async function prepareNativeScheduleReflow(
   const explicitDates = (['startDate', 'dueDate', 'targetDate'] as const).filter(
     (field) => request[field] !== undefined,
   );
-  const snapshot = await loadNativeScheduleAffectedSnapshot(tx, facts, reference, explicitDates);
+  const reconcileCompletion = request['state'] !== undefined || request['status'] !== undefined;
+  const snapshot = await loadNativeScheduleAffectedSnapshot(tx, facts, reference, {
+    dates: explicitDates,
+    completion: reconcileCompletion,
+  });
   return {
     facts,
     reference,
     explicitDates,
     affectedWorkIds: snapshot.affectedWorkIds,
-    reconcileCompletion: request['state'] !== undefined || request['status'] !== undefined,
+    reconcileCompletion,
   };
 }
 async function writeNativeDates(
@@ -162,7 +166,10 @@ export async function reflowNativeScheduleDates(
     ? pinNativeScheduleDates(saved, explicit.workId, explicit.fields)
     : saved;
   const affectedSnapshot = explicit
-    ? await loadNativeScheduleAffectedSnapshot(tx, facts, explicit.reference, explicit.fields)
+    ? await loadNativeScheduleAffectedSnapshot(tx, facts, explicit.reference, {
+        dates: explicit.fields,
+        completion: explicit.reconcileCompletion,
+      })
     : null;
   const snapshot = affectedSnapshot ?? (await loadNativeScheduleSnapshot(tx, facts, 'edit'));
   if (!snapshot.context) return { changes: [], rows: [] };
@@ -172,6 +179,7 @@ export async function reflowNativeScheduleDates(
     ownership,
     runDate: facts.occurrence.scheduledFor,
     context: snapshot.context,
+    ...(snapshot.privateCompletions ? { privateCompletions: snapshot.privateCompletions } : {}),
     ...(affectedSnapshot ? { affectedNodeIds: affectedSnapshot.affectedWorkIds } : {}),
   });
   const result = await writeNativeDates(tx, facts, snapshot.rowsByRef, plan);

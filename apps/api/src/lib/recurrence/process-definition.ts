@@ -48,6 +48,12 @@ import { registerCanonicalPublication } from './canonical-definition-publication
 import { archiveLegacyDefinition } from './legacy-definition-archive';
 import { captureLegacyProjectSource } from './legacy-source-capture';
 import { validateProcessDefinitionGraph } from './process-definition-graph';
+import { canonicalAliasReferencesEnforced } from './private-alias-references';
+import {
+  createCanonicalPrivateDefinition,
+  appendCanonicalPrivateDefinition,
+  createCanonicalPrivateDefinitionInTransaction,
+} from './private-definition-publication';
 export { validateProcessDefinitionGraph } from './process-definition-graph';
 import {
   reconcileTemplateCreationEffects,
@@ -108,7 +114,7 @@ function relativeOffset(anchor: string, value: Date | null): number | undefined 
 }
 
 /** Require every referenced row to belong to the definition's organization. */
-async function validateReferenceOwnership(
+export async function validateProcessDefinitionReferences(
   tx: Transaction,
   organizationId: string,
   definition: PreparedProcessDefinition,
@@ -446,7 +452,7 @@ async function publishProcessDefinitionInTransaction(
   definition: PreparedProcessDefinition,
 ): Promise<PublishedProcessRevisionWithEffects> {
   validateProcessDefinitionGraph(definition);
-  await validateReferenceOwnership(tx, command.organizationId, definition);
+  await validateProcessDefinitionReferences(tx, command.organizationId, definition);
   const definitionId = genId();
   await tx.insert(processDefinition).values({
     id: definitionId,
@@ -470,6 +476,12 @@ export async function createPublishedProcessDefinition(
   database: Database,
   command: CreatePublishedProcessDefinitionCommand,
 ): Promise<PublishedProcessRevision> {
+  if (await canonicalAliasReferencesEnforced(database))
+    return createCanonicalPrivateDefinition(database, {
+      organizationId: command.organizationId,
+      actorId: requireLegacyActor(command.actorId),
+      definition: command.definition,
+    });
   const definition = await prepareProcessTemplates(
     database,
     command.organizationId,
@@ -509,6 +521,12 @@ export async function createProcessDefinitionFromProjectInTransaction(
   command: CreateProcessDefinitionFromProjectCommand,
 ): Promise<PublishedProcessRevisionWithEffects> {
   const captured = await captureProcessDefinitionFromProject(tx, command);
+  if (await canonicalAliasReferencesEnforced(tx))
+    return createCanonicalPrivateDefinitionInTransaction(tx, {
+      organizationId: command.organizationId,
+      actorId: requireLegacyActor(command.actorId),
+      definition: captured,
+    });
   const definition = await prepareProcessTemplates(tx, command.organizationId, captured);
   return publishProcessDefinitionInTransaction(
     tx,
@@ -662,6 +680,13 @@ export async function appendPublishedProcessRevision(
   database: Database,
   command: AppendPublishedProcessRevisionCommand,
 ): Promise<PublishedProcessRevision> {
+  if (await canonicalAliasReferencesEnforced(database))
+    return appendCanonicalPrivateDefinition(database, {
+      organizationId: command.organizationId,
+      actorId: requireLegacyActor(command.actorId),
+      definitionId: command.definitionId,
+      definition: command.revision,
+    });
   await requireLegacyDefinitionAccess(database, command, 'manage');
   const definition = await prepareProcessTemplates(
     database,
@@ -684,7 +709,7 @@ export async function appendPublishedProcessRevision(
     if (!existing[0]) throw new NotFoundError('Process definition not found');
     if (existing[0].status === 'archived')
       throw new ConflictError('Archived process cannot change');
-    await validateReferenceOwnership(tx, command.organizationId, definition);
+    await validateProcessDefinitionReferences(tx, command.organizationId, definition);
     const latest = await tx
       .select({ number: processRevision.number })
       .from(processRevision)

@@ -2,6 +2,7 @@ import { sql } from 'drizzle-orm';
 import { rawResultRows } from '../raw-result';
 import type { TemplateTransaction } from '../templates/persistence';
 import { requireNativeScheduleFacts, type NativeScheduleFacts } from './schedule-native-facts';
+import { readNativeLegacyScheduleStatus } from './schedule-native-legacy-status';
 
 /** Private actual-status summary; it never returns hidden work prose or caps a read-only forest at500 writes. */
 export interface NativeScheduleStatus {
@@ -14,6 +15,8 @@ export async function readNativeScheduleStatus(
   facts: NativeScheduleFacts,
 ): Promise<NativeScheduleStatus> {
   requireNativeScheduleFacts(tx, facts.authority);
+  const legacy = await readNativeLegacyScheduleStatus(tx, facts);
+  if (legacy) return legacy;
   const result = await tx.execute<{
     roots: number;
     canceled: boolean;

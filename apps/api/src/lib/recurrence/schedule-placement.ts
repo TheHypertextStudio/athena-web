@@ -2,20 +2,28 @@ import { project, task } from '@docket/db';
 import { and, eq, isNull } from 'drizzle-orm';
 import { ConflictError, NotFoundError } from '../../error';
 import type { TemplateTransaction } from '../templates/persistence';
-import type { OrdinaryWorkCommand, PreparedOrdinaryWork } from '../work-creation/types';
+import type {
+  OrdinaryWorkCommand,
+  PreparedOrdinaryWork,
+  OrdinaryPreparationContext,
+} from '../work-creation/types';
+import { prospectiveWorkReference } from '../work-creation/ordinary-prospective';
 
 async function projectProgram(
   tx: TemplateTransaction,
-  organizationId: string,
+  command: OrdinaryWorkCommand,
   projectId: string,
+  context: OrdinaryPreparationContext | undefined,
 ): Promise<string | null> {
+  const prospective = prospectiveWorkReference(tx, command, context, 'project', projectId);
+  if (prospective?.kind === 'project') return prospective.programId ?? null;
   const [row] = await tx
     .select({ programId: project.programId })
     .from(project)
     .where(
       and(
         eq(project.id, projectId),
-        eq(project.organizationId, organizationId),
+        eq(project.organizationId, command.caller.orgId),
         isNull(project.archivedAt),
       ),
     )
@@ -27,37 +35,49 @@ async function projectProgram(
 export async function validateSchedulePlacement(
   tx: TemplateTransaction,
   command: OrdinaryWorkCommand,
+  context?: OrdinaryPreparationContext,
 ): Promise<void> {
   const owner = command.invocation.placement?.programId;
   if (!command.invocation.scheduleContext || !owner || command.kind !== 'task') return;
   if (
     command.body.projectId &&
-    (await projectProgram(tx, command.caller.orgId, command.body.projectId)) !== owner
+    (await projectProgram(tx, command, command.body.projectId, context)) !== owner
   )
     throw new ConflictError('The schedule destination must match its owning Program.');
-  await validateParentPlacement(tx, command, owner);
+  await validateParentPlacement(tx, command, owner, context);
 }
 async function validateParentPlacement(
   tx: TemplateTransaction,
   command: Extract<OrdinaryWorkCommand, { kind: 'task' }>,
   owner: string,
+  context: OrdinaryPreparationContext | undefined,
 ): Promise<void> {
   if (!command.body.parentTaskId) return;
-  const [parent] = await tx
-    .select({ programId: task.programId, projectId: task.projectId })
-    .from(task)
-    .where(
-      and(
-        eq(task.id, command.body.parentTaskId),
-        eq(task.organizationId, command.caller.orgId),
-        isNull(task.archivedAt),
-      ),
-    )
-    .limit(1);
+  const prospective = prospectiveWorkReference(
+    tx,
+    command,
+    context,
+    'task',
+    command.body.parentTaskId,
+  );
+  const [stored] = prospective
+    ? []
+    : await tx
+        .select({ programId: task.programId, projectId: task.projectId })
+        .from(task)
+        .where(
+          and(
+            eq(task.id, command.body.parentTaskId),
+            eq(task.organizationId, command.caller.orgId),
+            isNull(task.archivedAt),
+          ),
+        )
+        .limit(1);
+  const parent = prospective?.kind === 'task' ? prospective : stored;
   if (!parent) throw new NotFoundError('Schedule destination not found');
   const actual =
     parent.programId ??
-    (parent.projectId ? await projectProgram(tx, command.caller.orgId, parent.projectId) : null);
+    (parent.projectId ? await projectProgram(tx, command, parent.projectId, context) : null);
   if (actual !== owner || (command.body.projectId && command.body.projectId !== parent.projectId))
     throw new ConflictError('The schedule destination must match its owning Program.');
 }

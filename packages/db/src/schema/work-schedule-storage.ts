@@ -1,6 +1,13 @@
+import type { ScheduleHistoryImportReview } from '../work-schedule-history-import-proof';
+import type {
+  ScheduleConversionReceipt,
+  ScheduleConversionReview,
+} from '../work-schedule-conversion-types';
+import type { ImportedHistoryReceipt } from '@docket/work/work-schedule-import-receipt';
 import type { AcceptedScheduleClaim } from '@docket/work/work-schedule-claim';
 import type { WorkScheduleDraft } from '@docket/work/work-schedule';
 import type { WorkScheduleForest } from '@docket/work/work-schedule-forest';
+import type { WorkScheduleForestV2 } from '@docket/work/work-schedule-forest-v2';
 import type { WorkScheduleRevisionFallback } from '@docket/work/work-schedule-fallback';
 import type { NativeScheduleDateOwnership } from './work-schedule-date-ownership';
 import { sql } from 'drizzle-orm';
@@ -30,9 +37,31 @@ export interface ScheduleHistoricalArchive {
 /** Private canonical revision data; normalized cadence remains authoritative. */
 export function scheduleRevisionColumns() {
   return {
-    scheduleDraft: jsonb('schedule_draft').$type<WorkScheduleDraft | WorkScheduleForest>(),
+    scheduleDraft: jsonb('schedule_draft').$type<
+      WorkScheduleDraft | WorkScheduleForest | WorkScheduleForestV2
+    >(),
     authoringFallback: jsonb('authoring_fallback').$type<WorkScheduleRevisionFallback>(),
+    conversionReceipt: jsonb('conversion_receipt').$type<ScheduleConversionReceipt>(),
+    conversionReceiptHash: text('conversion_receipt_hash'),
+    conversionReview: jsonb('conversion_review').$type<ScheduleConversionReview>(),
   };
+}
+/** Immutable preparation metadata stays separate from executable drafts and retryable private reviews. */
+export function scheduleConversionConstraints(t: {
+  conversionReceipt: AnyPgColumn;
+  conversionReceiptHash: AnyPgColumn;
+  conversionReview: AnyPgColumn;
+}) {
+  return [
+    check(
+      'schedule_conversion_receipt_shape',
+      sql`(${t.conversionReceipt} is null and ${t.conversionReceiptHash} is null) or (${t.conversionReceipt} is not null and ${t.conversionReceiptHash} is not null and ${t.conversionReceiptHash} ~ '^sha256:[a-f0-9]{64}$')`,
+    ),
+    check(
+      'schedule_conversion_review_shape',
+      sql`${t.conversionReview} is null or (docket_schedule_keys(${t.conversionReview},ARRAY['kind','revision','execution','code']) and ${t.conversionReview}->>'kind'='schedule_conversion_review' and ${t.conversionReview}->'revision'='1'::jsonb and ${t.conversionReview}->>'execution'='nonexecuting' and ${t.conversionReview}->>'code' in('original_source_unproved','alias_unproved','timezone_unproved','closure_unproved','pending_source','missing_selection','oversized_source','invalid_structure','unsupported_timing'))`,
+    ),
+  ];
 }
 /** Durable run claims and conservative nonexecuting historical receipts on the existing occurrence. */
 export function scheduleOccurrenceColumns() {
@@ -49,6 +78,9 @@ export function scheduleOccurrenceColumns() {
     completedAt: timestamp('completed_at', { withTimezone: true }),
     historicalArchive: jsonb('historical_archive').$type<ScheduleHistoricalArchive>(),
     historicalArchiveHash: text('historical_archive_hash'),
+    importedHistoryReceipt: jsonb('imported_history_receipt').$type<ImportedHistoryReceipt>(),
+    importedHistoryReceiptHash: text('imported_history_receipt_hash'),
+    historyImportReview: jsonb('history_import_review').$type<ScheduleHistoryImportReview>(),
     scheduleDateOwnership:
       jsonb('schedule_date_ownership').$type<readonly NativeScheduleDateOwnership[]>(),
     continuedFromOccurrenceId: text('continued_from_occurrence_id'),
@@ -66,6 +98,9 @@ export function scheduleOccurrenceConstraints(t: {
   acceptedClaim: AnyPgColumn;
   retryAvailableAt: AnyPgColumn;
   attempt: AnyPgColumn;
+  importedHistoryReceipt: AnyPgColumn;
+  importedHistoryReceiptHash: AnyPgColumn;
+  historyImportReview: AnyPgColumn;
   acceptedAt: AnyPgColumn;
   acceptanceOrdinal: AnyPgColumn;
 }) {
@@ -73,6 +108,14 @@ export function scheduleOccurrenceConstraints(t: {
     check(
       'schedule_occurrence_run_shape',
       sql`(${t.runKind}='scheduled' and ${t.seriesId} is not null and ${t.seriesRevisionId} is not null) or (${t.runKind}='historical' and ${t.seriesId} is null and ${t.seriesRevisionId} is null and ${t.legacyInstanceId} is not null and ${t.status}::text in('completed','canceled','failed','needs_resolution') and ${t.externalOccurrenceKey} is null and ${t.acceptedClaim} is null and ${t.retryAvailableAt} is null)`,
+    ),
+    check(
+      'schedule_import_history_shape',
+      sql`(${t.importedHistoryReceipt} is null and ${t.importedHistoryReceiptHash} is null) or (${t.importedHistoryReceipt} is not null and ${t.importedHistoryReceiptHash} is not null and ${t.importedHistoryReceiptHash} ~ '^sha256:[a-f0-9]{64}$' and ${t.acceptedClaim} is null)`,
+    ),
+    check(
+      'schedule_import_review_shape',
+      sql`${t.historyImportReview} is null or (docket_schedule_keys(${t.historyImportReview},ARRAY['kind','revision','execution','code']) and ${t.historyImportReview}->>'kind'='history_import_review' and ${t.historyImportReview}->'revision'='1'::jsonb and ${t.historyImportReview}->>'execution'='nonexecuting' and ${t.historyImportReview}->>'code' in('current_run_requires_barrier','original_source_unproved','history_identity_unproved'))`,
     ),
     check('schedule_occurrence_attempt', sql`${t.attempt}>=0`),
     check(

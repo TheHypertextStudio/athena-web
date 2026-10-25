@@ -1,11 +1,12 @@
 /** Cursor-backed reads shared by process-definition and recurrence-series services. */
 import { processDefinition, recurrenceSeries, invocationHead, type Database } from '@docket/db';
-import { and, asc, eq, isNull, isNotNull, ne, or } from 'drizzle-orm';
+import { and, asc, eq, isNull, isNotNull, ne } from 'drizzle-orm';
 
 import { encodeIdCursor, seekAfterId } from '../list-cursor';
 import { canonicalDefinitionHead } from './canonical-definition';
 import { NotFoundError } from '../../error';
 import { requireLegacyActor, requireLegacyDefinitionAccess } from './legacy-definition-access';
+import { canonicalAliasReferencesEnforced } from './private-alias-references';
 
 interface ListPage {
   readonly cursor?: string | undefined;
@@ -68,6 +69,42 @@ async function activeDefinitionIds(
   organizationId: string,
   cursor: string | undefined,
 ): Promise<{ id: string }[]> {
+  const canonical = activeCanonicalDefinitionIds(database, organizationId, cursor);
+  if (await canonicalAliasReferencesEnforced(database)) return canonical;
+  // Each ordered branch contributes at most one page. Selecting the first page of
+  // their merge preserves the shared identifier cursor even when hidden rows are
+  // skipped by the caller. Canonical ownership excludes the old source branch.
+  const [retained, canonicalIds] = await Promise.all([
+    activeRetainedDefinitionIds(database, organizationId, cursor),
+    canonical,
+  ]);
+  return [...retained, ...canonicalIds].sort((a, b) => a.id.localeCompare(b.id)).slice(0, 100);
+}
+function activeCanonicalDefinitionIds(
+  database: Database,
+  organizationId: string,
+  cursor: string | undefined,
+) {
+  return database
+    .select({ id: invocationHead.id })
+    .from(invocationHead)
+    .where(
+      and(
+        eq(invocationHead.organizationId, organizationId),
+        isNotNull(invocationHead.canonicalAuthoringAt),
+        isNull(invocationHead.archivedAt),
+        ne(invocationHead.status, 'archived'),
+        seekAfterId(invocationHead.id, cursor, 'asc'),
+      ),
+    )
+    .orderBy(asc(invocationHead.id))
+    .limit(100);
+}
+async function activeRetainedDefinitionIds(
+  database: Database,
+  organizationId: string,
+  cursor: string | undefined,
+): Promise<{ id: string }[]> {
   return database
     .select({ id: processDefinition.id })
     .from(processDefinition)
@@ -81,18 +118,9 @@ async function activeDefinitionIds(
     .where(
       and(
         eq(processDefinition.organizationId, organizationId),
-        or(
-          and(
-            isNotNull(invocationHead.canonicalAuthoringAt),
-            isNull(invocationHead.archivedAt),
-            ne(invocationHead.status, 'archived'),
-          ),
-          and(
-            isNull(invocationHead.canonicalAuthoringAt),
-            isNull(processDefinition.archivedAt),
-            ne(processDefinition.status, 'archived'),
-          ),
-        ),
+        isNull(invocationHead.canonicalAuthoringAt),
+        isNull(processDefinition.archivedAt),
+        ne(processDefinition.status, 'archived'),
         seekAfterId(processDefinition.id, cursor, 'asc'),
       ),
     )

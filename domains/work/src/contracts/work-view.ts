@@ -737,6 +737,8 @@ function queryRequest<const TContract extends ViewContract, const TContext exten
       definition,
       temporaryFilter: createFilterNodeSchema(contract).nullable().default(null),
       context: context.default(organizationContext as never),
+      /** Narrow a picker to living work without changing ordinary view defaults. */
+      activeOnly: z.boolean().optional(),
       search: z.string().trim().min(1).optional(),
       groupPath: z.array(z.string()).max(2).optional(),
       cursor: ViewCursorValue.nullable().optional(),

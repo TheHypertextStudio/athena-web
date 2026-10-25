@@ -10,13 +10,7 @@ import {
   WorkTypeVersionId,
 } from '../ids';
 
-const work = z.discriminatedUnion('kind', [
-  z.strictObject({ kind: z.literal('task'), id: TaskId }),
-  z.strictObject({ kind: z.literal('project'), id: ProjectId }),
-  z.strictObject({ kind: z.literal('initiative'), id: InitiativeId }),
-  z.strictObject({ kind: z.literal('program'), id: ProgramId }),
-]);
-const selection = z.strictObject({
+const selection = {
   removeLabelIds: z
     .array(LabelId)
     .min(1)
@@ -24,12 +18,18 @@ const selection = z.strictObject({
     .refine((ids) => new Set(ids).size === ids.length),
   workTypeId: WorkTypeId,
   workTypeVersionId: WorkTypeVersionId,
-});
+};
+const selectedWork = z.discriminatedUnion('kind', [
+  z.strictObject({ kind: z.literal('task'), id: TaskId, ...selection }),
+  z.strictObject({ kind: z.literal('project'), id: ProjectId, ...selection }),
+  z.strictObject({ kind: z.literal('initiative'), id: InitiativeId, ...selection }),
+  z.strictObject({ kind: z.literal('program'), id: ProgramId, ...selection }),
+]);
 /** One explicitly selected batch; no draft, authoring override, or child/field application is accepted. */
 export const LabelTemplateConversionChoices = z.strictObject({
   labelGroupId: LabelGroupId,
   items: z
-    .array(z.intersection(work, selection))
+    .array(selectedWork)
     .min(1)
     .max(100)
     .refine(

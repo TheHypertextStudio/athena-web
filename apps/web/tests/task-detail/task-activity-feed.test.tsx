@@ -286,11 +286,10 @@ describe('TaskActivityFeed', () => {
     expect(
       within(activity).getByText('Brief ready. Venue confirmation remains open.'),
     ).toBeVisible();
-    expect(within(activity).queryByText('First draft prepared.')).not.toBeInTheDocument();
-    expect(within(activity).queryByText('Original brief')).not.toBeInTheDocument();
-    fireEvent.click(within(activity).getByRole('button', { name: '1 earlier update' }));
     expect(within(activity).getByText('First draft prepared.')).toBeVisible();
-    fireEvent.click(within(activity).getByRole('button', { name: 'View description change' }));
+    expect(within(activity).queryByText('Original brief')).not.toBeInTheDocument();
+    expect(within(activity).getByText('First draft prepared.')).toBeVisible();
+    fireEvent.click(within(activity).getByRole('button', { name: 'updated the description' }));
     expect(within(activity).getByText('Original brief')).toBeVisible();
     expect(within(activity).getAllByText('A much longer revised brief').length).toBeGreaterThan(0);
   });

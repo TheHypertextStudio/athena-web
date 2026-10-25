@@ -22,13 +22,11 @@ import { useMemo, useState } from 'react';
 
 import { FreeformTextEditor } from '@/components/editor/freeform-text';
 import { QueryLoadFailure } from '@/components/feedback';
-import { StaticMarkdown } from '@/components/editor/static-markdown';
-import { relativeTime } from '@/components/project-detail/format-time';
 import { api } from '@/lib/api';
-import { useViewerActorId } from '@/lib/provenance/defs';
 import { apiInfiniteQueryOptions, queryKeys, useInfiniteApiQuery } from '@/lib/query';
 
-import { activityPerformer, activitySentence, activityTimestampTitle } from './format-activity';
+import { activityPerformer } from './format-activity';
+import { TaskActivityContent } from './task-activity-content';
 import { activitySessionGroups } from './activity-session-groups';
 import { TaskActivitySession } from './task-activity-session';
 import { TaskDelegatedWork } from './task-delegated-work';
@@ -56,28 +54,6 @@ export interface TaskActivityFeedProps {
   readonly onComment?: ((body: string) => Promise<void>) | undefined;
   /** Whether the current viewer may add a task comment. */
   readonly canComment?: boolean | undefined;
-}
-
-/** Build one application-owned sentence for a non-comment entry. */
-function entrySentence(entry: TaskActivityOut): string {
-  if (entry.type === 'comment') return '';
-  if (entry.body) return entry.body;
-  if (entry.type === 'session') return 'recorded an execution update';
-  const change = activitySentence(entry);
-  if (entry.type === 'child' && entry.subjectTaskTitle) {
-    return `${entry.subjectTaskTitle}: ${change}`;
-  }
-  if (entry.type === 'dependency' && entry.subjectTaskTitle) {
-    return `${entry.subjectTaskTitle}: ${change}`;
-  }
-  return change;
-}
-
-/** An edited comment no longer presents its current body as the original author's words. */
-function entryAction(entry: TaskActivityOut): string {
-  if (entry.type === 'session' && entry.body) return 'posted an update';
-  if (entry.type !== 'comment') return entrySentence(entry);
-  return entry.commentEdit ? 'started this comment' : 'commented';
 }
 
 /** Props for {@link ActivityFilterMenu}. */
@@ -117,27 +93,7 @@ function ActivityFilterMenu({ filter, onFilterChange }: ActivityFilterMenuProps)
 /** Props for {@link ActivityRow}. */
 interface ActivityRowProps {
   readonly entry: TaskActivityOut;
-  readonly orgId: string;
   readonly compact?: boolean;
-}
-
-/** Name the last editor without replacing the original comment author. */
-function CommentEditNote({ entry, orgId }: ActivityRowProps): JSX.Element | null {
-  const editor = entry.commentEdit;
-  const viewerActorId = useViewerActorId(orgId, editor?.origin?.channel === 'mcp');
-  if (!editor) return null;
-  const editPerformer = activityPerformer(
-    { ...entry, actorId: editor.actorId, actorName: editor.actorName, origin: editor.origin },
-    viewerActorId,
-  );
-  return (
-    <p className="text-label-medium text-on-surface-variant mt-1">
-      {editor.actorName || editor.origin ? `Edited by ${editPerformer.name}` : 'Edited'}{' '}
-      <time dateTime={editor.at} title={editor.at}>
-        {relativeTime(editor.at)}
-      </time>
-    </p>
-  );
 }
 
 /** Prefer recorded agent artwork while retaining the existing human and system identities. */
@@ -169,34 +125,9 @@ function ActivityIdentity({
 }
 
 /** One chronological Activity row, naming whoever performed the change. */
-function ActivityRow({ entry, orgId, compact = false }: ActivityRowProps): JSX.Element {
-  const viewerActorId = useViewerActorId(orgId, entry.origin?.channel === 'mcp');
-  const performer = activityPerformer(entry, viewerActorId);
-  const content = (
-    <div className="text-body-medium min-w-0">
-      <div className="text-on-surface-variant text-label-medium flex flex-wrap items-baseline gap-x-2">
-        {!compact ? (
-          <span>
-            <span className="text-on-surface">{performer.name}</span> {entryAction(entry)}
-          </span>
-        ) : null}
-        <time
-          dateTime={entry.createdAt}
-          title={activityTimestampTitle(entry.createdAt, performer.detail)}
-          className="text-label-small tabular-nums"
-        >
-          {relativeTime(entry.createdAt)}
-        </time>
-      </div>
-      <CommentEditNote entry={entry} orgId={orgId} />
-      {(entry.type === 'comment' || entry.type === 'session') && entry.body ? (
-        <StaticMarkdown
-          value={entry.body}
-          className="mt-1 [overflow-wrap:anywhere] [&>*]:max-w-none"
-        />
-      ) : null}
-    </div>
-  );
+function ActivityRow({ entry, compact = false }: ActivityRowProps): JSX.Element {
+  const performer = activityPerformer(entry, null);
+  const content = <TaskActivityContent entry={entry} showPerformer={!compact} />;
   if (compact) return <li className="min-w-0">{content}</li>;
   return (
     <TimelineItem
@@ -210,7 +141,6 @@ function ActivityRow({ entry, orgId, compact = false }: ActivityRowProps): JSX.E
 /** Keep one shared rail while the source records retain their ordered contribution boundaries. */
 function ActivityContributions({
   entries,
-  orgId,
 }: {
   readonly entries: readonly TaskActivityOut[];
   readonly orgId: string;
@@ -220,15 +150,9 @@ function ActivityContributions({
     <Timeline aria-label="Task activity">
       {contributions.map((group) =>
         group.session ? (
-          <TaskActivitySession
-            key={group.key}
-            group={group}
-            renderEntry={(entry, compact) => (
-              <ActivityRow key={entry.id} entry={entry} orgId={orgId} compact={compact ?? false} />
-            )}
-          />
+          <TaskActivitySession key={group.key} group={group} />
         ) : (
-          group.entries.map((entry) => <ActivityRow key={entry.id} entry={entry} orgId={orgId} />)
+          group.entries.map((entry) => <ActivityRow key={entry.id} entry={entry} />)
         ),
       )}
     </Timeline>

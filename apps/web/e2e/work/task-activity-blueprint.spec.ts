@@ -100,7 +100,7 @@ for (const width of [390, 1440, 1920]) {
     await openTimeline(page);
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await expect(page.getByRole('button', { name: '1 change', exact: true })).toHaveCount(0);
-    const description = page.getByRole('button', { name: 'View description change' });
+    const description = page.getByRole('button', { name: 'updated the description' });
     await description.focus();
     await page.keyboard.press('Enter');
     await expect(description).toHaveAttribute('aria-expanded', 'true');
@@ -185,7 +185,7 @@ test.describe('touch activity controls', () => {
     await page.setViewportSize({ width: 390, height: 844 });
     await openTimeline(page);
     await page.setViewportSize({ width: 320, height: 844 });
-    const description = page.getByRole('button', { name: 'View description change' });
+    const description = page.getByRole('button', { name: 'updated the description' });
     expect((await description.boundingBox())?.height).toBeGreaterThanOrEqual(40);
     await description.tap();
     await expect(page.getByText('Revised brief').first()).toBeVisible();
@@ -215,4 +215,19 @@ test('shows supplied agent artwork and retains a named glyph if the image fails'
   await expect(
     contribution.getByRole('img', { name: 'Task automation', exact: true }).locator('svg'),
   ).toBeVisible();
+});
+
+test('opens recorded session activity and restores focus to its header control', async ({
+  page,
+}) => {
+  await openTimeline(page);
+  const opener = page.getByRole('button', { name: 'View session activity' });
+  await opener.click();
+  const inspector = page.getByRole('dialog', { name: 'Codex session' });
+  await expect(inspector).toBeVisible();
+  await expect(inspector.getByText('Original brief', { exact: true })).toBeVisible();
+  await expect(inspector.getByText('The brief is ready for review.')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(inspector).toHaveCount(0);
+  await expect(opener).toBeFocused();
 });

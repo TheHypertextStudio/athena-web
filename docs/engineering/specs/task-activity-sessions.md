@@ -169,3 +169,26 @@ fails, and the existing human identities for people. Artwork is not identity ver
 ownership. A shared identity/content grid aligns the header, content previews, relationship rows,
 property transitions and disclosures. Semantic icons annotate the type of work, rather than adding
 repeated agent avatars or decorating every paragraph. No endpoint or database migration is required.
+
+## Session metadata wrappers and detail destinations
+
+A session contribution uses the surrounding page tone with a thin shared outline boundary. It
+annotates the existing chronological rail rather than introducing a separate work object. Its
+header contains agent identity, a smaller authorizing-person avatar/name when recorded, the
+observed time range and detail controls. No wording implies that the authorizing person owns the
+session or participated continuously. “Continued” remains in chronological position.
+
+Grouped and standalone records use the same action, comment and change-content renderer. Ordinary
+comments remain visible in source order, interleaved with consolidated field changes at their
+latest source positions. A description edit has one expandable action heading and its saved
+content preview; expanding it shows individual source timestamps and before/after values without
+an additional “View description change” control. Only unusually long lists fold their middle.
+
+The activity inspector shows every loaded task-relevant source record in this contiguous part of
+the session, without scalar consolidation or execution chatter. It is not a claim to contain
+unloaded pages, filtered-out activity or an external tool's conversation. An optional session
+`detailUrl` links to the existing native detail page only when that caller may read the session:
+registered sessions retain workspace/task visibility and Athena retains owner-only access. This
+check does not remove otherwise-visible recorded task edits. External work keys do not imply a
+URL and are never decoded into a fabricated provider destination. No migration or endpoint is
+added; existing opaque identities, REST headers and MCP metadata keys remain unchanged.

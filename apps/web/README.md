@@ -254,3 +254,8 @@ Agent identity images in task activity use the optional server-resolved `agentIc
 agent avatars take precedence over stored OAuth client logos; unknown or failed artwork uses the
 shared agent glyph fallback. Activity does not infer a brand from a display name or borrow the
 authorizing person's avatar.
+
+Task activity sessions are outlined metadata wrappers around the same rows used in the main
+activity feed. Their recorded-activity inspector preserves each loaded source edit. Native
+“Open full session” destinations appear only when authorized by the activity API; external
+correlation keys do not imply an external session URL.

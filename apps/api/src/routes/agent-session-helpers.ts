@@ -165,6 +165,40 @@ export async function canContinueSessionDelivery(
   return visible.length === 1;
 }
 
+/**
+ * Resolve a bounded set of native session destinations using the detail endpoint's visibility.
+ * @param c - The authenticated workspace request.
+ * @param ids - Native ids from persisted, already-visible activity provenance.
+ * @returns Detail paths only for sessions whose full activity the caller may read.
+ */
+export async function sessionDetailDestinations(
+  c: Context<AppEnv>,
+  ids: string[],
+): Promise<Map<string, string>> {
+  if (ids.length === 0) return new Map();
+  const { orgId, actorId } = c.get('actorCtx');
+  const userId = c.get('session')?.user.id;
+  const rows = await db
+    .select()
+    .from(agentSession)
+    .where(
+      and(
+        inArray(agentSession.id, ids),
+        or(
+          and(
+            eq(agentSession.executorKind, 'registered_agent'),
+            eq(agentSession.organizationId, orgId),
+          ),
+          userId
+            ? and(eq(agentSession.executorKind, 'athena'), eq(agentSession.ownerUserId, userId))
+            : undefined,
+        ),
+      ),
+    );
+  const visible = await filterRegisteredTaskSessionDelivery(orgId, actorId, rows);
+  return new Map(visible.map((row) => [row.id, `/orgs/${orgId}/sessions/${row.id}`]));
+}
+
 /** List caller-visible personal Athena and shared registered-agent sessions. */
 export async function listSessionAccess(
   c: Context<AppEnv>,

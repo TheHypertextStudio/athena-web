@@ -7,6 +7,18 @@
 
 ## Active Tasks
 
+### [ACTIVITY-METADATA-WRAPPER] Integrate session groups with ordinary activity
+
+- **Status**: REVIEW
+- **Started**: 2026-10-25
+- **Description**: Treat sessions as quiet metadata wrappers around the same recorded activity rows used outside a session. Reduce tonal separation, remove duplicated change controls and awkward authority wording, retain the recorded range, and provide a real detail destination.
+- **Plan**: Reuse outlined shared surface infrastructure; share comment/change rendering across grouped and standalone entries; keep original entry chronology and lossless scalar consolidation. Use compact identity and a small authority avatar. Offer a loaded-record activity detail view for all groups and the existing permission-filtered native session page where available. Preserve opaque correlation keys and do not infer external URLs or session lifecycle.
+- **Validation**: Regression coverage for shared change disclosures, full chronological session contents, authority attribution and safe detail links; affected API/web/UI checks, builds and complexity; standard desktop/phone captures in both themes and browser accessibility/keyboard/overflow checks under the required capacity guard.
+
+- **Implemented locally**: Outlined metadata wrapper at the surrounding page tone; common activity content for grouped/standalone rows; visible comments in source order; one expandable change heading; compact authority avatar; recorded-activity inspector; permission-filtered native session links. Correlation identities and transport metadata are unchanged.
+- **Validation**: 30 API, 26 web, 7 UI and 6 browser tests pass. Affected builds, typechecks, lint and the unchanged complexity ledger pass. Sixteen standard captures cover four states in both themes at desktop/phone widths. The local stack was stopped and its seeded database reset.
+- **Remaining**: Phone captures reveal clipped inspector relationship text and control reachability needs review. Correct narrow-pane sizing/reflow, strengthen inspector-specific overflow/accessibility assertions, finish the craft audit and verify native detail navigation before integration. External provider-session URLs and Slack/Discord entity mentions remain separate integration work. The current refinement is preserved as a branch checkpoint at the user’s request; no integration or deployment is claimed. Work stopped at the user's quota constraint, with pending work captured in the Hypertext Studio Docket.
+
 ### [WORK-TEMPLATE-PRODUCTION-20261024] Publish validated work templates
 
 - **Status**: IN_PROGRESS

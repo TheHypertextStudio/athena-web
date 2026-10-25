@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { TaskActivityOut } from '@docket/connections/activity-contract';
 import { TaskActivitySession } from '../../src/components/task-detail/task-activity-session';
@@ -30,10 +30,7 @@ function show(entries: TaskActivityOut[]): void {
   if (!group) throw new Error('Missing contribution');
   render(
     <ol>
-      <TaskActivitySession
-        group={group}
-        renderEntry={(item) => <li key={item.id}>{item.body}</li>}
-      />
+      <TaskActivitySession group={group} />
     </ol>,
   );
 }
@@ -56,13 +53,13 @@ describe('session presentation', () => {
       }),
     ]);
     expect(screen.getByText('Revised brief')).toBeVisible();
-    expect(screen.getByRole('button', { name: 'View description change' })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'updated the description' })).toBeVisible();
     expect(screen.queryByRole('button', { name: '1 change' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '2 execution details' })).not.toBeInTheDocument();
     expect(screen.queryByText('Checking the brief.')).not.toBeInTheDocument();
     expect(screen.queryByText('Proposed publishing.')).not.toBeInTheDocument();
     expect(screen.queryByText('3 changes to this task')).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'View description change' }));
+    fireEvent.click(screen.getByRole('button', { name: 'updated the description' }));
     expect(screen.getByText('Original brief')).toBeVisible();
     expect(
       screen.getByText(
@@ -84,7 +81,9 @@ describe('session presentation', () => {
         change: { field: 'priority', label: 'Priority', from: 'Normal', to: 'High' },
       }),
     ]);
-    expect(screen.getByText('High')).toBeVisible();
+    expect(
+      screen.getByRole('button', { name: /changed Priority from Normal to High/ }),
+    ).toBeVisible();
     expect(screen.queryByText('1 change')).not.toBeInTheDocument();
   });
   it('consolidates repeated scalar edits into visible current values without losing their history', () => {
@@ -96,10 +95,10 @@ describe('session presentation', () => {
         change: { field: 'priority', label: 'Priority', from: 'High', to: 'Urgent' },
       }),
     ]);
-    expect(screen.getByText('Urgent')).toBeVisible();
-    expect(screen.getByText('Normal')).toBeVisible();
+    expect(screen.getByRole('button', { name: /Urgent/ })).toBeVisible();
+    expect(screen.getByRole('button', { name: /Normal/ })).toBeVisible();
     expect(screen.queryByText('High')).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'View 2 priority edits' }));
+    fireEvent.click(screen.getByRole('button', { name: /2 edits/ }));
     expect(screen.getAllByText('High')).toHaveLength(2);
   });
   it('shows concrete relationship changes without merging different links', () => {
@@ -121,11 +120,10 @@ describe('session presentation', () => {
         },
       }),
     ]);
-    expect(screen.getByText('November announcement')).toBeVisible();
-    expect(screen.getByText('Venue confirmation')).toBeVisible();
-    expect(screen.getByText('Blocks')).toBeVisible();
-    expect(screen.getByText('Blocked by')).toBeVisible();
-    expect(screen.getAllByRole('button', { name: 'View dependency change' })).toHaveLength(2);
+    expect(screen.getByRole('button', { name: /November announcement\b/ })).toBeVisible();
+    expect(screen.getByRole('button', { name: /Venue confirmation\b/ })).toBeVisible();
+
+    expect(screen.getAllByRole('button', { name: /Blocks|Blocked by/ })).toHaveLength(2);
   });
 
   it('shows a recorded activity window without implying session completion or task ownership', () => {
@@ -149,7 +147,7 @@ describe('session presentation', () => {
         change: { field: 'priority', label: 'Priority', from: 'Normal', to: 'High' },
       }),
     ]);
-    expect(screen.getByText('Connection activity')).toBeVisible();
+    expect(screen.getByText('connection')).toBeVisible();
     expect(screen.queryByText(/Owner|Delegated by/)).not.toBeInTheDocument();
   });
   it('keeps a newly edited field among the latest visible changes in a long session', () => {
@@ -167,8 +165,8 @@ describe('session presentation', () => {
       }),
     );
     show(edits);
-    expect(screen.getByText('Urgent')).toBeVisible();
-    expect(screen.queryByText('Field 5')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Urgent/ })).toBeVisible();
+    expect(screen.queryByRole('button', { name: /Field 5\b/ })).not.toBeInTheDocument();
   });
   it('shows every action in an ordinary five-change session', () => {
     show(
@@ -180,8 +178,8 @@ describe('session presentation', () => {
         }),
       ),
     );
-    expect(screen.getByText('Field 4')).toBeVisible();
-    expect(screen.getByText('Field 5')).toBeVisible();
+    expect(screen.getByRole('button', { name: /Field 4\b/ })).toBeVisible();
+    expect(screen.getByRole('button', { name: /Field 5\b/ })).toBeVisible();
     expect(screen.queryByRole('button', { name: /more changes/ })).not.toBeInTheDocument();
   });
   it('keeps ordinary change lists open and folds only the middle of long sequences', () => {
@@ -194,13 +192,38 @@ describe('session presentation', () => {
         }),
       ),
     );
-    expect(screen.getByText('Field 1')).toBeVisible();
-    expect(screen.getByText('Field 12')).toBeVisible();
-    expect(screen.queryByText('Field 4')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Field 1\b/ })).toBeVisible();
+    expect(screen.getByRole('button', { name: /Field 12\b/ })).toBeVisible();
+    expect(screen.queryByRole('button', { name: /Field 4\b/ })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Show 6 more changes' }));
-    expect(screen.getByText('Field 4')).toBeVisible();
-    expect(screen.getByText('Field 9')).toBeVisible();
+    expect(screen.getByRole('button', { name: /Field 4\b/ })).toBeVisible();
+    expect(screen.getByRole('button', { name: /Field 9\b/ })).toBeVisible();
   });
+  it('keeps authored updates and mutations in recorded order and offers full source activity', () => {
+    show([
+      entry('comment-one', { type: 'comment', body: 'Starting with the reusable kit.' }),
+      entry('edit-one', {
+        change: { field: 'priority', label: 'Priority', from: 'Normal', to: 'High' },
+      }),
+      entry('comment-two', { type: 'comment', body: 'The venue is still open.' }),
+      entry('edit-two', {
+        change: { field: 'priority', label: 'Priority', from: 'High', to: 'Urgent' },
+      }),
+    ]);
+    const article = screen.getByRole('article');
+    const rows = within(article).getAllByRole('listitem');
+    expect(rows[0]).toHaveTextContent('Starting with the reusable kit.');
+    expect(rows[1]).toHaveTextContent('The venue is still open.');
+    expect(rows[2]).toHaveTextContent('Urgent');
+    expect(screen.queryByText('for Willie')).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Open full session' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'View session activity' }));
+    const detail = screen.getByRole('dialog');
+    expect(within(detail).getAllByText('High')).toHaveLength(2);
+    expect(within(detail).getByText('Starting with the reusable kit.')).toBeVisible();
+    expect(within(detail).getByText('The venue is still open.')).toBeVisible();
+  });
+
   it('does not render transcript-only sessions as task contributions', () => {
     show([entry('thought', { body: 'Internal thought.', sessionEvent: 'change' })]);
     expect(screen.queryByRole('article')).not.toBeInTheDocument();

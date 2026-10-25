@@ -4,7 +4,15 @@ import { eq } from 'drizzle-orm';
 import { beforeAll, describe, expect, it } from 'vitest';
 import type * as DbModule from '@docket/db';
 import type tasksRouter from '../../src/routes/tasks';
-import { appWithActor, getDb, one, seedTask, seedTaskAccessOrg } from '../support/routes-harness';
+import {
+  appWithActor,
+  fakeSession,
+  getDb,
+  one,
+  seedTask,
+  seedTaskAccessOrg,
+  seedUserWithHub,
+} from '../support/routes-harness';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -155,6 +163,7 @@ describe('native task activity sessions', () => {
     expect(items.find((item) => item.body === 'Brief ready.')).toBeUndefined();
     const mutation = items.find((item) => item.change?.field === 'description');
     expect(mutation?.agentIconUrl).toBe('https://agent.example.test/automation.png');
+    expect(mutation?.session?.detailUrl).toBe(`/orgs/${org.orgId}/sessions/${session.id}`);
     expect(mutation?.session).toMatchObject({ kind: 'native', title: 'Task automation session' });
     expect(items.find((item) => item.sessionEvent === 'question')?.session?.id).toBe(
       mutation?.session?.id,
@@ -182,6 +191,64 @@ describe('native task activity sessions', () => {
       session: null,
     });
   });
+  it('keeps private native detail destinations owner-only while retaining recorded task changes', async () => {
+    const org = await seedTaskAccessOrg(db, schema);
+    const row = await seedTask(db, schema, org.statusId, {
+      organizationId: org.orgId,
+      teamId: org.teamId,
+      title: 'Shared task',
+      state: 'todo',
+    });
+    const owner = await seedUserWithHub(db, schema, 'SessionOwner');
+    const native = one(
+      await db
+        .insert(schema.agentSession)
+        .values({
+          executorKind: 'athena',
+          ownerUserId: owner,
+          contextOrganizationId: org.orgId,
+          taskId: row.id,
+          trigger: 'assignment',
+          status: 'completed',
+        })
+        .returning(),
+    );
+    await db.insert(schema.auditEvent).values({
+      organizationId: org.orgId,
+      actorId: org.humanActorId,
+      subjectType: 'task',
+      subjectId: row.id,
+      type: 'updated',
+      metadata: { field: 'priority', label: 'Priority', from: 'Normal', to: 'High' },
+      origin: {
+        v: 2,
+        channel: 'athena',
+        performer: { kind: 'athena', name: 'Athena' },
+        agentSessionId: native.id,
+        tool: 'update',
+      },
+    });
+    const read = async (userId?: string) => {
+      const res = await appWithActor(
+        tasks,
+        org.orgId,
+        ['view'],
+        org.humanActorId,
+        userId ? fakeSession(userId) : null,
+      ).request(`/${row.id}/activity`);
+      expect(res.status).toBe(200);
+      return ((await res.json()) as { items: TaskActivityOut[] }).items.find(
+        (item) => item.change?.field === 'priority',
+      );
+    };
+    const shared = await read();
+    expect(shared?.change?.to).toBe('High');
+    expect(shared?.session?.detailUrl).toBeUndefined();
+    const personal = await read(owner);
+    expect(personal?.session?.id).toBe(shared?.session?.id);
+    expect(personal?.session?.detailUrl).toBe(`/orgs/${org.orgId}/sessions/${native.id}`);
+  });
+
   it('uses a registered legacy agent avatar without using a human authorizing avatar', async () => {
     const org = await seedTaskAccessOrg(db, schema);
     const row = await seedTask(db, schema, org.statusId, {

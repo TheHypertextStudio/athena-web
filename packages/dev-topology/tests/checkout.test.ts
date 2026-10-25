@@ -58,6 +58,16 @@ describe('checkout identity', () => {
     expect(port).not.toBe(PRIMARY_WEB_PORT);
   });
 
+  it('keeps detached and uppercase branch hosts consistent with browser URL normalization', () => {
+    for (const branch of ['HEAD', 'codex/Review-Setup']) {
+      const checkout = { ...worktree('verification'), branch };
+      const prefix = hostPrefix(checkout);
+      expect(prefix).toBe(`${branch.split('/').at(-1)?.toLowerCase()}.`);
+      const host = `${prefix}docket.localhost`;
+      expect(new URL(`http://${host}:1932`).hostname).toBe(host);
+    }
+  });
+
   it('derives the port from the git directory so a branch rename keeps the block', () => {
     const before = worktree('feature-x');
     const renamed: CheckoutIdentity = { ...before, branch: 'claude/feature-x-take-two' };

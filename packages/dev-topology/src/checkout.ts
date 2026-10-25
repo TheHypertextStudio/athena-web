@@ -82,7 +82,9 @@ export function isLinkedWorktree(identity: CheckoutIdentity): boolean {
  * @returns A prefix ending in `.`, or the empty string for the primary checkout.
  */
 export function hostPrefix(identity: CheckoutIdentity): string {
-  return isLinkedWorktree(identity) ? `${identity.branch.split('/').pop() ?? ''}.` : '';
+  return isLinkedWorktree(identity)
+    ? `${identity.branch.split('/').pop()?.toLowerCase() ?? ''}.`
+    : '';
 }
 
 /**

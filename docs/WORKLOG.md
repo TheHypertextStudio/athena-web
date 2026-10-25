@@ -13686,6 +13686,14 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
 
 ## Completed Tasks
 
+### [WORKTREE-HOST-CASE] Keep worktree hosts consistent with browser URLs
+
+- **Completed**: 2026-10-25
+- **Summary**: Normalize worktree host prefixes to lowercase, including detached HEAD checkouts,
+  so generated origins and the browser agree during authenticated development.
+- **Validation**: The detached/uppercase-host regression fails before the correction; all 47
+  topology tests, typechecking, and affected lint pass afterward.
+
 ### [SESSION-ACCEPTANCE-EXPORTS] Preserve the composed session-only acceptance checks
 
 - **Completed**: 2026-10-25

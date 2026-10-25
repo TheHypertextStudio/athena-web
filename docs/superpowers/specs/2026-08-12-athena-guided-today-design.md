@@ -233,7 +233,7 @@ The exact DTO names may follow repository conventions, but the response needs th
 ```ts
 type HubTodayBrief = {
   date: string;
-  planState: 'unplanned' | 'active' | 'cleared';
+  planState: "unplanned" | "active" | "cleared";
   brief: {
     sentence: string;
     attentionCount: number;

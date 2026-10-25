@@ -1,5 +1,5 @@
 ---
-surfaces: ['today', 'orgs-[orgId]-tasks-[taskId]']
+surfaces: ["today", "orgs-[orgId]-tasks-[taskId]"]
 date: 2026-09-07
 verdict: ship
 scores:

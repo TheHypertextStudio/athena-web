@@ -22,11 +22,11 @@
 Add these expectations to `uses full-width heading-free documents and canonical MD3 prose hierarchy`:
 
 ```ts
-expect(document).toContain('@4xl:grid-cols-[minmax(0,calc(75ch+2rem))_11rem]');
-expect(document).toContain('grid min-w-0 flex-1 gap-4');
-expect(document).toContain('max-w-[calc(75ch+2rem)]');
-expect(document).toContain('max-w-[75ch]');
-expect(document).not.toContain('max-w-none');
+expect(document).toContain("@4xl:grid-cols-[minmax(0,calc(75ch+2rem))_11rem]");
+expect(document).toContain("grid min-w-0 flex-1 gap-4");
+expect(document).toContain("max-w-[calc(75ch+2rem)]");
+expect(document).toContain("max-w-[75ch]");
+expect(document).not.toContain("max-w-none");
 ```
 
 - [x] **Step 2: Write the failing recent-target contract**
@@ -34,7 +34,7 @@ expect(document).not.toContain('max-w-none');
 Replace the current 40px assertion in `shows recent documents as bounded primary-icon shortcuts`:
 
 ```ts
-expect(project).toHaveClass('h-12', 'w-14');
+expect(project).toHaveClass("h-12", "w-14");
 ```
 
 - [x] **Step 3: Run the two tests and verify RED**
@@ -72,11 +72,11 @@ Use these classes on the surface and editor:
 
 ```tsx
 className =
-  'entity-document bg-surface-container-low flex min-h-56 w-full max-w-[calc(75ch+2rem)] flex-1 flex-col rounded-xl p-4 sm:min-w-[32rem] print:bg-transparent print:p-0';
+  "entity-document bg-surface-container-low flex min-h-56 w-full max-w-[calc(75ch+2rem)] flex-1 flex-col rounded-xl p-4 sm:min-w-[32rem] print:bg-transparent print:p-0";
 ```
 
 ```tsx
-className = 'flex min-h-0 max-w-[75ch] flex-1 flex-col';
+className = "flex min-h-0 max-w-[75ch] flex-1 flex-col";
 ```
 
 - [x] **Step 3: Run the Web contract and verify GREEN**

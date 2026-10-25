@@ -289,11 +289,11 @@ Docket is passkey-first, and that creates a specific testing hazard: **WebAuthn 
 ```ts
 // fixture: virtual authenticator
 const client = await context.newCDPSession(page);
-await client.send('WebAuthn.enable');
-await client.send('WebAuthn.addVirtualAuthenticator', {
+await client.send("WebAuthn.enable");
+await client.send("WebAuthn.addVirtualAuthenticator", {
   options: {
-    protocol: 'ctap2',
-    transport: 'internal',
+    protocol: "ctap2",
+    transport: "internal",
     hasResidentKey: true,
     hasUserVerification: true,
     isUserVerified: true,

@@ -1,5 +1,5 @@
 ---
-surfaces: ['focus-panel', 'focus-mode']
+surfaces: ["focus-panel", "focus-mode"]
 date: 2026-08-09
 verdict: ship
 scores:

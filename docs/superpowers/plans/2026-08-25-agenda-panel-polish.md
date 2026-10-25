@@ -61,14 +61,14 @@ The implementation must satisfy this visual contract:
 Render August 20, 2026. Assert a Sunday-to-Saturday strip for August 16 through August 22, 40px targets, `aria-current="date"` on August 20, and no Previous or Next buttons.
 
 ```tsx
-const strip = screen.getByRole('list', { name: 'Choose a day' });
-expect(within(strip).getAllByRole('button')).toHaveLength(7);
-expect(within(strip).getByRole('button', { name: 'Thursday, August 20' })).toHaveAttribute(
-  'aria-current',
-  'date',
+const strip = screen.getByRole("list", { name: "Choose a day" });
+expect(within(strip).getAllByRole("button")).toHaveLength(7);
+expect(within(strip).getByRole("button", { name: "Thursday, August 20" })).toHaveAttribute(
+  "aria-current",
+  "date",
 );
-expect(screen.queryByRole('button', { name: 'Previous day' })).not.toBeInTheDocument();
-expect(screen.queryByRole('button', { name: 'Next day' })).not.toBeInTheDocument();
+expect(screen.queryByRole("button", { name: "Previous day" })).not.toBeInTheDocument();
+expect(screen.queryByRole("button", { name: "Next day" })).not.toBeInTheDocument();
 ```
 
 - [ ] **Step 2: Add the pure visible-week model**
@@ -82,8 +82,8 @@ export function agendaWeek(selected: string, today: string): readonly AgendaDayC
     const iso = addDays(start, index);
     return {
       iso,
-      weekday: formatDay(iso, { weekday: 'narrow' }) ?? '',
-      day: formatDay(iso, { day: 'numeric' }) ?? '',
+      weekday: formatDay(iso, { weekday: "narrow" }) ?? "",
+      day: formatDay(iso, { day: "numeric" }) ?? "",
       selected: iso === selected,
       today: iso === today,
     };
@@ -100,7 +100,7 @@ export function agendaWeek(selected: string, today: string): readonly AgendaDayC
       <button
         type="button"
         aria-label={longDayLabel(day.iso)}
-        aria-current={day.selected ? 'date' : undefined}
+        aria-current={day.selected ? "date" : undefined}
         className="focus-visible:ring-ring relative flex min-h-10 min-w-10 flex-col items-center justify-center rounded-full outline-none focus-visible:ring-2"
         onClick={() => onSelect(day.iso)}
       >
@@ -108,8 +108,8 @@ export function agendaWeek(selected: string, today: string): readonly AgendaDayC
         <span
           className={
             day.selected
-              ? 'bg-primary-container text-on-primary-container flex size-8 items-center justify-center rounded-full'
-              : 'flex size-8 items-center justify-center'
+              ? "bg-primary-container text-on-primary-container flex size-8 items-center justify-center rounded-full"
+              : "flex size-8 items-center justify-center"
           }
         >
           {day.day}
@@ -125,7 +125,7 @@ export function agendaWeek(selected: string, today: string): readonly AgendaDayC
 Use a 48px horizontal pointer threshold. Ignore vertical scroll. A completed page keeps the selected weekday and calls the existing guarded `goToDate` path.
 
 ```ts
-goToDate(shiftISODate(date, direction === 'next' ? 7 : -7));
+goToDate(shiftISODate(date, direction === "next" ? 7 : -7));
 ```
 
 Do not add arrows, carousel dots, or a second horizontal scrollport.
@@ -139,7 +139,7 @@ Do not add arrows, carousel dots, or a second horizontal scrollport.
     if (nextDate) goToDate(nextDate);
   }}
   formatLabel={(value) =>
-    value ? (formatDay(value, { month: 'long', year: 'numeric' }) ?? value) : undefined
+    value ? (formatDay(value, { month: "long", year: "numeric" }) ?? value) : undefined
   }
   placeholder="Choose date"
   ariaLabel="Agenda date"
@@ -154,7 +154,7 @@ Do not add arrows, carousel dots, or a second horizontal scrollport.
 Keep the current menu state. Label the trigger with the active view. Map the three scale steps to product terms.
 
 ```ts
-const DENSITY_LABELS = ['Compact', 'Comfortable', 'Expanded'] as const;
+const DENSITY_LABELS = ["Compact", "Comfortable", "Expanded"] as const;
 ```
 
 ```tsx
@@ -210,8 +210,8 @@ Co-authored-by: Codex <noreply@openai.com>
 Assert that Agenda uses the hidden-scrollbar utility, Calendar does not, and the Agenda frame has 12px inline padding with no second `overflow-auto` owner.
 
 ```tsx
-expect(screen.getByRole('region', { name: 'Schedule' })).toHaveClass('scrollbar-none');
-expect(screen.getByTestId('agenda-canvas-frame')).toHaveClass('px-3', 'overflow-hidden');
+expect(screen.getByRole("region", { name: "Schedule" })).toHaveClass("scrollbar-none");
+expect(screen.getByTestId("agenda-canvas-frame")).toHaveClass("px-3", "overflow-hidden");
 ```
 
 - [ ] **Step 2: Add one reusable utility beside the global scrollbar rules**

@@ -30,12 +30,12 @@ expect(
     ...programRow,
     activity: {
       weeks: [0, 2, 0, 1, 0, 0, 3, 1],
-      latestOccurredAt: '2026-08-24T12:00:00.000Z',
+      latestOccurredAt: "2026-08-24T12:00:00.000Z",
     },
   }).activity,
 ).toEqual({
   weeks: [0, 2, 0, 1, 0, 0, 3, 1],
-  latestOccurredAt: '2026-08-24T12:00:00.000Z',
+  latestOccurredAt: "2026-08-24T12:00:00.000Z",
 });
 ```
 
@@ -126,11 +126,11 @@ Run: `pnpm --filter @docket/api test tests/work-views/query.test.ts tests/work-v
 - [ ] **Step 1: Write failing DOM tests for a Program Card.**
 
 ```tsx
-render(<ProgramWorkCard row={programRow({ health: 'at_risk', activity: activeWeeks })} />);
-expect(screen.getByText('At risk')).toBeVisible();
-expect(screen.getByLabelText('Activity: 0, 2, 0, 1, 0, 0, 3, 1 events')).toBeVisible();
-expect(screen.queryByText('Connected work')).not.toBeInTheDocument();
-expect(screen.queryByText('Project count')).not.toBeInTheDocument();
+render(<ProgramWorkCard row={programRow({ health: "at_risk", activity: activeWeeks })} />);
+expect(screen.getByText("At risk")).toBeVisible();
+expect(screen.getByLabelText("Activity: 0, 2, 0, 1, 0, 0, 3, 1 events")).toBeVisible();
+expect(screen.queryByText("Connected work")).not.toBeInTheDocument();
+expect(screen.queryByText("Project count")).not.toBeInTheDocument();
 ```
 
 Also cover a null health, missing summary, and all-zero pulse. The all-zero card must say

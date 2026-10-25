@@ -50,7 +50,7 @@ control in this product. Everything else steps from it.
 **Do not set a control's height.** Put controls in a `ControlGroup` and let them read it:
 
 ```tsx
-import { Button, Chip, ControlGroup, Input } from '@docket/ui/primitives';
+import { Button, Chip, ControlGroup, Input } from "@docket/ui/primitives";
 
 // Every child is 32px tall. Not by convention — there is one number in play.
 <ControlGroup controlSize="md">
@@ -73,8 +73,8 @@ agree.
 ### API
 
 ```ts
-const CONTROL_SIZES: readonly ['xs', 'sm', 'md', 'lg', 'xl'];
-type ControlSize = 'xs' | 'sm' | 'md' | 'lg' | 'xl';
+const CONTROL_SIZES: readonly ["xs", "sm", "md", "lg", "xl"];
+type ControlSize = "xs" | "sm" | "md" | "lg" | "xl";
 const DEFAULT_CONTROL_SIZE: ControlSize; // 'md'
 
 interface ControlMetrics {
@@ -93,8 +93,8 @@ interface ControlMetrics {
 }
 const CONTROL: Readonly<Record<ControlSize, ControlMetrics>>;
 
-const CONTROL_RADIUS: 'rounded-md'; // 8px — every control
-const CONTAINER_RADIUS: 'rounded-lg'; // 10px — every floating container
+const CONTROL_RADIUS: "rounded-md"; // 8px — every control
+const CONTAINER_RADIUS: "rounded-lg"; // 10px — every floating container
 
 function useControlSize(explicit?: ControlSize): ControlSize;
 function useControlMetrics(explicit?: ControlSize): ControlMetrics;
@@ -106,7 +106,7 @@ function controlChrome(
 interface ControlGroupProps extends React.HTMLAttributes<HTMLElement> {
   readonly controlSize?: ControlSize;
   readonly as?: React.ElementType;
-  readonly orientation?: 'horizontal' | 'vertical';
+  readonly orientation?: "horizontal" | "vertical";
   readonly wrap?: boolean;
 }
 function ControlGroup(props: ControlGroupProps): React.JSX.Element;
@@ -211,24 +211,24 @@ There is no "make this bolder" utility. If a label needs more weight than `body-
 ```ts
 const TYPE_TOKENS: readonly TypeToken[]; // the 15 roles, MD3 order
 type TypeToken =
-  | 'display-large'
-  | 'display-medium'
-  | 'display-small'
-  | 'headline-large'
-  | 'headline-medium'
-  | 'headline-small'
-  | 'title-large'
-  | 'title-medium'
-  | 'title-small'
-  | 'body-large'
-  | 'body-medium'
-  | 'body-small'
-  | 'label-large'
-  | 'label-medium'
-  | 'label-small';
+  | "display-large"
+  | "display-medium"
+  | "display-small"
+  | "headline-large"
+  | "headline-medium"
+  | "headline-small"
+  | "title-large"
+  | "title-medium"
+  | "title-small"
+  | "body-large"
+  | "body-medium"
+  | "body-small"
+  | "label-large"
+  | "label-medium"
+  | "label-small";
 
 const TEXT_TONES: readonly TextTone[];
-type TextTone = 'default' | 'muted' | 'accent' | 'error' | 'inverse' | 'inherit';
+type TextTone = "default" | "muted" | "accent" | "error" | "inverse" | "inherit";
 
 function typeClass(token: TypeToken): string; // 'body-medium' -> 'text-body-medium'
 function toneClass(tone: TextTone): string; // 'muted' -> 'text-on-surface-variant'
@@ -356,13 +356,13 @@ Both are greppable: `grep -rn 'leadingNone' apps/`.
 ### API
 
 ```ts
-const CHIP_VARIANTS: readonly ['assist', 'filter', 'input', 'suggestion'];
-type ChipVariant = 'assist' | 'filter' | 'input' | 'suggestion';
+const CHIP_VARIANTS: readonly ["assist", "filter", "input", "suggestion"];
+type ChipVariant = "assist" | "filter" | "input" | "suggestion";
 
-const CHIP_TONES: readonly ['tonal', 'outlined'];
-type ChipTone = 'tonal' | 'outlined';
+const CHIP_TONES: readonly ["tonal", "outlined"];
+type ChipTone = "tonal" | "outlined";
 
-type ChipLeadingExemption = 'md3-suggestion-chip' | 'overflow-count';
+type ChipLeadingExemption = "md3-suggestion-chip" | "overflow-count";
 
 type ChipProps = {
   readonly controlSize?: ControlSize; // omit to inherit from ControlGroup
@@ -378,7 +378,7 @@ type ChipProps = {
   | { readonly avatar: React.ReactNode }
   | { readonly leadingNone: ChipLeadingExemption }
 ) &
-  Omit<React.ComponentProps<'button'>, 'children' | 'color'>;
+  Omit<React.ComponentProps<"button">, "children" | "color">;
 
 function Chip(props: ChipProps): React.JSX.Element;
 ```
@@ -413,14 +413,14 @@ name), no border except on the `outline` variant (which has no fill, so without 
 text), never a shadow.
 
 ```ts
-const BADGE_VARIANTS: readonly ['default', 'secondary', 'destructive', 'outline'];
-type BadgeVariant = 'default' | 'secondary' | 'destructive' | 'outline';
+const BADGE_VARIANTS: readonly ["default", "secondary", "destructive", "outline"];
+type BadgeVariant = "default" | "secondary" | "destructive" | "outline";
 function badgeVariants(options?: {
   readonly variant?: BadgeVariant | null;
   readonly className?: string;
 }): string;
 function Badge(
-  props: { readonly variant?: BadgeVariant | null } & React.ComponentProps<'span'>,
+  props: { readonly variant?: BadgeVariant | null } & React.ComponentProps<"span">,
 ): React.JSX.Element;
 ```
 
@@ -478,8 +478,8 @@ field in a dense toolbar is not phone-sized.
 ### API
 
 ```ts
-const FIELD_VARIANTS: readonly ['outlined', 'filled', 'plain'];
-type FieldVariant = 'outlined' | 'filled' | 'plain';
+const FIELD_VARIANTS: readonly ["outlined", "filled", "plain"];
+type FieldVariant = "outlined" | "filled" | "plain";
 
 interface FieldSurfaceOptions {
   readonly variant?: FieldVariant; // default 'outlined'
@@ -489,25 +489,25 @@ interface FieldSurfaceOptions {
 }
 function fieldSurface(options: FieldSurfaceOptions): string;
 
-interface InputProps extends Omit<React.ComponentProps<'input'>, 'size'> {
+interface InputProps extends Omit<React.ComponentProps<"input">, "size"> {
   readonly variant?: FieldVariant;
   readonly controlSize?: ControlSize;
 }
 function Input(props: InputProps): React.JSX.Element;
 
-interface TextareaProps extends React.ComponentProps<'textarea'> {
+interface TextareaProps extends React.ComponentProps<"textarea"> {
   readonly variant?: FieldVariant;
   readonly controlSize?: ControlSize;
 }
 function Textarea(props: TextareaProps): React.JSX.Element;
 
-interface SelectProps extends Omit<React.ComponentProps<'select'>, 'size'> {
+interface SelectProps extends Omit<React.ComponentProps<"select">, "size"> {
   readonly variant?: FieldVariant;
   readonly controlSize?: ControlSize;
 }
 function Select(props: SelectProps): React.JSX.Element;
 
-interface FieldProps extends Omit<React.ComponentProps<'div'>, 'title'> {
+interface FieldProps extends Omit<React.ComponentProps<"div">, "title"> {
   readonly label: React.ReactNode;
   readonly description?: React.ReactNode;
   readonly error?: string; // application-owned copy only
@@ -556,11 +556,11 @@ the **Outlined** button: a button is filled, tonal, or text, and a drawn 1px box
 earned borders.
 
 ```ts
-const BUTTON_VARIANTS: readonly ['default', 'secondary', 'outline', 'ghost', 'link', 'destructive'];
-type ButtonVariant = 'default' | 'secondary' | 'outline' | 'ghost' | 'link' | 'destructive';
-type LegacyButtonSize = 'default' | 'sm' | 'lg' | 'icon'; // migrating away; see below
+const BUTTON_VARIANTS: readonly ["default", "secondary", "outline", "ghost", "link", "destructive"];
+type ButtonVariant = "default" | "secondary" | "outline" | "ghost" | "link" | "destructive";
+type LegacyButtonSize = "default" | "sm" | "lg" | "icon"; // migrating away; see below
 
-interface ButtonProps extends Omit<React.ComponentProps<'button'>, 'color'> {
+interface ButtonProps extends Omit<React.ComponentProps<"button">, "color"> {
   readonly variant?: ButtonVariant | null;
   readonly size?: LegacyButtonSize | null; // prefer controlSize
   readonly controlSize?: ControlSize;
@@ -752,8 +752,8 @@ one left axis instead of stair-stepping. Docket does this in CSS, keyed off the 
 already emits:
 
 ```css
-[role='menu']:has([role='menuitem'] > svg:first-child)
-  [role='menuitem']:not(:has(> svg:first-child)) {
+[role="menu"]:has([role="menuitem"] > svg:first-child)
+  [role="menuitem"]:not(:has(> svg:first-child)) {
   padding-inline-start: calc(1rem + 1.25rem + 0.75rem);
 }
 ```
@@ -816,7 +816,7 @@ overlays the last few pixels of a row while it is scrolling, which is the lesser
 `Toolbar` is the view-header primitive:
 
 ```ts
-interface ToolbarProps extends Omit<React.HTMLAttributes<HTMLElement>, 'children'> {
+interface ToolbarProps extends Omit<React.HTMLAttributes<HTMLElement>, "children"> {
   readonly leading?: React.ReactNode; // the view's own controls — tabs, lens switcher, title
   readonly trailing?: React.ReactNode; // controls that act on the view — filter, display, create
   readonly controlSize?: ControlSize;

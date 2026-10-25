@@ -71,40 +71,40 @@
 Append inside `describe('PageContextProvider', …)`:
 
 ```tsx
-it('keeps a drawer active while the page under it changes its label', () => {
+it("keeps a drawer active while the page under it changes its label", () => {
   const view = render(
-    <PageContextProvider workspace={{ workspaceId: 'ws_1' }}>
+    <PageContextProvider workspace={{ workspaceId: "ws_1" }}>
       <PageSource type="task" id="task_1" />
       <PageSource type="calendar_item" id="cal_1" label="Venue walkthrough" />
       <Readout />
     </PageContextProvider>,
   );
   expect(readContext()).toEqual({
-    workspaceId: 'ws_1',
-    source: { type: 'calendar_item', id: 'cal_1', label: 'Venue walkthrough' },
+    workspaceId: "ws_1",
+    source: { type: "calendar_item", id: "cal_1", label: "Venue walkthrough" },
   });
 
   view.rerender(
-    <PageContextProvider workspace={{ workspaceId: 'ws_1' }}>
+    <PageContextProvider workspace={{ workspaceId: "ws_1" }}>
       <PageSource type="task" id="task_1" label="Confirm venue contract" />
       <PageSource type="calendar_item" id="cal_1" label="Venue walkthrough" />
       <Readout />
     </PageContextProvider>,
   );
   expect(readContext()).toEqual({
-    workspaceId: 'ws_1',
-    source: { type: 'calendar_item', id: 'cal_1', label: 'Venue walkthrough' },
+    workspaceId: "ws_1",
+    source: { type: "calendar_item", id: "cal_1", label: "Venue walkthrough" },
   });
 
   view.rerender(
-    <PageContextProvider workspace={{ workspaceId: 'ws_1' }}>
+    <PageContextProvider workspace={{ workspaceId: "ws_1" }}>
       <PageSource type="task" id="task_1" label="Confirm venue contract" />
       <Readout />
     </PageContextProvider>,
   );
   expect(readContext()).toEqual({
-    workspaceId: 'ws_1',
-    source: { type: 'task', id: 'task_1', label: 'Confirm venue contract' },
+    workspaceId: "ws_1",
+    source: { type: "task", id: "task_1", label: "Confirm venue contract" },
   });
 });
 ```
@@ -148,33 +148,33 @@ Co-authored-by: Claude Fable 5.1 <noreply@anthropic.com>
 
 ```ts
 // apps/web/tests/athena/suggestions.test.ts
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from "vitest";
 
-import { athenaSuggestions } from '../../src/lib/athena/suggestions';
+import { athenaSuggestions } from "../../src/lib/athena/suggestions";
 
-describe('athenaSuggestions', () => {
-  it('offers three prompts for a project', () => {
+describe("athenaSuggestions", () => {
+  it("offers three prompts for a project", () => {
     const prompts = athenaSuggestions({
-      workspaceId: 'ws_1',
-      source: { type: 'project', id: 'p1', label: 'Fall fundraiser launch' },
+      workspaceId: "ws_1",
+      source: { type: "project", id: "p1", label: "Fall fundraiser launch" },
     });
     expect(prompts).toHaveLength(3);
     expect(new Set(prompts).size).toBe(3);
   });
 
-  it('offers different prompts for a task than for a project', () => {
+  it("offers different prompts for a task than for a project", () => {
     const project = athenaSuggestions({
-      workspaceId: 'ws_1',
-      source: { type: 'project', id: 'p1' },
+      workspaceId: "ws_1",
+      source: { type: "project", id: "p1" },
     });
-    const task = athenaSuggestions({ workspaceId: 'ws_1', source: { type: 'task', id: 't1' } });
+    const task = athenaSuggestions({ workspaceId: "ws_1", source: { type: "task", id: "t1" } });
     expect(task).not.toEqual(project);
     expect(task).toHaveLength(3);
   });
 
-  it('offers day-level prompts without a page', () => {
+  it("offers day-level prompts without a page", () => {
     expect(athenaSuggestions(null)).toHaveLength(3);
-    expect(athenaSuggestions({ workspaceId: 'ws_1' })).toEqual(athenaSuggestions(null));
+    expect(athenaSuggestions({ workspaceId: "ws_1" })).toEqual(athenaSuggestions(null));
   });
 });
 ```
@@ -193,39 +193,39 @@ Run: `pnpm --filter @docket/web exec vitest run tests/athena/suggestions.test.ts
  * Three prompts, always. A prompt is a complete request the person could have typed, so choosing
  * one fills the composer rather than sending on its own.
  */
-import type { PersonalAthenaContext, PersonalAthenaSource } from './presentation';
+import type { PersonalAthenaContext, PersonalAthenaSource } from "./presentation";
 
-type SourceKind = PersonalAthenaSource['type'];
+type SourceKind = PersonalAthenaSource["type"];
 
 const BY_KIND: Readonly<Record<SourceKind, readonly [string, string, string]>> = {
   project: [
-    'What is at risk in this project?',
-    'Summarize what changed this week',
-    'Draft an update for the team',
+    "What is at risk in this project?",
+    "Summarize what changed this week",
+    "Draft an update for the team",
   ],
   initiative: [
-    'Which projects here are behind?',
-    'Summarize progress against the target',
-    'Draft a status update for leadership',
+    "Which projects here are behind?",
+    "Summarize progress against the target",
+    "Draft a status update for leadership",
   ],
   program: [
-    'What needs attention across this program?',
-    'Summarize what changed this week',
-    'Draft an update for the team',
+    "What needs attention across this program?",
+    "Summarize what changed this week",
+    "Draft an update for the team",
   ],
-  task: ['Break this into steps', 'Find related work', 'What is blocking this?'],
+  task: ["Break this into steps", "Find related work", "What is blocking this?"],
   calendar_item: [
-    'Prepare me for this',
-    'Find the work connected to this',
-    'Draft a follow-up after this',
+    "Prepare me for this",
+    "Find the work connected to this",
+    "Draft a follow-up after this",
   ],
-  stream_event: ['Turn this into a task', 'Find the work this relates to', 'Draft a reply'],
+  stream_event: ["Turn this into a task", "Find the work this relates to", "Draft a reply"],
 };
 
 const DAY: readonly [string, string, string] = [
-  'Plan my afternoon',
-  'What needs me today?',
-  'What did I finish this week?',
+  "Plan my afternoon",
+  "What needs me today?",
+  "What did I finish this week?",
 ];
 
 /**
@@ -272,65 +272,65 @@ Co-authored-by: Claude Fable 5.1 <noreply@anthropic.com>
 
 ```tsx
 // apps/web/tests/athena/chat-defs.test.tsx
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from "vitest";
 
-import { okResponse } from '../support/query';
+import { okResponse } from "../support/query";
 
 const { orgChatGet, personalPost } = vi.hoisted(() => ({
   orgChatGet: vi.fn(),
   personalPost: vi.fn(),
 }));
 
-vi.mock('../../src/lib/api', () => ({
+vi.mock("../../src/lib/api", () => ({
   api: {
     v1: {
-      orgs: { ':orgId': { sessions: { chat: { $get: orgChatGet } } } },
+      orgs: { ":orgId": { sessions: { chat: { $get: orgChatGet } } } },
       me: { athena: { chat: { messages: { $post: personalPost } } } },
     },
   },
 }));
 
-import { sendOrgChatMessage } from '../../src/lib/athena/chat-defs';
+import { sendOrgChatMessage } from "../../src/lib/athena/chat-defs";
 
 const thread = {
-  id: 'chat_1',
-  kind: 'chat',
-  status: 'running',
-  objective: 'Chat',
-  startedAt: '2026-09-18T10:00:00.000Z',
+  id: "chat_1",
+  kind: "chat",
+  status: "running",
+  objective: "Chat",
+  startedAt: "2026-09-18T10:00:00.000Z",
   endedAt: null,
-  createdAt: '2026-09-18T10:00:00.000Z',
+  createdAt: "2026-09-18T10:00:00.000Z",
   activities: [],
   result: null,
 };
 
-describe('sendOrgChatMessage', () => {
-  it('posts through the personal door with a wire-shaped context, then re-reads the thread', async () => {
+describe("sendOrgChatMessage", () => {
+  it("posts through the personal door with a wire-shaped context, then re-reads the thread", async () => {
     personalPost.mockResolvedValue(okResponse(thread));
     orgChatGet.mockResolvedValue(okResponse(thread));
-    const result = await sendOrgChatMessage('01HZZZZZZZZZZZZZZZZZZZZZZZ', 'What is at risk here?', {
-      workspaceId: '01HZZZZZZZZZZZZZZZZZZZZZZZ',
-      workspaceName: 'Harbor Health',
-      source: { type: 'project', id: 'project_1', label: 'Fall fundraiser launch' },
+    const result = await sendOrgChatMessage("01HZZZZZZZZZZZZZZZZZZZZZZZ", "What is at risk here?", {
+      workspaceId: "01HZZZZZZZZZZZZZZZZZZZZZZZ",
+      workspaceName: "Harbor Health",
+      source: { type: "project", id: "project_1", label: "Fall fundraiser launch" },
     });
     expect(personalPost).toHaveBeenCalledWith({
       json: {
-        body: 'What is at risk here?',
+        body: "What is at risk here?",
         context: {
-          workspaceId: '01HZZZZZZZZZZZZZZZZZZZZZZZ',
-          source: { type: 'project', id: 'project_1' },
+          workspaceId: "01HZZZZZZZZZZZZZZZZZZZZZZZ",
+          source: { type: "project", id: "project_1" },
         },
       },
     });
-    expect(orgChatGet).toHaveBeenCalledWith({ param: { orgId: '01HZZZZZZZZZZZZZZZZZZZZZZZ' } });
-    expect(result.id).toBe('chat_1');
+    expect(orgChatGet).toHaveBeenCalledWith({ param: { orgId: "01HZZZZZZZZZZZZZZZZZZZZZZZ" } });
+    expect(result.id).toBe("chat_1");
   });
 
-  it('omits context when the message has none', async () => {
+  it("omits context when the message has none", async () => {
     personalPost.mockResolvedValue(okResponse(thread));
     orgChatGet.mockResolvedValue(okResponse(thread));
-    await sendOrgChatMessage('01HZZZZZZZZZZZZZZZZZZZZZZZ', 'Plan my afternoon');
-    expect(personalPost).toHaveBeenCalledWith({ json: { body: 'Plan my afternoon' } });
+    await sendOrgChatMessage("01HZZZZZZZZZZZZZZZZZZZZZZZ", "Plan my afternoon");
+    expect(personalPost).toHaveBeenCalledWith({ json: { body: "Plan my afternoon" } });
   });
 });
 ```
@@ -365,7 +365,7 @@ export async function sendOrgChatMessage(
   const response = await api.v1.me.athena.chat.messages.$post({
     json: { body, ...(invocation ? { context: invocation } : {}) },
   });
-  if (!response.ok) throw await readProblemError(response, 'Athena could not answer right now.');
+  if (!response.ok) throw await readProblemError(response, "Athena could not answer right now.");
   return await fetchOrgChatThread(orgId);
 }
 ```
@@ -407,46 +407,46 @@ Co-authored-by: Claude Fable 5.1 <noreply@anthropic.com>
 Add to `athena-conversation.test.tsx` (extend the existing `api` mock with `me: { athena: { chat: { messages: { $post: personalPost } } } }` and route the existing send assertions to it):
 
 ```tsx
-it('shows the attached page above the composer and sends it with the message', async () => {
+it("shows the attached page above the composer and sends it with the message", async () => {
   chatGet.mockResolvedValue(okResponse(thread([])));
   personalPost.mockResolvedValue(okResponse(thread([])));
   renderConversation({
     context: {
       workspaceId: ORG_ID,
-      source: { type: 'project', id: 'project_1', label: 'Fall fundraiser launch' },
+      source: { type: "project", id: "project_1", label: "Fall fundraiser launch" },
     },
   });
-  const form = await screen.findByRole('form', { name: /Message Athena/ });
-  expect(within(form).getByRole('group', { name: /Fall fundraiser launch/ })).toBeVisible();
+  const form = await screen.findByRole("form", { name: /Message Athena/ });
+  expect(within(form).getByRole("group", { name: /Fall fundraiser launch/ })).toBeVisible();
 
-  fireEvent.change(screen.getByLabelText('Message Athena'), {
-    target: { value: 'What is at risk?' },
+  fireEvent.change(screen.getByLabelText("Message Athena"), {
+    target: { value: "What is at risk?" },
   });
-  fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+  fireEvent.click(screen.getByRole("button", { name: "Send" }));
 
   await waitFor(() => {
     expect(personalPost).toHaveBeenCalledWith({
       json: {
-        body: 'What is at risk?',
-        context: { workspaceId: ORG_ID, source: { type: 'project', id: 'project_1' } },
+        body: "What is at risk?",
+        context: { workspaceId: ORG_ID, source: { type: "project", id: "project_1" } },
       },
     });
   });
 });
 
-it('fills the composer from a suggestion without sending', async () => {
+it("fills the composer from a suggestion without sending", async () => {
   chatGet.mockResolvedValue(okResponse(thread([])));
   renderConversation({
     context: {
       workspaceId: ORG_ID,
-      source: { type: 'task', id: 'task_1', label: 'Confirm venue' },
+      source: { type: "task", id: "task_1", label: "Confirm venue" },
     },
   });
-  const list = await screen.findByRole('list', { name: /Suggestions/ });
-  const first = within(list).getAllByRole('button')[0];
+  const list = await screen.findByRole("list", { name: /Suggestions/ });
+  const first = within(list).getAllByRole("button")[0];
   expect(first).toBeDefined();
   fireEvent.click(first as HTMLElement);
-  expect(screen.getByLabelText('Message Athena')).toHaveValue(first?.textContent);
+  expect(screen.getByLabelText("Message Athena")).toHaveValue(first?.textContent);
   expect(personalPost).not.toHaveBeenCalled();
 });
 ```
@@ -462,9 +462,9 @@ In `athena-conversation.tsx`:
 Add imports:
 
 ```ts
-import { AthenaContextChip } from '@/components/athena/athena-context-chip';
-import { athenaSuggestions } from '@/lib/athena/suggestions';
-import type { PersonalAthenaContext } from '@/lib/athena/presentation';
+import { AthenaContextChip } from "@/components/athena/athena-context-chip";
+import { athenaSuggestions } from "@/lib/athena/suggestions";
+import type { PersonalAthenaContext } from "@/lib/athena/presentation";
 ```
 
 Extend `AthenaConversationProps`:
@@ -580,13 +580,13 @@ Co-authored-by: Claude Fable 5.1 <noreply@anthropic.com>
 `apps/web/tests/athena/rail-conversation.test.tsx`:
 
 ```tsx
-import '@testing-library/jest-dom/vitest';
+import "@testing-library/jest-dom/vitest";
 
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, render, screen, within } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { cleanup, render, screen, within } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { okResponse } from '../support/query';
+import { okResponse } from "../support/query";
 
 const { chatGet, personalPost, pulseGet } = vi.hoisted(() => ({
   chatGet: vi.fn(),
@@ -594,30 +594,30 @@ const { chatGet, personalPost, pulseGet } = vi.hoisted(() => ({
   pulseGet: vi.fn(),
 }));
 
-vi.mock('../../src/lib/api', () => ({
+vi.mock("../../src/lib/api", () => ({
   api: {
     v1: {
-      orgs: { ':orgId': { sessions: { chat: { $get: chatGet } } } },
+      orgs: { ":orgId": { sessions: { chat: { $get: chatGet } } } },
       me: { athena: { chat: { messages: { $post: personalPost } }, pulse: { $get: pulseGet } } },
     },
   },
 }));
 
-import { AthenaRailConversation } from '../../src/components/athena/athena-rail-conversation';
-import { AthenaPanelProvider } from '../../src/components/athena/athena-panel-provider';
-import { PageContextProvider, PageSource } from '../../src/components/athena/page-context';
+import { AthenaRailConversation } from "../../src/components/athena/athena-rail-conversation";
+import { AthenaPanelProvider } from "../../src/components/athena/athena-panel-provider";
+import { PageContextProvider, PageSource } from "../../src/components/athena/page-context";
 
-const ORG_ID = '01HZZZZZZZZZZZZZZZZZZZZZZZ';
+const ORG_ID = "01HZZZZZZZZZZZZZZZZZZZZZZZ";
 
 function thread() {
   return {
-    id: 'chat_1',
-    kind: 'chat',
-    status: 'completed',
-    objective: 'Chat',
-    startedAt: '2026-09-18T10:00:00.000Z',
+    id: "chat_1",
+    kind: "chat",
+    status: "completed",
+    objective: "Chat",
+    startedAt: "2026-09-18T10:00:00.000Z",
     endedAt: null,
-    createdAt: '2026-09-18T10:00:00.000Z',
+    createdAt: "2026-09-18T10:00:00.000Z",
     activities: [],
     result: null,
   };
@@ -625,14 +625,14 @@ function thread() {
 
 afterEach(cleanup);
 
-describe('AthenaRailConversation', () => {
-  it('names itself, links to the wide view for the workspace, and shows the page chip', async () => {
+describe("AthenaRailConversation", () => {
+  it("names itself, links to the wide view for the workspace, and shows the page chip", async () => {
     chatGet.mockResolvedValue(okResponse(thread()));
     pulseGet.mockResolvedValue(okResponse({ needsYou: 0, working: 0 }));
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     render(
       <QueryClientProvider client={client}>
-        <PageContextProvider workspace={{ workspaceId: ORG_ID, workspaceName: 'Harbor Health' }}>
+        <PageContextProvider workspace={{ workspaceId: ORG_ID, workspaceName: "Harbor Health" }}>
           <PageSource type="project" id="project_1" label="Fall fundraiser launch" />
           <AthenaPanelProvider railVisible onRevealRail={vi.fn()}>
             <AthenaRailConversation orgId={ORG_ID} />
@@ -640,10 +640,10 @@ describe('AthenaRailConversation', () => {
         </PageContextProvider>
       </QueryClientProvider>,
     );
-    const link = screen.getByRole('link', { name: /Open the Athena page/ });
-    expect(link).toHaveAttribute('href', `/athena?workspace=${ORG_ID}`);
-    const form = await screen.findByRole('form', { name: /Message Athena/ });
-    expect(within(form).getByRole('group', { name: /Fall fundraiser launch/ })).toBeVisible();
+    const link = screen.getByRole("link", { name: /Open the Athena page/ });
+    expect(link).toHaveAttribute("href", `/athena?workspace=${ORG_ID}`);
+    const form = await screen.findByRole("form", { name: /Message Athena/ });
+    expect(within(form).getByRole("group", { name: /Fall fundraiser launch/ })).toBeVisible();
   });
 });
 ```
@@ -651,36 +651,36 @@ describe('AthenaRailConversation', () => {
 In `panel-provider.test.tsx`: delete the tests named `does not fetch the full queue…`, `replaces the queue with one selected session…`, `keeps the selected session when the shell rerenders…`, `keeps the selected session when the page underneath changes`, `starts new work with the open page as its context`, `opens a contextual composer in the rail…`, `uses owned copy when Athena's queue cannot load`, `keeps a Back path…`, `starts work without the page once the chip is detached`. Replace them with:
 
 ```tsx
-it('shows the conversation in the rail by default', async () => {
+it("shows the conversation in the rail by default", async () => {
   renderPanel();
-  expect(await screen.findByRole('form', { name: /Message Athena/ })).toBeVisible();
-  expect(screen.queryByRole('navigation', { name: /Athena work/ })).toBeNull();
+  expect(await screen.findByRole("form", { name: /Message Athena/ })).toBeVisible();
+  expect(screen.queryByRole("navigation", { name: /Athena work/ })).toBeNull();
 });
 
-it('seeds the composer from an open with an opening line', async () => {
+it("seeds the composer from an open with an opening line", async () => {
   renderPanel();
-  fireEvent.click(screen.getByRole('button', { name: 'Open contextual Athena' }));
+  fireEvent.click(screen.getByRole("button", { name: "Open contextual Athena" }));
   await waitFor(() => {
-    expect(screen.getByLabelText('Message Athena')).toHaveValue('');
+    expect(screen.getByLabelText("Message Athena")).toHaveValue("");
   });
-  fireEvent.click(screen.getByRole('button', { name: 'Open with a line' }));
+  fireEvent.click(screen.getByRole("button", { name: "Open with a line" }));
   await waitFor(() => {
-    expect(screen.getByLabelText('Message Athena')).toHaveValue('Help me with this');
+    expect(screen.getByLabelText("Message Athena")).toHaveValue("Help me with this");
   });
 });
 
-it('keeps the composer draft when the page underneath changes', async () => {
+it("keeps the composer draft when the page underneath changes", async () => {
   const view = renderPanelWithPage(
     <PageSource type="task" id="task_1" label="Confirm venue contract" />,
   );
-  fireEvent.change(await screen.findByLabelText('Message Athena'), {
-    target: { value: 'Half a thought' },
+  fireEvent.change(await screen.findByLabelText("Message Athena"), {
+    target: { value: "Half a thought" },
   });
   view.rerender(
     pageTree(<PageSource type="project" id="project_1" label="Fall fundraiser launch" />),
   );
-  expect(screen.getByLabelText('Message Athena')).toHaveValue('Half a thought');
-  expect(screen.getByRole('group', { name: /Fall fundraiser launch/ })).toBeVisible();
+  expect(screen.getByLabelText("Message Athena")).toHaveValue("Half a thought");
+  expect(screen.getByRole("group", { name: /Fall fundraiser launch/ })).toBeVisible();
 });
 ```
 
@@ -691,7 +691,7 @@ Update `transport()` to only need `pulse` (the provider no longer calls `queue`/
 - [ ] **Step 3: Create `athena-rail-conversation.tsx`**
 
 ```tsx
-'use client';
+"use client";
 
 /**
  * The rail's Athena panel: the one conversation, beside whatever the person is looking at.
@@ -700,17 +700,17 @@ Update `transport()` to only need `pulse` (the provider no longer calls `queue`/
  * with the page chip above its composer. An "open Athena" that carries an opening line lands it in
  * the composer; a route with its own subject (a plan) passes a shorter empty state.
  */
-import { OpenInNew, Sparkles } from '@docket/ui/icons';
-import { Button } from '@docket/ui/primitives';
-import { type JSX, useEffect, useState } from 'react';
+import { OpenInNew, Sparkles } from "@docket/ui/icons";
+import { Button } from "@docket/ui/primitives";
+import { type JSX, useEffect, useState } from "react";
 
 import AthenaConversation, {
   type ConversationEmptyState,
-} from '@/components/athena/athena-conversation';
-import { useAthenaPanel } from '@/components/athena/athena-panel-provider';
-import { VoiceLaunch } from '@/components/athena/voice-launch';
-import Link from '@/components/docket-link';
-import { athenaHref } from '@/lib/athena/query-defs';
+} from "@/components/athena/athena-conversation";
+import { useAthenaPanel } from "@/components/athena/athena-panel-provider";
+import { VoiceLaunch } from "@/components/athena/voice-launch";
+import Link from "@/components/docket-link";
+import { athenaHref } from "@/lib/athena/query-defs";
 
 /** A draft handed to the composer; each new version replaces the text and focuses the field. */
 interface DraftRequest {
@@ -722,7 +722,7 @@ interface DraftRequest {
 function useLaunchDraftRequest(launchDraft: string | null): DraftRequest | null {
   const [request, setRequest] = useState<DraftRequest | null>(null);
   useEffect(() => {
-    if (launchDraft === null || launchDraft === '') return;
+    if (launchDraft === null || launchDraft === "") return;
     setRequest((current) => ({ text: launchDraft, version: (current?.version ?? 0) + 1 }));
   }, [launchDraft]);
   return request;
@@ -864,10 +864,10 @@ Co-authored-by: Claude Fable 5.1 <noreply@anthropic.com>
 Find how the existing test renders the shell with a resolved session (the `describe('AppShellFrame session loading')` block's helpers) and add:
 
 ```tsx
-it('puts Athena first in the rail', async () => {
+it("puts Athena first in the rail", async () => {
   renderResolvedShell();
-  const bar = await screen.findByRole('toolbar', { name: /panels/i });
-  const buttons = within(bar).getAllByRole('button');
+  const bar = await screen.findByRole("toolbar", { name: /panels/i });
+  const buttons = within(bar).getAllByRole("button");
   expect(buttons[0]).toHaveAccessibleName(/Athena/);
 });
 ```
@@ -879,7 +879,7 @@ If the activity bar is not a `toolbar`, read `packages/ui/src/components/shell/S
 ```ts
 return {
   panels: [athena, agenda, focus],
-  defaultPanelId: athena.status?.tone === 'attention' ? 'athena' : 'agenda',
+  defaultPanelId: athena.status?.tone === "attention" ? "athena" : "agenda",
 };
 ```
 
@@ -910,10 +910,10 @@ Co-authored-by: Claude Fable 5.1 <noreply@anthropic.com>
 Replace the desktop-rail assertions (the queue button, Back, the heading) with:
 
 ```ts
-const desktopRail = page.getByRole('complementary', { name: 'Athena' });
+const desktopRail = page.getByRole("complementary", { name: "Athena" });
 await expect(desktopRail).toBeVisible();
-await expect(desktopRail.getByRole('form', { name: /Message Athena/ })).toBeVisible();
-await expect(desktopRail.getByRole('link', { name: /Open the Athena page/ })).toBeVisible();
+await expect(desktopRail.getByRole("form", { name: /Message Athena/ })).toBeVisible();
+await expect(desktopRail.getByRole("link", { name: /Open the Athena page/ })).toBeVisible();
 ```
 
 Add to the route fixture a handler for `GET /v1/orgs/<orgId>/sessions/chat` returning an empty completed thread (same shape as the unit tests' `thread()`), and for `POST /v1/me/athena/chat/messages` returning it too. Keep the mobile and Calendar halves.

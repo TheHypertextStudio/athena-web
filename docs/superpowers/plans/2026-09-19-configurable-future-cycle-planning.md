@@ -27,7 +27,7 @@ Add assertions that `TeamDetail` returns `cycleCadenceDays: 7`, `cycleCadenceAnc
 
 ```ts
 expect(
-  TeamUpdate.safeParse({ cycleCadenceDays: 1, cycleCadenceAnchor: '2026-09-21' }).success,
+  TeamUpdate.safeParse({ cycleCadenceDays: 1, cycleCadenceAnchor: "2026-09-21" }).success,
 ).toBe(true);
 expect(TeamUpdate.safeParse({ cycleCadenceDays: 0 }).success).toBe(false);
 expect(TeamUpdate.safeParse({ cycleCadenceDays: 366 }).success).toBe(false);
@@ -71,12 +71,12 @@ Commit as `feat(cycles): Store team cadence in calendar days` with a body explai
 Cover 1, 7, 10, and 365 days, leap day, a DST transition, a target years ahead, stable starts, and a 400-window request cap.
 
 ```ts
-const slots = cycleWindowsThrough({ anchor: '2026-03-07', cadenceDays: 1 }, '2026-03-10');
+const slots = cycleWindowsThrough({ anchor: "2026-03-07", cadenceDays: 1 }, "2026-03-10");
 expect(slots.map((slot) => slot.startDate)).toEqual([
-  '2026-03-07',
-  '2026-03-08',
-  '2026-03-09',
-  '2026-03-10',
+  "2026-03-07",
+  "2026-03-08",
+  "2026-03-09",
+  "2026-03-10",
 ]);
 ```
 
@@ -116,9 +116,9 @@ Add `POST /v1/orgs/:orgId/cycles/ensure` cases for a quarter-ahead daily team, r
 
 ```ts
 const response = await app.request(`/v1/orgs/${orgId}/cycles/ensure`, {
-  method: 'POST',
+  method: "POST",
   headers,
-  body: JSON.stringify({ teamId, throughDate: '2026-12-31' }),
+  body: JSON.stringify({ teamId, throughDate: "2026-12-31" }),
 });
 expect(response.status).toBe(200);
 ```

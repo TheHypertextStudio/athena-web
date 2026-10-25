@@ -41,14 +41,14 @@ request, rerender, and assert both that private content appears and that the cur
 the exact recorded node:
 
 ```typescript
-const loadingMain = screen.getByRole('main');
+const loadingMain = screen.getByRole("main");
 sessionState.data = session;
 sessionState.isPending = false;
 rerenderFrame();
 resolveOrganizations(successfulOrganizationsResponse);
 
-await screen.findByText('Private route content');
-expect(screen.getByRole('main')).toBe(loadingMain);
+await screen.findByText("Private route content");
+expect(screen.getByRole("main")).toBe(loadingMain);
 ```
 
 - [ ] **Step 3: Run the test and verify the current duplicate shell fails**

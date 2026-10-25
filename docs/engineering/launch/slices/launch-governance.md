@@ -30,7 +30,7 @@ filesChanged:
 verifier: launch-record-reconciler
 verifierArtifacts:
   - docs/engineering/launch/evidence/verification/2026-08-02-launch-record-reconciliation.txt
-verification: 'pnpm exec vitest run tests/launch — Test Files 1 passed / Tests 21 passed; pnpm test:tooling — Test Files 7 passed / Tests 91 passed; tsx scripts/launch-record.ts — 399 rows written, requirements=399 closed=8 open=391 slices=2, byte-identical on re-run; tsx scripts/launch-record.ts --sign-off — exit 1, 391 open (unclaimed 382, partial 6, fail 3), every id named; eslint on all 3 sources — clean; prettier --check on all 13 authored files — All matched files use Prettier code style; tsc --noEmit against the root tsconfig — clean; git rev-list --merges --count origin/main..HEAD — 0. Repo-wide pnpm lint: @docket/runner fixed here (.wrangler scratch), @docket/db still red on another lane in-flight test file (packages/** off-limits to this slice).'
+verification: "pnpm exec vitest run tests/launch — Test Files 1 passed / Tests 21 passed; pnpm test:tooling — Test Files 7 passed / Tests 91 passed; tsx scripts/launch-record.ts — 399 rows written, requirements=399 closed=8 open=391 slices=2, byte-identical on re-run; tsx scripts/launch-record.ts --sign-off — exit 1, 391 open (unclaimed 382, partial 6, fail 3), every id named; eslint on all 3 sources — clean; prettier --check on all 13 authored files — All matched files use Prettier code style; tsc --noEmit against the root tsconfig — clean; git rev-list --merges --count origin/main..HEAD — 0. Repo-wide pnpm lint: @docket/runner fixed here (.wrangler scratch), @docket/db still red on another lane in-flight test file (packages/** off-limits to this slice)."
 ---
 
 # Slice: launch-governance

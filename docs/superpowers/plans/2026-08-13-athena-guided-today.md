@@ -80,10 +80,10 @@ TanStack Query, Vitest, Testing Library, Playwright, Tailwind CSS, Docket UI pri
   Cover these exact cases in table-driven Vitest tests:
 
   ```ts
-  expect(derivePlanState({ readiness: 'not_generated', items: [] })).toBe('unplanned');
-  expect(derivePlanState({ readiness: 'empty_week', items: [] })).toBe('cleared');
-  expect(derivePlanState({ readiness: 'ready', items: [planned] })).toBe('active');
-  expect(derivePlanState({ readiness: 'ready', items: [done] })).toBe('cleared');
+  expect(derivePlanState({ readiness: "not_generated", items: [] })).toBe("unplanned");
+  expect(derivePlanState({ readiness: "empty_week", items: [] })).toBe("cleared");
+  expect(derivePlanState({ readiness: "ready", items: [planned] })).toBe("active");
+  expect(derivePlanState({ readiness: "ready", items: [done] })).toBe("cleared");
   expect(selectFocus({ items: [blocked, current, following], now })).toEqual({
     now: current,
     after: following,
@@ -111,10 +111,10 @@ TanStack Query, Vitest, Testing Library, Playwright, Tailwind CSS, Docket UI pri
   Define discriminated schemas with these stable shapes:
 
   ```ts
-  HubTodayPlanState = z.enum(['unplanned', 'active', 'cleared']);
+  HubTodayPlanState = z.enum(["unplanned", "active", "cleared"]);
   HubTodayPlanItem = HubTaskItem.extend({
     planItemId: DailyPlanItemId,
-    planStatus: z.enum(['planned', 'done']),
+    planStatus: z.enum(["planned", "done"]),
     position: z.number().int(),
     estimateMinutes: z.number().int().positive().nullable(),
     timeboxStartsAt: z.string().nullable(),
@@ -126,7 +126,7 @@ TanStack Query, Vitest, Testing Library, Playwright, Tailwind CSS, Docket UI pri
     now: HubTodayPlanItem.nullable(),
     after: HubTodayPlanItem.nullable(),
   });
-  HubTodayStatusCard = z.discriminatedUnion('kind', [
+  HubTodayStatusCard = z.discriminatedUnion("kind", [
     HubTodayProjectStatus,
     HubTodayInitiativeStatus,
   ]);

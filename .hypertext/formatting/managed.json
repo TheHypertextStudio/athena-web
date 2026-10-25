@@ -12,7 +12,7 @@
     ".hypertext/formatting/install.py": "a67c1660c371f22a5befa5cf61c4b34f1cd37c477d6a9225ea3a34a272095df2",
     ".hypertext/formatter-tools/setup.py": "2b681e562bd663ca1ce8a18e30efc5f669d07dfdae620e3aed6bd12b562722a3",
     ".hypertext/formatter-tools/run.py": "d6fbab2bab923d03d8fa904d9e35d54436e0ee36ba471708931cd6d409fe421e",
-    ".hypertext/formatter-tools/prettier.mjs": "56ea416b45c56a09331009a3e1eecd261100d0262d3a8ae9ca134b502ddbe278",
+    ".hypertext/formatter-tools/prettier.mjs": "c849fa445d2ba4f73f67181ca738d4b42c5d8c6bf504be396740e11091548b24",
     ".hypertext/formatter-tools/preset.mjs": "0eba1bb6edbfbeb4101afb2e65c1b4120ebd94403808864de534dc60b25e06c0",
     ".hypertext/formatter-tools/text.py": "0c0e7f27d6ec0b9e02ec330a7faa60f535f60fafb8a4eb5bf023af68acc6a149"
   }

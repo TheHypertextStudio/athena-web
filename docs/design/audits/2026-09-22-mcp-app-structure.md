@@ -1,5 +1,5 @@
 ---
-surfaces: ['mcp-app-entity', 'mcp-app-change-report', 'mcp-app-work-list', 'mcp-app-plan']
+surfaces: ["mcp-app-entity", "mcp-app-change-report", "mcp-app-work-list", "mcp-app-plan"]
 date: 2026-09-22
 verdict: ship
 scores:

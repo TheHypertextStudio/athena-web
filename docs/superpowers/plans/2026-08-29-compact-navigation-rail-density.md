@@ -20,8 +20,8 @@
 - [x] **Step 1: Change the component geometry assertion before production code**
 
 ```tsx
-expect(destinations).toHaveClass('gap-1');
-expect(today).toHaveClass('min-h-14');
+expect(destinations).toHaveClass("gap-1");
+expect(today).toHaveClass("min-h-14");
 ```
 
 - [x] **Step 2: Change the browser geometry assertion before production code**
@@ -59,7 +59,7 @@ Expected: FAIL because the component still contains `min-h-16` and the destinati
 
 ```tsx
 const className = cn(
-  'group text-label-medium flex min-h-14 w-full flex-col items-center justify-center gap-1 rounded-none px-1 text-center hover:bg-transparent focus-visible:ring-0 focus-visible:outline-none',
+  "group text-label-medium flex min-h-14 w-full flex-col items-center justify-center gap-1 rounded-none px-1 text-center hover:bg-transparent focus-visible:ring-0 focus-visible:outline-none",
 );
 ```
 
@@ -165,7 +165,7 @@ Stage only the component, tests, audit, screenshots, and worklog. Use the declar
 - [x] **Step 1: Change the component and browser assertions before production code**
 
 ```tsx
-expect(destinations).toHaveClass('gap-1');
+expect(destinations).toHaveClass("gap-1");
 expect(secondDestination.y - (firstDestination.y + firstDestination.height)).toBe(4);
 ```
 

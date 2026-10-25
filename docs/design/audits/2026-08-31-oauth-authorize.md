@@ -1,5 +1,5 @@
 ---
-surfaces: ['oauth-authorize']
+surfaces: ["oauth-authorize"]
 date: 2026-08-31
 verdict: ship
 scores:

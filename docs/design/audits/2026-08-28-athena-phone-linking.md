@@ -1,5 +1,5 @@
 ---
-surfaces: ['settings-athena']
+surfaces: ["settings-athena"]
 date: 2026-08-28
 verdict: needs-work
 scores:

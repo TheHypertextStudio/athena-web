@@ -1,5 +1,5 @@
 ---
-surfaces: ['search']
+surfaces: ["search"]
 date: 2026-08-02
 verdict: needs-work
 scores:

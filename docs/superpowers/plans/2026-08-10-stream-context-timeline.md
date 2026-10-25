@@ -100,9 +100,9 @@ Prove a member sees an event without an `eventRecipient` row, relevance is null,
 an inaccessible workspace cannot leak, and equal-timestamp cursor ordering remains stable.
 
 ```ts
-expect(titles).toEqual(['Member event', 'Recipient event']);
+expect(titles).toEqual(["Member event", "Recipient event"]);
 expect(body.items.every((item) => item.relevance === null)).toBe(true);
-expect(body.items.some((item) => item.title === 'Foreign event')).toBe(false);
+expect(body.items.some((item) => item.title === "Foreign event")).toBe(false);
 ```
 
 Run the API Stream test. Expected: FAIL while Hub joins `event_recipient`.

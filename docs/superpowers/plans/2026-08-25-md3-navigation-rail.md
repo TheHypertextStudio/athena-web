@@ -94,19 +94,19 @@ the hierarchy, People, Views, Graph, and Settings appear once in More and never 
 
 ```tsx
 expect(rail.map((item) => item.id)).toEqual([
-  'home:today',
-  'workspace:my-work',
-  'home:calendar',
-  'home:inbox',
-  'home:search',
-  'home:athena',
+  "home:today",
+  "workspace:my-work",
+  "home:calendar",
+  "home:inbox",
+  "home:search",
+  "home:athena",
 ]);
-expect(more.workspace.map((item) => item.id)).toContain('workspace:projects');
+expect(more.workspace.map((item) => item.id)).toContain("workspace:projects");
 expect(more.manage.map((item) => item.id)).toEqual([
-  'workspace:people',
-  'workspace:views',
-  'workspace:graph',
-  'workspace:settings',
+  "workspace:people",
+  "workspace:views",
+  "workspace:graph",
+  "workspace:settings",
 ]);
 ```
 
@@ -131,8 +131,8 @@ Add route-altitude and presentation fields instead of inferring meaning from a k
 ```tsx
 export interface ResolvedNavigationDestination {
   readonly id: `home:${HomeNavKey}` | `workspace:${WorkspaceNavKey}`;
-  readonly group: 'home' | 'workspace';
-  readonly moreGroup: 'workspace' | 'manage' | null;
+  readonly group: "home" | "workspace";
+  readonly moreGroup: "workspace" | "manage" | null;
   readonly rail: boolean;
   readonly label: string;
   readonly icon: LucideIcon;
@@ -140,8 +140,8 @@ export interface ResolvedNavigationDestination {
   readonly disabled: boolean;
 }
 
-export function navigationTransitionName(id: ResolvedNavigationDestination['id']): string {
-  return `navigation-${id.replace(':', '-')}`;
+export function navigationTransitionName(id: ResolvedNavigationDestination["id"]): string {
+  return `navigation-${id.replace(":", "-")}`;
 }
 ```
 
@@ -186,13 +186,13 @@ Projects item. Open the workspace avatar menu, select another workspace, and ass
 callback receives that id.
 
 ```tsx
-expect(screen.getByRole('navigation', { name: 'Primary navigation' })).toHaveTextContent(
-  'TodayMy WorkCalendarInboxSearchAthenaMore',
+expect(screen.getByRole("navigation", { name: "Primary navigation" })).toHaveTextContent(
+  "TodayMy WorkCalendarInboxSearchAthenaMore",
 );
-await user.click(screen.getByRole('button', { name: 'More navigation' }));
-expect(screen.getByRole('group', { name: 'Workspace' })).toBeInTheDocument();
-expect(screen.getByRole('link', { name: 'Projects' })).toHaveAttribute(
-  'href',
+await user.click(screen.getByRole("button", { name: "More navigation" }));
+expect(screen.getByRole("group", { name: "Workspace" })).toBeInTheDocument();
+expect(screen.getByRole("link", { name: "Projects" })).toHaveAttribute(
+  "href",
   `/orgs/${ACME.id}/projects`,
 );
 ```
@@ -315,11 +315,11 @@ still exposes `lg:w-14`.
 Implement the shell-local helper with a synchronous update and a reduced-motion guard:
 
 ```tsx
-import { flushSync } from 'react-dom';
+import { flushSync } from "react-dom";
 
 export function startNavigationTransition(update: () => void): void {
-  const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
-  if (reduced || typeof document === 'undefined' || !('startViewTransition' in document)) {
+  const reduced = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
+  if (reduced || typeof document === "undefined" || !("startViewTransition" in document)) {
     update();
     return;
   }

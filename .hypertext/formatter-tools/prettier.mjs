@@ -332,7 +332,7 @@ if (configFile && /\.(?:mjs|cjs|js)$/.test(configFile)) {
     },
   });
   try {
-    config = (await import(configURL)).default;
+    config = await prettier.resolveConfig(filename);
   } finally {
     hooks.deregister();
   }

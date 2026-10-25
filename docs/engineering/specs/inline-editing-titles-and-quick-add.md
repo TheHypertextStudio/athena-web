@@ -47,7 +47,7 @@ export interface EditableTitleProps {
   /** Disable while a save is in flight. */
   saving?: boolean;
   /** How editing is triggered — see §4. */
-  activate?: 'click' | 'doubleClick';
+  activate?: "click" | "doubleClick";
   /** Accessible label for the edit field (e.g. "Task title"). */
   ariaLabel: string;
   /** Styling hook so a heading and a row cell can share one component at different scales. */

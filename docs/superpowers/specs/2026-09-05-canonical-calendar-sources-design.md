@@ -50,7 +50,7 @@ interface ProviderIdentity {
 
 interface ProviderLayerSnapshot {
   sourceIdentity: ProviderIdentity;
-  sourceRelationship: 'owned' | 'direct' | 'shared' | 'subscribed';
+  sourceRelationship: "owned" | "direct" | "shared" | "subscribed";
   sourceManagement: {
     canRemoveSubscription: boolean;
     requiresIncrementalConsent: boolean;

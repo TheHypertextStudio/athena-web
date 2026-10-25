@@ -1,5 +1,5 @@
 ---
-surfaces: ['orgs-[orgId]-settings-publishing']
+surfaces: ["orgs-[orgId]-settings-publishing"]
 date: 2026-08-14
 verdict: ship
 scores:

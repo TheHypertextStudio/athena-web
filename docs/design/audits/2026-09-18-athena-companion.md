@@ -1,5 +1,5 @@
 ---
-surfaces: ['today', 'orgs-[orgId]-projects-[projectId]', 'orgs-[orgId]-tasks-[taskId]', 'athena']
+surfaces: ["today", "orgs-[orgId]-projects-[projectId]", "orgs-[orgId]-tasks-[taskId]", "athena"]
 date: 2026-09-18
 verdict: below-bar
 scores:

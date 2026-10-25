@@ -1,5 +1,5 @@
 ---
-surfaces: ['orgs-[orgId]-initiatives']
+surfaces: ["orgs-[orgId]-initiatives"]
 date: 2026-09-01
 verdict: ship
 scores:

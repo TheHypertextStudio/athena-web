@@ -1,10 +1,10 @@
 ---
 surfaces:
   [
-    'orgs-[orgId]-work-templates',
-    'plan',
-    'orgs-[orgId]-plans-[planId]',
-    'orgs-[orgId]-tasks-[taskId]',
+    "orgs-[orgId]-work-templates",
+    "plan",
+    "orgs-[orgId]-plans-[planId]",
+    "orgs-[orgId]-tasks-[taskId]",
   ]
 date: 2026-10-16
 verdict: ship

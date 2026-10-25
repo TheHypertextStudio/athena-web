@@ -204,12 +204,12 @@ All errors follow a consistent format:
 All endpoints validate input using Zod schemas:
 
 ```typescript
-import { z } from 'zod';
+import { z } from "zod";
 
 export const CreateTaskSchema = z.object({
   title: z.string().min(1).max(255),
   description: z.string().max(5000).optional(),
-  priority: z.enum(['low', 'medium', 'high']).default('medium'),
+  priority: z.enum(["low", "medium", "high"]).default("medium"),
   projectId: z.string().uuid().optional(),
   deadline: z.string().datetime().optional(),
 });
@@ -289,18 +289,18 @@ X-RateLimit-Reset: 1704370000
 All endpoints are documented using `@hono/zod-openapi`:
 
 ```typescript
-import { createRoute, z } from '@hono/zod-openapi';
+import { createRoute, z } from "@hono/zod-openapi";
 
 const createTaskRoute = createRoute({
-  method: 'post',
-  path: '/api/tasks',
-  tags: ['Tasks'],
-  summary: 'Create a new task',
-  description: 'Creates a new task with the provided attributes.',
+  method: "post",
+  path: "/api/tasks",
+  tags: ["Tasks"],
+  summary: "Create a new task",
+  description: "Creates a new task with the provided attributes.",
   request: {
     body: {
       content: {
-        'application/json': {
+        "application/json": {
           schema: CreateTaskSchema,
         },
       },
@@ -308,17 +308,17 @@ const createTaskRoute = createRoute({
   },
   responses: {
     201: {
-      description: 'Task created successfully',
+      description: "Task created successfully",
       content: {
-        'application/json': {
+        "application/json": {
           schema: TaskResponseSchema,
         },
       },
     },
     400: {
-      description: 'Validation error',
+      description: "Validation error",
       content: {
-        'application/json': {
+        "application/json": {
           schema: ErrorResponseSchema,
         },
       },

@@ -59,7 +59,7 @@ interface PickerOverlayApi {
   open(request: LabelPickerRequest): void;
 }
 interface LabelPickerRequest {
-  readonly kind: 'labels';
+  readonly kind: "labels";
   readonly organizationId: string;
   readonly objects: readonly ObjectRef[]; // tasks being edited, 1 or more
   /** Known current label ids per object, when the caller already has them (avoids a fetch). */
@@ -189,7 +189,7 @@ function parsePrefix(query: string): { mode: string | null; term: string } {
   // '#bug' -> { mode: '#', term: 'bug' }; 'bug' -> { mode: null, term: 'bug' }
 }
 
-const MODES: Record<string, PaletteMode> = { '#': labelMode };
+const MODES: Record<string, PaletteMode> = { "#": labelMode };
 ```
 
 `labelMode.useItems`:

@@ -1,5 +1,5 @@
 ---
-surfaces: ['settings-athena-phone', 'athena-phone-call-summary']
+surfaces: ["settings-athena-phone", "athena-phone-call-summary"]
 date: 2026-08-30
 verdict: needs-work
 scores:

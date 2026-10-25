@@ -72,18 +72,18 @@
 
 ```tsx
 // apps/web/tests/athena/page-context.test.tsx
-import '@testing-library/jest-dom/vitest';
+import "@testing-library/jest-dom/vitest";
 
-import { cleanup, render, screen } from '@testing-library/react';
-import type { JSX } from 'react';
-import { afterEach, describe, expect, it } from 'vitest';
+import { cleanup, render, screen } from "@testing-library/react";
+import type { JSX } from "react";
+import { afterEach, describe, expect, it } from "vitest";
 
 import {
   PageContextProvider,
   PageSource,
   buildPageContext,
   usePageContext,
-} from '../../src/components/athena/page-context';
+} from "../../src/components/athena/page-context";
 
 function Readout(): JSX.Element {
   const context = usePageContext();
@@ -91,23 +91,23 @@ function Readout(): JSX.Element {
 }
 
 function readContext(): unknown {
-  return JSON.parse(screen.getByTestId('page-context').textContent ?? 'null');
+  return JSON.parse(screen.getByTestId("page-context").textContent ?? "null");
 }
 
 afterEach(cleanup);
 
-describe('buildPageContext', () => {
-  it('returns null with neither a workspace nor a source', () => {
+describe("buildPageContext", () => {
+  it("returns null with neither a workspace nor a source", () => {
     expect(buildPageContext(null, null)).toBeNull();
   });
 
-  it('omits an absent workspace name instead of writing undefined', () => {
-    expect(buildPageContext({ workspaceId: 'ws_1' }, null)).toEqual({ workspaceId: 'ws_1' });
+  it("omits an absent workspace name instead of writing undefined", () => {
+    expect(buildPageContext({ workspaceId: "ws_1" }, null)).toEqual({ workspaceId: "ws_1" });
   });
 });
 
-describe('PageContextProvider', () => {
-  it('reports null outside any workspace or page', () => {
+describe("PageContextProvider", () => {
+  it("reports null outside any workspace or page", () => {
     render(
       <PageContextProvider workspace={null}>
         <Readout />
@@ -116,36 +116,36 @@ describe('PageContextProvider', () => {
     expect(readContext()).toBeNull();
   });
 
-  it('merges the shell workspace with a published page source', () => {
+  it("merges the shell workspace with a published page source", () => {
     render(
-      <PageContextProvider workspace={{ workspaceId: 'ws_1', workspaceName: 'Harbor Health' }}>
+      <PageContextProvider workspace={{ workspaceId: "ws_1", workspaceName: "Harbor Health" }}>
         <PageSource type="project" id="project_1" label="Fall fundraiser launch" />
         <Readout />
       </PageContextProvider>,
     );
     expect(readContext()).toEqual({
-      workspaceId: 'ws_1',
-      workspaceName: 'Harbor Health',
-      source: { type: 'project', id: 'project_1', label: 'Fall fundraiser launch' },
+      workspaceId: "ws_1",
+      workspaceName: "Harbor Health",
+      source: { type: "project", id: "project_1", label: "Fall fundraiser launch" },
     });
   });
 
-  it('clears the source when the page unmounts', () => {
+  it("clears the source when the page unmounts", () => {
     const view = render(
-      <PageContextProvider workspace={{ workspaceId: 'ws_1' }}>
+      <PageContextProvider workspace={{ workspaceId: "ws_1" }}>
         <PageSource type="task" id="task_1" label="Confirm venue contract" />
         <Readout />
       </PageContextProvider>,
     );
     view.rerender(
-      <PageContextProvider workspace={{ workspaceId: 'ws_1' }}>
+      <PageContextProvider workspace={{ workspaceId: "ws_1" }}>
         <Readout />
       </PageContextProvider>,
     );
-    expect(readContext()).toEqual({ workspaceId: 'ws_1' });
+    expect(readContext()).toEqual({ workspaceId: "ws_1" });
   });
 
-  it('lets a page publish without a provider', () => {
+  it("lets a page publish without a provider", () => {
     expect(() => render(<PageSource type="task" id="task_1" />)).not.toThrow();
   });
 });
@@ -160,7 +160,7 @@ Expected: FAIL, the module `../../src/components/athena/page-context` cannot be 
 
 ```tsx
 // apps/web/src/components/athena/page-context.tsx
-'use client';
+"use client";
 
 /**
  * What page the person is on, for Athena.
@@ -177,9 +177,9 @@ import {
   useEffect,
   useMemo,
   useState,
-} from 'react';
+} from "react";
 
-import type { PersonalAthenaContext, PersonalAthenaSource } from '@/lib/athena/presentation';
+import type { PersonalAthenaContext, PersonalAthenaSource } from "@/lib/athena/presentation";
 
 /** The workspace the shell has resolved for the current route. */
 export interface PageWorkspace {
@@ -311,7 +311,7 @@ git restore --staged . && git add apps/web/src/components/athena/page-context.ts
 Add to `apps/web/tests/athena/panel-provider.test.tsx`. Extend the imports and the launcher:
 
 ```tsx
-import { PageContextProvider, PageSource } from '../../src/components/athena/page-context';
+import { PageContextProvider, PageSource } from "../../src/components/athena/page-context";
 ```
 
 Replace `AthenaLaunchers` with:
@@ -321,13 +321,13 @@ function AthenaLaunchers(): ReactNode {
   const { openAthena, railStatus } = useAthenaPanel();
   return (
     <>
-      <span data-testid="athena-rail-status">{railStatus?.tone ?? 'none'}</span>
+      <span data-testid="athena-rail-status">{railStatus?.tone ?? "none"}</span>
       <button
         type="button"
         onClick={() => {
           openAthena({
-            workspaceId: 'workspace_1',
-            source: { type: 'project', id: 'project_1', label: 'Athena launch' },
+            workspaceId: "workspace_1",
+            source: { type: "project", id: "project_1", label: "Athena launch" },
           });
         }}
       >
@@ -349,13 +349,13 @@ function AthenaLaunchers(): ReactNode {
 Append two tests inside `describe('AthenaPanelProvider', …)`:
 
 ```tsx
-it('keeps the selected session when the page underneath changes', async () => {
+it("keeps the selected session when the page underneath changes", async () => {
   const api = transport();
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const tree = (source: ReactNode): ReactNode => (
     <QueryClientProvider client={client}>
       <PageContextProvider
-        workspace={{ workspaceId: 'workspace_1', workspaceName: 'Hypertext Studio' }}
+        workspace={{ workspaceId: "workspace_1", workspaceName: "Hypertext Studio" }}
       >
         {source}
         <AthenaPanelProvider transport={api} railVisible onRevealRail={vi.fn()}>
@@ -367,24 +367,24 @@ it('keeps the selected session when the page underneath changes', async () => {
   const view = render(tree(<PageSource type="task" id="task_1" label="Confirm venue contract" />));
 
   fireEvent.click(
-    await screen.findByRole('button', { name: /Confirm the private launch review change/ }),
+    await screen.findByRole("button", { name: /Confirm the private launch review change/ }),
   );
-  expect(await screen.findByRole('button', { name: 'Back' })).toBeVisible();
+  expect(await screen.findByRole("button", { name: "Back" })).toBeVisible();
 
   view.rerender(tree(<PageSource type="project" id="project_1" label="Fall fundraiser launch" />));
 
   expect(
-    await screen.findByRole('heading', { name: 'Confirm the private launch review change' }),
+    await screen.findByRole("heading", { name: "Confirm the private launch review change" }),
   ).toBeVisible();
 });
 
-it('starts new work with the open page as its context', async () => {
+it("starts new work with the open page as its context", async () => {
   const api = transport();
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(
     <QueryClientProvider client={client}>
       <PageContextProvider
-        workspace={{ workspaceId: 'workspace_1', workspaceName: 'Hypertext Studio' }}
+        workspace={{ workspaceId: "workspace_1", workspaceName: "Hypertext Studio" }}
       >
         <PageSource type="project" id="project_1" label="Fall fundraiser launch" />
         <AthenaPanelProvider transport={api} railVisible onRevealRail={vi.fn()}>
@@ -395,19 +395,19 @@ it('starts new work with the open page as its context', async () => {
     </QueryClientProvider>,
   );
 
-  fireEvent.click(screen.getByRole('button', { name: 'Open ambient Athena' }));
-  fireEvent.change(await screen.findByLabelText('Athena objective'), {
-    target: { value: 'What is at risk here?' },
+  fireEvent.click(screen.getByRole("button", { name: "Open ambient Athena" }));
+  fireEvent.change(await screen.findByLabelText("Athena objective"), {
+    target: { value: "What is at risk here?" },
   });
-  fireEvent.click(screen.getByRole('button', { name: 'Start work' }));
+  fireEvent.click(screen.getByRole("button", { name: "Start work" }));
 
   await waitFor(() => {
     expect(api.create).toHaveBeenCalledWith({
-      prompt: 'What is at risk here?',
+      prompt: "What is at risk here?",
       context: {
-        workspaceId: 'workspace_1',
-        workspaceName: 'Hypertext Studio',
-        source: { type: 'project', id: 'project_1', label: 'Fall fundraiser launch' },
+        workspaceId: "workspace_1",
+        workspaceName: "Hypertext Studio",
+        source: { type: "project", id: "project_1", label: "Fall fundraiser launch" },
       },
     });
   });
@@ -428,7 +428,7 @@ In `apps/web/src/components/athena/athena-panel-provider.tsx`:
 Add the import:
 
 ```ts
-import { usePageContext } from './page-context';
+import { usePageContext } from "./page-context";
 ```
 
 Replace the props interface's `context` and `locationKey` entries. The interface becomes:
@@ -499,8 +499,8 @@ const openAthena = useCallback(
     const startsNewWork = effective !== undefined;
     const resolvedContext = effective === undefined ? pageContext : effective;
     setContext(resolvedContext);
-    setSelectedId('');
-    setLaunchDraft(startsNewWork ? (draft?.trim() ?? '') : null);
+    setSelectedId("");
+    setLaunchDraft(startsNewWork ? (draft?.trim() ?? "") : null);
     reveal(resolvedContext, startsNewWork ? draft : undefined);
   },
   [pageContext, reveal],
@@ -521,7 +521,7 @@ In `apps/web/src/components/app-shell-frame.tsx`:
 Add the import:
 
 ```ts
-import { PageContextProvider, type PageWorkspace } from '@/components/athena/page-context';
+import { PageContextProvider, type PageWorkspace } from "@/components/athena/page-context";
 ```
 
 In `AthenaShellProps` (line ~894) replace
@@ -553,7 +553,7 @@ return (
         calendarSurface || settingsSurface
           ? undefined
           : () => {
-              revealRailPanel('athena');
+              revealRailPanel("athena");
             }
       }
       onOpenFullAthena={openFullAthena}
@@ -640,13 +640,13 @@ git restore --staged . && git add apps/web/src/components/athena/athena-panel-pr
 Add the import:
 
 ```ts
-import { usePublishPageSource } from '@/components/athena/page-context';
+import { usePublishPageSource } from "@/components/athena/page-context";
 ```
 
 Directly after `useDocumentTitle(task?.title);` (line 106) add:
 
 ```ts
-usePublishPageSource({ type: 'task', id: taskId, ...(task?.title ? { label: task.title } : {}) });
+usePublishPageSource({ type: "task", id: taskId, ...(task?.title ? { label: task.title } : {}) });
 ```
 
 - [ ] **Step 2: Project detail**
@@ -656,7 +656,7 @@ Add the same import. Directly after `useDocumentTitle(project?.name ?? navigatio
 ```ts
 const projectLabel = project?.name ?? navigationSnapshot?.name;
 usePublishPageSource({
-  type: 'project',
+  type: "project",
   id: projectId,
   ...(projectLabel ? { label: projectLabel } : {}),
 });
@@ -669,7 +669,7 @@ Add the same import. Directly after the `useRegisterTabTitle('initiative', …)`
 ```ts
 const initiativeLabel = detail?.name ?? navigationSnapshot?.name;
 usePublishPageSource({
-  type: 'initiative',
+  type: "initiative",
   id: initiativeId,
   ...(initiativeLabel ? { label: initiativeLabel } : {}),
 });
@@ -680,7 +680,7 @@ usePublishPageSource({
 Add the same import. Directly after `const { openAthena } = useAthenaPanel();` (line 67) add:
 
 ```ts
-usePublishPageSource({ type: 'calendar_item', id: item.id, label: item.title });
+usePublishPageSource({ type: "calendar_item", id: item.id, label: item.title });
 ```
 
 Leave the existing "Have Athena handle this" button unchanged; it still passes an explicit context.
@@ -733,49 +733,49 @@ git restore --staged . && git add "apps/web/src/app/(app)/orgs/[orgId]/tasks/[ta
 
 ```tsx
 // apps/web/tests/athena/athena-context-chip.test.tsx
-import '@testing-library/jest-dom/vitest';
+import "@testing-library/jest-dom/vitest";
 
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   AthenaContextChip,
   contextChipLabel,
-} from '../../src/components/athena/athena-context-chip';
+} from "../../src/components/athena/athena-context-chip";
 
 afterEach(cleanup);
 
 const projectContext = {
-  workspaceId: 'ws_1',
-  workspaceName: 'Harbor Health',
-  source: { type: 'project' as const, id: 'project_1', label: 'Fall fundraiser launch' },
+  workspaceId: "ws_1",
+  workspaceName: "Harbor Health",
+  source: { type: "project" as const, id: "project_1", label: "Fall fundraiser launch" },
 };
 
-describe('contextChipLabel', () => {
-  it('names the source when it has a label', () => {
-    expect(contextChipLabel(projectContext)).toBe('Fall fundraiser launch');
+describe("contextChipLabel", () => {
+  it("names the source when it has a label", () => {
+    expect(contextChipLabel(projectContext)).toBe("Fall fundraiser launch");
   });
 
-  it('falls back to the workspace name', () => {
-    expect(contextChipLabel({ workspaceId: 'ws_1', workspaceName: 'Harbor Health' })).toBe(
-      'Harbor Health',
+  it("falls back to the workspace name", () => {
+    expect(contextChipLabel({ workspaceId: "ws_1", workspaceName: "Harbor Health" })).toBe(
+      "Harbor Health",
     );
   });
 
-  it('returns null with nothing to show', () => {
-    expect(contextChipLabel({ workspaceId: 'ws_1' })).toBeNull();
+  it("returns null with nothing to show", () => {
+    expect(contextChipLabel({ workspaceId: "ws_1" })).toBeNull();
   });
 });
 
-describe('AthenaContextChip', () => {
-  it('renders nothing without a context', () => {
+describe("AthenaContextChip", () => {
+  it("renders nothing without a context", () => {
     const { container } = render(
       <AthenaContextChip context={null} attached onDetach={vi.fn()} onAttach={vi.fn()} />,
     );
     expect(container).toBeEmptyDOMElement();
   });
 
-  it('offers to detach an attached page', () => {
+  it("offers to detach an attached page", () => {
     const onDetach = vi.fn();
     render(
       <AthenaContextChip
@@ -785,13 +785,13 @@ describe('AthenaContextChip', () => {
         onAttach={vi.fn()}
       />,
     );
-    const chip = screen.getByRole('group', { name: /Fall fundraiser launch/ });
+    const chip = screen.getByRole("group", { name: /Fall fundraiser launch/ });
     expect(chip).toBeVisible();
-    fireEvent.click(screen.getByRole('button', { name: /Detach/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Detach/ }));
     expect(onDetach).toHaveBeenCalledTimes(1);
   });
 
-  it('offers to reattach a detached page', () => {
+  it("offers to reattach a detached page", () => {
     const onAttach = vi.fn();
     render(
       <AthenaContextChip
@@ -801,7 +801,7 @@ describe('AthenaContextChip', () => {
         onAttach={onAttach}
       />,
     );
-    fireEvent.click(screen.getByRole('button', { name: /Fall fundraiser launch/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Fall fundraiser launch/ }));
     expect(onAttach).toHaveBeenCalledTimes(1);
   });
 });
@@ -816,7 +816,7 @@ Expected: FAIL, module not found.
 
 ```tsx
 // apps/web/src/components/athena/athena-context-chip.tsx
-'use client';
+"use client";
 
 /**
  * The chip above an Athena composer that shows which page is attached to the next message.
@@ -824,20 +824,20 @@ Expected: FAIL, module not found.
  * Attached: "On: Fall fundraiser launch · Project" with a remove control. Detached: an assist
  * chip that reattaches the page. No context, nothing rendered.
  */
-import { Sparkles } from '@docket/ui/icons';
-import { Chip } from '@docket/ui/primitives';
-import type { JSX } from 'react';
+import { Sparkles } from "@docket/ui/icons";
+import { Chip } from "@docket/ui/primitives";
+import type { JSX } from "react";
 
-import type { PersonalAthenaContext, PersonalAthenaSource } from '@/lib/athena/presentation';
+import type { PersonalAthenaContext, PersonalAthenaSource } from "@/lib/athena/presentation";
 
 /** Plain names for each source kind. */
-const KIND_LABEL: Readonly<Record<PersonalAthenaSource['type'], string>> = {
-  task: 'Task',
-  project: 'Project',
-  initiative: 'Initiative',
-  program: 'Program',
-  calendar_item: 'Calendar',
-  stream_event: 'Inbox item',
+const KIND_LABEL: Readonly<Record<PersonalAthenaSource["type"], string>> = {
+  task: "Task",
+  project: "Project",
+  initiative: "Initiative",
+  program: "Program",
+  calendar_item: "Calendar",
+  stream_event: "Inbox item",
 };
 
 /** The name the chip shows for a context, or null when it has nothing nameable. */
@@ -863,7 +863,7 @@ export function AthenaContextChip({
   if (!context) return null;
   const label = contextChipLabel(context);
   if (!label) return null;
-  const kind = context.source ? KIND_LABEL[context.source.type] : 'Workspace';
+  const kind = context.source ? KIND_LABEL[context.source.type] : "Workspace";
 
   if (!attached) {
     return (
@@ -935,13 +935,13 @@ git restore --staged . && git add apps/web/src/components/athena/athena-context-
 Append to `describe('AthenaPanelProvider', …)`:
 
 ```tsx
-it('starts work without the page once the chip is detached', async () => {
+it("starts work without the page once the chip is detached", async () => {
   const api = transport();
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(
     <QueryClientProvider client={client}>
       <PageContextProvider
-        workspace={{ workspaceId: 'workspace_1', workspaceName: 'Hypertext Studio' }}
+        workspace={{ workspaceId: "workspace_1", workspaceName: "Hypertext Studio" }}
       >
         <PageSource type="project" id="project_1" label="Fall fundraiser launch" />
         <AthenaPanelProvider transport={api} railVisible onRevealRail={vi.fn()}>
@@ -952,20 +952,20 @@ it('starts work without the page once the chip is detached', async () => {
     </QueryClientProvider>,
   );
 
-  fireEvent.click(screen.getByRole('button', { name: 'Open ambient Athena' }));
-  const form = await screen.findByRole('form', { name: 'Start Athena work' });
-  expect(within(form).getByRole('group', { name: /Fall fundraiser launch/ })).toBeVisible();
+  fireEvent.click(screen.getByRole("button", { name: "Open ambient Athena" }));
+  const form = await screen.findByRole("form", { name: "Start Athena work" });
+  expect(within(form).getByRole("group", { name: /Fall fundraiser launch/ })).toBeVisible();
 
-  fireEvent.click(within(form).getByRole('button', { name: /Detach/ }));
-  expect(within(form).queryByRole('group', { name: /Fall fundraiser launch/ })).toBeNull();
+  fireEvent.click(within(form).getByRole("button", { name: /Detach/ }));
+  expect(within(form).queryByRole("group", { name: /Fall fundraiser launch/ })).toBeNull();
 
-  fireEvent.change(screen.getByLabelText('Athena objective'), {
-    target: { value: 'Plan my afternoon' },
+  fireEvent.change(screen.getByLabelText("Athena objective"), {
+    target: { value: "Plan my afternoon" },
   });
-  fireEvent.click(screen.getByRole('button', { name: 'Start work' }));
+  fireEvent.click(screen.getByRole("button", { name: "Start work" }));
 
   await waitFor(() => {
-    expect(api.create).toHaveBeenCalledWith({ prompt: 'Plan my afternoon' });
+    expect(api.create).toHaveBeenCalledWith({ prompt: "Plan my afternoon" });
   });
 });
 ```
@@ -984,7 +984,7 @@ In `athena-panel-provider.tsx`:
 Add the import:
 
 ```ts
-import { AthenaContextChip } from './athena-context-chip';
+import { AthenaContextChip } from "./athena-context-chip";
 ```
 
 Extend `AthenaPanelValue` after `railStatus`:
@@ -1088,22 +1088,22 @@ git restore --staged . && git add apps/web/src/components/athena/athena-panel-pr
 
 ```tsx
 // apps/web/tests/athena/thread-defs.test.tsx
-import '@testing-library/jest-dom/vitest';
+import "@testing-library/jest-dom/vitest";
 
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
-import type { JSX } from 'react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
+import type { JSX } from "react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { okResponse } from '../support/query';
+import { okResponse } from "../support/query";
 
 const { chatGet, messagePost } = vi.hoisted(() => ({ chatGet: vi.fn(), messagePost: vi.fn() }));
 
-vi.mock('../../src/lib/api', () => ({
+vi.mock("../../src/lib/api", () => ({
   api: { v1: { me: { athena: { chat: { $get: chatGet, messages: { $post: messagePost } } } } } },
 }));
 
-import { sendPersonalMessage, usePersonalThread } from '../../src/lib/athena/thread-defs';
+import { sendPersonalMessage, usePersonalThread } from "../../src/lib/athena/thread-defs";
 
 class FakeEventSource {
   static instances: FakeEventSource[] = [];
@@ -1120,13 +1120,13 @@ class FakeEventSource {
 
 function thread(status: string, activities: readonly Record<string, unknown>[] = []) {
   return {
-    id: 'chat_1',
-    kind: 'chat',
+    id: "chat_1",
+    kind: "chat",
     status,
-    objective: 'Chat',
-    startedAt: '2026-09-13T10:00:00.000Z',
+    objective: "Chat",
+    startedAt: "2026-09-13T10:00:00.000Z",
     endedAt: null,
-    createdAt: '2026-09-13T10:00:00.000Z',
+    createdAt: "2026-09-13T10:00:00.000Z",
     activities,
     result: null,
   };
@@ -1134,7 +1134,7 @@ function thread(status: string, activities: readonly Record<string, unknown>[] =
 
 function Readout(): JSX.Element {
   const query = usePersonalThread();
-  return <output data-testid="count">{query.data?.activities.length ?? 'none'}</output>;
+  return <output data-testid="count">{query.data?.activities.length ?? "none"}</output>;
 }
 
 function renderThread(): void {
@@ -1152,62 +1152,62 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe('sendPersonalMessage', () => {
-  it('posts the body with a wire-shaped context', async () => {
-    messagePost.mockResolvedValue(okResponse(thread('running')));
-    await sendPersonalMessage('What is at risk here?', {
-      workspaceId: 'ws_1',
-      workspaceName: 'Harbor Health',
-      source: { type: 'project', id: 'project_1', label: 'Fall fundraiser launch' },
+describe("sendPersonalMessage", () => {
+  it("posts the body with a wire-shaped context", async () => {
+    messagePost.mockResolvedValue(okResponse(thread("running")));
+    await sendPersonalMessage("What is at risk here?", {
+      workspaceId: "ws_1",
+      workspaceName: "Harbor Health",
+      source: { type: "project", id: "project_1", label: "Fall fundraiser launch" },
     });
     expect(messagePost).toHaveBeenCalledWith({
       json: {
-        body: 'What is at risk here?',
-        context: { workspaceId: 'ws_1', source: { type: 'project', id: 'project_1' } },
+        body: "What is at risk here?",
+        context: { workspaceId: "ws_1", source: { type: "project", id: "project_1" } },
       },
     });
   });
 
-  it('omits context when there is none', async () => {
-    messagePost.mockResolvedValue(okResponse(thread('running')));
-    await sendPersonalMessage('Plan my afternoon');
-    expect(messagePost).toHaveBeenCalledWith({ json: { body: 'Plan my afternoon' } });
+  it("omits context when there is none", async () => {
+    messagePost.mockResolvedValue(okResponse(thread("running")));
+    await sendPersonalMessage("Plan my afternoon");
+    expect(messagePost).toHaveBeenCalledWith({ json: { body: "Plan my afternoon" } });
   });
 });
 
-describe('usePersonalThread', () => {
-  it('tails the stream while a turn is in flight and merges what arrives', async () => {
-    vi.stubGlobal('EventSource', FakeEventSource);
-    chatGet.mockResolvedValue(okResponse(thread('running')));
+describe("usePersonalThread", () => {
+  it("tails the stream while a turn is in flight and merges what arrives", async () => {
+    vi.stubGlobal("EventSource", FakeEventSource);
+    chatGet.mockResolvedValue(okResponse(thread("running")));
     renderThread();
 
     await waitFor(() => {
-      expect(screen.getByTestId('count')).toHaveTextContent('0');
+      expect(screen.getByTestId("count")).toHaveTextContent("0");
     });
-    expect(FakeEventSource.instances[0]?.url).toBe('/v1/me/athena/sessions/chat_1/stream');
+    expect(FakeEventSource.instances[0]?.url).toBe("/v1/me/athena/sessions/chat_1/stream");
 
-    const listener = FakeEventSource.instances[0]?.listeners.get('response');
+    const listener = FakeEventSource.instances[0]?.listeners.get("response");
     act(() => {
       listener?.({
         data: JSON.stringify({
-          id: 'act_1',
-          sessionId: 'chat_1',
-          type: 'response',
-          body: { text: 'Two things.', author: 'athena' },
-          createdAt: '2026-09-13T10:00:01.000Z',
+          id: "act_1",
+          sessionId: "chat_1",
+          type: "response",
+          body: { text: "Two things.", author: "athena" },
+          createdAt: "2026-09-13T10:00:01.000Z",
         }),
       } as MessageEvent);
     });
-    expect(screen.getByTestId('count')).toHaveTextContent('1');
+    expect(screen.getByTestId("count")).toHaveTextContent("1");
   });
 
-  it('opens no stream for a settled thread', async () => {
-    vi.stubGlobal('EventSource', FakeEventSource);
-    chatGet.mockResolvedValue(okResponse(thread('completed')));
+  it("opens no stream for a settled thread", async () => {
+    vi.stubGlobal("EventSource", FakeEventSource);
+    chatGet.mockResolvedValue(okResponse(thread("completed")));
     renderThread();
 
     await waitFor(() => {
-      expect(screen.getByTestId('count')).toHaveTextContent('0');
+      expect(screen.getByTestId("count")).toHaveTextContent("0");
     });
     expect(FakeEventSource.instances).toHaveLength(0);
   });
@@ -1243,7 +1243,7 @@ Update the two call sites in that file (`create` and any other) from `apiContext
 
 ```ts
 // apps/web/src/lib/athena/thread-defs.ts
-'use client';
+"use client";
 
 /**
  * The person's one Athena conversation: a live read with an SSE tail while a turn is in flight.
@@ -1252,23 +1252,23 @@ Update the two call sites in that file (`create` and any other) from `apiContext
  * when the session settles, so the subscription exists only while the thread reports a
  * non-terminal status.
  */
-import type { AthenaSessionDetailOut, SessionActivityOut } from '@docket/athena/agent-contract';
-import { useQueryClient, type QueryClient, type UseQueryResult } from '@tanstack/react-query';
-import { useEffect } from 'react';
+import type { AthenaSessionDetailOut, SessionActivityOut } from "@docket/athena/agent-contract";
+import { useQueryClient, type QueryClient, type UseQueryResult } from "@tanstack/react-query";
+import { useEffect } from "react";
 
-import { api } from '@/lib/api';
-import { readProblemError } from '@/lib/problem';
-import { apiQueryOptions, STALE } from '@/lib/query-core';
-import { queryKeys, useLiveApiQuery } from '@/lib/query';
+import { api } from "@/lib/api";
+import { readProblemError } from "@/lib/problem";
+import { apiQueryOptions, STALE } from "@/lib/query-core";
+import { queryKeys, useLiveApiQuery } from "@/lib/query";
 
-import type { PersonalAthenaContext } from './presentation';
-import { toInvocationContext } from './query-defs';
+import type { PersonalAthenaContext } from "./presentation";
+import { toInvocationContext } from "./query-defs";
 
 /** Session states after which the API closes the activity stream. */
-const TERMINAL_STATUSES = new Set(['completed', 'failed', 'canceled']);
+const TERMINAL_STATUSES = new Set(["completed", "failed", "canceled"]);
 
 /** SSE event names, one per activity type. */
-const ACTIVITY_EVENTS = ['thought', 'action', 'response', 'elicitation', 'error'] as const;
+const ACTIVITY_EVENTS = ["thought", "action", "response", "elicitation", "error"] as const;
 
 /** Poll cadence while Athena is working. */
 const ACTIVE_POLL_MS = 2_000;
@@ -1281,7 +1281,7 @@ export function personalThreadDef() {
   return apiQueryOptions<AthenaSessionDetailOut>(
     queryKeys.athenaChat(),
     () => api.v1.me.athena.chat.$get({ query: {} }),
-    'Could not open the conversation.',
+    "Could not open the conversation.",
     { staleTime: STALE.realtime },
   );
 }
@@ -1302,7 +1302,7 @@ export async function sendPersonalMessage(
   const response = await api.v1.me.athena.chat.messages.$post({
     json: { body, ...(invocation ? { context: invocation } : {}) },
   });
-  if (!response.ok) throw await readProblemError(response, 'Athena could not answer right now.');
+  if (!response.ok) throw await readProblemError(response, "Athena could not answer right now.");
   return await response.json();
 }
 
@@ -1407,39 +1407,39 @@ git restore --staged . && git add apps/web/src/lib/athena/thread-defs.ts apps/we
 
 ```ts
 // apps/web/e2e/athena/companion-context.spec.ts
-import type { Page, Route } from '@playwright/test';
+import type { Page, Route } from "@playwright/test";
 
-import { signUpAndOnboard } from '../helpers/app';
-import { expect, test } from '../helpers/fixtures';
+import { signUpAndOnboard } from "../helpers/app";
+import { expect, test } from "../helpers/fixtures";
 
-const createdAt = '2026-09-13T09:00:00.000Z';
+const createdAt = "2026-09-13T09:00:00.000Z";
 
 /** Serve one piece of waiting Athena work so the rail has something to select. */
 async function installAthenaFixture(page: Page, orgId: string): Promise<void> {
   const session = {
-    id: 'athena_companion_session',
-    kind: 'job',
-    status: 'awaiting_approval',
-    queueState: 'needs_you',
-    objective: 'Draft sponsor outreach and reschedule printing',
+    id: "athena_companion_session",
+    kind: "job",
+    status: "awaiting_approval",
+    queueState: "needs_you",
+    objective: "Draft sponsor outreach and reschedule printing",
     context: { workspaceId: orgId },
-    workspace: { id: orgId, name: 'Personal workspace' },
+    workspace: { id: orgId, name: "Personal workspace" },
     startedAt: createdAt,
     endedAt: null,
     createdAt,
   } as const;
   const detail = { ...session, activities: [], result: null } as const;
 
-  await page.route('**/v1/me/athena**', async (route: Route) => {
+  await page.route("**/v1/me/athena**", async (route: Route) => {
     const request = route.request();
     const path = new URL(request.url()).pathname;
     const json = (body: unknown): Promise<void> =>
-      route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
-    if (request.method() === 'GET' && path === '/v1/me/athena/pulse') {
+      route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
+    if (request.method() === "GET" && path === "/v1/me/athena/pulse") {
       await json({ needsYou: 1, working: 0 });
       return;
     }
-    if (request.method() === 'GET' && path === '/v1/me/athena') {
+    if (request.method() === "GET" && path === "/v1/me/athena") {
       await json({
         counts: { needsYou: 1, working: 0, finished: 0 },
         currentChat: null,
@@ -1447,33 +1447,33 @@ async function installAthenaFixture(page: Page, orgId: string): Promise<void> {
       });
       return;
     }
-    if (request.method() === 'GET' && path === `/v1/me/athena/sessions/${session.id}`) {
+    if (request.method() === "GET" && path === `/v1/me/athena/sessions/${session.id}`) {
       await json(detail);
       return;
     }
-    await route.fulfill({ status: 404, contentType: 'application/json', body: '{}' });
+    await route.fulfill({ status: 404, contentType: "application/json", body: "{}" });
   });
 }
 
-test('the Athena panel keeps its selected work while the person moves between pages', async ({
+test("the Athena panel keeps its selected work while the person moves between pages", async ({
   page,
 }) => {
-  const { orgId } = await signUpAndOnboard(page, 'athena-companion');
+  const { orgId } = await signUpAndOnboard(page, "athena-companion");
   await installAthenaFixture(page, orgId);
 
   await page.setViewportSize({ width: 1440, height: 900 });
-  await page.goto('/today');
-  await page.keyboard.press('Meta+J');
-  const rail = page.getByRole('complementary', { name: 'Athena' });
-  await rail.getByRole('button', { name: /Draft sponsor outreach/ }).click();
-  await expect(rail.getByRole('heading', { name: /Draft sponsor outreach/ })).toBeVisible();
+  await page.goto("/today");
+  await page.keyboard.press("Meta+J");
+  const rail = page.getByRole("complementary", { name: "Athena" });
+  await rail.getByRole("button", { name: /Draft sponsor outreach/ }).click();
+  await expect(rail.getByRole("heading", { name: /Draft sponsor outreach/ })).toBeVisible();
 
   // Client-side navigation through the sidebar; a full page load would be a different test.
-  await page.getByRole('navigation').getByRole('link', { name: /Inbox/ }).first().click();
+  await page.getByRole("navigation").getByRole("link", { name: /Inbox/ }).first().click();
   await expect(page).toHaveURL(/inbox|triage/);
 
-  await expect(rail.getByRole('heading', { name: /Draft sponsor outreach/ })).toBeVisible();
-  await expect(rail.getByRole('button', { name: 'Back' })).toBeVisible();
+  await expect(rail.getByRole("heading", { name: /Draft sponsor outreach/ })).toBeVisible();
+  await expect(rail.getByRole("button", { name: "Back" })).toBeVisible();
 });
 ```
 

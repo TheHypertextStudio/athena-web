@@ -47,8 +47,8 @@ Wraps TanStack's `queryOptions`, so the returned `queryKey` carries its data typ
 const taskDef = (orgId: string, id: string) =>
   apiQueryOptions(
     queryKeys.task(orgId, id),
-    () => api.v1.orgs[':orgId'].tasks[':id'].$get({ param: { orgId, id } }),
-    'Could not load the task.',
+    () => api.v1.orgs[":orgId"].tasks[":id"].$get({ param: { orgId, id } }),
+    "Could not load the task.",
     { staleTime: STALE.volatile },
   );
 
@@ -89,7 +89,7 @@ Snapshots the cache at `key`, applies `recipe(prev) => next`, and returns `{ rol
 ```ts
 useApiMutation({
   mutationFn: (vars) =>
-    unwrap(() => api.v1.orgs[':orgId'].tasks[':id'].$patch(/* … */), 'Could not update.'),
+    unwrap(() => api.v1.orgs[":orgId"].tasks[":id"].$patch(/* … */), "Could not update."),
   onMutate: (vars) =>
     optimisticPatch<TaskOut>(queryClient, queryKeys.task(orgId, vars.id), (prev) => ({
       ...prev,
@@ -183,8 +183,8 @@ Omitting `staleTime` inherits `standard`. Reserve `realtime` for data you also p
 
   ```ts
   void invalidateWorkTargetQueries(queryClient, {
-    target: 'initiative',
-    ownerOrganizationId: 'owner-b',
+    target: "initiative",
+    ownerOrganizationId: "owner-b",
   });
   ```
 

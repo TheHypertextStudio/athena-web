@@ -38,7 +38,7 @@ This document defines the testing strategy for Project Athena, ensuring code qua
 export default defineConfig({
   test: {
     coverage: {
-      provider: 'v8',
+      provider: "v8",
       thresholds: {
         lines: 80,
         functions: 80,
@@ -63,27 +63,27 @@ export default defineConfig({
 ### Unit Test Structure
 
 ```typescript
-import { describe, it, expect, beforeEach } from 'vitest';
-import { calculatePriority } from './priority';
+import { describe, it, expect, beforeEach } from "vitest";
+import { calculatePriority } from "./priority";
 
-describe('calculatePriority', () => {
-  describe('when task has deadline', () => {
-    it('returns high priority for overdue tasks', () => {
+describe("calculatePriority", () => {
+  describe("when task has deadline", () => {
+    it("returns high priority for overdue tasks", () => {
       const task = {
-        deadline: new Date('2020-01-01'),
-        importance: 'medium',
+        deadline: new Date("2020-01-01"),
+        importance: "medium",
       };
 
-      expect(calculatePriority(task)).toBe('high');
+      expect(calculatePriority(task)).toBe("high");
     });
 
-    it('returns medium priority for tasks due this week', () => {
+    it("returns medium priority for tasks due this week", () => {
       // ...
     });
   });
 
-  describe('when task has no deadline', () => {
-    it('returns priority based on importance only', () => {
+  describe("when task has no deadline", () => {
+    it("returns priority based on importance only", () => {
       // ...
     });
   });
@@ -110,12 +110,12 @@ describe('calculatePriority', () => {
 ### API Integration Test Structure
 
 ```typescript
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { testClient } from 'hono/testing';
-import { app } from '../src/app';
-import { setupTestDb, teardownTestDb, createTestUser } from '@athena/test-utils';
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { testClient } from "hono/testing";
+import { app } from "../src/app";
+import { setupTestDb, teardownTestDb, createTestUser } from "@athena/test-utils";
 
-describe('POST /api/tasks', () => {
+describe("POST /api/tasks", () => {
   let db: TestDb;
   let authToken: string;
 
@@ -129,13 +129,13 @@ describe('POST /api/tasks', () => {
     await teardownTestDb(db);
   });
 
-  it('creates a task with valid input', async () => {
+  it("creates a task with valid input", async () => {
     const client = testClient(app);
 
     const response = await client.api.tasks.$post({
       json: {
-        title: 'Test Task',
-        priority: 'high',
+        title: "Test Task",
+        priority: "high",
       },
       headers: {
         Authorization: `Bearer ${authToken}`,
@@ -145,17 +145,17 @@ describe('POST /api/tasks', () => {
     expect(response.status).toBe(201);
 
     const data = await response.json();
-    expect(data.data.attributes.title).toBe('Test Task');
-    expect(data.data.attributes.priority).toBe('high');
+    expect(data.data.attributes.title).toBe("Test Task");
+    expect(data.data.attributes.priority).toBe("high");
   });
 
-  it('returns 400 for invalid input', async () => {
+  it("returns 400 for invalid input", async () => {
     const client = testClient(app);
 
     const response = await client.api.tasks.$post({
       json: {
         // Missing required 'title' field
-        priority: 'high',
+        priority: "high",
       },
       headers: {
         Authorization: `Bearer ${authToken}`,
@@ -165,12 +165,12 @@ describe('POST /api/tasks', () => {
     expect(response.status).toBe(400);
   });
 
-  it('returns 401 without authentication', async () => {
+  it("returns 401 without authentication", async () => {
     const client = testClient(app);
 
     const response = await client.api.tasks.$post({
       json: {
-        title: 'Test Task',
+        title: "Test Task",
       },
     });
 
@@ -182,11 +182,11 @@ describe('POST /api/tasks', () => {
 ### Database Testing
 
 ```typescript
-import { describe, it, expect, beforeEach } from 'vitest';
-import { createTestDb, resetTestDb } from '@athena/test-utils';
-import { TaskRepository } from '../src/repositories/task';
+import { describe, it, expect, beforeEach } from "vitest";
+import { createTestDb, resetTestDb } from "@athena/test-utils";
+import { TaskRepository } from "../src/repositories/task";
 
-describe('TaskRepository', () => {
+describe("TaskRepository", () => {
   let db: TestDb;
   let taskRepo: TaskRepository;
 
@@ -196,17 +196,17 @@ describe('TaskRepository', () => {
     taskRepo = new TaskRepository(db);
   });
 
-  it('creates and retrieves a task', async () => {
+  it("creates and retrieves a task", async () => {
     const created = await taskRepo.create({
-      title: 'Test Task',
-      userId: 'user_123',
+      title: "Test Task",
+      userId: "user_123",
     });
 
     const retrieved = await taskRepo.findById(created.id);
 
     expect(retrieved).toMatchObject({
-      title: 'Test Task',
-      status: 'pending',
+      title: "Test Task",
+      status: "pending",
     });
   });
 });
@@ -224,15 +224,15 @@ describe('TaskRepository', () => {
 ### E2E Test Structure
 
 ```typescript
-import { test, expect } from '@playwright/test';
+import { test, expect } from "@playwright/test";
 
-test.describe('Task Creation', () => {
+test.describe("Task Creation", () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/');
+    await page.goto("/");
     await loginAsTestUser(page);
   });
 
-  test('user can create a task from the agenda', async ({ page }) => {
+  test("user can create a task from the agenda", async ({ page }) => {
     // Navigate to agenda
     await page.click('[data-testid="nav-agenda"]');
 
@@ -240,14 +240,14 @@ test.describe('Task Creation', () => {
     await page.click('[data-testid="create-task-button"]');
 
     // Fill form
-    await page.fill('[data-testid="task-title-input"]', 'My New Task');
-    await page.selectOption('[data-testid="priority-select"]', 'high');
+    await page.fill('[data-testid="task-title-input"]', "My New Task");
+    await page.selectOption('[data-testid="priority-select"]', "high");
 
     // Submit
     await page.click('[data-testid="submit-task-button"]');
 
     // Verify task appears in agenda
-    await expect(page.locator('[data-testid="task-item"]')).toContainText('My New Task');
+    await expect(page.locator('[data-testid="task-item"]')).toContainText("My New Task");
   });
 });
 ```
@@ -256,10 +256,10 @@ test.describe('Task Creation', () => {
 
 ```typescript
 // playwright.config.ts
-import { defineConfig } from '@playwright/test';
+import { defineConfig } from "@playwright/test";
 
 export default defineConfig({
-  testDir: './e2e',
+  testDir: "./e2e",
   timeout: 30000,
   expect: {
     timeout: 5000,
@@ -268,28 +268,28 @@ export default defineConfig({
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
   workers: process.env.CI ? 1 : undefined,
-  reporter: 'html',
+  reporter: "html",
   use: {
-    baseURL: 'http://localhost:3000',
-    trace: 'on-first-retry',
-    screenshot: 'only-on-failure',
+    baseURL: "http://localhost:3000",
+    trace: "on-first-retry",
+    screenshot: "only-on-failure",
   },
   projects: [
     {
-      name: 'chromium',
-      use: { browserName: 'chromium' },
+      name: "chromium",
+      use: { browserName: "chromium" },
     },
     {
-      name: 'firefox',
-      use: { browserName: 'firefox' },
+      name: "firefox",
+      use: { browserName: "firefox" },
     },
     {
-      name: 'webkit',
-      use: { browserName: 'webkit' },
+      name: "webkit",
+      use: { browserName: "webkit" },
     },
   ],
   webServer: {
-    command: 'pnpm dev',
+    command: "pnpm dev",
     port: 3000,
     reuseExistingServer: !process.env.CI,
   },
@@ -302,23 +302,23 @@ export default defineConfig({
 
 ```typescript
 // mocks/stripe.ts
-import { vi } from 'vitest';
+import { vi } from "vitest";
 
 export const mockStripe = {
   customers: {
     create: vi.fn().mockResolvedValue({
-      id: 'cus_test123',
-      email: 'test@example.com',
+      id: "cus_test123",
+      email: "test@example.com",
     }),
     retrieve: vi.fn().mockResolvedValue({
-      id: 'cus_test123',
+      id: "cus_test123",
       subscriptions: { data: [] },
     }),
   },
   subscriptions: {
     create: vi.fn().mockResolvedValue({
-      id: 'sub_test123',
-      status: 'active',
+      id: "sub_test123",
+      status: "active",
     }),
   },
 };
@@ -328,12 +328,12 @@ export const mockStripe = {
 
 ```typescript
 // mocks/handlers.ts
-import { http, HttpResponse } from 'msw';
+import { http, HttpResponse } from "msw";
 
 export const handlers = [
-  http.get('/api/tasks', () => {
+  http.get("/api/tasks", () => {
     return HttpResponse.json({
-      data: [{ id: '1', type: 'task', attributes: { title: 'Mock Task' } }],
+      data: [{ id: "1", type: "task", attributes: { title: "Mock Task" } }],
     });
   }),
 ];
@@ -345,14 +345,14 @@ export const handlers = [
 
 ```typescript
 // test-utils/fixtures/tasks.ts
-import { faker } from '@faker-js/faker';
+import { faker } from "@faker-js/faker";
 
 export function createTaskFixture(overrides = {}) {
   return {
     id: faker.string.uuid(),
     title: faker.lorem.sentence(),
-    status: 'pending',
-    priority: 'medium',
+    status: "pending",
+    priority: "medium",
     createdAt: faker.date.recent().toISOString(),
     updatedAt: faker.date.recent().toISOString(),
     ...overrides,
@@ -365,15 +365,15 @@ export function createTaskFixture(overrides = {}) {
 ```typescript
 // test-utils/helpers/auth.ts
 export async function loginAsTestUser(page: Page) {
-  await page.goto('/auth/signin');
-  await page.fill('[data-testid="email-input"]', 'test@example.com');
+  await page.goto("/auth/signin");
+  await page.fill('[data-testid="email-input"]', "test@example.com");
   await page.click('[data-testid="submit-button"]');
   // Handle test auth flow
 }
 
 export function generateTestToken(user: User) {
-  return jwt.sign({ sub: user.id, scope: ['read', 'write'] }, process.env.JWT_SECRET!, {
-    expiresIn: '1h',
+  return jwt.sign({ sub: user.id, scope: ["read", "write"] }, process.env.JWT_SECRET!, {
+    expiresIn: "1h",
   });
 }
 ```
@@ -418,7 +418,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: 'pnpm'
+          cache: "pnpm"
 
       - run: pnpm install
 
@@ -444,7 +444,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: 'pnpm'
+          cache: "pnpm"
 
       - run: pnpm install
 

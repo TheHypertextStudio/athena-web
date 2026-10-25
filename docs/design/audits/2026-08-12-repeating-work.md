@@ -1,5 +1,5 @@
 ---
-surfaces: ['orgs-[orgId]-recurrence-series-[seriesId]']
+surfaces: ["orgs-[orgId]-recurrence-series-[seriesId]"]
 date: 2026-08-12
 verdict: ship
 scores:

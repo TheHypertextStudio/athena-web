@@ -72,14 +72,14 @@ versions.
 Cover these exact contracts:
 
 ```typescript
-expect(scheduleDateRange('2026-03-08', 1, 'America/Los_Angeles')).toEqual({
-  startISO: '2026-03-08T08:00:00Z',
-  endISO: '2026-03-09T07:00:00Z',
+expect(scheduleDateRange("2026-03-08", 1, "America/Los_Angeles")).toEqual({
+  startISO: "2026-03-08T08:00:00Z",
+  endISO: "2026-03-09T07:00:00Z",
 });
-expect(scheduleInstantAt('2026-11-01', 90, 'America/Los_Angeles', 'earlier')).not.toBe(
-  scheduleInstantAt('2026-11-01', 90, 'America/Los_Angeles', 'later'),
+expect(scheduleInstantAt("2026-11-01", 90, "America/Los_Angeles", "earlier")).not.toBe(
+  scheduleInstantAt("2026-11-01", 90, "America/Los_Angeles", "later"),
 );
-expect(scheduleInstantAt('2026-03-08', 150, 'America/Los_Angeles', 'reject')).toBeNull();
+expect(scheduleInstantAt("2026-03-08", 150, "America/Los_Angeles", "reject")).toBeNull();
 expect(majorTickInterval(24)).toBe(120);
 expect(majorTickInterval(72)).toBe(60);
 expect(majorTickInterval(144)).toBe(30);

@@ -27,19 +27,19 @@
 
   ```tsx
   expect(dialog).toHaveClass(
-    'h-[min(34rem,75dvh)]',
-    'max-w-2xl',
-    'transition-[height]',
-    'duration-(--dur-slow)',
-    'ease-(--ease-in-out)',
-    'motion-reduce:transition-none',
+    "h-[min(34rem,75dvh)]",
+    "max-w-2xl",
+    "transition-[height]",
+    "duration-(--dur-slow)",
+    "ease-(--ease-in-out)",
+    "motion-reduce:transition-none",
   );
-  expect(scrollSurface).toHaveClass('flex', 'flex-1', 'flex-col');
+  expect(scrollSurface).toHaveClass("flex", "flex-1", "flex-col");
 
-  await user.click(screen.getByRole('button', { name: 'Expand editor' }));
+  await user.click(screen.getByRole("button", { name: "Expand editor" }));
 
-  expect(dialog).toHaveClass('h-[min(48rem,85dvh)]', 'max-w-2xl');
-  expect(dialog).not.toHaveClass('max-w-5xl');
+  expect(dialog).toHaveClass("h-[min(48rem,85dvh)]", "max-w-2xl");
+  expect(dialog).not.toHaveClass("max-w-5xl");
   ```
 
 - [ ] **Step 2: Run the test and verify the old presets fail**

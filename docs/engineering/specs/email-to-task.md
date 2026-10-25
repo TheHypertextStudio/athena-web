@@ -203,7 +203,7 @@ interface Connector {
   asMailActor?(): MailActions | undefined; // undefined for non-mail providers
 }
 
-type MailAction = 'archive' | 'markRead' | 'markUnread' | 'applyLabel' | 'removeLabel' | 'trash';
+type MailAction = "archive" | "markRead" | "markUnread" | "applyLabel" | "removeLabel" | "trash";
 
 interface MailActions {
   applyMailAction(input: {

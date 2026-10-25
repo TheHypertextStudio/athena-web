@@ -70,18 +70,18 @@
 ```ts
 expect(
   CalendarItemCreate.parse({
-    intent: 'event',
-    title: 'Flight',
+    intent: "event",
+    title: "Flight",
     startsAt,
     endsAt,
-    timezone: 'America/Los_Angeles',
-    endTimezone: 'America/New_York',
+    timezone: "America/Los_Angeles",
+    endTimezone: "America/New_York",
   }).endTimezone,
-).toBe('America/New_York');
+).toBe("America/New_York");
 
-expect(serialized.endTimezone).toBe('America/New_York');
-expect(googlePatch.start).toMatchObject({ timeZone: 'America/Los_Angeles' });
-expect(googlePatch.end).toMatchObject({ timeZone: 'America/New_York' });
+expect(serialized.endTimezone).toBe("America/New_York");
+expect(googlePatch.start).toMatchObject({ timeZone: "America/Los_Angeles" });
+expect(googlePatch.end).toMatchObject({ timeZone: "America/New_York" });
 ```
 
 - [ ] **Step 2: Run the focused contract tests and verify missing-field failures**
@@ -141,16 +141,16 @@ Expected: PASS.
 - [ ] **Step 1: Write failing search and daylight-label tests**
 
 ```ts
-const entries = buildTimezoneSearchIndex('2026-08-10T17:00:00Z', 'en-US', [
-  'America/Los_Angeles',
-  'America/Vancouver',
-  'Pacific/Pitcairn',
+const entries = buildTimezoneSearchIndex("2026-08-10T17:00:00Z", "en-US", [
+  "America/Los_Angeles",
+  "America/Vancouver",
+  "Pacific/Pitcairn",
 ]);
-expect(searchTimezones(entries, 'PST').map((x) => x.id)).toContain('America/Los_Angeles');
-expect(searchTimezones(entries, 'Pacific Time')[0]?.id).toBe('America/Los_Angeles');
-expect(searchTimezones(entries, 'America/Los_Angeles')[0]?.id).toBe('America/Los_Angeles');
-expect(searchTimezones(entries, 'Los Angeles')[0]?.id).toBe('America/Los_Angeles');
-expect(entries.find((x) => x.id === 'America/Los_Angeles')?.offsetLabel).toBe('UTC−7');
+expect(searchTimezones(entries, "PST").map((x) => x.id)).toContain("America/Los_Angeles");
+expect(searchTimezones(entries, "Pacific Time")[0]?.id).toBe("America/Los_Angeles");
+expect(searchTimezones(entries, "America/Los_Angeles")[0]?.id).toBe("America/Los_Angeles");
+expect(searchTimezones(entries, "Los Angeles")[0]?.id).toBe("America/Los_Angeles");
+expect(entries.find((x) => x.id === "America/Los_Angeles")?.offsetLabel).toBe("UTC−7");
 ```
 
 - [ ] **Step 2: Run the focused test and verify the module is missing**
@@ -195,15 +195,15 @@ Expected: PASS.
 - [ ] **Step 1: Write failing draft conversion, rebase, separate-zone, DST gap/fold, and range tests**
 
 ```ts
-const draft = calendarTimeDraftFromSeed(seed, 'America/Los_Angeles');
-expect(draft.start).toMatchObject({ date: '2026-08-10', time: '10:00' });
-const withEndWall = updateCalendarDraftEnd(draft, { date: '2026-08-10', time: '14:00' });
-const zoned = applyCalendarDraftTimezones(withEndWall, 'America/Los_Angeles', 'America/New_York');
+const draft = calendarTimeDraftFromSeed(seed, "America/Los_Angeles");
+expect(draft.start).toMatchObject({ date: "2026-08-10", time: "10:00" });
+const withEndWall = updateCalendarDraftEnd(draft, { date: "2026-08-10", time: "14:00" });
+const zoned = applyCalendarDraftTimezones(withEndWall, "America/Los_Angeles", "America/New_York");
 expect(resolveCalendarTimeDraft(zoned)).toEqual({
-  startsAt: '2026-08-10T17:00:00Z',
-  endsAt: '2026-08-10T18:00:00Z',
-  timezone: 'America/Los_Angeles',
-  endTimezone: 'America/New_York',
+  startsAt: "2026-08-10T17:00:00Z",
+  endsAt: "2026-08-10T18:00:00Z",
+  timezone: "America/Los_Angeles",
+  endTimezone: "America/New_York",
 });
 ```
 
@@ -261,7 +261,7 @@ Expected: PASS after downstream compile errors are resolved in the schedule edit
 - [ ] **Step 1: Write failing shell-host and pure clamp tests**
 
 ```ts
-expect(screen.getByTestId('shell-overlay-host')).toBeInTheDocument();
+expect(screen.getByTestId("shell-overlay-host")).toBeInTheDocument();
 expect(clampDialogPosition({ x: 900, y: -20 }, hostRect, dialogSize)).toEqual({ x: 540, y: 0 });
 ```
 

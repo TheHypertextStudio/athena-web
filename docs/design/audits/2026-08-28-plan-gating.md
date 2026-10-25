@@ -1,5 +1,5 @@
 ---
-surfaces: ['connections-plan-gating']
+surfaces: ["connections-plan-gating"]
 date: 2026-08-28
 verdict: ship
 scores:

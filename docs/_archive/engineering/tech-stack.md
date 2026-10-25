@@ -40,11 +40,11 @@ This document defines the technology choices for Project Athena. All decisions w
 
 ```typescript
 // Example: Type-safe route definition
-import { createRoute, z } from '@hono/zod-openapi';
+import { createRoute, z } from "@hono/zod-openapi";
 
 const getTaskRoute = createRoute({
-  method: 'get',
-  path: '/tasks/{id}',
+  method: "get",
+  path: "/tasks/{id}",
   request: {
     params: z.object({
       id: z.string().uuid(),
@@ -53,11 +53,11 @@ const getTaskRoute = createRoute({
   responses: {
     200: {
       content: {
-        'application/json': {
+        "application/json": {
           schema: TaskSchema,
         },
       },
-      description: 'Task retrieved successfully',
+      description: "Task retrieved successfully",
     },
   },
 });
@@ -75,14 +75,14 @@ const getTaskRoute = createRoute({
 
 ```typescript
 // Example: Drizzle schema
-import { pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
+import { pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 
-export const tasks = pgTable('tasks', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  title: text('title').notNull(),
-  status: text('status').notNull().default('pending'),
-  createdAt: timestamp('created_at').defaultNow(),
-  updatedAt: timestamp('updated_at').defaultNow(),
+export const tasks = pgTable("tasks", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  title: text("title").notNull(),
+  status: text("status").notNull().default("pending"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
 });
 ```
 
@@ -107,14 +107,14 @@ export const tasks = pgTable('tasks', {
 
 ```typescript
 // Example: Pino configuration
-import pino from 'pino';
+import pino from "pino";
 
 export const logger = pino({
-  level: process.env.LOG_LEVEL ?? 'info',
+  level: process.env.LOG_LEVEL ?? "info",
   formatters: {
     level: (label) => ({ level: label }),
   },
-  redact: ['req.headers.authorization', 'password'],
+  redact: ["req.headers.authorization", "password"],
 });
 ```
 
@@ -174,17 +174,17 @@ export function SubmitButton() {
 
 ```typescript
 // Example: Server Action
-'use server';
+"use server";
 
-import { revalidatePath } from 'next/cache';
-import { createTask } from '@/lib/api';
+import { revalidatePath } from "next/cache";
+import { createTask } from "@/lib/api";
 
 export async function createTaskAction(formData: FormData) {
-  const title = formData.get('title') as string;
+  const title = formData.get("title") as string;
 
   await createTask({ title });
 
-  revalidatePath('/tasks');
+  revalidatePath("/tasks");
 }
 ```
 
@@ -204,15 +204,15 @@ export async function createTaskAction(formData: FormData) {
 
 ```typescript
 // vitest.config.ts
-import { defineConfig } from 'vitest/config';
+import { defineConfig } from "vitest/config";
 
 export default defineConfig({
   test: {
     globals: true,
-    environment: 'node',
+    environment: "node",
     coverage: {
-      provider: 'v8',
-      reporter: ['text', 'json', 'html'],
+      provider: "v8",
+      reporter: ["text", "json", "html"],
       thresholds: {
         lines: 80,
         functions: 80,
@@ -285,12 +285,12 @@ export default {
 
 ```typescript
 // env.ts
-import { z } from 'zod';
+import { z } from "zod";
 
 const envSchema = z.object({
-  NODE_ENV: z.enum(['development', 'production', 'test']),
+  NODE_ENV: z.enum(["development", "production", "test"]),
   DATABASE_URL: z.string().url(),
-  STRIPE_SECRET_KEY: z.string().startsWith('sk_'),
+  STRIPE_SECRET_KEY: z.string().startsWith("sk_"),
   SENTRY_DSN: z.string().url().optional(),
 });
 

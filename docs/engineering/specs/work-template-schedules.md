@@ -138,16 +138,16 @@ Proposed logical form:
 interface PrivateDateTarget {
   rootKey: StepKey;
   path: readonly StepKey[];
-  field: 'startDate' | 'dueDate' | 'targetDate';
+  field: "startDate" | "dueDate" | "targetDate";
 }
 type PrivateDateSource =
-  | { kind: 'run' }
-  | { kind: 'work_date'; work: ForestPath; field: DateField }
-  | { kind: 'after_completion'; works: readonly ForestPath[] };
+  | { kind: "run" }
+  | { kind: "work_date"; work: ForestPath; field: DateField }
+  | { kind: "after_completion"; works: readonly ForestPath[] };
 interface PrivateDateRule {
   target: PrivateDateTarget;
   source: PrivateDateSource;
-  offset: { days: number; unit: 'calendar' };
+  offset: { days: number; unit: "calendar" };
 }
 ```
 

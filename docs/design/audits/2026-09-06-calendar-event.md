@@ -1,5 +1,5 @@
 ---
-surfaces: ['calendar-item-peek', 'calendar-item-drawer', 'event-arc']
+surfaces: ["calendar-item-peek", "calendar-item-drawer", "event-arc"]
 date: 2026-09-06
 verdict: ship
 scores:

@@ -1,5 +1,5 @@
 ---
-surfaces: ['today', 'orgs-[orgId]-agents', 'orgs-[orgId]-athena']
+surfaces: ["today", "orgs-[orgId]-agents", "orgs-[orgId]-athena"]
 date: 2026-07-06
 verdict: needs-work
 scores:

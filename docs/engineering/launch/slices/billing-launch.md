@@ -36,7 +36,7 @@ verifierArtifacts:
   - docs/engineering/launch/evidence/verification/2026-08-25-billing-launch-review.md
   - docs/engineering/launch/evidence/verification/2026-08-26-billing-launch-hardening.md
   - docs/engineering/launch/evidence/verification/2026-08-28-billing-provider-and-deployment.md
-verification: 'Exact-main CI, browser shards, migrations, API, Admin, Scheduler, and the Vercel Web deployment pass. Hypertext Studio product, duplicate-subscription, portal, account-pin, webhook, migration-audit, and owner-policy evidence is complete. Checkout remains disabled while the fixed gateway deployment, Founder grant, sandbox lifecycle, reconciliation observation, live canaries, phone round trip, and 72-hour gate remain open.'
+verification: "Exact-main CI, browser shards, migrations, API, Admin, Scheduler, and the Vercel Web deployment pass. Hypertext Studio product, duplicate-subscription, portal, account-pin, webhook, migration-audit, and owner-policy evidence is complete. Checkout remains disabled while the fixed gateway deployment, Founder grant, sandbox lifecycle, reconciliation observation, live canaries, phone round trip, and 72-hour gate remain open."
 ---
 
 ## MISS-03 — A working web subscription must gate live phone access

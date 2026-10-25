@@ -41,7 +41,7 @@
 - [x] **Step 1: Write the failing enum and boundary tests**
 
 ```typescript
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from "vitest";
 
 import {
   DateResolution,
@@ -49,29 +49,29 @@ import {
   timeframeBounds,
   timeframeKey,
   timeframeLabel,
-} from '../src/planning-timeframe';
+} from "../src/planning-timeframe";
 
-describe('planning timeframes', () => {
-  it('uses Linear resolution values', () => {
-    expect(DateResolution.options).toEqual(['month', 'quarter', 'halfYear', 'year']);
+describe("planning timeframes", () => {
+  it("uses Linear resolution values", () => {
+    expect(DateResolution.options).toEqual(["month", "quarter", "halfYear", "year"]);
   });
 
-  it('resolves a calendar quarter to both canonical anchors', () => {
-    expect(timeframeBounds('2026-05-19', 'quarter', 0)).toEqual({
-      start: '2026-04-01',
-      end: '2026-06-30',
+  it("resolves a calendar quarter to both canonical anchors", () => {
+    expect(timeframeBounds("2026-05-19", "quarter", 0)).toEqual({
+      start: "2026-04-01",
+      end: "2026-06-30",
     });
-    expect(timeframeAnchor('2026-05-19', 'quarter', 0, 'start')).toBe('2026-04-01');
-    expect(timeframeAnchor('2026-05-19', 'quarter', 0, 'target')).toBe('2026-06-30');
+    expect(timeframeAnchor("2026-05-19", "quarter", 0, "start")).toBe("2026-04-01");
+    expect(timeframeAnchor("2026-05-19", "quarter", 0, "target")).toBe("2026-06-30");
   });
 
-  it('keeps a July fiscal year stable in its label and key', () => {
-    expect(timeframeBounds('2026-11-03', 'year', 6)).toEqual({
-      start: '2026-07-01',
-      end: '2027-06-30',
+  it("keeps a July fiscal year stable in its label and key", () => {
+    expect(timeframeBounds("2026-11-03", "year", 6)).toEqual({
+      start: "2026-07-01",
+      end: "2027-06-30",
     });
-    expect(timeframeLabel('2027-06-30', 'year', 6)).toBe('FY 2027');
-    expect(timeframeKey('2027-06-30', 'year', 6)).toBe('2027-06-30|year|6');
+    expect(timeframeLabel("2027-06-30", "year", 6)).toBe("FY 2027");
+    expect(timeframeKey("2027-06-30", "year", 6)).toBe("2027-06-30|year|6");
   });
 });
 ```
@@ -85,9 +85,9 @@ Expected: FAIL because `src/planning-timeframe.ts` does not exist.
 - [x] **Step 3: Implement the public types and calendar-component helpers**
 
 ```typescript
-import { z } from 'zod';
+import { z } from "zod";
 
-export const DateResolution = z.enum(['month', 'quarter', 'halfYear', 'year']);
+export const DateResolution = z.enum(["month", "quarter", "halfYear", "year"]);
 export type DateResolution = z.infer<typeof DateResolution>;
 
 export interface PlanningTimeframe {
@@ -101,7 +101,7 @@ export interface TimeframeBounds {
   readonly end: string;
 }
 
-export type TimeframeEdge = 'start' | 'target';
+export type TimeframeEdge = "start" | "target";
 ```
 
 Implement integer Gregorian helpers for parsing, leap years, month lengths, adding months, and
@@ -117,7 +117,7 @@ export function timeframeAnchor(
   edge: TimeframeEdge,
 ): string {
   const bounds = timeframeBounds(selectedDate, resolution, fiscalYearStartMonth);
-  return edge === 'start' ? bounds.start : bounds.end;
+  return edge === "start" ? bounds.start : bounds.end;
 }
 
 export function isCanonicalTimeframeAnchor(value: PlanningTimeframe, edge: TimeframeEdge): boolean {
@@ -138,9 +138,9 @@ January workspaces format `year`, `halfYear`, and `quarter` as `2027`, `H1 2027`
 for (let fiscalMonth = 0; fiscalMonth < 12; fiscalMonth += 1) {
   it(`round-trips every resolution for fiscal month ${fiscalMonth}`, () => {
     for (const resolution of DateResolution.options) {
-      const bounds = timeframeBounds('2028-02-29', resolution, fiscalMonth);
-      expect(timeframeAnchor(bounds.start, resolution, fiscalMonth, 'start')).toBe(bounds.start);
-      expect(timeframeAnchor(bounds.end, resolution, fiscalMonth, 'target')).toBe(bounds.end);
+      const bounds = timeframeBounds("2028-02-29", resolution, fiscalMonth);
+      expect(timeframeAnchor(bounds.start, resolution, fiscalMonth, "start")).toBe(bounds.start);
+      expect(timeframeAnchor(bounds.end, resolution, fiscalMonth, "target")).toBe(bounds.end);
     }
   });
 }
@@ -192,17 +192,17 @@ the calendar-component invariant.
 ```typescript
 expect(
   ProjectCreate.parse({
-    name: 'Launch Ada',
-    startDate: '2026-06-01',
-    startDateResolution: 'month',
-    targetDate: '2026-06-30',
-    targetDateResolution: 'month',
+    name: "Launch Ada",
+    startDate: "2026-06-01",
+    startDateResolution: "month",
+    targetDate: "2026-06-30",
+    targetDateResolution: "month",
   }),
-).toMatchObject({ startDateResolution: 'month', targetDateResolution: 'month' });
+).toMatchObject({ startDateResolution: "month", targetDateResolution: "month" });
 
 expect(
-  ProjectCreate.parse({ name: 'Precise launch', targetDate: '2026-06-17' }),
-).not.toHaveProperty('targetDateResolution');
+  ProjectCreate.parse({ name: "Precise launch", targetDate: "2026-06-17" }),
+).not.toHaveProperty("targetDateResolution");
 
 expect(WorkspaceSettingsUpdate.parse({ fiscalYearStartMonth: 6 })).toEqual({
   fiscalYearStartMonth: 6,
@@ -219,7 +219,7 @@ Expected: FAIL on the missing resolution and workspace fields.
 - [x] **Step 3: Add the documented DTO fields**
 
 ```typescript
-import { DateResolution } from '@docket/work/planning-timeframe';
+import { DateResolution } from "@docket/work/planning-timeframe";
 
 startDateResolution: DateResolution.nullable().optional();
 targetDateResolution: DateResolution.nullable().optional();
@@ -249,11 +249,11 @@ precise date with one.
 - [x] **Step 5: Add the enum, columns, and schema checks**
 
 ```typescript
-export const planningDateResolution = pgEnum('planning_date_resolution', [
-  'month',
-  'quarter',
-  'halfYear',
-  'year',
+export const planningDateResolution = pgEnum("planning_date_resolution", [
+  "month",
+  "quarter",
+  "halfYear",
+  "year",
 ]);
 ```
 
@@ -306,25 +306,25 @@ field parity, and why fiscal snapshots are read-only.
 ```typescript
 expect(
   planningDatePatch({
-    date: '2026-06-30',
-    resolution: 'month',
+    date: "2026-06-30",
+    resolution: "month",
     fiscalYearStartMonth: 0,
-    edge: 'target',
+    edge: "target",
   }),
 ).toEqual({
-  date: new Date('2026-06-30T00:00:00.000Z'),
-  resolution: 'month',
+  date: new Date("2026-06-30T00:00:00.000Z"),
+  resolution: "month",
   fiscalYearStartMonth: 0,
 });
 
 expect(() =>
   planningDatePatch({
-    date: '2026-06-17',
-    resolution: 'month',
+    date: "2026-06-17",
+    resolution: "month",
     fiscalYearStartMonth: 0,
-    edge: 'target',
+    edge: "target",
   }),
-).toThrow('Choose the last day of the selected month');
+).toThrow("Choose the last day of the selected month");
 ```
 
 - [x] **Step 2: Run the helper test and verify the missing helper fails**
@@ -371,15 +371,15 @@ Cover these requests:
 
 ```typescript
 await createProject({
-  startDate: '2026-04-01',
-  startDateResolution: 'quarter',
-  targetDate: '2026-09-30',
-  targetDateResolution: 'quarter',
+  startDate: "2026-04-01",
+  startDateResolution: "quarter",
+  targetDate: "2026-09-30",
+  targetDateResolution: "quarter",
 });
 
-await updateProject({ targetDate: '2026-09-18' });
+await updateProject({ targetDate: "2026-09-18" });
 await updateProject({ targetDate: null });
-await updateInitiative({ targetDate: '2027-06-30', targetDateResolution: 'year' });
+await updateInitiative({ targetDate: "2027-06-30", targetDateResolution: "year" });
 ```
 
 Assert that the first response returns resolution plus fiscal snapshots. Assert that the old-client
@@ -461,17 +461,17 @@ and the no-rewrite fiscal setting.
 ```typescript
 expect(
   toExternalProject({
-    id: 'p1',
-    name: 'Launch Ada',
-    state: 'started',
-    url: 'https://linear.app/acme/project/launch-ada',
-    startDate: '2026-06-01',
-    startDateResolution: 'month',
-    targetDate: '2026-06-30',
-    targetDateResolution: 'month',
-    updatedAt: '2026-05-01T00:00:00.000Z',
+    id: "p1",
+    name: "Launch Ada",
+    state: "started",
+    url: "https://linear.app/acme/project/launch-ada",
+    startDate: "2026-06-01",
+    startDateResolution: "month",
+    targetDate: "2026-06-30",
+    targetDateResolution: "month",
+    updatedAt: "2026-05-01T00:00:00.000Z",
   }),
-).toMatchObject({ startDateResolution: 'month', targetDateResolution: 'month' });
+).toMatchObject({ startDateResolution: "month", targetDateResolution: "month" });
 ```
 
 - [x] **Step 2: Add resolution fields to the provider boundary and GraphQL query**
@@ -508,13 +508,13 @@ const start = externalPlanningDatePatch({
   date: ext.startDate,
   resolution: ext.startDateResolution,
   fiscalYearStartMonth: ctx.sourceFiscalYearStartMonth,
-  edge: 'start',
+  edge: "start",
 });
 const target = externalPlanningDatePatch({
   date: ext.targetDate,
   resolution: ext.targetDateResolution,
   fiscalYearStartMonth: ctx.sourceFiscalYearStartMonth,
-  edge: 'target',
+  edge: "target",
 });
 ```
 
@@ -526,16 +526,16 @@ metadata. Linear must never take that fallback.
 
 ```typescript
 expect(projectRow).toMatchObject({
-  startDate: '2026-06-01',
-  startDateResolution: 'month',
-  targetDate: '2026-06-30',
-  targetDateResolution: 'month',
+  startDate: "2026-06-01",
+  startDateResolution: "month",
+  targetDate: "2026-06-30",
+  targetDateResolution: "month",
 });
 
 await callUpdateTool({
-  entity: 'project',
+  entity: "project",
   id: projectId,
-  set: { targetDate: '2026-09-30', targetDateResolution: 'quarter' },
+  set: { targetDate: "2026-09-30", targetDateResolution: "quarter" },
 });
 ```
 
@@ -593,12 +593,12 @@ render(
   />,
 );
 
-await user.click(screen.getByRole('button', { name: 'Set target date' }));
-expect(screen.getByRole('option', { name: 'Month' })).toBeVisible();
-expect(screen.getByRole('option', { name: 'Quarter' })).toBeVisible();
-expect(screen.getByRole('option', { name: 'Half-year' })).toBeVisible();
-expect(screen.getByRole('option', { name: 'Year' })).toBeVisible();
-expect(screen.getByRole('option', { name: 'Specific date' })).toBeVisible();
+await user.click(screen.getByRole("button", { name: "Set target date" }));
+expect(screen.getByRole("option", { name: "Month" })).toBeVisible();
+expect(screen.getByRole("option", { name: "Quarter" })).toBeVisible();
+expect(screen.getByRole("option", { name: "Half-year" })).toBeVisible();
+expect(screen.getByRole("option", { name: "Year" })).toBeVisible();
+expect(screen.getByRole("option", { name: "Specific date" })).toBeVisible();
 ```
 
 Add tests for Enter, arrow navigation, Escape without save, outside click, Clear, fiscal labels,
@@ -707,8 +707,8 @@ calendar instead of changing it.
 - [x] **Step 1: Write failing workspace-setting tests**
 
 ```tsx
-expect(screen.getByLabelText('Fiscal year starts')).toHaveValue('0');
-await user.selectOptions(screen.getByLabelText('Fiscal year starts'), '6');
+expect(screen.getByLabelText("Fiscal year starts")).toHaveValue("0");
+await user.selectOptions(screen.getByLabelText("Fiscal year starts"), "6");
 expect(patch).toHaveBeenCalledWith({ fiscalYearStartMonth: 6 });
 expect(screen.getByText(/new project and initiative timeframes/i)).toBeVisible();
 ```
@@ -721,14 +721,14 @@ Use month values `0` through `11` and localized month names. The supporting copy
 - [x] **Step 3: Write failing Project create and detail tests**
 
 ```tsx
-await chooseTimeframe('Project start', 'Quarter', 'Q3 2026');
-await chooseTimeframe('Project target', 'Month', 'December 2026');
+await chooseTimeframe("Project start", "Quarter", "Q3 2026");
+await chooseTimeframe("Project target", "Month", "December 2026");
 expect(createProject).toHaveBeenCalledWith(
   expect.objectContaining({
-    startDate: '2026-07-01',
-    startDateResolution: 'quarter',
-    targetDate: '2026-12-31',
-    targetDateResolution: 'month',
+    startDate: "2026-07-01",
+    startDateResolution: "quarter",
+    targetDate: "2026-12-31",
+    targetDateResolution: "month",
   }),
 );
 ```
@@ -756,9 +756,9 @@ snapshot for labels and the current setting for new selections.
 - [x] **Step 5: Write failing Project catalog tests for semantic display and grouping**
 
 ```typescript
-expect(formatProjectTarget(monthProject)).toBe('June 2026');
-expect(targetTimeframeKey(monthProject)).toBe('2026-06-30|month|0');
-expect(targetTimeframeKey(exactProject)).toBe('2026-06-17|day');
+expect(formatProjectTarget(monthProject)).toBe("June 2026");
+expect(targetTimeframeKey(monthProject)).toBe("2026-06-30|month|0");
+expect(targetTimeframeKey(exactProject)).toBe("2026-06-17|day");
 ```
 
 Create catalog options from the loaded Project rows. Group broad values by `timeframeKey`. Keep
@@ -812,11 +812,11 @@ stability, and unchanged timeline anchors.
 - [x] **Step 1: Write failing Initiative picker and mutation tests**
 
 ```tsx
-await chooseTimeframe('Initiative target', 'Half-year', 'H2 2026');
+await chooseTimeframe("Initiative target", "Half-year", "H2 2026");
 expect(updateInitiative).toHaveBeenCalledWith(
   expect.objectContaining({
-    targetDate: '2026-12-31',
-    targetDateResolution: 'halfYear',
+    targetDate: "2026-12-31",
+    targetDateResolution: "halfYear",
   }),
 );
 ```
@@ -894,13 +894,13 @@ geometry.
 - [x] **Step 1: Add the authenticated end-to-end journey**
 
 ```typescript
-test('saved planning timeframes retain their fiscal basis', async ({ page }) => {
-  await setFiscalStart(page, 'July');
-  await createProjectWithTimeframes(page, { start: 'Q1 FY 2027', target: 'H2 FY 2027' });
-  await setFiscalStart(page, 'January');
+test("saved planning timeframes retain their fiscal basis", async ({ page }) => {
+  await setFiscalStart(page, "July");
+  await createProjectWithTimeframes(page, { start: "Q1 FY 2027", target: "H2 FY 2027" });
+  await setFiscalStart(page, "January");
   await openCreatedProject(page);
-  await expect(page.getByRole('button', { name: /Q1 FY 2027/ })).toBeVisible();
-  await expect(page.getByRole('button', { name: /H2 FY 2027/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: /Q1 FY 2027/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: /H2 FY 2027/ })).toBeVisible();
 });
 ```
 

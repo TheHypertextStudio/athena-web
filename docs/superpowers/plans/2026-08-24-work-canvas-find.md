@@ -148,7 +148,7 @@ to both node renderers through one context, so selection and find remain separat
   export function matchWorkCanvasDocuments(
     documents: readonly WorkCanvasFindDocument[],
     query: string,
-    direction: 'LR' | 'TB',
+    direction: "LR" | "TB",
   ): readonly WorkCanvasFindMatch[];
   ```
 
@@ -178,12 +178,12 @@ to both node renderers through one context, so selection and find remain separat
 
   export function normalizeWorkCanvasFindText(value: string): string {
     return value
-      .normalize('NFKD')
-      .replace(COMBINING_MARK, '')
+      .normalize("NFKD")
+      .replace(COMBINING_MARK, "")
       .toLocaleLowerCase()
-      .replace(SEPARATOR, ' ')
+      .replace(SEPARATOR, " ")
       .trim()
-      .replace(/\s+/g, ' ');
+      .replace(/\s+/g, " ");
   }
   ```
 
@@ -227,7 +227,7 @@ to both node renderers through one context, so selection and find remain separat
     readonly scopeKey: string;
     readonly rootRef: React.RefObject<HTMLElement | null>;
     readonly documents: readonly WorkCanvasFindDocument[];
-    readonly direction: 'LR' | 'TB';
+    readonly direction: "LR" | "TB";
     readonly viewport: WorkCanvasViewport | null;
     readonly initialQuery?: string;
     readonly onInitialQueryConsumed?: () => void;
@@ -277,7 +277,7 @@ to both node renderers through one context, so selection and find remain separat
     if (!(element instanceof HTMLElement)) return false;
     if (element.closest('[role="dialog"], [role="alertdialog"]')) return true;
     if (element instanceof HTMLTextAreaElement || element.isContentEditable) return true;
-    return element instanceof HTMLInputElement && element.type !== 'button';
+    return element instanceof HTMLInputElement && element.type !== "button";
   }
   ```
 
@@ -321,7 +321,7 @@ to both node renderers through one context, so selection and find remain separat
   Pin the context value:
 
   ```ts
-  export type WorkCanvasFindNodeState = 'inactive' | 'match' | 'active' | 'quiet';
+  export type WorkCanvasFindNodeState = "inactive" | "match" | "active" | "quiet";
 
   export interface WorkCanvasFindDecoration {
     readonly open: boolean;

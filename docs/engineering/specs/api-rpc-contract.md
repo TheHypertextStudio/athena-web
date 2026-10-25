@@ -41,17 +41,17 @@ export default tasks;
 
 ```ts
 // apps/api/src/app.ts — TWO composition roots, kept apart
-import { Hono } from 'hono';
+import { Hono } from "hono";
 
 // (1) The PUBLIC product API under /v1 — consumed by apps/web.
-const app = new Hono<AppEnv>().basePath('/v1');
-const routes = app.route('/orgs', orgs).route('/hub', hub); // cross-org Hub surfaces
+const app = new Hono<AppEnv>().basePath("/v1");
+const routes = app.route("/orgs", orgs).route("/hub", hub); // cross-org Hub surfaces
 export type AppType = typeof routes; // ← THE public contract
 
 // (2) The INTERNAL staff back-office under /admin — consumed ONLY by apps/admin.
 // Off /v1 so it is neither in the public AppType nor the public Scalar spec.
 export const adminApp = new Hono<AppEnv>();
-const adminRoutes = adminApp.route('/admin', admin); // self-gated by staffMiddleware
+const adminRoutes = adminApp.route("/admin", admin); // self-gated by staffMiddleware
 export type AdminAppType = typeof adminRoutes; // ← the admin contract (api.admin.*)
 
 export { app };

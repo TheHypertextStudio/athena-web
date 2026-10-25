@@ -46,8 +46,8 @@ All tokens are **CSS custom properties in OKLCH**, defined under `:root` plus a 
 File: `@docket/ui/src/styles/globals.css` (imported by every app's own `globals.css`).
 
 ```css
-@import 'tailwindcss';
-@import 'tw-animate-css';
+@import "tailwindcss";
+@import "tw-animate-css";
 
 /* dark mode follows the browser color scheme; no JS theme provider */
 
@@ -265,7 +265,7 @@ File: `@docket/ui/src/styles/globals.css` (imported by every app's own `globals.
      and published as --font-ibm-plex-sans / --font-ibm-plex-mono by the root layout CSS.
      Marketing, authentication and onboarding add Fraunces in their route layouts. */
   --font-sans: var(--font-ibm-plex-sans), ui-sans-serif, system-ui, sans-serif;
-  --font-mono: var(--font-ibm-plex-mono), ui-monospace, 'SFMono-Regular', monospace;
+  --font-mono: var(--font-ibm-plex-mono), ui-monospace, "SFMono-Regular", monospace;
 }
 
 @layer base {
@@ -274,7 +274,7 @@ File: `@docket/ui/src/styles/globals.css` (imported by every app's own `globals.
   }
   body {
     @apply bg-background text-foreground;
-    font-feature-settings: 'cv11', 'ss01';
+    font-feature-settings: "cv11", "ss01";
   }
   /* density: see §1.7 */
 }
@@ -350,11 +350,11 @@ Three modes via `data-density` on the AppShell root (persisted per user in `loca
     --row-h: 2.25rem;
     --row-py: 0.375rem;
   } /* comfortable (default) */
-  [data-density='compact'] {
+  [data-density="compact"] {
     --row-h: 2rem;
     --row-py: 0.25rem;
   }
-  [data-density='spacious'] {
+  [data-density="spacious"] {
     --row-h: 2.75rem;
     --row-py: 0.625rem;
   }
@@ -412,8 +412,8 @@ Rules: **no decorative motion.** Group collapse animates height/opacity; Cmd+K f
 ### 2.2 Each app's `app/globals.css`
 
 ```css
-@import '@docket/ui/styles/globals.css'; /* the file in §1 */
-@source '../../packages/ui/src/**/*.{ts,tsx}'; /* v4 content detection across the workspace */
+@import "@docket/ui/styles/globals.css"; /* the file in §1 */
+@source "../../packages/ui/src/**/*.{ts,tsx}"; /* v4 content detection across the workspace */
 ```
 
 ### 2.3 Theme provider (dark/light)

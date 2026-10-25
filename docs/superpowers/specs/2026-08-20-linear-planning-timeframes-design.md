@@ -32,7 +32,7 @@ from `0` through `11`, where January is `0`.
 Athena will expose these additions:
 
 ```typescript
-export const DateResolution = z.enum(['month', 'quarter', 'halfYear', 'year']);
+export const DateResolution = z.enum(["month", "quarter", "halfYear", "year"]);
 
 type ProjectOut = {
   startDate: string | null;

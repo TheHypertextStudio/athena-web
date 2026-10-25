@@ -43,96 +43,96 @@ function keyEvent(key: string, overrides: Partial<ListKeyboardEvent> = {}): List
 Then add:
 
 ```ts
-it('ignores every handled key when the event target is a text-entry element', () => {
+it("ignores every handled key when the event target is a text-entry element", () => {
   const onActiveChange = vi.fn();
   const { result } = renderHook(() => useListKeyboard({ rowCount: 3, onActiveChange }));
-  const input = document.createElement('input');
+  const input = document.createElement("input");
   act(() => {
-    result.current.onKeyDown(keyEvent('ArrowDown', { target: input }));
+    result.current.onKeyDown(keyEvent("ArrowDown", { target: input }));
   });
   expect(result.current.activeIndex).toBe(-1);
   expect(onActiveChange).not.toHaveBeenCalled();
 });
 
-it('ignores a handled key when the target is contenteditable', () => {
+it("ignores a handled key when the target is contenteditable", () => {
   const { result } = renderHook(() => useListKeyboard({ rowCount: 3, initialIndex: 1 }));
-  const div = document.createElement('div');
-  Object.defineProperty(div, 'isContentEditable', { value: true });
+  const div = document.createElement("div");
+  Object.defineProperty(div, "isContentEditable", { value: true });
   act(() => {
-    result.current.onKeyDown(keyEvent('Escape', { target: div }));
+    result.current.onKeyDown(keyEvent("Escape", { target: div }));
   });
   expect(result.current.activeIndex).toBe(1);
 });
 
-it('fires onPropertyKey for an unmodified letter on the active row and consumes it when handled', () => {
+it("fires onPropertyKey for an unmodified letter on the active row and consumes it when handled", () => {
   const onPropertyKey = vi.fn().mockReturnValue(true);
   const { result } = renderHook(() =>
     useListKeyboard({ rowCount: 3, initialIndex: 1, onPropertyKey }),
   );
-  const event = keyEvent('l');
+  const event = keyEvent("l");
   act(() => {
     result.current.onKeyDown(event);
   });
-  expect(onPropertyKey).toHaveBeenCalledWith('l', 1);
+  expect(onPropertyKey).toHaveBeenCalledWith("l", 1);
   expect(event.preventDefault).toHaveBeenCalled();
 });
 
-it('lowercases the dispatched key', () => {
+it("lowercases the dispatched key", () => {
   const onPropertyKey = vi.fn().mockReturnValue(true);
   const { result } = renderHook(() =>
     useListKeyboard({ rowCount: 2, initialIndex: 0, onPropertyKey }),
   );
   act(() => {
-    result.current.onKeyDown(keyEvent('L'));
+    result.current.onKeyDown(keyEvent("L"));
   });
-  expect(onPropertyKey).toHaveBeenCalledWith('l', 0);
+  expect(onPropertyKey).toHaveBeenCalledWith("l", 0);
 });
 
-it('leaves an unhandled property key untouched (no preventDefault)', () => {
+it("leaves an unhandled property key untouched (no preventDefault)", () => {
   const onPropertyKey = vi.fn().mockReturnValue(false);
   const { result } = renderHook(() =>
     useListKeyboard({ rowCount: 2, initialIndex: 0, onPropertyKey }),
   );
-  const event = keyEvent('q');
+  const event = keyEvent("q");
   act(() => {
     result.current.onKeyDown(event);
   });
   expect(event.preventDefault).not.toHaveBeenCalled();
 });
 
-it('never dispatches onPropertyKey for a modified keystroke', () => {
+it("never dispatches onPropertyKey for a modified keystroke", () => {
   const onPropertyKey = vi.fn();
   const { result } = renderHook(() =>
     useListKeyboard({ rowCount: 3, initialIndex: 0, onPropertyKey }),
   );
   act(() => {
-    result.current.onKeyDown(keyEvent('l', { metaKey: true }));
+    result.current.onKeyDown(keyEvent("l", { metaKey: true }));
   });
   act(() => {
-    result.current.onKeyDown(keyEvent('l', { ctrlKey: true }));
+    result.current.onKeyDown(keyEvent("l", { ctrlKey: true }));
   });
   act(() => {
-    result.current.onKeyDown(keyEvent('l', { altKey: true }));
+    result.current.onKeyDown(keyEvent("l", { altKey: true }));
   });
   expect(onPropertyKey).not.toHaveBeenCalled();
 });
 
-it('does not dispatch onPropertyKey when no row is active', () => {
+it("does not dispatch onPropertyKey when no row is active", () => {
   const onPropertyKey = vi.fn();
   const { result } = renderHook(() => useListKeyboard({ rowCount: 3, onPropertyKey }));
   act(() => {
-    result.current.onKeyDown(keyEvent('l'));
+    result.current.onKeyDown(keyEvent("l"));
   });
   expect(onPropertyKey).not.toHaveBeenCalled();
 });
 
-it('does not dispatch onPropertyKey for multi-character keys (arrows, Enter, etc.)', () => {
+it("does not dispatch onPropertyKey for multi-character keys (arrows, Enter, etc.)", () => {
   const onPropertyKey = vi.fn();
   const { result } = renderHook(() =>
     useListKeyboard({ rowCount: 3, initialIndex: 0, onPropertyKey }),
   );
   act(() => {
-    result.current.onKeyDown(keyEvent('ArrowDown'));
+    result.current.onKeyDown(keyEvent("ArrowDown"));
   });
   expect(onPropertyKey).not.toHaveBeenCalled();
 });
@@ -148,7 +148,7 @@ Expected: FAIL — `ListKeyboardEvent`/`UseListKeyboardOptions` don't know `targ
 Replace the full contents of `packages/ui/src/hooks/useListKeyboard.tsx` with:
 
 ````tsx
-'use client';
+"use client";
 
 /**
  * `@docket/ui` — grid keyboard navigation for the virtualized {@link ListView}.
@@ -173,7 +173,7 @@ Replace the full contents of `packages/ui/src/hooks/useListKeyboard.tsx` with:
  * `onKeyDown` handler and the current `activeIndex`, so the {@link ListView} can scroll the
  * active row into view through its virtualizer.
  */
-import * as React from 'react';
+import * as React from "react";
 
 /** The keyboard event fields {@link useListKeyboard} reads. */
 export interface ListKeyboardEvent {
@@ -234,7 +234,7 @@ function isTextEntryTarget(target: EventTarget | null | undefined): boolean {
   if (!(target instanceof HTMLElement)) return false;
   if (target.isContentEditable) return true;
   const tag = target.tagName;
-  return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
+  return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
 }
 
 /** Whether `key` is a single, unmodified letter eligible for `onPropertyKey` dispatch. */
@@ -290,34 +290,34 @@ export function useListKeyboard({
       }
 
       switch (event.key) {
-        case 'ArrowDown': {
+        case "ArrowDown": {
           event.preventDefault();
           setActiveIndex(activeIndex < 0 ? 0 : activeIndex + 1);
           break;
         }
-        case 'ArrowUp': {
+        case "ArrowUp": {
           event.preventDefault();
           setActiveIndex(activeIndex < 0 ? rowCount - 1 : activeIndex - 1);
           break;
         }
-        case 'Home': {
+        case "Home": {
           event.preventDefault();
           setActiveIndex(0);
           break;
         }
-        case 'End': {
+        case "End": {
           event.preventDefault();
           setActiveIndex(rowCount - 1);
           break;
         }
-        case 'Enter': {
+        case "Enter": {
           if (activeIndex >= 0) {
             event.preventDefault();
             onActivate?.(activeIndex);
           }
           break;
         }
-        case 'Escape': {
+        case "Escape": {
           event.preventDefault();
           setActiveIndexState(-1);
           break;
@@ -377,8 +377,8 @@ git restore --staged . && git add packages/ui/src/hooks/useListKeyboard.tsx pack
 Add to `packages/ui/tests/components/views/entity-table.test.tsx`, as a new `describe` block after `'EntityTable — keyboard navigation'`:
 
 ```tsx
-describe('EntityTable — property-key hotkeys', () => {
-  it('forwards a property key with the active row and its anchor element', () => {
+describe("EntityTable — property-key hotkeys", () => {
+  it("forwards a property key with the active row and its anchor element", () => {
     const onRowPropertyKey =
       vi.fn<(key: string, row: Row, anchor: HTMLElement | null) => boolean>();
     render(
@@ -390,18 +390,18 @@ describe('EntityTable — property-key hotkeys', () => {
         onRowPropertyKey={onRowPropertyKey}
       />,
     );
-    const grid = screen.getByRole('grid', { name: 'Items' });
+    const grid = screen.getByRole("grid", { name: "Items" });
     grid.focus();
-    fireEvent.keyDown(grid, { key: 'ArrowDown' });
-    fireEvent.keyDown(grid, { key: 'l' });
+    fireEvent.keyDown(grid, { key: "ArrowDown" });
+    fireEvent.keyDown(grid, { key: "l" });
     expect(onRowPropertyKey).toHaveBeenCalledTimes(1);
     const [key, row, anchor] = onRowPropertyKey.mock.calls[0]!;
-    expect(key).toBe('l');
+    expect(key).toBe("l");
     expect(row).toBe(ROWS[0]);
-    expect(anchor).toBe(screen.getByRole('row', { name: /Billing revamp/ }));
+    expect(anchor).toBe(screen.getByRole("row", { name: /Billing revamp/ }));
   });
 
-  it('resolves the anchor when rows render through a custom renderRowLink', () => {
+  it("resolves the anchor when rows render through a custom renderRowLink", () => {
     const onRowPropertyKey =
       vi.fn<(key: string, row: Row, anchor: HTMLElement | null) => boolean>();
     render(
@@ -419,18 +419,18 @@ describe('EntityTable — property-key hotkeys', () => {
         onRowPropertyKey={onRowPropertyKey}
       />,
     );
-    const grid = screen.getByRole('grid', { name: 'Items' });
+    const grid = screen.getByRole("grid", { name: "Items" });
     grid.focus();
-    fireEvent.keyDown(grid, { key: 'ArrowDown' });
-    fireEvent.keyDown(grid, { key: 'l' });
-    expect(onRowPropertyKey).toHaveBeenCalledWith('l', ROWS[0], screen.getAllByTestId('link')[0]);
+    fireEvent.keyDown(grid, { key: "ArrowDown" });
+    fireEvent.keyDown(grid, { key: "l" });
+    expect(onRowPropertyKey).toHaveBeenCalledWith("l", ROWS[0], screen.getAllByTestId("link")[0]);
   });
 
-  it('never forwards a property key when the active row is a group header', () => {
+  it("never forwards a property key when the active row is a group header", () => {
     const onRowPropertyKey =
       vi.fn<(key: string, row: Row, anchor: HTMLElement | null) => boolean>();
     const GROUPS: EntityTableGroup<Row>[] = [
-      { id: 'g-one', label: 'First bucket', rows: [ROWS[0]!] },
+      { id: "g-one", label: "First bucket", rows: [ROWS[0]!] },
     ];
     render(
       <EntityTable
@@ -441,14 +441,14 @@ describe('EntityTable — property-key hotkeys', () => {
         onRowPropertyKey={onRowPropertyKey}
       />,
     );
-    const grid = screen.getByRole('grid', { name: 'Items' });
+    const grid = screen.getByRole("grid", { name: "Items" });
     grid.focus();
-    fireEvent.keyDown(grid, { key: 'ArrowDown' }); // -> the group header is the first flat row
-    fireEvent.keyDown(grid, { key: 'l' });
+    fireEvent.keyDown(grid, { key: "ArrowDown" }); // -> the group header is the first flat row
+    fireEvent.keyDown(grid, { key: "l" });
     expect(onRowPropertyKey).not.toHaveBeenCalled();
   });
 
-  it('prevents the default keydown when onRowPropertyKey reports it handled the key', () => {
+  it("prevents the default keydown when onRowPropertyKey reports it handled the key", () => {
     const onRowPropertyKey = vi.fn().mockReturnValue(true);
     render(
       <EntityTable
@@ -459,20 +459,20 @@ describe('EntityTable — property-key hotkeys', () => {
         onRowPropertyKey={onRowPropertyKey}
       />,
     );
-    const grid = screen.getByRole('grid', { name: 'Items' });
+    const grid = screen.getByRole("grid", { name: "Items" });
     grid.focus();
-    fireEvent.keyDown(grid, { key: 'ArrowDown' });
-    const notCancelled = fireEvent.keyDown(grid, { key: 'l' });
+    fireEvent.keyDown(grid, { key: "ArrowDown" });
+    const notCancelled = fireEvent.keyDown(grid, { key: "l" });
     expect(notCancelled).toBe(false); // dispatchEvent returns false once preventDefault runs
   });
 
-  it('does nothing when no onRowPropertyKey handler is supplied', () => {
+  it("does nothing when no onRowPropertyKey handler is supplied", () => {
     render(<EntityTable aria-label="Items" columns={COLUMNS} rows={ROWS} getRowKey={getRowKey} />);
-    const grid = screen.getByRole('grid', { name: 'Items' });
+    const grid = screen.getByRole("grid", { name: "Items" });
     grid.focus();
-    fireEvent.keyDown(grid, { key: 'ArrowDown' });
+    fireEvent.keyDown(grid, { key: "ArrowDown" });
     expect(() => {
-      fireEvent.keyDown(grid, { key: 'l' });
+      fireEvent.keyDown(grid, { key: "l" });
     }).not.toThrow();
   });
 });
@@ -509,7 +509,7 @@ const handlePropertyKey = React.useCallback(
   (key: string, index: number): boolean => {
     if (!onRowPropertyKey) return false;
     const entry = flat[index];
-    if (!entry || entry.kind !== 'row') return false;
+    if (!entry || entry.kind !== "row") return false;
     const anchor = scrollRef.current?.querySelector<HTMLElement>('[aria-current="true"]') ?? null;
     return onRowPropertyKey(key, entry.row, anchor);
   },
@@ -573,9 +573,9 @@ git restore --staged . && git add packages/ui/src/components/views/EntityTable.t
 Add to `apps/web/tests/lib/search-route.test.ts` (new top-level `describe`, after the existing ones — check the file's existing structure/imports first and match its style):
 
 ```ts
-describe('labelFilterHref', () => {
-  it('builds the same pre-filtered task-list URL the label search-hit route uses', () => {
-    const href = labelFilterHref(ORG, 'label_1');
+describe("labelFilterHref", () => {
+  it("builds the same pre-filtered task-list URL the label search-hit route uses", () => {
+    const href = labelFilterHref(ORG, "label_1");
     expect(href).toBe(`/orgs/${ORG}/tasks?filter=labels%3Aeq%3Alabel_1`);
   });
 });
@@ -613,7 +613,7 @@ Add the new export near `withQuery` (which stays `function`, not exported — th
  * shape changes, the other must change with it.
  */
 export function labelFilterHref(organizationId: string, labelId: string): string {
-  return withQuery(`/orgs/${organizationId}/tasks`, 'filter', `labels:eq:${labelId}`);
+  return withQuery(`/orgs/${organizationId}/tasks`, "filter", `labels:eq:${labelId}`);
 }
 ```
 
@@ -662,24 +662,24 @@ git restore --staged . && git add apps/web/src/lib/search-route.ts apps/web/test
 Create `apps/web/tests/components/pickers/picker-overlay.test.tsx`:
 
 ```tsx
-import '@testing-library/jest-dom/vitest';
+import "@testing-library/jest-dom/vitest";
 
-import { OrganizationId } from '@docket/identity-access/ids';
-import { act, render, renderHook, screen } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { OrganizationId } from "@docket/identity-access/ids";
+import { act, render, renderHook, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { PickerOverlayProvider, usePickerOverlay } from '@/components/pickers/picker-overlay';
-import { makeQueryWrapper } from '../../support/query';
+import { PickerOverlayProvider, usePickerOverlay } from "@/components/pickers/picker-overlay";
+import { makeQueryWrapper } from "../../support/query";
 
 afterEach(() => {
   vi.restoreAllMocks();
 });
 
-vi.mock('@/lib/api', () => ({
+vi.mock("@/lib/api", () => ({
   api: {
     v1: {
       orgs: {
-        ':orgId': {
+        ":orgId": {
           labels: {
             $get: vi.fn().mockResolvedValue({
               ok: true,
@@ -693,10 +693,10 @@ vi.mock('@/lib/api', () => ({
   },
 }));
 
-const ORG = OrganizationId.parse('01HZX5K3QJ9F8B7C6D5E4F3G2H');
+const ORG = OrganizationId.parse("01HZX5K3QJ9F8B7C6D5E4F3G2H");
 
-describe('usePickerOverlay', () => {
-  it('throws when used outside a PickerOverlayProvider', () => {
+describe("usePickerOverlay", () => {
+  it("throws when used outside a PickerOverlayProvider", () => {
     const { result } = renderHook(() => {
       try {
         return usePickerOverlay();
@@ -707,7 +707,7 @@ describe('usePickerOverlay', () => {
     expect(result.current).toBeInstanceOf(Error);
   });
 
-  it('opens the labels popover with a listbox once open() is called', async () => {
+  it("opens the labels popover with a listbox once open() is called", async () => {
     const { wrapper } = makeQueryWrapper();
 
     function Trigger(): React.JSX.Element {
@@ -717,10 +717,10 @@ describe('usePickerOverlay', () => {
           type="button"
           onClick={() => {
             overlay.open({
-              kind: 'labels',
+              kind: "labels",
               organizationId: ORG,
-              objects: [{ kind: 'task', id: 'task_1', organizationId: ORG, title: 'Ship it' }],
-              current: new Map([['task:task_1', []]]),
+              objects: [{ kind: "task", id: "task_1", organizationId: ORG, title: "Ship it" }],
+              current: new Map([["task:task_1", []]]),
             });
           }}
         >
@@ -737,10 +737,10 @@ describe('usePickerOverlay', () => {
     );
 
     await act(async () => {
-      screen.getByRole('button', { name: 'Open' }).click();
+      screen.getByRole("button", { name: "Open" }).click();
     });
 
-    expect(await screen.findByRole('listbox')).toBeInTheDocument();
+    expect(await screen.findByRole("listbox")).toBeInTheDocument();
   });
 });
 ```
@@ -755,7 +755,7 @@ Expected: FAIL — the module does not exist.
 Create `apps/web/src/components/pickers/picker-overlay.tsx`:
 
 ```tsx
-'use client';
+"use client";
 
 /**
  * `components/pickers/picker-overlay` — the one moved popover for "edit labels on N objects".
@@ -781,15 +781,15 @@ import {
   useMemo,
   useRef,
   useState,
-} from 'react';
+} from "react";
 
-import type { ObjectRef } from '@/lib/actions';
+import type { ObjectRef } from "@/lib/actions";
 
-import { LabelPickerOverlay } from './label-picker-overlay';
+import { LabelPickerOverlay } from "./label-picker-overlay";
 
 /** A request to edit the label set of one or more objects. */
 export interface LabelPickerRequest {
-  readonly kind: 'labels';
+  readonly kind: "labels";
   /** The workspace the objects belong to. */
   readonly organizationId: string;
   /** The objects being edited, in display order. Always at least one. */
@@ -815,8 +815,8 @@ const PickerOverlayContext = createContext<PickerOverlayApi | null>(null);
 /** Thrown when `usePickerOverlay` is used outside a {@link PickerOverlayProvider}. */
 class MissingPickerOverlayError extends Error {
   constructor() {
-    super('No picker overlay is mounted. Wrap the app in <PickerOverlayProvider>.');
-    this.name = 'MissingPickerOverlayError';
+    super("No picker overlay is mounted. Wrap the app in <PickerOverlayProvider>.");
+    this.name = "MissingPickerOverlayError";
   }
 }
 
@@ -878,7 +878,7 @@ export function PickerOverlayProvider({ children }: PickerOverlayProviderProps):
 Create `apps/web/src/components/pickers/label-picker-overlay.tsx`:
 
 ```tsx
-'use client';
+"use client";
 
 /**
  * `components/pickers/label-picker-overlay` — the popover {@link PickerOverlayProvider} renders.
@@ -894,23 +894,23 @@ Create `apps/web/src/components/pickers/label-picker-overlay.tsx`:
  * partially- or un-applied label applies it to every object that lacks it; unchecking a fully-
  * applied label removes it from every object that has it.
  */
-import type { LabelCreate, LabelOut } from '@docket/work/label-contract';
-import { LabelId } from '@docket/work/ids';
-import { PickerList, type PickerOption } from '@docket/ui/components';
-import { Popover, PopoverAnchor, PopoverContent, Skeleton } from '@docket/ui/primitives';
-import type { PopoverVirtualAnchor } from '@docket/ui/primitives';
-import { useQueryClient } from '@tanstack/react-query';
-import { useCallback, useMemo, useRef, useState, type JSX } from 'react';
-import { useQueries } from '@tanstack/react-query';
+import type { LabelCreate, LabelOut } from "@docket/work/label-contract";
+import { LabelId } from "@docket/work/ids";
+import { PickerList, type PickerOption } from "@docket/ui/components";
+import { Popover, PopoverAnchor, PopoverContent, Skeleton } from "@docket/ui/primitives";
+import type { PopoverVirtualAnchor } from "@docket/ui/primitives";
+import { useQueryClient } from "@tanstack/react-query";
+import { useCallback, useMemo, useRef, useState, type JSX } from "react";
+import { useQueries } from "@tanstack/react-query";
 
-import { objectKey } from '@/lib/actions';
-import { api } from '@/lib/api';
-import { labelOptions } from '@/components/pickers/options';
-import { labelsDef, useCreateLabel } from '@/components/labels/queries';
-import { taskDetailDef } from '@/lib/use-task-detail';
-import { queryKeys, unwrap, useApiListQuery, type QueryClient } from '@/lib/query';
+import { objectKey } from "@/lib/actions";
+import { api } from "@/lib/api";
+import { labelOptions } from "@/components/pickers/options";
+import { labelsDef, useCreateLabel } from "@/components/labels/queries";
+import { taskDetailDef } from "@/lib/use-task-detail";
+import { queryKeys, unwrap, useApiListQuery, type QueryClient } from "@/lib/query";
 
-import type { LabelPickerRequest } from './picker-overlay';
+import type { LabelPickerRequest } from "./picker-overlay";
 
 /** Props for {@link LabelPickerOverlay}. */
 export interface LabelPickerOverlayProps {
@@ -927,14 +927,14 @@ async function applyLabelsToTask(
 ): Promise<void> {
   await unwrap(
     () =>
-      api.v1.orgs[':orgId'].tasks[':id'].$patch({
+      api.v1.orgs[":orgId"].tasks[":id"].$patch({
         param: { orgId, id: taskId },
         json: { labels: labelIds.map((id) => LabelId.parse(id)) },
       }),
-    'Could not update labels.',
+    "Could not update labels.",
   );
   void queryClient.invalidateQueries({ queryKey: queryKeys.task(orgId, taskId) });
-  void queryClient.invalidateQueries({ queryKey: ['org', orgId, 'task-graph'] });
+  void queryClient.invalidateQueries({ queryKey: ["org", orgId, "task-graph"] });
   void queryClient.invalidateQueries({ queryKey: queryKeys.tasks(orgId) });
 }
 
@@ -1022,7 +1022,7 @@ export function LabelPickerOverlay({ request, onClose }: LabelPickerOverlayProps
   // Radix needs to measure the popover's initial position correctly.
   const anchorRef = useRef<PopoverVirtualAnchor | null>(
     request.anchor ??
-      (typeof document !== 'undefined' && document.activeElement instanceof HTMLElement
+      (typeof document !== "undefined" && document.activeElement instanceof HTMLElement
         ? document.activeElement
         : null),
   );
@@ -1072,7 +1072,7 @@ Check `@docket/ui/primitives`' barrel actually re-exports `Skeleton`, `Popover`,
 In `apps/web/src/components/providers.tsx`, add the import:
 
 ```ts
-import { PickerOverlayProvider } from '@/components/pickers/picker-overlay';
+import { PickerOverlayProvider } from "@/components/pickers/picker-overlay";
 ```
 
 Wrap `ActionDomainsProvider`'s subtree with it (inside `InteractionProvider`, above `ActionDomainsProvider`, so both the `task.label` registry action — Task 6 — and every `TaskTable` — Task 7 — can reach `usePickerOverlay()`):
@@ -1142,23 +1142,23 @@ This task is pure test-writing against the component Task 4 already built — Ta
 Create `apps/web/tests/components/pickers/label-picker-overlay.test.tsx`:
 
 ```tsx
-import '@testing-library/jest-dom/vitest';
+import "@testing-library/jest-dom/vitest";
 
-import { OrganizationId } from '@docket/identity-access/ids';
-import { LabelId } from '@docket/work/ids';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { OrganizationId } from "@docket/identity-access/ids";
+import { LabelId } from "@docket/work/ids";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { LabelPickerOverlay } from '@/components/pickers/label-picker-overlay';
-import { makeQueryWrapper } from '../../support/query';
+import { LabelPickerOverlay } from "@/components/pickers/label-picker-overlay";
+import { makeQueryWrapper } from "../../support/query";
 
 afterEach(() => {
   vi.restoreAllMocks();
 });
 
-const ORG = OrganizationId.parse('01HZX5K3QJ9F8B7C6D5E4F3G2H');
-const BUG = LabelId.parse('01ARZ3NDEKTSV4RRFFQ69G5FA1');
-const URGENT = LabelId.parse('01ARZ3NDEKTSV4RRFFQ69G5FA2');
+const ORG = OrganizationId.parse("01HZX5K3QJ9F8B7C6D5E4F3G2H");
+const BUG = LabelId.parse("01ARZ3NDEKTSV4RRFFQ69G5FA1");
+const URGENT = LabelId.parse("01ARZ3NDEKTSV4RRFFQ69G5FA2");
 
 const LABELS_GET = vi.fn().mockResolvedValue({
   ok: true,
@@ -1169,18 +1169,18 @@ const LABELS_GET = vi.fn().mockResolvedValue({
         {
           id: BUG,
           organizationId: ORG,
-          name: 'Bug',
-          color: '#ef4444',
+          name: "Bug",
+          color: "#ef4444",
           teamId: null,
-          createdAt: '2026-08-01T00:00:00.000Z',
+          createdAt: "2026-08-01T00:00:00.000Z",
         },
         {
           id: URGENT,
           organizationId: ORG,
-          name: 'Urgent',
-          color: '#f97316',
+          name: "Urgent",
+          color: "#f97316",
           teamId: null,
-          createdAt: '2026-08-01T00:00:00.000Z',
+          createdAt: "2026-08-01T00:00:00.000Z",
         },
       ],
     }),
@@ -1190,24 +1190,24 @@ const TASK_PATCH = vi
   .mockResolvedValue({ ok: true, status: 200, json: () => Promise.resolve({}) });
 const LABEL_CREATE = vi.fn();
 
-vi.mock('@/lib/api', () => ({
+vi.mock("@/lib/api", () => ({
   api: {
     v1: {
       orgs: {
-        ':orgId': {
+        ":orgId": {
           labels: {
             $get: (...args: unknown[]) => LABELS_GET(...args),
             $post: (...args: unknown[]) => LABEL_CREATE(...args),
           },
-          tasks: { ':id': { $get: vi.fn(), $patch: (...args: unknown[]) => TASK_PATCH(...args) } },
+          tasks: { ":id": { $get: vi.fn(), $patch: (...args: unknown[]) => TASK_PATCH(...args) } },
         },
       },
     },
   },
 }));
 
-const TASK_A = { kind: 'task' as const, id: 'task_a', organizationId: ORG, title: 'A' };
-const TASK_B = { kind: 'task' as const, id: 'task_b', organizationId: ORG, title: 'B' };
+const TASK_A = { kind: "task" as const, id: "task_a", organizationId: ORG, title: "A" };
+const TASK_B = { kind: "task" as const, id: "task_b", organizationId: ORG, title: "B" };
 
 function renderOverlay(overrides: Partial<React.ComponentProps<typeof LabelPickerOverlay>> = {}) {
   const { wrapper } = makeQueryWrapper();
@@ -1215,10 +1215,10 @@ function renderOverlay(overrides: Partial<React.ComponentProps<typeof LabelPicke
   render(
     <LabelPickerOverlay
       request={{
-        kind: 'labels',
+        kind: "labels",
         organizationId: ORG,
         objects: [TASK_A],
-        current: new Map([['task:task_a', [BUG]]]),
+        current: new Map([["task:task_a", [BUG]]]),
       }}
       onClose={onClose}
       {...overrides}
@@ -1228,158 +1228,158 @@ function renderOverlay(overrides: Partial<React.ComponentProps<typeof LabelPicke
   return { onClose };
 }
 
-describe('LabelPickerOverlay', () => {
-  it('checks a label already on the single target object', async () => {
+describe("LabelPickerOverlay", () => {
+  it("checks a label already on the single target object", async () => {
     renderOverlay();
-    const bugRow = await screen.findByRole('option', { name: /Bug/ });
-    expect(bugRow).toHaveAttribute('aria-selected', 'true');
-    const urgentRow = screen.getByRole('option', { name: /Urgent/ });
-    expect(urgentRow).toHaveAttribute('aria-selected', 'false');
+    const bugRow = await screen.findByRole("option", { name: /Bug/ });
+    expect(bugRow).toHaveAttribute("aria-selected", "true");
+    const urgentRow = screen.getByRole("option", { name: /Urgent/ });
+    expect(urgentRow).toHaveAttribute("aria-selected", "false");
   });
 
-  it('checks a label only when every target object carries it', async () => {
+  it("checks a label only when every target object carries it", async () => {
     renderOverlay({
       request: {
-        kind: 'labels',
+        kind: "labels",
         organizationId: ORG,
         objects: [TASK_A, TASK_B],
         current: new Map([
-          ['task:task_a', [BUG]],
-          ['task:task_b', []],
+          ["task:task_a", [BUG]],
+          ["task:task_b", []],
         ]),
       },
     });
-    const bugRow = await screen.findByRole('option', { name: /Bug/ });
-    expect(bugRow).toHaveAttribute('aria-selected', 'false');
+    const bugRow = await screen.findByRole("option", { name: /Bug/ });
+    expect(bugRow).toHaveAttribute("aria-selected", "false");
   });
 
-  it('applies a partially-carried label to every target object', async () => {
+  it("applies a partially-carried label to every target object", async () => {
     renderOverlay({
       request: {
-        kind: 'labels',
+        kind: "labels",
         organizationId: ORG,
         objects: [TASK_A, TASK_B],
         current: new Map([
-          ['task:task_a', [BUG]],
-          ['task:task_b', []],
+          ["task:task_a", [BUG]],
+          ["task:task_b", []],
         ]),
       },
     });
-    const bugRow = await screen.findByRole('option', { name: /Bug/ });
+    const bugRow = await screen.findByRole("option", { name: /Bug/ });
     fireEvent.click(bugRow);
 
     await waitFor(() => {
       expect(TASK_PATCH).toHaveBeenCalledTimes(1); // task_a already has it -> only task_b writes
     });
     expect(TASK_PATCH).toHaveBeenCalledWith(
-      expect.objectContaining({ param: { orgId: ORG, id: 'task_b' }, json: { labels: [BUG] } }),
+      expect.objectContaining({ param: { orgId: ORG, id: "task_b" }, json: { labels: [BUG] } }),
     );
     // Optimistic local state now shows Bug checked for both.
-    expect(screen.getByRole('option', { name: /Bug/ })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole("option", { name: /Bug/ })).toHaveAttribute("aria-selected", "true");
   });
 
-  it('removes a fully-applied label from every target object', async () => {
+  it("removes a fully-applied label from every target object", async () => {
     renderOverlay({
       request: {
-        kind: 'labels',
+        kind: "labels",
         organizationId: ORG,
         objects: [TASK_A, TASK_B],
         current: new Map([
-          ['task:task_a', [BUG]],
-          ['task:task_b', [BUG]],
+          ["task:task_a", [BUG]],
+          ["task:task_b", [BUG]],
         ]),
       },
     });
-    const bugRow = await screen.findByRole('option', { name: /Bug/ });
+    const bugRow = await screen.findByRole("option", { name: /Bug/ });
     fireEvent.click(bugRow);
 
     await waitFor(() => {
       expect(TASK_PATCH).toHaveBeenCalledTimes(2);
     });
     expect(TASK_PATCH).toHaveBeenCalledWith(
-      expect.objectContaining({ param: { orgId: ORG, id: 'task_a' }, json: { labels: [] } }),
+      expect.objectContaining({ param: { orgId: ORG, id: "task_a" }, json: { labels: [] } }),
     );
     expect(TASK_PATCH).toHaveBeenCalledWith(
-      expect.objectContaining({ param: { orgId: ORG, id: 'task_b' }, json: { labels: [] } }),
+      expect.objectContaining({ param: { orgId: ORG, id: "task_b" }, json: { labels: [] } }),
     );
   });
 
-  it('resolves current labels from the task detail query when the caller omits current', async () => {
+  it("resolves current labels from the task detail query when the caller omits current", async () => {
     const TASK_GET = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
       json: () =>
         Promise.resolve({
-          id: 'task_a',
+          id: "task_a",
           organizationId: ORG,
-          labels: [{ id: BUG, name: 'Bug', color: '#ef4444' }],
+          labels: [{ id: BUG, name: "Bug", color: "#ef4444" }],
         }),
     });
-    vi.doMock('@/lib/api', () => ({
+    vi.doMock("@/lib/api", () => ({
       api: {
         v1: {
           orgs: {
-            ':orgId': {
+            ":orgId": {
               labels: { $get: (...args: unknown[]) => LABELS_GET(...args) },
-              tasks: { ':id': { $get: (...args: unknown[]) => TASK_GET(...args) } },
+              tasks: { ":id": { $get: (...args: unknown[]) => TASK_GET(...args) } },
             },
           },
         },
       },
     }));
     const { LabelPickerOverlay: FreshOverlay } =
-      await import('@/components/pickers/label-picker-overlay');
+      await import("@/components/pickers/label-picker-overlay");
     const { wrapper } = makeQueryWrapper();
     render(
       <FreshOverlay
-        request={{ kind: 'labels', organizationId: ORG, objects: [TASK_A] }}
+        request={{ kind: "labels", organizationId: ORG, objects: [TASK_A] }}
         onClose={vi.fn()}
       />,
       { wrapper },
     );
-    const bugRow = await screen.findByRole('option', { name: /Bug/ });
-    expect(bugRow).toHaveAttribute('aria-selected', 'true');
-    vi.doUnmock('@/lib/api');
+    const bugRow = await screen.findByRole("option", { name: /Bug/ });
+    expect(bugRow).toHaveAttribute("aria-selected", "true");
+    vi.doUnmock("@/lib/api");
   });
 
-  it('creates a label from typed text and applies it to every target object', async () => {
+  it("creates a label from typed text and applies it to every target object", async () => {
     LABEL_CREATE.mockResolvedValueOnce({
       ok: true,
       status: 200,
       json: () =>
         Promise.resolve({
-          id: 'label_new',
+          id: "label_new",
           organizationId: ORG,
-          name: 'Backend',
-          color: '#0ea5e9',
-          createdAt: '2026-08-09T00:00:00.000Z',
+          name: "Backend",
+          color: "#0ea5e9",
+          createdAt: "2026-08-09T00:00:00.000Z",
         }),
     });
     renderOverlay();
-    const search = await screen.findByRole('textbox');
-    fireEvent.change(search, { target: { value: 'Backend' } });
-    const createRow = await screen.findByRole('option', { name: /Create/ });
+    const search = await screen.findByRole("textbox");
+    fireEvent.change(search, { target: { value: "Backend" } });
+    const createRow = await screen.findByRole("option", { name: /Create/ });
     fireEvent.click(createRow);
 
     await waitFor(() => {
       expect(LABEL_CREATE).toHaveBeenCalledWith(
-        expect.objectContaining({ json: { name: 'Backend' } }),
+        expect.objectContaining({ json: { name: "Backend" } }),
       );
     });
     await waitFor(() => {
       expect(TASK_PATCH).toHaveBeenCalledWith(
         expect.objectContaining({
-          param: { orgId: ORG, id: 'task_a' },
-          json: { labels: expect.arrayContaining([BUG, 'label_new']) },
+          param: { orgId: ORG, id: "task_a" },
+          json: { labels: expect.arrayContaining([BUG, "label_new"]) },
         }),
       );
     });
   });
 
-  it('closes when the popover reports it closed', async () => {
+  it("closes when the popover reports it closed", async () => {
     const { onClose } = renderOverlay();
-    await screen.findByRole('option', { name: /Bug/ });
-    fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' });
+    await screen.findByRole("option", { name: /Bug/ });
+    fireEvent.keyDown(document.activeElement ?? document.body, { key: "Escape" });
     await waitFor(() => {
       expect(onClose).toHaveBeenCalled();
     });
@@ -1433,28 +1433,28 @@ git restore --staged . && git add apps/web/tests/components/pickers/label-picker
 Create `apps/web/tests/components/tasks/task-actions.test.tsx`:
 
 ```tsx
-import '@testing-library/jest-dom/vitest';
+import "@testing-library/jest-dom/vitest";
 
-import { QueryClientProvider } from '@tanstack/react-query';
-import { render } from '@testing-library/react';
-import type { JSX } from 'react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { QueryClientProvider } from "@tanstack/react-query";
+import { render } from "@testing-library/react";
+import type { JSX } from "react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { InteractionProvider } from '@/lib/actions/interaction-provider';
-import { createActionRegistry } from '@/lib/actions/registry';
-import { useRegisterTaskActions } from '@/components/tasks/task-actions';
-import { makeQueryWrapper } from '../../support/query';
+import { InteractionProvider } from "@/lib/actions/interaction-provider";
+import { createActionRegistry } from "@/lib/actions/registry";
+import { useRegisterTaskActions } from "@/components/tasks/task-actions";
+import { makeQueryWrapper } from "../../support/query";
 
 afterEach(() => {
   vi.restoreAllMocks();
 });
 
-vi.mock('next/navigation', () => ({
+vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn() }),
 }));
 
 const open = vi.fn();
-vi.mock('@/components/pickers/picker-overlay', () => ({
+vi.mock("@/components/pickers/picker-overlay", () => ({
   usePickerOverlay: () => ({ open }),
 }));
 
@@ -1464,8 +1464,8 @@ function TaskActionRegistration(): null {
   return null;
 }
 
-describe('task.label registration', () => {
-  it('registers a multi-object, organize-section action with an L shortcut hint', () => {
+describe("task.label registration", () => {
+  it("registers a multi-object, organize-section action with an L shortcut hint", () => {
     const registry = createActionRegistry();
     const { client } = makeQueryWrapper();
     render(
@@ -1475,10 +1475,10 @@ describe('task.label registration', () => {
         </InteractionProvider>
       </QueryClientProvider>,
     );
-    expect(registry.snapshot().ids).toContain('task.label');
+    expect(registry.snapshot().ids).toContain("task.label");
   });
 
-  it('opens the picker overlay for the context objects on run', async () => {
+  it("opens the picker overlay for the context objects on run", async () => {
     open.mockClear();
     const registry = createActionRegistry();
     const { client } = makeQueryWrapper();
@@ -1490,19 +1490,19 @@ describe('task.label registration', () => {
       </QueryClientProvider>,
     );
     const context = {
-      objects: [{ kind: 'task' as const, id: 't1', organizationId: 'org_1', title: 'Ship it' }],
-      source: 'context-menu' as const,
-      organizationId: 'org_1',
+      objects: [{ kind: "task" as const, id: "t1", organizationId: "org_1", title: "Ship it" }],
+      source: "context-menu" as const,
+      organizationId: "org_1",
     };
-    await registry.invoke('task.label', () => context);
+    await registry.invoke("task.label", () => context);
     expect(open).toHaveBeenCalledWith({
-      kind: 'labels',
-      organizationId: 'org_1',
+      kind: "labels",
+      organizationId: "org_1",
       objects: context.objects,
     });
   });
 
-  it('does nothing when the context has no bound organization', async () => {
+  it("does nothing when the context has no bound organization", async () => {
     open.mockClear();
     const registry = createActionRegistry();
     const { client } = makeQueryWrapper();
@@ -1514,11 +1514,11 @@ describe('task.label registration', () => {
       </QueryClientProvider>,
     );
     const context = {
-      objects: [{ kind: 'task' as const, id: 't1', organizationId: null, title: 'Ship it' }],
-      source: 'context-menu' as const,
+      objects: [{ kind: "task" as const, id: "t1", organizationId: null, title: "Ship it" }],
+      source: "context-menu" as const,
       organizationId: null,
     };
-    await registry.invoke('task.label', () => context);
+    await registry.invoke("task.label", () => context);
     expect(open).not.toHaveBeenCalled();
   });
 });
@@ -1538,13 +1538,13 @@ In `apps/web/src/components/tasks/task-actions.ts`:
 Add `Tag` to the icon import:
 
 ```ts
-import { ArrowRight, CheckCircle2, Link, Plus, Tag, Workflow } from '@docket/ui/icons';
+import { ArrowRight, CheckCircle2, Link, Plus, Tag, Workflow } from "@docket/ui/icons";
 ```
 
 Add the picker-overlay import:
 
 ```ts
-import { usePickerOverlay } from '@/components/pickers/picker-overlay';
+import { usePickerOverlay } from "@/components/pickers/picker-overlay";
 ```
 
 Inside `useRegisterTaskActions`, call the hook alongside `router`/`queryClient` and capture it before the `useMemo` (so it's available in the deps array like the other two):
@@ -1637,20 +1637,20 @@ Read `apps/web/tests/components/views/task-table.test.tsx` fully first, to match
 Add a test asserting that pressing `l` on the active row opens the picker with the row's own labels as `current` (mock `usePickerOverlay` the same way Task 6's test did):
 
 ```tsx
-it('opens the label picker for the focused row on L, with its current labels attached', () => {
+it("opens the label picker for the focused row on L, with its current labels attached", () => {
   const open = vi.fn();
   vi.mocked(usePickerOverlay).mockReturnValue({ open });
   // ... render TaskTable with a fixture task carrying one label ...
-  const grid = screen.getByRole('grid');
+  const grid = screen.getByRole("grid");
   grid.focus();
-  fireEvent.keyDown(grid, { key: 'ArrowDown' });
-  fireEvent.keyDown(grid, { key: 'l' });
+  fireEvent.keyDown(grid, { key: "ArrowDown" });
+  fireEvent.keyDown(grid, { key: "l" });
 
   expect(open).toHaveBeenCalledWith({
-    kind: 'labels',
+    kind: "labels",
     organizationId: TASK.organizationId,
     objects: [
-      { kind: 'task', id: TASK.id, organizationId: TASK.organizationId, title: TASK.title },
+      { kind: "task", id: TASK.id, organizationId: TASK.organizationId, title: TASK.title },
     ],
     current: new Map([[`task:${TASK.id}`, TASK.labels.map((l) => l.id)]]),
     anchor: expect.anything(),
@@ -1670,8 +1670,8 @@ In `apps/web/src/components/views/task-table.tsx`:
 Add imports:
 
 ```ts
-import { objectKey } from '@/lib/actions';
-import { usePickerOverlay } from '@/components/pickers/picker-overlay';
+import { objectKey } from "@/lib/actions";
+import { usePickerOverlay } from "@/components/pickers/picker-overlay";
 ```
 
 Inside `TaskTable`, before the `return`:
@@ -1787,61 +1787,61 @@ git restore --staged . && git add apps/web/src/components/views/task-table.tsx a
 Create `apps/web/tests/components/command-palette/sub-modes.test.ts`:
 
 ```ts
-import '@testing-library/jest-dom/vitest';
+import "@testing-library/jest-dom/vitest";
 
-import { OrganizationId } from '@docket/identity-access/ids';
-import { LabelId } from '@docket/work/ids';
-import { renderHook, waitFor } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { OrganizationId } from "@docket/identity-access/ids";
+import { LabelId } from "@docket/work/ids";
+import { renderHook, waitFor } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { parsePrefix, useLabelPaletteMode } from '@/components/command-palette/sub-modes';
-import { makeQueryWrapper } from '../../support/query';
+import { parsePrefix, useLabelPaletteMode } from "@/components/command-palette/sub-modes";
+import { makeQueryWrapper } from "../../support/query";
 
 afterEach(() => {
   vi.restoreAllMocks();
 });
 
-vi.mock('next/navigation', () => ({
+vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn() }),
 }));
 
-const ORG = OrganizationId.parse('01HZX5K3QJ9F8B7C6D5E4F3G2H');
-const BUG = LabelId.parse('01ARZ3NDEKTSV4RRFFQ69G5FA1');
+const ORG = OrganizationId.parse("01HZX5K3QJ9F8B7C6D5E4F3G2H");
+const BUG = LabelId.parse("01ARZ3NDEKTSV4RRFFQ69G5FA1");
 
-describe('parsePrefix', () => {
-  it('splits a leading # into the labels mode and the remaining term', () => {
-    expect(parsePrefix('#bug')).toEqual({ mode: '#', term: 'bug' });
+describe("parsePrefix", () => {
+  it("splits a leading # into the labels mode and the remaining term", () => {
+    expect(parsePrefix("#bug")).toEqual({ mode: "#", term: "bug" });
   });
 
-  it('treats a bare # as the labels mode with an empty term', () => {
-    expect(parsePrefix('#')).toEqual({ mode: '#', term: '' });
+  it("treats a bare # as the labels mode with an empty term", () => {
+    expect(parsePrefix("#")).toEqual({ mode: "#", term: "" });
   });
 
-  it('has no mode for a query with no recognized prefix', () => {
-    expect(parsePrefix('bug')).toEqual({ mode: null, term: 'bug' });
+  it("has no mode for a query with no recognized prefix", () => {
+    expect(parsePrefix("bug")).toEqual({ mode: null, term: "bug" });
   });
 
-  it('has no mode for an empty query', () => {
-    expect(parsePrefix('')).toEqual({ mode: null, term: '' });
+  it("has no mode for an empty query", () => {
+    expect(parsePrefix("")).toEqual({ mode: null, term: "" });
   });
 });
 
-describe('useLabelPaletteMode', () => {
-  it('shows no items and is not loading with no bound organization', () => {
+describe("useLabelPaletteMode", () => {
+  it("shows no items and is not loading with no bound organization", () => {
     const { wrapper } = makeQueryWrapper();
     const { result } = renderHook(
-      () => useLabelPaletteMode('', { activeOrgId: null, close: vi.fn() }),
+      () => useLabelPaletteMode("", { activeOrgId: null, close: vi.fn() }),
       { wrapper },
     );
     expect(result.current).toEqual({ items: [], loading: false, error: null });
   });
 
-  it('lists the org labels matching the term, navigating to the filtered task list on select', async () => {
-    vi.doMock('@/lib/api', () => ({
+  it("lists the org labels matching the term, navigating to the filtered task list on select", async () => {
+    vi.doMock("@/lib/api", () => ({
       api: {
         v1: {
           orgs: {
-            ':orgId': {
+            ":orgId": {
               labels: {
                 $get: vi.fn().mockResolvedValue({
                   ok: true,
@@ -1852,10 +1852,10 @@ describe('useLabelPaletteMode', () => {
                         {
                           id: BUG,
                           organizationId: ORG,
-                          name: 'Bug',
-                          color: '#ef4444',
+                          name: "Bug",
+                          color: "#ef4444",
                           teamId: null,
-                          createdAt: '2026-08-01T00:00:00.000Z',
+                          createdAt: "2026-08-01T00:00:00.000Z",
                         },
                       ],
                     }),
@@ -1867,27 +1867,27 @@ describe('useLabelPaletteMode', () => {
       },
     }));
     const { useLabelPaletteMode: freshHook } =
-      await import('@/components/command-palette/sub-modes');
+      await import("@/components/command-palette/sub-modes");
     const close = vi.fn();
     const { wrapper } = makeQueryWrapper();
-    const { result } = renderHook(() => freshHook('bu', { activeOrgId: ORG, close }), { wrapper });
+    const { result } = renderHook(() => freshHook("bu", { activeOrgId: ORG, close }), { wrapper });
 
     await waitFor(() => {
       expect(result.current.items).toHaveLength(1);
     });
-    expect(result.current.items[0]).toMatchObject({ label: 'Bug' });
+    expect(result.current.items[0]).toMatchObject({ label: "Bug" });
 
     result.current.items[0]!.run();
     expect(close).toHaveBeenCalledOnce();
-    vi.doUnmock('@/lib/api');
+    vi.doUnmock("@/lib/api");
   });
 
-  it('filters out labels that do not match the term', async () => {
-    vi.doMock('@/lib/api', () => ({
+  it("filters out labels that do not match the term", async () => {
+    vi.doMock("@/lib/api", () => ({
       api: {
         v1: {
           orgs: {
-            ':orgId': {
+            ":orgId": {
               labels: {
                 $get: vi.fn().mockResolvedValue({
                   ok: true,
@@ -1898,10 +1898,10 @@ describe('useLabelPaletteMode', () => {
                         {
                           id: BUG,
                           organizationId: ORG,
-                          name: 'Bug',
-                          color: '#ef4444',
+                          name: "Bug",
+                          color: "#ef4444",
                           teamId: null,
-                          createdAt: '2026-08-01T00:00:00.000Z',
+                          createdAt: "2026-08-01T00:00:00.000Z",
                         },
                       ],
                     }),
@@ -1913,16 +1913,16 @@ describe('useLabelPaletteMode', () => {
       },
     }));
     const { useLabelPaletteMode: freshHook } =
-      await import('@/components/command-palette/sub-modes');
+      await import("@/components/command-palette/sub-modes");
     const { wrapper } = makeQueryWrapper();
-    const { result } = renderHook(() => freshHook('zzz', { activeOrgId: ORG, close: vi.fn() }), {
+    const { result } = renderHook(() => freshHook("zzz", { activeOrgId: ORG, close: vi.fn() }), {
       wrapper,
     });
     await waitFor(() => {
       expect(result.current.loading).toBe(false);
     });
     expect(result.current.items).toHaveLength(0);
-    vi.doUnmock('@/lib/api');
+    vi.doUnmock("@/lib/api");
   });
 });
 ```
@@ -1937,7 +1937,7 @@ Expected: FAIL — the module does not exist.
 Create `apps/web/src/components/command-palette/sub-modes.ts`:
 
 ```ts
-'use client';
+"use client";
 
 /**
  * `components/command-palette/sub-modes` — the command palette's typed prefix mode.
@@ -1951,17 +1951,17 @@ Create `apps/web/src/components/command-palette/sub-modes.ts`:
  * selected by `mode`. Adding `>` or `@` later means: one new named hook here, one new
  * `PALETTE_MODES` entry, one new call + switch arm in `CommandPalette` — not a framework.
  */
-import { Tag, type LucideIcon } from '@docket/ui/icons';
-import { useRouter } from 'next/navigation';
-import { useMemo } from 'react';
+import { Tag, type LucideIcon } from "@docket/ui/icons";
+import { useRouter } from "next/navigation";
+import { useMemo } from "react";
 
-import { labelsDef } from '@/components/labels/queries';
-import { labelFilterHref } from '@/lib/search-route';
-import { userErrorMessage } from '@/lib/problem';
-import { useApiListQuery } from '@/lib/query';
+import { labelsDef } from "@/components/labels/queries";
+import { labelFilterHref } from "@/lib/search-route";
+import { userErrorMessage } from "@/lib/problem";
+import { useApiListQuery } from "@/lib/query";
 
-import { subsequenceMatch } from './filter';
-import type { PaletteItem } from './types';
+import { subsequenceMatch } from "./filter";
+import type { PaletteItem } from "./types";
 
 /** A raw palette query split into its leading mode prefix (if any) and the term after it. */
 export interface ParsedPaletteQuery {
@@ -1971,7 +1971,7 @@ export interface ParsedPaletteQuery {
 
 /** Split `query` on a recognized leading mode prefix. */
 export function parsePrefix(query: string): ParsedPaletteQuery {
-  if (query.startsWith('#')) return { mode: '#', term: query.slice(1) };
+  if (query.startsWith("#")) return { mode: "#", term: query.slice(1) };
   return { mode: null, term: query };
 }
 
@@ -1983,7 +1983,7 @@ export interface PaletteModeMeta {
 
 /** Every registered sub-mode's display metadata. */
 export const PALETTE_MODES: Record<string, PaletteModeMeta> = {
-  '#': { label: 'Labels', icon: Tag },
+  "#": { label: "Labels", icon: Tag },
 };
 
 /** What every mode's item-list hook needs from the palette host. */
@@ -2016,7 +2016,7 @@ export function useLabelPaletteMode(
 ): PaletteModeResult {
   const router = useRouter();
   const enabled = activeOrgId !== null;
-  const labelsQ = useApiListQuery({ ...labelsDef(activeOrgId ?? ''), enabled });
+  const labelsQ = useApiListQuery({ ...labelsDef(activeOrgId ?? ""), enabled });
 
   const items = useMemo<readonly PaletteItem[]>(() => {
     if (!enabled) return [];
@@ -2026,7 +2026,7 @@ export function useLabelPaletteMode(
       .filter((label) => subsequenceMatch(label.name, q))
       .map((label) => ({
         id: `label-mode:${label.id}`,
-        section: 'results' as const,
+        section: "results" as const,
         label: label.name,
         icon: Tag,
         run: () => {
@@ -2041,7 +2041,7 @@ export function useLabelPaletteMode(
     loading: enabled && labelsQ.isPending,
     error:
       enabled && labelsQ.isError
-        ? userErrorMessage(labelsQ.error, 'Could not load your labels.')
+        ? userErrorMessage(labelsQ.error, "Could not load your labels.")
         : null,
   };
 }
@@ -2090,32 +2090,32 @@ git restore --staged . && git add apps/web/src/components/command-palette/sub-mo
 Create `apps/web/tests/components/command-palette/command-palette.test.tsx`:
 
 ```tsx
-import '@testing-library/jest-dom/vitest';
+import "@testing-library/jest-dom/vitest";
 
-import { OrganizationId } from '@docket/identity-access/ids';
-import { LabelId } from '@docket/work/ids';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { OrganizationId } from "@docket/identity-access/ids";
+import { LabelId } from "@docket/work/ids";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { CommandPalette } from '@/components/command-palette/command-palette';
-import { makeQueryWrapper } from '../../support/query';
+import { CommandPalette } from "@/components/command-palette/command-palette";
+import { makeQueryWrapper } from "../../support/query";
 
 afterEach(() => {
   vi.restoreAllMocks();
 });
 
 const push = vi.fn();
-vi.mock('next/navigation', () => ({
+vi.mock("next/navigation", () => ({
   useRouter: () => ({ push }),
 }));
 
-const ORG = OrganizationId.parse('01HZX5K3QJ9F8B7C6D5E4F3G2H');
-const BUG = LabelId.parse('01ARZ3NDEKTSV4RRFFQ69G5FA1');
+const ORG = OrganizationId.parse("01HZX5K3QJ9F8B7C6D5E4F3G2H");
+const BUG = LabelId.parse("01ARZ3NDEKTSV4RRFFQ69G5FA1");
 
-vi.mock('@/components/active-org', () => ({
+vi.mock("@/components/active-org", () => ({
   useActiveOrg: () => ({
     activeOrgId: ORG,
-    orgName: () => 'Acme',
+    orgName: () => "Acme",
   }),
 }));
 
@@ -2133,21 +2133,21 @@ const LABELS_GET = vi.fn().mockResolvedValue({
         {
           id: BUG,
           organizationId: ORG,
-          name: 'Bug',
-          color: '#ef4444',
+          name: "Bug",
+          color: "#ef4444",
           teamId: null,
-          createdAt: '2026-08-01T00:00:00.000Z',
+          createdAt: "2026-08-01T00:00:00.000Z",
         },
       ],
     }),
 });
 
-vi.mock('@/lib/api', () => ({
+vi.mock("@/lib/api", () => ({
   api: {
     v1: {
       hub: { search: { $get: (...args: unknown[]) => SEARCH_GET(...args) } },
       orgs: {
-        ':orgId': {
+        ":orgId": {
           search: { $get: (...args: unknown[]) => SEARCH_GET(...args) },
           labels: { $get: (...args: unknown[]) => LABELS_GET(...args) },
         },
@@ -2163,69 +2163,69 @@ function renderPalette() {
   return { onClose };
 }
 
-describe('CommandPalette — # label sub-mode', () => {
-  it('enters the labels mode on #, suppressing hub search and static commands', async () => {
+describe("CommandPalette — # label sub-mode", () => {
+  it("enters the labels mode on #, suppressing hub search and static commands", async () => {
     renderPalette();
-    const input = screen.getByRole('combobox');
-    fireEvent.change(input, { target: { value: '#bu' } });
+    const input = screen.getByRole("combobox");
+    fireEvent.change(input, { target: { value: "#bu" } });
 
     await waitFor(() => {
-      expect(screen.getByRole('option', { name: /Bug/ })).toBeInTheDocument();
+      expect(screen.getByRole("option", { name: /Bug/ })).toBeInTheDocument();
     });
     // The search endpoint is never hit while in mode.
     expect(SEARCH_GET).not.toHaveBeenCalled();
   });
 
-  it('navigates to the filtered task list and closes on selecting a label', async () => {
+  it("navigates to the filtered task list and closes on selecting a label", async () => {
     const { onClose } = renderPalette();
-    fireEvent.change(screen.getByRole('combobox'), { target: { value: '#bug' } });
-    const row = await screen.findByRole('option', { name: /Bug/ });
+    fireEvent.change(screen.getByRole("combobox"), { target: { value: "#bug" } });
+    const row = await screen.findByRole("option", { name: /Bug/ });
     fireEvent.click(row);
 
     expect(push).toHaveBeenCalledWith(`/orgs/${ORG}/tasks?filter=labels%3Aeq%3A${BUG}`);
     expect(onClose).toHaveBeenCalled();
   });
 
-  it('exits the mode on Escape without closing the palette', async () => {
+  it("exits the mode on Escape without closing the palette", async () => {
     const { onClose } = renderPalette();
-    const input = screen.getByRole('combobox');
-    fireEvent.change(input, { target: { value: '#bug' } });
-    await screen.findByRole('option', { name: /Bug/ });
+    const input = screen.getByRole("combobox");
+    fireEvent.change(input, { target: { value: "#bug" } });
+    await screen.findByRole("option", { name: /Bug/ });
 
-    fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
+    fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
     expect(onClose).not.toHaveBeenCalled();
-    expect(input).toHaveValue('');
+    expect(input).toHaveValue("");
 
-    fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
+    fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
     expect(onClose).toHaveBeenCalled();
   });
 
-  it('exits the mode when backspacing the prefix away', async () => {
+  it("exits the mode when backspacing the prefix away", async () => {
     renderPalette();
-    const input = screen.getByRole('combobox');
-    fireEvent.change(input, { target: { value: '#bug' } });
-    await screen.findByRole('option', { name: /Bug/ });
-    fireEvent.change(input, { target: { value: '' } });
+    const input = screen.getByRole("combobox");
+    fireEvent.change(input, { target: { value: "#bug" } });
+    await screen.findByRole("option", { name: /Bug/ });
+    fireEvent.change(input, { target: { value: "" } });
     await waitFor(() => {
-      expect(screen.queryByRole('option', { name: /Bug/ })).not.toBeInTheDocument();
+      expect(screen.queryByRole("option", { name: /Bug/ })).not.toBeInTheDocument();
     });
   });
 });
 
-describe('CommandPalette — # with no bound organization', () => {
-  it('shows an explanatory row instead of an empty list', async () => {
-    vi.doMock('@/components/active-org', () => ({
-      useActiveOrg: () => ({ activeOrgId: null, orgName: () => 'Hub' }),
+describe("CommandPalette — # with no bound organization", () => {
+  it("shows an explanatory row instead of an empty list", async () => {
+    vi.doMock("@/components/active-org", () => ({
+      useActiveOrg: () => ({ activeOrgId: null, orgName: () => "Hub" }),
     }));
     const { CommandPalette: FreshPalette } =
-      await import('@/components/command-palette/command-palette');
+      await import("@/components/command-palette/command-palette");
     const { wrapper } = makeQueryWrapper();
     render(<FreshPalette open onClose={vi.fn()} />, { wrapper });
-    fireEvent.change(screen.getByRole('combobox'), { target: { value: '#' } });
+    fireEvent.change(screen.getByRole("combobox"), { target: { value: "#" } });
 
     expect(await screen.findByText(/open a workspace/i)).toBeInTheDocument();
     expect(LABELS_GET).not.toHaveBeenCalled();
-    vi.doUnmock('@/components/active-org');
+    vi.doUnmock("@/components/active-org");
   });
 });
 ```
@@ -2244,13 +2244,13 @@ In `apps/web/src/components/command-palette/command-palette.tsx`:
 Add imports:
 
 ```ts
-import { Command, Search, Tag, X } from '@docket/ui/icons';
+import { Command, Search, Tag, X } from "@docket/ui/icons";
 ```
 
 (replacing the existing `import { Command, Search } from '@docket/ui/icons';`)
 
 ```ts
-import { PALETTE_MODES, parsePrefix, useLabelPaletteMode } from './sub-modes';
+import { PALETTE_MODES, parsePrefix, useLabelPaletteMode } from "./sub-modes";
 ```
 
 Inside `CommandPalette`, after `const [query, setQuery] = useState('');` add the mode derivation, and call the mode hook unconditionally (rules of hooks — see Task 8's file doc):
@@ -2258,7 +2258,7 @@ Inside `CommandPalette`, after `const [query, setQuery] = useState('');` add the
 ```ts
 const { mode, term } = useMemo(() => parsePrefix(query), [query]);
 const labelModeResult = useLabelPaletteMode(term, { activeOrgId, close: onClose });
-const modeResult = mode === '#' ? labelModeResult : null;
+const modeResult = mode === "#" ? labelModeResult : null;
 ```
 
 Change the `useHubSearch` call's `open` to suppress it while in a mode:
@@ -2295,7 +2295,7 @@ Add the mode-aware close, and pass it to `usePaletteKeyboard` instead of `onClos
 ```ts
 const handlePaletteClose = useCallback(() => {
   if (mode !== null) {
-    setQuery('');
+    setQuery("");
     return;
   }
   onClose();
@@ -2315,7 +2315,7 @@ const { onKeyDown } = usePaletteKeyboard({
 Change the resolved loading/error and the "no org bound" flag, placed near the existing `orgLocalLabel`/`showResultsSkeleton`/`showEmpty` block:
 
 ```ts
-const orgLocalLabel = activeOrgId ? orgName(activeOrgId) : 'This org';
+const orgLocalLabel = activeOrgId ? orgName(activeOrgId) : "This org";
 const effectiveError = modeResult ? modeResult.error : error;
 const showNoOrgForMode = mode !== null && activeOrgId === null;
 const showResultsSkeleton = modeResult
@@ -2391,7 +2391,7 @@ Add the no-org informational block right after it:
   showNoOrgForMode ? (
     <div className="flex flex-col items-center justify-center gap-1 px-4 py-10 text-center">
       <p className="text-on-surface-variant text-body-medium">
-        Open a workspace to filter by {(PALETTE_MODES[mode ?? '']?.label ?? 'this').toLowerCase()}
+        Open a workspace to filter by {(PALETTE_MODES[mode ?? ""]?.label ?? "this").toLowerCase()}
       </p>
     </div>
   ) : null;
@@ -2407,10 +2407,10 @@ Update the empty-state copy's `hasQuery` branch to also read sensibly in mode (t
       <p className="text-on-surface text-body-medium font-medium">No matches</p>
       <p className="text-on-surface-variant text-body-medium max-w-xs">
         {mode !== null
-          ? 'No labels match.'
+          ? "No labels match."
           : hasQuery
-            ? 'Nothing matched your search. Try a different term or switch scope.'
-            : 'Nothing here yet. Create some work, or link a document, and it will show up.'}
+            ? "Nothing matched your search. Try a different term or switch scope."
+            : "Nothing here yet. Create some work, or link a document, and it will show up."}
       </p>
     </div>
   ) : null;
@@ -2423,21 +2423,21 @@ Update the `grouped` computation's section label and loading suffix:
 const grouped = SECTION_ORDER.map((s) => ({
   ...s,
   label:
-    mode !== null && s.section === 'results'
+    mode !== null && s.section === "results"
       ? (PALETTE_MODES[mode]?.label ?? s.label)
-      : s.section === 'results' && !hasQuery
-        ? 'Recent'
+      : s.section === "results" && !hasQuery
+        ? "Recent"
         : s.label,
   rows: items.filter((it) => it.section === s.section),
 })).filter((g) => g.rows.length > 0);
 ```
 
 ```tsx
-<p className={menuLabel('standard')}>
+<p className={menuLabel("standard")}>
   {group.label}
-  {group.section === 'results' && (modeResult ? modeResult.loading : loading)
-    ? ` · ${mode !== null ? 'loading…' : 'searching…'}`
-    : ''}
+  {group.section === "results" && (modeResult ? modeResult.loading : loading)
+    ? ` · ${mode !== null ? "loading…" : "searching…"}`
+    : ""}
 </p>
 ```
 

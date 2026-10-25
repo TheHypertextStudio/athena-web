@@ -175,10 +175,10 @@ means a day other than today.
 ```ts
 // deleted legacy module directive — net-new
 export const DirectivePosture = z
-  .enum(['on_track', 'attention_needed', 'intervention_recommended'])
+  .enum(["on_track", "attention_needed", "intervention_recommended"])
   .describe(
     "Athena's current read on the day, most to least on schedule. Deliberately generic — " +
-      'a device-control client maps this onto whatever enforcement it owns.',
+      "a device-control client maps this onto whatever enforcement it owns.",
   );
 
 export const DirectivePlanItemOut = z
@@ -187,34 +187,34 @@ export const DirectivePlanItemOut = z
     organizationId: OrganizationId,
     title: z.string(),
     status: z
-      .enum(['planned', 'done'])
+      .enum(["planned", "done"])
       .describe(
         "Mirrors `daily_plan_item.status` exactly. There is no `deferred` value: Docket's daily " +
-          'plan has no such state — a dropped item is a `plan_day` `remove` edit (the row is ' +
-          'deleted), never relabeled.',
+          "plan has no such state — a dropped item is a `plan_day` `remove` edit (the row is " +
+          "deleted), never relabeled.",
       ),
     priority: Priority.optional(),
-    startsAt: z.string().optional().describe('`daily_plan_item.timeboxStartsAt`, when timeboxed.'),
-    endsAt: z.string().optional().describe('`daily_plan_item.timeboxEndsAt`, when timeboxed.'),
-    url: z.string().optional().describe('Deep link into the Docket web app for this task.'),
+    startsAt: z.string().optional().describe("`daily_plan_item.timeboxStartsAt`, when timeboxed."),
+    endsAt: z.string().optional().describe("`daily_plan_item.timeboxEndsAt`, when timeboxed."),
+    url: z.string().optional().describe("Deep link into the Docket web app for this task."),
   })
-  .meta({ id: 'DirectivePlanItemOut' });
+  .meta({ id: "DirectivePlanItemOut" });
 
 export const DirectiveRecommendedAction = z
   .object({
-    kind: z.literal('narrow_focus'),
+    kind: z.literal("narrow_focus"),
     taskId: TaskId,
     proposalId: z.string(),
   })
-  .meta({ id: 'DirectiveRecommendedAction' })
-  .describe('The one thing Athena thinks deserves the client’s full attention right now, if any.');
+  .meta({ id: "DirectiveRecommendedAction" })
+  .describe("The one thing Athena thinks deserves the client’s full attention right now, if any.");
 
 export const DirectiveOut = z
   .object({
-    schemaVersion: z.literal('directive/1'),
+    schemaVersion: z.literal("directive/1"),
     directiveId: z
       .string()
-      .describe('This computed snapshot’s id; echo it to acknowledge_directive.'),
+      .describe("This computed snapshot’s id; echo it to acknowledge_directive."),
     date: DateString,
     timezone: z.string(),
     generatedAt: z.string(),
@@ -225,10 +225,10 @@ export const DirectiveOut = z
       approvalsPending: z.number().int(),
     }),
     posture: DirectivePosture,
-    reason: z.string().max(280).describe('Plain-language, safe to show the user verbatim.'),
+    reason: z.string().max(280).describe("Plain-language, safe to show the user verbatim."),
     recommendedAction: DirectiveRecommendedAction.nullable(),
   })
-  .meta({ id: 'DirectiveOut', description: 'Generic daily-directive projection.' });
+  .meta({ id: "DirectiveOut", description: "Generic daily-directive projection." });
 ```
 
 `attention` is not a new computation — it is `buildHubTodayPayload`'s (`apps/api/src/routes/hub-today.ts`,
@@ -296,16 +296,16 @@ freebie, not a dependency of this feature.
 // deleted legacy module directive
 export const AcknowledgeDirectiveInput = z
   .object({
-    directiveId: z.string().describe('The directiveId being acknowledged.'),
-    appliedPosture: DirectivePosture.describe('The posture the client actually acted on.'),
-    enforced: z.boolean().describe('Whether the client changed device state in response.'),
+    directiveId: z.string().describe("The directiveId being acknowledged."),
+    appliedPosture: DirectivePosture.describe("The posture the client actually acted on."),
+    enforced: z.boolean().describe("Whether the client changed device state in response."),
     note: z.string().max(500).optional(),
   })
-  .meta({ id: 'AcknowledgeDirectiveInput' });
+  .meta({ id: "AcknowledgeDirectiveInput" });
 
 export const AcknowledgeDirectiveOutput = z
   .object({ acknowledged: z.literal(true), acknowledgedAt: z.string() })
-  .meta({ id: 'AcknowledgeDirectiveOutput' });
+  .meta({ id: "AcknowledgeDirectiveOutput" });
 ```
 
 | readOnly | destructive | idempotent | openWorld | Scope        |
@@ -324,31 +324,31 @@ device-control client is actually acting on what it's told:
 
 ```ts
 // packages/db/src/schema — net-new
-export const directivePosture = pgEnum('directive_posture', [
-  'on_track',
-  'attention_needed',
-  'intervention_recommended',
+export const directivePosture = pgEnum("directive_posture", [
+  "on_track",
+  "attention_needed",
+  "intervention_recommended",
 ]);
 
 export const directiveAcknowledgment = pgTable(
-  'directive_acknowledgment',
+  "directive_acknowledgment",
   {
-    id: text('id').primaryKey().$defaultFn(genId),
-    hubId: text('hub_id')
+    id: text("id").primaryKey().$defaultFn(genId),
+    hubId: text("hub_id")
       .notNull()
-      .references(() => hub.id, { onDelete: 'cascade' }),
-    directiveId: text('directive_id').notNull(),
-    oauthClientId: text('oauth_client_id').notNull(), // whichever registered MCP client sent it
-    appliedPosture: directivePosture('applied_posture').notNull(),
-    enforced: boolean('enforced').notNull(),
-    note: text('note'),
-    createdAt: timestamp('created_at').notNull().defaultNow(),
-    updatedAt: timestamp('updated_at')
+      .references(() => hub.id, { onDelete: "cascade" }),
+    directiveId: text("directive_id").notNull(),
+    oauthClientId: text("oauth_client_id").notNull(), // whichever registered MCP client sent it
+    appliedPosture: directivePosture("applied_posture").notNull(),
+    enforced: boolean("enforced").notNull(),
+    note: text("note"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at")
       .notNull()
       .defaultNow()
       .$onUpdate(() => new Date()),
   },
-  (t) => [uniqueIndex('directive_ack_hub_directive_uq').on(t.hubId, t.directiveId)],
+  (t) => [uniqueIndex("directive_ack_hub_directive_uq").on(t.hubId, t.directiveId)],
 );
 ```
 

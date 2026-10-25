@@ -29,7 +29,7 @@ Change the minimap class to this exact value:
 
 ```tsx
 className =
-  'pointer-events-auto !static !m-0 hidden !h-20 !w-32 shrink-0 !rounded-lg sm:block sm:!h-[150px] sm:!w-[200px]';
+  "pointer-events-auto !static !m-0 hidden !h-20 !w-32 shrink-0 !rounded-lg sm:block sm:!h-[150px] sm:!w-[200px]";
 ```
 
 Keep the existing `minimap` and `density` rendering condition. This preserves a host's ability to
@@ -90,8 +90,8 @@ Use the hidden in-app browser. Capture both routes at 320×720 dark and at 390×
 dark. For each capture, evaluate these facts:
 
 ```js
-const minimap = document.querySelector('.react-flow__minimap');
-const controls = document.querySelector('.react-flow__controls');
+const minimap = document.querySelector(".react-flow__minimap");
+const controls = document.querySelector(".react-flow__controls");
 const toolbar = document.querySelector('[aria-label="Canvas view controls"]');
 
 return {

@@ -35,19 +35,19 @@ Add tests that assert the active task is absent from **Up next**, both other pla
 selecting one posts its `taskId`, and typing a title then pressing Enter posts only that `label`.
 
 ```tsx
-fireEvent.click(await screen.findByRole('button', { name: 'Draft the launch checklist' }));
+fireEvent.click(await screen.findByRole("button", { name: "Draft the launch checklist" }));
 await waitFor(() => {
   expect(recordsPost).toHaveBeenCalledWith({
-    json: { context: { label: 'Draft the launch checklist', taskId: 'task_2' } },
+    json: { context: { label: "Draft the launch checklist", taskId: "task_2" } },
   });
 });
 
-const field = screen.getByRole('searchbox', { name: 'Find or create a task' });
-fireEvent.change(field, { target: { value: 'Write the launch notes' } });
-fireEvent.keyDown(field, { key: 'Enter' });
+const field = screen.getByRole("searchbox", { name: "Find or create a task" });
+fireEvent.change(field, { target: { value: "Write the launch notes" } });
+fireEvent.keyDown(field, { key: "Enter" });
 await waitFor(() => {
   expect(recordsPost).toHaveBeenCalledWith({
-    json: { context: { label: 'Write the launch notes' } },
+    json: { context: { label: "Write the launch notes" } },
   });
 });
 ```
@@ -97,9 +97,9 @@ Use `useRemoteSearch<SearchOut>` with a 180ms debounce, a one-character minimum,
 api.v1.hub.search.$get({
   query: {
     q: term,
-    kinds: 'task',
-    limit: '8',
-    surface: 'palette',
+    kinds: "task",
+    limit: "8",
+    surface: "palette",
   },
 });
 ```

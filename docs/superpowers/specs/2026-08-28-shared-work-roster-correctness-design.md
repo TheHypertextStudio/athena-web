@@ -128,8 +128,8 @@ interface EntityTableContinuationBase {
 
 type EntityTableContinuation = EntityTableContinuationBase &
   (
-    | { readonly state: 'idle' | 'error'; readonly onActivate: () => void }
-    | { readonly state: 'loading'; readonly onActivate?: never }
+    | { readonly state: "idle" | "error"; readonly onActivate: () => void }
+    | { readonly state: "loading"; readonly onActivate?: never }
   );
 
 type EntityTableGroup<T> = EntityTableGroupBase &
@@ -174,7 +174,7 @@ interface EntityTableSelectionModifiers {
 
 interface EntityTableSelectionCommand {
   readonly command:
-    'replace' | 'toggle' | 'range' | 'move-active' | 'extend-active' | 'select-all' | 'clear';
+    "replace" | "toggle" | "range" | "move-active" | "extend-active" | "select-all" | "clear";
   readonly activeEntryKey: string | null;
   readonly targetSelectionKey: string | null;
   readonly anchorSelectionKey: string | null;

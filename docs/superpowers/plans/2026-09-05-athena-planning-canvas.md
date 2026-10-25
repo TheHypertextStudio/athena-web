@@ -77,14 +77,14 @@
 
 ```ts
 // domains/work/tests/plan-draft.test.ts
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from "vitest";
 import {
   applyPlanOps,
   PlanOpError,
   planNodeClosure,
   planCounts,
   EMPTY_PLAN_DOCUMENT,
-} from '../src/plan-draft';
+} from "../src/plan-draft";
 
 const env = { templatePayload: () => undefined };
 
@@ -93,110 +93,110 @@ function seeded() {
     EMPTY_PLAN_DOCUMENT,
     [
       {
-        op: 'upsert_node',
-        node: { ref: 'init', kind: 'initiative', fields: { title: 'Spring campaign' } },
+        op: "upsert_node",
+        node: { ref: "init", kind: "initiative", fields: { title: "Spring campaign" } },
       },
       {
-        op: 'upsert_node',
-        node: { ref: 'p1', kind: 'project', parentRef: 'init', fields: { title: 'Outreach' } },
+        op: "upsert_node",
+        node: { ref: "p1", kind: "project", parentRef: "init", fields: { title: "Outreach" } },
       },
       {
-        op: 'upsert_node',
-        node: { ref: 't1', kind: 'task', parentRef: 'p1', fields: { title: 'Segment donors' } },
+        op: "upsert_node",
+        node: { ref: "t1", kind: "task", parentRef: "p1", fields: { title: "Segment donors" } },
       },
     ],
     env,
   );
 }
 
-describe('applyPlanOps', () => {
-  it('upserts nodes parents-first regardless of op order', () => {
+describe("applyPlanOps", () => {
+  it("upserts nodes parents-first regardless of op order", () => {
     const doc = applyPlanOps(
       EMPTY_PLAN_DOCUMENT,
       [
         {
-          op: 'upsert_node',
-          node: { ref: 't1', kind: 'task', parentRef: 'p1', fields: { title: 'T' } },
+          op: "upsert_node",
+          node: { ref: "t1", kind: "task", parentRef: "p1", fields: { title: "T" } },
         },
         {
-          op: 'upsert_node',
-          node: { ref: 'p1', kind: 'project', parentRef: 'init', fields: { title: 'P' } },
+          op: "upsert_node",
+          node: { ref: "p1", kind: "project", parentRef: "init", fields: { title: "P" } },
         },
-        { op: 'upsert_node', node: { ref: 'init', kind: 'initiative', fields: { title: 'I' } } },
+        { op: "upsert_node", node: { ref: "init", kind: "initiative", fields: { title: "I" } } },
       ],
       env,
     );
-    expect(doc.nodes.map((n) => n.ref)).toEqual(['init', 'p1', 't1']);
+    expect(doc.nodes.map((n) => n.ref)).toEqual(["init", "p1", "t1"]);
   });
-  it('rejects a task under an initiative', () => {
+  it("rejects a task under an initiative", () => {
     expect(() =>
       applyPlanOps(
         EMPTY_PLAN_DOCUMENT,
         [
-          { op: 'upsert_node', node: { ref: 'init', kind: 'initiative', fields: { title: 'I' } } },
+          { op: "upsert_node", node: { ref: "init", kind: "initiative", fields: { title: "I" } } },
           {
-            op: 'upsert_node',
-            node: { ref: 't', kind: 'task', parentRef: 'init', fields: { title: 'T' } },
+            op: "upsert_node",
+            node: { ref: "t", kind: "task", parentRef: "init", fields: { title: "T" } },
           },
         ],
         env,
       ),
     ).toThrow(PlanOpError);
   });
-  it('is atomic: a failing op leaves the document untouched', () => {
+  it("is atomic: a failing op leaves the document untouched", () => {
     const doc = seeded();
     expect(() =>
       applyPlanOps(
         doc,
         [
-          { op: 'set_fields', ref: 'p1', fields: { summary: 'ok' } },
-          { op: 'set_fields', ref: 'missing', fields: { summary: 'x' } },
+          { op: "set_fields", ref: "p1", fields: { summary: "ok" } },
+          { op: "set_fields", ref: "missing", fields: { summary: "x" } },
         ],
         env,
       ),
     ).toThrow(PlanOpError);
-    expect(doc.nodes.find((n) => n.ref === 'p1')?.fields.summary).toBeUndefined();
+    expect(doc.nodes.find((n) => n.ref === "p1")?.fields.summary).toBeUndefined();
   });
-  it('merges a template without overwriting set fields', () => {
+  it("merges a template without overwriting set fields", () => {
     const doc = applyPlanOps(
       seeded(),
       [
-        { op: 'set_fields', ref: 'p1', fields: { description: 'mine' } },
-        { op: 'apply_template', ref: 'p1', templateId: 'tpl_1' },
+        { op: "set_fields", ref: "p1", fields: { description: "mine" } },
+        { op: "apply_template", ref: "p1", templateId: "tpl_1" },
       ],
       {
         templatePayload: () => ({
-          targetType: 'project',
-          description: 'theirs',
-          summary: 'from template',
+          targetType: "project",
+          description: "theirs",
+          summary: "from template",
         }),
       },
     );
-    const p1 = doc.nodes.find((n) => n.ref === 'p1');
-    expect(p1?.fields.description).toBe('mine');
-    expect(p1?.fields.summary).toBe('from template');
-    expect(p1?.templateId).toBe('tpl_1');
+    const p1 = doc.nodes.find((n) => n.ref === "p1");
+    expect(p1?.fields.description).toBe("mine");
+    expect(p1?.fields.summary).toBe("from template");
+    expect(p1?.templateId).toBe("tpl_1");
   });
-  it('rejects field edits and moves on a confirmed node', () => {
+  it("rejects field edits and moves on a confirmed node", () => {
     const doc = {
       ...seeded(),
       nodes: seeded().nodes.map((n) =>
-        n.ref === 'p1' ? { ...n, status: 'confirmed' as const, objectId: 'prj_1' } : n,
+        n.ref === "p1" ? { ...n, status: "confirmed" as const, objectId: "prj_1" } : n,
       ),
     };
     expect(() =>
-      applyPlanOps(doc, [{ op: 'set_fields', ref: 'p1', fields: { summary: 'x' } }], env),
+      applyPlanOps(doc, [{ op: "set_fields", ref: "p1", fields: { summary: "x" } }], env),
     ).toThrow(PlanOpError);
-    expect(() => applyPlanOps(doc, [{ op: 'remove_node', ref: 'p1' }], env)).toThrow(PlanOpError);
+    expect(() => applyPlanOps(doc, [{ op: "remove_node", ref: "p1" }], env)).toThrow(PlanOpError);
   });
-  it('allows an edge from a confirmed node to a draft neighbour', () => {
+  it("allows an edge from a confirmed node to a draft neighbour", () => {
     const base = seeded();
     const withP2 = applyPlanOps(
       base,
       [
         {
-          op: 'upsert_node',
-          node: { ref: 'p2', kind: 'project', parentRef: 'init', fields: { title: 'Push' } },
+          op: "upsert_node",
+          node: { ref: "p2", kind: "project", parentRef: "init", fields: { title: "Push" } },
         },
       ],
       env,
@@ -204,69 +204,69 @@ describe('applyPlanOps', () => {
     const doc = {
       ...withP2,
       nodes: withP2.nodes.map((n) =>
-        n.ref === 'p1' ? { ...n, status: 'confirmed' as const, objectId: 'prj_1' } : n,
+        n.ref === "p1" ? { ...n, status: "confirmed" as const, objectId: "prj_1" } : n,
       ),
     };
-    const next = applyPlanOps(doc, [{ op: 'add_edge', fromRef: 'p1', toRef: 'p2' }], env);
-    expect(next.edges).toEqual([{ fromRef: 'p1', toRef: 'p2', kind: 'blocks' }]);
+    const next = applyPlanOps(doc, [{ op: "add_edge", fromRef: "p1", toRef: "p2" }], env);
+    expect(next.edges).toEqual([{ fromRef: "p1", toRef: "p2", kind: "blocks" }]);
   });
-  it('rejects an edge between different kinds and a self edge', () => {
+  it("rejects an edge between different kinds and a self edge", () => {
     expect(() =>
-      applyPlanOps(seeded(), [{ op: 'add_edge', fromRef: 'p1', toRef: 't1' }], env),
+      applyPlanOps(seeded(), [{ op: "add_edge", fromRef: "p1", toRef: "t1" }], env),
     ).toThrow(PlanOpError);
     expect(() =>
-      applyPlanOps(seeded(), [{ op: 'add_edge', fromRef: 'p1', toRef: 'p1' }], env),
+      applyPlanOps(seeded(), [{ op: "add_edge", fromRef: "p1", toRef: "p1" }], env),
     ).toThrow(PlanOpError);
   });
-  it('removing a node removes its subtree and its edges', () => {
-    const doc = applyPlanOps(seeded(), [{ op: 'remove_node', ref: 'p1' }], env);
-    expect(doc.nodes.map((n) => n.ref)).toEqual(['init']);
+  it("removing a node removes its subtree and its edges", () => {
+    const doc = applyPlanOps(seeded(), [{ op: "remove_node", ref: "p1" }], env);
+    expect(doc.nodes.map((n) => n.ref)).toEqual(["init"]);
   });
-  it('moves a task between projects and rejects moving under a task', () => {
+  it("moves a task between projects and rejects moving under a task", () => {
     const doc = applyPlanOps(
       seeded(),
       [
         {
-          op: 'upsert_node',
-          node: { ref: 'p2', kind: 'project', parentRef: 'init', fields: { title: 'P2' } },
+          op: "upsert_node",
+          node: { ref: "p2", kind: "project", parentRef: "init", fields: { title: "P2" } },
         },
-        { op: 'move_node', ref: 't1', parentRef: 'p2' },
+        { op: "move_node", ref: "t1", parentRef: "p2" },
       ],
       env,
     );
-    expect(doc.nodes.find((n) => n.ref === 't1')?.parentRef).toBe('p2');
-    expect(() => applyPlanOps(doc, [{ op: 'move_node', ref: 'p2', parentRef: 't1' }], env)).toThrow(
+    expect(doc.nodes.find((n) => n.ref === "t1")?.parentRef).toBe("p2");
+    expect(() => applyPlanOps(doc, [{ op: "move_node", ref: "p2", parentRef: "t1" }], env)).toThrow(
       PlanOpError,
     );
   });
-  it('rejects fields a kind does not carry', () => {
+  it("rejects fields a kind does not carry", () => {
     expect(() =>
       applyPlanOps(
         seeded(),
-        [{ op: 'set_fields', ref: 'init', fields: { dueDate: '2026-05-01' } }],
+        [{ op: "set_fields", ref: "init", fields: { dueDate: "2026-05-01" } }],
         env,
       ),
     ).toThrow(PlanOpError);
   });
 });
 
-describe('planNodeClosure', () => {
-  it('adds unconfirmed ancestors parents-first', () => {
-    expect(planNodeClosure(seeded(), ['t1'])).toEqual(['init', 'p1', 't1']);
+describe("planNodeClosure", () => {
+  it("adds unconfirmed ancestors parents-first", () => {
+    expect(planNodeClosure(seeded(), ["t1"])).toEqual(["init", "p1", "t1"]);
   });
-  it('skips confirmed ancestors', () => {
+  it("skips confirmed ancestors", () => {
     const doc = {
       ...seeded(),
       nodes: seeded().nodes.map((n) =>
-        n.ref === 'init' ? { ...n, status: 'confirmed' as const, objectId: 'ini_1' } : n,
+        n.ref === "init" ? { ...n, status: "confirmed" as const, objectId: "ini_1" } : n,
       ),
     };
-    expect(planNodeClosure(doc, ['t1'])).toEqual(['p1', 't1']);
+    expect(planNodeClosure(doc, ["t1"])).toEqual(["p1", "t1"]);
   });
 });
 
-describe('planCounts', () => {
-  it('counts by kind and draft', () => {
+describe("planCounts", () => {
+  it("counts by kind and draft", () => {
     expect(planCounts(seeded())).toEqual({ projects: 1, tasks: 1, draft: 3 });
   });
 });
@@ -281,16 +281,16 @@ Expected: FAIL (module not found).
 
 ```ts
 // domains/work/src/contracts/plan-draft.ts
-import { z } from 'zod';
-import { ActorId, OrganizationId, TeamId } from '@docket/identity-access/ids';
-import { InitiativeId, LabelId, TemplateId } from '../ids';
-import { Health } from './capability';
-import { Priority } from '../task-contract';
-import { InitiativeUpdateCadence } from './initiative';
+import { z } from "zod";
+import { ActorId, OrganizationId, TeamId } from "@docket/identity-access/ids";
+import { InitiativeId, LabelId, TemplateId } from "../ids";
+import { Health } from "./capability";
+import { Priority } from "../task-contract";
+import { InitiativeUpdateCadence } from "./initiative";
 
-export const PlanNodeKind = z.enum(['initiative', 'program', 'project', 'task']);
+export const PlanNodeKind = z.enum(["initiative", "program", "project", "task"]);
 export type PlanNodeKind = z.infer<typeof PlanNodeKind>;
-export const PlanNodeStatus = z.enum(['draft', 'confirmed']);
+export const PlanNodeStatus = z.enum(["draft", "confirmed"]);
 export type PlanNodeStatus = z.infer<typeof PlanNodeStatus>;
 
 /** One flat field bag; the reducer enforces which keys each kind accepts. */
@@ -330,7 +330,7 @@ export type PlanNode = z.infer<typeof PlanNode>;
 export const PlanEdge = z.object({
   fromRef: z.string(),
   toRef: z.string(),
-  kind: z.literal('blocks'),
+  kind: z.literal("blocks"),
 });
 export type PlanEdge = z.infer<typeof PlanEdge>;
 
@@ -347,19 +347,19 @@ export const PlanUpsertNode = z.object({
   templateId: TemplateId.nullable().optional(),
 });
 
-export const PlanOp = z.discriminatedUnion('op', [
-  z.object({ op: z.literal('set_title'), title: z.string().min(1).max(200) }),
-  z.object({ op: z.literal('upsert_node'), node: PlanUpsertNode }),
-  z.object({ op: z.literal('set_fields'), ref: z.string(), fields: PlanNodeFields.partial() }),
-  z.object({ op: z.literal('move_node'), ref: z.string(), parentRef: z.string().nullable() }),
-  z.object({ op: z.literal('remove_node'), ref: z.string() }),
-  z.object({ op: z.literal('add_edge'), fromRef: z.string(), toRef: z.string() }),
-  z.object({ op: z.literal('remove_edge'), fromRef: z.string(), toRef: z.string() }),
-  z.object({ op: z.literal('apply_template'), ref: z.string(), templateId: TemplateId }),
+export const PlanOp = z.discriminatedUnion("op", [
+  z.object({ op: z.literal("set_title"), title: z.string().min(1).max(200) }),
+  z.object({ op: z.literal("upsert_node"), node: PlanUpsertNode }),
+  z.object({ op: z.literal("set_fields"), ref: z.string(), fields: PlanNodeFields.partial() }),
+  z.object({ op: z.literal("move_node"), ref: z.string(), parentRef: z.string().nullable() }),
+  z.object({ op: z.literal("remove_node"), ref: z.string() }),
+  z.object({ op: z.literal("add_edge"), fromRef: z.string(), toRef: z.string() }),
+  z.object({ op: z.literal("remove_edge"), fromRef: z.string(), toRef: z.string() }),
+  z.object({ op: z.literal("apply_template"), ref: z.string(), templateId: TemplateId }),
 ]);
 export type PlanOp = z.infer<typeof PlanOp>;
 
-export const PlanDraftStatus = z.enum(['active', 'committed', 'archived']);
+export const PlanDraftStatus = z.enum(["active", "committed", "archived"]);
 export type PlanDraftStatus = z.infer<typeof PlanDraftStatus>;
 
 /** What the read hydrates for a confirmed node from its real record. */
@@ -386,7 +386,7 @@ export const PlanDraftOut = z
     createdAt: z.string(),
     updatedAt: z.string(),
   })
-  .meta({ id: 'PlanDraftOut', description: 'A personal planning draft and its document.' });
+  .meta({ id: "PlanDraftOut", description: "A personal planning draft and its document." });
 export type PlanDraftOut = z.infer<typeof PlanDraftOut>;
 
 export const PlanDraftListOut = z.object({ items: z.array(PlanDraftOut) });
@@ -397,7 +397,7 @@ export const PlanDraftCreate = z
     initiativeId: InitiativeId.optional(),
     title: z.string().min(1).max(200).optional(),
   })
-  .meta({ id: 'PlanDraftCreate', description: 'Start or reopen a planning draft.' });
+  .meta({ id: "PlanDraftCreate", description: "Start or reopen a planning draft." });
 export type PlanDraftCreate = z.infer<typeof PlanDraftCreate>;
 
 export const PlanDraftPatch = z
@@ -405,12 +405,12 @@ export const PlanDraftPatch = z
     revision: z.number().int().min(0),
     ops: z.array(PlanOp).min(1).max(200),
   })
-  .meta({ id: 'PlanDraftPatch', description: 'A batch of draft operations against one revision.' });
+  .meta({ id: "PlanDraftPatch", description: "A batch of draft operations against one revision." });
 export type PlanDraftPatch = z.infer<typeof PlanDraftPatch>;
 
 export const PlanCommitBody = z
   .object({ refs: z.array(z.string()).min(1).max(200) })
-  .meta({ id: 'PlanCommitBody', description: 'The draft nodes to create for real.' });
+  .meta({ id: "PlanCommitBody", description: "The draft nodes to create for real." });
 export type PlanCommitBody = z.infer<typeof PlanCommitBody>;
 
 export const PlanPlaced = z.object({
@@ -425,7 +425,7 @@ export const PlanCommitOut = z
     placed: z.array(PlanPlaced),
     changeSetId: z.string().nullable(),
   })
-  .meta({ id: 'PlanCommitOut', description: 'The result of confirming part of a plan.' });
+  .meta({ id: "PlanCommitOut", description: "The result of confirming part of a plan." });
 export type PlanCommitOut = z.infer<typeof PlanCommitOut>;
 
 export const PlanTemplateOption = z.object({
@@ -437,10 +437,10 @@ export const PlanTemplateOption = z.object({
 export type PlanTemplateOption = z.infer<typeof PlanTemplateOption>;
 
 export const PLAN_TOOL_NAMES = {
-  start: 'plan_start',
-  read: 'plan_read',
-  draft: 'plan_draft',
-  commit: 'plan_commit',
+  start: "plan_start",
+  read: "plan_read",
+  draft: "plan_draft",
+  commit: "plan_commit",
 } as const;
 ```
 
@@ -448,14 +448,14 @@ export const PLAN_TOOL_NAMES = {
 
 ```ts
 // domains/work/src/plan-draft.ts
-import type { TemplateDraft } from './contracts/template';
+import type { TemplateDraft } from "./contracts/template";
 import type {
   PlanDocument,
   PlanNode,
   PlanNodeFields,
   PlanNodeKind,
   PlanOp,
-} from './contracts/plan-draft';
+} from "./contracts/plan-draft";
 
 export const EMPTY_PLAN_DOCUMENT: PlanDocument = { nodes: [], edges: [] };
 
@@ -466,7 +466,7 @@ export class PlanOpError extends Error {
     readonly reason: string,
   ) {
     super(`${path}: ${reason}`);
-    this.name = 'PlanOpError';
+    this.name = "PlanOpError";
   }
 }
 
@@ -476,55 +476,55 @@ export interface PlanOpEnvironment {
 
 const ALLOWED_PARENTS: Record<PlanNodeKind, readonly PlanNodeKind[]> = {
   initiative: [],
-  program: ['initiative'],
-  project: ['program', 'initiative'],
-  task: ['project'],
+  program: ["initiative"],
+  project: ["program", "initiative"],
+  task: ["project"],
 };
 const FIELDS_BY_KIND: Record<PlanNodeKind, ReadonlySet<keyof PlanNodeFields>> = {
   initiative: new Set([
-    'title',
-    'summary',
-    'description',
-    'status',
-    'priority',
-    'health',
-    'updateCadence',
-    'ownerId',
-    'labelIds',
-    'targetDate',
+    "title",
+    "summary",
+    "description",
+    "status",
+    "priority",
+    "health",
+    "updateCadence",
+    "ownerId",
+    "labelIds",
+    "targetDate",
   ]),
-  program: new Set(['title', 'summary', 'description', 'status', 'health', 'ownerId', 'labelIds']),
+  program: new Set(["title", "summary", "description", "status", "health", "ownerId", "labelIds"]),
   project: new Set([
-    'title',
-    'summary',
-    'description',
-    'status',
-    'priority',
-    'health',
-    'leadId',
-    'teamId',
-    'labelIds',
-    'startDate',
-    'targetDate',
+    "title",
+    "summary",
+    "description",
+    "status",
+    "priority",
+    "health",
+    "leadId",
+    "teamId",
+    "labelIds",
+    "startDate",
+    "targetDate",
   ]),
   task: new Set([
-    'title',
-    'description',
-    'status',
-    'priority',
-    'assigneeId',
-    'teamId',
-    'labelIds',
-    'startDate',
-    'dueDate',
-    'estimate',
+    "title",
+    "description",
+    "status",
+    "priority",
+    "assigneeId",
+    "teamId",
+    "labelIds",
+    "startDate",
+    "dueDate",
+    "estimate",
   ]),
 };
 const TEMPLATE_FIELD_KEYS: Record<PlanNodeKind, readonly (keyof PlanNodeFields)[]> = {
-  initiative: ['summary', 'description', 'status', 'priority', 'updateCadence', 'health'],
-  program: ['summary', 'description', 'status', 'health'],
-  project: ['summary', 'description', 'status', 'health'],
-  task: ['description', 'priority', 'labelIds'],
+  initiative: ["summary", "description", "status", "priority", "updateCadence", "health"],
+  program: ["summary", "description", "status", "health"],
+  project: ["summary", "description", "status", "health"],
+  task: ["description", "priority", "labelIds"],
 };
 
 export function planNode(document: PlanDocument, ref: string): PlanNode | undefined {
@@ -550,12 +550,12 @@ function assertParent(
   selfRef: string,
 ): void {
   if (parentRef === null) {
-    if (kind !== 'initiative')
+    if (kind !== "initiative")
       throw new PlanOpError(index, `ops.${index}.parentRef`, `A ${kind} needs a parent.`);
     return;
   }
   if (parentRef === selfRef)
-    throw new PlanOpError(index, `ops.${index}.parentRef`, 'A node cannot be its own parent.');
+    throw new PlanOpError(index, `ops.${index}.parentRef`, "A node cannot be its own parent.");
   const parent = planNode(doc, parentRef);
   if (!parent)
     throw new PlanOpError(index, `ops.${index}.parentRef`, `No node has ref "${parentRef}".`);
@@ -569,7 +569,7 @@ function assertParent(
   let cursor: PlanNode | undefined = parent;
   while (cursor) {
     if (cursor.ref === selfRef)
-      throw new PlanOpError(index, `ops.${index}.parentRef`, 'That would make a cycle.');
+      throw new PlanOpError(index, `ops.${index}.parentRef`, "That would make a cycle.");
     cursor = cursor.parentRef === null ? undefined : planNode(doc, cursor.parentRef);
   }
 }
@@ -592,8 +592,8 @@ function subtreeRefs(doc: PlanDocument, ref: string): Set<string> {
 function requireDraft(index: number, doc: PlanDocument, ref: string, path: string): PlanNode {
   const node = planNode(doc, ref);
   if (!node) throw new PlanOpError(index, path, `No node has ref "${ref}".`);
-  if (node.status === 'confirmed')
-    throw new PlanOpError(index, path, 'That node is already created; edit it in the workspace.');
+  if (node.status === "confirmed")
+    throw new PlanOpError(index, path, "That node is already created; edit it in the workspace.");
   return node;
 }
 
@@ -620,19 +620,19 @@ function applyOne(
   env: PlanOpEnvironment,
 ): PlanDocument {
   switch (op.op) {
-    case 'set_title':
+    case "set_title":
       return doc;
-    case 'upsert_node': {
+    case "upsert_node": {
       const existing = planNode(doc, op.node.ref);
-      if (existing?.status === 'confirmed')
+      if (existing?.status === "confirmed")
         throw new PlanOpError(
           index,
           `ops.${index}.node.ref`,
-          'That node is already created; edit it in the workspace.',
+          "That node is already created; edit it in the workspace.",
         );
       const kind = existing?.kind ?? op.node.kind;
       if (existing && existing.kind !== op.node.kind)
-        throw new PlanOpError(index, `ops.${index}.node.kind`, 'A node cannot change kind.');
+        throw new PlanOpError(index, `ops.${index}.node.kind`, "A node cannot change kind.");
       const parentRef =
         op.node.parentRef === undefined ? (existing?.parentRef ?? null) : op.node.parentRef;
       assertFieldsForKind(index, kind, op.node.fields);
@@ -645,7 +645,7 @@ function applyOne(
         fields: { ...existing?.fields, ...op.node.fields },
         templateId:
           op.node.templateId === undefined ? (existing?.templateId ?? null) : op.node.templateId,
-        status: 'draft',
+        status: "draft",
         objectId: null,
       };
       const nodes = existing
@@ -655,15 +655,15 @@ function applyOne(
       assertParent(index, withNode, kind, parentRef, next.ref);
       return withNode;
     }
-    case 'set_fields': {
+    case "set_fields": {
       const node = requireDraft(index, doc, op.ref, `ops.${index}.ref`);
       assertFieldsForKind(index, node.kind, op.fields);
       const fields = { ...node.fields, ...op.fields };
       if (fields.title.trim().length === 0)
-        throw new PlanOpError(index, `ops.${index}.fields.title`, 'A title is required.');
+        throw new PlanOpError(index, `ops.${index}.fields.title`, "A title is required.");
       return { ...doc, nodes: doc.nodes.map((n) => (n.ref === op.ref ? { ...n, fields } : n)) };
     }
-    case 'move_node': {
+    case "move_node": {
       const node = requireDraft(index, doc, op.ref, `ops.${index}.ref`);
       assertParent(index, doc, node.kind, op.parentRef, node.ref);
       return {
@@ -671,16 +671,16 @@ function applyOne(
         nodes: doc.nodes.map((n) => (n.ref === op.ref ? { ...n, parentRef: op.parentRef } : n)),
       };
     }
-    case 'remove_node': {
+    case "remove_node": {
       requireDraft(index, doc, op.ref, `ops.${index}.ref`);
       const gone = subtreeRefs(doc, op.ref);
       for (const ref of gone) {
         const node = planNode(doc, ref);
-        if (node?.status === 'confirmed')
+        if (node?.status === "confirmed")
           throw new PlanOpError(
             index,
             `ops.${index}.ref`,
-            'A created node is inside that subtree.',
+            "A created node is inside that subtree.",
           );
       }
       return {
@@ -690,45 +690,45 @@ function applyOne(
         edges: doc.edges.filter((e) => !gone.has(e.fromRef) && !gone.has(e.toRef)),
       };
     }
-    case 'add_edge': {
+    case "add_edge": {
       const from = planNode(doc, op.fromRef);
       const to = planNode(doc, op.toRef);
       if (!from)
         throw new PlanOpError(index, `ops.${index}.fromRef`, `No node has ref "${op.fromRef}".`);
       if (!to) throw new PlanOpError(index, `ops.${index}.toRef`, `No node has ref "${op.toRef}".`);
       if (from.ref === to.ref)
-        throw new PlanOpError(index, `ops.${index}.toRef`, 'A node cannot block itself.');
-      if (from.kind !== to.kind || from.kind === 'initiative')
+        throw new PlanOpError(index, `ops.${index}.toRef`, "A node cannot block itself.");
+      if (from.kind !== to.kind || from.kind === "initiative")
         throw new PlanOpError(
           index,
           `ops.${index}.toRef`,
-          'Dependencies join two projects or two tasks.',
+          "Dependencies join two projects or two tasks.",
         );
-      if (from.status === 'confirmed' && to.status === 'confirmed')
+      if (from.status === "confirmed" && to.status === "confirmed")
         throw new PlanOpError(
           index,
           `ops.${index}.toRef`,
-          'Both are already created; link them in the workspace.',
+          "Both are already created; link them in the workspace.",
         );
       if (doc.edges.some((e) => e.fromRef === op.fromRef && e.toRef === op.toRef)) return doc;
       return {
         ...doc,
-        edges: [...doc.edges, { fromRef: op.fromRef, toRef: op.toRef, kind: 'blocks' }],
+        edges: [...doc.edges, { fromRef: op.fromRef, toRef: op.toRef, kind: "blocks" }],
       };
     }
-    case 'remove_edge':
+    case "remove_edge":
       return {
         ...doc,
         edges: doc.edges.filter((e) => !(e.fromRef === op.fromRef && e.toRef === op.toRef)),
       };
-    case 'apply_template': {
+    case "apply_template": {
       const node = requireDraft(index, doc, op.ref, `ops.${index}.ref`);
       const payload = env.templatePayload(op.templateId);
       if (!payload)
         throw new PlanOpError(
           index,
           `ops.${index}.templateId`,
-          'That template does not exist here.',
+          "That template does not exist here.",
         );
       if (payload.targetType !== node.kind)
         throw new PlanOpError(
@@ -770,7 +770,7 @@ export function planNodeClosure(document: PlanDocument, refs: readonly string[])
   const wanted = new Set<string>();
   for (const ref of refs) {
     let cursor = planNode(document, ref);
-    while (cursor && cursor.status !== 'confirmed') {
+    while (cursor && cursor.status !== "confirmed") {
       wanted.add(cursor.ref);
       cursor = cursor.parentRef === null ? undefined : planNode(document, cursor.parentRef);
     }
@@ -786,9 +786,9 @@ export function planCounts(document: PlanDocument): {
   draft: number;
 } {
   return {
-    projects: document.nodes.filter((n) => n.kind === 'project').length,
-    tasks: document.nodes.filter((n) => n.kind === 'task').length,
-    draft: document.nodes.filter((n) => n.status === 'draft').length,
+    projects: document.nodes.filter((n) => n.kind === "project").length,
+    tasks: document.nodes.filter((n) => n.kind === "task").length,
+    draft: document.nodes.filter((n) => n.status === "draft").length,
   };
 }
 ```
@@ -817,39 +817,39 @@ Expected: PASS, clean.
 - [ ] **Step 1: Add the table**
 
 ```ts
-export const planDraftStatus = pgEnum('plan_draft_status', ['active', 'committed', 'archived']);
+export const planDraftStatus = pgEnum("plan_draft_status", ["active", "committed", "archived"]);
 
 export const planDraft = pgTable(
-  'plan_draft',
+  "plan_draft",
   {
-    id: text('id').primaryKey().$defaultFn(genId),
-    ownerUserId: text('owner_user_id')
+    id: text("id").primaryKey().$defaultFn(genId),
+    ownerUserId: text("owner_user_id")
       .notNull()
-      .references(() => user.id, { onDelete: 'cascade' }),
-    organizationId: text('organization_id')
+      .references(() => user.id, { onDelete: "cascade" }),
+    organizationId: text("organization_id")
       .notNull()
-      .references(() => organization.id, { onDelete: 'cascade' }),
-    sessionId: text('session_id').references(() => agentSession.id, { onDelete: 'set null' }),
-    rootInitiativeId: text('root_initiative_id').references(() => initiative.id, {
-      onDelete: 'set null',
+      .references(() => organization.id, { onDelete: "cascade" }),
+    sessionId: text("session_id").references(() => agentSession.id, { onDelete: "set null" }),
+    rootInitiativeId: text("root_initiative_id").references(() => initiative.id, {
+      onDelete: "set null",
     }),
-    title: text('title').notNull(),
-    status: planDraftStatus('status').notNull().default('active'),
-    revision: integer('revision').notNull().default(0),
-    document: jsonb('document').$type<PlanDocument>().notNull(),
-    createdAt: timestamp('created_at').notNull().defaultNow(),
-    updatedAt: timestamp('updated_at')
+    title: text("title").notNull(),
+    status: planDraftStatus("status").notNull().default("active"),
+    revision: integer("revision").notNull().default(0),
+    document: jsonb("document").$type<PlanDocument>().notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at")
       .notNull()
       .defaultNow()
       .$onUpdate(() => new Date()),
-    archivedAt: timestamp('archived_at'),
+    archivedAt: timestamp("archived_at"),
   },
   (t) => [
-    index('plan_draft_owner_status_idx').on(t.ownerUserId, t.status),
-    uniqueIndex('plan_draft_owner_root_active_uq')
+    index("plan_draft_owner_status_idx").on(t.ownerUserId, t.status),
+    uniqueIndex("plan_draft_owner_root_active_uq")
       .on(t.ownerUserId, t.rootInitiativeId)
       .where(sql`${t.status} = 'active' AND ${t.rootInitiativeId} IS NOT NULL`),
-    notBlank('plan_draft_title_not_blank', t.title),
+    notBlank("plan_draft_title_not_blank", t.title),
   ],
 );
 ```
@@ -956,15 +956,15 @@ Use `internalUserContext(userId)` + `scopedActor(ctx, orgId, 'work:read')` from 
 - [ ] **Step 1: Failing tests**
 
 ```ts
-it('closes over unconfirmed ancestors and creates parents first'); // commit ['t1'] creates init, p1, t1
-it('matches an existing project by name instead of duplicating'); // second commit → created:false
-it('links a project to its initiativeRefs and initiativeIds'); // initiative_project rows
-it('creates dependency edges only when both ends are confirmed');
-it('writes objectId and status back and bumps revision');
-it('records a change set the undo tool can read');
-it('rolls back everything when one node fails'); // e.g. team missing → no rows
-it('marks the plan committed when no draft node remains');
-it('route: refuses without contribute and returns application copy');
+it("closes over unconfirmed ancestors and creates parents first"); // commit ['t1'] creates init, p1, t1
+it("matches an existing project by name instead of duplicating"); // second commit → created:false
+it("links a project to its initiativeRefs and initiativeIds"); // initiative_project rows
+it("creates dependency edges only when both ends are confirmed");
+it("writes objectId and status back and bumps revision");
+it("records a change set the undo tool can read");
+it("rolls back everything when one node fails"); // e.g. team missing → no rows
+it("marks the plan committed when no draft node remains");
+it("route: refuses without contribute and returns application copy");
 ```
 
 - [ ] **Step 2: Implement**
@@ -993,15 +993,15 @@ Route: `POST /:id/commit` → `internalUserContext(userId)`, `scopedActor(ctx, r
 - [ ] **Step 1: Failing tests** (use the in-process client pattern from `tests/mcp/organize*.test.ts`)
 
 ```ts
-it('plan_start creates a plan, links the session, and returns href + templates');
-it('plan_start reopens the active plan for an initiative');
-it('plan_read returns the document and revision');
-it('plan_draft applies ops and returns the next revision and a change summary');
-it('plan_draft rejects a stale revision with the current revision in the error');
-it('plan_commit creates the refs and returns placed items');
-it('every plan tool 404s for a plan another user owns');
+it("plan_start creates a plan, links the session, and returns href + templates");
+it("plan_start reopens the active plan for an initiative");
+it("plan_read returns the document and revision");
+it("plan_draft applies ops and returns the next revision and a change summary");
+it("plan_draft rejects a stale revision with the current revision in the error");
+it("plan_commit creates the refs and returns placed items");
+it("every plan tool 404s for a plan another user owns");
 it(
-  'plan_start and plan_draft carry the private-draft annotation; plan_read is read-only; plan_commit is neither',
+  "plan_start and plan_draft carry the private-draft annotation; plan_read is read-only; plan_commit is neither",
 );
 ```
 
@@ -1031,9 +1031,9 @@ Tool definitions (all `runTool`):
 - [ ] **Step 1: Failing tests**
 
 ```ts
-it('a first-party private-draft tool executes under act_with_approval and autonomous');
-it('a first-party private-draft tool records only under suggest');
-it('a remote tool claiming private-draft is still a gated write');
+it("a first-party private-draft tool executes under act_with_approval and autonomous");
+it("a first-party private-draft tool records only under suggest");
+it("a remote tool claiming private-draft is still a gated write");
 it('the toolbox reports privateDraft for docket tools carrying _meta["docket/approval"]');
 ```
 

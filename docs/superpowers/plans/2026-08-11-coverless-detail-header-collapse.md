@@ -42,10 +42,10 @@ The contract requires:
 
 ```typescript
 expect(layout).toContain("data-detail-cover={cover ? 'present' : 'absent'}");
-expect(layout).toContain('useDetailHeaderCollapse({ hasCover: Boolean(cover) })');
-expect(layout).toContain('detail-body page-bleed page-grid');
-expect(css).toContain('container-type: size');
-expect(css).toContain('overflow-anchor: none');
+expect(layout).toContain("useDetailHeaderCollapse({ hasCover: Boolean(cover) })");
+expect(layout).toContain("detail-body page-bleed page-grid");
+expect(css).toContain("container-type: size");
+expect(css).toContain("overflow-anchor: none");
 expect(css).toMatch(/min-block-size:\s*calc\(100cqb/);
 ```
 
@@ -99,8 +99,8 @@ export function resolveDetailCollapseProgress(
 `requestAnimationFrame`, and writes:
 
 ```typescript
-scroller.style.setProperty('--detail-collapse-progress', String(progress));
-scroller.style.setProperty('--detail-collapse-delay', `${-progress}s`);
+scroller.style.setProperty("--detail-collapse-progress", String(progress));
+scroller.style.setProperty("--detail-collapse-delay", `${-progress}s`);
 ```
 
 Coverless uses four rem, covered uses six rem, and reduced motion selects only zero or one.

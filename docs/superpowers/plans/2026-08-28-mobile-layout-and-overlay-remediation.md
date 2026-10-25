@@ -169,7 +169,7 @@ numbering keeps related audit findings together; it does not override this depen
   rail spacer:
 
   ```tsx
-  export const TAB_BAR_BLOCK_SIZE_CLASS = 'h-10';
+  export const TAB_BAR_BLOCK_SIZE_CLASS = "h-10";
 
   export interface ShellRailDockProps {
     readonly panel: RailPanel;
@@ -242,7 +242,7 @@ numbering keeps related audit findings together; it does not override this depen
   expect(shortDetail.scrollHeight).toBeLessThanOrEqual(shortDetail.clientHeight + 1);
   expect(await assignAndReadScrollTop(shortDetail, 40)).toBe(0);
   expect(await scrollingAncestors(shortDetail)).toEqual([]);
-  expect(await scrollOwners(longDetail)).toEqual(['entity-detail']);
+  expect(await scrollOwners(longDetail)).toEqual(["entity-detail"]);
   ```
 
   In the expanded state, require the action top and identity-glyph top to differ by no more than
@@ -276,7 +276,7 @@ numbering keeps related audit findings together; it does not override this depen
   `overflow-y-auto` on the detail root so long pages still scroll. Replace `pb-24` with:
 
   ```tsx
-  'pb-[max(1rem,env(safe-area-inset-bottom))] lg:pb-6';
+  "pb-[max(1rem,env(safe-area-inset-bottom))] lg:pb-6";
   ```
 
   The collapse animation must read real `scrollTop`. A short route must stay at its expanded
@@ -386,19 +386,19 @@ numbering keeps related audit findings together; it does not override this depen
   Replace the current tone names with this public type and mapping:
 
   ```ts
-  export const SURFACE_TONES = ['canvas', 'page', 'well', 'card', 'floating', 'prominent'] as const;
+  export const SURFACE_TONES = ["canvas", "page", "well", "card", "floating", "prominent"] as const;
 
   export type SurfaceTone = (typeof SURFACE_TONES)[number];
-  export type SurfaceShape = 'none' | 'small' | 'medium';
-  export type SurfaceInset = 'none' | 'tight' | 'comfortable' | 'roomy';
+  export type SurfaceShape = "none" | "small" | "medium";
+  export type SurfaceInset = "none" | "tight" | "comfortable" | "roomy";
 
   const SURFACE_TONE: Readonly<Record<SurfaceTone, string>> = {
-    canvas: 'bg-surface-container text-on-surface',
-    page: 'bg-surface text-on-surface',
-    well: 'bg-surface-container-lowest text-on-surface',
-    card: 'bg-surface-container-low text-on-surface',
-    floating: 'bg-surface-container-high text-on-surface',
-    prominent: 'bg-surface-container-highest text-on-surface',
+    canvas: "bg-surface-container text-on-surface",
+    page: "bg-surface text-on-surface",
+    well: "bg-surface-container-lowest text-on-surface",
+    card: "bg-surface-container-low text-on-surface",
+    floating: "bg-surface-container-high text-on-surface",
+    prominent: "bg-surface-container-highest text-on-surface",
   };
 
   export function surfaceToneColor(tone: SurfaceTone): string;
@@ -500,9 +500,9 @@ numbering keeps related audit findings together; it does not override this depen
   Replace geometry-through-`className` with typed variants:
 
   ```ts
-  export type DialogSize = 'compact' | 'standard' | 'large' | 'wide' | 'detail' | 'workspace';
-  export type DialogHeight = 'content' | 'medium' | 'tall' | 'viewport';
-  export type OverlayInset = 'none' | 'compact' | 'standard';
+  export type DialogSize = "compact" | "standard" | "large" | "wide" | "detail" | "workspace";
+  export type DialogHeight = "content" | "medium" | "tall" | "viewport";
+  export type OverlayInset = "none" | "compact" | "standard";
 
   export interface HostedDialogPosition {
     readonly top: number;
@@ -513,22 +513,22 @@ numbering keeps related audit findings together; it does not override this depen
 
   export type DialogPresentation =
     | {
-        readonly kind: 'centered' | 'top' | 'responsive-fullscreen' | 'fullscreen' | 'bottom-sheet';
+        readonly kind: "centered" | "top" | "responsive-fullscreen" | "fullscreen" | "bottom-sheet";
         readonly size?: DialogSize;
         readonly height?: DialogHeight;
       }
     | {
-        readonly kind: 'hosted';
+        readonly kind: "hosted";
         readonly size?: DialogSize;
         readonly height?: DialogHeight;
         readonly portalContainer: HTMLElement;
         readonly position: HostedDialogPosition;
-        readonly backdrop?: 'none' | 'surface';
+        readonly backdrop?: "none" | "surface";
       };
 
   export interface DialogContentProps extends Omit<
     React.ComponentProps<typeof DialogPrimitive.Content>,
-    'asChild' | 'className' | 'style'
+    "asChild" | "className" | "style"
   > {
     readonly presentation?: DialogPresentation;
     readonly showClose?: boolean;
@@ -546,14 +546,14 @@ numbering keeps related audit findings together; it does not override this depen
 - [ ] **Step 3: Define the Sheet and Popover APIs**
 
   ```ts
-  export type SheetPresentation = 'edge' | 'fullscreen' | 'responsive-fullscreen';
-  export type SheetSize = 'navigation' | 'standard' | 'wide';
-  export type PopoverPresentation = 'menu' | 'panel';
-  export type PanelWidth = 'sm' | 'md' | 'lg' | 'xl' | 'wide' | 'content';
+  export type SheetPresentation = "edge" | "fullscreen" | "responsive-fullscreen";
+  export type SheetSize = "navigation" | "standard" | "wide";
+  export type PopoverPresentation = "menu" | "panel";
+  export type PanelWidth = "sm" | "md" | "lg" | "xl" | "wide" | "content";
 
   export interface PopoverContentProps extends Omit<
     React.ComponentProps<typeof PopoverPrimitive.Content>,
-    'className'
+    "className"
   > {
     readonly presentation?: PopoverPresentation;
     readonly width?: MenuWidth | PanelWidth;
@@ -578,10 +578,10 @@ numbering keeps related audit findings together; it does not override this depen
 
   ```ts
   export const MENU_WIDTH: Readonly<Record<MenuWidth, string>> = {
-    sm: 'w-48 min-w-0',
-    md: 'w-56 min-w-0',
-    lg: 'w-72 min-w-0',
-    xl: 'w-88 min-w-0',
+    sm: "w-48 min-w-0",
+    md: "w-56 min-w-0",
+    lg: "w-72 min-w-0",
+    xl: "w-88 min-w-0",
   };
   ```
 
@@ -894,7 +894,7 @@ numbering keeps related audit findings together; it does not override this depen
   Add this closed panel state:
 
   ```ts
-  export type DisplayPanel = 'root' | 'organize' | 'properties';
+  export type DisplayPanel = "root" | "organize" | "properties";
 
   export interface DisplayControlPanelProps<TTarget extends ViewTarget> {
     readonly panel: DisplayPanel;
@@ -1181,7 +1181,7 @@ Dialog geometry decision while producing an acceptable-looking compact result.
     readonly children: ReactNode;
   }
 
-  export type FocusPresentation = 'rail' | 'page';
+  export type FocusPresentation = "rail" | "page";
   ```
 
   `FocusRouteFrame` must use `ShellTopBar`, `Surface tone="canvas"`, `Surface tone="page"`, and the
@@ -1362,7 +1362,7 @@ Dialog geometry decision while producing an acceptable-looking compact result.
 - [ ] **Step 1: Replace the ambiguous `fill` flag with a closed body presentation**
 
   ```ts
-  export type ListPageBodyPresentation = 'inset' | 'full-bleed';
+  export type ListPageBodyPresentation = "inset" | "full-bleed";
 
   export interface ListPageLayoutProps {
     readonly bodyPresentation?: ListPageBodyPresentation;
@@ -1498,7 +1498,7 @@ Dialog geometry decision while producing an acceptable-looking compact result.
   Change only their import source:
 
   ```ts
-  import { apiQueryOptions } from '@/lib/query-core';
+  import { apiQueryOptions } from "@/lib/query-core";
   ```
 
   Do not move client hooks into `query-core`. Do not add a re-export from the client module. Do not
@@ -1618,7 +1618,7 @@ Dialog geometry decision while producing an acceptable-looking compact result.
 - [ ] **Step 1: Define the reusable banner contract**
 
   ```ts
-  export type InlineBannerTone = 'info' | 'warning' | 'critical';
+  export type InlineBannerTone = "info" | "warning" | "critical";
 
   export interface InlineBannerAction {
     readonly label: string;

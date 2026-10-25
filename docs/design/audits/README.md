@@ -29,7 +29,7 @@ Two policy tests read this directory:
 
 ```markdown
 ---
-surfaces: ['settings-athena', 'settings-connections']
+surfaces: ["settings-athena", "settings-connections"]
 date: 2026-07-19
 verdict: ship
 scores:

@@ -21,9 +21,9 @@
 - [ ] **Step 1: Write failing resource assertions**
 
 ```ts
-expect(projectDto['tasks']).toEqual([expect.objectContaining({ title: 'Ship', state: 'todo' })]);
-expect(updateDto['author']).toEqual(expect.objectContaining({ displayName: 'Ada' }));
-expect(sessionDto['agent']).toEqual(expect.objectContaining({ displayName: 'Athena' }));
+expect(projectDto["tasks"]).toEqual([expect.objectContaining({ title: "Ship", state: "todo" })]);
+expect(updateDto["author"]).toEqual(expect.objectContaining({ displayName: "Ada" }));
+expect(sessionDto["agent"]).toEqual(expect.objectContaining({ displayName: "Athena" }));
 ```
 
 - [ ] **Step 2: Verify the test fails because current DTOs expose only ids/counts**
@@ -69,10 +69,10 @@ git commit -F -
 ```ts
 items: [
   {
-    name: 'Bus Buddies',
-    description: 'Pairs riders with reliable transit guidance.',
-    tasks: [{ title: 'Recruit volunteer navigators', state: 'doing' }],
-    latestUpdate: { body: 'Recruitment is ahead of schedule.' },
+    name: "Bus Buddies",
+    description: "Pairs riders with reliable transit guidance.",
+    tasks: [{ title: "Recruit volunteer navigators", state: "doing" }],
+    latestUpdate: { body: "Recruitment is ahead of schedule." },
   },
 ];
 ```
@@ -89,9 +89,9 @@ Run: `pnpm --filter @docket/web exec playwright test mcp/widget-shots.spec.ts --
 function renderProject(item) {
   renderHeader(item.name, item.description || item.summary);
   renderContext([status(item), health(item), target(item)]);
-  renderSection('Active work', item.tasks, renderTaskPreview);
-  renderSection('Milestones', item.milestones, renderMilestonePreview);
-  renderNarrative('Latest update', item.latestUpdate && item.latestUpdate.body);
+  renderSection("Active work", item.tasks, renderTaskPreview);
+  renderSection("Milestones", item.milestones, renderMilestonePreview);
+  renderNarrative("Latest update", item.latestUpdate && item.latestUpdate.body);
 }
 ```
 
@@ -154,10 +154,10 @@ git commit -F -
 - [ ] **Step 1: Add failing semantic batch assertions**
 
 ```ts
-await expect(body).toContainText('Pairs riders with reliable transit guidance.');
-await expect(body.locator('.entity-section', { hasText: 'Associated work' })).toHaveCount(0);
-await expect(body.locator('#state')).toBeHidden();
-await expect(body.getByRole('button', { name: 'Open Bus Buddies in Docket' })).toBeVisible();
+await expect(body).toContainText("Pairs riders with reliable transit guidance.");
+await expect(body.locator(".entity-section", { hasText: "Associated work" })).toHaveCount(0);
+await expect(body.locator("#state")).toBeHidden();
+await expect(body.getByRole("button", { name: "Open Bus Buddies in Docket" })).toBeVisible();
 ```
 
 - [ ] **Step 2: Implement batch context priority**

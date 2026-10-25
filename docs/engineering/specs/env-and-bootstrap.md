@@ -268,12 +268,12 @@ packages/env/
 
 ```ts
 // src/shared.ts
-import { createEnv } from '@t3-oss/env-core';
-import * as z from 'zod';
+import { createEnv } from "@t3-oss/env-core";
+import * as z from "zod";
 
 export const sharedEnv = createEnv({
   server: {
-    NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
+    NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
     API_URL: z.url(),
   },
   // client vars are declared in the *app* createEnv so the prefix is enforced there;
@@ -285,8 +285,8 @@ export const sharedEnv = createEnv({
 
 ```ts
 // src/auth.ts
-import { createEnv } from '@t3-oss/env-core';
-import * as z from 'zod';
+import { createEnv } from "@t3-oss/env-core";
+import * as z from "zod";
 
 export const authEnv = createEnv({
   server: {
@@ -294,7 +294,7 @@ export const authEnv = createEnv({
     BETTER_AUTH_URL: z.url(),
     BETTER_AUTH_TRUSTED_ORIGINS: z.string().min(1), // CSV; parse to array at consume site
     BETTER_AUTH_PASSKEY_RP_ID: z.string().min(1),
-    BETTER_AUTH_PASSKEY_RP_NAME: z.string().default('Docket'),
+    BETTER_AUTH_PASSKEY_RP_NAME: z.string().default("Docket"),
     GOOGLE_CLIENT_ID: z.string().min(1),
     GOOGLE_CLIENT_SECRET: z.string().min(1),
     GITHUB_APP_ID: z.string().min(1),
@@ -315,11 +315,11 @@ export const authEnv = createEnv({
 // src/stripe.ts (split: server slice + a client-publishable that the web app re-declares)
 export const stripeServerEnv = createEnv({
   server: {
-    STRIPE_SECRET_KEY: z.string().startsWith('sk_'),
-    STRIPE_WEBHOOK_SECRET: z.string().startsWith('whsec_'),
+    STRIPE_SECRET_KEY: z.string().startsWith("sk_"),
+    STRIPE_WEBHOOK_SECRET: z.string().startsWith("whsec_"),
     DOCKET_PRICE_LOOKUP_TEAM: z.string().min(1),
     DOCKET_PRICE_LOOKUP_TEAM_ANNUAL: z.string().optional(),
-    STRIPE_PRICE_TEAM: z.string().startsWith('price_').optional(),
+    STRIPE_PRICE_TEAM: z.string().startsWith("price_").optional(),
     STRIPE_BILLING_PORTAL_CONFIG_ID: z.string().optional(),
   },
   runtimeEnv: process.env,
@@ -331,15 +331,15 @@ export const stripeServerEnv = createEnv({
 
 ```ts
 // src/env.api.ts  — consumed by apps/api (Hono)
-import { createEnv } from '@t3-oss/env-core';
-import * as z from 'zod';
-import { sharedEnv } from './shared';
-import { dbEnv } from './db';
-import { authEnv } from './auth';
-import { stripeServerEnv } from './stripe';
-import { mcpEnv } from './mcp';
-import { agentEnv } from './agent';
-import { opsEnv } from './ops';
+import { createEnv } from "@t3-oss/env-core";
+import * as z from "zod";
+import { sharedEnv } from "./shared";
+import { dbEnv } from "./db";
+import { authEnv } from "./auth";
+import { stripeServerEnv } from "./stripe";
+import { mcpEnv } from "./mcp";
+import { agentEnv } from "./agent";
+import { opsEnv } from "./ops";
 
 export const env = createEnv({
   extends: [sharedEnv, dbEnv, authEnv, stripeServerEnv, mcpEnv, agentEnv, opsEnv],
@@ -355,9 +355,9 @@ export const env = createEnv({
 
 ```ts
 // src/env.web.ts — consumed by apps/web (Next 16)
-import { createEnv } from '@t3-oss/env-nextjs';
-import * as z from 'zod';
-import { sharedEnv } from './shared';
+import { createEnv } from "@t3-oss/env-nextjs";
+import * as z from "zod";
+import { sharedEnv } from "./shared";
 
 export const env = createEnv({
   extends: [sharedEnv],
@@ -365,7 +365,7 @@ export const env = createEnv({
     NEXT_PUBLIC_API_URL: z.url(),
     NEXT_PUBLIC_WEB_URL: z.url(),
     NEXT_PUBLIC_MARKETING_URL: z.url(),
-    STRIPE_PUBLISHABLE_KEY: z.string().startsWith('pk_'),
+    STRIPE_PUBLISHABLE_KEY: z.string().startsWith("pk_"),
   },
   runtimeEnv: {
     NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL,

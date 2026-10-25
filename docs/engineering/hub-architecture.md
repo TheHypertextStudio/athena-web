@@ -36,11 +36,11 @@ The entities every connector reads and writes. The closed taxonomy lives in
 
 ```ts
 export const DOCKET_ENTITY_KIND: Readonly<Record<string, CanonicalEntityKind>> = {
-  task: 'work_item',
-  project: 'project',
-  program: 'program',
-  initiative: 'initiative',
-  cycle: 'cycle',
+  task: "work_item",
+  project: "project",
+  program: "program",
+  initiative: "initiative",
+  cycle: "cycle",
 };
 ```
 
@@ -64,7 +64,7 @@ Five providers implement the Connector port. The list is a single `as const` tup
 countable rather than scattered — `domains/connections/src/contracts/provider-catalog.ts:14`:
 
 ```ts
-export const CONNECTOR_PROVIDER_IDS = ['gmail', 'gtasks', 'calendar', 'github', 'linear'] as const;
+export const CONNECTOR_PROVIDER_IDS = ["gmail", "gtasks", "calendar", "github", "linear"] as const;
 ```
 
 `PROVIDER_CATALOG` (`provider-catalog.ts:55–113`) is `satisfies Record<DirectoryProviderId,

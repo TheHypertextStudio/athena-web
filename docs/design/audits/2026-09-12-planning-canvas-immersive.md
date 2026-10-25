@@ -1,5 +1,5 @@
 ---
-surfaces: ['athena', 'orgs-[orgId]-plans-[planId]', 'orgs-[orgId]-graph']
+surfaces: ["athena", "orgs-[orgId]-plans-[planId]", "orgs-[orgId]-graph"]
 date: 2026-09-12
 verdict: ship
 scores:

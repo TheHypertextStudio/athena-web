@@ -25,17 +25,17 @@ retention, editor node identity, unique tab/panel ids, and the absence of tab ch
 are supplied.
 
 ```tsx
-const descriptionTab = screen.getByRole('tab', { name: 'Description' });
-const milestonesTab = screen.getByRole('tab', { name: 'Milestones 1' });
-expect(descriptionTab).toHaveAttribute('aria-selected', 'true');
-expect(screen.getByRole('tabpanel', { name: 'Description' })).toBeVisible();
-expect(screen.getByRole('tabpanel', { name: 'Milestones 1', hidden: true })).not.toBeVisible();
+const descriptionTab = screen.getByRole("tab", { name: "Description" });
+const milestonesTab = screen.getByRole("tab", { name: "Milestones 1" });
+expect(descriptionTab).toHaveAttribute("aria-selected", "true");
+expect(screen.getByRole("tabpanel", { name: "Description" })).toBeVisible();
+expect(screen.getByRole("tabpanel", { name: "Milestones 1", hidden: true })).not.toBeVisible();
 
-const editor = screen.getByRole('textbox', { name: 'Add a description' });
+const editor = screen.getByRole("textbox", { name: "Add a description" });
 await user.click(milestonesTab);
-await user.type(screen.getByRole('textbox', { name: 'Milestone name' }), 'Launch');
+await user.type(screen.getByRole("textbox", { name: "Milestone name" }), "Launch");
 await user.click(descriptionTab);
-expect(screen.getByRole('textbox', { name: 'Add a description' })).toBe(editor);
+expect(screen.getByRole("textbox", { name: "Add a description" })).toBe(editor);
 ```
 
 Assert the hierarchy through `compareDocumentPosition`: title precedes the tablist, the tablist precedes the active panel, the active panel precedes the metadata group, and metadata precedes the submit action.
@@ -128,13 +128,13 @@ through Description, Description remains the default when the dialog reopens, an
 either active section sends the same atomic `milestones` array.
 
 ```tsx
-fireEvent.click(screen.getByRole('tab', { name: 'Milestones 0' }));
-addMilestone('Beta');
-addMilestone('Launch');
-expect(screen.getByRole('tab', { name: 'Milestones 2' })).toHaveAttribute('aria-selected', 'true');
-fireEvent.click(screen.getByRole('tab', { name: 'Description' }));
-fireEvent.click(screen.getByRole('tab', { name: 'Milestones 2' }));
-expect(screen.getAllByLabelText('Milestone name')).toHaveLength(2);
+fireEvent.click(screen.getByRole("tab", { name: "Milestones 0" }));
+addMilestone("Beta");
+addMilestone("Launch");
+expect(screen.getByRole("tab", { name: "Milestones 2" })).toHaveAttribute("aria-selected", "true");
+fireEvent.click(screen.getByRole("tab", { name: "Description" }));
+fireEvent.click(screen.getByRole("tab", { name: "Milestones 2" }));
+expect(screen.getAllByLabelText("Milestone name")).toHaveLength(2);
 ```
 
 Add a focused field test that the milestone section's root fills its panel and owns no extra resting container or horizontal rule.
@@ -200,8 +200,8 @@ Extend the existing authenticated composer matrix instead of creating another ha
 Measure the active description surface against the shared body rectangle:
 
 ```ts
-const body = dialog.locator('[data-composer-body]');
-const editor = dialog.locator('[data-editor-surface]');
+const body = dialog.locator("[data-composer-body]");
+const editor = dialog.locator("[data-editor-surface]");
 const [bodyBox, editorBox] = await Promise.all([body.boundingBox(), editor.boundingBox()]);
 expect(bodyBox).not.toBeNull();
 expect(editorBox).not.toBeNull();

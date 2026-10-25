@@ -53,7 +53,7 @@ TypeScript is configured with strict mode. All code must pass:
 export function calculatePriority(task: Task): Priority {
   const now = new Date();
   const isOverdue = task.deadline && task.deadline < now;
-  return isOverdue ? 'high' : task.priority;
+  return isOverdue ? "high" : task.priority;
 }
 
 // Good: Inference for simple cases
@@ -82,7 +82,7 @@ function parse<T>(data: string): T {
 
 // Good: When truly unknown
 function handleUnknown(value: unknown): void {
-  if (typeof value === 'string') {
+  if (typeof value === "string") {
     console.log(value.toUpperCase());
   }
 }
@@ -95,7 +95,7 @@ function handleUnknown(value: unknown): void {
 
 ```typescript
 // Type for unions and simple aliases
-type Priority = 'low' | 'medium' | 'high';
+type Priority = "low" | "medium" | "high";
 type TaskId = string & { readonly brand: unique symbol };
 
 // Interface for object shapes
@@ -124,9 +124,9 @@ Use branded types for domain identifiers:
 
 ```typescript
 // types/domain.ts
-export type UserId = string & { readonly __brand: 'UserId' };
-export type TaskId = string & { readonly __brand: 'TaskId' };
-export type ProjectId = string & { readonly __brand: 'ProjectId' };
+export type UserId = string & { readonly __brand: "UserId" };
+export type TaskId = string & { readonly __brand: "TaskId" };
+export type ProjectId = string & { readonly __brand: "ProjectId" };
 
 // Helper functions
 export function createUserId(id: string): UserId {
@@ -143,13 +143,13 @@ export function createTaskId(id: string): TaskId {
 Use Zod for runtime validation with type inference:
 
 ```typescript
-import { z } from 'zod';
+import { z } from "zod";
 
 // Schema definition
 export const CreateTaskSchema = z.object({
-  title: z.string().min(1, 'Title is required').max(255),
+  title: z.string().min(1, "Title is required").max(255),
   description: z.string().max(5000).optional(),
-  priority: z.enum(['low', 'medium', 'high']).default('medium'),
+  priority: z.enum(["low", "medium", "high"]).default("medium"),
   projectId: z.string().uuid().optional(),
   deadline: z.coerce.date().optional(),
 });
@@ -190,7 +190,7 @@ const userIds: UserId[] = [];
 
 ```typescript
 // PascalCase for types, interfaces, classes
-type Priority = 'low' | 'medium' | 'high';
+type Priority = "low" | "medium" | "high";
 interface TaskRepository {}
 class TaskService {}
 
@@ -205,7 +205,7 @@ interface TaskListResponse {} // Not: GetTasksResult
 // SCREAMING_SNAKE_CASE for true constants
 const MAX_TITLE_LENGTH = 255;
 const DEFAULT_PAGE_SIZE = 20;
-const API_VERSION = 'v1';
+const API_VERSION = "v1";
 
 // PascalCase for constant objects
 const HttpStatus = {
@@ -215,9 +215,9 @@ const HttpStatus = {
 } as const;
 
 const Priority = {
-  Low: 'low',
-  Medium: 'medium',
-  High: 'high',
+  Low: "low",
+  Medium: "medium",
+  High: "high",
 } as const;
 ```
 
@@ -289,7 +289,7 @@ async function updateTaskStatus(
 ): Promise<Task> {
   const task = await repository.findById(taskId);
   if (!task) {
-    throw new NotFoundError('Task', taskId);
+    throw new NotFoundError("Task", taskId);
   }
 
   task.status = status;
@@ -309,7 +309,7 @@ export class NotFoundError extends Error {
     public readonly id: string,
   ) {
     super(`${resource} not found: ${id}`);
-    this.name = 'NotFoundError';
+    this.name = "NotFoundError";
   }
 }
 
@@ -319,7 +319,7 @@ export class ValidationError extends Error {
     public readonly message: string,
   ) {
     super(`Validation failed: ${field} - ${message}`);
-    this.name = 'ValidationError';
+    this.name = "ValidationError";
   }
 }
 
@@ -328,7 +328,7 @@ async function getTask(taskId: TaskId): Promise<Task> {
   const task = await repository.findById(taskId);
 
   if (!task) {
-    throw new NotFoundError('Task', taskId);
+    throw new NotFoundError("Task", taskId);
   }
 
   return task;
@@ -479,16 +479,16 @@ export function TaskForm() {
 
 ```typescript
 // app/actions.ts
-'use server';
+"use server";
 
-import { revalidatePath } from 'next/cache';
-import { CreateTaskSchema } from '@athena/types';
-import { createTask } from '@/lib/api';
+import { revalidatePath } from "next/cache";
+import { CreateTaskSchema } from "@athena/types";
+import { createTask } from "@/lib/api";
 
 export async function createTaskAction(prevState: unknown, formData: FormData) {
   const result = CreateTaskSchema.safeParse({
-    title: formData.get('title'),
-    description: formData.get('description'),
+    title: formData.get("title"),
+    description: formData.get("description"),
   });
 
   if (!result.success) {
@@ -496,7 +496,7 @@ export async function createTaskAction(prevState: unknown, formData: FormData) {
   }
 
   await createTask(result.data);
-  revalidatePath('/tasks');
+  revalidatePath("/tasks");
 
   return { success: true };
 }
@@ -505,9 +505,9 @@ export async function createTaskAction(prevState: unknown, formData: FormData) {
 ## Testing Style
 
 ```typescript
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from "vitest";
 
-describe('TaskService', () => {
+describe("TaskService", () => {
   let service: TaskService;
   let mockRepository: MockTaskRepository;
 
@@ -516,21 +516,21 @@ describe('TaskService', () => {
     service = new TaskService(mockRepository);
   });
 
-  describe('createTask', () => {
-    it('creates a task with default priority when not specified', async () => {
+  describe("createTask", () => {
+    it("creates a task with default priority when not specified", async () => {
       // Arrange
-      const input = { title: 'Test Task' };
+      const input = { title: "Test Task" };
 
       // Act
       const task = await service.createTask(input);
 
       // Assert
-      expect(task.priority).toBe('medium');
+      expect(task.priority).toBe("medium");
     });
 
-    it('throws ValidationError when title is empty', async () => {
+    it("throws ValidationError when title is empty", async () => {
       // Arrange
-      const input = { title: '' };
+      const input = { title: "" };
 
       // Act & Assert
       await expect(service.createTask(input)).rejects.toThrow(ValidationError);
@@ -550,20 +550,20 @@ Organize imports in this order:
 
 ```typescript
 // 1. Node built-ins
-import { readFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
 
 // 2. External dependencies
-import { Hono } from 'hono';
-import { z } from 'zod';
+import { Hono } from "hono";
+import { z } from "zod";
 
 // 3. Internal packages
-import { TaskSchema } from '@athena/types';
-import { logger } from '@athena/shared';
+import { TaskSchema } from "@athena/types";
+import { logger } from "@athena/shared";
 
 // 4. Relative imports
-import { TaskRepository } from './task-repository';
-import { validateTask } from './validation';
+import { TaskRepository } from "./task-repository";
+import { validateTask } from "./validation";
 ```
 
 ## ESLint Configuration
@@ -574,22 +574,22 @@ export default [
   {
     rules: {
       // Enforce consistent type imports
-      '@typescript-eslint/consistent-type-imports': 'error',
+      "@typescript-eslint/consistent-type-imports": "error",
 
       // No unused variables (with exceptions)
-      '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
+      "@typescript-eslint/no-unused-vars": ["error", { argsIgnorePattern: "^_" }],
 
       // Require explicit return types on public APIs
-      '@typescript-eslint/explicit-module-boundary-types': 'error',
+      "@typescript-eslint/explicit-module-boundary-types": "error",
 
       // No floating promises
-      '@typescript-eslint/no-floating-promises': 'error',
+      "@typescript-eslint/no-floating-promises": "error",
 
       // Prefer nullish coalescing
-      '@typescript-eslint/prefer-nullish-coalescing': 'error',
+      "@typescript-eslint/prefer-nullish-coalescing": "error",
 
       // Prefer optional chaining
-      '@typescript-eslint/prefer-optional-chain': 'error',
+      "@typescript-eslint/prefer-optional-chain": "error",
     },
   },
 ];

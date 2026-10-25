@@ -94,31 +94,31 @@ A durable record that describes why Docket is trying to notify people.
 ```ts
 type NotificationIntent = {
   id: string;
-  senderType: 'system' | 'staff' | 'org' | 'automation';
+  senderType: "system" | "staff" | "org" | "automation";
   senderId?: string;
   organizationId?: string | null;
   category:
-    | 'security'
-    | 'account'
-    | 'service_announcement'
-    | 'workflow'
-    | 'digest'
-    | 'billing'
-    | 'marketing';
-  priority: 'low' | 'normal' | 'high' | 'urgent';
+    | "security"
+    | "account"
+    | "service_announcement"
+    | "workflow"
+    | "digest"
+    | "billing"
+    | "marketing";
+  priority: "low" | "normal" | "high" | "urgent";
   audience: Audience;
   channels: NotificationChannel[];
   subject: string;
   body: NotificationBody;
   status:
-    | 'draft'
-    | 'scheduled'
-    | 'queued'
-    | 'sending'
-    | 'sent'
-    | 'partially_failed'
-    | 'failed'
-    | 'canceled';
+    | "draft"
+    | "scheduled"
+    | "queued"
+    | "sending"
+    | "sent"
+    | "partially_failed"
+    | "failed"
+    | "canceled";
   scheduledAt?: string | null;
   createdAt: string;
   createdBy: string;
@@ -136,7 +136,7 @@ type NotificationRecipient = {
   notificationId: string;
   userId: string;
   organizationId?: string | null;
-  reason: 'explicit' | 'org_member' | 'segment_match' | 'owner' | 'assignee';
+  reason: "explicit" | "org_member" | "segment_match" | "owner" | "assignee";
   suppressions: SuppressionReason[];
   createdAt: string;
 };
@@ -151,22 +151,22 @@ type NotificationDelivery = {
   id: string;
   notificationId: string;
   recipientId: string;
-  channel: 'web' | 'email' | 'sms' | 'push';
+  channel: "web" | "email" | "sms" | "push";
   destination: {
-    type: 'in_app' | 'email' | 'phone' | 'push_token';
+    type: "in_app" | "email" | "phone" | "push_token";
     valueMasked?: string;
     contactPointId?: string;
   };
   status:
-    | 'suppressed'
-    | 'queued'
-    | 'sent'
-    | 'delivered'
-    | 'read'
-    | 'acted'
-    | 'failed'
-    | 'bounced'
-    | 'complained';
+    | "suppressed"
+    | "queued"
+    | "sent"
+    | "delivered"
+    | "read"
+    | "acted"
+    | "failed"
+    | "bounced"
+    | "complained";
   providerMessageId?: string | null;
   errorCode?: string | null;
   errorMessage?: string | null;
@@ -185,9 +185,9 @@ A verified destination owned by a user.
 type ContactPoint = {
   id: string;
   userId: string;
-  type: 'email' | 'phone' | 'push_token';
+  type: "email" | "phone" | "push_token";
   valueMasked: string;
-  status: 'pending' | 'active' | 'disabled' | 'bounced' | 'unsubscribed';
+  status: "pending" | "active" | "disabled" | "bounced" | "unsubscribed";
   primary: boolean;
   verifiedAt?: string | null;
   disabledAt?: string | null;
@@ -204,16 +204,16 @@ type NotificationInboundEvent = {
   id: string;
   notificationId?: string | null;
   deliveryId?: string | null;
-  channel: 'email' | 'sms' | 'web' | 'push';
+  channel: "email" | "sms" | "web" | "push";
   kind:
-    | 'delivered'
-    | 'opened'
-    | 'clicked'
-    | 'bounced'
-    | 'complained'
-    | 'replied'
-    | 'unsubscribed'
-    | 'action';
+    | "delivered"
+    | "opened"
+    | "clicked"
+    | "bounced"
+    | "complained"
+    | "replied"
+    | "unsubscribed"
+    | "action";
   from?: string | null;
   payload: Record<string, unknown>;
   receivedAt: string;
@@ -251,18 +251,18 @@ Supported initial audiences:
 
 ```ts
 type Audience =
-  | { type: 'user'; userId: string }
-  | { type: 'users'; userIds: string[] }
-  | { type: 'organization'; organizationId: string }
-  | { type: 'all_users' }
+  | { type: "user"; userId: string }
+  | { type: "users"; userIds: string[] }
+  | { type: "organization"; organizationId: string }
+  | { type: "all_users" }
   | {
-      type: 'segment';
+      type: "segment";
       segment:
-        | 'active_users'
-        | 'trial_users'
-        | 'billing_admins'
-        | 'users_with_bounced_email'
-        | 'users_without_verified_phone';
+        | "active_users"
+        | "trial_users"
+        | "billing_admins"
+        | "users_with_bounced_email"
+        | "users_without_verified_phone";
     };
 ```
 

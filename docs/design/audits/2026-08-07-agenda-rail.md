@@ -1,5 +1,5 @@
 ---
-surfaces: ['agenda']
+surfaces: ["agenda"]
 date: 2026-08-07
 verdict: needs-work
 scores:

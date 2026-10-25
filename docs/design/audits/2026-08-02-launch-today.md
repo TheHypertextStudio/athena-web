@@ -1,5 +1,5 @@
 ---
-surfaces: ['today']
+surfaces: ["today"]
 date: 2026-08-02
 verdict: needs-work
 scores:

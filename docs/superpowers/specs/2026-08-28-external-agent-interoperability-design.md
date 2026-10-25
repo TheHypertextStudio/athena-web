@@ -115,7 +115,7 @@ The generic contract associates each provider with its wire types. It does not m
 core generic.
 
 ```ts
-export type AgentSurfaceProvider = 'linear' | 'slack' | 'github' | 'jira_a2a';
+export type AgentSurfaceProvider = "linear" | "slack" | "github" | "jira_a2a";
 
 export interface ExternalRef {
   readonly id: string;
@@ -154,7 +154,7 @@ type of a strict Zod schema after signature verification. The raw body remains `
 schema succeeds.
 
 ```ts
-export interface LinearSurfaceTypes extends SurfaceTypeFamily<'linear'> {
+export interface LinearSurfaceTypes extends SurfaceTypeFamily<"linear"> {
   readonly verification: LinearAgentVerification;
   readonly install: LinearAgentInstall;
   readonly webhook: LinearAgentWebhook;
@@ -166,7 +166,7 @@ export interface LinearSurfaceTypes extends SurfaceTypeFamily<'linear'> {
   readonly receipt: LinearAgentActivityRef;
 }
 
-export interface SlackSurfaceTypes extends SurfaceTypeFamily<'slack'> {
+export interface SlackSurfaceTypes extends SurfaceTypeFamily<"slack"> {
   readonly verification: SlackAgentVerification;
   readonly install: SlackAgentInstall;
   readonly webhook: SlackAgentEvent;
@@ -178,7 +178,7 @@ export interface SlackSurfaceTypes extends SurfaceTypeFamily<'slack'> {
   readonly receipt: SlackMessageRef;
 }
 
-export interface GitHubSurfaceTypes extends SurfaceTypeFamily<'github'> {
+export interface GitHubSurfaceTypes extends SurfaceTypeFamily<"github"> {
   readonly verification: GitHubAgentVerification;
   readonly install: GitHubAgentInstall;
   readonly webhook: GitHubAgentWebhook;
@@ -190,7 +190,7 @@ export interface GitHubSurfaceTypes extends SurfaceTypeFamily<'github'> {
   readonly receipt: GitHubOutputRef;
 }
 
-export interface JiraA2ASurfaceTypes extends SurfaceTypeFamily<'jira_a2a'> {
+export interface JiraA2ASurfaceTypes extends SurfaceTypeFamily<"jira_a2a"> {
   readonly verification: JiraA2AVerification;
   readonly install: JiraA2AInstall;
   readonly webhook: A2ARequest;
@@ -224,34 +224,34 @@ export interface AgentSurfaceAdapter<P extends AgentSurfaceProvider> {
   readonly capabilities: AgentSurfaceCapabilities;
   readonly routing: AgentSurfaceRouting;
 
-  nativeContext(connection: Readonly<Record<string, unknown>>): SurfaceTypes<P>['nativeContext'];
+  nativeContext(connection: Readonly<Record<string, unknown>>): SurfaceTypes<P>["nativeContext"];
 
-  sessionRef(context: ExternalSessionProjectionContext<P>): SurfaceTypes<P>['sessionRef'];
+  sessionRef(context: ExternalSessionProjectionContext<P>): SurfaceTypes<P>["sessionRef"];
 
   verify(
     input: RawWebhook,
-    verification: SurfaceTypes<P>['verification'],
-  ): Promise<VerifiedWebhook<SurfaceTypes<P>['webhook']>>;
+    verification: SurfaceTypes<P>["verification"],
+  ): Promise<VerifiedWebhook<SurfaceTypes<P>["webhook"]>>;
 
-  parse(payload: unknown): SurfaceTypes<P>['webhook'];
+  parse(payload: unknown): SurfaceTypes<P>["webhook"];
 
-  route(input: VerifiedWebhook<SurfaceTypes<P>['webhook']>): AgentSurfaceRoute;
+  route(input: VerifiedWebhook<SurfaceTypes<P>["webhook"]>): AgentSurfaceRoute;
 
   normalize(
-    input: VerifiedWebhook<SurfaceTypes<P>['webhook']>,
-    context: SurfaceTypes<P>['nativeContext'],
+    input: VerifiedWebhook<SurfaceTypes<P>["webhook"]>,
+    context: SurfaceTypes<P>["nativeContext"],
   ): Promise<readonly CanonicalAgentEvent[]>;
 
   render(
     activity: CanonicalAgentActivity,
     context: ExternalSessionProjectionContext,
-  ): SurfaceTypes<P>['outbound'];
+  ): SurfaceTypes<P>["outbound"];
 
   publish(
-    install: SurfaceTypes<P>['install'],
-    session: SurfaceTypes<P>['sessionRef'],
-    output: SurfaceTypes<P>['outbound'],
-  ): Promise<SurfaceTypes<P>['receipt']>;
+    install: SurfaceTypes<P>["install"],
+    session: SurfaceTypes<P>["sessionRef"],
+    output: SurfaceTypes<P>["outbound"],
+  ): Promise<SurfaceTypes<P>["receipt"]>;
 }
 ```
 
@@ -301,29 +301,29 @@ export interface CanonicalPromptContext {
 
 export type CanonicalAgentEvent =
   | {
-      readonly type: 'session_started';
+      readonly type: "session_started";
       readonly workspaceId: string;
       readonly externalSessionId: string;
       readonly actor: CanonicalExternalActor;
       readonly context: CanonicalPromptContext;
-      readonly trigger: 'mention' | 'delegation' | 'message';
+      readonly trigger: "mention" | "delegation" | "message";
     }
   | {
-      readonly type: 'prompt_received';
+      readonly type: "prompt_received";
       readonly externalSessionId: string;
       readonly externalActivityId: string;
       readonly actor: CanonicalExternalActor;
       readonly body: string;
     }
   | {
-      readonly type: 'approval_selected';
+      readonly type: "approval_selected";
       readonly externalSessionId: string;
       readonly externalActivityId: string;
       readonly actor: CanonicalExternalActor;
       readonly choiceToken: string;
     }
   | {
-      readonly type: 'stop_requested';
+      readonly type: "stop_requested";
       readonly externalSessionId: string;
       readonly externalActivityId: string;
       readonly actor: CanonicalExternalActor;
@@ -347,10 +347,10 @@ payload. Controls describe intent rather than provider widgets.
 
 ```ts
 export type AgentSurfaceCapabilities = Readonly<{
-  progress: 'activity' | 'message_status' | 'check_run' | 'stream';
-  approval: 'select' | 'buttons' | 'check_actions' | 'reply';
-  authentication: 'signal' | 'button_link' | 'plain_link';
-  stop: 'signal' | 'button' | 'reply';
+  progress: "activity" | "message_status" | "check_run" | "stream";
+  approval: "select" | "buttons" | "check_actions" | "reply";
+  authentication: "signal" | "button_link" | "plain_link";
+  stop: "signal" | "button" | "reply";
   plans: boolean;
 }>;
 
@@ -361,29 +361,29 @@ export interface AgentSurfaceRouting {
   readonly installProvider: AgentSurfaceInstallProvider;
   readonly identitySource: AgentSurfaceIdentitySource | null;
   readonly workGraphProvider: AgentSurfaceWorkGraphProvider | null;
-  readonly turnProvenance: 'linear' | 'external_agent';
-  readonly stopAuthority: 'provider_event' | 'signed_control';
+  readonly turnProvenance: "linear" | "external_agent";
+  readonly stopAuthority: "provider_event" | "signed_control";
 }
 
 export type CanonicalAgentControl =
   | {
-      readonly type: 'approval';
+      readonly type: "approval";
       readonly activityId: string;
       readonly approveToken: string;
       readonly rejectToken: string;
     }
   | {
-      readonly type: 'authentication';
+      readonly type: "authentication";
       readonly url: string;
       readonly externalActorId: string;
     }
   | {
-      readonly type: 'stop';
+      readonly type: "stop";
       readonly stopToken: string;
     };
 
 export type CanonicalApprovalStatus =
-  'proposed' | 'approved' | 'executing' | 'rejected' | 'applied';
+  "proposed" | "approved" | "executing" | "rejected" | "applied";
 
 export interface ExternalSessionProjectionContext {
   readonly provider: AgentSurfaceProvider;
@@ -394,7 +394,7 @@ export interface ExternalSessionProjectionContext {
 
 export interface CanonicalAgentActivity {
   readonly id: string;
-  readonly type: 'thought' | 'action' | 'response' | 'elicitation' | 'error';
+  readonly type: "thought" | "action" | "response" | "elicitation" | "error";
   readonly body: SessionActivityBody;
   readonly approvalStatus: CanonicalApprovalStatus | null;
   readonly control?: CanonicalAgentControl;

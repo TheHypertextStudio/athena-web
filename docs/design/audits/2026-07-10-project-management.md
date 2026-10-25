@@ -1,5 +1,5 @@
 ---
-surfaces: ['today', 'portfolio', 'orgs-[orgId]-projects', 'orgs-[orgId]-initiatives']
+surfaces: ["today", "portfolio", "orgs-[orgId]-projects", "orgs-[orgId]-initiatives"]
 date: 2026-07-10
 verdict: needs-work
 scores:

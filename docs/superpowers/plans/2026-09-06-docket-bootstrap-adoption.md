@@ -42,13 +42,13 @@
 - [ ] **Step 1: Write the failing launcher contract test**
 
 ```ts
-it('ships one executable, version-pinned root entrypoint', () => {
-  const launcher = readFileSync('bootstrap', 'utf8');
-  expect(statSync('bootstrap').mode & 0o111).not.toBe(0);
+it("ships one executable, version-pinned root entrypoint", () => {
+  const launcher = readFileSync("bootstrap", "utf8");
+  expect(statSync("bootstrap").mode & 0o111).not.toBe(0);
   expect(launcher).toContain('BOOTSTRAP_VERSION="v0.1.0"');
-  expect(launcher).toContain('BOOTSTRAP_SHA256_DARWIN_ARM64=');
-  expect(launcher).toContain('BOOTSTRAP_SHA256_LINUX_X64=');
-  expect(pkg.scripts.bootstrap).toBe('./bootstrap');
+  expect(launcher).toContain("BOOTSTRAP_SHA256_DARWIN_ARM64=");
+  expect(launcher).toContain("BOOTSTRAP_SHA256_LINUX_X64=");
+  expect(pkg.scripts.bootstrap).toBe("./bootstrap");
 });
 ```
 
@@ -124,7 +124,7 @@ export async function reconcileLocal(context: HookContext): Promise<void>;
 export async function reconcileProduction(context: HookContext): Promise<void>;
 export async function verifyDocket(
   context: HookContext,
-  target: 'local' | 'production',
+  target: "local" | "production",
 ): Promise<void>;
 ```
 
@@ -162,12 +162,12 @@ Expected: all characterization and hook-equivalence cases pass.
 Cover these cases:
 
 ```ts
-it.each(['darwin', 'linux'])('writes safe defaults once on %s', async (platform) => {});
-it('leaves bytes and mtime unchanged on the second run', async () => {});
-it('preserves valid manual values and unrelated keys', async () => {});
-it('creates a generated secret once and never rotates it implicitly', async () => {});
-it('derives every local origin from one canonical port selection', async () => {});
-it('reports malformed or mutually inconsistent values without overwriting them', async () => {});
+it.each(["darwin", "linux"])("writes safe defaults once on %s", async (platform) => {});
+it("leaves bytes and mtime unchanged on the second run", async () => {});
+it("preserves valid manual values and unrelated keys", async () => {});
+it("creates a generated secret once and never rotates it implicitly", async () => {});
+it("derives every local origin from one canonical port selection", async () => {});
+it("reports malformed or mutually inconsistent values without overwriting them", async () => {});
 ```
 
 - [ ] **Step 2: Run the focused tests and confirm the module is missing**
@@ -318,7 +318,7 @@ interface ProductionObservation {
   account: Observed<string>;
   project: Observed<string>;
   services: Record<string, Observed<ServiceState>>;
-  secrets: Record<string, 'present' | 'missing' | 'unknown'>;
+  secrets: Record<string, "present" | "missing" | "unknown">;
   domains: Record<string, Observed<DnsState>>;
 }
 ```

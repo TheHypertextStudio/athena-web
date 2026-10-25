@@ -34,7 +34,7 @@ Five capabilities, ordered as a **strict implication chain**. A higher capabilit
 
 ```ts
 // the retired contract package
-export const CAPABILITIES = ['view', 'comment', 'contribute', 'assign', 'manage'] as const;
+export const CAPABILITIES = ["view", "comment", "contribute", "assign", "manage"] as const;
 export type Capability = (typeof CAPABILITIES)[number];
 export const CAPABILITY_RANK: Record<Capability, number> = {
   view: 1,
@@ -70,7 +70,7 @@ Organization
 **Resource types under authorization** (the `resource_type` enum):
 
 ```ts
-export const RESOURCE_TYPES = ['organization', 'team', 'program', 'project', 'task'] as const;
+export const RESOURCE_TYPES = ["organization", "team", "program", "project", "task"] as const;
 export type ResourceType = (typeof RESOURCE_TYPES)[number];
 ```
 
@@ -116,41 +116,41 @@ A `permission_grant` row binds a **subject** (an Actor _or_ a role) to a **resou
 ```ts
 // packages/db — drizzle schema (illustrative; align column casing with db conventions)
 export const permissionGrant = pgTable(
-  'permission_grant',
+  "permission_grant",
   {
-    id: uuid('id').primaryKey().defaultRandom(),
-    organizationId: uuid('organization_id')
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: uuid("organization_id")
       .notNull()
       .references(() => organization.id),
 
     // SUBJECT — exactly one of (actorId) or (roleId) is non-null (CHECK constraint).
-    subjectKind: text('subject_kind', { enum: ['actor', 'role'] }).notNull(),
-    actorId: uuid('actor_id').references(() => actor.id), // when subjectKind='actor' (humans AND agents)
-    roleId: uuid('role_id').references(() => role.id), // when subjectKind='role'
+    subjectKind: text("subject_kind", { enum: ["actor", "role"] }).notNull(),
+    actorId: uuid("actor_id").references(() => actor.id), // when subjectKind='actor' (humans AND agents)
+    roleId: uuid("role_id").references(() => role.id), // when subjectKind='role'
 
     // RESOURCE — polymorphic instance.
-    resourceType: text('resource_type', { enum: RESOURCE_TYPES }).notNull(),
-    resourceId: uuid('resource_id').notNull(), // FK enforced per-type by app layer; org row uses organizationId
+    resourceType: text("resource_type", { enum: RESOURCE_TYPES }).notNull(),
+    resourceId: uuid("resource_id").notNull(), // FK enforced per-type by app layer; org row uses organizationId
 
     // CAPABILITY + EFFECT
-    capabilities: text('capabilities', { enum: CAPABILITIES }).array().notNull(), // resolve by max-rank
-    effect: text('effect', { enum: ['allow', 'deny'] })
+    capabilities: text("capabilities", { enum: CAPABILITIES }).array().notNull(), // resolve by max-rank
+    effect: text("effect", { enum: ["allow", "deny"] })
       .notNull()
-      .default('allow'),
+      .default("allow"),
 
     // PROPAGATION
-    cascades: boolean('cascades').notNull().default(true), // applies to the resource AND its containment subtree
-    visibilityOverride: text('visibility_override', { enum: ['public', 'private'] }), // null = inherit; see §5
+    cascades: boolean("cascades").notNull().default(true), // applies to the resource AND its containment subtree
+    visibilityOverride: text("visibility_override", { enum: ["public", "private"] }), // null = inherit; see §5
 
-    createdBy: uuid('created_by')
+    createdBy: uuid("created_by")
       .references(() => actor.id)
       .notNull(),
-    createdAt: timestamp('created_at').notNull().defaultNow(),
-    expiresAt: timestamp('expires_at'), // optional time-boxed grant (e.g. temporary guest access)
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    expiresAt: timestamp("expires_at"), // optional time-boxed grant (e.g. temporary guest access)
   },
   (t) => [
     // one effective grant per (subject, resource, effect)
-    uniqueIndex('grant_subject_resource_uq').on(
+    uniqueIndex("grant_subject_resource_uq").on(
       t.subjectKind,
       t.actorId,
       t.roleId,
@@ -158,9 +158,9 @@ export const permissionGrant = pgTable(
       t.resourceId,
       t.effect,
     ),
-    index('grant_actor_idx').on(t.organizationId, t.actorId),
-    index('grant_role_idx').on(t.organizationId, t.roleId),
-    index('grant_resource_idx').on(t.resourceType, t.resourceId),
+    index("grant_actor_idx").on(t.organizationId, t.actorId),
+    index("grant_role_idx").on(t.organizationId, t.roleId),
+    index("grant_resource_idx").on(t.resourceType, t.resourceId),
   ],
 );
 ```
@@ -182,20 +182,20 @@ Semantics:
 
 ```ts
 export const role = pgTable(
-  'role',
+  "role",
   {
-    id: uuid('id').primaryKey().defaultRandom(),
-    organizationId: uuid('organization_id')
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: uuid("organization_id")
       .notNull()
       .references(() => organization.id),
-    key: text('key').notNull(), // 'owner' | 'admin' | 'member' | 'guest' | custom slug
-    name: text('name').notNull(), // display (honors vocabulary skin)
-    isSystem: boolean('is_system').notNull().default(false), // the 4 seeded bundles
+    key: text("key").notNull(), // 'owner' | 'admin' | 'member' | 'guest' | custom slug
+    name: text("name").notNull(), // display (honors vocabulary skin)
+    isSystem: boolean("is_system").notNull().default(false), // the 4 seeded bundles
     // default capability this role confers org-wide (materialized as a role-grant at the Org root):
-    baseCapability: text('base_capability', { enum: CAPABILITIES }), // null for guest
-    defaultVisibility: text('default_visibility', { enum: ['public', 'private'] }).notNull(), // §5
+    baseCapability: text("base_capability", { enum: CAPABILITIES }), // null for guest
+    defaultVisibility: text("default_visibility", { enum: ["public", "private"] }).notNull(), // §5
   },
-  (t) => [uniqueIndex('role_org_key_uq').on(t.organizationId, t.key)],
+  (t) => [uniqueIndex("role_org_key_uq").on(t.organizationId, t.key)],
 );
 ```
 
@@ -218,10 +218,10 @@ Both hold `manage`, so the capability resolver alone cannot distinguish them. A 
 
 ```ts
 const OWNER_ONLY = new Set([
-  'org.delete',
-  'org.transfer_ownership',
-  'org.change_billing_subject',
-  'role.modify_system_role', // editing the Owner/Admin/Member/Guest bundles themselves
+  "org.delete",
+  "org.transfer_ownership",
+  "org.change_billing_subject",
+  "role.modify_system_role", // editing the Owner/Admin/Member/Guest bundles themselves
 ]);
 ```
 
@@ -270,8 +270,8 @@ Each grantable resource has an **effective visibility** ∈ `{public, private}`,
 ```ts
 function visibilityGrantsView(actor: ResolvedActor, target: ResourceRef, db): boolean {
   const eff = effectiveVisibility(target, db); // §5 steps 1–3
-  if (actor.roleDefaultVisibility === 'private') return false; // guests: never by visibility
-  return eff === 'public'; // members+: public is visible by default
+  if (actor.roleDefaultVisibility === "private") return false; // guests: never by visibility
+  return eff === "public"; // members+: public is visible by default
 }
 ```
 
@@ -297,8 +297,8 @@ async function canActor(
   // 0. Load actor (human or agent) WITHIN the target's org. Cross-org is an automatic deny.
   const actor = await loadActor(db, actorId); // { kind, orgId, roleId, roleKey, roleBase, roleDefaultVisibility, status }
   const targetOrgId = await orgOf(db, target);
-  if (!actor || actor.orgId !== targetOrgId) return deny('cross-org-or-unknown-actor');
-  if (actor.status !== 'active') return deny('actor-suspended');
+  if (!actor || actor.orgId !== targetOrgId) return deny("cross-org-or-unknown-actor");
+  if (actor.status !== "active") return deny("actor-suspended");
 
   // 1. Org-privileged actions (Owner-only) short-circuit (§4.2).
   // (Caller passes an optional `privilegedAction` discriminator; omitted here for the capability path.)
@@ -321,17 +321,17 @@ async function canActor(
   for (const level of chain) {
     const here = grants.filter((g) => g.resourceType === level.type && g.resourceId === level.id);
     if (here.length === 0) continue; // pass-through inherited
-    const allowMax = maxCapability(here.filter((g) => g.effect === 'allow')); // actor-subject wins ties over role-subject
-    const denySet = unionCapabilities(here.filter((g) => g.effect === 'deny'));
+    const allowMax = maxCapability(here.filter((g) => g.effect === "allow")); // actor-subject wins ties over role-subject
+    const denySet = unionCapabilities(here.filter((g) => g.effect === "deny"));
     if (allowMax) effective = raiseOrReplace(effective, allowMax); // more-specific replaces
     if (denySet) effective = subtract(effective, denySet); // most-specific deny wins
   }
 
   // 5. If still null, fall back to VISIBILITY for the `view` capability only (§5).
   if (effective === null) {
-    if (required === 'view' && visibilityGrantsView(actor, target, db))
-      return allow('visibility-public', 'view');
-    return deny('no-grant-no-visibility');
+    if (required === "view" && visibilityGrantsView(actor, target, db))
+      return allow("visibility-public", "view");
+    return deny("no-grant-no-visibility");
   }
 
   // 6. A grant exists but we must still respect visibility for guests on view:
@@ -340,7 +340,7 @@ async function canActor(
 
   // 7. Decision.
   return satisfies(effective, required)
-    ? allow('grant-or-role', effective)
+    ? allow("grant-or-role", effective)
     : deny(`insufficient: have ${effective}, need ${required}`);
 }
 ```
@@ -367,28 +367,28 @@ A Hono middleware factory wraps any route that touches a specific resource. It c
 // apps/api — authorize middleware
 export const authorize = (required: Capability, locate: (c) => Promise<ResourceRef>) =>
   createMiddleware(async (c, next) => {
-    const actorId = c.get('actorId'); // set by an upstream session/token middleware (auth-identity / §10)
+    const actorId = c.get("actorId"); // set by an upstream session/token middleware (auth-identity / §10)
     const target = await locate(c); // e.g. { type:'task', id: c.req.param('taskId') }
-    const res = await canActor(actorId, required, target, c.get('db'));
+    const res = await canActor(actorId, required, target, c.get("db"));
     if (!res.allow) {
       // 404 vs 403: if the actor lacks even `view`, return 404 to avoid leaking existence (§7.5).
       const canSee =
-        required === 'view' ? false : (await canActor(actorId, 'view', target, c.get('db'))).allow;
-      return c.json({ error: 'forbidden' }, canSee ? 403 : 404);
+        required === "view" ? false : (await canActor(actorId, "view", target, c.get("db"))).allow;
+      return c.json({ error: "forbidden" }, canSee ? 403 : 404);
     }
-    c.set('authz', res);
+    c.set("authz", res);
     await next();
   });
 
 // usage
 work.patch(
-  '/tasks/:taskId',
-  authorize('contribute', (c) => Promise.resolve({ type: 'task', id: c.req.param('taskId') })),
+  "/tasks/:taskId",
+  authorize("contribute", (c) => Promise.resolve({ type: "task", id: c.req.param("taskId") })),
   updateTaskHandler,
 );
 work.post(
-  '/tasks/:taskId/assign',
-  authorize('assign', (c) => Promise.resolve({ type: 'task', id: c.req.param('taskId') })),
+  "/tasks/:taskId/assign",
+  authorize("assign", (c) => Promise.resolve({ type: "task", id: c.req.param("taskId") })),
   assignHandler,
 );
 ```
@@ -492,18 +492,18 @@ async function gateAgentWrite(session, agentActor, write: PendingWrite, db): Pro
   // 1. Capability axis — MUST pass first (§8). No capability ⇒ blocked (request grant-on-request).
   const cap = await canActor(agentActor.id, requiredCapabilityFor(write), write.target, db);
   if (!cap.allow)
-    return { outcome: 'needs_grant', missing: requiredCapabilityFor(write), target: write.target };
+    return { outcome: "needs_grant", missing: requiredCapabilityFor(write), target: write.target };
 
   // 2. Approval axis — based on the agent's approval_policy.
   switch (agentActor.approvalPolicy) {
-    case 'autonomous':
-      return { outcome: 'apply' }; // applies directly; still audited (§9.4)
-    case 'suggest':
-      return { outcome: 'propose_only' }; // never auto-applies; recorded as a proposal
-    case 'act_with_approval':
+    case "autonomous":
+      return { outcome: "apply" }; // applies directly; still audited (§9.4)
+    case "suggest":
+      return { outcome: "propose_only" }; // never auto-applies; recorded as a proposal
+    case "act_with_approval":
       // Create an approval-pending Session Activity action and route to the approver(s) (§9.2).
       const approvers = await resolveApprovers(session, agentActor, write.target, db);
-      return { outcome: 'awaiting_approval', approvers };
+      return { outcome: "awaiting_approval", approvers };
   }
 }
 ```

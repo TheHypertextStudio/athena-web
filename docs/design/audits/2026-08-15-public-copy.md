@@ -1,20 +1,20 @@
 ---
 surfaces:
   [
-    'root',
-    'pricing',
-    'about',
-    'privacy',
-    'terms',
-    'problems',
-    'problems-[code]',
-    'sign-in',
-    'sign-up',
-    'recover',
-    'oauth-authorize',
-    'onboarding',
-    'billing-return',
-    'orgs-[orgId]-settings-billing',
+    "root",
+    "pricing",
+    "about",
+    "privacy",
+    "terms",
+    "problems",
+    "problems-[code]",
+    "sign-in",
+    "sign-up",
+    "recover",
+    "oauth-authorize",
+    "onboarding",
+    "billing-return",
+    "orgs-[orgId]-settings-billing",
   ]
 date: 2026-08-15
 verdict: ship

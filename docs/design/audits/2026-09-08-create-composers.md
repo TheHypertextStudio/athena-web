@@ -1,5 +1,5 @@
 ---
-surfaces: ['create-task', 'create-project', 'create-initiative', 'create-program', 'create-team']
+surfaces: ["create-task", "create-project", "create-initiative", "create-program", "create-team"]
 date: 2026-09-08
 verdict: ship
 scores:

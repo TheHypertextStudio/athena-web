@@ -30,10 +30,10 @@ footer do not contain `border-b`, `border-t`, or pseudo-element underline classe
 elements stable test identifiers so the assertion does not depend on DOM position.
 
 ```tsx
-expect(screen.getByTestId('entity-glyph-search-header')).not.toHaveClass('border-b');
-expect(screen.getByRole('tablist', { name: 'Glyph catalog' })).not.toHaveClass('border-b');
-expect(screen.getByRole('tab', { name: 'Icons' }).className).not.toContain('after:h-0.5');
-expect(screen.getByTestId('entity-glyph-color-footer')).not.toHaveClass('border-t');
+expect(screen.getByTestId("entity-glyph-search-header")).not.toHaveClass("border-b");
+expect(screen.getByRole("tablist", { name: "Glyph catalog" })).not.toHaveClass("border-b");
+expect(screen.getByRole("tab", { name: "Icons" }).className).not.toContain("after:h-0.5");
+expect(screen.getByTestId("entity-glyph-color-footer")).not.toHaveClass("border-t");
 ```
 
 - [x] **Step 2: Prove the test fails against the committed picker**
@@ -70,7 +70,7 @@ Remove the `after:*` underline classes. Apply the existing surface token and rou
 the selected tab.
 
 ```tsx
-activeTab === tab && 'bg-surface-container-high text-on-surface rounded-md';
+activeTab === tab && "bg-surface-container-high text-on-surface rounded-md";
 ```
 
 - [x] **Step 3: Replace the footer rule with a tonal surface**

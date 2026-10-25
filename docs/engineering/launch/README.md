@@ -96,7 +96,7 @@ filesChanged:
 verifier: production-verification-agent
 verifierArtifacts:
   - docs/engineering/launch/evidence/production/2026-08-02-secret-sweep.txt
-verification: 'pnpm exec vitest run repo-tests/ci — 14 passed'
+verification: "pnpm exec vitest run repo-tests/ci — 14 passed"
 ---
 
 ## GEN-02 — <requirement title>

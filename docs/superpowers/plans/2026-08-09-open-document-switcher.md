@@ -21,22 +21,22 @@
 Add tests that open the existing `Open documents (2)` trigger and assert:
 
 ```tsx
-const search = await screen.findByRole('searchbox', { name: 'Search open documents' });
+const search = await screen.findByRole("searchbox", { name: "Search open documents" });
 expect(search).toHaveFocus();
-expect(screen.queryByText('Open documents', { selector: '[role="menu"] *' })).toBeNull();
-expect(search.closest('[data-radix-popper-content-wrapper]')?.firstElementChild).toHaveClass(
-  'w-88',
+expect(screen.queryByText("Open documents", { selector: '[role="menu"] *' })).toBeNull();
+expect(search.closest("[data-radix-popper-content-wrapper]")?.firstElementChild).toHaveClass(
+  "w-88",
 );
 ```
 
 Assert case-insensitive filtering and the empty state:
 
 ```tsx
-fireEvent.change(search, { target: { value: 'launch' } });
-expect(screen.queryByRole('link', { name: 'Fix the build' })).toBeNull();
-expect(screen.getByRole('link', { name: 'Q3 Launch' })).toBeInTheDocument();
-fireEvent.change(search, { target: { value: 'missing' } });
-expect(screen.getByText('No open documents found')).toBeInTheDocument();
+fireEvent.change(search, { target: { value: "launch" } });
+expect(screen.queryByRole("link", { name: "Fix the build" })).toBeNull();
+expect(screen.getByRole("link", { name: "Q3 Launch" })).toBeInTheDocument();
+fireEvent.change(search, { target: { value: "missing" } });
+expect(screen.getByText("No open documents found")).toBeInTheDocument();
 ```
 
 - [ ] **Step 2: Add shortcut and focus-order tests**
@@ -44,11 +44,11 @@ expect(screen.getByText('No open documents found')).toBeInTheDocument();
 Exercise both platform modifiers and rejected chords:
 
 ```tsx
-fireEvent.keyDown(document, { key: 'a', metaKey: true, shiftKey: true });
-expect(await screen.findByRole('searchbox', { name: 'Search open documents' })).toHaveFocus();
-fireEvent.keyDown(document, { key: 'a', ctrlKey: true, shiftKey: true });
-fireEvent.keyDown(document, { key: 'a', metaKey: true, shiftKey: true, altKey: true });
-fireEvent.keyDown(document, { key: 'a', metaKey: true, shiftKey: true, repeat: true });
+fireEvent.keyDown(document, { key: "a", metaKey: true, shiftKey: true });
+expect(await screen.findByRole("searchbox", { name: "Search open documents" })).toHaveFocus();
+fireEvent.keyDown(document, { key: "a", ctrlKey: true, shiftKey: true });
+fireEvent.keyDown(document, { key: "a", metaKey: true, shiftKey: true, altKey: true });
+fireEvent.keyDown(document, { key: "a", metaKey: true, shiftKey: true, repeat: true });
 ```
 
 Use `userEvent.tab()` to prove focus advances from the search field to the first document link and
@@ -84,7 +84,7 @@ width, Radix menu focus semantics, and an `mr-1` close inset.
 Use the shared primitives and icons:
 
 ```tsx
-import { ChevronDown, Search, X } from '../../icons';
+import { ChevronDown, Search, X } from "../../icons";
 import {
   CONTROL,
   fieldSurface,
@@ -97,7 +97,7 @@ import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-} from '../../primitives';
+} from "../../primitives";
 ```
 
 Add controlled `open` and `query` state, refs for the trigger/search/content, and a filtered-tabs

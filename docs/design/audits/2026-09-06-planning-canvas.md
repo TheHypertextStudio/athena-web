@@ -1,5 +1,5 @@
 ---
-surfaces: ['athena', 'canvas']
+surfaces: ["athena", "canvas"]
 date: 2026-09-06
 verdict: ship
 scores:

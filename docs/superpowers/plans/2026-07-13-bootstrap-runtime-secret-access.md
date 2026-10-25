@@ -34,15 +34,15 @@
 - [x] **Step 1: Write the failing regression test**
 
 ```ts
-expect(bootstrapSource).toContain('ensureRuntimeSecretAccess(cfg.project, name)');
-expect(runtimeSecretAccessorBindingArgs('123', 'docket-auth-secret', 'project')).toEqual([
-  'secrets',
-  'add-iam-policy-binding',
-  'docket-auth-secret',
-  '--project=project',
-  '--member=serviceAccount:123-compute@developer.gserviceaccount.com',
-  '--role=roles/secretmanager.secretAccessor',
-  '--quiet',
+expect(bootstrapSource).toContain("ensureRuntimeSecretAccess(cfg.project, name)");
+expect(runtimeSecretAccessorBindingArgs("123", "docket-auth-secret", "project")).toEqual([
+  "secrets",
+  "add-iam-policy-binding",
+  "docket-auth-secret",
+  "--project=project",
+  "--member=serviceAccount:123-compute@developer.gserviceaccount.com",
+  "--role=roles/secretmanager.secretAccessor",
+  "--quiet",
 ]);
 ```
 
@@ -60,8 +60,8 @@ export function ensureRuntimeSecretAccess(project: string, secretName: string): 
     `gcloud projects describe ${project} --format='value(projectNumber)'`,
   );
   if (!projectNumber) throw new Error(`Could not resolve the project number for ${project}`);
-  execFileSync('gcloud', runtimeSecretAccessorBindingArgs(projectNumber, secretName, project), {
-    stdio: 'inherit',
+  execFileSync("gcloud", runtimeSecretAccessorBindingArgs(projectNumber, secretName, project), {
+    stdio: "inherit",
   });
 }
 ```

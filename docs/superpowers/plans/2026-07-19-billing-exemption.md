@@ -39,21 +39,21 @@ Open `packages/db/src/schema/admin.ts`. Add this export at the end of the file (
 ```ts
 /** A permanent, staff-granted billing exemption on an org (bypasses the Stripe-driven lifecycle gate). */
 export const billingExemption = pgTable(
-  'billing_exemption',
+  "billing_exemption",
   {
-    id: text('id').primaryKey().$defaultFn(genId),
-    organizationId: text('organization_id')
+    id: text("id").primaryKey().$defaultFn(genId),
+    organizationId: text("organization_id")
       .notNull()
-      .references(() => organization.id, { onDelete: 'cascade' }),
-    reason: text('reason').notNull(),
-    grantedBy: text('granted_by').references(() => staffUser.id, { onDelete: 'set null' }),
-    createdAt: timestamp('created_at').notNull().defaultNow(),
-    revokedBy: text('revoked_by').references(() => staffUser.id, { onDelete: 'set null' }),
-    revokedAt: timestamp('revoked_at'),
+      .references(() => organization.id, { onDelete: "cascade" }),
+    reason: text("reason").notNull(),
+    grantedBy: text("granted_by").references(() => staffUser.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    revokedBy: text("revoked_by").references(() => staffUser.id, { onDelete: "set null" }),
+    revokedAt: timestamp("revoked_at"),
   },
   (t) => [
-    index('billing_exemption_org_idx').on(t.organizationId),
-    uniqueIndex('billing_exemption_org_active_uq')
+    index("billing_exemption_org_idx").on(t.organizationId),
+    uniqueIndex("billing_exemption_org_active_uq")
       .on(t.organizationId)
       .where(sql`${t.revokedAt} IS NULL`),
   ],
@@ -63,14 +63,14 @@ export const billingExemption = pgTable(
 This requires adding `sql` to the existing drizzle-orm import at the top of the file. Change:
 
 ```ts
-import { index, jsonb, pgTable, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-core';
+import { index, jsonb, pgTable, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
 ```
 
 to:
 
 ```ts
-import { sql } from 'drizzle-orm';
-import { index, jsonb, pgTable, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-core';
+import { sql } from "drizzle-orm";
+import { index, jsonb, pgTable, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
 ```
 
 - [ ] **Step 2: Generate the migration**
@@ -128,22 +128,22 @@ EOF
 Open `apps/api/tests/agent/entitlement.test.ts`. Add this import at the top, alongside the existing imports (after line 8's `vi.mock` call, with the other `import` statements):
 
 ```ts
-import { billingExemption } from '@docket/db';
+import { billingExemption } from "@docket/db";
 ```
 
 Add this test inside the existing `describe('assertAgentSessionsEntitled', ...)` block (after the existing `it('allows trialing and active...')` test, before the closing `});` of the `describe`):
 
 ```ts
-it('an active exemption entitles a non-entitled org; revoking it removes entitlement', async () => {
-  const lapsed = await seedOrg('export_window');
+it("an active exemption entitles a non-entitled org; revoking it removes entitlement", async () => {
+  const lapsed = await seedOrg("export_window");
   await expect(assertAgentSessionsEntitled(lapsed.orgId)).rejects.toMatchObject({
     status: 402,
-    code: 'agent_plan_required',
+    code: "agent_plan_required",
   });
 
   const [grant] = await db
     .insert(billingExemption)
-    .values({ organizationId: lapsed.orgId, reason: 'internal free use' })
+    .values({ organizationId: lapsed.orgId, reason: "internal free use" })
     .returning({ id: billingExemption.id });
   await expect(assertAgentSessionsEntitled(lapsed.orgId)).resolves.toBeUndefined();
 
@@ -153,7 +153,7 @@ it('an active exemption entitles a non-entitled org; revoking it removes entitle
     .where(eq(billingExemption.id, grant!.id));
   await expect(assertAgentSessionsEntitled(lapsed.orgId)).rejects.toMatchObject({
     status: 402,
-    code: 'agent_plan_required',
+    code: "agent_plan_required",
   });
 });
 ```
@@ -186,13 +186,13 @@ Replace the full contents of `apps/api/src/billing/entitlement.ts` with:
  * re-gated, so an approval arriving after a plan lapse still lands the work the
  * user already reviewed.
  */
-import { billingExemption, db, organization } from '@docket/db';
-import { eq, isNull } from 'drizzle-orm';
+import { billingExemption, db, organization } from "@docket/db";
+import { eq, isNull } from "drizzle-orm";
 
-import { AgentPlanRequiredError, NotFoundError } from '../error';
+import { AgentPlanRequiredError, NotFoundError } from "../error";
 
 /** The lifecycle states entitled to run agent sessions. */
-const ENTITLED_STATES = new Set(['trialing', 'active']);
+const ENTITLED_STATES = new Set(["trialing", "active"]);
 
 /**
  * Assert the org may start agent sessions, or throw the typed 402.
@@ -212,7 +212,7 @@ export async function assertAgentSessionsEntitled(orgId: string): Promise<void> 
     .where(eq(organization.id, orgId))
     .limit(1);
   const row = rows[0];
-  if (!row) throw new NotFoundError('Organization not found');
+  if (!row) throw new NotFoundError("Organization not found");
   if (row.exemptionId) return;
   if (!ENTITLED_STATES.has(row.lifecycleState)) {
     throw new AgentPlanRequiredError();
@@ -241,7 +241,7 @@ In `apps/api/src/billing/entitlement.ts`, change the `.leftJoin(...)` call to fi
 Add `and` to the `drizzle-orm` import:
 
 ```ts
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, eq, isNull } from "drizzle-orm";
 ```
 
 - [ ] **Step 6: Run test to verify it passes**
@@ -292,31 +292,31 @@ So the schema reads:
 
 ```ts
 export const AdminOrgOut = z.object({
-  id: z.string().describe('The organization id.'),
-  name: z.string().describe('Display name of the org.'),
-  slug: z.string().describe('URL slug of the org (unique).'),
+  id: z.string().describe("The organization id."),
+  name: z.string().describe("Display name of the org."),
+  slug: z.string().describe("URL slug of the org (unique)."),
   isPersonal: z
     .boolean()
-    .describe('True for a single-member personal workspace, which cannot accept invites.'),
+    .describe("True for a single-member personal workspace, which cannot accept invites."),
   lifecycleState: LifecycleState.describe("The org's current data-lifecycle state."),
   exportReadyAt: z
     .string()
     .nullable()
     .describe(
-      'When the export window opened (ISO-8601), or null when the org is not in/after the window. Set on entry to `export_window`; cleared on reactivation and on final deletion.',
+      "When the export window opened (ISO-8601), or null when the org is not in/after the window. Set on entry to `export_window`; cleared on reactivation and on final deletion.",
     ),
   deleteAfterAt: z
     .string()
     .nullable()
     .describe(
-      'When the deletion sweep may advance this org (ISO-8601 = export-window open + 14 days), or null when no deletion is scheduled.',
+      "When the deletion sweep may advance this org (ISO-8601 = export-window open + 14 days), or null when no deletion is scheduled.",
     ),
   isBillingExempt: z
     .boolean()
     .describe(
-      'True when a staff-granted billing exemption is currently active on this org — it bypasses the lifecycle-state entitlement gate entirely, independent of Stripe.',
+      "True when a staff-granted billing exemption is currently active on this org — it bypasses the lifecycle-state entitlement gate entirely, independent of Stripe.",
     ),
-  createdAt: z.string().describe('Org creation timestamp (ISO-8601).'),
+  createdAt: z.string().describe("Org creation timestamp (ISO-8601)."),
 });
 ```
 
@@ -327,24 +327,24 @@ In `apps/api/src/admin-dto.ts`, add these two schemas immediately after `AdminHo
 ```ts
 /** An active (un-revoked) billing exemption on an org. */
 export const AdminBillingExemptionOut = z.object({
-  id: z.string().describe('The billing-exemption id.'),
-  organizationId: z.string().describe('The org this exemption applies to.'),
-  reason: z.string().describe('The required free-text justification for the grant.'),
+  id: z.string().describe("The billing-exemption id."),
+  organizationId: z.string().describe("The org this exemption applies to."),
+  reason: z.string().describe("The required free-text justification for the grant."),
   grantedBy: z
     .string()
     .nullable()
-    .describe('Staff-user id of the operator who granted the exemption, or null if unattributed.'),
-  createdAt: z.string().describe('When the exemption was granted (ISO-8601).'),
+    .describe("Staff-user id of the operator who granted the exemption, or null if unattributed."),
+  createdAt: z.string().describe("When the exemption was granted (ISO-8601)."),
   revokedBy: z
     .string()
     .nullable()
     .describe(
-      'Staff-user id of the operator who revoked the exemption, or null while still active.',
+      "Staff-user id of the operator who revoked the exemption, or null while still active.",
     ),
   revokedAt: z
     .string()
     .nullable()
-    .describe('When the exemption was revoked (ISO-8601), or null while still active.'),
+    .describe("When the exemption was revoked (ISO-8601), or null while still active."),
 });
 /** Validated billing-exemption value. */
 export type AdminBillingExemptionOut = z.infer<typeof AdminBillingExemptionOut>;
@@ -354,7 +354,7 @@ export const GrantExemptionBody = z.object({
   reason: z
     .string()
     .min(1)
-    .describe('Required free-text justification, recorded on the grant and in the audit event.'),
+    .describe("Required free-text justification, recorded on the grant and in the audit event."),
 });
 /** Validated grant-exemption body. */
 export type GrantExemptionBody = z.infer<typeof GrantExemptionBody>;
@@ -396,17 +396,17 @@ EOF
 In `apps/api/src/routes/admin-serializers.ts`, change:
 
 ```ts
-import type { lifecycleHold, impersonationSession, staffUser, user } from '@docket/db';
-import { type Database, db, operatorAuditEvent, organization } from '@docket/db';
-import { eq } from 'drizzle-orm';
+import type { lifecycleHold, impersonationSession, staffUser, user } from "@docket/db";
+import { type Database, db, operatorAuditEvent, organization } from "@docket/db";
+import { eq } from "drizzle-orm";
 ```
 
 to:
 
 ```ts
-import type { lifecycleHold, impersonationSession, staffUser, user } from '@docket/db';
-import { type Database, billingExemption, db, operatorAuditEvent, organization } from '@docket/db';
-import { and, eq, inArray, isNull } from 'drizzle-orm';
+import type { lifecycleHold, impersonationSession, staffUser, user } from "@docket/db";
+import { type Database, billingExemption, db, operatorAuditEvent, organization } from "@docket/db";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 ```
 
 `billingExemption` moves to the value-import line (not the `import type` line) because `loadActiveExemptOrgIds` in Step 4 uses it at runtime (in a `.from(billingExemption)` query), not just as a type.
@@ -414,7 +414,7 @@ import { and, eq, inArray, isNull } from 'drizzle-orm';
 And change:
 
 ```ts
-import type { AdminHoldOut, AdminImpersonationOut, AdminOrgOut, AdminStaffOut } from '../admin-dto';
+import type { AdminHoldOut, AdminImpersonationOut, AdminOrgOut, AdminStaffOut } from "../admin-dto";
 ```
 
 to:
@@ -426,7 +426,7 @@ import type {
   AdminImpersonationOut,
   AdminOrgOut,
   AdminStaffOut,
-} from '../admin-dto';
+} from "../admin-dto";
 ```
 
 - [ ] **Step 2: Add the `ExemptionRow` type alias**
@@ -557,97 +557,97 @@ EOF
 Open `apps/api/tests/routes/admin.test.ts`. Add this `describe` block right after the closing `});` of the existing `describe('lifecycle holds', ...)` block (before `describe('billing actions', ...)`):
 
 ```ts
-describe('billing exemptions', () => {
-  it('grants (audited), then revokes (audited); double-revoke 404s', async () => {
-    const { userId } = await makeStaff('superadmin');
-    const orgId = await makeOrg('export_window');
+describe("billing exemptions", () => {
+  it("grants (audited), then revokes (audited); double-revoke 404s", async () => {
+    const { userId } = await makeStaff("superadmin");
+    const orgId = await makeOrg("export_window");
     const app = appWithSession(admin, fakeSession(userId));
 
     const granted = await app.request(`/orgs/${orgId}/billing-exemption`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ reason: 'internal free use' }),
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ reason: "internal free use" }),
     });
     expect(granted.status).toBe(200);
     const exemption = await json<{ id: string; revokedAt: string | null }>(granted);
     expect(exemption.revokedAt).toBeNull();
-    expect(await auditCount('billing.exemption_granted', orgId)).toBe(1);
+    expect(await auditCount("billing.exemption_granted", orgId)).toBe(1);
 
-    const orgAfterGrant = await app.request(`/orgs/${orgId}`, { method: 'GET' });
+    const orgAfterGrant = await app.request(`/orgs/${orgId}`, { method: "GET" });
     expect((await json<{ isBillingExempt: boolean }>(orgAfterGrant)).isBillingExempt).toBe(true);
 
-    const revoked = await app.request(`/orgs/${orgId}/billing-exemption`, { method: 'DELETE' });
+    const revoked = await app.request(`/orgs/${orgId}/billing-exemption`, { method: "DELETE" });
     expect(revoked.status).toBe(200);
     expect((await json<{ revokedAt: string | null }>(revoked)).revokedAt).not.toBeNull();
-    expect(await auditCount('billing.exemption_revoked', orgId)).toBe(1);
+    expect(await auditCount("billing.exemption_revoked", orgId)).toBe(1);
 
-    const orgAfterRevoke = await app.request(`/orgs/${orgId}`, { method: 'GET' });
+    const orgAfterRevoke = await app.request(`/orgs/${orgId}`, { method: "GET" });
     expect((await json<{ isBillingExempt: boolean }>(orgAfterRevoke)).isBillingExempt).toBe(false);
 
     // Revoking again 404s (no active grant).
     expect(
-      (await app.request(`/orgs/${orgId}/billing-exemption`, { method: 'DELETE' })).status,
+      (await app.request(`/orgs/${orgId}/billing-exemption`, { method: "DELETE" })).status,
     ).toBe(404);
   });
 
-  it('403s a finance user (superadmin-only action)', async () => {
-    const { userId } = await makeStaff('finance');
-    const orgId = await makeOrg('export_window');
+  it("403s a finance user (superadmin-only action)", async () => {
+    const { userId } = await makeStaff("finance");
+    const orgId = await makeOrg("export_window");
     const app = appWithSession(admin, fakeSession(userId));
     const res = await app.request(`/orgs/${orgId}/billing-exemption`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ reason: 'x' }),
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ reason: "x" }),
     });
     expect(res.status).toBe(403);
   });
 
-  it('404s granting on an unknown org', async () => {
-    const { userId } = await makeStaff('superadmin');
+  it("404s granting on an unknown org", async () => {
+    const { userId } = await makeStaff("superadmin");
     const app = appWithSession(admin, fakeSession(userId));
-    const res = await app.request('/orgs/missing/billing-exemption', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ reason: 'x' }),
+    const res = await app.request("/orgs/missing/billing-exemption", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ reason: "x" }),
     });
     expect(res.status).toBe(404);
   });
 
-  it('422s a grant with an empty reason', async () => {
-    const { userId } = await makeStaff('superadmin');
-    const orgId = await makeOrg('active');
+  it("422s a grant with an empty reason", async () => {
+    const { userId } = await makeStaff("superadmin");
+    const orgId = await makeOrg("active");
     const app = appWithSession(admin, fakeSession(userId));
     const res = await app.request(`/orgs/${orgId}/billing-exemption`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ reason: '' }),
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ reason: "" }),
     });
     expect(res.status).toBe(422);
   });
 
-  it('409s granting a second exemption while one is already active', async () => {
-    const { userId } = await makeStaff('superadmin');
-    const orgId = await makeOrg('active');
+  it("409s granting a second exemption while one is already active", async () => {
+    const { userId } = await makeStaff("superadmin");
+    const orgId = await makeOrg("active");
     const app = appWithSession(admin, fakeSession(userId));
     const first = await app.request(`/orgs/${orgId}/billing-exemption`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ reason: 'first' }),
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ reason: "first" }),
     });
     expect(first.status).toBe(200);
     const second = await app.request(`/orgs/${orgId}/billing-exemption`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ reason: 'second' }),
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ reason: "second" }),
     });
     expect(second.status).toBe(409);
   });
 
-  it('404s revoking on an unknown org', async () => {
-    const { userId } = await makeStaff('superadmin');
+  it("404s revoking on an unknown org", async () => {
+    const { userId } = await makeStaff("superadmin");
     const app = appWithSession(admin, fakeSession(userId));
     expect(
-      (await app.request('/orgs/missing/billing-exemption', { method: 'DELETE' })).status,
+      (await app.request("/orgs/missing/billing-exemption", { method: "DELETE" })).status,
     ).toBe(404);
   });
 });
@@ -663,9 +663,9 @@ Expected: FAIL — every new test 404s or errors, because `/orgs/:id/billing-exe
 In `apps/api/src/routes/admin-billing-routes.ts`, update the imports:
 
 ```ts
-import { db, lifecycleHold, organization } from '@docket/db';
-import { and, eq, isNull } from 'drizzle-orm';
-import { Hono } from 'hono';
+import { db, lifecycleHold, organization } from "@docket/db";
+import { and, eq, isNull } from "drizzle-orm";
+import { Hono } from "hono";
 
 import {
   AdminHoldOut,
@@ -673,15 +673,15 @@ import {
   ExtendTrialBody,
   PlaceHoldBody,
   SetLifecycleBody,
-} from '../admin-dto';
+} from "../admin-dto";
 ```
 
 becomes:
 
 ```ts
-import { billingExemption, db, lifecycleHold, organization } from '@docket/db';
-import { and, eq, isNull } from 'drizzle-orm';
-import { Hono } from 'hono';
+import { billingExemption, db, lifecycleHold, organization } from "@docket/db";
+import { and, eq, isNull } from "drizzle-orm";
+import { Hono } from "hono";
 
 import {
   AdminBillingExemptionOut,
@@ -691,13 +691,13 @@ import {
   GrantExemptionBody,
   PlaceHoldBody,
   SetLifecycleBody,
-} from '../admin-dto';
+} from "../admin-dto";
 ```
 
 and the local serializer import gains `toExemptionOut`:
 
 ```ts
-import { audit, holdParam, idParam, loadOrg, toHoldOut, toOrgOut } from './admin-serializers';
+import { audit, holdParam, idParam, loadOrg, toHoldOut, toOrgOut } from "./admin-serializers";
 ```
 
 becomes:
@@ -711,19 +711,19 @@ import {
   toExemptionOut,
   toHoldOut,
   toOrgOut,
-} from './admin-serializers';
+} from "./admin-serializers";
 ```
 
 and add `ConflictError` to the error import:
 
 ```ts
-import { NotFoundError } from '../error';
+import { NotFoundError } from "../error";
 ```
 
 becomes:
 
 ```ts
-import { ConflictError, NotFoundError } from '../error';
+import { ConflictError, NotFoundError } from "../error";
 ```
 
 and `requireStaffRole` is already imported (line 18) — no change needed there.
@@ -862,7 +862,7 @@ import {
   toImpersonationOut,
   toOrgOut,
   toUserOut,
-} from './admin-serializers';
+} from "./admin-serializers";
 ```
 
 becomes:
@@ -880,7 +880,7 @@ import {
   toImpersonationOut,
   toOrgOut,
   toUserOut,
-} from './admin-serializers';
+} from "./admin-serializers";
 ```
 
 - [ ] **Step 2: Wire the org list route**

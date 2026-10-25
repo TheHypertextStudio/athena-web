@@ -7,6 +7,15 @@
 
 ## Active Tasks
 
+### [WORK-TEMPLATE-PRODUCTION-20261024] Publish validated work templates
+
+- **Status**: IN_PROGRESS
+- **Started**: 2026-10-24
+- **Description**: Integrate the validated work-template delivery into main, pass hosted release checks, and deploy the backend and native production Worker under the owner’s explicit deployment authorization.
+- **Plan**: Repair the existing private-package Docker build and repository formatting failures, validate those repairs locally, retain the feature acceptance evidence, fast-forward main and push once. Observe hosted checks and deployment, accept the isolated staging candidate, and publish the production frontend with matching configuration and a recorded rollback version. Verify active revisions and production health.
+- **Findings**: Remote main remains at 0b27c3615. Its last CI run failed because container installs lacked GitHub Packages credentials and the repository formatting check rejected 130 files. Use ephemeral BuildKit secret mounts and retain the existing formatting gate. The staged formatter imported ESM configuration without applying file overrides, so each commit reverted the CI formatter’s Markdown output. A failing native-format comparison reproduces that defect; resolve the config through Prettier while retaining validated module imports. The admin container compiler also exceeds Node’s default 2 GB heap during its required TypeScript pass. Scope a 3 GB heap to that build command; keep runtime limits unchanged. This repair adds no workflow triggers, jobs, or runner multiplier.
+- **Validation**: Local formatting and release-tooling checks, serial container builds, exact-SHA hosted checks, deployed staging acceptance, and production revision/configuration and safe runtime smoke checks remain required. Existing feature evidence remains bound to unchanged application behavior.
+
 ### [STUDIO-FORMATTER-CONSISTENCY] Import one shared formatting baseline
 
 - **Status**: REVIEW

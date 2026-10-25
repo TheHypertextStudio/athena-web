@@ -28,20 +28,20 @@
 Add this test after the light-style test in `place-map-picker.test.tsx`:
 
 ```tsx
-it('uses short visible map credits instead of MapLibre attribution', async () => {
+it("uses short visible map credits instead of MapLibre attribution", async () => {
   render(<PlaceMapPicker value={null} onChange={vi.fn()} />);
-  await screen.findByRole('region', { name: 'Place map' });
+  await screen.findByRole("region", { name: "Place map" });
 
-  expect(runtime.maps[0]?.options['attributionControl']).toBe(false);
-  expect(screen.getByRole('link', { name: 'OpenMapTiles' })).toHaveAttribute(
-    'href',
-    'https://openmaptiles.org/',
+  expect(runtime.maps[0]?.options["attributionControl"]).toBe(false);
+  expect(screen.getByRole("link", { name: "OpenMapTiles" })).toHaveAttribute(
+    "href",
+    "https://openmaptiles.org/",
   );
-  expect(screen.getByRole('link', { name: 'OpenStreetMap' })).toHaveAttribute(
-    'href',
-    'https://www.openstreetmap.org/copyright',
+  expect(screen.getByRole("link", { name: "OpenStreetMap" })).toHaveAttribute(
+    "href",
+    "https://www.openstreetmap.org/copyright",
   );
-  expect(screen.queryByText('OpenFreeMap')).not.toBeInTheDocument();
+  expect(screen.queryByText("OpenFreeMap")).not.toBeInTheDocument();
 });
 ```
 
@@ -98,9 +98,9 @@ Expected result: The `PlaceMapPicker` test file passes with 11 tests.
 Replace the old generated-control assertion in `saved-place-picker-shots.spec.ts` with:
 
 ```tsx
-await expect(dialog.locator('.maplibregl-ctrl-attrib')).toHaveCount(0);
-await expect(dialog.getByRole('link', { name: 'OpenMapTiles' })).toBeVisible();
-await expect(dialog.getByRole('link', { name: 'OpenStreetMap' })).toBeVisible();
+await expect(dialog.locator(".maplibregl-ctrl-attrib")).toHaveCount(0);
+await expect(dialog.getByRole("link", { name: "OpenMapTiles" })).toBeVisible();
+await expect(dialog.getByRole("link", { name: "OpenStreetMap" })).toBeVisible();
 ```
 
 - [ ] **Step 6: Run the authenticated visual journey**

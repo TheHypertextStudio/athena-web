@@ -36,7 +36,7 @@ verifierArtifacts:
   - docs/engineering/launch/evidence/verification/2026-08-02-security-and-domains-verification.txt
   - docs/design/audits/screenshots/2026-08-02-credential-masking/surfaces/orgs-orgId-settings-connections-1440x900-light.png
   - docs/design/audits/screenshots/2026-08-02-credential-masking/stored-connector-1440x900-light.png
-verification: 'pnpm --filter @docket/api typecheck|lint|test — 0/0/0, 183 files / 1610 tests passed; pnpm --filter @docket/db typecheck|lint|test — 0/0/0, 18 files / 109 tests; pnpm --filter @docket/test-utils typecheck|lint|test — 0/0/0, 15 files / 104 tests; pnpm --filter @docket/web typecheck|lint — 0/0; pnpm exec tsx scripts/secret-scan.ts — exit 0, 2001 files / 12 rules / 0 findings; pnpm exec tsx scripts/migration-safety.ts — exit 1 BY DESIGN (unratified view; the ratified gate is the policy test, which passes)'
+verification: "pnpm --filter @docket/api typecheck|lint|test — 0/0/0, 183 files / 1610 tests passed; pnpm --filter @docket/db typecheck|lint|test — 0/0/0, 18 files / 109 tests; pnpm --filter @docket/test-utils typecheck|lint|test — 0/0/0, 15 files / 104 tests; pnpm --filter @docket/web typecheck|lint — 0/0; pnpm exec tsx scripts/secret-scan.ts — exit 0, 2001 files / 12 rules / 0 findings; pnpm exec tsx scripts/migration-safety.ts — exit 1 BY DESIGN (unratified view; the ratified gate is the policy test, which passes)"
 ---
 
 > **This slice was originally recorded twice.** The lane contract handed this worker a

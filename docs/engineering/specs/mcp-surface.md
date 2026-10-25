@@ -54,31 +54,31 @@
 
 ```ts
 // packages/auth — composed in the single betterAuth() instance.
-import { betterAuth } from 'better-auth';
-import { mcp, oidcProvider } from 'better-auth/plugins';
+import { betterAuth } from "better-auth";
+import { mcp, oidcProvider } from "better-auth/plugins";
 
 export const auth = betterAuth({
   // ...db (drizzleAdapter), passkey, sso, scim, stripe, socialProviders...
   plugins: [
     oidcProvider({
-      loginPage: '/sign-in',
+      loginPage: "/sign-in",
       // PKCE + S256 are enforced; CIMD advertised (see §2.4).
       // Token aud MUST be bound to the RFC 8707 `resource` param (verify; open issue).
     }),
     mcp({
-      loginPage: '/sign-in',
-      resource: 'https://api.docket.app/mcp', // canonical RS URI (per-env value)
+      loginPage: "/sign-in",
+      resource: "https://api.docket.app/mcp", // canonical RS URI (per-env value)
       oidcConfig: {
         accessTokenExpiresIn: 60 * 15, // 15 min — short-lived (spec SHOULD)
         refreshTokenExpiresIn: 60 * 60 * 24 * 30,
         scopes: [
           // the Docket MCP scope set, flat/global
-          'work:read',
-          'work:write',
-          'agents:run',
-          'connectors:link',
+          "work:read",
+          "work:write",
+          "agents:run",
+          "connectors:link",
         ],
-        defaultScope: 'work:read',
+        defaultScope: "work:read",
       },
     }),
     // nextCookies() MUST be last in the full config.
@@ -106,17 +106,17 @@ export const auth = betterAuth({
 Mount these in `apps/api` using the `mcp()` plugin helpers:
 
 ```ts
-import { oAuthDiscoveryMetadata, oAuthProtectedResourceMetadata } from 'better-auth/plugins';
+import { oAuthDiscoveryMetadata, oAuthProtectedResourceMetadata } from "better-auth/plugins";
 
 // AS metadata (RFC 8414) — proxied from Better Auth's OIDC config.
-app.get('/.well-known/oauth-authorization-server', (c) => oAuthDiscoveryMetadata(auth)(c.req.raw));
+app.get("/.well-known/oauth-authorization-server", (c) => oAuthDiscoveryMetadata(auth)(c.req.raw));
 
 // Protected Resource Metadata (RFC 9728).
-app.get('/.well-known/oauth-protected-resource', (c) =>
+app.get("/.well-known/oauth-protected-resource", (c) =>
   oAuthProtectedResourceMetadata(auth)(c.req.raw),
 );
 // AND the sub-path form for the /mcp endpoint (RFC 9728 §3.1):
-app.get('/.well-known/oauth-protected-resource/mcp', (c) =>
+app.get("/.well-known/oauth-protected-resource/mcp", (c) =>
   oAuthProtectedResourceMetadata(auth)(c.req.raw),
 );
 ```

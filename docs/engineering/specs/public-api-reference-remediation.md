@@ -85,13 +85,13 @@ The request context represents the caller without inventing session data:
 ```ts
 type CallerPrincipal =
   | {
-      kind: 'session';
+      kind: "session";
       userId: string;
       user: AuthUser;
       session: AuthSessionRecord;
     }
   | {
-      kind: 'oauth';
+      kind: "oauth";
       userId: string;
       user: AuthUser;
       clientId: string;
@@ -138,29 +138,29 @@ compares runtime registrations with the manifest and the generated document.
 
 ```ts
 type ApiAccess =
-  | { kind: 'public' }
-  | { kind: 'session-only'; stepUp?: boolean }
-  | { kind: 'session-or-oauth'; scopes: readonly OAuthCapabilityScope[] }
-  | { kind: 'share-token'; header: 'X-Docket-Share-Token' };
+  | { kind: "public" }
+  | { kind: "session-only"; stepUp?: boolean }
+  | { kind: "session-or-oauth"; scopes: readonly OAuthCapabilityScope[] }
+  | { kind: "share-token"; header: "X-Docket-Share-Token" };
 
 type ApiSuccess =
   | {
-      kind: 'json';
+      kind: "json";
       status: 200 | 201 | 202;
       schema: z.ZodType;
       description: string;
-      location?: 'resource' | 'monitor';
+      location?: "resource" | "monitor";
     }
-  | { kind: 'empty'; status: 204; description: string }
+  | { kind: "empty"; status: 204; description: string }
   | {
-      kind: 'binary';
+      kind: "binary";
       status: 200;
       mediaTypes: readonly string[];
-      disposition: 'inline' | 'attachment';
+      disposition: "inline" | "attachment";
       description: string;
     }
   | {
-      kind: 'sse';
+      kind: "sse";
       status: 200;
       events: readonly ApiStreamEvent[];
       resume: ApiStreamResume;
@@ -187,7 +187,7 @@ interface ApiOperationContract {
   capability?: Capability;
   conditionalRead: boolean;
   conditionalWrite: false | ConditionalResourceKind;
-  idempotency: false | 'json-receipt' | 'atomic-receipt';
+  idempotency: false | "json-receipt" | "atomic-receipt";
   related: readonly OperationId[];
 }
 ```

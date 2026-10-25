@@ -51,7 +51,7 @@ verifierArtifacts:
   - docs/design/audits/screenshots/2026-08-02-credential-masking/connector-bearer-1440x900-light.png
   - docs/design/audits/screenshots/2026-08-02-credential-masking/connector-bearer-1440x900-dark.png
   - docs/design/audits/screenshots/2026-08-02-credential-masking/stored-connector-1440x900-light.png
-verification: 'pnpm --filter @docket/test-utils test — 15 files / 104 passed; pnpm --filter @docket/api test — 183 files / 1608 tests, 1607 passed (1 pre-existing failure in tests/mcp/mcp-auth.test.ts, another lane); pnpm --filter @docket/web exec playwright test --list — Total: 41 tests in 24 files (identical to pre-move)'
+verification: "pnpm --filter @docket/test-utils test — 15 files / 104 passed; pnpm --filter @docket/api test — 183 files / 1608 tests, 1607 passed (1 pre-existing failure in tests/mcp/mcp-auth.test.ts, another lane); pnpm --filter @docket/web exec playwright test --list — Total: 41 tests in 24 files (identical to pre-move)"
 ---
 
 > **Current architecture note (2026-08-13):** This launch record preserves the old

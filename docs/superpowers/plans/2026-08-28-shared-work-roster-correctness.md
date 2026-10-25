@@ -97,10 +97,10 @@ Tailwind container queries, Testing Library, Vitest, Playwright, and GitHub Acti
   collection prefix. Assert that an Initiative key does not start with the Projects prefix.
 
   ```typescript
-  expect(queryKeys.workView(orgId, 'initiative', instance, request, timezone)).toEqual([
+  expect(queryKeys.workView(orgId, "initiative", instance, request, timezone)).toEqual([
     ...queryKeys.initiatives(orgId),
-    'work-view',
-    'initiative',
+    "work-view",
+    "initiative",
     instance,
     timezone,
     request,

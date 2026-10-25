@@ -59,45 +59,45 @@ Expected: FAIL because `searchDocument`, `searchIndexJob`, and search enums are 
 Add enums:
 
 ```ts
-export const searchDocumentFamily = pgEnum('search_document_family', [
-  'work',
-  'people',
-  'content',
-  'activity',
+export const searchDocumentFamily = pgEnum("search_document_family", [
+  "work",
+  "people",
+  "content",
+  "activity",
 ]);
-export const searchDocumentKind = pgEnum('search_document_kind', [
-  'organization',
-  'team',
-  'member',
-  'agent',
-  'agent_session',
-  'task',
-  'project',
-  'program',
-  'initiative',
-  'milestone',
-  'cycle',
-  'label',
-  'saved_view',
-  'comment',
-  'update',
-  'attachment',
-  'calendar_event',
-  'activity',
+export const searchDocumentKind = pgEnum("search_document_kind", [
+  "organization",
+  "team",
+  "member",
+  "agent",
+  "agent_session",
+  "task",
+  "project",
+  "program",
+  "initiative",
+  "milestone",
+  "cycle",
+  "label",
+  "saved_view",
+  "comment",
+  "update",
+  "attachment",
+  "calendar_event",
+  "activity",
 ]);
-export const searchIndexJobOperation = pgEnum('search_index_job_operation', ['upsert', 'delete']);
-export const searchIndexJobReason = pgEnum('search_index_job_reason', [
-  'entity_write',
-  'event_log',
-  'backfill',
-  'repair',
-  'manual',
+export const searchIndexJobOperation = pgEnum("search_index_job_operation", ["upsert", "delete"]);
+export const searchIndexJobReason = pgEnum("search_index_job_reason", [
+  "entity_write",
+  "event_log",
+  "backfill",
+  "repair",
+  "manual",
 ]);
-export const searchIndexJobStatus = pgEnum('search_index_job_status', [
-  'pending',
-  'processing',
-  'succeeded',
-  'failed',
+export const searchIndexJobStatus = pgEnum("search_index_job_status", [
+  "pending",
+  "processing",
+  "succeeded",
+  "failed",
 ]);
 ```
 

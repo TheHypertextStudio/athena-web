@@ -1,5 +1,5 @@
 ---
-surfaces: ['markdown-code']
+surfaces: ["markdown-code"]
 date: 2026-08-10
 verdict: ship
 scores:

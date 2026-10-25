@@ -27,23 +27,23 @@ Build five `RailPanel` fixtures in the test and assert the desired public behavi
 const panels = [
   TASKS_PANEL,
   AGENDA_PANEL,
-  { id: 'focus', label: 'Focus', icon: <Home />, node: <div>Focus body</div> },
-  { id: 'athena', label: 'Athena', icon: <Home />, node: <div>Athena body</div> },
-  { id: 'inbox', label: 'Inbox', icon: <Home />, node: <div>Inbox body</div> },
+  { id: "focus", label: "Focus", icon: <Home />, node: <div>Focus body</div> },
+  { id: "athena", label: "Athena", icon: <Home />, node: <div>Athena body</div> },
+  { id: "inbox", label: "Inbox", icon: <Home />, node: <div>Inbox body</div> },
 ];
 
-fireEvent.click(screen.getByRole('button', { name: 'Show Tasks' }));
-const overlay = await screen.findByRole('dialog', { name: 'Tasks' });
-expect(within(overlay).queryByRole('tablist')).not.toBeInTheDocument();
+fireEvent.click(screen.getByRole("button", { name: "Show Tasks" }));
+const overlay = await screen.findByRole("dialog", { name: "Tasks" });
+expect(within(overlay).queryByRole("tablist")).not.toBeInTheDocument();
 
-const trigger = within(overlay).getByRole('button', {
-  name: 'Panel: Tasks. Switch panel',
+const trigger = within(overlay).getByRole("button", {
+  name: "Panel: Tasks. Switch panel",
 });
 fireEvent.click(trigger);
-expect(screen.getAllByRole('menuitem')).toHaveLength(5);
-fireEvent.click(screen.getByRole('menuitem', { name: 'Agenda' }));
-expect(await screen.findByRole('dialog', { name: 'Agenda' })).toBeInTheDocument();
-expect(screen.getByText('Agenda body')).toBeInTheDocument();
+expect(screen.getAllByRole("menuitem")).toHaveLength(5);
+fireEvent.click(screen.getByRole("menuitem", { name: "Agenda" }));
+expect(await screen.findByRole("dialog", { name: "Agenda" })).toBeInTheDocument();
+expect(screen.getByText("Agenda body")).toBeInTheDocument();
 ```
 
 - [ ] **Step 2: Run the test and verify the old horizontal tablist fails the new contract**
@@ -139,11 +139,11 @@ Run the Step 2 command. Expected: PASS with no React, Radix, or accessibility wa
 Add focused assertions that:
 
 ```tsx
-expect(screen.getByRole('menuitem', { name: /Focus.*tracking Deep work/ })).toBeInTheDocument();
-expect(window.localStorage.getItem('docket.rail.active')).toBe('agenda');
-expect(trigger.querySelector('.truncate')).toHaveTextContent(longPanelName);
-await user.keyboard('{ArrowDown}{End}{Enter}');
-expect(await screen.findByRole('dialog', { name: 'Inbox' })).toBeInTheDocument();
+expect(screen.getByRole("menuitem", { name: /Focus.*tracking Deep work/ })).toBeInTheDocument();
+expect(window.localStorage.getItem("docket.rail.active")).toBe("agenda");
+expect(trigger.querySelector(".truncate")).toHaveTextContent(longPanelName);
+await user.keyboard("{ArrowDown}{End}{Enter}");
+expect(await screen.findByRole("dialog", { name: "Inbox" })).toBeInTheDocument();
 ```
 
 The long name must remain one line and truncate. The menu must retain Radix Home, End, arrow, Enter,
@@ -187,14 +187,14 @@ expect(
     regions,
     lane: firstLane,
     bounds: { startMinutes: 480, endMinutes: 600 },
-    displayTimezone: 'UTC',
+    displayTimezone: "UTC",
   }),
 ).toBe(32);
 
-expect(screen.getByTestId('work-location-band')).toHaveClass('left-1.5', 'w-3');
-expect(screen.getByTestId('work-location-rail')).toHaveClass('left-[11px]', 'w-0.5');
-expect(move).toHaveClass('-left-2', 'size-10');
-expect(resizeStart).toHaveStyle({ left: '-8px', width: '40px', height: '40px' });
+expect(screen.getByTestId("work-location-band")).toHaveClass("left-1.5", "w-3");
+expect(screen.getByTestId("work-location-rail")).toHaveClass("left-[11px]", "w-0.5");
+expect(move).toHaveClass("-left-2", "size-10");
+expect(resizeStart).toHaveStyle({ left: "-8px", width: "40px", height: "40px" });
 ```
 
 Assert that every 40px move or resize box ends at `32px`, which is the same coordinate where an

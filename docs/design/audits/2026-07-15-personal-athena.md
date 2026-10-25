@@ -1,5 +1,5 @@
 ---
-surfaces: ['athena']
+surfaces: ["athena"]
 date: 2026-07-15
 verdict: ship
 scores:

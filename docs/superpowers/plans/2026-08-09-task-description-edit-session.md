@@ -24,7 +24,7 @@ Define a typed harness whose props are `value`, `baseline`, `delayMs`, and `save
 ```tsx
 const { result, rerender, unmount } = renderHook(
   ({ value, baseline, delayMs, save }) => useDebouncedAutosave({ value, baseline, delayMs, save }),
-  { initialProps: { value: 'Before', baseline: 'Before', delayMs: 2_000, save } },
+  { initialProps: { value: "Before", baseline: "Before", delayMs: 2_000, save } },
 );
 ```
 
@@ -115,7 +115,7 @@ Capture the hook controls:
 ```tsx
 const { flush } = useDebouncedAutosave({
   value: draft,
-  baseline: value ?? '',
+  baseline: value ?? "",
   delayMs: 2_000,
   save: normalizeAndSave,
 });

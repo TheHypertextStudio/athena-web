@@ -31,7 +31,7 @@ verifierArtifacts:
   - docs/engineering/launch/evidence/production/2026-08-02T10-05-46-131Z-production-verify.json
   - docs/engineering/launch/evidence/production/2026-08-02-scr20-forced-failure.txt
   - docs/engineering/launch/evidence/production/2026-08-02-secret-sweep.txt
-verification: 'pnpm exec vitest run tests/ci — 24 passed (2 files); pnpm exec tsx scripts/ci-gate-policy.ts — PASS, exit 0; pnpm exec tsx scripts/production-verify.ts — FAIL, exit 1 (production 32 paths behind HEAD)'
+verification: "pnpm exec vitest run tests/ci — 24 passed (2 files); pnpm exec tsx scripts/ci-gate-policy.ts — PASS, exit 0; pnpm exec tsx scripts/production-verify.ts — FAIL, exit 1 (production 32 paths behind HEAD)"
 ---
 
 ## Summary

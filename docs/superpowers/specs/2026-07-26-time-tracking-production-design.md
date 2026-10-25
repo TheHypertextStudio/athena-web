@@ -161,7 +161,7 @@ Algorithm:
   placed: Array<{ taskId; dailyPlanItemId; date; timeboxStartsAt; timeboxEndsAt }>;
   overflow: Array<{
     taskId;
-    reason: 'org_cap_exceeded' | 'category_cap_exceeded' | 'no_open_slot';
+    reason: "org_cap_exceeded" | "category_cap_exceeded" | "no_open_slot";
     constraintId?: string;
   }>;
 }

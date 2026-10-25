@@ -1,5 +1,5 @@
 ---
-surfaces: ['settings']
+surfaces: ["settings"]
 date: 2026-08-15
 verdict: ship
 scores:

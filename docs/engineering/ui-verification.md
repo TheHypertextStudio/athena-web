@@ -252,9 +252,9 @@ A fresh `dev-session.ts` account is **empty**. Screenshots of it only ever show 
 is not coverage. Seed through the API with the session cookie:
 
 ```js
-const state = JSON.parse(readFileSync(`${STATE}`, 'utf8'));
-const orgId = JSON.parse(readFileSync(`${STATE}.meta.json`, 'utf8')).orgId;
-const cookie = state.cookies.map((c) => `${c.name}=${c.value}`).join('; ');
+const state = JSON.parse(readFileSync(`${STATE}`, "utf8"));
+const orgId = JSON.parse(readFileSync(`${STATE}.meta.json`, "utf8")).orgId;
+const cookie = state.cookies.map((c) => `${c.name}=${c.value}`).join("; ");
 // then POST /v1/orgs/:orgId/projects, /tasks, /v1/daily-plan … with { cookie, origin: APP_URL }
 ```
 

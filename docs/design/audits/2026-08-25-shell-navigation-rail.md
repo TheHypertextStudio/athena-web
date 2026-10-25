@@ -1,5 +1,5 @@
 ---
-surfaces: ['shell-navigation-rail']
+surfaces: ["shell-navigation-rail"]
 date: 2026-08-25
 verdict: ship
 scores:

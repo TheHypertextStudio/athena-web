@@ -43,9 +43,9 @@
 - [ ] **Step 1: Write failing contract and repository tests**
 
 ```typescript
-const parsed = WorkPlaceCreate.parse({ name: 'Main library', address: '123 Main St' });
-expect(parsed.address).toBe('123 Main St');
-expect(WorkPlaceCreate.safeParse({ name: 'Library', address: 'x'.repeat(241) }).success).toBe(
+const parsed = WorkPlaceCreate.parse({ name: "Main library", address: "123 Main St" });
+expect(parsed.address).toBe("123 Main St");
+expect(WorkPlaceCreate.safeParse({ name: "Library", address: "x".repeat(241) }).success).toBe(
   false,
 );
 ```
@@ -87,8 +87,8 @@ Commit type/scope: `feat(work-location)` with a substantive body explaining the 
 - [ ] **Step 1: Write failing dialog tests for name-only save, optional address, and map disclosure**
 
 ```tsx
-fireEvent.click(screen.getByRole('button', { name: 'Choose on map' }));
-expect(screen.getByLabelText('Place map')).toBeVisible();
+fireEvent.click(screen.getByRole("button", { name: "Choose on map" }));
+expect(screen.getByLabelText("Place map")).toBeVisible();
 expect(screen.queryByLabelText(/radius/i)).not.toBeInTheDocument();
 ```
 
@@ -134,10 +134,10 @@ Commit type/scope: `feat(work-location)` with a substantive body explaining prog
 - [ ] **Step 1: Replace the existing settings test with failing behavior assertions**
 
 ```tsx
-expect(screen.getByRole('button', { name: 'Add place' })).toBeVisible();
-expect(screen.queryByRole('heading', { name: 'Regular places' })).not.toBeInTheDocument();
+expect(screen.getByRole("button", { name: "Add place" })).toBeVisible();
+expect(screen.queryByRole("heading", { name: "Regular places" })).not.toBeInTheDocument();
 expect(screen.queryByLabelText(/geofence radius/i)).not.toBeInTheDocument();
-expect(screen.queryByRole('button', { name: 'Save name' })).not.toBeInTheDocument();
+expect(screen.queryByRole("button", { name: "Save name" })).not.toBeInTheDocument();
 ```
 
 - [ ] **Step 2: Run the focused settings test and verify it fails against the inline control panel**

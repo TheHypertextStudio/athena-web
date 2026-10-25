@@ -45,22 +45,22 @@ content continue through the existing controlled Sheet state.
 Add these assertions after opening Tasks:
 
 ```tsx
-const overlay = await screen.findByRole('dialog', { name: 'Tasks' });
+const overlay = await screen.findByRole("dialog", { name: "Tasks" });
 expect(overlay).toHaveClass(
-  'inset-0',
-  'h-dvh',
-  'w-screen',
-  'max-w-none',
-  'border-0',
-  'shadow-none',
+  "inset-0",
+  "h-dvh",
+  "w-screen",
+  "max-w-none",
+  "border-0",
+  "shadow-none",
 );
-expect(overlay).not.toHaveClass('w-[22rem]', 'max-w-[90vw]');
-expect(within(overlay).getByTestId('shell-utility-pane-bar')).toHaveClass(
-  'min-h-12',
-  'border-b',
-  'pt-[env(safe-area-inset-top)]',
+expect(overlay).not.toHaveClass("w-[22rem]", "max-w-[90vw]");
+expect(within(overlay).getByTestId("shell-utility-pane-bar")).toHaveClass(
+  "min-h-12",
+  "border-b",
+  "pt-[env(safe-area-inset-top)]",
 );
-expect(within(overlay).getByRole('button', { name: 'Close Tasks' })).toHaveClass('size-10');
+expect(within(overlay).getByRole("button", { name: "Close Tasks" })).toHaveClass("size-10");
 ```
 
 - [x] **Step 2: Add close and focus-restoration coverage**
@@ -69,10 +69,10 @@ Capture the `Show Tasks` trigger, open the pane, click `Close Tasks`, and wait f
 leave the tree. Assert that the original trigger has focus:
 
 ```tsx
-const trigger = screen.getByRole('button', { name: 'Show Tasks' });
+const trigger = screen.getByRole("button", { name: "Show Tasks" });
 fireEvent.click(trigger);
-const overlay = await screen.findByRole('dialog', { name: 'Tasks' });
-fireEvent.click(within(overlay).getByRole('button', { name: 'Close Tasks' }));
+const overlay = await screen.findByRole("dialog", { name: "Tasks" });
+fireEvent.click(within(overlay).getByRole("button", { name: "Close Tasks" }));
 await waitFor(() => expect(overlay).not.toBeInTheDocument());
 expect(trigger).toHaveFocus();
 ```
@@ -108,8 +108,8 @@ Expected: the new geometry and close-action assertions fail against `w-[22rem] m
 Import `X` from `../../icons` and `SheetClose` from `../../primitives`:
 
 ```tsx
-import { Menu, X } from '../../icons';
-import { Sheet, SheetClose, SheetContent, SheetTitle } from '../../primitives';
+import { Menu, X } from "../../icons";
+import { Sheet, SheetClose, SheetContent, SheetTitle } from "../../primitives";
 ```
 
 - [x] **Step 2: Replace the side-sheet geometry**
@@ -118,7 +118,7 @@ Use full dynamic-viewport geometry only on the shell's compact panel instance:
 
 ```tsx
 className =
-  '@container inset-0 flex h-dvh w-screen max-w-none flex-col overflow-hidden border-0 shadow-none';
+  "@container inset-0 flex h-dvh w-screen max-w-none flex-col overflow-hidden border-0 shadow-none";
 ```
 
 The generic navigation drawer and `SheetContent` primitive keep their existing widths.

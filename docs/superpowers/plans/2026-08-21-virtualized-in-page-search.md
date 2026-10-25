@@ -159,7 +159,7 @@ Vitest, Testing Library, TypeScript, Playwright.
 
   ```ts
   export interface CompleteResidentCollection<T> {
-    readonly completeness: 'complete';
+    readonly completeness: "complete";
     readonly items: readonly T[];
   }
 

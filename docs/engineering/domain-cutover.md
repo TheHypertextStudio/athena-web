@@ -446,7 +446,7 @@ The sender address is read from configuration, never hard-coded:
 const apiKey = realEnvValue(env.RESEND_API_KEY);
 const from = realEnvValue(env.MAIL_FROM);
 if (!apiKey || !from) {
-  throw new Error('Missing required production mail config: RESEND_API_KEY and MAIL_FROM');
+  throw new Error("Missing required production mail config: RESEND_API_KEY and MAIL_FROM");
 }
 return new RealMailer({ endpoint: RESEND_EMAIL_ENDPOINT, apiKey, from });
 ```

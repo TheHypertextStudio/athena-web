@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1
 # Default matches `.node-version`, which CI passes explicitly as this build arg.
 ARG NODE_VERSION=24
 FROM node:${NODE_VERSION}-alpine AS base
@@ -22,7 +23,10 @@ WORKDIR /app
 COPY --from=pruner /app/out/json/ .
 COPY --from=pruner /app/out/full/ .
 COPY --from=pruner /app/scripts/install-git-guardrails.sh ./scripts/install-git-guardrails.sh
-RUN pnpm install --prod --frozen-lockfile
+RUN --mount=type=secret,id=github_token,env=NODE_AUTH_TOKEN,required=true \
+    --mount=type=tmpfs,target=/run/registry \
+    printf '%s\n' '//npm.pkg.github.com/:_authToken=${NODE_AUTH_TOKEN}' >/run/registry/npmrc \
+    && NPM_CONFIG_USERCONFIG=/run/registry/npmrc pnpm install --prod --frozen-lockfile
 # The serving process uses only the build-stage artifacts copied below.
 
 # Production receives already-runnable JavaScript. `tsx` is a development tool; loading it in the
@@ -34,7 +38,10 @@ WORKDIR /app
 COPY --from=pruner /app/out/json/ .
 COPY --from=pruner /app/out/full/ .
 COPY --from=pruner /app/scripts/install-git-guardrails.sh ./scripts/install-git-guardrails.sh
-RUN pnpm install --frozen-lockfile
+RUN --mount=type=secret,id=github_token,env=NODE_AUTH_TOKEN,required=true \
+    --mount=type=tmpfs,target=/run/registry \
+    printf '%s\n' '//npm.pkg.github.com/:_authToken=${NODE_AUTH_TOKEN}' >/run/registry/npmrc \
+    && NPM_CONFIG_USERCONFIG=/run/registry/npmrc pnpm install --frozen-lockfile
 RUN DOCKET_BUILD_REVISION="$DOCKET_BUILD_REVISION" pnpm --filter @docket/api build:runtime
 
 FROM base AS runner

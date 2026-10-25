@@ -7,6 +7,12 @@ after formatting, lint, types, tests, build, and browser E2E are green.
 
 ---
 
+## Private packages in release images
+
+The API and admin builds require read access to GitHub Packages. Both the caller and reusable image workflow grant `packages: read`. The build action passes its short-lived GitHub token as the `github_token` BuildKit secret. Container install steps mount that token and a temporary registry configuration only while pnpm runs. The serving image receives neither credential.
+
+For a local build, provide `NODE_AUTH_TOKEN` from an existing GitHub login with `read:packages` and pass `--secret id=github_token,env=NODE_AUTH_TOKEN` to Docker. Do not pass the token as a build argument or copy a credential-bearing npmrc into the image. The API also requires a full source revision through `--build-arg DOCKET_BUILD_REVISION=<40-character-commit>`.
+
 ## Architecture
 
 | Service        | Domain                     | Platform  | Notes                                                   |

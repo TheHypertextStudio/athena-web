@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1
 # Default matches `.node-version`, which CI passes explicitly as this build arg.
 ARG NODE_VERSION=24
 FROM node:${NODE_VERSION}-alpine AS base
@@ -21,7 +22,10 @@ WORKDIR /app
 COPY --from=pruner /app/out/json/ .
 COPY --from=pruner /app/out/full/ .
 COPY --from=pruner /app/scripts/install-git-guardrails.sh ./scripts/install-git-guardrails.sh
-RUN pnpm install --frozen-lockfile
+RUN --mount=type=secret,id=github_token,env=NODE_AUTH_TOKEN,required=true \
+    --mount=type=tmpfs,target=/run/registry \
+    printf '%s\n' '//npm.pkg.github.com/:_authToken=${NODE_AUTH_TOKEN}' >/run/registry/npmrc \
+    && NPM_CONFIG_USERCONFIG=/run/registry/npmrc pnpm install --frozen-lockfile
 ARG API_URL
 ARG NEXT_PUBLIC_API_URL
 ARG NEXT_PUBLIC_APP_URL
@@ -32,7 +36,7 @@ ENV NEXT_PUBLIC_APP_URL=$NEXT_PUBLIC_APP_URL
 ENV NEXT_PUBLIC_PASSKEY_RP_ID=$NEXT_PUBLIC_PASSKEY_RP_ID
 ENV NODE_ENV=production
 ENV APP_MODE=production
-RUN pnpm --filter=@docket/admin build
+RUN NODE_OPTIONS=--max-old-space-size=3072 pnpm --filter=@docket/admin build
 
 FROM node:${NODE_VERSION}-alpine AS runner
 WORKDIR /app

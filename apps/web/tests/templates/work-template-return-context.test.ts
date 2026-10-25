@@ -36,3 +36,37 @@ it('carries route presentation and the original parent through the first save', 
     ),
   ).toBe(`/orgs/${org}/work-templates/${child}?returnTo=${parent}&section=structure&mode=create`);
 });
+
+it('returns an independent copied draft to its same-workspace saved bundle', () => {
+  expect(workTemplateReturnHref(org, child, null, null, parent)).toBe(
+    `/orgs/${org}/work-templates/gallery/copies/${parent}`,
+  );
+});
+it('keeps the actual parent before bundle context when reviewing a nested copied definition', () => {
+  expect(
+    workTemplateReturnHref(
+      org,
+      child,
+      parent,
+      new URLSearchParams({ returnBundle: child }).toString(),
+      child,
+    ),
+  ).toBe(`/orgs/${org}/work-templates/${parent}?section=review&returnBundle=${child}`);
+});
+it.each([null, 'https://example.com/private', '../settings'])(
+  'rejects invalid bundle navigation %s',
+  (candidate) => {
+    expect(workTemplateReturnHref(org, child, null, null, candidate)).toBeNull();
+  },
+);
+
+it('returns Adjust to the exact Inbox proposal in its original workspace', () => {
+  expect(workTemplateReturnHref(org, child, null, 'proposal', { proposal: parent })).toBe(
+    `/orgs/${org}/work-templates/review/${parent}`,
+  );
+});
+it('keeps nested parent review ahead of Inbox return context', () => {
+  expect(workTemplateReturnHref(org, child, parent, 'proposal', { proposal: child })).toBe(
+    `/orgs/${org}/work-templates/${parent}?section=review`,
+  );
+});

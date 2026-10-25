@@ -252,6 +252,8 @@
         "./work-schedule-defaults",
         "./work-schedule-claim",
         "./work-schedule-forest",
+        "./work-schedule-forest-v2",
+        "./work-private-definition",
         "./work-schedule-fallback",
         "./schedule-title-pattern",
         "./work-schedule-management",

@@ -1,3 +1,4 @@
+import { addVirtualAuthenticator } from '../helpers/webauthn';
 import type { Locator, Page } from '@playwright/test';
 import { z } from 'zod';
 
@@ -89,6 +90,9 @@ const scenarioSchema = z
     id: z.string().regex(/^[a-z0-9][a-z0-9_-]*$/),
     route: z.string().regex(/^\/(?!\/)/),
     authenticated: z.boolean().optional(),
+    virtualAuthenticator: z.boolean().optional(),
+    credentialResponse: z.literal('cancel').optional(),
+    textScale: z.union([z.literal(1), z.literal(2)]).optional(),
     actions: z.array(actionSchema).default([]),
     ready: targetSchema.optional(),
     allowState: z.enum(['loading', 'error']).optional(),
@@ -304,4 +308,30 @@ async function fetchCaptureRequest(
   if (response.status() === 204) return null;
   const body: unknown = await response.json();
   return body;
+}
+
+/** Install explicitly requested local device/text fixtures in the canonical capture path. */
+export async function prepareCaptureEnvironment(
+  page: Page,
+  scenario?: CaptureScenario,
+): Promise<void> {
+  if (!scenario) return;
+  if (scenario.virtualAuthenticator) await addVirtualAuthenticator(page);
+  if (!scenario.textScale && !scenario.credentialResponse) return;
+  if (scenario.credentialResponse === 'cancel')
+    await page.addInitScript({
+      // A literal avoids tsx's keep-names helper escaping into the browser function body.
+      content:
+        "Object.defineProperty(navigator.credentials, 'create', { configurable: true, value: function () { return Promise.reject(new DOMException('Controlled local cancellation', 'NotAllowedError')); } });",
+    });
+  if (scenario.textScale !== 2) return;
+  await page.addInitScript(() => {
+    document.addEventListener(
+      'DOMContentLoaded',
+      () => {
+        document.documentElement.style.fontSize = '200%';
+      },
+      { once: true },
+    );
+  });
 }

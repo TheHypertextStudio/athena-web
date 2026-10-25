@@ -14,7 +14,7 @@
 import { ChevronLeft } from '@docket/ui/icons/chevron-left';
 import { cn } from '@docket/ui/lib/utils';
 import { Button } from '@docket/ui/primitives/button';
-import type { JSX, ReactNode } from 'react';
+import { useEffect, useRef, type JSX, type ReactNode } from 'react';
 
 /** Props for {@link WizardShell}. */
 export interface WizardShellProps {
@@ -44,6 +44,8 @@ export interface WizardShellProps {
   subtitle: string;
   /** The step's body content. */
   children: ReactNode;
+  /** A setup notice spanning the content column above the action row. */
+  notice?: ReactNode;
   /** The footer action row (primary / secondary buttons). */
   footer: ReactNode;
   /** Invoked when the back affordance is used; omit on the first step to hide it. */
@@ -67,68 +69,30 @@ export function WizardShell({
   subtitle,
   children,
   footer,
+  notice,
   onBack,
 }: WizardShellProps): JSX.Element {
+  const titleRef = useRef<HTMLHeadingElement>(null);
+  useEffect(() => {
+    titleRef.current?.focus({ preventScroll: true });
+    window.scrollTo(0, 0);
+  }, [stepKey]);
   return (
-    <main className="bg-surface text-on-surface flex min-h-screen flex-col px-6 py-10 sm:py-16">
+    <main className="bg-surface text-on-surface flex min-h-svh flex-col px-4 py-6 sm:px-6 sm:py-12">
       <div className="mx-auto flex w-full max-w-2xl flex-1 flex-col">
-        <header className="mb-10 flex flex-col gap-6">
-          <div className="flex items-center justify-between">
-            <span
-              className="text-on-surface wonk text-xl leading-none font-semibold tracking-tight"
-              style={{ fontFamily: 'var(--font-fraunces), Georgia, serif' }}
-            >
-              Docket
-            </span>
-            <span className="text-on-surface-variant text-xs font-medium tabular-nums">
-              {totalKnown ? `Step ${stepNumber} of ${totalSteps}` : 'Getting started'}
-            </span>
-          </div>
-
-          {totalKnown ? (
-            <div
-              className="flex gap-1.5"
-              role="progressbar"
-              aria-valuemin={1}
-              aria-valuemax={totalSteps}
-              aria-valuenow={stepNumber}
-              aria-label={`Onboarding progress: step ${stepNumber} of ${totalSteps}`}
-            >
-              {Array.from({ length: totalSteps }, (_, i) => (
-                <span
-                  key={i}
-                  aria-hidden
-                  className={cn(
-                    'h-1.5 flex-1 rounded-full transition-colors duration-300',
-                    i < stepNumber ? 'bg-primary' : 'bg-surface-container-high',
-                  )}
-                />
-              ))}
-            </div>
-          ) : (
-            <div
-              className="flex gap-1.5"
-              role="progressbar"
-              aria-valuemin={0}
-              aria-valuemax={100}
-              aria-valuenow={0}
-              aria-label="Onboarding progress: getting started"
-            >
-              {/* Total unknown until the wizard forks: a single, un-committed lead segment
-                  so the bar doesn't claim a step count it will immediately have to change. */}
-              <span aria-hidden className="bg-primary h-1.5 w-10 rounded-full" />
-              <span aria-hidden className="bg-surface-container-high h-1.5 flex-1 rounded-full" />
-            </div>
-          )}
-        </header>
+        <WizardHeader stepNumber={stepNumber} totalSteps={totalSteps} totalKnown={totalKnown} />
 
         <div
           key={stepKey}
-          className="animate-in fade-in slide-in-from-bottom-2 flex flex-1 flex-col duration-300"
+          className="animate-in fade-in slide-in-from-bottom-2 flex flex-1 flex-col duration-(--dur-slow) ease-(--ease-out) motion-reduce:animate-none"
         >
-          <div className="mb-8 flex flex-col gap-2">
+          <div className="mb-6 flex flex-col gap-2 sm:mb-8">
             <span className="text-on-surface-variant text-xs font-medium">{eyebrow}</span>
-            <h1 className="text-3xl font-semibold tracking-tight text-balance sm:text-4xl">
+            <h1
+              ref={titleRef}
+              tabIndex={-1}
+              className="text-2xl font-semibold tracking-tight text-balance outline-none sm:text-4xl"
+            >
               {title}
             </h1>
             <p className="text-on-surface-variant max-w-xl text-base text-balance">{subtitle}</p>
@@ -136,19 +100,87 @@ export function WizardShell({
 
           <div className="flex-1">{children}</div>
 
-          <div className="mt-10 flex items-center justify-between gap-4">
+          {notice ? <div className="mt-6">{notice}</div> : null}
+          <div
+            className={cn(
+              'flex min-w-0 flex-wrap items-center justify-between gap-3',
+              notice ? 'mt-3' : 'mt-8',
+            )}
+          >
             {onBack ? (
               <Button type="button" variant="ghost" onClick={onBack} className="gap-1.5">
                 <ChevronLeft className="size-4" />
                 Back
               </Button>
-            ) : (
-              <span aria-hidden />
-            )}
-            <div className="flex items-center gap-3">{footer}</div>
+            ) : null}
+            <div className="ml-auto flex max-w-full min-w-0 flex-wrap items-center justify-end gap-2">
+              {footer}
+            </div>
           </div>
         </div>
       </div>
     </main>
+  );
+}
+
+function WizardHeader({
+  stepNumber,
+  totalSteps,
+  totalKnown,
+}: {
+  readonly stepNumber: number;
+  readonly totalSteps: number;
+  readonly totalKnown: boolean;
+}): JSX.Element {
+  return (
+    <header className="mb-6 flex flex-col gap-4 sm:mb-10 sm:gap-6">
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <span
+          className="text-on-surface wonk text-xl leading-none font-semibold tracking-tight"
+          style={{ fontFamily: 'var(--font-fraunces), Georgia, serif' }}
+        >
+          Docket
+        </span>
+        <span className="text-on-surface-variant text-xs font-medium tabular-nums">
+          {totalKnown ? `Step ${stepNumber} of ${totalSteps}` : 'Getting started'}
+        </span>
+      </div>
+
+      {totalKnown ? (
+        <div
+          className="flex gap-1.5"
+          role="progressbar"
+          aria-valuemin={1}
+          aria-valuemax={totalSteps}
+          aria-valuenow={stepNumber}
+          aria-label={`Onboarding progress: step ${stepNumber} of ${totalSteps}`}
+        >
+          {Array.from({ length: totalSteps }, (_, i) => (
+            <span
+              key={i}
+              aria-hidden
+              className={cn(
+                'h-1.5 flex-1 rounded-full transition-colors duration-(--dur-base) motion-reduce:transition-none',
+                i < stepNumber ? 'bg-primary' : 'bg-surface-container-high',
+              )}
+            />
+          ))}
+        </div>
+      ) : (
+        <div
+          className="flex gap-1.5"
+          role="progressbar"
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={0}
+          aria-label="Onboarding progress: getting started"
+        >
+          {/* Total unknown until the wizard forks: a single, un-committed lead segment
+                  so the bar doesn't claim a step count it will immediately have to change. */}
+          <span aria-hidden className="bg-primary h-1.5 w-10 rounded-full" />
+          <span aria-hidden className="bg-surface-container-high h-1.5 flex-1 rounded-full" />
+        </div>
+      )}
+    </header>
   );
 }

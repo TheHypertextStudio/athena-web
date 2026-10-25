@@ -167,6 +167,35 @@ source remains required until exact aliases, accepted receipts and migration ord
 The [canonical cutover engineering specification](work-schedule-canonical-cutover.md) defines the
 immutable alias registry, guarded read adapter, conversion receipts and activation prerequisites.
 
+### Bound runtime documents
+
+`CanonicalPrivateWorkDefinition` is a timezone-neutral authoring payload with an explicit
+`private_definition` discriminator. Published payloads require pinned roots and complete authored
+aliases, titles, date policies and Task completion requirements. Pending authoring can retain empty
+roots or unresolved selections. Original retained evidence remains in its source envelope and
+receipts; fresh authoring does not invent a legacy revision or MD5.
+
+`WorkScheduleForestV2` binds existing root drafts to one saved timezone and carries independent
+field timing, explicit absent fields, title policy and completion policy. Native version1 documents
+retain their existing parser and behavior. Conversion candidates and pending source envelopes are
+not runnable documents; binding a retained schedule requires the separate activation proof in the
+canonical cutover specification.
+
+Creation compiles every field before inserting the complete selected forest. A completion rule can
+leave a Project start unresolved while its child Task already exists. Per-field literal offsets take
+precedence, and absence suppresses inherited defaults. Compatibility titles are rendered for every
+authored Task, Project and Milestone after ordinary document preparation, including explicit blank
+document replacement. Invalid rendered titles fail without truncation.
+
+Private date ownership stores exact accepted physical prerequisites and distinguishes planned
+fields from actual Task completion instants. Foreground discovery follows the changed field or
+lifecycle fact, so editing a planned date does not require writes to completion-only consumers.
+Read-only prerequisites remain outside the 500 affected-work budget. Manual pins, terminal work,
+same-transaction ownership companions and Undo keep their existing protections. The authored-Task
+completion policy requires concrete timestamps for its declared Task paths; Project state and
+template-only descendants do not add completion requirements. These facts expose no unrelated work
+prose or private schedule body.
+
 ## Recovering standalone project setup
 
 Reader: A maintainer changing the existing Repeat project authoring or retry path.

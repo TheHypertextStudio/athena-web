@@ -18,7 +18,10 @@
  * - **Mark read** — shown for any unread row, dismisses it from the attention queue.
  */
 import { notificationDeliveryHintsFromBody } from '@docket/notifications/web';
-import type { NotificationOut } from '@docket/notifications/notification-contract';
+import {
+  TemplateReviewReference,
+  type NotificationOut,
+} from '@docket/notifications/notification-contract';
 import { Check, Mail, MessageSquare } from '@docket/ui/icons';
 import { STRETCHED_LINK } from '@docket/ui/lib/stretched-link';
 import { cn } from '@docket/ui/lib/utils';
@@ -76,7 +79,7 @@ export function NotificationRow({
 }: NotificationRowProps): JSX.Element {
   const { icon: Icon, label } = notificationKind(notification.type);
   const unread = !notification.readAt;
-  const approval = isApproval(notification.type);
+  const approval = ordinaryApproval(notification);
   const phoneAction = phoneNotificationAction(notification);
   const href = notificationHref(notification);
   const summary = notification.body.summary;
@@ -89,7 +92,7 @@ export function NotificationRow({
   return (
     <div
       className={cn(
-        'border-outline-variant relative flex items-start gap-3 rounded-lg border px-3 py-3 transition-colors',
+        'border-outline-variant relative grid grid-cols-[2rem_minmax(0,1fr)] items-start gap-3 rounded-lg border px-3 py-3 transition-colors sm:grid-cols-[2rem_minmax(0,1fr)_auto]',
         unread ? 'bg-surface-container-low' : 'bg-transparent',
       )}
     >
@@ -157,7 +160,8 @@ export function NotificationRow({
 
       {/* Inline actions. */}
       {unread ? (
-        <div className="flex shrink-0 items-center gap-1.5">
+        <div className="col-start-2 flex shrink-0 items-center gap-1.5 sm:col-start-3 sm:row-start-1">
+          <TemplateReviewLink notification={notification} href={href} />
           {approval ? (
             <Button
               size="sm"
@@ -266,5 +270,27 @@ function TitleLine({ href, children }: { href: string | null; children: ReactNod
     >
       {children}
     </Link>
+  );
+}
+
+function ordinaryApproval(notification: NotificationOut): boolean {
+  return (
+    isApproval(notification.type) &&
+    !TemplateReviewReference.safeParse(notification.body.templateReview).success
+  );
+}
+function TemplateReviewLink({
+  notification,
+  href,
+}: {
+  readonly notification: NotificationOut;
+  readonly href: string | null;
+}): JSX.Element | null {
+  if (!TemplateReviewReference.safeParse(notification.body.templateReview).success || !href)
+    return null;
+  return (
+    <Button size="sm" variant="secondary" asChild>
+      <Link href={href}>Review template</Link>
+    </Button>
   );
 }

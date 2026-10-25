@@ -1,12 +1,13 @@
 'use client';
 
 import type { OrgCreate } from '../../lib/contracts/organization';
-import { cn } from '@docket/ui/lib/utils';
-import { Button } from '@docket/ui/primitives/button';
 import { useRouter } from 'next/navigation';
 import { type JSX, useCallback, useEffect, useMemo, useState } from 'react';
 
-import { interpolate, primaryLabel, stepCopy } from '@/components/onboarding/onboarding-copy';
+import { interpolate, stepCopy } from '@/components/onboarding/onboarding-copy';
+import { OnboardingFooter, OnboardingNotice } from '@/components/onboarding/onboarding-footer';
+import { onboardingPasskeysDef } from '@/components/onboarding/onboarding-queries';
+import { workTemplateHref } from '@/components/templates/work-template-navigation';
 import { StepIntent } from '@/components/onboarding/step-intent';
 import { StepConnect } from '@/components/onboarding/step-connect';
 import { StepPasskey } from '@/components/onboarding/step-passkey';
@@ -14,17 +15,16 @@ import type { OnboardingIntent, OnboardingStep } from '@/components/onboarding/t
 import { WizardShell } from '@/components/onboarding/wizard-shell';
 import { WorkspaceNameField } from '@/components/workspace-creation/workspace-name-field';
 import { useAuthenticationRecovery } from '@/components/authentication-interlock';
-import { api } from '@/lib/api';
 import { passkey, useSession } from '@/lib/auth-client';
 import { userErrorMessage } from '@/lib/problem';
-import { unwrap } from '@/lib/query';
+import { useApiQuery } from '@/lib/query';
 import { createWorkspace } from '@/lib/workspace-creation';
 
 /** The ordered steps for the individual ("just me") fork. */
-const PERSONAL_STEPS: readonly OnboardingStep[] = ['intent', 'connect'];
+const PERSONAL_STEPS: readonly OnboardingStep[] = ['intent', 'connect', 'starters'];
 
 /** The ordered steps for the team / nonprofit fork. */
-const TEAM_STEPS: readonly OnboardingStep[] = ['intent', 'name', 'connect'];
+const TEAM_STEPS: readonly OnboardingStep[] = ['intent', 'name', 'connect', 'starters'];
 
 /** Extract a friendly first name from a full display name, if any. */
 function firstNameOf(name: string | undefined): string | undefined {
@@ -34,7 +34,7 @@ function firstNameOf(name: string | undefined): string | undefined {
 }
 
 /**
- * The first-run onboarding wizard: a polished, multi-step setup right after sign-up.
+ * The first-run onboarding wizard: a focused setup right after sign-up.
  *
  * @remarks
  * A Client Component that runs a small state machine. The first screen forks on intent:
@@ -48,11 +48,10 @@ function firstNameOf(name: string | undefined): string | undefined {
  * end — so the connect step has a real org to mirror work into (create integration → import).
  * The ordered step list is derived from the chosen intent so the progress indicator and
  * back/next navigation stay correct without hand-maintained branches. Once the org exists the
- * user is committed: back navigation is disabled, and both "Skip for now" and "Enter your
- * workspace" route to the new org's My Work — populated by whatever was mirrored, or empty but
- * usable when skipped. If the create call fails, the wizard stays on the setup step and
- * surfaces the `Problem` response body inline rather than advancing to a connect step with no
- * org behind it. Submission only ever fires from the React click handler, so a pre-hydration
+ * user is committed: back navigation is disabled. After optional connections and passkey enrollment,
+ * the person can choose starting work through the ordinary gallery or skip into usable Home.
+ * If creation fails, the wizard stays on setup with application-owned recovery copy rather than
+ * advancing to a connect step without a real workspace. Submission only ever fires from the React click handler, so a pre-hydration
  * click cannot trigger a half-initialised create.
  */
 export default function OnboardingPage(): JSX.Element {
@@ -72,33 +71,21 @@ export default function OnboardingPage(): JSX.Element {
   /** Running total of items mirrored on the connect step (promotes the primary action). */
   const [mirroredTotal, setMirroredTotal] = useState(0);
   /**
-   * Whether to append the optional passkey-enrollment beat. True only once we've confirmed the
+   * Whether to include the optional passkey-enrollment beat. True only once we've confirmed the
    * account has zero passkeys (a social sign-up); defaults false so a passkey sign-up — or a check
-   * that hasn't resolved — keeps the original connect-is-terminal flow.
+   * that hasn't resolved — goes from connections directly to optional starting work.
    */
   const [needsPasskey, setNeedsPasskey] = useState(false);
 
-  // Detect a social-sign-up account (no passkey of its own) so we can offer enrollment before the
-  // user enters their workspace. Fail-closed: any error or a non-empty list leaves the step off.
-  // Only ever flips the flag on (never off), so a late resolve after unmount is a harmless no-op.
+  const passkeys = useApiQuery(onboardingPasskeysDef());
   useEffect(() => {
-    void (async () => {
-      try {
-        const list = await unwrap(
-          () => api.v1.me.passkeys.$get({ query: {} }),
-          'Could not check your passkeys.',
-        );
-        if (list.items.length === 0) setNeedsPasskey(true);
-      } catch {
-        // Enrollment is an optional onboarding beat; a failed check leaves the original flow.
-      }
-    })();
-  }, []);
+    if (passkeys.data?.items.length === 0) setNeedsPasskey(true);
+  }, [passkeys.data]);
 
   /** The active fork's ordered steps; the personal fork until an intent forks it otherwise. */
   const steps = useMemo<readonly OnboardingStep[]>(() => {
     const base = intent === 'personal' || intent === null ? PERSONAL_STEPS : TEAM_STEPS;
-    return needsPasskey ? [...base, 'passkey'] : base;
+    return needsPasskey ? [...base.slice(0, -1), 'passkey', 'starters'] : base;
   }, [intent, needsPasskey]);
   const stepIndex = Math.max(0, steps.indexOf(step));
   const isConnectStep = step === 'connect';
@@ -152,7 +139,7 @@ export default function OnboardingPage(): JSX.Element {
    * @remarks
    * Idempotent against re-entry: once {@link orgId} is set this is a no-op, so a double-click
    * never creates two orgs. On failure the wizard stays on the current setup step and surfaces
-   * the server's message — it never advances to a connect step without a real org behind it.
+   * application-owned recovery copy — it never advances to a connect step without a real org behind it.
    */
   const enterConnect = useCallback(async (): Promise<void> => {
     if (intent === null || pending) return;
@@ -188,8 +175,7 @@ export default function OnboardingPage(): JSX.Element {
 
   /**
    * Leave the connect step: advance to the passkey beat when one is queued (a social sign-up),
-   * otherwise go straight into the workspace. Both the primary action and "Skip for now" route
-   * through here so the passkey nudge isn't lost by skipping the tool connection.
+   * otherwise offer starting work. Continuing without a connection preserves the passkey offer.
    */
   const leaveConnect = useCallback((): void => {
     if (needsPasskey) {
@@ -197,16 +183,16 @@ export default function OnboardingPage(): JSX.Element {
       setStep('passkey');
       return;
     }
-    enterWorkspace();
-  }, [needsPasskey, enterWorkspace]);
+    setStep('starters');
+  }, [needsPasskey]);
 
   /**
-   * Enrol a passkey from the authenticated session, then enter the workspace.
+   * Enrol a passkey from the authenticated session, then offer starting work.
    *
    * @remarks
    * Session-bound registration ({@link passkey.addPasskey}) — the safe, verified path that replaced
    * the removed unauthenticated graft. On cancel/failure the wizard stays on the step and surfaces
-   * the reason so the user can retry or skip; success routes into the workspace.
+   * the reason so the user can retry or skip; success advances to the optional starter handoff.
    */
   const enrollPasskey = useCallback(async (): Promise<void> => {
     if (pending) return;
@@ -218,7 +204,7 @@ export default function OnboardingPage(): JSX.Element {
         setError(userErrorMessage(result.error, 'Could not add a passkey. You can add one later.'));
         return;
       }
-      enterWorkspace();
+      setStep('starters');
     } catch (caught) {
       setError(
         userErrorMessage(caught, 'Could not add a passkey. You can add one later in Settings.'),
@@ -226,7 +212,7 @@ export default function OnboardingPage(): JSX.Element {
     } finally {
       setPending(false);
     }
-  }, [pending, enterWorkspace]);
+  }, [pending]);
 
   /** Advance to the next step; the setup→connect hop creates the org first. */
   const goNext = useCallback((): void => {
@@ -239,6 +225,13 @@ export default function OnboardingPage(): JSX.Element {
     if (next) setStep(next);
   }, [steps, stepIndex, enterConnect]);
 
+  /** Keep the passkey skip in setup; only the final skip opens ordinary work. */
+  const skipStep = useCallback((): void => {
+    setError(null);
+    if (isPasskeyStep) setStep('starters');
+    else enterWorkspace();
+  }, [isPasskeyStep, enterWorkspace]);
+
   /** Run the right action for the current step's primary button. */
   const onPrimary = useCallback((): void => {
     if (isPasskeyStep) {
@@ -249,8 +242,22 @@ export default function OnboardingPage(): JSX.Element {
       leaveConnect();
       return;
     }
+    if (step === 'starters' && orgId !== null && intent !== null) {
+      router.push(`${workTemplateHref(orgId, '/gallery')}?fork=${intent}`);
+      return;
+    }
     goNext();
-  }, [isPasskeyStep, enrollPasskey, isConnectStep, leaveConnect, goNext]);
+  }, [
+    isPasskeyStep,
+    enrollPasskey,
+    isConnectStep,
+    leaveConnect,
+    step,
+    orgId,
+    intent,
+    router,
+    goNext,
+  ]);
 
   const copy = stepCopy(step);
 
@@ -264,34 +271,16 @@ export default function OnboardingPage(): JSX.Element {
       title={interpolate(copy.title, firstName)}
       subtitle={copy.subtitle}
       onBack={step === 'intent' || orgId !== null ? undefined : goBack}
+      notice={error ? <OnboardingNotice message={error} /> : undefined}
       footer={
-        <>
-          {error ? (
-            <p role="alert" className="text-error text-body-medium mr-1">
-              {error}
-            </p>
-          ) : null}
-          {isConnectStep && mirroredTotal === 0 ? (
-            <Button type="button" variant="ghost" onClick={leaveConnect}>
-              Skip for now
-            </Button>
-          ) : null}
-          {isPasskeyStep ? (
-            <Button type="button" variant="ghost" disabled={pending} onClick={enterWorkspace}>
-              Skip for now
-            </Button>
-          ) : null}
-          {step === 'intent' ? null : (
-            <Button
-              type="button"
-              onClick={onPrimary}
-              disabled={pending || (step === 'name' && !nameReady)}
-              className={cn((isConnectStep || isPasskeyStep) && 'min-w-44')}
-            >
-              {primaryLabel(step, isConnectStep, pending, mirroredTotal)}
-            </Button>
-          )}
-        </>
+        <OnboardingFooter
+          step={step}
+          pending={pending}
+          mirroredTotal={mirroredTotal}
+          nameReady={nameReady}
+          onPrimary={onPrimary}
+          onSkip={skipStep}
+        />
       }
     >
       {step === 'intent' ? <StepIntent value={intent} onChange={chooseIntent} /> : null}
@@ -316,6 +305,11 @@ export default function OnboardingPage(): JSX.Element {
       ) : null}
 
       {step === 'passkey' ? <StepPasskey /> : null}
+      {step === 'starters' ? (
+        <p className="text-on-surface-variant text-body-medium">
+          You can find these later in Work templates.
+        </p>
+      ) : null}
     </WizardShell>
   );
 }

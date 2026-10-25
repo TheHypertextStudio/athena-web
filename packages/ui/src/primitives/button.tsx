@@ -102,6 +102,8 @@ export interface ButtonVariantsOptions {
   readonly size?: LegacyButtonSize | null;
   /** The control step, when the caller already speaks the new vocabulary. */
   readonly controlSize?: ControlSize;
+  /** Allow a long label to wrap within its surface while retaining the control-size minimum. */
+  readonly wrapLabel?: boolean;
   /** Extra classes appended last. */
   readonly className?: string;
 }
@@ -122,8 +124,10 @@ export function buttonVariants(options?: ButtonVariantsOptions): string {
   const legacy = options?.size ?? null;
   const step: ControlSize =
     options?.controlSize ?? (legacy === null ? 'md' : LEGACY_BUTTON_SIZE[legacy]);
+  const growable = options?.wrapLabel === true && legacy !== 'icon';
   return cn(
-    controlChrome(step, { iconOnly: legacy === 'icon' }),
+    controlChrome(step, { iconOnly: legacy === 'icon', growable }),
+    growable && 'min-w-0 max-w-full whitespace-normal py-1',
     BUTTON_COLOR[variant],
     focusRing,
     options?.className,
@@ -143,6 +147,8 @@ export interface ButtonProps extends Omit<React.ComponentProps<'button'>, 'color
   readonly controlSize?: ControlSize | undefined;
   /** Render a square, label-less button sized to the resolved control step. */
   readonly iconOnly?: boolean | undefined;
+  /** Wrap long labels within the available width using the shared growable control metrics. */
+  readonly wrapLabel?: boolean | undefined;
   /** When `true`, render styling onto the single child element via Radix `Slot`. */
   readonly asChild?: boolean | undefined;
 }
@@ -166,6 +172,7 @@ export function Button({
   size,
   controlSize,
   iconOnly = false,
+  wrapLabel = false,
   asChild = false,
   ...props
 }: ButtonProps): React.JSX.Element {
@@ -173,11 +180,14 @@ export function Button({
   // resize a button that still names its own height.
   const explicit = controlSize ?? (size ? LEGACY_BUTTON_SIZE[size] : undefined);
   const step = useControlSize(explicit);
+  const square = iconOnly || size === 'icon';
+  const growable = wrapLabel && !square;
   const Comp = asChild ? Slot : 'button';
   return (
     <Comp
       className={cn(
-        controlChrome(step, { iconOnly: iconOnly || size === 'icon' }),
+        controlChrome(step, { iconOnly: square, growable }),
+        growable && 'max-w-full min-w-0 py-1 whitespace-normal',
         BUTTON_COLOR[variant ?? 'default'],
         focusRing,
         className,

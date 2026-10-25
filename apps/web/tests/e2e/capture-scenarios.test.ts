@@ -9,6 +9,26 @@ import {
   substituteCaptureValues,
 } from '../../e2e/tools/capture-scenarios';
 
+it('accepts explicit local passkey and 200-percent text fixtures while rejecting arbitrary scale', () => {
+  const [scenario] = parseCaptureScenarios([
+    {
+      id: 'passkey-and-enlarged-text',
+      route: '/onboarding',
+      virtualAuthenticator: true,
+      textScale: 2,
+      credentialResponse: 'cancel',
+    },
+  ]);
+  expect(scenario).toMatchObject({
+    virtualAuthenticator: true,
+    textScale: 2,
+    credentialResponse: 'cancel',
+  });
+  expect(() =>
+    parseCaptureScenarios([{ id: 'bad-scale', route: '/onboarding', textScale: 8 }]),
+  ).toThrow();
+});
+
 describe('named screenshot states', () => {
   afterEach(() => {
     vi.unstubAllEnvs();

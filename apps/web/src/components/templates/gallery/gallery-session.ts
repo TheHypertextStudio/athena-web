@@ -30,16 +30,27 @@ export type GalleryTabMemory = z.infer<typeof memory>;
 function key(scope: GalleryAttemptScope): string {
   return `docket:gallery-review:${JSON.stringify([scope.userId, scope.orgId])}`;
 }
-/** Restore lawful catalog choices after reload, tolerating corrupt or unavailable tab storage. */
-export function readGalleryTabMemory(scope: GalleryAttemptScope): GalleryTabMemory {
+/**
+ * Restore unsaved catalog choices, tolerating corrupt or unavailable tab storage.
+ *
+ * @param scope - The current authenticated account and actual destination workspace.
+ * @param initialFork - Public entry context; changing it preserves chosen roots and copy decisions.
+ * @returns Unsaved choices and matching-fork browse position for ordinary detail return.
+ */
+export function readGalleryTabMemory(
+  scope: GalleryAttemptScope,
+  initialFork?: WorkTemplateGalleryQuery['fork'],
+): GalleryTabMemory {
   const previous = memory.safeParse(readStoredJson(key(scope), 'session'));
-  return previous.success
+  const restored: GalleryTabMemory = previous.success
     ? previous.data
     : {
         choices: { roots: [], release: 1, mode: 'private_drafts', labels: [], offerings: [] },
         filters: {},
         view: 'suggested',
       };
+  if (!initialFork || restored.filters.fork === initialFork) return restored;
+  return { choices: restored.choices, filters: { fork: initialFork }, view: 'suggested' };
 }
 /** Remember unsaved selection metadata without storing private template documents or server draft claims. */
 export function writeGalleryTabMemory(scope: GalleryAttemptScope, value: GalleryTabMemory): void {

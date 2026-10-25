@@ -37,7 +37,7 @@ function BundleEntry({
     <li className="flex min-w-0 flex-col gap-1 py-3">
       <Link
         className="text-title-medium text-primary underline-offset-4 hover:underline focus-visible:underline"
-        href={`${workTemplateHref(orgId)}/${entry.workTypeId}`}
+        href={`${workTemplateHref(orgId)}/${entry.workTypeId}?returnBundle=${bundle.receipt.bundleId}`}
       >
         {entry.template.definition.name}
       </Link>
@@ -112,7 +112,7 @@ export function GalleryCopyBundle({
       {required.length ? (
         <Collapsible>
           <CollapsibleTrigger asChild>
-            <Button variant="ghost" className="px-3 sm:px-0">
+            <Button wrapLabel variant="ghost" className="px-3 sm:px-0">
               Included templates ({required.length})
             </Button>
           </CollapsibleTrigger>
@@ -156,14 +156,16 @@ function BundleNextReview({
       </h2>
       <p className="text-body-medium">{nextReviewInstructions(undone, consumers)}</p>
       {next ? (
-        <Button asChild className="self-start">
-          <Link href={`${workTemplateHref(orgId)}/${next.workTypeId}?section=review`}>
+        <Button wrapLabel asChild className="self-start">
+          <Link
+            href={`${workTemplateHref(orgId)}/${next.workTypeId}?section=review&returnBundle=${bundle.receipt.bundleId}`}
+          >
             Review {(next.template?.draftDefinition ?? next.template?.definition)?.name}
           </Link>
         </Button>
       ) : null}
       {undone ? (
-        <Button className="self-start" onClick={onNew}>
+        <Button wrapLabel className="self-start" onClick={onNew}>
           Choose starting points
         </Button>
       ) : null}

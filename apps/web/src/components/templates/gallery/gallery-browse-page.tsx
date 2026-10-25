@@ -1,8 +1,9 @@
 'use client';
-import { useEffect, type JSX } from 'react';
+import { useEffect, type JSX, type MouseEvent } from 'react';
 import {
   WorkTemplateGalleryForkSet,
   type WorkTemplateGalleryQuery,
+  type WorkTemplateGalleryItem,
 } from '@docket/work/template-gallery-contract';
 import { useApiQuery } from '@/lib/query';
 import { useAppRouter } from '@/lib/interactions/navigation';
@@ -14,6 +15,7 @@ import { Button } from '@docket/ui/primitives';
 import { InlineBanner } from '@docket/ui/components';
 import { templateGalleryForkDef } from '../work-template-gallery-queries';
 import { useGalleryCatalog } from './use-gallery-catalog';
+import { TemplateTailoringPanel } from './template-tailoring-panel';
 import { GalleryBrowse } from './gallery-browse';
 import { gallerySelectedItems, useGalleryWorkspace } from './gallery-workspace';
 
@@ -32,21 +34,14 @@ export function GalleryBrowsePage(): JSX.Element {
   });
   const base = workTemplateHref(state.scope.orgId, '/gallery');
   const fork = forkMembership(filters.fork, query);
-  const search = filters.search?.toLowerCase() ?? '';
-  const items = catalog.items.filter(
-    (item) =>
-      (!filters.fork || item.forks.includes(filters.fork)) &&
-      (!filters.category || item.category === filters.category) &&
-      (!filters.targetType || item.targetType === filters.targetType) &&
-      `${item.name} ${item.use}`.toLowerCase().includes(search),
-  );
+  const items = matchingGalleryItems(catalog.items, filters);
   return (
     <WorkTemplateWorkspaceFrame
+      inset="none"
       orgId={state.scope.orgId}
       title="Choose starting points"
       description="Review templates and save your own copies."
       loading={catalog.pending || fork.pending}
-      parent={{ label: 'Work templates' }}
     >
       {catalog.failed ? (
         <QueryLoadFailure title="Work gallery" query={catalog.failure} />
@@ -57,14 +52,16 @@ export function GalleryBrowsePage(): JSX.Element {
       ) : (
         <div
           onClickCapture={(event) => {
-            if (!(event.target instanceof Element)) return;
-            const slug = event.target
-              .closest('a[data-gallery-slug]')
-              ?.getAttribute('data-gallery-slug');
-            if (slug && catalog.items.some((item) => item.slug === slug))
-              state.browseReturn.remember(slug);
+            rememberEntry(event, state, catalog.items);
           }}
         >
+          {filters.fork ? (
+            <TemplateTailoringPanel
+              key={filters.fork}
+              orgId={state.scope.orgId}
+              fork={filters.fork}
+            />
+          ) : null}
           <GalleryBrowse
             view={state.memory.view}
             onView={(view) => {
@@ -77,6 +74,11 @@ export function GalleryBrowsePage(): JSX.Element {
             baseHref={base}
             onFilters={(next) => {
               state.change((memory) => ({ ...memory, filters: next }));
+              if (next.fork !== filters.fork) {
+                router.replace(`${base}${next.fork ? `?fork=${next.fork}` : ''}`, {
+                  scroll: false,
+                });
+              }
             }}
             onSelect={(selected) => {
               state.change((memory) => ({
@@ -120,5 +122,29 @@ function GalleryForkFailure({ query }: { readonly query: QueryFailureSource }): 
         Reload starting points
       </Button>
     </InlineBanner>
+  );
+}
+
+function rememberEntry(
+  event: MouseEvent,
+  state: ReturnType<typeof useGalleryWorkspace>,
+  items: ReturnType<typeof useGalleryCatalog>['items'],
+): void {
+  if (!(event.target instanceof Element)) return;
+  const slug = event.target.closest('a[data-gallery-slug]')?.getAttribute('data-gallery-slug');
+  if (slug && items.some((item) => item.slug === slug)) state.browseReturn.remember(slug);
+}
+
+function matchingGalleryItems(
+  items: readonly WorkTemplateGalleryItem[],
+  filters: WorkTemplateGalleryQuery,
+): readonly WorkTemplateGalleryItem[] {
+  const search = filters.search?.toLowerCase() ?? '';
+  return items.filter(
+    (item) =>
+      (!filters.fork || item.forks.includes(filters.fork)) &&
+      (!filters.category || item.category === filters.category) &&
+      (!filters.targetType || item.targetType === filters.targetType) &&
+      `${item.name} ${item.use}`.toLowerCase().includes(search),
   );
 }

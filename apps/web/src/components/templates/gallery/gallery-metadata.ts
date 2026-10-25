@@ -1,3 +1,4 @@
+import { copyIdentityKey, type CopySourceIdentity } from '@docket/work/template-copy';
 import type {
   WorkTemplateGalleryItem,
   WorkTemplateGalleryQuery,
@@ -57,10 +58,10 @@ export const GALLERY_OUTCOMES: Readonly<
 };
 /** Selection keys bind actual released identity; equal names never merge unrelated catalog entries. */
 export function galleryItemKey(item: WorkTemplateGalleryItem): string {
-  return `${item.identity.release}:${item.identity.workTypeId}:${item.identity.catalogVersionId}`;
+  return copyIdentityKey(item.identity);
 }
 
-/** Exact immutable catalog identity key used for reviewed source joins without publication casts. */
-export function gallerySourceKey(identity: WorkTemplateGalleryItem['identity']): string {
-  return `${identity.release}:${identity.workTypeId}:${identity.catalogVersionId}`;
+/** Exact checked source identity, including tenant, draft revision or immutable publication. */
+export function gallerySourceKey(identity: CopySourceIdentity): string {
+  return copyIdentityKey(identity);
 }

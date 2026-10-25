@@ -2,6 +2,7 @@
 import type { JSX } from 'react';
 import { Surface } from '@docket/ui/primitives';
 import { useApiQuery } from '@/lib/query';
+import { TemplateDisclosure } from './template-disclosure';
 import { StaticMarkdown } from '@/components/editor/static-markdown';
 import { workTemplatesDef } from './work-template-queries';
 import { WorkTemplateReviewStartingValues } from './work-template-review-starting-values';
@@ -15,10 +16,12 @@ export function WorkTemplateDefinitionReview({
   form,
   orgId,
   templateId,
+  compactDocument = false,
 }: {
   orgId: string;
-  form: WorkTemplateFormState;
+  form: Pick<WorkTemplateFormState, 'definition' | 'kind'>;
   templateId?: string | undefined;
+  compactDocument?: boolean;
 }): JSX.Element {
   const templates = useApiQuery(workTemplatesDef(orgId, { includeDrafts: true }));
   const blueprint = form.definition.blueprint;
@@ -27,9 +30,9 @@ export function WorkTemplateDefinitionReview({
   return (
     <section
       aria-label="Work definition review"
-      className="grid min-w-0 items-start gap-8 lg:grid-cols-[minmax(0,1fr)_320px] lg:gap-10"
+      className={`grid min-w-0 items-start gap-8 lg:gap-10 ${compactDocument ? 'lg:grid-cols-[320px_minmax(0,1fr)]' : 'lg:grid-cols-[minmax(0,1fr)_320px]'}`}
     >
-      <StartingWorkReview form={form} orgId={orgId} />
+      <StartingWorkReview form={form} orgId={orgId} compactDocument={compactDocument} />
       <div className="flex min-w-0 flex-col gap-5">
         <section aria-label="Included work" className="flex min-w-0 flex-col gap-4">
           <div className="flex flex-col gap-1">
@@ -66,9 +69,11 @@ export function WorkTemplateDefinitionReview({
 function StartingWorkReview({
   form,
   orgId,
+  compactDocument,
 }: {
-  form: WorkTemplateFormState;
+  form: Pick<WorkTemplateFormState, 'definition' | 'kind'>;
   orgId: string;
+  compactDocument: boolean;
 }): JSX.Element {
   return (
     <section aria-label="Starting work" className="flex min-w-0 flex-col gap-4">
@@ -83,21 +88,37 @@ function StartingWorkReview({
           heading={false}
           compactProperties
         >
-          {form.definition.payload.description ? (
-            <section className="flex min-w-0 flex-col gap-3" aria-label="Starting document">
-              <h3 className="text-label-large text-on-surface-variant">Document</h3>
-              <StaticMarkdown
-                value={form.definition.payload.description}
-                className="text-body-large"
-              />
-            </section>
-          ) : (
-            <p className="text-body-medium text-on-surface-variant">
-              Starts with an empty document.
-            </p>
-          )}
+          <StartingDocument
+            description={form.definition.payload.description}
+            compact={compactDocument}
+          />
         </WorkTemplateReviewStartingValues>
       </Surface>
+    </section>
+  );
+}
+
+function StartingDocument({
+  description,
+  compact,
+}: {
+  readonly description?: string | undefined;
+  readonly compact: boolean;
+}): JSX.Element {
+  if (!description)
+    return (
+      <p className="text-body-medium text-on-surface-variant">Starts with an empty document.</p>
+    );
+  if (compact)
+    return (
+      <TemplateDisclosure title="Starting document">
+        <StaticMarkdown value={description} className="text-body-large" />
+      </TemplateDisclosure>
+    );
+  return (
+    <section className="flex min-w-0 flex-col gap-3" aria-label="Starting document">
+      <h3 className="text-label-large text-on-surface-variant">Document</h3>
+      <StaticMarkdown value={description} className="text-body-large" />
     </section>
   );
 }

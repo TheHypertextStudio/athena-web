@@ -15,7 +15,7 @@ import { useGalleryWorkspace } from './gallery-workspace';
 export function GalleryEntryPage({ slug }: { readonly slug: string }): JSX.Element {
   const state = useGalleryWorkspace();
   return (
-    <WorkTemplateWorkspaceFrame orgId={state.scope.orgId}>
+    <WorkTemplateWorkspaceFrame inset="none" orgId={state.scope.orgId}>
       <GalleryEntryContent slug={slug} />
     </WorkTemplateWorkspaceFrame>
   );

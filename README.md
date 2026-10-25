@@ -100,6 +100,9 @@ working weekdays. Archive review shows authorized parent-template and schedule u
 accepted schedules continue to run from their retained versions.
 Programs can own recurring Task or Project work with a title pattern, responsibility, calendar
 rhythm and visible run history. Failed runs can be retried without creating duplicate work.
+Private schedules derive Task start/due, Project start/target and Milestone target dates from each
+run or actual Task completion in the saved timezone. Absent fields stay empty; explicit dates and
+nulls stay pinned through ordinary updates and Undo.
 Missed runs awaiting a decision offer Create work for their original scheduled date.
 A Program definition can include reusable routines; each new Program receives independent schedule
 copies, and later definition edits leave existing copies intact. The authoring outline separates

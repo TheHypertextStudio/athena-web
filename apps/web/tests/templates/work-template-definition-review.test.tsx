@@ -9,8 +9,24 @@ import {
 } from './work-template-authoring-fixture';
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
+import { WorkTemplateDefinitionReview } from '@/components/templates/work-template-definition-review';
 import { WorkTemplateForm } from '@/components/templates/work-template-authoring';
 describe('work definition publication review', () => {
+  it('keeps a compact proposal outline visible while its complete starting document can be opened', () => {
+    const initial = template('project');
+    initial.definition.payload.description = 'The complete starting instructions.';
+    render(
+      <WorkTemplateDefinitionReview
+        orgId="org"
+        form={{ definition: initial.definition, kind: 'project' }}
+        compactDocument
+      />,
+    );
+    expect(screen.getByRole('heading', { name: 'Included work' })).toBeVisible();
+    expect(screen.queryByText('The complete starting instructions.')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Starting document' }));
+    expect(screen.getByText('The complete starting instructions.')).toBeVisible();
+  });
   it('separates purpose, starting content, included work and publication into revisitable decisions', () => {
     render(<WorkTemplateForm orgId="org" initial={null} onCreated={vi.fn()} />);
     expect(screen.getByRole('textbox', { name: 'Template name' })).toBeVisible();

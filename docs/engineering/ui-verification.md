@@ -178,6 +178,14 @@ APP_URL="$APP_URL" API_URL="$API_URL" pnpm exec tsx e2e/tools/capture-shots.ts \
 
 The first four frames are desktop and phone in both themes; omit `--frame-limit` for all eight.
 Each scenario has a unique `id`, a local `route`, ordered `actions` and an optional `ready` target.
+
+For accessibility and account-state review, `textScale: 2` applies an actual 200% root text size
+before the document renders. `virtualAuthenticator: true` uses the same local WebAuthn helper as
+`dev-session.ts`, allowing a task-owned account to complete a real local registration ceremony.
+`credentialResponse: "cancel"` instead supplies a controlled browser cancellation. Label controlled
+account reads, cancellation, and transport faults as simulations; they prove rendered recovery,
+not social-provider login or a real device's credential UI. Never delete or copy a person's
+credentials to reach an onboarding branch.
 Targets use one of `role`/`name`, `label`, `text`, `testId` or `selector`; `exact` defaults to true.
 Actions include `click`, `fill` (`value`), `select` (`value`), `press` (`key`), `check` (`checked`),
 `scroll` (centers the actual target), `reload`, `drag` and `wait`. Clicks accept optional keyboard

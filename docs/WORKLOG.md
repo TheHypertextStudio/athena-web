@@ -87,6 +87,12 @@
   dispositions only when required facts, access, provider/device state or product decisions prevent
   progress. Keep independent work moving and preserve unrelated dirty checkouts.
 
+- **Delivery boundary**: Ship the completed template, gallery, source-copy, label-conversion and
+  Inbox proposal interfaces with the additive schedule-history migrations. Keep normalized
+  schedule sources and the existing authoring path active. The private schedule writer cutover
+  remains disabled until invocation-owned structure can replace generated public templates.
+  Final proposal-screen, provider and physical-device acceptance remain outstanding.
+
 ### [PRODUCT-ADMIN-CACHE-CI] Register private Product Admin CI
 
 - **Status**: DONE
@@ -13685,33 +13691,6 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
 ---
 
 ## Completed Tasks
-
-### [CANONICAL-ALIAS-ORIGIN] Route the Athena alias directly to the configured app
-
-- **Completed**: 2026-10-25
-- **Summary**: Resolve legacy Athena redirects to the configured canonical app in both Next and
-  Workers, preserving the full authentication callback path and query without an intermediate host.
-  Slack setup comments now describe the configured API and local tunnel hostname.
-- **Validation**: All 10 affected Next and Workers configuration cases pass, including alternative
-  app origins and preserved OAuth query parameters.
-
-### [WORKTREE-HOST-CASE] Keep worktree hosts consistent with browser URLs
-
-- **Completed**: 2026-10-25
-- **Summary**: Normalize worktree host prefixes to lowercase, including detached HEAD checkouts,
-  so generated origins and the browser agree during authenticated development.
-- **Validation**: The detached/uppercase-host regression fails before the correction; all 47
-  topology tests, typechecking, and affected lint pass afterward.
-
-### [SESSION-ACCEPTANCE-EXPORTS] Preserve the composed session-only acceptance checks
-
-- **Completed**: 2026-10-25
-- **Summary**: Retain the real idempotency module exports while replacing only the middleware
-  observed by the session-only authorization tests. Server route composition remains fully exercised.
-- **Validation**: The missing body-capture export reproduces the current main CI failure. All 60
-  production-composed session-only cases pass with the corrected partial mock.
-- **Learnings**: A focused middleware mock must preserve unrelated real exports consumed by the
-  production server; otherwise the suite fails before reaching its authorization assertions.
 
 ### [CACHE-CONFIG-BOUNDARY] Keep deployment metadata outside application runtime
 

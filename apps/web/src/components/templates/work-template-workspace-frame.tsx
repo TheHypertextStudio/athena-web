@@ -12,28 +12,34 @@ import {
 } from '@/components/views/page-layout';
 import { workTemplateHref } from './work-template-navigation';
 
-/** Full-page work-definition frame; the app shell remains the single scroll and navigation owner. */
+/** Full-page work-definition content under the existing workspace or focused activity scroll owner. */
 export interface WorkTemplateWorkspaceFrameProps {
   readonly orgId: string;
   readonly title?: string;
   readonly description?: string;
   readonly action?: ReactNode;
   readonly parent?: { readonly label: string; readonly href?: string };
+  /** Let a focused activity own the outer gutter without adding nested page padding. */
+  readonly inset?: 'default' | 'none';
   readonly loading?: boolean;
   readonly children?: ReactNode;
 }
-/** Compose the shared app page slots without settings chrome, modal infrastructure or nested scrolling. */
+/** Compose shared page slots without settings chrome or nested scrolling. */
 export function WorkTemplateWorkspaceFrame({
   orgId,
   title,
   description,
   action,
   parent,
+  inset = 'default',
   loading = false,
   children,
 }: WorkTemplateWorkspaceFrameProps): JSX.Element {
   return (
-    <PageContainer as="div" className="@container max-w-6xl min-w-0 p-0 sm:p-3">
+    <PageContainer
+      as="div"
+      className={`@container max-w-6xl min-w-0 ${inset === 'none' ? 'p-0' : 'p-0 sm:p-3'}`}
+    >
       <ControlGroup controlSize="xl" orientation="vertical" className="gap-3 sm:gap-6">
         {parent ? (
           <nav aria-label="Work templates navigation" className="px-3 pt-2 sm:px-0 sm:pt-0">

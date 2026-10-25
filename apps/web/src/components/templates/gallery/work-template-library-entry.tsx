@@ -22,6 +22,15 @@ export function LibraryDefineEntry({ orgId }: { readonly orgId: string }): JSX.E
       >
         <Link href={workTemplateHref(orgId, '/gallery')}>Browse starting points</Link>
       </Button>
+      <Button
+        asChild
+        variant="ghost"
+        className="coarse:h-auto h-auto min-h-10 py-2 whitespace-normal"
+      >
+        <Link href={workTemplateHref(orgId, '/suggest-from-labels')} navigation="activity">
+          Suggest from labels
+        </Link>
+      </Button>
     </ControlGroup>
   );
 }

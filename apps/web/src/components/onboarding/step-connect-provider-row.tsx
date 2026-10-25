@@ -4,7 +4,7 @@ import { Cable } from '@docket/ui/icons/cable';
 import { CheckCircle2 } from '@docket/ui/icons/check-circle-2';
 import type { DocketIcon } from '@docket/ui/icons/icon-type';
 import { cn } from '@docket/ui/lib/utils';
-import { Button } from '@docket/ui/primitives/button';
+import { Button, DecorativeIcon, Surface } from '@docket/ui/primitives';
 import { useMemo, type JSX } from 'react';
 
 /** Static presentation for one onboarding source. */
@@ -55,26 +55,22 @@ export function ProviderRow<Provider extends string = string>({
   const mirroredLabel = useMemo(() => mirroredText(state.mirrored, card.name), [state, card.name]);
 
   return (
-    <div
+    <Surface
+      as="div"
+      tone={connected ? 'prominent' : 'well'}
+      shape="medium"
+      pad="comfortable"
       className={cn(
-        'border-outline-variant bg-surface-container-low flex items-center gap-4 rounded-xl border p-4 transition-colors',
-        connected && 'border-primary/40 bg-primary/5',
+        '@container grid grid-cols-[2.5rem_minmax(0,1fr)] items-start gap-3 sm:flex sm:items-center sm:gap-4',
         !live && 'opacity-70',
       )}
     >
-      <span
-        aria-hidden
-        className={cn(
-          'flex size-10 shrink-0 items-center justify-center rounded-lg border',
-          connected
-            ? 'border-primary/30 bg-primary/10 text-primary'
-            : 'border-outline-variant bg-surface-container text-on-surface-variant',
-        )}
-      >
-        {connected ? <CheckCircle2 className="size-5" /> : <card.icon className="size-5" />}
-      </span>
+      <DecorativeIcon
+        icon={connected ? CheckCircle2 : card.icon}
+        className="shrink-0 @max-[16rem]:col-span-2"
+      />
 
-      <div className="flex min-w-0 flex-col gap-0.5">
+      <div className="flex min-w-0 flex-1 flex-col gap-0.5 break-words @max-[16rem]:col-span-2">
         <span className="text-on-surface text-body-medium leading-tight font-semibold">
           {card.name}
         </span>
@@ -87,9 +83,9 @@ export function ProviderRow<Provider extends string = string>({
         )}
       </div>
 
-      <div className="ml-auto shrink-0">
+      <div className="col-start-2 sm:ml-auto sm:shrink-0 @max-[16rem]:col-span-2 @max-[16rem]:col-start-1">
         {!live ? (
-          <span className="text-on-surface-variant border-outline-variant rounded-md border px-3 py-1.5 text-xs font-medium">
+          <span className="text-on-surface-variant text-body-small font-medium">
             Available soon
           </span>
         ) : connected ? (
@@ -101,7 +97,7 @@ export function ProviderRow<Provider extends string = string>({
           <Button
             type="button"
             variant={phase === 'error' ? 'ghost' : 'secondary'}
-            size="sm"
+            controlSize="md"
             onClick={onConnect}
             disabled={phase === 'connecting'}
             aria-label={
@@ -127,7 +123,7 @@ export function ProviderRow<Provider extends string = string>({
           </Button>
         )}
       </div>
-    </div>
+    </Surface>
   );
 }
 

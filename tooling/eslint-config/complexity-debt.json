@@ -4429,12 +4429,6 @@
       "excess": 6
     }
   },
-  "apps/web/src/components/onboarding/wizard-shell.tsx": {
-    "max-lines-per-function": {
-      "max": 91,
-      "excess": 11
-    }
-  },
   "apps/web/src/components/people/add-person-dialog.tsx": {
     "max-lines-per-function": {
       "max": 115,

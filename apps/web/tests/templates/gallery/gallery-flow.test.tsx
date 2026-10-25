@@ -1,11 +1,12 @@
 import { useState, type ComponentProps } from 'react';
 import { cleanup, fireEvent, render, screen, within, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type {
   WorkTemplateGalleryItem,
   WorkTemplateGalleryQuery,
 } from '@docket/work/template-gallery-contract';
+import { scrollIntoViewSpy } from '../../support/scroll-into-view';
 import { GALLERY_OUTCOMES } from '@/components/templates/gallery/gallery-metadata';
 import { GalleryBrowse } from '@/components/templates/gallery/gallery-browse';
 import { GalleryEntry } from '@/components/templates/gallery/gallery-entry';
@@ -22,7 +23,14 @@ vi.mock('@/components/docket-link', () => ({
 vi.mock('@/components/editor/static-markdown', () => ({
   StaticMarkdown: ({ value }: { value: string }) => <p>{value}</p>,
 }));
-afterEach(cleanup);
+let restoreScroll: () => void = () => undefined;
+beforeEach(() => {
+  restoreScroll = scrollIntoViewSpy().restore;
+});
+afterEach(() => {
+  cleanup();
+  restoreScroll();
+});
 function Browse({ onReview }: { onReview: (items: readonly WorkTemplateGalleryItem[]) => void }) {
   const [selected, onSelect] = useState<readonly WorkTemplateGalleryItem[]>([]);
   const [filters, onFilters] = useState<WorkTemplateGalleryQuery>({ fork: 'startup' });
@@ -156,6 +164,7 @@ describe('real callback gallery review', () => {
     expect(screen.getByText(/60 selected/)).toBeVisible();
     expect(screen.getByRole('heading', { name: /Ship a product/ })).toBeVisible();
     const launch = screen.getByRole('button', { name: 'Inspect Product launch' });
+    expect(launch.closest('li')).toHaveTextContent('Initiative');
     launch.focus();
     fireEvent.click(launch);
     expect(screen.getByRole('heading', { name: 'Starting work' })).toBeVisible();

@@ -80,10 +80,13 @@ describe('durable private copy review', () => {
     const saved = bundle();
     render(<GalleryCopyBundle bundle={saved} orgId={orgId} onNew={vi.fn()} />);
     expect(nextGalleryDraft(saved)?.workTypeId).toBe(vendorId);
-    expect(screen.getByRole('link', { name: 'Edited community dinner' })).toBeVisible();
+    expect(screen.getByRole('link', { name: 'Edited community dinner' })).toHaveAttribute(
+      'href',
+      `/orgs/${orgId}/work-templates/${eventId}?returnBundle=${eventId}`,
+    );
     expect(screen.getByRole('link', { name: 'Review Vendor booking' })).toHaveAttribute(
       'href',
-      `/orgs/${orgId}/work-templates/${vendorId}?section=review`,
+      `/orgs/${orgId}/work-templates/${vendorId}?section=review&returnBundle=${eventId}`,
     );
     expect(screen.getByText('Publish Vendor booking before this template.')).toBeVisible();
     expect(screen.queryByText(/Fixed publication|Version 1/)).not.toBeInTheDocument();
@@ -210,4 +213,21 @@ it('explains the next real prerequisite before its parent without repeating page
   ).toBeVisible();
   expect(screen.getByRole('heading', { name: 'Selected templates', level: 2 })).toBeVisible();
   expect(screen.queryByRole('heading', { level: 1 })).not.toBeInTheDocument();
+});
+
+it('keeps published-template viewing primary and offers the exact saved copy for review and Undo', () => {
+  const receipt = { ...bundle().receipt, mode: 'published' as const },
+    onReviewCopy = vi.fn();
+  render(
+    <GalleryCopyResult
+      receipt={receipt}
+      workspaceName="Studio"
+      onOpen={vi.fn()}
+      onNew={vi.fn()}
+      onReviewCopy={onReviewCopy}
+    />,
+  );
+  expect(screen.getByRole('button', { name: 'View templates' })).toBeVisible();
+  fireEvent.click(screen.getByRole('button', { name: 'Review this copy' }));
+  expect(onReviewCopy).toHaveBeenCalledWith(receipt);
 });

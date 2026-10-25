@@ -9,6 +9,7 @@ import {
   reviewPlan,
   saveDraft,
   setupPlan,
+  showPlanningPanel,
   snapshot,
   type DayRead,
 } from '../helpers/daily-planning';
@@ -251,16 +252,38 @@ test.describe('touch planning', () => {
   test.use({ hasTouch: true, viewport: { width: 390, height: 844 } });
   test('a phone user edits proposed work and confirms without starting tracking', async ({
     page,
-  }) => {
+  }, testInfo) => {
     await page.emulateMedia({ reducedMotion: 'reduce' });
     const context = await setupPlan(page, 'daily-touch', ['Prepare the brief']);
     await openPlan(page, context.date);
-    await editPlanningTouchWork(page, 'Prepare the brief', '30');
-    await page.setViewportSize({ width: 320, height: 720 });
-    expect(
-      await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
-    ).toBe(true);
+    await captureDailyPlanningEvidence(page, testInfo, 'plan', async () => {
+      await page.keyboard.press('Escape');
+      await showPlanningPanel(page, 'Work');
+      const move = page.getByRole('menuitem', { name: 'Move block', exact: true });
+      if (!(await move.isVisible()))
+        await page.getByRole('button', { name: 'Actions for Prepare the brief' }).tap();
+      await expect(move).toBeVisible();
+    });
+    await page.keyboard.press('Escape');
+    for (const width of [390, 320]) {
+      await page.setViewportSize({ width, height: 844 });
+      for (const colorScheme of ['light', 'dark'] as const) {
+        await page.emulateMedia({ colorScheme });
+        await test.step(`${width}px ${colorScheme} touch editing`, async () => {
+          await editPlanningTouchWork(page, 'Prepare the brief', '30');
+          expect(
+            await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+          ).toBe(true);
+        });
+      }
+    }
     await confirmPlanningTouchPlan(page);
+    const saved = await apiJson<DayRead>(page, `/v1/daily-plan/day/${context.date}`);
+    expect(saved.accepted?.current.snapshot.sessions).toEqual([
+      expect.objectContaining({
+        allocations: [expect.objectContaining({ taskId: context.taskIds[0], plannedMinutes: 30 })],
+      }),
+    ]);
   });
 });
 

@@ -1,7 +1,15 @@
 'use client';
 import { createContext, useContext, useEffect, useState, type JSX, type ReactNode } from 'react';
-import type { WorkTemplateGalleryItem } from '@docket/work/template-gallery-contract';
-import { Skeleton } from '@docket/ui/primitives';
+import type {
+  WorkTemplateGalleryItem,
+  WorkTemplateGalleryQuery,
+} from '@docket/work/template-gallery-contract';
+import { Button, Skeleton } from '@docket/ui/primitives';
+import { ImmersiveShell } from '@docket/ui/components';
+import { ChevronLeft } from '@docket/ui/icons';
+import Link from '@/components/docket-link';
+import { useOptionalActiveOrg } from '@/components/active-org';
+import { workTemplateHref } from '../work-template-navigation';
 import { useSession } from '@/lib/auth-client';
 import {
   readGalleryTabMemory,
@@ -23,16 +31,20 @@ export interface GalleryWorkspaceState {
 const Context = createContext<GalleryWorkspaceState | null>(null);
 function ScopedGallery({
   scope,
+  initialFork,
   children,
 }: {
   readonly scope: GalleryAttemptScope;
+  readonly initialFork?: WorkTemplateGalleryQuery['fork'];
   readonly children: ReactNode;
 }): JSX.Element {
   const browseReturn = useGalleryBrowseReturn(scope);
   const [memory, setMemory] = useState<GalleryTabMemory | null>(null);
   useEffect(() => {
-    setMemory(readGalleryTabMemory(scope));
-  }, [scope.userId, scope.orgId]);
+    const restored = readGalleryTabMemory(scope, initialFork);
+    writeGalleryTabMemory(scope, restored);
+    setMemory(restored);
+  }, [scope.userId, scope.orgId, initialFork]);
   function change(
     update: GalleryTabMemory | ((previous: GalleryTabMemory) => GalleryTabMemory),
   ): void {
@@ -48,21 +60,54 @@ function ScopedGallery({
     <Context.Provider value={{ scope, memory, change, browseReturn }}>{children}</Context.Provider>
   );
 }
-/** Scope tab memory to the actual signed-in account; account changes remount all review state. */
+/** Own the focused gallery activity and account-scoped review state, including loading and exit. */
 export function GalleryWorkspace({
   orgId,
+  initialFork,
   children,
 }: {
   readonly orgId: string;
+  readonly initialFork?: WorkTemplateGalleryQuery['fork'];
   readonly children: ReactNode;
 }): JSX.Element {
   const session = useSession();
   const userId = session.data?.user.id;
-  if (!userId) return <Skeleton className="h-64" />;
+  const workspace = useOptionalActiveOrg()?.orgs.find((org) => org.id === orgId);
   return (
-    <ScopedGallery key={`${userId}:${orgId}`} scope={{ userId, orgId }}>
-      {children}
-    </ScopedGallery>
+    <ImmersiveShell
+      header={
+        <nav
+          aria-label="Work templates navigation"
+          className="flex min-w-0 items-center justify-between gap-2"
+        >
+          <Button asChild variant="ghost" className="px-0">
+            <Link href={workTemplateHref(orgId)} aria-label="Back to Work templates">
+              <ChevronLeft className="size-4" aria-hidden="true" />
+              Work templates
+            </Link>
+          </Button>
+          {workspace ? (
+            <p className="text-body-small text-on-surface-variant min-w-0 truncate">
+              {workspace.name}
+            </p>
+          ) : null}
+        </nav>
+      }
+    >
+      <div className="mx-auto w-full max-w-6xl min-w-0 pb-6 sm:px-6">
+        {userId ? (
+          <ScopedGallery
+            key={`${userId}:${orgId}`}
+            scope={{ userId, orgId }}
+            initialFork={initialFork}
+          >
+            {children}
+          </ScopedGallery>
+        ) : (
+          <Skeleton className="h-64" />
+        )}
+      </div>
+    </ImmersiveShell>
   );
 }
 /** Read a gallery selection only inside its authenticated workspace layout. */

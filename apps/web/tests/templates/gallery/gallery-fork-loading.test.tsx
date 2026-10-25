@@ -1,5 +1,5 @@
 import type { ComponentProps } from 'react';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type {
   WorkTemplateGalleryForkSet,
@@ -8,6 +8,9 @@ import type {
 import type { GalleryWorkspaceState } from '@/components/templates/gallery/gallery-workspace';
 import { GalleryBrowsePage } from '@/components/templates/gallery/gallery-browse-page';
 import { galleryItems } from './gallery-fixture';
+vi.mock('@/components/templates/gallery/template-tailoring-panel', () => ({
+  TemplateTailoringPanel: () => null,
+}));
 const read = vi.hoisted(() => ({
   data: undefined as WorkTemplateGalleryForkSet | undefined,
   isPending: true,
@@ -16,6 +19,7 @@ const read = vi.hoisted(() => ({
   isFetching: true,
   refetch: vi.fn(),
 }));
+const navigation = vi.hoisted(() => ({ push: vi.fn(), replace: vi.fn() }));
 const state = vi.hoisted(() => ({
   scope: { userId: 'viewer', orgId: '01ARZ3NDEKTSV4RRFFQ69G5FAX' },
   memory: {
@@ -33,7 +37,7 @@ const state = vi.hoisted(() => ({
   change: vi.fn(),
 }));
 vi.mock('@/lib/query', () => ({ useApiQuery: () => read }));
-vi.mock('@/lib/interactions/navigation', () => ({ useAppRouter: () => ({ push: vi.fn() }) }));
+vi.mock('@/lib/interactions/navigation', () => ({ useAppRouter: () => navigation }));
 vi.mock('@/components/docket-link', () => ({
   default: (props: ComponentProps<'a'>) => <a {...props} />,
 }));
@@ -58,6 +62,7 @@ beforeEach(() => {
   read.error = null;
   read.isFetching = true;
   state.change.mockClear();
+  navigation.replace.mockClear();
 });
 it('waits for complete fork facts without a false empty result or zero count, then retains the selection', () => {
   const page = render(<GalleryBrowsePage />);
@@ -93,3 +98,21 @@ it.each([
     expect(screen.getByRole('button', { name: 'Reload starting points' })).toBeVisible();
   },
 );
+
+it('keeps the chosen audience in the route so Browser Back cannot restore an older onboarding fork', () => {
+  read.data = {
+    release: 1,
+    fork: 'nonprofit',
+    items: galleryItems.filter((item) => item.forks.includes('nonprofit')),
+  };
+  read.isPending = false;
+  read.isFetching = false;
+  render(<GalleryBrowsePage />);
+  fireEvent.change(screen.getByRole('combobox', { name: 'Starting points for' }), {
+    target: { value: 'agency' },
+  });
+  expect(navigation.replace).toHaveBeenCalledWith(
+    '/orgs/01ARZ3NDEKTSV4RRFFQ69G5FAX/work-templates/gallery?fork=agency',
+    { scroll: false },
+  );
+});

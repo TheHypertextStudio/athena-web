@@ -225,11 +225,19 @@ async function onboardJustMe(page: Page): Promise<string> {
   // The personal fork creates its workspace as soon as the intent card is selected. Waiting for
   // its response before using the connection step keeps the helper from clicking Skip while the
   // workspace id is still null, which would make the button a no-op.
-  await page.getByRole('button', { name: 'Skip for now' }).waitFor({
+  await page.getByRole('button', { name: 'Continue without connecting' }).waitFor({
     state: 'visible',
     timeout: TIMEOUTS.sweep,
   });
+  await page
+    .getByRole('button', { name: 'Continue without connecting' })
+    .click({ timeout: TIMEOUTS.sweep });
+  await page.getByRole('button', { name: 'Choose starting work' }).waitFor({
+    state: 'visible',
+    timeout: TIMEOUTS.pageReady,
+  });
   await page.getByRole('button', { name: 'Skip for now' }).click({ timeout: TIMEOUTS.sweep });
+  await page.waitForURL('**/today', { timeout: TIMEOUTS.pageReady });
 
   expect(orgId, 'onboarding did not return a personal org id').toBeTruthy();
   return assertDefined(orgId);

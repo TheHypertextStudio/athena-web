@@ -28,6 +28,7 @@ describe('actual catalog work structure', () => {
       'Pay deposit',
     ]);
     expect(nodes[0]?.children[0]?.document).toContain('Checklist');
+    expect(nodes[0]?.children[0]?.timing).toContain('7 days before Book venue’s due date');
   });
   it('keeps real milestone and task parentage and rejects missing exact sources', () => {
     const event = source('partnership-event');

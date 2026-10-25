@@ -292,7 +292,6 @@
     "shadow-outside-overlay": 2
   },
   "apps/web/src/components/onboarding/step-connect-provider-row.tsx": {
-    "ad-hoc-border": 8,
     "raw-type-utility": 7
   },
   "apps/web/src/components/onboarding/wizard-shell.tsx": {

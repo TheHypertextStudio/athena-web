@@ -55,7 +55,7 @@ export function SelectableCard({
       aria-pressed={selected}
       onClick={onSelect}
       className={cn(
-        'focus-visible:ring-ring group relative flex flex-col gap-3 rounded-xl border p-5 text-left transition-all duration-200 focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none',
+        'focus-visible:ring-ring group @container relative flex w-full min-w-0 flex-col gap-3 rounded-xl border p-5 text-left transition-all duration-200 focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none',
         selected
           ? 'border-primary bg-surface-container-highest shadow-sm'
           : 'border-outline-variant hover:border-outline hover:bg-surface-container-high hover:shadow-sm',
@@ -88,7 +88,7 @@ export function SelectableCard({
         </span>
       ) : null}
 
-      <span className="flex flex-col gap-1 pr-6">
+      <span className="flex min-w-0 flex-col gap-1 pr-6 break-words @max-[14rem]:pr-0">
         <span className="text-on-surface text-base leading-tight font-semibold">{title}</span>
         <span className="text-on-surface-variant text-body-medium leading-relaxed">
           {description}

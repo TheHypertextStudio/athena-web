@@ -565,6 +565,7 @@ interface ButtonProps extends Omit<React.ComponentProps<"button">, "color"> {
   readonly size?: LegacyButtonSize | null; // prefer controlSize
   readonly controlSize?: ControlSize;
   readonly iconOnly?: boolean;
+  readonly wrapLabel?: boolean;
   readonly asChild?: boolean;
 }
 function Button(props: ButtonProps): React.JSX.Element;
@@ -573,6 +574,7 @@ function buttonVariants(options?: {
   readonly variant?: ButtonVariant | null;
   readonly size?: LegacyButtonSize | null;
   readonly controlSize?: ControlSize;
+  readonly wrapLabel?: boolean;
   readonly className?: string;
 }): string;
 ```
@@ -582,6 +584,10 @@ while screens migrate. It is a **name mapping onto the control scale**, not a se
 `default` → `lg` (36px), `sm` → `md` (32px), `lg` → `xl` (40px), `icon` → `xl` + `iconOnly`. New
 code uses `controlSize` (or, better, `ControlGroup`) and `iconOnly` — under the old vocabulary "a
 small icon button" was unexpressible because shape and height shared one axis.
+
+Use `wrapLabel` for actions that must fit a narrow surface or enlarged text. It keeps the shared
+control-size minimum and lets the full label wrap as the button grows vertically. Icon-only
+controls remain square. Both `<Button asChild>` and `buttonVariants` support the same option.
 
 ---
 

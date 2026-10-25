@@ -205,6 +205,9 @@ function useReviewController(
 }
 
 function reviewError(caught: unknown): string {
+  if (caught instanceof UserFacingError && caught.code === 'product_required') {
+    return 'Creating work in a shared workspace requires Docket Pro.';
+  }
   return userErrorMessage(
     caught,
     'Could not review these choices. Check the destination, parents and prerequisites, then try again.',

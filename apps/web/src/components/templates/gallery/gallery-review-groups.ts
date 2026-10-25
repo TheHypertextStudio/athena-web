@@ -1,7 +1,5 @@
-import type {
-  WorkTemplateGalleryItem,
-  WorkTemplateGalleryPreview,
-} from '@docket/work/template-gallery-contract';
+import type { TemplateCopyReview } from './gallery-review-types';
+import type { WorkTemplateGalleryItem } from '@docket/work/template-gallery-contract';
 import {
   galleryStructure,
   galleryPreviewSources,
@@ -15,7 +13,7 @@ export interface GalleryReviewOutcome {
   readonly slugs: readonly string[];
 }
 /** Actual server-reviewed definition and its current public catalog use summary. */
-export type GalleryReviewedCopy = WorkTemplateGalleryPreview['copies'][number] & {
+export type GalleryReviewedCopy = TemplateCopyReview['copies'][number] & {
   readonly use?: string;
   readonly adjustmentCount?: number;
   readonly includedCount?: number;
@@ -30,7 +28,7 @@ function workCount(nodes: readonly GalleryStructureNode[]): number {
 }
 /** Preserve outcome/category browse order and exact selected roots without mounting nested work outlines. */
 export function galleryReviewGroups(
-  preview: WorkTemplateGalleryPreview,
+  preview: TemplateCopyReview,
   items: readonly WorkTemplateGalleryItem[],
   outcomes: readonly GalleryReviewOutcome[] = [],
 ): readonly GalleryReviewGroup[] {
@@ -46,7 +44,7 @@ export function galleryReviewGroups(
       ? [
           {
             ...copy,
-            includedCount: workCount(galleryStructure(copy.definition, sources)),
+            includedCount: workCount(galleryStructure(copy.definition, sources, copy.source)),
             adjustmentCount: preview.omissions.filter(
               (entry) => gallerySourceKey(entry.source) === gallerySourceKey(copy.source),
             ).length,

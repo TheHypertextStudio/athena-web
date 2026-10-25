@@ -18,10 +18,10 @@ import {
 import { QueryLoadFailure } from '@/components/feedback';
 import { useGalleryCatalog, type GalleryCatalogState } from './use-gallery-catalog';
 import { gallerySelectedOutcomes, galleryReviewedMetadata } from './gallery-review-context';
-import { GalleryReview } from './gallery-review';
+import { GalleryReview, galleryReviewRecovery } from './gallery-review';
 import { GalleryCopyResult } from './gallery-copy-result';
 import { useGalleryAcceptance, type GalleryAcceptance } from './use-gallery-acceptance';
-import { useGalleryReview, type GalleryReviewQuery } from './use-gallery-review';
+import { useGalleryReview } from './use-gallery-review';
 import { gallerySelectedItems, useGalleryWorkspace } from './gallery-workspace';
 
 function useActualAcceptance() {
@@ -98,11 +98,19 @@ function ActualCopyResult({
   readonly back: () => void;
 }): JSX.Element | null {
   const router = useAppRouter();
+  const orgId = useGalleryWorkspace().scope.orgId;
   return acceptance.receipt ? (
     <GalleryCopyResult
       receipt={acceptance.receipt}
       workspaceName={workspaceName}
       onOpen={(receipt) => {
+        router.push(
+          receipt.mode === 'published'
+            ? workTemplateHref(orgId)
+            : `${base}/copies/${receipt.bundleId}`,
+        );
+      }}
+      onReviewCopy={(receipt) => {
         router.push(`${base}/copies/${receipt.bundleId}`);
       }}
       onNew={() => {
@@ -114,12 +122,10 @@ function ActualCopyResult({
 }
 function ReviewAlerts({
   acceptance,
-  review,
   error,
   retry,
 }: {
   readonly acceptance: GalleryAcceptance;
-  readonly review: GalleryReviewQuery;
   readonly error: string | null;
   readonly retry: () => void;
 }): JSX.Element {
@@ -130,17 +136,7 @@ function ReviewAlerts({
           Checking whether your templates were saved…
         </p>
       ) : null}
-      {acceptance.needsReview ? (
-        <Button
-          className="mx-3 self-start sm:mx-0"
-          onClick={() => {
-            acceptance.reset();
-            review.refresh();
-          }}
-        >
-          Check updated review
-        </Button>
-      ) : null}
+
       {error ? (
         <InlineBanner tone="critical" title="Could not load destination choices">
           {error}
@@ -202,7 +198,7 @@ function useReviewDestination(orgId: string): {
 export function GalleryReviewPage(): JSX.Element {
   const state = useGalleryWorkspace();
   return (
-    <WorkTemplateWorkspaceFrame orgId={state.scope.orgId} parent={{ label: 'Work templates' }}>
+    <WorkTemplateWorkspaceFrame inset="none" orgId={state.scope.orgId}>
       <GalleryReviewContent />
     </WorkTemplateWorkspaceFrame>
   );
@@ -246,13 +242,9 @@ function GalleryReviewContent(): JSX.Element {
     <div className="flex min-w-0 flex-col gap-4">
       <GalleryReview
         alerts={
-          <ReviewAlerts
-            acceptance={acceptance}
-            review={review}
-            error={pickers.error}
-            retry={pickers.retry}
-          />
+          <ReviewAlerts acceptance={acceptance} error={pickers.error} retry={pickers.retry} />
         }
+        recoveryAction={galleryReviewRecovery(acceptance, review.refresh, 'Check updated review')}
         preview={checked.preview}
         outcomes={gallerySelectedOutcomes(state.memory)}
         workspaceName={workspaceName}

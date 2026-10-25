@@ -38,10 +38,18 @@ function templateAuthoringParent(
   id: string | null,
   candidate: string | null,
   context?: string | null,
+  destination?: { readonly bundle: string | null; readonly proposal: string | null },
 ) {
-  const href = workTemplateReturnHref(orgId, id, candidate, context);
+  const href = workTemplateReturnHref(orgId, id, candidate, context, destination);
   return href
-    ? { label: 'Back to parent template', href }
+    ? {
+        label: href.includes('/review/')
+          ? 'Back to Inbox review'
+          : href.includes('/gallery/copies/')
+            ? 'Back to saved templates'
+            : 'Back to parent template',
+        href,
+      }
     : {
         label: 'Back to Work templates',
         href: `${workTemplateHref(orgId)}${id ? `#work-template-${id}` : ''}`,
@@ -49,6 +57,8 @@ function templateAuthoringParent(
 }
 
 function compactParentLabel(label: string): string {
+  if (label === 'Back to Inbox review') return 'Inbox review';
+  if (label === 'Back to saved templates') return 'Saved templates';
   return label === 'Back to parent template' ? 'Parent template' : 'Work templates';
 }
 
@@ -112,6 +122,7 @@ export function WorkTemplateAuthoring({
     id,
     searchParams.get('returnTo'),
     searchParams.get('returnContext'),
+    { bundle: searchParams.get('returnBundle'), proposal: searchParams.get('returnProposal') },
   );
   const query = useApiQuery({ ...workTemplateDef(orgId, id ?? ''), enabled: id !== null });
   const router = useAppRouter();

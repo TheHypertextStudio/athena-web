@@ -24,7 +24,7 @@ export function GalleryEntry({
   const kind = useVocabulary(detail.targetType);
   return (
     <div className="flex min-w-0 flex-col gap-3 sm:gap-5">
-      <Button variant="ghost" className="self-start px-3 sm:px-0" onClick={onBack}>
+      <Button wrapLabel variant="ghost" className="self-start px-3 sm:px-0" onClick={onBack}>
         Back to gallery
       </Button>
       <Surface
@@ -37,11 +37,12 @@ export function GalleryEntry({
         <p className="text-label-large">{kind} · Docket gallery</p>
         <h1 className="text-title-large sm:text-headline-large break-words">{detail.name}</h1>
         {onReview && (selected || selectionFull) ? (
-          <Button className="self-start" onClick={onReview}>
+          <Button wrapLabel className="self-start" onClick={onReview}>
             Review selection
           </Button>
         ) : null}
         <Button
+          wrapLabel
           disabled={selectionFull && !selected}
           variant={selected ? 'ghost' : 'default'}
           className="self-start"

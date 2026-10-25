@@ -1,9 +1,7 @@
 'use client';
+import type { TemplateCopyReview } from './gallery-review-types';
 import type { JSX } from 'react';
-import type {
-  WorkTemplateGalleryItem,
-  WorkTemplateGalleryPreview,
-} from '@docket/work/template-gallery-contract';
+import type { WorkTemplateGalleryItem } from '@docket/work/template-gallery-contract';
 import {
   Button,
   Collapsible,
@@ -22,7 +20,7 @@ import {
 } from './gallery-review-groups';
 export type { GalleryReviewedCopy } from './gallery-review-groups';
 interface OrganizationProps {
-  readonly preview: WorkTemplateGalleryPreview;
+  readonly preview: TemplateCopyReview;
   readonly selectedItems: readonly WorkTemplateGalleryItem[];
   readonly outcomes?: readonly GalleryReviewOutcome[] | undefined;
   readonly onInspect: (copy: GalleryReviewedCopy) => void;
@@ -38,14 +36,23 @@ function ReviewedWorkButton({
 }): JSX.Element {
   return (
     <Button
+      wrapLabel
       variant="ghost"
       aria-label={`Inspect ${copy.name}`}
-      className="h-auto min-h-10 w-full justify-between px-0 text-left whitespace-normal"
+      className="min-h-10 w-full flex-col items-start gap-1 px-0 text-left sm:flex-row sm:items-center sm:justify-between"
       onClick={() => {
         onInspect(copy);
       }}
     >
-      <span className={prominent ? 'text-title-large' : 'text-title-medium'}>{copy.name}</span>
+      <span
+        className={
+          prominent
+            ? 'text-title-large min-w-0 flex-1 break-words'
+            : 'text-title-medium min-w-0 flex-1 break-words'
+        }
+      >
+        {copy.name}
+      </span>
       <span
         aria-hidden="true"
         className="text-label-medium text-on-surface-variant flex shrink-0 items-center gap-1"
@@ -58,7 +65,9 @@ function ReviewedWorkButton({
 function WorkCopySummary({ copy }: { readonly copy: GalleryReviewedCopy }): JSX.Element | null {
   const items = copy.includedCount ?? 0,
     routines = copy.definition.defaultSchedules.length;
+  const kind = useVocabulary(copy.targetType);
   const parts = [
+    kind,
     items ? `${items} included items` : '',
     routines ? `${routines} recurring routines` : '',
   ].filter(Boolean);
@@ -66,43 +75,30 @@ function WorkCopySummary({ copy }: { readonly copy: GalleryReviewedCopy }): JSX.
     <p className="text-body-small text-on-surface-variant px-0">{parts.join(' · ')}</p>
   ) : null;
 }
-function KindRows({
-  kind,
+function ReviewedCopyRows({
   copies,
   onInspect,
-  showKind = true,
 }: {
-  readonly showKind?: boolean;
-  readonly kind: GalleryReviewedCopy['targetType'];
   readonly copies: readonly GalleryReviewedCopy[];
   readonly onInspect: OrganizationProps['onInspect'];
-}): JSX.Element | null {
-  const noun = useVocabulary(kind, { plural: true });
-  if (!copies.length) return null;
+}): JSX.Element {
   return (
-    <section aria-label={noun} className="py-3">
-      {showKind ? (
-        <p className="text-label-medium text-on-surface-variant">
-          {noun} ({copies.length})
-        </p>
-      ) : null}
-      <ul className="flex flex-col gap-1">
-        {copies.map((copy) => (
-          <li key={gallerySourceKey(copy.source)}>
-            <ReviewedWorkButton copy={copy} onInspect={onInspect} />
-            <WorkCopySummary copy={copy} />
-            {copy.use ? (
-              <p className="text-body-medium text-on-surface-variant px-0 pb-2">{copy.use}</p>
-            ) : null}
-            {copy.adjustmentCount ? (
-              <p className="text-body-small text-on-surface-variant px-0 pb-2">
-                {copy.adjustmentCount} optional adjustments · Open to review
-              </p>
-            ) : null}
-          </li>
-        ))}
-      </ul>
-    </section>
+    <ul className="flex flex-col gap-3 py-3">
+      {copies.map((copy) => (
+        <li key={gallerySourceKey(copy.source)}>
+          <ReviewedWorkButton copy={copy} onInspect={onInspect} />
+          <WorkCopySummary copy={copy} />
+          {copy.use ? (
+            <p className="text-body-medium text-on-surface-variant pb-2">{copy.use}</p>
+          ) : null}
+          {copy.adjustmentCount ? (
+            <p className="text-body-small text-on-surface-variant pb-2">
+              {copy.adjustmentCount} {copy.adjustmentCount === 1 ? 'change' : 'changes'} to review
+            </p>
+          ) : null}
+        </li>
+      ))}
+    </ul>
   );
 }
 function CategoryGroup({
@@ -133,21 +129,13 @@ function CategoryGroup({
           </CollapsibleTrigger>
         </h3>
         <CollapsibleContent>
-          {(['initiative', 'program', 'project', 'task'] as const).map((kind) => (
-            <KindRows
-              key={kind}
-              kind={kind}
-              copies={copies.filter((copy) => copy.targetType === kind)}
-              onInspect={onInspect}
-              showKind={new Set(copies.map((copy) => copy.targetType)).size > 1}
-            />
-          ))}
+          <ReviewedCopyRows copies={copies} onInspect={onInspect} />
         </CollapsibleContent>
       </Collapsible>
     </Surface>
   );
 }
-/** Group complete reviewed selections by actual category and work kind, without mounting every outline. */
+/** Group complete reviewed selections by purpose, with each kind beside its actual work. */
 export function GalleryReviewOrganization({
   preview,
   selectedItems,
@@ -176,7 +164,8 @@ export function GalleryReviewOrganization({
                 ) : null}
                 {copy.adjustmentCount ? (
                   <p className="text-body-small text-on-surface-variant px-0 pt-2">
-                    {copy.adjustmentCount} optional adjustments · Open to review
+                    {copy.adjustmentCount} {copy.adjustmentCount === 1 ? 'change' : 'changes'} to
+                    review
                   </p>
                 ) : null}
               </div>

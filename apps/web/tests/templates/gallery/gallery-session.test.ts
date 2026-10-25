@@ -32,3 +32,32 @@ it('ignores corrupt tab choices and begins with no implicit selection', () => {
   );
   expect(readGalleryTabMemory(scope).choices.roots).toEqual([]);
 });
+
+it('changes starter context without throwing away explicitly selected roots or publication choices', () => {
+  const initial = readGalleryTabMemory(scope);
+  writeGalleryTabMemory(scope, {
+    ...initial,
+    choices: { ...initial.choices, roots: ['event'], mode: 'published' },
+    filters: { fork: 'nonprofit', search: 'event' },
+    view: 'all',
+  });
+  const agency = readGalleryTabMemory(scope, 'agency');
+  expect(agency.filters).toEqual({ fork: 'agency' });
+  expect(agency.view).toBe('suggested');
+  expect(agency.choices.roots).toEqual(['event']);
+  expect(agency.choices.mode).toBe('published');
+});
+it('keeps matching-audience browse state when returning from a detail page', () => {
+  const initial = readGalleryTabMemory(scope);
+  writeGalleryTabMemory(scope, {
+    ...initial,
+    choices: { ...initial.choices, roots: ['event'] },
+    filters: { fork: 'nonprofit', search: 'event' },
+    view: 'all',
+    returnTo: { slug: 'event', top: 530, left: 0 },
+  });
+  const restored = readGalleryTabMemory(scope, 'nonprofit');
+  expect(restored.filters).toEqual({ fork: 'nonprofit', search: 'event' });
+  expect(restored.view).toBe('all');
+  expect(restored.returnTo).toEqual({ slug: 'event', top: 530, left: 0 });
+});

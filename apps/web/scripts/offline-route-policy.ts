@@ -263,17 +263,8 @@ export async function renderRouteModule(routes: readonly ResolvedRoute[]): Promi
  * Every \`load\` is a dynamic import, which is what keeps the route table out of the shell's own
  * bundle and gives the service worker a per-route chunk it can precache.
  */
-import type { ComponentType } from 'react';
-
-/** One route, and how to load the component that renders it. */
-export interface OfflineRoute {
-  /** The URL pattern in Next's \`[param]\` notation. */
-  readonly pattern: string;
-  /** Only this layout owner may mount the page. */
-  readonly navigationContext: 'workspace' | 'activity';
-  /** Load the route's client component. */
-  readonly load: () => Promise<ComponentType>;
-}
+import type { OfflineRoute } from './offline-route-types';
+export type { OfflineRoute } from './offline-route-types';
 
 /** Every authenticated route that has a client component to render. */
 export const OFFLINE_ROUTES = [
@@ -284,9 +275,7 @@ ${entries}
 export type AuthenticatedRoutePattern = (typeof OFFLINE_ROUTES)[number]['pattern'];
 
 /** Just the patterns, for matching a pathname without touching any route's component. */
-export const ROUTE_PATTERNS: readonly AuthenticatedRoutePattern[] = OFFLINE_ROUTES.map(
-  (route) => route.pattern,
-);
+export const ROUTE_PATTERNS = Object.freeze(OFFLINE_ROUTES.map((route) => route.pattern));
 `;
   const options = (await resolveConfig(GENERATED_PATH)) ?? {};
   return format(source, { ...options, filepath: GENERATED_PATH });

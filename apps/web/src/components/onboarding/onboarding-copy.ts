@@ -11,20 +11,26 @@ export function stepCopy(step: OnboardingStep): {
       return {
         eyebrow: 'Welcome to Docket',
         title: 'How will you use Docket?',
-        subtitle: 'Choose a personal workspace or a shared organization.',
+        subtitle: 'Plan on your own or work together.',
       };
     case 'name':
       return {
-        eyebrow: 'Set up your organization',
-        title: 'Name your organization',
-        subtitle: 'This name identifies the shared organization and its data.',
+        eyebrow: 'Set up your workspace',
+        title: 'Name your workspace',
+        subtitle: 'Give your team a place to plan and work together.',
       };
     case 'connect':
       return {
-        eyebrow: 'Connect a source',
-        title: 'Import existing work',
+        eyebrow: 'Connect an app',
+        title: 'Bring in your work',
         subtitle:
-          'Imported records stay linked to their source. You can connect a source or skip this step.',
+          'Import tasks and events from apps you already use. Each item stays linked to its app.',
+      };
+    case 'starters':
+      return {
+        eyebrow: 'Your workspace is ready',
+        title: 'Give your work a starting point',
+        subtitle: 'Choose reusable plans you can make your own, or continue to your workspace.',
       };
     case 'passkey':
       return {
@@ -40,8 +46,8 @@ export function stepCopy(step: OnboardingStep): {
  *
  * @remarks
  * On the connect step the label promotes from a neutral "Continue without connecting" to a
- * confident "Enter your workspace" once anything has been mirrored, so the primary action
- * always reads true to what the user will land in.
+ * simple "Continue" once anything has been mirrored, before the optional passkey and starter
+ * handoff. Only the final skip or gallery choice leaves setup.
  */
 export function primaryLabel(
   step: OnboardingStep,
@@ -49,11 +55,12 @@ export function primaryLabel(
   pending: boolean,
   mirroredTotal: number,
 ): string {
+  if (step === 'starters') return 'Choose starting work';
   if (step === 'passkey') {
     return pending ? 'Adding your passkey…' : 'Add a passkey';
   }
   if (isConnectStep) {
-    return mirroredTotal > 0 ? 'Enter your workspace' : 'Continue without connecting';
+    return mirroredTotal > 0 ? 'Continue' : 'Continue without connecting';
   }
   if (step === 'name') {
     if (pending) return 'Setting things up…';

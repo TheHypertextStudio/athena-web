@@ -18,10 +18,10 @@ export type OnboardingIntent = Exclude<OrgCreate['intent'], undefined>;
  *
  * @remarks
  * `intent` is always first. After that the path forks: the `personal` fork creates the personal
- * workspace and opens `connect`; the team / nonprofit fork shows `name`, then `connect`. A final
- * `passkey` beat is appended for either fork only when the
+ * workspace and opens `connect`; the team / nonprofit fork shows `name`, then `connect`. An optional
+ * `passkey` beat precedes the final optional `starters` handoff for either fork only when the
  * account has no passkey yet (a social sign-up), nudging the user to enrol one. The orchestrator
  * computes the ordered step list from the chosen intent (and that condition) so progress and
  * back/next navigation are derived, never hand-maintained.
  */
-export type OnboardingStep = 'intent' | 'name' | 'connect' | 'passkey';
+export type OnboardingStep = 'intent' | 'name' | 'connect' | 'passkey' | 'starters';

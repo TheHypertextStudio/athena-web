@@ -475,3 +475,24 @@ describe('navigateWithDocumentCache', () => {
     expect(await response.text()).toBe('<h1>offline</h1>');
   });
 });
+
+it('isolates choosing work from workspace, planning and template-editing offline documents', () => {
+  const path = '/orgs/01ARZ3NDEKTSV4RRFFQ69G5FAV/work-templates/gallery';
+  const key = shellCacheKey(ORIGIN, 'u1', path);
+  expect(key).not.toBe(shellCacheKey(ORIGIN, 'u1'));
+  expect(key).not.toBe(shellCacheKey(ORIGIN, 'u1', '/plan/day'));
+  expect(key).not.toBe(
+    shellCacheKey(ORIGIN, 'u1', '/orgs/01ARZ3NDEKTSV4RRFFQ69G5FAV/work-templates/new'),
+  );
+  expect(key).toBe(shellCacheKey(ORIGIN, 'u1', path + '/review'));
+  expect(key).not.toBe(shellCacheKey(ORIGIN, 'u2', path));
+});
+
+it('never replays an editor or gallery document as a private template proposal review', () => {
+  const base = '/orgs/01ARZ3NDEKTSV4RRFFQ69G5FAV/work-templates';
+  const review = shellCacheKey(ORIGIN, 'u1', base + '/review/01ARZ3NDEKTSV4RRFFQ69G5FAW');
+  expect(review).not.toBe(shellCacheKey(ORIGIN, 'u1'));
+  expect(review).not.toBe(shellCacheKey(ORIGIN, 'u1', base + '/new'));
+  expect(review).not.toBe(shellCacheKey(ORIGIN, 'u1', base + '/gallery'));
+  expect(review).not.toBe(shellCacheKey(ORIGIN, 'u2', base + '/review/01ARZ3NDEKTSV4RRFFQ69G5FAW'));
+});

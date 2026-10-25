@@ -51,9 +51,7 @@ export function WorkspaceNameField({
         placeholder="Acme Inc."
         className="h-11 text-base"
       />
-      <p className="text-on-surface-variant text-body-medium mt-1">
-        This is the shared space your team will work in. You can rename it or create more later.
-      </p>
+      <p className="text-on-surface-variant text-body-medium mt-1">You can change this later.</p>
     </div>
   );
 }

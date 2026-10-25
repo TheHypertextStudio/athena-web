@@ -10,6 +10,8 @@ import { useGalleryOriginalOutcome } from './use-gallery-original-outcome';
 import { UserFacingError, userErrorMessage } from '@/lib/problem';
 import {
   galleryAttempt,
+  galleryScopeOwner,
+  type AcceptedCopyIdentity,
   markGalleryAttemptStale,
   clearGalleryAttempt,
   retainGalleryOriginal,
@@ -19,8 +21,8 @@ import {
 } from './gallery-acceptance-attempt';
 
 /** Actual canonical acceptance transport; only its validated persisted receipt can signal success. */
-export type GalleryAccept = (
-  request: WorkTemplateGalleryAcceptRequest,
+export type GalleryAccept<Accepted = WorkTemplateGalleryAcceptRequest> = (
+  request: Accepted,
 ) => Promise<WorkTemplateCopyReceipt>;
 /** Actual original-request lookup, scoped by the authenticated route's workspace. */
 export interface GalleryAcceptanceOptions {
@@ -28,7 +30,10 @@ export interface GalleryAcceptanceOptions {
   readonly lookupReceipt: (requestId: string) => Promise<WorkTemplateCopyReceipt | null>;
 }
 /** Retry state for exact reviewed choices; tab memory is never a saved draft or execution authority. */
-export interface GalleryAcceptance {
+export interface GalleryAcceptance<
+  Request = WorkTemplateGalleryPreviewRequest,
+  Preview = WorkTemplateGalleryPreview,
+> {
   readonly pending: boolean;
   readonly ready: boolean;
   readonly resume: () => Promise<WorkTemplateCopyReceipt | null>;
@@ -36,14 +41,11 @@ export interface GalleryAcceptance {
   readonly error: string | null;
   readonly needsReview: boolean;
   readonly receipt: WorkTemplateCopyReceipt | null;
-  readonly accept: (
-    request: WorkTemplateGalleryPreviewRequest,
-    preview: WorkTemplateGalleryPreview,
-  ) => Promise<void>;
+  readonly accept: (request: Request, preview: Preview) => Promise<void>;
   readonly reset: () => void;
 }
 async function originalReceipt(
-  attempt: GalleryAttempt,
+  attempt: GalleryAttempt<AcceptedCopyIdentity>,
   options: GalleryAcceptanceOptions,
 ): Promise<WorkTemplateCopyReceipt | null> {
   const receipt = await options.lookupReceipt(attempt.request.requestId);
@@ -55,9 +57,9 @@ function unknownOutcome(failure: unknown): boolean {
   );
 }
 /** Reconcile a restored attempt before retrying; a lost response never allocates a replacement identity. */
-async function submitAttempt(
-  attempt: GalleryAttempt,
-  onAccept: GalleryAccept,
+async function submitAttempt<Accepted extends AcceptedCopyIdentity>(
+  attempt: GalleryAttempt<Accepted>,
+  onAccept: GalleryAccept<Accepted>,
   options: GalleryAcceptanceOptions,
   onChecking: () => void,
 ): Promise<WorkTemplateCopyReceipt> {
@@ -103,23 +105,36 @@ function acceptanceFailure(failure: unknown): Pick<AttemptState, 'needsReview' |
       : userErrorMessage(failure, 'Could not save these templates. Your choices are still here.'),
   };
 }
-/** Preserve request identities across reloads, block duplicate clicks and accept only real receipts. */
+/** Preserve catalog compatibility through the same canonical union-source acceptance lifecycle. */
 export function useGalleryAcceptance(
   onAccept: GalleryAccept,
   options: GalleryAcceptanceOptions,
 ): GalleryAcceptance {
+  return useTemplateCopyAcceptance(onAccept, options, galleryAttempt);
+}
+/** Reconcile and accept exact checked choices for every canonical source through one lifecycle. */
+export function useTemplateCopyAcceptance<
+  Request extends { readonly mode: 'private_drafts' | 'published' },
+  Preview extends { readonly mode: 'private_drafts' | 'published' },
+  Accepted extends AcceptedCopyIdentity,
+>(
+  onAccept: GalleryAccept<Accepted>,
+  options: GalleryAcceptanceOptions,
+  prepareAttempt: (
+    scope: GalleryAttemptScope,
+    request: Request,
+    preview: Preview,
+  ) => Promise<GalleryAttempt<Accepted>>,
+): GalleryAcceptance<Request, Preview> {
   const original = useGalleryOriginalOutcome(options);
-  const owner = JSON.stringify([options.scope.userId, options.scope.orgId]);
+  const owner = galleryScopeOwner(options.scope);
   const [local, setLocal] = useState<AttemptState>(() => emptyAttempt(owner));
   const active = useRef(false),
-    attempt = useRef<GalleryAttempt | null>(null);
+    attempt = useRef<GalleryAttempt<Accepted> | null>(null);
   function update(patch: Partial<AttemptState>): void {
     setLocal((value) => ({ ...value, ...patch }));
   }
-  async function accept(
-    request: WorkTemplateGalleryPreviewRequest,
-    preview: WorkTemplateGalleryPreview,
-  ): Promise<void> {
+  async function accept(request: Request, preview: Preview): Promise<void> {
     if (active.current || original.receipt) return;
     if (request.mode !== preview.mode) {
       update({ error: 'Review the updated visibility before continuing.' });
@@ -133,7 +148,7 @@ export function useGalleryAcceptance(
         update({ receipt: existing });
         return;
       }
-      attempt.current = await galleryAttempt(options.scope, request, preview);
+      attempt.current = await prepareAttempt(options.scope, request, preview);
       if (attempt.current.stale) {
         update({ needsReview: true });
         return;

@@ -57,19 +57,19 @@ const PROVIDER_CARDS: readonly ProviderCard<OnboardingProvider>[] = [
   {
     provider: 'calendar',
     name: 'Google Calendar',
-    blurb: 'Import selected events and keep their Google Calendar source.',
+    blurb: 'Bring your events into Docket.',
     icon: Calendar,
   },
   {
     provider: 'gtasks',
     name: 'Google Tasks',
-    blurb: 'Import tasks and keep them linked to Google Tasks.',
+    blurb: 'Bring your tasks into Docket.',
     icon: TaskAlt,
   },
   {
     provider: 'linear',
     name: 'Linear',
-    blurb: 'Import assigned issues and keep them linked to Linear.',
+    blurb: 'Bring in issues assigned to you.',
     icon: Layers,
   },
 ];
@@ -167,7 +167,7 @@ export function StepConnect({
       try {
         const createRes = await createIntegration(orgId, provider);
         if (!createRes.ok) {
-          await presentRejectedResponse(createRes, 'Could not connect this source.');
+          await presentRejectedResponse(createRes, 'Could not connect this app.');
           settle(FAILED_CARD_STATE);
           return;
         }
@@ -183,7 +183,7 @@ export function StepConnect({
 
         settle({ phase: 'connected', mirrored: items.length });
       } catch (caught) {
-        presentFailure(caught, 'Docket could not connect this source. Try again.');
+        presentFailure(caught, 'Docket could not connect this app. Try again.');
         settle(FAILED_CARD_STATE);
       }
     },

@@ -31,6 +31,7 @@ export function GalleryBundleUndo({
       {bundle.receipt.state === 'installed' ? (
         <div>
           <Button
+            wrapLabel
             variant="ghost-destructive"
             className="px-3 sm:px-0"
             disabled={state.pending}
@@ -56,7 +57,7 @@ export function GalleryBundleUndo({
               <li key={entry.workTypeId}>
                 <Link
                   className="text-body-medium text-primary underline"
-                  href={`${workTemplateHref(orgId ?? '')}/${entry.workTypeId}`}
+                  href={`${workTemplateHref(orgId ?? '')}/${entry.workTypeId}?returnBundle=${bundle.receipt.bundleId}`}
                 >
                   {bundle.entries.find((copy) => copy.workTypeId === entry.workTypeId)?.template
                     ?.definition.name ?? 'A template'}

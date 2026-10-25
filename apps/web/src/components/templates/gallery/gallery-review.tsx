@@ -1,15 +1,14 @@
 'use client';
-import { useRef, useState, type JSX, type ReactNode } from 'react';
-import type {
-  WorkTemplateGalleryPreview,
-  WorkTemplateGalleryPreviewRequest,
-  WorkTemplateGalleryItem,
-} from '@docket/work/template-gallery-contract';
+import type { TemplateCopyReview } from './gallery-review-types';
+import { useEffect, useRef, useState, type JSX, type ReactNode, type RefObject } from 'react';
+import type { WorkTemplateGalleryItem } from '@docket/work/template-gallery-contract';
 import { Button, Field, Select, Surface } from '@docket/ui/primitives';
-import { InlineBanner } from '@docket/ui/components';
+import { InlineBanner, type InlineBannerAction } from '@docket/ui/components';
+import type { GalleryAcceptance } from './use-gallery-acceptance';
 import { GalleryCopyChoices, type GalleryCopyChoicesProps } from './gallery-copy-choices';
 import { GalleryWorkOutline } from './gallery-work-outline';
 import { galleryPreviewSources } from './gallery-structure';
+import { GalleryReviewOmissions as Omissions } from './gallery-review-omissions';
 import type { GalleryReviewOutcome } from './gallery-review-groups';
 import { gallerySourceKey } from './gallery-metadata';
 import {
@@ -27,49 +26,87 @@ export interface GalleryReviewState {
 }
 /** Read-only checked review with an explicit real acceptance callback; no simulated success state. */
 export interface GalleryReviewProps {
-  readonly preview: WorkTemplateGalleryPreview;
+  readonly preview: TemplateCopyReview;
   readonly outcomes?: readonly GalleryReviewOutcome[] | undefined;
   readonly workspaceName: string;
   readonly selectedItems: readonly WorkTemplateGalleryItem[];
   readonly state: GalleryReviewState;
   readonly choices?: GalleryCopyChoicesProps;
   readonly alerts?: ReactNode;
-  readonly onMode: (mode: WorkTemplateGalleryPreviewRequest['mode']) => void;
-  readonly onAccept: (preview: WorkTemplateGalleryPreview) => void;
+  readonly recoveryAction?: InlineBannerAction | undefined;
+  readonly onMode: (mode: TemplateCopyReview['mode']) => void;
+  readonly onAccept: (preview: TemplateCopyReview) => void;
   readonly onBack: () => void;
 }
-function Omissions({
-  preview,
+/**
+ * Keep stale-review recovery with its failure while preserving the canonical attempt reset.
+ * @param acceptance - The existing copy outcome owner.
+ * @param refresh - Check current source revisions after clearing the stale attempt.
+ * @param label - The ordinary gallery or saved-copy action label.
+ * @returns One explicit recovery action only when the accepted review changed.
+ */
+export function galleryReviewRecovery(
+  acceptance: Pick<GalleryAcceptance, 'needsReview' | 'reset'>,
+  refresh: () => void,
+  label = 'Review updated copy',
+): InlineBannerAction | undefined {
+  return acceptance.needsReview
+    ? {
+        label,
+        onSelect: () => {
+          acceptance.reset();
+          refresh();
+        },
+      }
+    : undefined;
+}
+function GalleryReviewError({
+  props,
+  onRecover,
 }: {
-  readonly preview: WorkTemplateGalleryPreview;
-}): JSX.Element | null {
-  if (!preview.omissions.length) return null;
-  const labels = {
-    label: 'Label references will be left out',
-    image: 'Images will be left out',
-    offering: 'Team offerings will be left out',
-    label_suggestion: 'Suggested label is not mapped',
-    offering_suggestion: 'Suggested team offering is not confirmed',
-  };
+  readonly props: GalleryReviewProps;
+  readonly onRecover: () => void;
+}): JSX.Element {
+  const recovery = useRef<HTMLDivElement>(null);
+  const action = props.recoveryAction;
+  useEffect(() => {
+    recovery.current?.focus({ preventScroll: true });
+    recovery.current?.scrollIntoView({ block: 'center' });
+  }, [props.state.error]);
   return (
-    <section aria-label="Copy adjustments">
-      <h3 className="text-title-medium">What changes in this copy</h3>
-      <ul className="flex flex-col gap-3">
-        {preview.omissions.map((omission, index) => {
-          const copy = preview.copies.find(
-            (entry) => gallerySourceKey(entry.source) === gallerySourceKey(omission.source),
-          );
-          return (
-            <li key={`${gallerySourceKey(omission.source)}:${index}`}>
-              <p className="text-body-medium">
-                {copy?.name}: {labels[omission.kind]}
-                {omission.value ? ` — ${omission.value}` : ''} ({omission.count})
-              </p>
-            </li>
-          );
-        })}
-      </ul>
-    </section>
+    <div
+      ref={recovery}
+      role="region"
+      aria-label="Copy could not be saved"
+      tabIndex={-1}
+      className="flex flex-col gap-3 outline-none"
+    >
+      <InlineBanner
+        tone="critical"
+        title={
+          props.preview.mode === 'published'
+            ? 'Could not add these templates'
+            : 'Could not keep these drafts'
+        }
+      >
+        {props.state.error}
+      </InlineBanner>
+      {action ? (
+        <div className="px-3 sm:px-0">
+          <Button
+            wrapLabel
+            className="self-start"
+            aria-label={action.ariaLabel}
+            onClick={() => {
+              action.onSelect();
+              onRecover();
+            }}
+          >
+            {action.label}
+          </Button>
+        </div>
+      ) : null}
+    </div>
   );
 }
 function GalleryDestination({ props }: { readonly props: GalleryReviewProps }): JSX.Element {
@@ -109,7 +146,7 @@ function GalleryFocusedAdjustments({
   choices,
 }: {
   readonly copy: GalleryReviewedCopy;
-  readonly preview: WorkTemplateGalleryPreview;
+  readonly preview: TemplateCopyReview;
   readonly choices?: GalleryCopyChoicesProps | undefined;
 }): JSX.Element | null {
   const key = gallerySourceKey(copy.source);
@@ -130,10 +167,11 @@ function GalleryFocusedAdjustments({
       shape="medium"
       tone="well"
       pad="comfortable"
-      aria-label={`Optional adjustments for ${copy.name}`}
+      aria-label={`Changes in ${copy.name}`}
     >
-      <h2 className="text-title-large">Optional adjustments</h2>
+      {omissions.length ? null : <h2 className="text-title-large">Changes in this copy</h2>}
       <Omissions
+        headingLevel={2}
         preview={{
           ...preview,
           omissions: omissions,
@@ -153,28 +191,50 @@ function GalleryFocusedReview({
   readonly useText?: string | undefined;
   readonly choices?: GalleryCopyChoicesProps | undefined;
   readonly copy: GalleryReviewedCopy;
-  readonly preview: WorkTemplateGalleryPreview;
+  readonly preview: TemplateCopyReview;
   readonly onBack: () => void;
 }): JSX.Element {
   return (
     <section aria-label={`Review ${copy.name}`} className="flex min-w-0 flex-col gap-3">
-      <Button variant="ghost" className="self-start px-3 sm:px-0" autoFocus onClick={onBack}>
+      <Button
+        wrapLabel
+        variant="ghost"
+        className="self-start px-3 sm:px-0"
+        autoFocus
+        onClick={onBack}
+      >
         Back to review
       </Button>
       <h1 className="text-title-large sm:text-headline-medium px-3 break-words sm:px-0">
         {copy.name}
       </h1>
       {useText ? <p className="text-body-medium px-3 sm:px-0">{useText}</p> : null}
-      <GalleryWorkOutline definition={copy.definition} sources={galleryPreviewSources(preview)} />
+      <GalleryWorkOutline
+        definition={copy.definition}
+        sources={galleryPreviewSources(preview)}
+        identity={copy.source}
+      />
       <GalleryFocusedAdjustments copy={copy} preview={preview} choices={choices} />
     </section>
   );
 }
-function ReviewHeader({ workspaceName }: { readonly workspaceName: string }): JSX.Element {
+function ReviewHeader({
+  workspaceName,
+  headingRef,
+}: {
+  readonly workspaceName: string;
+  readonly headingRef: RefObject<HTMLHeadingElement | null>;
+}): JSX.Element {
   return (
     <header className="flex min-w-0 flex-col gap-1 px-3 sm:px-0">
       <p className="text-label-large">Review for {workspaceName}</p>
-      <h1 className="text-title-large sm:text-headline-medium">Review selected templates</h1>
+      <h1
+        ref={headingRef}
+        tabIndex={-1}
+        className="text-title-large sm:text-headline-medium outline-none"
+      >
+        Review selected templates
+      </h1>
     </header>
   );
 }
@@ -182,6 +242,11 @@ function ReviewHeader({ workspaceName }: { readonly workspaceName: string }): JS
 export function GalleryReview(props: GalleryReviewProps): JSX.Element {
   const [inspecting, setInspecting] = useState<string | null>(null);
   const returnFocus = useRef<HTMLElement | null>(null);
+  const reviewHeading = useRef<HTMLHeadingElement>(null);
+  function revealReview(): void {
+    reviewHeading.current?.focus({ preventScroll: true });
+    reviewHeading.current?.scrollIntoView({ block: 'start' });
+  }
   const focused = props.preview.copies.find((copy) => gallerySourceKey(copy.source) === inspecting);
   function inspect(copy: GalleryReviewedCopy): void {
     returnFocus.current =
@@ -194,8 +259,7 @@ export function GalleryReview(props: GalleryReviewProps): JSX.Element {
       returnFocus.current?.focus();
     });
   }
-  const published = props.preview.mode === 'published';
-  const busy = props.state.pending || props.state.updating || props.state.blocked;
+  const busy = props.state.pending || props.state.updating;
   return (
     <>
       {focused ? (
@@ -213,7 +277,7 @@ export function GalleryReview(props: GalleryReviewProps): JSX.Element {
       ) : null}
       <div hidden={Boolean(focused)}>
         <div className="flex min-w-0 flex-col gap-3 sm:gap-5" aria-busy={busy}>
-          <ReviewHeader workspaceName={props.workspaceName} />
+          <ReviewHeader workspaceName={props.workspaceName} headingRef={reviewHeading} />
           {props.alerts}
           <GalleryReviewOrganization
             preview={props.preview}
@@ -223,14 +287,7 @@ export function GalleryReview(props: GalleryReviewProps): JSX.Element {
           />
           <GalleryRequiredCopies preview={props.preview} onInspect={inspect} />
           <GalleryDestination props={props} />
-          {props.state.error ? (
-            <InlineBanner
-              tone="critical"
-              title={published ? 'Could not add these templates' : 'Could not keep these drafts'}
-            >
-              {props.state.error}
-            </InlineBanner>
-          ) : null}
+          {props.state.error ? <GalleryReviewError props={props} onRecover={revealReview} /> : null}
           {props.state.updating ? (
             <p role="status" className="px-3 sm:px-0">
               Updating the review…
@@ -248,10 +305,11 @@ function GalleryReviewFooter({ props }: { readonly props: GalleryReviewProps }):
   const busy = props.state.pending || props.state.updating || props.state.blocked;
   return (
     <div className="flex flex-col-reverse justify-between gap-2 px-3 sm:flex-row sm:gap-3 sm:px-0">
-      <Button variant="ghost" disabled={props.state.pending} onClick={props.onBack}>
+      <Button wrapLabel variant="ghost" disabled={props.state.pending} onClick={props.onBack}>
         Back to selection
       </Button>
       <Button
+        wrapLabel
         disabled={busy}
         onClick={() => {
           props.onAccept(props.preview);

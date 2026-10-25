@@ -4,6 +4,8 @@ import { Button } from '@docket/ui/primitives';
 import type { WorkTemplateOut } from '@docket/work/work-template-contract';
 import { WorkTemplateBlueprintSummary } from './work-template-blueprint-summary';
 import { TemplateDisclosure } from './template-disclosure';
+import { LabelConversionEntry } from './label-conversion/entry';
+import { TemplateCopyAction } from './source-copy/template-copy-action';
 import { WorkTemplateArchiveAction } from './work-template-archive-action';
 import { QueryLoadFailure } from '@/components/feedback';
 import { StaticMarkdown } from '@/components/editor/static-markdown';
@@ -24,10 +26,18 @@ export function TemplatePublishedHistory({
   visible: boolean;
 }): JSX.Element | null {
   if (!visible || id === null || !template?.latestVersion) return null;
-  return <TemplateHistory orgId={orgId} id={id} />;
+  return <TemplateHistory orgId={orgId} id={id} template={template} />;
 }
 
-function TemplateHistory({ orgId, id }: { orgId: string; id: string }): JSX.Element {
+function TemplateHistory({
+  orgId,
+  id,
+  template,
+}: {
+  orgId: string;
+  id: string;
+  template: WorkTemplateOut;
+}): JSX.Element {
   const query = useApiQuery(workTemplateVersionsDef(orgId, id));
   const [selected, setSelected] = useState<string | null>(null);
   const version = query.data?.items.find((item) => item.id === selected);
@@ -59,6 +69,8 @@ function TemplateHistory({ orgId, id }: { orgId: string; id: string }): JSX.Elem
           <h3 className="text-title-medium break-words">{version.definition.name}</h3>
           <StaticMarkdown value={version.definition.payload.description ?? ''} />
           <WorkTemplateBlueprintSummary blueprint={version.definition.blueprint} />
+          <TemplateCopyAction template={template} version={version} />
+          <LabelConversionEntry template={template} version={version} />
         </div>
       ) : null}
     </TemplateDisclosure>
@@ -75,10 +87,12 @@ export function TemplatePublicationActions({
   initial: WorkTemplateOut;
   form: WorkTemplateFormState;
 }): JSX.Element | null {
-  if (initial.isBase || !form.canEdit || initial.status === 'archived') return null;
+  if (initial.isBase || initial.status === 'archived') return null;
   return (
     <TemplateDisclosure title="Manage template">
-      <WorkTemplateArchiveAction orgId={orgId} id={initial.id} />
+      <TemplateCopyAction template={initial} />
+      <LabelConversionEntry template={initial} />
+      {form.canEdit ? <WorkTemplateArchiveAction orgId={orgId} id={initial.id} /> : null}
     </TemplateDisclosure>
   );
 }

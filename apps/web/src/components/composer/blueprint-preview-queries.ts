@@ -12,6 +12,7 @@ export type BlueprintPreviewRequest = InferRequestType<PreviewEndpoint['$post']>
 /** A read-only POST through the shared query layer; it never invalidates or creates work. */
 export function useBlueprintPreview(orgId: string) {
   return useApiMutation({
+    failure: 'silent',
     mutationFn: ({ id, request }: { id: string; request: BlueprintPreviewRequest }) =>
       unwrap(
         () =>

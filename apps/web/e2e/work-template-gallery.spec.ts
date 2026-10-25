@@ -3,7 +3,7 @@ import type {
   WorkTemplateCopyReceipt,
   WorkTemplateGalleryPreview,
 } from '@docket/work/template-gallery-contract';
-import type { Locator } from '@playwright/test';
+import type { Locator, Page } from '@playwright/test';
 import { expect, test } from './helpers/fixtures';
 import { apiJson, waitForApiResponse } from './helpers/net';
 import { blueprintWorkspace } from './helpers/work-template-blueprints';
@@ -178,4 +178,84 @@ test.describe('touch starting-point choices', () => {
       }
     }
   });
+});
+
+async function assertScaledGallery(page: Page, control: Locator): Promise<void> {
+  for (const colorScheme of ['light', 'dark'] as const) {
+    await page.emulateMedia({ colorScheme, reducedMotion: 'reduce' });
+    await control.scrollIntoViewIfNeeded();
+    expect(
+      await page.locator('body').evaluate((element) => getComputedStyle(element).fontSize),
+    ).toBe('32px');
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+      true,
+    );
+    expect(await hasVisibleKeyboardFocus(page, control)).toBe(true);
+    const bounds = await control.boundingBox();
+    const viewport = page.viewportSize();
+    if (!bounds || !viewport) throw new Error('The gallery action is unavailable.');
+    expect(Math.min(bounds.width, bounds.height)).toBeGreaterThanOrEqual(40);
+    expect(bounds.x).toBeGreaterThanOrEqual(0);
+    expect(bounds.x + bounds.width).toBeLessThanOrEqual(viewport.width);
+  }
+}
+
+test('keeps enlarged text and keyboard navigation usable through reviewed copy and Undo', async ({
+  page,
+}) => {
+  const { orgId } = await blueprintWorkspace(page);
+  await page.setViewportSize({ width: 320, height: 600 });
+  await page.addInitScript(() => {
+    document.addEventListener(
+      'DOMContentLoaded',
+      () => {
+        document.documentElement.style.fontSize = '200%';
+      },
+      { once: true },
+    );
+  });
+  await page.goto(`/orgs/${orgId}/work-templates/gallery?fork=nonprofit`, {
+    waitUntil: 'commit',
+    timeout: TIMEOUTS.pageReady,
+  });
+  const event = page.getByRole('link', { name: 'Event', exact: true });
+  await event.focus();
+  await assertScaledGallery(page, event);
+  await event.press('Enter');
+  const instructions = page.getByRole('button', {
+    name: 'Read starting instructions',
+    exact: true,
+  });
+  await instructions.focus();
+  await assertScaledGallery(page, instructions);
+  const choose = page.getByRole('button', { name: 'Select this template', exact: true });
+  await choose.focus();
+  await assertScaledGallery(page, choose);
+  await choose.press('Enter');
+  await page.getByRole('button', { name: 'Back to gallery', exact: true }).press('Enter');
+  await expect(
+    page.getByRole('heading', { name: 'Choose starting points', exact: true }),
+  ).toBeVisible();
+  const review = page.getByRole('button', { name: 'Review selection', exact: true });
+  await review.focus();
+  await assertScaledGallery(page, review);
+  await review.press('Enter');
+  const keep = page.getByRole('button', { name: 'Keep private drafts', exact: true });
+  await keep.focus();
+  await assertScaledGallery(page, keep);
+  await keep.press('Enter');
+  const drafts = page.getByRole('button', { name: 'Open drafts', exact: true });
+  await drafts.focus();
+  await assertScaledGallery(page, drafts);
+  await drafts.press('Enter');
+  const undo = page.getByRole('button', { name: 'Undo this copy', exact: true });
+  await undo.focus();
+  await assertScaledGallery(page, undo);
+  await undo.press('Enter');
+  await expect(
+    page.getByRole('heading', { name: 'This copy was undone', exact: true }),
+  ).toBeVisible();
+  const next = page.getByRole('button', { name: 'Choose starting points', exact: true });
+  await next.focus();
+  await assertScaledGallery(page, next);
 });

@@ -2,7 +2,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { WorkTemplateCopyReceipt } from '@docket/work/template-gallery-contract';
 import { userErrorMessage } from '@/lib/problem';
-import { clearGalleryOriginal, readGalleryOriginal } from './gallery-acceptance-attempt';
+import {
+  clearGalleryOriginal,
+  readGalleryOriginal,
+  galleryScopeOwner,
+} from './gallery-acceptance-attempt';
 import type { GalleryAcceptanceOptions } from './use-gallery-acceptance';
 
 /** A real original outcome is reconciled before source reads or a replacement installation can proceed. */
@@ -25,7 +29,7 @@ interface OriginalState {
 export function useGalleryOriginalOutcome(
   options: GalleryAcceptanceOptions,
 ): GalleryOriginalOutcome {
-  const owner = JSON.stringify([options.scope.userId, options.scope.orgId]);
+  const owner = galleryScopeOwner(options.scope);
   const currentOwner = useRef(owner);
   currentOwner.current = owner;
   const [state, setState] = useState<OriginalState>({

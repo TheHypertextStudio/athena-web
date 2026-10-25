@@ -1,4 +1,5 @@
 'use client';
+import type { CopySourceIdentity } from '@docket/work/template-copy';
 import { useState, type JSX } from 'react';
 import {
   Button,
@@ -14,6 +15,7 @@ import { StaticMarkdown } from '@/components/editor/static-markdown';
 import { calendarRecurrenceSummary } from '@/components/recurrence/repeat-task-control';
 import {
   galleryStructure,
+  galleryReferenceSource,
   type GalleryStructureNode,
   type GalleryStructureSource,
 } from './gallery-structure';
@@ -82,9 +84,11 @@ function WorkBranch({
 function RecurringWork({
   definition,
   sources,
+  identity,
 }: {
   readonly definition: WorkTemplateDefinition;
   readonly sources: readonly GalleryStructureSource[];
+  readonly identity?: CopySourceIdentity | undefined;
 }): JSX.Element | null {
   const program = useVocabulary('program');
   if (!definition.defaultSchedules.length) return null;
@@ -103,15 +107,19 @@ function RecurringWork({
       </p>
       <ol className="flex min-w-0 flex-col gap-4">
         {definition.defaultSchedules.map((schedule) => {
-          const source = sources.find(
-            (entry) => entry.identity.workTypeId === schedule.template.workTypeId,
+          const source = galleryReferenceSource(
+            schedule.template,
+            sources,
+            identity
+              ? { owner: identity, slot: { kind: 'default_schedule', key: schedule.key } }
+              : undefined,
           );
           return (
             <li key={schedule.key} className="min-w-0">
               <h3 className="text-title-medium break-words">{schedule.name}</h3>
               <p className="text-body-medium">{calendarRecurrenceSummary(schedule.cadence)}</p>
               <p className="text-body-small text-on-surface-variant">
-                {source?.definition.name} · Begins{' '}
+                {source.definition.name} · Begins{' '}
                 {schedule.cadence.startOffsetDays === 0
                   ? `when the ${program} is created`
                   : `${Math.abs(schedule.cadence.startOffsetDays)} days ${schedule.cadence.startOffsetDays < 0 ? 'before' : 'after'} ${program} creation`}
@@ -161,7 +169,7 @@ function StartingInstructions({
       <h2 className="text-title-medium">Starting work</h2>
       <Collapsible>
         <CollapsibleTrigger asChild>
-          <Button variant="ghost" className="min-h-10 px-0">
+          <Button wrapLabel variant="ghost" className="min-h-10 px-0">
             Read starting instructions <ChevronDown className="size-4" aria-hidden="true" />
           </Button>
         </CollapsibleTrigger>
@@ -179,12 +187,14 @@ function StartingInstructions({
 export function GalleryWorkOutline({
   definition,
   sources,
+  identity,
 }: {
   readonly definition: WorkTemplateDefinition;
   readonly sources: readonly GalleryStructureSource[];
+  readonly identity?: CopySourceIdentity | undefined;
 }): JSX.Element {
   const [includedOpen, setIncludedOpen] = useState(true);
-  const nodes = galleryStructure(definition, sources);
+  const nodes = galleryStructure(definition, sources, identity);
   return (
     <div className="flex min-w-0 flex-col gap-3 sm:gap-6">
       {nodes.length ? (
@@ -201,7 +211,7 @@ export function GalleryWorkOutline({
           </CollapsibleContent>
         </Collapsible>
       ) : null}
-      <RecurringWork definition={definition} sources={sources} />
+      <RecurringWork definition={definition} sources={sources} identity={identity} />
       <StartingInstructions definition={definition} />
     </div>
   );

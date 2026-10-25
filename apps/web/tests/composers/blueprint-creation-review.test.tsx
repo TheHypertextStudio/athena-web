@@ -1,3 +1,4 @@
+import { UserFacingError } from '@/lib/problem';
 import { deferred } from '../support/deferred';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { useState } from 'react';
@@ -266,6 +267,22 @@ describe('reviewing included work in a composer', () => {
     expect(accepted).toHaveBeenCalledWith(
       expect.objectContaining({ optionalChoices: [{ path: ['prepare'], selected: false }] }),
     );
+  });
+  it('explains the shared plan requirement and preserves the draft after a billing refusal', async () => {
+    mocks.preview.mockReset().mockRejectedValue(
+      new UserFacingError('Could not review template work.', {
+        status: 402,
+        code: 'product_required',
+      }),
+    );
+    const created = vi.fn();
+    render(<Composer created={created} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Review included work' }));
+    await screen.findByText('Creating work in a shared workspace requires Docket Pro.');
+    expect(screen.getByRole('button', { name: 'Keep these choices' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Back to draft' }));
+    expect(screen.getByLabelText('Name')).toHaveValue('Dinner');
+    expect(created).not.toHaveBeenCalled();
   });
   it('keeps the authored draft when a preview fails and displays application-owned copy', async () => {
     mocks.preview.mockReset().mockRejectedValue(new Error('Private upstream diagnostics'));

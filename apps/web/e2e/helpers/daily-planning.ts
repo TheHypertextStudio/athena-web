@@ -189,6 +189,7 @@ export async function editPlanningTouchWork(
   await actions.tap();
   const move = page.getByRole('menuitem', { name: 'Move block', exact: true });
   await assertPlanningTouchTarget(move);
+  for (const item of await page.getByRole('menuitem').all()) await assertPlanningTouchTarget(item);
   await move.tap();
   await expect(page.getByRole('dialog', { name: 'Edit block' })).toBeVisible();
   await page.getByRole('spinbutton', { name: `Duration for ${title}` }).fill(minutes);

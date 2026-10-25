@@ -106,6 +106,28 @@ function renderInbox(
 }
 
 describe('InboxClient notification UX', () => {
+  it('opens a template review instead of marking a proposal approved through generic act', () => {
+    renderInbox([
+      notification({
+        type: 'approval_request',
+        body: {
+          title: 'Review a template',
+          url: `/orgs/${ORG_ID}/work-templates/review/${NOTICE_ID}`,
+          templateReview: {
+            activityId: NOTICE_ID,
+            sessionId: 'session',
+            allowedActions: ['keep', 'adjust', 'dismiss', 'undo'],
+          },
+        },
+      }),
+    ]);
+    expect(screen.getByRole('link', { name: 'Review template' })).toHaveAttribute(
+      'href',
+      `/orgs/${ORG_ID}/work-templates/review/${NOTICE_ID}`,
+    );
+    expect(screen.queryByRole('button', { name: /Approve/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Mark read' })).toBeInTheDocument();
+  });
   it('groups approval requests under Needs action before the rest of the inbox', () => {
     renderInbox([
       notification({

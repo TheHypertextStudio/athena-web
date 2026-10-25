@@ -22,9 +22,9 @@ export function GalleryBundlePage({ bundleId }: { readonly bundleId: string }): 
   const href = workTemplateHref(state.scope.orgId);
   return (
     <WorkTemplateWorkspaceFrame
+      inset="none"
       orgId={state.scope.orgId}
       title="Saved templates"
-      parent={{ label: 'Work templates', href }}
       loading={query.isPending}
     >
       {query.isError ? (

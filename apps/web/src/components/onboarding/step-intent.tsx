@@ -47,7 +47,7 @@ export const INTENT_OPTIONS: readonly IntentOption[] = [
   {
     intent: 'nonprofit',
     title: 'A nonprofit',
-    description: 'Plan programs, initiatives, and shared responsibilities.',
+    description: 'Organize events, programs, and volunteer work.',
     icon: Sparkles,
   },
 ];

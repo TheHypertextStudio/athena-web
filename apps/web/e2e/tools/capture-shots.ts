@@ -56,6 +56,7 @@ import {
   installCaptureMocks,
   parseCaptureScenarios,
   prepareCaptureScenario,
+  prepareCaptureEnvironment,
   type CaptureScenario,
 } from './capture-scenarios';
 
@@ -252,6 +253,7 @@ async function captureCleanFrame(options: {
     });
     try {
       await page.setViewportSize(viewport);
+      await prepareCaptureEnvironment(page, scenario);
       const device = await context.newCDPSession(page);
       await device.send('Emulation.setTouchEmulationEnabled', {
         enabled: viewport.width < 640,

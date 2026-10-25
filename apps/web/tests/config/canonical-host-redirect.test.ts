@@ -1,4 +1,5 @@
-import { describe, expect, it, vi } from 'vitest';
+import { unstable_getResponseFromNextConfig } from 'next/experimental/testing/server';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 vi.hoisted(() => {
   process.env['API_URL'] = 'https://docket-api.hypertext.studio';
@@ -7,27 +8,28 @@ vi.hoisted(() => {
 
 import nextConfig from '../../next.config';
 
-async function configuredRedirects() {
-  return nextConfig.redirects?.();
-}
+afterEach(() => vi.unstubAllEnvs());
 
 async function configuredRewrites() {
   return nextConfig.rewrites?.();
 }
 
 describe('canonical production host redirects', () => {
-  it('redirects the legacy Athena alias before it can proxy an OAuth request', async () => {
-    await expect(configuredRedirects()).resolves.toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          source: '/:path*',
-          destination: 'https://docket.hypertext.studio/:path*',
-          permanent: true,
-          has: [{ type: 'host', value: 'athena\\.hypertext\\.studio' }],
-        }),
-      ]),
-    );
-  });
+  it.each(['https://clearthedocket.com', 'https://app.example.test'])(
+    'redirects the legacy Athena OAuth request directly to configured origin %s',
+    async (origin) => {
+      vi.stubEnv('NEXT_PUBLIC_APP_URL', origin);
+      const response = await unstable_getResponseFromNextConfig({
+        url: 'https://athena.hypertext.studio/api/auth/callback/github?code=fixture&state=fixture',
+        nextConfig,
+      });
+
+      expect(response.status).toBe(308);
+      expect(response.headers.get('location')).toBe(
+        `${origin}/api/auth/callback/github?code=fixture&state=fixture`,
+      );
+    },
+  );
 
   it('proxies the GitHub App setup callback through the canonical product origin', async () => {
     await expect(configuredRewrites()).resolves.toEqual(

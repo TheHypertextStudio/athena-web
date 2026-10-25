@@ -230,7 +230,7 @@ const nextConfig: NextConfig = {
       {
         source: '/:path*',
         has: [{ type: 'host', value: LEGACY_ATHENA_HOST }],
-        destination: 'https://docket.hypertext.studio/:path*',
+        destination: `${process.env['NEXT_PUBLIC_APP_URL']}/:path*`,
         permanent: true,
       },
       // NOTE: `connections` and its `google-calendar` child are deliberately NOT redirected here,

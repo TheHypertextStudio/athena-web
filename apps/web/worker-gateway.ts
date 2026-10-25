@@ -23,7 +23,7 @@ export function workerHostRedirect(url: URL, config: WorkerRuntimeConfig): Respo
   ) {
     destination = config.appOrigin;
   } else if (url.hostname === 'athena.hypertext.studio') {
-    destination = 'https://docket.hypertext.studio';
+    destination = config.appOrigin;
   }
   if (!destination) return undefined;
   return frontendResponse(

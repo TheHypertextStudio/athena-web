@@ -13686,6 +13686,15 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
 
 ## Completed Tasks
 
+### [CANONICAL-ALIAS-ORIGIN] Route the Athena alias directly to the configured app
+
+- **Completed**: 2026-10-25
+- **Summary**: Resolve legacy Athena redirects to the configured canonical app in both Next and
+  Workers, preserving the full authentication callback path and query without an intermediate host.
+  Slack setup comments now describe the configured API and local tunnel hostname.
+- **Validation**: All 10 affected Next and Workers configuration cases pass, including alternative
+  app origins and preserved OAuth query parameters.
+
 ### [WORKTREE-HOST-CASE] Keep worktree hosts consistent with browser URLs
 
 - **Completed**: 2026-10-25

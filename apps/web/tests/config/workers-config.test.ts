@@ -11,6 +11,28 @@ afterEach(() => {
 });
 
 describe('Workers provider configuration', () => {
+  it('redirects the legacy Athena alias directly to the configured canonical app', () => {
+    const config = readWorkerRuntimeConfig({
+      STUDIO_DEPLOYMENT_ENV: 'production',
+      WEB_URL: 'https://clearthedocket.com',
+      API_URL: 'https://api.clearthedocket.com',
+      PUBLIC_BRIEF_HOST: 'briefs.clearthedocket.com',
+      BETTER_AUTH_PASSKEY_RP_ID: 'clearthedocket.com',
+      BETTER_AUTH_PASSKEY_LEGACY_RP_ID: 'hypertext.studio',
+    });
+    const response = workerHostRedirect(
+      new URL(
+        'https://athena.hypertext.studio/api/auth/callback/github?code=fixture&state=fixture',
+      ),
+      config,
+    );
+
+    expect(response?.status).toBe(308);
+    expect(response?.headers.get('location')).toBe(
+      'https://clearthedocket.com/api/auth/callback/github?code=fixture&state=fixture',
+    );
+  });
+
   it('preserves the existing exact www alias redirect without capturing other hosts', () => {
     const config = readWorkerRuntimeConfig({
       STUDIO_DEPLOYMENT_ENV: 'production',

@@ -6,8 +6,8 @@
 # deliver every message the authorizing user can see (a bot only sees channels it was invited
 # to, and no DMs). End users install it with one click ("Connect Slack" in Docket settings).
 #
-# Substitute <api-host> with the deployment's API origin (prod: docket-api.hypertext.studio;
-# dev tunnel: docket-dev.hypertext.studio). Slack allows ONE events request URL per app, so
+# Substitute <api-host> with the deployment's public API hostname, including the public tunnel
+# hostname when testing locally. Slack allows ONE events request URL per app, so
 # prod and dev need separate apps from this same manifest. Slack verifies the request URL live
 # at save time (POST /internal/ingest/slack answers the url_verification challenge), so deploy
 # the API before creating/updating the app.

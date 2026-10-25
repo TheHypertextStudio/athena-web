@@ -3,74 +3,16 @@ import { and, eq } from 'drizzle-orm';
 import { describe, expect, it } from 'vitest';
 
 import { appWithActor, seedBaseOrg } from '../support/routes-harness';
-import { grantOrganizationCapability, JSON_HEADERS, schema, workViews } from './work-views-harness';
-
-type SeededOrg = Awaited<ReturnType<typeof seedBaseOrg>>;
-type OrderApp = ReturnType<typeof appWithActor>;
-
-/** A seeded organization with a contributor app mounted on the work-view routes. */
-interface ContributorFixture extends SeededOrg {
-  readonly app: OrderApp;
-}
-
-async function contributorFixture(): Promise<ContributorFixture> {
-  const seeded = await seedBaseOrg(schema.db, schema);
-  await grantOrganizationCapability(seeded.orgId, seeded.humanActorId, 'contribute');
-  return {
-    ...seeded,
-    app: appWithActor(workViews, seeded.orgId, ['contribute'], seeded.humanActorId),
-  };
-}
-
-async function patchOrder(app: OrderApp, body: Record<string, unknown>): Promise<Response> {
-  return app.request('/order', {
-    method: 'PATCH',
-    headers: JSON_HEADERS,
-    body: JSON.stringify({ context: { kind: 'organization' }, ...body }),
-  });
-}
-
-async function seedTasks(fixture: SeededOrg, titles: readonly string[]): Promise<string[]> {
-  const rows = await schema.db
-    .insert(schema.task)
-    .values(
-      titles.map((title) => ({
-        organizationId: fixture.orgId,
-        teamId: fixture.teamId,
-        title,
-        state: 'todo' as const,
-        statusId: fixture.statusId('task', 'todo'),
-        visibility: 'public' as const,
-      })),
-    )
-    .returning({ id: schema.task.id });
-  return rows.map((row) => row.id);
-}
-
-async function seedRank(orgId: string, itemId: string, rank: string): Promise<void> {
-  await schema.db.insert(schema.workItemOrder).values({
-    organizationId: orgId,
-    contextType: 'organization',
-    contextId: orgId,
-    target: 'task',
-    itemId,
-    rank: FractionalRank.parse(rank),
-  });
-}
-
-async function readRanks(orgId: string): Promise<Map<string, string>> {
-  const rows = await schema.db
-    .select({ itemId: schema.workItemOrder.itemId, rank: schema.workItemOrder.rank })
-    .from(schema.workItemOrder)
-    .where(eq(schema.workItemOrder.organizationId, orgId));
-  return new Map(rows.map((row) => [row.itemId, row.rank]));
-}
-
-function rankOf(ranks: Map<string, string>, itemId: string): string {
-  const rank = ranks.get(itemId);
-  if (rank === undefined) throw new Error(`no stored rank for ${itemId}`);
-  return rank;
-}
+import {
+  contributorFixture,
+  patchOrder,
+  rankOf,
+  readRanks,
+  seedRank,
+  seedTasks,
+  type SeededOrg,
+} from './work-view-order-fixture';
+import { schema, workViews } from './work-views-harness';
 
 async function seedProject(fixture: SeededOrg, name: string): Promise<string> {
   const [row] = await schema.db

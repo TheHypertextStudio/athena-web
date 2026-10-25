@@ -24,18 +24,29 @@ export interface InvocationRevisionBackfillOptions {
 interface NamespaceInvocationOptions extends InvocationRevisionBackfillOptions {
   readonly identityNamespace: boolean;
 }
-/** Lock existing source/head identity without replacing an explicitly private null owner. */
+/**
+ * Lock existing source/head identity without replacing an explicitly private null owner.
+ *
+ * @param identityNamespace - Whether the private identity namespace exists; a head created then is
+ *   reserved as the retained source's identity, matching `reserveSourcePage`.
+ */
 export async function lockInvocationRevisionHead(
   tx: BlueprintMigrationConnection,
   definitionId: string,
+  identityNamespace = false,
 ): Promise<void> {
   const source = await migrationRows(
     tx,
     sql`select id from process_definition where id=${definitionId} for update`,
   );
   if (!source.length) throw new Error('Invocation source definition disappeared.');
-  await tx.execute(sql`insert into work_template_invocation_head(id,organization_id,created_by,created_at,updated_at,archived_at,owner_actor_id,name,description,status)
-    select id,organization_id,created_by,created_at,updated_at,archived_at,created_by,name,description,'draft' from process_definition where id=${definitionId} on conflict(id) do nothing`);
+  await tx.execute(
+    identityNamespace
+      ? sql`insert into work_template_invocation_head(id,organization_id,created_by,created_at,updated_at,archived_at,owner_actor_id,name,description,status,identity_origin)
+    select id,organization_id,created_by,created_at,updated_at,archived_at,created_by,name,description,'draft','retained' from process_definition where id=${definitionId} on conflict(id) do nothing`
+      : sql`insert into work_template_invocation_head(id,organization_id,created_by,created_at,updated_at,archived_at,owner_actor_id,name,description,status)
+    select id,organization_id,created_by,created_at,updated_at,archived_at,created_by,name,description,'draft' from process_definition where id=${definitionId} on conflict(id) do nothing`,
+  );
   await tx.execute(
     sql`select id from work_template_invocation_head where id=${definitionId} for update`,
   );
@@ -73,7 +84,7 @@ async function registerHeadPage(
   options: NamespaceInvocationOptions,
 ) {
   return database.transaction(async (tx) => {
-    await lockInvocationRevisionHead(tx, id);
+    await lockInvocationRevisionHead(tx, id, options.identityNamespace);
     if (options.identityNamespace && !(await identityMayRegisterAliases(tx, id))) {
       const [pending] = await migrationRows<{ count: number }>(
         tx,

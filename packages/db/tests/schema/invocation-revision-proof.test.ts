@@ -7,11 +7,14 @@ it('fails stored immutable evidence with missing original proof instead of treat
   const execute = vi
     .fn()
     .mockResolvedValueOnce({ rows: [{ archive, hash: hashScheduleArchive(archive) }] })
+    // Definition and revision locks, then the proved-source read finds no original receipt.
+    .mockResolvedValueOnce({ rows: [] })
+    .mockResolvedValueOnce({ rows: [] })
     .mockResolvedValueOnce({ rows: [] });
   await expect(
     registerInvocationRevision({ execute }, 'source-revision'),
   ).rejects.not.toBeInstanceOf(ScheduleSourceProofError);
-  expect(execute).toHaveBeenCalledTimes(2);
+  expect(execute).toHaveBeenCalledTimes(4);
 });
 it('fails forged immutable archive integrity before attempting alias registration', async () => {
   const execute = vi

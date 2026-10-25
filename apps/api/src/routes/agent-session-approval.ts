@@ -1,5 +1,6 @@
 import { requireAthenaOwner as athenaOwner } from '../agent/session-executor';
 import { requireOrdinaryProposal } from '../agent/template-proposal-reference';
+import { participantReplyBody } from '../agent/session-activity';
 import { workflowIdFor } from '@docket/athena/execution-protocol';
 import {
   actor,
@@ -741,13 +742,12 @@ export async function replyToElicitation(
       .limit(1);
     const session = assertSessionContext(sessionRows[0], orgId);
 
-    const promptRows = await tx
+    const [prompt] = await tx
       .select()
       .from(sessionActivity)
       .where(and(eq(sessionActivity.id, activityId), eq(sessionActivity.sessionId, sessionId)))
       .for('update')
       .limit(1);
-    const prompt = promptRows[0];
     if (!prompt) throw new NotFoundError('Activity not found');
     if (prompt.type !== 'elicitation') {
       throw new ConflictError('Activity is not an elicitation');
@@ -771,7 +771,7 @@ export async function replyToElicitation(
         sessionId,
         organizationId: session.executorKind === 'athena' ? null : orgId,
         type: 'response',
-        body: { text, ...(toolUseId ? { toolUseId } : {}) },
+        body: participantReplyBody(text, activityId, toolUseId),
       })
       .returning();
     /* v8 ignore next -- @preserve defensive: insert always returns a row */

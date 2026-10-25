@@ -99,7 +99,7 @@ export async function createAndRunFromPrompt(
       sessionId: created.id,
       organizationId: ownerUserId ? null : orgId,
       type: 'response',
-      body: { text: prompt },
+      body: { text: prompt, author: 'user' },
     });
     return created;
   });
@@ -226,7 +226,7 @@ export async function createSessionFromObservation(
       sessionId: created.id,
       organizationId: null,
       type: 'response',
-      body: { text: prompt },
+      body: { text: prompt, author: 'user' },
     });
     return created.id;
   });
@@ -616,7 +616,7 @@ export async function createLinearAgentSession(
       sessionId: created.id,
       organizationId: orgId,
       type: 'response',
-      body: { text: input.prompt },
+      body: { text: input.prompt, author: 'user', provenance: 'linear' },
     });
     if (!input.initiatorActorId) {
       await tx.insert(sessionActivity).values({

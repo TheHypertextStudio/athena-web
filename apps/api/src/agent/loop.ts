@@ -19,6 +19,7 @@ import {
   templateToolExecutionInput,
   templateSafeActionResult,
 } from './template-proposal-loop';
+import { insertExecutorActivity as insertActivity } from './session-activity';
 import { mailElicitationAttachmentContext } from '../services/athena-mail/attachments';
 import { isMailSession, mailSessionAuthorized } from '../services/athena-mail/session-auth';
 import { collectProviderTurn } from './provider-turn';
@@ -53,7 +54,6 @@ import {
   sessionActivity,
   task,
 } from '@docket/db';
-import type { SessionActivityBody } from '@docket/db';
 import type { AgentTurnRuntime } from '@docket/athena/turn';
 import type { TurnContentBlock, TurnMessage } from '@docket/athena/turn-protocol';
 import { HubPreferences } from '@docket/planning/hub-preferences-contract';
@@ -163,25 +163,6 @@ async function principalAthenaPreferences(session: SessionRow): Promise<{
       : (preferences.athena?.approvalMode ?? 'ask_before_acting'),
     instructions: instructions && instructions.length > 0 ? instructions : null,
   };
-}
-
-/** Extract the tool_use blocks of a message. */
-/** Insert one activity row and return it. */
-async function insertActivity(
-  handle: DbHandle,
-  organizationId: string | null,
-  sessionId: string,
-  type: 'thought' | 'response' | 'elicitation' | 'error' | 'action',
-  body: SessionActivityBody,
-  extras: { approvalStatus?: 'proposed' | 'applied'; proposalGroupId?: string } = {},
-): Promise<string> {
-  const [row] = await handle
-    .insert(sessionActivity)
-    .values({ sessionId, organizationId, type, body, ...extras })
-    .returning({ id: sessionActivity.id });
-  /* v8 ignore next -- @preserve defensive: insert always returns a row */
-  if (!row) throw new Error('activity insert returned no row');
-  return row.id;
 }
 
 /** Run one persisted effect after the deterministic race seam and behind the transaction fence. */

@@ -53,7 +53,15 @@ export type RelatedLedgerRow = LedgerRow & RelatedTask;
 /** A comment on the task. */
 export type CommentRow = Pick<
   typeof comment.$inferSelect,
-  'id' | 'authorId' | 'origin' | 'body' | 'createdAt' | 'editedAt' | 'editedById' | 'editedOrigin'
+  | 'id'
+  | 'authorId'
+  | 'createdBy'
+  | 'origin'
+  | 'body'
+  | 'createdAt'
+  | 'editedAt'
+  | 'editedById'
+  | 'editedOrigin'
 > &
   ActorNamed & { readonly editorName: string | null };
 
@@ -65,6 +73,7 @@ export type SessionRow = Pick<
   typeof sessionActivity.$inferSelect,
   'id' | 'type' | 'body' | 'createdAt' | 'sessionId'
 > & {
+  readonly participantReply: boolean;
   readonly performerName: string | null;
   readonly executorKind: string;
   readonly initiatorId: string | null;
@@ -295,7 +304,7 @@ function contentEntries(taskId: string, sources: ActivitySources): ActivityEntry
           actorName: row.actorName,
           body: row.body,
           origin: activityOriginOf(row.origin),
-          session: activitySessionOf({ taskId, actorId: row.authorId }, row.origin),
+          session: activitySessionOf({ taskId, actorId: row.createdBy }, row.origin),
           commentEdit: row.editedAt
             ? {
                 at: row.editedAt.toISOString(),
@@ -329,10 +338,13 @@ function contentEntries(taskId: string, sources: ActivitySources): ActivityEntry
 /** User-authored session inputs must never be consolidated or attributed as agent output. */
 function nativeSessionDetail(taskId: string, row: SessionRow): Partial<ActivityEntry> {
   const body = sessionBody(row.body, row.type);
-  if (row.body.author === 'user') {
+  if (row.body.author === 'user' || (row.participantReply && row.body.author !== 'athena')) {
     // Session messages record a role, not a verified per-message actor. Do not invent a name,
     // delegation relationship or app channel for inputs relayed from email/external providers.
     return { body, actorName: 'Session participant', origin: null, session: null };
+  }
+  if (row.type === 'response' && row.body.author !== 'athena') {
+    return { body, actorName: 'Session message', origin: null, session: null };
   }
   const origin = sessionOrigin(row);
   const sessionEvent =

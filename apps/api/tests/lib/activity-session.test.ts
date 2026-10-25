@@ -59,6 +59,12 @@ describe('activity session protocol', () => {
       activitySessionOf(scope, { ...appProvenance(), sessionId: 'x', tool: 'update' }),
     ).toBeNull();
     expect(activitySessionOf(scope, null)).toBeNull();
+    expect(
+      activitySessionOf(
+        { ...scope, actorId: null },
+        { ...client, activitySessionId: 'work', tool: 'comment' },
+      ),
+    ).toBeNull();
     expect(activitySessionOf(scope, { ...client, tool: 'update' })).toBeNull();
     expect(withActivitySession(appProvenance(), 'work')).not.toHaveProperty('activitySessionId');
   });

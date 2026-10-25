@@ -332,7 +332,7 @@ describe('task activity log — what is written', () => {
     expect(second.items[0]).toMatchObject({ type: 'comment', body: 'Second comment.' });
   });
 
-  it('includes timer and delegated task updates without reading separate feeds', async () => {
+  it('includes timer events without projecting private delegated conversation', async () => {
     const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
     const app = appWithActor(tasks, orgId, ['contribute'], humanActorId);
     const id = await createTask(app, teamId);
@@ -380,7 +380,7 @@ describe('task activity log — what is written', () => {
     });
 
     const items = await activity(app, id);
-    expect(items).toContainEqual(
+    expect(items).not.toContainEqual(
       expect.objectContaining({ type: 'session', body: 'Checked the linked documents.' }),
     );
     expect(items).toContainEqual(

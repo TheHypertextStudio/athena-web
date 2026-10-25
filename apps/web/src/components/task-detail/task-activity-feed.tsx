@@ -13,6 +13,8 @@ import {
   DropdownMenuTrigger,
   Skeleton,
   Surface,
+  Timeline,
+  TimelineItem,
 } from '@docket/ui/primitives';
 import type { JSX } from 'react';
 import { useMemo, useState } from 'react';
@@ -115,6 +117,7 @@ function ActivityFilterMenu({ filter, onFilterChange }: ActivityFilterMenuProps)
 interface ActivityRowProps {
   readonly entry: TaskActivityOut;
   readonly orgId: string;
+  readonly compact?: boolean;
 }
 
 /** Name the last editor without replacing the original comment author. */
@@ -137,31 +140,69 @@ function CommentEditNote({ entry, orgId }: ActivityRowProps): JSX.Element | null
 }
 
 /** One chronological Activity row, naming whoever performed the change. */
-function ActivityRow({ entry, orgId }: ActivityRowProps): JSX.Element {
-  // Only an agent working for someone reads its owner ("for You"), so only its row asks who is viewing.
+function ActivityRow({ entry, orgId, compact = false }: ActivityRowProps): JSX.Element {
   const viewerActorId = useViewerActorId(orgId, entry.origin?.channel === 'mcp');
   const performer = activityPerformer(entry, viewerActorId);
-  const { name } = performer;
-  return (
-    <li className="flex items-start gap-2.5">
-      <ActorAvatar kind={performer.avatarKind} name={name} size={24} className="mt-0.5 shrink-0" />
-      <div className="text-body-medium text-on-surface-variant min-w-0 flex-1">
-        <div>
-          <span className="text-on-surface">{name}</span> {entryAction(entry)}{' '}
-          <time
-            dateTime={entry.createdAt}
-            title={activityTimestampTitle(entry.createdAt, performer.detail)}
-            className="text-label-medium text-on-surface-variant whitespace-nowrap"
-          >
-            {relativeTime(entry.createdAt)}
-          </time>
-        </div>
-        <CommentEditNote entry={entry} orgId={orgId} />
-        {(entry.type === 'comment' || entry.type === 'session') && entry.body ? (
-          <StaticMarkdown value={entry.body} className="mt-1 [&>*]:max-w-none" />
+  const content = (
+    <div className="text-body-medium min-w-0">
+      <div className="text-on-surface-variant text-label-medium flex flex-wrap items-baseline gap-x-2">
+        {!compact ? (
+          <span>
+            <span className="text-on-surface">{performer.name}</span> {entryAction(entry)}
+          </span>
         ) : null}
+        <time
+          dateTime={entry.createdAt}
+          title={activityTimestampTitle(entry.createdAt, performer.detail)}
+          className="text-label-small font-mono tabular-nums"
+        >
+          {relativeTime(entry.createdAt)}
+        </time>
       </div>
-    </li>
+      <CommentEditNote entry={entry} orgId={orgId} />
+      {(entry.type === 'comment' || entry.type === 'session') && entry.body ? (
+        <StaticMarkdown
+          value={entry.body}
+          className="mt-1 [overflow-wrap:anywhere] [&>*]:max-w-none"
+        />
+      ) : null}
+    </div>
+  );
+  if (compact) return <li className="min-w-0">{content}</li>;
+  return (
+    <TimelineItem
+      node={<ActorAvatar kind={performer.avatarKind} name={performer.name} size={24} />}
+    >
+      <div className="px-3">{content}</div>
+    </TimelineItem>
+  );
+}
+
+/** Keep one shared rail while the source records retain their ordered contribution boundaries. */
+function ActivityContributions({
+  entries,
+  orgId,
+}: {
+  readonly entries: readonly TaskActivityOut[];
+  readonly orgId: string;
+}): JSX.Element {
+  const contributions = activitySessionGroups(entries);
+  return (
+    <Timeline aria-label="Task activity">
+      {contributions.map((group) =>
+        group.session ? (
+          <TaskActivitySession
+            key={group.key}
+            group={group}
+            renderEntry={(entry, compact) => (
+              <ActivityRow key={entry.id} entry={entry} orgId={orgId} compact={compact ?? false} />
+            )}
+          />
+        ) : (
+          group.entries.map((entry) => <ActivityRow key={entry.id} entry={entry} orgId={orgId} />)
+        ),
+      )}
+    </Timeline>
   );
 }
 
@@ -213,7 +254,6 @@ export function TaskActivityFeed({
     }
   }
 
-  const contributions = activitySessionGroups(entries);
   return (
     <>
       <TaskDelegatedWork orgId={orgId} taskId={taskId} />
@@ -235,23 +275,7 @@ export function TaskActivityFeed({
             Nothing has happened to this task yet.
           </p>
         ) : (
-          <ol className="flex flex-col gap-4">
-            {contributions.map((group) =>
-              group.session ? (
-                <TaskActivitySession
-                  key={group.key}
-                  group={group}
-                  renderEntry={(entry) => (
-                    <ActivityRow key={entry.id} entry={entry} orgId={orgId} />
-                  )}
-                />
-              ) : (
-                group.entries.map((entry) => (
-                  <ActivityRow key={entry.id} entry={entry} orgId={orgId} />
-                ))
-              ),
-            )}
-          </ol>
+          <ActivityContributions entries={entries} orgId={orgId} />
         )}
 
         {query.hasNextPage ? (

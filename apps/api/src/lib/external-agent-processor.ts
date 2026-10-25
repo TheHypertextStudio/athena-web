@@ -307,6 +307,7 @@ export async function processExternalAgentInboxEvent(row: ExternalAgentInboxRow)
           type: 'response',
           body: {
             text: 'Athena stopped this session at the external user’s request.',
+            author: 'athena',
             sourceActivityId,
           },
         });

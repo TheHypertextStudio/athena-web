@@ -57,6 +57,7 @@ function sessionIdentity(
   const native =
     origin.agentSessionId ?? (provenance.channel === 'athena' ? provenance.sessionId : null);
   if (native) return { kind: 'native', parts: [scope.taskId, 'native', native] };
+  if (scope.actorId === null) return null;
   const key = origin.activitySessionId ?? provenance.sessionId;
   if (!key) return null;
   const kind = origin.activitySessionId ? 'work' : 'connection';

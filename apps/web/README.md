@@ -242,3 +242,10 @@ auth declarations against the selected version. Keep staging auth/data isolated.
 native Worker versions and separately recorded domain/DNS/route reversal; retired Vercel aliases
 are not a recovery target. The ordinary backend release pipeline remains separate from frontend
 publication and its production approval.
+
+## Task activity sessions
+
+Task activity groups adjacent intentional agent comments and recorded mutations using stored session
+metadata. A session can touch several entities and does not require a closing update. Agent
+conversation stays in session history. See the [protocol and identity contract](../../docs/engineering/specs/task-activity-sessions.md)
+and [timeline geometry guidance](../../docs/design/references/detail-page-layout.md#activity-timeline-exception).

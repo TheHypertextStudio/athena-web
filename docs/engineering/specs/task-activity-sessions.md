@@ -12,7 +12,8 @@ Native Athena execution uses its durable agent session identity. External integr
 stable, non-secret work key through `Docket-Activity-Session` on authenticated REST requests or
 `params._meta["io.docket/activity-session"]` on MCP tool calls. The key is 1–128 ASCII letters,
 digits, dots, underscores, colons or hyphens. Reuse it across calls and reconnects for the same work;
-choose a new key for a new assignment. It is correlation metadata, never an authorization token,
+choose a new key for a new work session. A session can touch multiple workspace entities; each
+entity shows only the records relevant to its own activity. It is correlation metadata, never an authorization token,
 proof of delegation, request idempotency key, or replacement for MCP transport sessions.
 
 The server records this key in provenance, scopes the public grouping identity to the task,
@@ -34,8 +35,11 @@ Grouping does not manufacture a result, lifecycle state, human acceptance or del
 Existing live delegated-work controls remain available independently of partially loaded history.
 
 No generative summary runs at read time. Integrations consolidate information by posting a
-substantive task comment under the same explicit work key; native execution contributes its saved
-session messages. Provider/tool errors use application-owned copy. Session grouping is additive to
+substantive task comment under the same explicit work key. Native execution uses the same task
+comment and mutation writers for intentional work updates. A session may contain only mutations,
+only comments, or both; no final update or session completion is required. Ordinary agent
+conversation, thoughts, tool calls and proposals remain in session history. Task-bound questions,
+durably linked answers and failures may also appear as work notices. Provider/tool errors use application-owned copy. Session grouping is additive to
 the existing activity response and uses existing provenance JSON, so no data backfill is needed.
 
 ## Integration example
@@ -69,3 +73,21 @@ and group adjacent matching identities after concatenating loaded pages. Native 
 also carry `sessionEvent` (`update`, `question`, `error`, or `change`). Questions and errors stay
 visible alongside the latest update; these historical labels do not claim a gate is still open.
 No client-supplied metadata can set native session identity or a delegation/acceptance state.
+
+## Authority and historical response compatibility
+
+Comment correlation uses `createdBy`, the stored authority, independently of `authorId`, which is
+the displayed performer and may be null for OAuth clients. External records with no stored
+authority stay ungrouped. Native session identity still comes from durable execution.
+
+New executor responses carry `author: "athena"` (the existing executor-role marker); participant
+replies carry `author: "user"`. An unmarked historical response can be identified as a participant
+reply only through an elicitation with the same session and exact tool-use reference. Otherwise
+it remains in session history, excluded from task Activity, and cannot replace a consolidated task
+update. Explicit authorship on an ordinary session response does not make it a task comment.
+Neither a role nor a correlation key establishes a verified person's name.
+
+Only entries with a recorded field change contribute to the changes count. Thoughts and action
+proposals remain in session history, whether the tool was read-only, unapproved, rejected or
+executed. Task Activity does not expose an execution transcript or count proposals as changes. Disclosed
+changes preserve their subject, exact timestamp and full before/after values.

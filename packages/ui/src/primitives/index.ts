@@ -244,3 +244,5 @@ export {
   type ExclusiveChoiceProps,
   type ExclusiveChoiceItem,
 } from './exclusive-choice';
+
+export { Timeline, TimelineItem, TimelineMarker, type TimelineItemProps } from './timeline';

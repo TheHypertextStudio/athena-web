@@ -419,6 +419,7 @@ describe('POST /:id/activity/:activityId/reply', () => {
     const json = (await res.json()) as { type: string; body: { text: string } };
     expect(json.type).toBe('response');
     expect(json.body.text).toBe('The Q3 launch milestone');
+    expect(json.body).toMatchObject({ author: 'user' });
 
     const sessionRows = await db
       .select({ status: agentSession.status })

@@ -287,6 +287,9 @@ describe('driveSession — act_with_approval (the default dial)', () => {
     expect(applied?.body.action?.result?.isError).toBe(false);
 
     // The model heard the result and summarized (turn 1 of the script).
+    expect(
+      after.find((a) => a.type === 'response' && a.body.text === 'Created the task.')?.body.author,
+    ).toBe('athena');
     expect(after.some((a) => a.type === 'response' && a.body.text === 'Created the task.')).toBe(
       true,
     );

@@ -128,3 +128,16 @@ When the viewer can contribute, each relationship on the page can be added and r
    pixel.
 3. No property label appears twice on the page.
 4. Every empty section shows its heading and its actions, with no sentence.
+
+## Activity timeline exception
+
+Task Activity uses a shared chronological rail rather than segmented list furniture. This is an
+explicit exception to rule 4's ban on dividers: one neutral 1px rail joins visible contribution
+nodes, and a short orthogonal stub connects each discrete agent session. The rail starts and ends
+at node centers and implies sequence only. No inner rail, graph edge, decorative grid, or shadow
+is added. `@docket/ui` Timeline primitives own this geometry and its 24px nodes, 16px gutter gap
+and 24px row rhythm. Plain content uses the same 12px inset as a session surface, keeping its
+text aligned. Session surfaces use the existing small corner variant, leaving app-wide geometry
+unchanged. There is one verified performer identity per session, mono timestamps, and separate
+progressive disclosures for earlier intentional task updates and durable changes. Session
+conversation and execution details belong in the session surface, outside task Activity.

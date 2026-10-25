@@ -1,3 +1,4 @@
+import { readTaskSessionActivity } from './task-activity-session-source';
 /**
  * `@docket/api` — one chronological Activity projection for a task.
  *
@@ -9,8 +10,6 @@
  */
 import {
   actor,
-  agent,
-  agentSession,
   auditEvent,
   comment,
   db,
@@ -21,7 +20,7 @@ import {
 } from '@docket/db';
 import { pageOf } from '../contracts/pagination';
 import { TaskActivityOut, TaskActivityQuery } from '@docket/connections/activity-contract';
-import { and, asc, eq, inArray, isNull, or, sql, type SQLWrapper } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNull, sql, type SQLWrapper } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import { Hono } from 'hono';
 
@@ -163,6 +162,7 @@ export const taskActivityRoutes = new Hono<AppEnv>().get(
       .select({
         id: comment.id,
         authorId: comment.authorId,
+        createdBy: comment.createdBy,
         origin: comment.origin,
         actorName: actor.displayName,
         editedAt: comment.editedAt,
@@ -209,31 +209,12 @@ export const taskActivityRoutes = new Hono<AppEnv>().get(
       )
       .orderBy(asc(event.occurredAt), asc(event.id))
       .limit(sourceLimit);
-    const sessionActor = alias(actor, 'session_performer');
-    const taskSessions = await db
-      .select({
-        id: sessionActivity.id,
-        sessionId: sessionActivity.sessionId,
-        performerName: sessionActor.displayName,
-        executorKind: agentSession.executorKind,
-        initiatorId: agentSession.initiatorId,
-        type: sessionActivity.type,
-        body: sessionActivity.body,
-        createdAt: sessionActivity.createdAt,
-      })
-      .from(sessionActivity)
-      .innerJoin(agentSession, eq(sessionActivity.sessionId, agentSession.id))
-      .leftJoin(agent, eq(agent.id, agentSession.agentId))
-      .leftJoin(sessionActor, eq(sessionActor.id, agent.actorId))
-      .where(
-        and(
-          eq(agentSession.taskId, id),
-          or(eq(agentSession.organizationId, orgId), eq(agentSession.contextOrganizationId, orgId)),
-          sourceAfter(sessionActivity.createdAt, sessionActivity.id, 'session:', query.cursor),
-        ),
-      )
-      .orderBy(asc(sessionActivity.createdAt), asc(sessionActivity.id))
-      .limit(sourceLimit);
+    const taskSessions = await readTaskSessionActivity(
+      id,
+      orgId,
+      sourceAfter(sessionActivity.createdAt, sessionActivity.id, 'session:', query.cursor),
+      sourceLimit,
+    );
 
     const childCreations = await readVisibleSource(
       'child-created:',

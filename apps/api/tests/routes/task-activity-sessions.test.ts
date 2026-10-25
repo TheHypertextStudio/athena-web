@@ -15,7 +15,7 @@ beforeAll(async () => {
 });
 
 describe('native task activity sessions', () => {
-  it('correlates native mutations with agent output while preserving human interruptions', async () => {
+  it('correlates native work without promoting session conversation into task updates', async () => {
     const org = await seedTaskAccessOrg(db, schema);
     const row = await seedTask(db, schema, org.statusId, {
       organizationId: org.orgId,
@@ -60,19 +60,74 @@ describe('native task activity sessions', () => {
         organizationId: org.orgId,
         sessionId: session.id,
         type: 'response',
-        body: { text: 'Brief ready.' },
+        body: { author: 'athena', text: 'Brief ready.' },
       },
       {
         organizationId: org.orgId,
         sessionId: session.id,
         type: 'response',
-        body: { author: 'user', text: 'Venue confirmation is required.' },
+        body: {
+          author: 'user',
+          text: 'Venue confirmation is required.',
+          toolUseId: 'legacy-question',
+        },
       },
       {
         organizationId: org.orgId,
         sessionId: session.id,
         type: 'error',
         body: { text: 'Private provider traceback' },
+      },
+    ]);
+    await db.insert(schema.sessionActivity).values([
+      {
+        organizationId: org.orgId,
+        sessionId: session.id,
+        type: 'response',
+        body: { text: 'Ambiguous historical message.' },
+      },
+      {
+        organizationId: org.orgId,
+        sessionId: session.id,
+        type: 'elicitation',
+        body: { text: 'Which venue?', toolUseId: 'legacy-question' },
+      },
+      {
+        organizationId: org.orgId,
+        sessionId: session.id,
+        type: 'response',
+        body: { text: 'The community hall.', toolUseId: 'legacy-question' },
+      },
+    ]);
+    await db.insert(schema.sessionActivity).values([
+      {
+        organizationId: org.orgId,
+        sessionId: session.id,
+        type: 'thought',
+        body: { text: 'Private working notes' },
+      },
+      {
+        organizationId: org.orgId,
+        sessionId: session.id,
+        type: 'action',
+        approvalStatus: 'proposed',
+        body: { action: { kind: 'read_task', summary: 'Internal tool call' } },
+      },
+      {
+        organizationId: org.orgId,
+        sessionId: session.id,
+        type: 'response',
+        body: {
+          author: 'athena',
+          text: 'I will inspect the task next.',
+          toolUseId: 'legacy-question',
+        },
+      },
+      {
+        organizationId: org.orgId,
+        sessionId: session.id,
+        type: 'response',
+        body: { author: 'user', text: 'Original private assignment prompt.' },
       },
     ]);
     await db.insert(schema.auditEvent).values({
@@ -95,10 +150,11 @@ describe('native task activity sessions', () => {
     );
     expect(response.status).toBe(200);
     const { items } = (await response.json()) as { items: TaskActivityOut[] };
-    const update = items.find((item) => item.body === 'Brief ready.');
-    expect(update?.session).toMatchObject({ kind: 'native', title: 'Task automation session' });
-    expect(items.find((item) => item.change?.field === 'description')?.session?.id).toBe(
-      update?.session?.id,
+    expect(items.find((item) => item.body === 'Brief ready.')).toBeUndefined();
+    const mutation = items.find((item) => item.change?.field === 'description');
+    expect(mutation?.session).toMatchObject({ kind: 'native', title: 'Task automation session' });
+    expect(items.find((item) => item.sessionEvent === 'question')?.session?.id).toBe(
+      mutation?.session?.id,
     );
     expect(items.find((item) => item.body === 'Venue confirmation is required.')).toMatchObject({
       actorName: 'Session participant',
@@ -109,5 +165,18 @@ describe('native task activity sessions', () => {
       body: 'An automated task update could not be completed.',
     });
     expect(JSON.stringify(items)).not.toContain('Private provider traceback');
+    for (const text of [
+      'Private working notes',
+      'Internal tool call',
+      'I will inspect the task next.',
+      'Original private assignment prompt.',
+    ])
+      expect(JSON.stringify(items)).not.toContain(text);
+    expect(items.find((item) => item.body === 'Ambiguous historical message.')).toBeUndefined();
+    expect(items.find((item) => item.body === 'The community hall.')).toMatchObject({
+      actorName: 'Session participant',
+      origin: null,
+      session: null,
+    });
   });
 });

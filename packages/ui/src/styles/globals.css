@@ -1371,6 +1371,9 @@
     white-space: normal;
   }
   to {
+    /* The compact title shares the identity row with actions. Its expanded grid area spans
+     * both columns; end at the action column so transformed text cannot paint underneath it. */
+    grid-column-end: 2;
     transform: translateY(-2.5rem);
     padding-block-start: 0.5rem;
     padding-block-end: 0.5rem;
@@ -1389,10 +1392,10 @@
   }
 }
 
-/* Phone identity and actions need separate lanes. A transformed, full-width compact title
- * otherwise paints underneath the timer controls. Keep the phone title readable at one size;
+/* Narrow panes keep identity and actions in separate lanes. A transformed, full-width compact title
+ * otherwise paints underneath the timer controls. Keep the narrow-pane title readable at one size;
  * the existing secondary-row collapse still removes supporting metadata when scrolling. */
-@container (max-width: 41.999rem) {
+@container (max-width: 55.999rem) {
   .detail-primary {
     grid-template-columns: var(--detail-expanded-glyph-size) minmax(0, 1fr);
     grid-template-rows: auto auto;
@@ -1415,6 +1418,7 @@
   .detail-actions {
     justify-self: end;
     max-width: 100%;
+    flex-wrap: wrap;
   }
 }
 

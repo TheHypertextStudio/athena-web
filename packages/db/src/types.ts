@@ -276,6 +276,8 @@ export interface SessionActivityBody {
     | undefined;
   /** Application attribution for human-authored response rows. */
   readonly author?: 'user' | 'athena' | undefined;
+  /** Durable question activity answered by this participant response. */
+  readonly elicitationActivityId?: string | undefined;
   /**
    * Where a `author: 'user'` row's text actually came from.
    *

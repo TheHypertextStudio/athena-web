@@ -154,7 +154,7 @@ function ActivityRow({ entry, orgId, compact = false }: ActivityRowProps): JSX.E
         <time
           dateTime={entry.createdAt}
           title={activityTimestampTitle(entry.createdAt, performer.detail)}
-          className="text-label-small font-mono tabular-nums"
+          className="text-label-small tabular-nums"
         >
           {relativeTime(entry.createdAt)}
         </time>

@@ -138,6 +138,7 @@ at node centers and implies sequence only. No inner rail, graph edge, decorative
 is added. `@docket/ui` Timeline primitives own this geometry and its 24px nodes, 16px gutter gap
 and 24px row rhythm. Plain content uses the same 12px inset as a session surface, keeping its
 text aligned. Session surfaces use the existing small corner variant, leaving app-wide geometry
-unchanged. There is one verified performer identity per session, mono timestamps, and separate
-progressive disclosures for earlier intentional task updates and durable changes. Session
+unchanged. There is one verified performer identity per session. Timestamps use the normal app typeface.
+Action summaries remain visible; disclose full diffs and unusually long sequences, never replace
+ordinary changes with a bare count. Earlier intentional task updates can disclose separately. Session
 conversation and execution details belong in the session surface, outside task Activity.

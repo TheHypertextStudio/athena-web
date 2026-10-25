@@ -84,20 +84,24 @@ for (const width of [390, 1440, 1920]) {
     await page.setViewportSize({ width, height: 1000 });
     await openTimeline(page);
     await page.emulateMedia({ reducedMotion: 'reduce' });
-    const changes = page.getByRole('button', { name: '1 change', exact: true });
-    await changes.focus();
-    await page.keyboard.press('Enter');
-    await expect(changes).toHaveAttribute('aria-expanded', 'true');
-    const description = page.getByRole('button', { name: 'Description revised' });
+    await expect(page.getByRole('button', { name: '1 change', exact: true })).toHaveCount(0);
+    const description = page.getByRole('button', { name: 'View description change' });
     await description.focus();
     await page.keyboard.press('Enter');
+    await expect(description).toHaveAttribute('aria-expanded', 'true');
     await expect(page.getByText('Original brief')).toBeVisible();
     await expect(description).toBeFocused();
     expect(
-      await changes
+      await description
         .locator('svg')
         .evaluate((element) => getComputedStyle(element).transitionProperty),
     ).toBe('none');
+    expect(
+      await page
+        .locator('[data-entry-time]')
+        .first()
+        .evaluate((element) => getComputedStyle(element).fontFamily),
+    ).not.toMatch(/mono/i);
     const geometry = await page.getByRole('list', { name: 'Task activity' }).evaluate((list) => {
       const items = Array.from(list.children) as HTMLElement[];
       return items.map((item) => {
@@ -166,13 +170,10 @@ test.describe('touch activity controls', () => {
     await page.setViewportSize({ width: 390, height: 844 });
     await openTimeline(page);
     await page.setViewportSize({ width: 320, height: 844 });
-    const changes = page.getByRole('button', { name: '1 change', exact: true });
-    expect((await changes.boundingBox())?.height).toBeGreaterThanOrEqual(40);
-    await changes.tap();
-    const description = page.getByRole('button', { name: 'Description revised' });
+    const description = page.getByRole('button', { name: 'View description change' });
     expect((await description.boundingBox())?.height).toBeGreaterThanOrEqual(40);
     await description.tap();
-    await expect(page.getByText('Revised brief')).toBeVisible();
+    await expect(page.getByText('Revised brief').first()).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(
       false,
     );

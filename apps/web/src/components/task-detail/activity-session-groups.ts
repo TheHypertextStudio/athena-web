@@ -1,5 +1,6 @@
 /** Chronological contributions retain session identity without moving interleaved discussion. */
 import type { TaskActivityOut, TaskActivitySession } from '@docket/connections/activity-contract';
+import { activityContributorKey } from './activity-contributor';
 
 /** One contiguous contribution; another actor's entry always starts a new contribution. */
 export interface ActivitySessionGroup {
@@ -7,6 +8,17 @@ export interface ActivitySessionGroup {
   readonly session: TaskActivitySession | null;
   readonly entries: TaskActivityOut[];
   readonly continued: boolean;
+}
+
+/** Extend only one performer's adjacent contribution; a session itself is never its author. */
+function canExtend(previous: ActivitySessionGroup, entry: TaskActivityOut): boolean {
+  const first = previous.entries[0];
+  return Boolean(
+    first &&
+    entry.session &&
+    previous.session?.id === entry.session.id &&
+    activityContributorKey(first) === activityContributorKey(entry),
+  );
 }
 
 /** Group loaded pages together; continuation and counts describe only the loaded filtered history. */
@@ -19,7 +31,7 @@ export function activitySessionGroups(entries: readonly TaskActivityOut[]): Acti
     seenEntries.add(entry.id);
     const session = entry.session ?? null;
     const previous = groups.at(-1);
-    if (session && previous?.session?.id === session.id) {
+    if (previous && canExtend(previous, entry)) {
       previous.entries.push(entry);
       continue;
     }

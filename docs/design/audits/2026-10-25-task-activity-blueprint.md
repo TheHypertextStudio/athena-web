@@ -1,5 +1,8 @@
 # Design review: task activity blueprint — 2026-10-25
 
+Superseded by the [readability correction audit](2026-10-25-task-activity-readability.md). The user rejected the count-only mutation surface
+and monospace timestamps: the previous local SHIP verdict overstated usefulness.
+
 Register: Docket app, Plex typography and semantic tonal surfaces. Scope: task Activity and its
 masthead correction. This is local implementation acceptance, not production or provider acceptance.
 

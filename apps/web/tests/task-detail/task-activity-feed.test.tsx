@@ -187,7 +187,6 @@ describe('TaskActivityFeed', () => {
     renderFeed();
     expect(screen.getByText('Brief ready for review.')).toBeVisible();
     expect(screen.getByText('Which venue should we use?')).toBeVisible();
-    fireEvent.click(screen.getByRole('button', { name: '1 change' }));
     expect(screen.getByText('November announcement')).toBeVisible();
   });
 
@@ -291,10 +290,9 @@ describe('TaskActivityFeed', () => {
     expect(within(activity).queryByText('Original brief')).not.toBeInTheDocument();
     fireEvent.click(within(activity).getByRole('button', { name: '1 earlier update' }));
     expect(within(activity).getByText('First draft prepared.')).toBeVisible();
-    fireEvent.click(within(activity).getByRole('button', { name: '1 change' }));
-    fireEvent.click(within(activity).getByRole('button', { name: 'Description revised' }));
+    fireEvent.click(within(activity).getByRole('button', { name: 'View description change' }));
     expect(within(activity).getByText('Original brief')).toBeVisible();
-    expect(within(activity).getByText('A much longer revised brief')).toBeVisible();
+    expect(within(activity).getAllByText('A much longer revised brief').length).toBeGreaterThan(0);
   });
 
   it('renders comments and task changes in one chronological Activity list', () => {

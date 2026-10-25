@@ -50,4 +50,31 @@ describe('activity session contributions', () => {
     expect(groups).toHaveLength(1);
     expect(groups[0]?.entries.map((item) => item.id)).toEqual(['a', 'b']);
   });
+  it('keeps each performer visible when the same session contains different contributors', () => {
+    const codex = {
+      channel: 'mcp',
+      surface: null,
+      performerKind: 'agent',
+      performerName: 'Codex',
+      clientName: 'Codex',
+      provider: null,
+    } as const;
+    const entries = [
+      {
+        ...entry('one', 'work'),
+        actorId: 'authority' as TaskActivityOut['actorId'],
+        origin: codex,
+      },
+      { ...entry('two', 'work'), actorId: null, origin: codex, type: 'comment' as const },
+      { ...entry('three', 'work'), actorName: 'Bella', origin: null },
+      { ...entry('four', 'work'), origin: codex },
+    ];
+    const groups = activitySessionGroups(entries);
+    expect(groups.map((group) => group.entries.map((item) => item.id))).toEqual([
+      ['one', 'two'],
+      ['three'],
+      ['four'],
+    ]);
+    expect(groups.map((group) => group.continued)).toEqual([false, true, true]);
+  });
 });

@@ -1,5 +1,5 @@
-import clientRegistry from '../cache-clients.json' with { type: 'json' };
-import { cacheClientNamespaces } from './clients.ts';
+import clientRegistry from './cache-clients.json' with { type: 'json' };
+import { cacheClientNamespaces } from './src/clients.ts';
 
 /** Canonical client metadata consumed by deployment, bootstrap and cache diagnostics. */
 export const cacheClients = clientRegistry;

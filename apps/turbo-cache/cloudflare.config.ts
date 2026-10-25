@@ -1,5 +1,5 @@
 import { bindings, defineConfig } from 'cf/config';
-import { cacheConfig } from './src/config.ts';
+import { cacheConfig } from './config.ts';
 
 /** Native cf deployment with a private binding and one authenticated custom domain. */
 export default defineConfig({

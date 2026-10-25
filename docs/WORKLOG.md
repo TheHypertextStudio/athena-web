@@ -70,6 +70,23 @@
 - **Local acceptance**: Six real Workers asset-binding tests, root typecheck, focused lint and the native production build pass. The built asset directory includes the source header declaration. An independent source review found no release-blocking issues.
 - **Findings**: Cloudflare Security Events identify Bot Fight Mode managed challenges for the exact GitHub verification user agent and docs path; the docs origin is healthy. This free-plan feature has no path-specific exemption. Correct native static caching with the standard public/_headers declaration; keep the unchanged verifier and mutable-asset revalidation. Browser automation requires owner confirmation before changing the bot-protection setting.
 
+### [WORK-RECOVERY-COMPLETION] Finish the remaining recovery and typed-work roadmap
+
+- **Status**: IN_PROGRESS
+- **Priority**: P1
+- **Description**: Complete the original recovery plan beyond the integrated interface and loading
+  delivery. Reconcile current source and evidence before identifying remaining work.
+- **Approach**: Finish canonical schedule conversion with independently proved retained data;
+  complete trusted Athena proposals, Inbox review, onboarding, label conversion and cross-workspace
+  delivery; verify current operational acceptance and reconcile or retire preserved candidates.
+  Preserve ordinary adapters, authorization, private/team drafts and accepted history throughout.
+- **Validation**: Use failing behavior regressions, real PostgreSQL migration/concurrency tests,
+  populated focused browser journeys and the existing craft/capture tooling. Run affected types,
+  lint, complexity and builds; require current provider/device proof for corresponding acceptance.
+- **Execution**: Continue across validated slices without owner check-ins. Record explicit blocked
+  dispositions only when required facts, access, provider/device state or product decisions prevent
+  progress. Keep independent work moving and preserve unrelated dirty checkouts.
+
 ### [PRODUCT-ADMIN-CACHE-CI] Register private Product Admin CI
 
 - **Status**: DONE
@@ -13668,6 +13685,18 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
 ---
 
 ## Completed Tasks
+
+### [CACHE-CONFIG-BOUNDARY] Keep deployment metadata outside application runtime
+
+- **Completed**: 2026-10-25
+- **Summary**: Keep the shared cache's public deployment and test configuration at the package
+  root. Deployment, bootstrap and worker tests still import one unchanged configuration; the
+  application legacy-host policy continues to inspect runtime source without an exemption.
+- **Files changed**: Cache configuration, its three consumers and package development guidance.
+- **Validation**: All 71 cache worker tests, 38 host-policy cases and 10 bootstrap storage checks
+  pass. Native cache type generation, TypeScript and ESLint pass. No provider settings changed.
+- **Learnings**: Deployment-only metadata belongs outside the shipped runtime source boundary;
+  changing that boundary does not require weakening the runtime policy.
 
 ### [WORK-TEMPLATE-FINAL-RELEASE-20261024] Reconcile and validate the complete feature
 

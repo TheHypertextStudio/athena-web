@@ -1,6 +1,6 @@
 import { cloudflareTest } from '@cloudflare/vitest-pool-workers';
 import { defineConfig } from 'vitest/config';
-import { cacheConfig } from './src/config';
+import { cacheConfig } from './config';
 
 /** Run protocol, cryptographic authentication and R2 tests inside workerd. */
 export default defineConfig({

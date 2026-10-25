@@ -66,7 +66,7 @@ storage for cache artifacts.
 
 Deployment uses native `cf build`, `cf deploy` and `cf dev` through package scripts.
 `cloudflare.config.ts` is the production configuration; public settings shared with tests live in
-`src/config.ts`. Generate runtime and binding declarations with `pnpm --filter @docket/turbo-cache cf:types`.
+`config.ts`. Generate runtime and binding declarations with `pnpm --filter @docket/turbo-cache cf:types`.
 The existing Workers test pool uses its supported July compatibility date; deployment uses October 16.
 
 Use the root bootstrap to prepare this workspace, then the normal package tasks:

@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
-import { cacheConfig } from '../../apps/turbo-cache/src/config';
+import { cacheConfig } from '../../apps/turbo-cache/config';
 
 /** R2 storage and the native Worker endpoint used by the shared Studio cache. */
 export const TURBO_CACHE_BUCKET = cacheConfig.bucketName;

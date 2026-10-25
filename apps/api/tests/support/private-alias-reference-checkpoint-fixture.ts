@@ -1,8 +1,7 @@
 import { expect } from 'vitest';
 import { sql } from 'drizzle-orm';
 import * as schema from '@docket/db';
-import type { Database } from '@docket/db';
-import { preparePrivateAliasReferences } from '../../../../packages/db/src/work-template-alias-reference-checkpoint';
+import { preparePrivateAliasReferences, type Database } from '@docket/db';
 import { ProcessDefinitionCreate } from '../../src/contracts/recurrence';
 import { appendPublishedProcessRevision } from '../../src/lib/recurrence/process-definition';
 import { rawResultRows } from '../../src/lib/raw-result';

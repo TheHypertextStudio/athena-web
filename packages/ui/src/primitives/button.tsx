@@ -108,6 +108,9 @@ export interface ButtonVariantsOptions {
   readonly className?: string;
 }
 
+/** Lets a long label wrap within its surface; shared so `Button` and `buttonVariants` match. */
+const WRAPPED_LABEL = 'max-w-full min-w-0 py-1 whitespace-normal';
+
 /**
  * Build a button's complete class string without rendering a {@link Button}.
  *
@@ -127,7 +130,7 @@ export function buttonVariants(options?: ButtonVariantsOptions): string {
   const growable = options?.wrapLabel === true && legacy !== 'icon';
   return cn(
     controlChrome(step, { iconOnly: legacy === 'icon', growable }),
-    growable && 'min-w-0 max-w-full whitespace-normal py-1',
+    growable && WRAPPED_LABEL,
     BUTTON_COLOR[variant],
     focusRing,
     options?.className,
@@ -187,7 +190,7 @@ export function Button({
     <Comp
       className={cn(
         controlChrome(step, { iconOnly: square, growable }),
-        growable && 'max-w-full min-w-0 py-1 whitespace-normal',
+        growable && WRAPPED_LABEL,
         BUTTON_COLOR[variant ?? 'default'],
         focusRing,
         className,

@@ -599,8 +599,7 @@ export async function loadGeneratedWorkRecurrence(
   if (!(await visibleLegacyWorkReference(database, lookup, reference))) return null;
   const native = await loadNativeGeneratedWorkRecurrence(database, {
     organizationId: lookup.organizationId,
-    kind: lookup.kind,
-    id: lookup.kind === 'task' ? lookup.taskId : lookup.projectId,
+    ...reference,
     ...(lookup.actorId ? { actorId: lookup.actorId } : {}),
   });
   if (native) return native;
@@ -696,9 +695,6 @@ async function appendFutureSeriesRevision(
       .limit(1);
     const series = rows[0];
     if (!series) throw new NotFoundError('Recurrence series not found');
-    if (series.definitionId !== initialDefinitionId)
-      throw new ConflictError('The schedule definition changed.');
-    if (series.status === 'ended') throw new ConflictError('Ended recurrence series cannot change');
     const latest = await tx
       .select({
         number: recurrenceSeriesRevision.number,
@@ -708,14 +704,7 @@ async function appendFutureSeriesRevision(
       .where(eq(recurrenceSeriesRevision.seriesId, input.seriesId))
       .orderBy(desc(recurrenceSeriesRevision.number))
       .limit(1);
-    const asOf = input.asOf ?? utcCalendarDate();
-    if (compareCalendarDates(input.effectiveFrom, asOf) < 0) {
-      throw new ConflictError('Future schedule changes cannot begin in the past');
-    }
-    if (latest[0] && compareCalendarDates(input.effectiveFrom, latest[0].effectiveFrom) <= 0) {
-      throw new ConflictError('Future schedule changes must follow the latest schedule version');
-    }
-    if (!series.definitionId)
+    if (!futureRevisionDefinition(series, initialDefinitionId, latest[0], input))
       throw new ConflictError('Edit this work schedule through its template revision');
     await requireLegacyDefinitionAccess(tx, {
       organizationId: input.organizationId,
@@ -752,6 +741,46 @@ async function appendFutureSeriesRevision(
   });
   await finishRetiredTaskCascades(retired.cascades);
   await input.onRetired?.({ taskIds: retired.taskIds, projectIds: retired.projectIds });
+}
+
+/** Series fields that decide whether a future revision may be appended. */
+interface FutureRevisionSeries {
+  readonly definitionId: string | null;
+  readonly status: string;
+}
+/** The latest stored revision boundary, when one exists. */
+interface FutureRevisionBoundary {
+  readonly effectiveFrom: string;
+}
+/** When a future revision starts and the civil date it is checked against. */
+interface FutureRevisionStart {
+  readonly effectiveFrom: string;
+  readonly asOf?: string | undefined;
+}
+
+/**
+ * Check that a future revision may follow the locked series.
+ *
+ * @returns Whether the series is backed by a definition that future revisions can edit.
+ * @throws ConflictError When the definition changed, the series ended, or the start is not in the
+ *   future after the latest revision.
+ */
+function futureRevisionDefinition(
+  series: FutureRevisionSeries,
+  initialDefinitionId: string | null,
+  latest: FutureRevisionBoundary | undefined,
+  input: FutureRevisionStart,
+): series is FutureRevisionSeries & { readonly definitionId: string } {
+  if (series.definitionId !== initialDefinitionId)
+    throw new ConflictError('The schedule definition changed.');
+  if (series.status === 'ended') throw new ConflictError('Ended recurrence series cannot change');
+  if (compareCalendarDates(input.effectiveFrom, input.asOf ?? utcCalendarDate()) < 0) {
+    throw new ConflictError('Future schedule changes cannot begin in the past');
+  }
+  if (latest && compareCalendarDates(input.effectiveFrom, latest.effectiveFrom) <= 0) {
+    throw new ConflictError('Future schedule changes must follow the latest schedule version');
+  }
+  return series.definitionId !== null;
 }
 
 async function lockFutureSeriesDefinition(

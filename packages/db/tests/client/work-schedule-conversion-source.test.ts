@@ -85,6 +85,14 @@ function source(): ScheduleArchiveSource {
     ],
   };
 }
+function referencesFor(original: ScheduleArchiveSource) {
+  return new Map(
+    original.manifest.steps.map((step) => [
+      step.sourceStepId,
+      { rootKey: step.rootKey, path: [...step.path] },
+    ]),
+  );
+}
 describe('private original-source conversion projection', () => {
   it('preserves exact aliases, independent order, all literal date policies and blank replacement without restamping evidence', () => {
     const original = source(),
@@ -183,5 +191,48 @@ describe('private original-source conversion projection', () => {
     expect(input.roots[0]?.stepOverrides[0]?.path).toEqual(['follow']);
     expect(JSON.stringify(original)).toBe(before);
     expect(original.manifest.steps[0]?.path).toEqual(['checkpoint', 'follow']);
+  });
+  it('refuses original steps that are not a list of step records', () => {
+    for (const steps of [null, [null], ['step']]) {
+      const original = { ...source(), source: { steps } };
+      expect(() =>
+        compileScheduleConversionInput(original, evidence, selected, referencesFor(original)),
+      ).toThrow('invalid_structure');
+    }
+  });
+  it('refuses timing that waits on a step absent from the original source', () => {
+    const base = source();
+    const original = {
+      ...base,
+      overrides: base.overrides.map((entry) =>
+        entry.sourceStepId === task
+          ? { ...entry, timing: { ...entry.timing, afterStepId: 'missing-step' } }
+          : entry,
+      ),
+    };
+    expect(() =>
+      compileScheduleConversionInput(original, evidence, selected, referencesFor(original)),
+    ).toThrow('invalid_structure');
+  });
+  it('projects relative trigger timing with a zero offset when none was recorded', () => {
+    const base = source();
+    const original = {
+      ...base,
+      overrides: base.overrides.map((entry) =>
+        entry.sourceStepId === task
+          ? {
+              ...entry,
+              timing: { kind: 'relative_to_trigger' as const, afterStepId: null, offsetDays: null },
+            }
+          : entry,
+      ),
+    };
+    const input = compileScheduleConversionInput(
+      original,
+      evidence,
+      selected,
+      referencesFor(original),
+    );
+    expect(JSON.stringify(input)).toContain('"relative_to_trigger"');
   });
 });

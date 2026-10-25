@@ -102,6 +102,12 @@ describe('triggerFromStorage', () => {
         entityKind: 'workshop',
       },
     });
+    expect(
+      triggerFromStorage(
+        stored({ triggerKind: 'event', eventSubjectType: 'calendar_event', eventSource: 'google' }),
+        [],
+      ),
+    ).toEqual({ kind: 'event', event: { subjectType: 'calendar_event', source: 'google' } });
   });
 
   it('rejects either missing completion interval column', () => {

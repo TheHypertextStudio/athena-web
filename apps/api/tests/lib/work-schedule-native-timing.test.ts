@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { WorkScheduleDraft } from '@docket/work/work-schedule';
 import { WorkScheduleForest } from '@docket/work/work-schedule-forest';
-import type { ExistingBlueprintNode } from '@docket/work/blueprints';
+import { BlueprintError, type ExistingBlueprintNode } from '@docket/work/blueprints';
+import type { NativeScheduleDateOwnership } from '@docket/db';
 import {
   planScheduleBlueprint,
   compileScheduleCommand,
@@ -12,8 +13,9 @@ import {
   pinNativeScheduleDates,
 } from '../../src/lib/recurrence/schedule-native-timing';
 import { actor, input, team, ulid, context } from './work-schedule-fixture';
+import { dateBinding, existingNode } from './existing-blueprint-node-fixture';
 
-function fixture(dates: Record<string, string | null> = {}) {
+function fixture(dates: Record<string, string | null> = {}, stepOverrides: unknown[] = []) {
   const document = WorkScheduleDraft.parse({
     kind: 'schedule',
     revision: 1,
@@ -21,7 +23,7 @@ function fixture(dates: Record<string, string | null> = {}) {
     titlePattern: '{month} Dinner',
     timezone: 'America/Los_Angeles',
     root: { kind: 'project', fields: {}, dates, placement: {}, teamId: team },
-    stepOverrides: [],
+    stepOverrides,
     optionalChoices: [],
   });
   const command = compileScheduleCommand({
@@ -209,5 +211,185 @@ describe('native occurrence date ownership', () => {
       context: context(),
     });
     expect(result.dates).toContainEqual({ id: ulid(21), field: 'dueDate', value: '2026-09-25' });
+  });
+});
+
+/** One-root forest whose child due date follows the root's actual target date. */
+function childTimingForest(f: ReturnType<typeof fixture>, offsetDays = 2) {
+  return WorkScheduleForest.parse({
+    kind: 'forest',
+    revision: 1,
+    state: 'published',
+    roots: [{ key: 'root', draft: f.document }],
+    dependencies: [],
+    timing: [
+      {
+        target: { rootKey: 'root', path: ['child'] },
+        prerequisite: { rootKey: 'root', path: [] },
+        offsetDays,
+      },
+    ],
+  });
+}
+
+function blueprintCode(run: () => unknown): string | null {
+  try {
+    run();
+    return null;
+  } catch (error) {
+    if (error instanceof BlueprintError) return error.code;
+    throw error;
+  }
+}
+
+describe('native occurrence private timing registration', () => {
+  it('pins a private timing target whose child date was authored in the saved draft', () => {
+    const f = fixture({}, [{ kind: 'task', path: ['child'], dates: { dueDate: '2026-09-20' } }]);
+    const ownership = nativeDateOwnership(childTimingForest(f), f.roots, f.nodes);
+    expect(ownership.find((entry) => entry.id === ulid(21))).toMatchObject({
+      field: 'dueDate',
+      anchor: { kind: 'work', id: ulid(20), offsetDays: 2 },
+      manual: true,
+    });
+  });
+
+  it('keeps an override without dates managed', () => {
+    const f = fixture({}, [{ kind: 'task', path: ['child'], fields: { title: 'Renamed' } }]);
+    const ownership = nativeDateOwnership(childTimingForest(f), f.roots, f.nodes);
+    expect(ownership.find((entry) => entry.id === ulid(21))?.manual).toBe(false);
+  });
+
+  it('refuses timing whose prerequisite has no accepted actual work', () => {
+    const f = fixture();
+    const roots = f.roots.map((root) => ({ ...root, selectedWork: [] }));
+    expect(blueprintCode(() => nativeDateOwnership(childTimingForest(f), roots, f.nodes))).toBe(
+      'blueprint_invalid',
+    );
+  });
+
+  it('refuses registration when the accepted work row is gone', () => {
+    const f = fixture();
+    expect(blueprintCode(() => nativeDateOwnership(f.document, f.roots, []))).toBe(
+      'blueprint_invalid',
+    );
+  });
+});
+
+describe('native occurrence private reflow refusals', () => {
+  it('refuses to reflow more than 500 work items without an affected set', () => {
+    const f = fixture();
+    const root = f.nodes[0];
+    if (!root) throw new Error('Missing root');
+    const nodes = Array.from({ length: 501 }, (_, index) => ({ ...root, id: `copy-${index}` }));
+    expect(
+      blueprintCode(() =>
+        planNativeScheduleReflow({
+          nodes,
+          ownership: nativeDateOwnership(f.document, f.roots, f.nodes),
+          runDate: '2026-10-15',
+          context: context(),
+        }),
+      ),
+    ).toBe('blueprint_limit');
+  });
+
+  it('refuses an ownership entry with an unknown private policy', () => {
+    const f = fixture();
+    const [entry] = nativeDateOwnership(f.document, f.roots, f.nodes);
+    if (!entry) throw new Error('Missing ownership');
+    const unknown = {
+      ...entry,
+      anchor: { kind: 'later' },
+    } as unknown as NativeScheduleDateOwnership;
+    expect(
+      blueprintCode(() =>
+        planNativeScheduleReflow({
+          nodes: f.nodes,
+          ownership: [unknown],
+          runDate: '2026-10-15',
+          context: context(),
+        }),
+      ),
+    ).toBe('blueprint_invalid');
+  });
+
+  it('refuses a private root anchor that loops through its own descendant', () => {
+    const f = fixture();
+    const [entry] = nativeDateOwnership(f.document, f.roots, f.nodes);
+    if (!entry) throw new Error('Missing ownership');
+    const looped: NativeScheduleDateOwnership = {
+      ...entry,
+      anchor: { kind: 'work', id: ulid(21), offsetDays: 1 },
+    };
+    expect(
+      blueprintCode(() =>
+        planNativeScheduleReflow({
+          nodes: f.nodes,
+          ownership: [looped],
+          runDate: '2026-10-15',
+          context: context(),
+        }),
+      ),
+    ).toBe('blueprint_loop');
+  });
+});
+
+describe('native occurrence private reflow outcomes', () => {
+  it('treats a diverged private date as an explicit pin and skips departed work', () => {
+    const f = fixture();
+    const [entry] = nativeDateOwnership(f.document, f.roots, f.nodes);
+    if (!entry) throw new Error('Missing ownership');
+    const nodes = f.nodes.map((node) =>
+      node.id === ulid(20) ? { ...node, dates: { targetDate: '2026-10-01' } } : node,
+    );
+    const result = planNativeScheduleReflow({
+      nodes,
+      ownership: [entry, { ...entry, id: 'departed' }],
+      runDate: '2026-10-15',
+      context: context(),
+    });
+    expect(result.dates.some((change) => change.id === ulid(20))).toBe(false);
+    expect(result.ownership[0]?.manual).toBe(true);
+    expect(result.ownership[1]?.manual).toBe(false);
+  });
+
+  it('fills an undated run-anchored root and leaves unmanaged siblings alone', () => {
+    const f = fixture();
+    const [entry] = nativeDateOwnership(f.document, f.roots, f.nodes);
+    if (!entry) throw new Error('Missing ownership');
+    const sibling: ExistingBlueprintNode = existingNode({
+      id: 'sibling',
+      kind: 'task',
+      path: ['sibling'],
+      parentId: ulid(20),
+      dateBindings: { startDate: dateBinding({ kind: 'none' }) },
+    });
+    const nodes = [
+      ...f.nodes.map((node) => (node.id === ulid(20) ? { ...node, dates: {} } : node)),
+      sibling,
+    ];
+    const result = planNativeScheduleReflow({
+      nodes,
+      ownership: [{ ...entry, lastDerivedDate: null }],
+      runDate: '2026-10-15',
+      context: context(),
+    });
+    expect(result.dates).toContainEqual({ id: ulid(20), field: 'targetDate', value: '2026-10-15' });
+    expect(result.dates.some((change) => change.id === 'sibling')).toBe(false);
+    expect(result.ownership[0]?.lastDerivedDate).toBe('2026-10-15');
+  });
+
+  it('clears a work-anchored date whose source work has no date', () => {
+    const f = fixture();
+    const forest = childTimingForest(f);
+    const ownership = nativeDateOwnership(forest, f.roots, f.nodes);
+    const nodes = f.nodes.map((node) => (node.id === ulid(20) ? { ...node, dates: {} } : node));
+    const result = planNativeScheduleReflow({
+      nodes,
+      ownership: ownership.filter((entry) => entry.id === ulid(21)),
+      runDate: '2026-10-15',
+      context: context(),
+    });
+    expect(result.dates).toContainEqual({ id: ulid(21), field: 'dueDate', value: null });
   });
 });

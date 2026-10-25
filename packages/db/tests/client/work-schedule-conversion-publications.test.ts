@@ -99,3 +99,131 @@ it('prepares only exact pinned nested publications without manufacturing inline 
   ]);
   expect(execute).toHaveBeenCalledTimes(2);
 });
+function connection(...rows: unknown[][]): BlueprintMigrationConnection {
+  const execute = vi.fn();
+  for (const row of rows) execute.mockResolvedValueOnce(row);
+  return { execute };
+}
+function childPublication(targetType: string): { definition: unknown } {
+  return {
+    definition: {
+      name: 'Child outline',
+      payload: { targetType },
+      blueprint: { steps: [], dependencies: [] },
+    },
+  };
+}
+function withRoot(patch: Partial<ScheduleArchiveSource['manifest']['roots'][number]>) {
+  const value = source();
+  const [root] = value.manifest.roots;
+  if (!root) throw new Error('Fixture root missing.');
+  return { ...value, manifest: { ...value.manifest, roots: [{ ...root, ...patch }] } };
+}
+it('refuses a root without both selected identities before reading publications', async () => {
+  const tx = connection();
+  await expect(
+    readScheduleConversionClosure(tx, 'workspace', withRoot({ workTypeVersionId: null })),
+  ).rejects.toThrow('missing_selection');
+  expect(tx.execute).not.toHaveBeenCalled();
+});
+it('refuses an absent or unreadable root publication', async () => {
+  await expect(
+    readScheduleConversionClosure(connection([]), 'workspace', source()),
+  ).rejects.toThrow('closure_unproved');
+  await expect(
+    readScheduleConversionClosure(connection([{ definition: { name: 1 } }]), 'workspace', source()),
+  ).rejects.toThrow('closure_unproved');
+});
+it('refuses publications whose kind cannot carry a schedule', async () => {
+  await expect(
+    readScheduleConversionClosure(
+      connection([childPublication('initiative')]),
+      'workspace',
+      source(),
+    ),
+  ).rejects.toThrow('invalid_structure');
+});
+it('refuses a root whose publication kind differs from the recorded root', async () => {
+  await expect(
+    readScheduleConversionClosure(connection([childPublication('task')]), 'workspace', source()),
+  ).rejects.toThrow('closure_unproved');
+});
+it('refuses a pinned child publication of a different kind than its step', async () => {
+  await expect(
+    readScheduleConversionClosure(
+      connection([{ definition: definition(true) }], [childPublication('project')]),
+      'workspace',
+      source(),
+    ),
+  ).rejects.toThrow('closure_unproved');
+});
+it('refuses one version reached through two different work types', async () => {
+  const value = source();
+  const [root] = value.manifest.roots;
+  if (!root) throw new Error('Fixture root missing.');
+  const doubled = {
+    ...value,
+    manifest: {
+      ...value.manifest,
+      roots: [root, { ...root, key: 'second', sourceStepId: 'second', workTypeId: childId }],
+    },
+  };
+  await expect(
+    readScheduleConversionClosure(
+      connection([{ definition: definition(true) }], [childPublication('task')]),
+      'workspace',
+      doubled,
+    ),
+  ).rejects.toThrow('closure_unproved');
+});
+it('refuses a nested step without its original order proof', async () => {
+  const value = source();
+  const nested = {
+    ...value,
+    manifest: {
+      ...value.manifest,
+      steps: [{ sourceStepId: 'step', rootKey: 'root', path: ['child'] }],
+    },
+  } as unknown as ScheduleArchiveSource;
+  await expect(
+    readScheduleConversionClosure(
+      connection([{ definition: definition(true) }], [childPublication('task')]),
+      'workspace',
+      nested,
+    ),
+  ).rejects.toThrow('closure_unproved');
+  const unmatched = {
+    ...nested,
+    originalStepOrders: [{ sourceStepId: 'step', sourceVersionId: 'other', key: 'child' }],
+  } as unknown as ScheduleArchiveSource;
+  await expect(
+    readScheduleConversionClosure(
+      connection([{ definition: definition(true) }], [childPublication('task')]),
+      'workspace',
+      unmatched,
+    ),
+  ).rejects.toThrow('closure_unproved');
+});
+it('maps proved nested and root steps to their canonical references', async () => {
+  const value = source();
+  const proved = {
+    ...value,
+    originalStepOrders: [{ sourceStepId: 'step', sourceVersionId: rootVersion, key: 'child' }],
+    manifest: {
+      ...value.manifest,
+      steps: [
+        { sourceStepId: 'root-step', rootKey: 'root', path: [] },
+        { sourceStepId: 'step', rootKey: 'root', path: ['child'] },
+      ],
+    },
+  } as unknown as ScheduleArchiveSource;
+  const closure = await readScheduleConversionClosure(
+    connection([{ definition: definition(true) }], [childPublication('task')]),
+    'workspace',
+    proved,
+  );
+  expect([...closure.references]).toEqual([
+    ['root-step', { rootKey: 'root', path: [] }],
+    ['step', { rootKey: 'root', path: ['child'] }],
+  ]);
+});

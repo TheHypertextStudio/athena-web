@@ -124,6 +124,20 @@ also has no schedule or push trigger and uses one ten-minute-capped Ubuntu runne
 
 ---
 
+## OpenAI domain ownership
+
+Set the API runtime environment variable `OPENAI_APPS_CHALLENGE` to the token from the OpenAI
+plugin draft. The API serves those exact bytes as `text/plain` at
+`https://api.clearthedocket.com/.well-known/openai-apps-challenge`, without authentication or caching.
+When the variable is absent or empty, the endpoint returns 404. Copy the token exactly, without
+surrounding quotes or extra whitespace; the endpoint does not transform it.
+
+For normal production releases, set `OPENAI_APPS_CHALLENGE` in the GitHub `production` environment's
+variables. The deploy workflow passes it to Cloud Run. This value is public domain ownership proof,
+so it belongs in deployment configuration rather than source or a container build argument. Rotate
+or remove it through the same environment variable. Check that the public URL returns the exact
+token before using **Verify Domain** in the draft. Domain verification does not submit the plugin.
+
 ## One-time bootstrap
 
 Run once per GCP project. Idempotent — safe to re-run.

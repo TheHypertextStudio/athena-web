@@ -266,6 +266,8 @@ export const stripeServer = {
 
 /** Remote MCP server (OAuth 2.1 RS) configuration. */
 export const mcpServer = {
+  /** Public OpenAI domain ownership token; absent disables the challenge endpoint. */
+  OPENAI_APPS_CHALLENGE: z.string().optional(),
   MCP_ISSUER_URL: z.string().optional(),
   MCP_RESOURCE_URL: z.string().optional(),
   OIDC_LOGIN_PAGE_URL: z.string().optional(),

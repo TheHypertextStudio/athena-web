@@ -7,6 +7,25 @@
 
 ## Active Tasks
 
+### [OPENAI-DOMAIN-CHALLENGE] Serve the configured marketplace ownership challenge
+
+- **Status**: IN_PROGRESS
+- **Started**: 2026-10-25
+- **Description**: Serve the OpenAI domain ownership challenge at the API origin's
+  `/.well-known/openai-apps-challenge` endpoint, configured through runtime environment.
+- **Approach**: Declare the optional public `OPENAI_APPS_CHALLENGE` variable in the API environment
+  contract and deployment configuration. Mount the exact plain-text response before session
+  resolution, disable caching and return 404 when unset. Keep the actual token outside source.
+- **Validation**: The implementation checkout passes four endpoint tests, 195 environment tests,
+  typechecks, lint and runtime compilation. Verify the deployed-source backport against its own
+  dependency graph before building the replacement API image under the capacity guard.
+- **Deployment**: The production GitHub environment has the portal's public ownership token.
+  Deploying the handler and verifying the public origin remain separate from source validation.
+  Marketplace submission remains paused.
+- **Learnings**: Runtime configuration lets the operator rotate ownership proof without a new
+  container build. Mounting the endpoint before session resolution avoids an unrelated database
+  dependency during domain verification.
+
 ### [WORK-TEMPLATE-PRODUCTION-20261024] Publish validated work templates
 
 - **Status**: IN_PROGRESS

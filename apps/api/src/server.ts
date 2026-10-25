@@ -59,6 +59,7 @@ import integrationsLinearAgentOAuth from './routes/integrations-linear-agent-oau
 import integrationsMcpOAuth from './routes/integrations-mcp-oauth';
 import latticeOAuth from './routes/lattice-oauth';
 import { latticeClientMetadata } from './routes/lattice-client-metadata';
+import { createOpenaiAppsChallengeRoutes } from './routes/openai-apps-challenge';
 import webhooks from './routes/webhooks';
 import oauthStubProvider from './lib/oauth-stub-provider';
 import { MAX_REQUEST_BYTES, rejectOversizedBody } from './lib/http-limits';
@@ -96,6 +97,10 @@ server.use('*', requestId());
 server.use('*', secureHeaders({ crossOriginResourcePolicy: 'cross-origin', xFrameOptions: false }));
 
 registerPublicApiBoundary(server, trustedOrigins);
+
+// Domain ownership is public deployment metadata. Serve it before session resolution so a
+// verifier never needs account access or a database lookup to fetch the configured proof.
+server.route('/', createOpenaiAppsChallengeRoutes(env.OPENAI_APPS_CHALLENGE));
 
 // The REST byte ceiling sits outside the typed app because its stream/download routes are
 // root-mounted. It also keeps authentication and database reads behind the process-protection

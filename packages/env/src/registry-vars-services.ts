@@ -139,6 +139,15 @@ export const SERVICE_VARS: readonly VarSpec[] = [
 
   // mcp
   {
+    name: 'OPENAI_APPS_CHALLENGE',
+    slice: 'mcp',
+    scope: 'server',
+    targets: ['api'],
+    required: false,
+    zod: mcpServer.OPENAI_APPS_CHALLENGE,
+    where: 'Public OpenAI domain ownership token served verbatim; unset disables the endpoint',
+  },
+  {
     name: 'MCP_ISSUER_URL',
     slice: 'mcp',
     scope: 'server',

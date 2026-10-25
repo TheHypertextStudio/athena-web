@@ -33,6 +33,7 @@ import { and, eq } from 'drizzle-orm';
 import type { z } from 'zod';
 
 import { ConflictError } from '../error';
+import { ACTIVITY_SESSION_META, withActivitySession } from '../lib/provenance/activity-session';
 import { type ProvenanceBase, runWithProvenance } from '../lib/provenance/context';
 import type { McpContext } from './auth';
 import { authorizeResourceUri } from './resources';
@@ -122,7 +123,16 @@ type AnyCallback = (...args: never[]) => unknown;
 
 /** Run a callback inside `base`, so every change it records names the caller. */
 function withProvenance<T extends AnyCallback>(base: ProvenanceBase, callback: T): T {
-  return ((...args: Parameters<T>) => runWithProvenance(base, () => callback(...args))) as T;
+  return ((...args: Parameters<T>) => {
+    // The SDK supplies RequestHandlerExtra last for both schema-less and typed callbacks.
+    const extra = (args as readonly unknown[]).at(-1);
+    const meta = extra && typeof extra === 'object' && '_meta' in extra ? extra._meta : undefined;
+    const key =
+      meta && typeof meta === 'object' && ACTIVITY_SESSION_META in meta
+        ? meta[ACTIVITY_SESSION_META]
+        : undefined;
+    return runWithProvenance(withActivitySession(base, key), () => callback(...args));
+  }) as T;
 }
 
 /** A registrar that can register task-capable tools. */

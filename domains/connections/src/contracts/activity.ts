@@ -173,6 +173,21 @@ export const TaskActivityQuery = z
 /** Task Activity query value. */
 export type TaskActivityQuery = z.infer<typeof TaskActivityQuery>;
 
+/** Public session identity attached to activity, independent of pagination and transport handles. */
+export const TaskActivitySession = z
+  .object({
+    id: z.string().describe('Opaque task- and caller-qualified correlation identity.'),
+    kind: z
+      .enum(['native', 'work', 'connection'])
+      .describe('Durable native session, explicit integration work key, or legacy MCP connection.'),
+    title: z
+      .string()
+      .describe('Application-owned performer and session label; never implies delegation.'),
+  })
+  .meta({ id: 'TaskActivitySession' });
+/** Session descriptor used to group adjacent contributions in the shared timeline. */
+export type TaskActivitySession = z.infer<typeof TaskActivitySession>;
+
 /**
  * One entry in a task's activity log — its creation, or one metadata field changing.
  *
@@ -231,6 +246,17 @@ export const TaskActivityOut = z
     origin: ActivityOriginOut.nullable().describe(
       'Where the change came from: its channel and who performed it. Null when the source did not record provenance.',
     ),
+    sessionEvent: z
+      .enum(['update', 'question', 'error', 'change'])
+      .optional()
+      .describe(
+        'Session contribution role: authored update, historical question/error, or mechanical execution detail.',
+      ),
+    session: TaskActivitySession.nullable()
+      .optional()
+      .describe(
+        'Explicitly recorded agent correlation; absent for uncorrelated activity and human comments.',
+      ),
     commentEdit: z
       .object({
         at: z.string(),

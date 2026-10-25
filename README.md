@@ -63,6 +63,12 @@ Initiative-rooted plans show visible existing work, reject dependency cycles, an
 for undo. See the [MCP contract](docs/engineering/specs/mcp-surface.md) and
 [planning canvas](docs/engineering/specs/planning-canvas.md).
 
+Task Activity groups explicitly correlated agent contributions inside the shared conversation.
+Integrations can reuse `Docket-Activity-Session` on authenticated REST writes or
+`params._meta["io.docket/activity-session"]` on MCP tool calls across reconnects. Authored updates
+remain readable while individual edits expand on demand. See the
+[activity session protocol](docs/engineering/specs/task-activity-sessions.md).
+
 Daily, weekly and proposal planning own focused activities with explicit return navigation.
 Proposal review keeps the canvas visible until contextual Athena help is requested. Closing help
 returns to the same plan and retains the unsent message; confirmation and Undo keep using the

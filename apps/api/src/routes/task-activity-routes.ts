@@ -9,6 +9,7 @@
  */
 import {
   actor,
+  agent,
   agentSession,
   auditEvent,
   comment,
@@ -208,15 +209,22 @@ export const taskActivityRoutes = new Hono<AppEnv>().get(
       )
       .orderBy(asc(event.occurredAt), asc(event.id))
       .limit(sourceLimit);
+    const sessionActor = alias(actor, 'session_performer');
     const taskSessions = await db
       .select({
         id: sessionActivity.id,
+        sessionId: sessionActivity.sessionId,
+        performerName: sessionActor.displayName,
+        executorKind: agentSession.executorKind,
+        initiatorId: agentSession.initiatorId,
         type: sessionActivity.type,
         body: sessionActivity.body,
         createdAt: sessionActivity.createdAt,
       })
       .from(sessionActivity)
       .innerJoin(agentSession, eq(sessionActivity.sessionId, agentSession.id))
+      .leftJoin(agent, eq(agent.id, agentSession.agentId))
+      .leftJoin(sessionActor, eq(sessionActor.id, agent.actorId))
       .where(
         and(
           eq(agentSession.taskId, id),

@@ -1,7 +1,7 @@
 # Project Athena Work Log
 
 > **Purpose**: Comprehensive tracking of all work - past, present, and future.
-> **Last Updated**: 2026-10-24
+> **Last Updated**: 2026-10-25
 
 ---
 
@@ -13703,6 +13703,21 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
   pass. Native cache type generation, TypeScript and ESLint pass. No provider settings changed.
 - **Learnings**: Deployment-only metadata belongs outside the shipped runtime source boundary;
   changing that boundary does not require weakening the runtime policy.
+### [TASK-ACTIVITY-SESSIONS] Group agent work within task activity
+
+- **Completed**: 2026-10-25
+- **Description**: Present explicitly identified agent sessions as discrete containers inside the shared chronological task activity timeline, with consolidated updates and expandable changes.
+- **Design**: `docs/engineering/specs/task-activity-sessions.md`
+- **Plan**: Extend stored provenance with a client-supplied work correlation key, accepted through bounded MCP metadata and authenticated API headers. Project tenant/authority/client-qualified opaque session identities without exposing transport credentials. Preserve native session attribution, human chronology, legacy ungrouped rows and pagination. Render contiguous session contributions with the latest substantive update and disclose every earlier update and change using shared UI primitives.
+- **Validation**: Protocol propagation and isolation tests; activity API pagination and provenance tests; rendered session grouping, continuation and disclosure tests; affected typecheck/lint/build; populated narrow/wide and light/dark UI inspection.
+- **Decisions**: Correlation is presentation metadata, never authority or proof of delegation. MCP transport sessions are identified as connections. No time-window inference or synthetic acceptance. Consolidation uses authored content and durable changes, never invented outcomes. Existing live delegated-work controls remain available while paginated history loads.
+- **Summary**: Explicit session identities group adjacent contributions across loaded pages; interleaved people and other sessions remain separate. Latest authored results and historical questions/errors remain visible, with earlier updates and complete field changes available through keyboard-operable disclosure. Native user-role inputs retain standalone attribution without inventing a named actor.
+- **Files changed**: Activity/provenance contracts in `domains/work` and `domains/connections`; API provenance, MCP registrar/native toolbox and task activity projection; task activity grouping/session UI and behavioral tests; README, engineering spec and implementation plan.
+- **Verification evidence**: The focused API activity/protocol/CORS/toolbox checks passed (97 tests across the affected suites), and all 13 web behavior tests passed. Affected API/web/work/connections typechecks and lint passed. The production API/web build and unchanged complexity ledger passed. Eight standard collapsed/expanded desktop/phone captures cover both themes with the harness's 320px overflow checks. Rendered activity uses labeled fixtures on a real authenticated local task; API tests separately exercise durable provenance. The disposable dev database was reset after capture.
+- **Review**: Independent review identified and verified corrections for native human-role attribution, questions replacing authored results, and missing related-task titles. No material findings remained in its focused follow-up.
+- **Retrospection**: Reusing stored provenance and shared disclosure/surface primitives kept the change additive. Independent review caught attribution and consolidation mistakes before completion. Install the whole verification-stack scope upfront, and use the root environment-wrapped build command to avoid setup-only retries.
+- **Learnings**: A transport connection is not a delegated assignment, and a saved session message's role is not a verified named author. Preserve both distinctions at projection time. Keep notices independent of the latest authored result.
+- **Scope boundary**: No deployment or existing-data inference. Integrations consolidate through authored comments carrying the same work key. Existing compact task-masthead title/action overlap with the companion calendar open remains outside this activity slice.
 
 ### [WORK-TEMPLATE-FINAL-RELEASE-20261024] Reconcile and validate the complete feature
 

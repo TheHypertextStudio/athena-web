@@ -5,8 +5,8 @@
  * `task-activity-routes.ts` reads the sources; this module turns their rows into the one entry
  * shape the route returns. Entries backed by the audit ledger carry the origin the ledger recorded,
  * normalized through `readOrigin`, and the creation entry carries the origin of the change set that
- * created the task. Comments carry their stored performer. Timers, delegated execution updates,
- * and subtask creation carry none.
+ * created the task. Comments carry their stored performer. Native execution updates carry the saved executor identity;
+ * user-role inputs stay standalone. Timers and subtask creation carry no origin.
  */
 import type { auditEvent, ChangeOrigin, comment, event, sessionActivity, task } from '@docket/db';
 import {
@@ -19,6 +19,7 @@ import {
   toActivityOrigin,
   type ActivityOriginOut,
 } from '@docket/work/provenance-contract';
+import { activitySessionOf } from '../lib/provenance/activity-session';
 import { taskCreationEntryId } from '@docket/work/task-model';
 import type { z } from 'zod';
 
@@ -62,8 +63,12 @@ export type TimerRow = Pick<typeof event.$inferSelect, 'id' | 'actor' | 'title' 
 /** A delegated execution update on the task. */
 export type SessionRow = Pick<
   typeof sessionActivity.$inferSelect,
-  'id' | 'type' | 'body' | 'createdAt'
->;
+  'id' | 'type' | 'body' | 'createdAt' | 'sessionId'
+> & {
+  readonly performerName: string | null;
+  readonly executorKind: string;
+  readonly initiatorId: string | null;
+};
 
 /** A direct child created under the task. */
 export type ChildCreationRow = Pick<
@@ -109,6 +114,7 @@ export function activityEntry(core: EntryCore, detail: Partial<ActivityEntry> = 
     subjectTaskTitle: null,
     origin: null,
     commentEdit: null,
+    session: null,
     ...core,
     ...detail,
   };
@@ -125,6 +131,21 @@ export function activityOriginOf(
 ): ActivityOriginOut | null {
   const provenance = readOrigin(origin);
   return provenance ? toActivityOrigin(provenance) : null;
+}
+
+/** Native execution owns its session identity; it is never supplied by request metadata. */
+function sessionOrigin(row: SessionRow): ChangeOrigin {
+  return {
+    v: 2,
+    channel: 'athena',
+    surface: 'session',
+    tool: 'session_activity',
+    agentSessionId: row.sessionId,
+    performer:
+      row.executorKind === 'athena'
+        ? { kind: 'athena', name: 'Athena' }
+        : { kind: 'agent', name: row.performerName ?? 'Agent' },
+  };
 }
 
 /** Read safe application text from a session activity body. */
@@ -175,7 +196,12 @@ export function creationEntry(
       category: 'task',
       createdAt: row.createdAt.toISOString(),
     },
-    { actorId: row.createdBy, actorName: creatorName, origin: activityOriginOf(origin) },
+    {
+      actorId: row.createdBy,
+      actorName: creatorName,
+      origin: activityOriginOf(origin),
+      session: activitySessionOf({ taskId: row.id, actorId: row.createdBy }, origin),
+    },
   );
 }
 
@@ -197,6 +223,7 @@ function directLedgerEntries(taskId: string, rows: readonly LedgerRow[]): Activi
         actorName: row.actorName,
         change: parsed.data,
         origin: activityOriginOf(row.origin),
+        session: activitySessionOf({ taskId, actorId: row.actorId }, row.origin),
       }),
     ];
   });
@@ -228,6 +255,7 @@ function relatedLedgerEntries(
         subjectTaskId: row.taskId,
         subjectTaskTitle: row.taskTitle,
         origin: activityOriginOf(row.origin),
+        session: activitySessionOf({ taskId, actorId: row.actorId }, row.origin),
       }),
     ];
   });
@@ -267,6 +295,7 @@ function contentEntries(taskId: string, sources: ActivitySources): ActivityEntry
           actorName: row.actorName,
           body: row.body,
           origin: activityOriginOf(row.origin),
+          session: activitySessionOf({ taskId, actorId: row.authorId }, row.origin),
           commentEdit: row.editedAt
             ? {
                 at: row.editedAt.toISOString(),
@@ -294,19 +323,48 @@ function contentEntries(taskId: string, sources: ActivitySources): ActivityEntry
         },
       ),
     ),
-    ...sources.taskSessions.map((row) =>
-      activityEntry(
-        {
-          id: `session:${row.id}`,
-          taskId,
-          type: 'session',
-          category: 'automation',
-          createdAt: row.createdAt.toISOString(),
-        },
-        { body: sessionBody(row.body, row.type) },
-      ),
-    ),
   ];
+}
+
+/** User-authored session inputs must never be consolidated or attributed as agent output. */
+function nativeSessionDetail(taskId: string, row: SessionRow): Partial<ActivityEntry> {
+  const body = sessionBody(row.body, row.type);
+  if (row.body.author === 'user') {
+    // Session messages record a role, not a verified per-message actor. Do not invent a name,
+    // delegation relationship or app channel for inputs relayed from email/external providers.
+    return { body, actorName: 'Session participant', origin: null, session: null };
+  }
+  const origin = sessionOrigin(row);
+  const sessionEvent =
+    row.type === 'response'
+      ? 'update'
+      : row.type === 'elicitation'
+        ? 'question'
+        : row.type === 'error'
+          ? 'error'
+          : 'change';
+  return {
+    body,
+    sessionEvent,
+    origin: activityOriginOf(origin),
+    session: activitySessionOf({ taskId, actorId: row.initiatorId }, origin),
+  };
+}
+
+/** Saved native session messages remain correlated with their execution's mutations. */
+function nativeSessionEntries(taskId: string, rows: readonly SessionRow[]): ActivityEntry[] {
+  return rows.map((row) =>
+    activityEntry(
+      {
+        id: `session:${row.id}`,
+        taskId,
+        type: 'session',
+        category: 'automation',
+        createdAt: row.createdAt.toISOString(),
+      },
+      nativeSessionDetail(taskId, row),
+    ),
+  );
 }
 
 /**
@@ -319,6 +377,7 @@ function contentEntries(taskId: string, sources: ActivitySources): ActivityEntry
 export function activityEntries(taskId: string, sources: ActivitySources): ActivityEntry[] {
   return [
     ...contentEntries(taskId, sources),
+    ...nativeSessionEntries(taskId, sources.taskSessions),
     ...directLedgerEntries(taskId, sources.directLedger),
     ...relatedLedgerEntries(taskId, sources.childLedger, 'child', (change) =>
       MEANINGFUL_CHILD_FIELDS.has(change.field),

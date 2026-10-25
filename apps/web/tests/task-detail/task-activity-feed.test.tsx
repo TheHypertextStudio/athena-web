@@ -152,6 +152,151 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('TaskActivityFeed', () => {
+  it('keeps the latest result visible when a question follows and identifies related tasks', () => {
+    const session = { id: 'work_1', kind: 'work', title: 'Codex session' } as const;
+    queryState.data = {
+      pages: [
+        {
+          items: [
+            entry({
+              id: 'result',
+              session,
+              type: 'comment',
+              change: null,
+              body: 'Brief ready for review.',
+            }),
+            entry({
+              id: 'question-last',
+              session,
+              type: 'session',
+              sessionEvent: 'question',
+              change: null,
+              body: 'Which venue should we use?',
+            }),
+            entry({
+              id: 'child-change',
+              session,
+              type: 'child',
+              subjectTaskId: OTHER_TASK_ID,
+              subjectTaskTitle: 'November announcement',
+            }),
+          ],
+        },
+      ],
+    };
+    renderFeed();
+    expect(screen.getByText('Brief ready for review.')).toBeVisible();
+    expect(screen.getByText('Which venue should we use?')).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: '1 change' }));
+    expect(screen.getByText('November announcement')).toBeVisible();
+  });
+
+  it('keeps session questions visible after later updates and preserves comment edit attribution', () => {
+    const session = { id: 'native_1', kind: 'native', title: 'Athena session' } as const;
+    queryState.data = {
+      pages: [
+        {
+          items: [
+            entry({
+              id: 'question',
+              session,
+              type: 'session',
+              sessionEvent: 'question',
+              change: null,
+              body: 'Please confirm the venue.',
+            }),
+            entry({
+              id: 'latest',
+              session,
+              type: 'comment',
+              change: null,
+              body: 'Layouts are prepared.',
+              commentEdit: {
+                at: '2026-10-25T12:00:00.000Z',
+                actorId: null,
+                actorName: 'Grace Hopper',
+                origin: null,
+              },
+            }),
+          ],
+        },
+      ],
+    };
+    renderFeed();
+    expect(screen.getByText('Please confirm the venue.')).toBeVisible();
+    expect(screen.getByText('Layouts are prepared.')).toBeVisible();
+    expect(screen.getByText(/Edited by Grace Hopper/)).toBeVisible();
+  });
+
+  it('contains each session contribution, consolidates updates and discloses all changes', () => {
+    const session = { id: 'work_1', kind: 'work', title: 'Codex session' } as const;
+    queryState.data = {
+      pages: [
+        {
+          items: [
+            entry({
+              id: 'a',
+              session,
+              change: {
+                field: 'description',
+                label: 'Description',
+                from: 'Original brief',
+                to: 'A much longer revised brief',
+              },
+            }),
+            entry({
+              id: 'b',
+              session,
+              type: 'comment',
+              change: null,
+              body: 'First draft prepared.',
+            }),
+          ],
+        },
+        {
+          items: [
+            entry({
+              id: 'c',
+              session,
+              type: 'comment',
+              change: null,
+              body: 'Brief ready. Venue confirmation remains open.',
+            }),
+            entry({
+              id: 'd',
+              session: null,
+              type: 'comment',
+              change: null,
+              body: 'Reusable layouts can start.',
+            }),
+            entry({
+              id: 'e',
+              session,
+              type: 'comment',
+              change: null,
+              body: 'Updated the publishing gate.',
+            }),
+          ],
+        },
+      ],
+    };
+    renderFeed();
+    const activity = screen.getByRole('region', { name: 'Activity' });
+    expect(within(activity).getAllByRole('article', { name: 'Codex session' })).toHaveLength(2);
+    expect(within(activity).getByText('Continued')).toBeInTheDocument();
+    expect(
+      within(activity).getByText('Brief ready. Venue confirmation remains open.'),
+    ).toBeVisible();
+    expect(within(activity).queryByText('First draft prepared.')).not.toBeInTheDocument();
+    expect(within(activity).queryByText('Original brief')).not.toBeInTheDocument();
+    fireEvent.click(within(activity).getByRole('button', { name: '1 earlier update' }));
+    expect(within(activity).getByText('First draft prepared.')).toBeVisible();
+    fireEvent.click(within(activity).getByRole('button', { name: '1 change' }));
+    fireEvent.click(within(activity).getByRole('button', { name: 'Description revised' }));
+    expect(within(activity).getByText('Original brief')).toBeVisible();
+    expect(within(activity).getByText('A much longer revised brief')).toBeVisible();
+  });
+
   it('renders comments and task changes in one chronological Activity list', () => {
     queryState.data = {
       pages: [

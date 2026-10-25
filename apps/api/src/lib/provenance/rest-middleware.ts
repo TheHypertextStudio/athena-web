@@ -10,6 +10,7 @@
 import { isAppSurface, SURFACE_HEADER } from '@docket/work/provenance-contract';
 import type { MiddlewareHandler } from 'hono';
 
+import { ACTIVITY_SESSION_HEADER, withActivitySession } from './activity-session';
 import type { AppEnv } from '../../context';
 import { clientDisplayName } from './clients';
 import { appProvenance, clientProvenance, runWithProvenance } from './context';
@@ -23,7 +24,8 @@ export const provenanceMiddleware: MiddlewareHandler<AppEnv> = async (c, next) =
   }
   if (principal.kind === 'oauth') {
     const name = clientDisplayName(principal.clientId, principal.clientName);
-    await runWithProvenance(clientProvenance('api', { name, id: principal.clientId }), next);
+    const base = clientProvenance('api', { name, id: principal.clientId });
+    await runWithProvenance(withActivitySession(base, c.req.header(ACTIVITY_SESSION_HEADER)), next);
     return;
   }
   const surface = c.req.header(SURFACE_HEADER);

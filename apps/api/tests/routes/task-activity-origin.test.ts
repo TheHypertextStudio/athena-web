@@ -43,6 +43,7 @@ interface OriginBody {
 interface EntryBody {
   readonly id: string;
   readonly type: string;
+  readonly session?: { readonly id: string; readonly kind: string } | null;
   readonly origin: OriginBody | null;
   readonly commentEdit: { readonly origin: OriginBody | null } | null;
 }
@@ -92,6 +93,52 @@ function entry(items: readonly EntryBody[], id: string): EntryBody {
 }
 
 describe('task Activity origin', () => {
+  it('returns stable logical identity across pages and reconnects while leaving human comments ungrouped', async () => {
+    const org = await seedTaskAccessOrg(db, schema);
+    const row = await seedTask(db, schema, org.statusId, {
+      organizationId: org.orgId,
+      teamId: org.teamId,
+      title: 'Session history',
+      state: 'todo',
+    });
+    const base: ChangeOrigin = {
+      v: 2,
+      channel: 'mcp',
+      performer: { kind: 'agent', name: 'Codex' },
+      clientId: 'codex',
+      activitySessionId: 'work_1',
+      tool: 'update',
+    };
+    const first = await auditChange(org, row.id, { ...base, sessionId: 'secret_a' });
+    const second = await auditChange(org, row.id, { ...base, sessionId: 'secret_b' });
+    await db.insert(schema.comment).values({
+      organizationId: org.orgId,
+      subjectType: 'task',
+      subjectId: row.id,
+      authorId: org.humanActorId,
+      createdBy: org.humanActorId,
+      body: 'A human reply',
+      createdAt: nextAt(),
+    });
+    const app = appWithActor(tasks, org.orgId, ['view'], org.humanActorId);
+    const loaded: EntryBody[] = [];
+    let cursor: string | undefined;
+    do {
+      const res = await app.request(
+        `/${row.id}/activity?limit=1${cursor ? `&cursor=${cursor}` : ''}`,
+      );
+      expect(res.status).toBe(200);
+      const page = (await res.json()) as { items: EntryBody[]; nextCursor?: string };
+      loaded.push(...page.items);
+      cursor = page.nextCursor;
+    } while (cursor);
+    expect(entry(loaded, first).session).toMatchObject({ kind: 'work' });
+    expect(entry(loaded, first).session).toEqual(entry(loaded, second).session);
+    expect(loaded.find((item) => item.type === 'comment')?.session).toBeNull();
+    expect(JSON.stringify(loaded)).not.toContain('secret_');
+    expect(JSON.stringify(loaded)).not.toContain('work_1');
+  });
+
   it('names the channel and performer of the creation and of each recorded field change', async () => {
     const org = await seedTaskAccessOrg(db, schema);
     const task = await seedTask(db, schema, org.statusId, {

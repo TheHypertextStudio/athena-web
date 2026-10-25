@@ -26,6 +26,8 @@ import { useViewerActorId } from '@/lib/provenance/defs';
 import { apiInfiniteQueryOptions, queryKeys, useInfiniteApiQuery } from '@/lib/query';
 
 import { activityPerformer, activitySentence, activityTimestampTitle } from './format-activity';
+import { activitySessionGroups } from './activity-session-groups';
+import { TaskActivitySession } from './task-activity-session';
 import { TaskDelegatedWork } from './task-delegated-work';
 import { DetailSection } from '@/components/entity-detail/detail-section';
 
@@ -57,6 +59,7 @@ export interface TaskActivityFeedProps {
 function entrySentence(entry: TaskActivityOut): string {
   if (entry.type === 'comment') return '';
   if (entry.body) return entry.body;
+  if (entry.type === 'session') return 'recorded an execution update';
   const change = activitySentence(entry);
   if (entry.type === 'child' && entry.subjectTaskTitle) {
     return `${entry.subjectTaskTitle}: ${change}`;
@@ -69,6 +72,7 @@ function entrySentence(entry: TaskActivityOut): string {
 
 /** An edited comment no longer presents its current body as the original author's words. */
 function entryAction(entry: TaskActivityOut): string {
+  if (entry.type === 'session' && entry.body) return 'posted an update';
   if (entry.type !== 'comment') return entrySentence(entry);
   return entry.commentEdit ? 'started this comment' : 'commented';
 }
@@ -153,7 +157,7 @@ function ActivityRow({ entry, orgId }: ActivityRowProps): JSX.Element {
           </time>
         </div>
         <CommentEditNote entry={entry} orgId={orgId} />
-        {entry.type === 'comment' && entry.body ? (
+        {(entry.type === 'comment' || entry.type === 'session') && entry.body ? (
           <StaticMarkdown value={entry.body} className="mt-1 [&>*]:max-w-none" />
         ) : null}
       </div>
@@ -209,7 +213,7 @@ export function TaskActivityFeed({
     }
   }
 
-  // placeholder: this task's comments and activity, at the chosen filter.
+  const contributions = activitySessionGroups(entries);
   return (
     <>
       <TaskDelegatedWork orgId={orgId} taskId={taskId} />
@@ -232,9 +236,21 @@ export function TaskActivityFeed({
           </p>
         ) : (
           <ol className="flex flex-col gap-4">
-            {entries.map((entry) => (
-              <ActivityRow key={entry.id} entry={entry} orgId={orgId} />
-            ))}
+            {contributions.map((group) =>
+              group.session ? (
+                <TaskActivitySession
+                  key={group.key}
+                  group={group}
+                  renderEntry={(entry) => (
+                    <ActivityRow key={entry.id} entry={entry} orgId={orgId} />
+                  )}
+                />
+              ) : (
+                group.entries.map((entry) => (
+                  <ActivityRow key={entry.id} entry={entry} orgId={orgId} />
+                ))
+              ),
+            )}
           </ol>
         )}
 

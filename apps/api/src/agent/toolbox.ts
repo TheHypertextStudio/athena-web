@@ -38,6 +38,8 @@ import { getContainer } from '../container';
 import { sealCredential, unsealCredential } from '../lib/credentials';
 import { athenaProvenance, type ProvenanceBase } from '../lib/provenance/context';
 import { internalAgentContext, internalUserContext } from '../mcp/internal-session';
+import { mcpProvenance } from '../mcp/provenance';
+import type { McpContext } from '../mcp/auth';
 import { buildServer } from '../mcp/server';
 import type { ToolAnnotationHints, ToolAnnotationSource } from './approval-policy';
 import { listConnectedMcpTools } from './list-mcp-tools';
@@ -350,6 +352,16 @@ async function toolboxRemoteConnections(executor: ToolboxExecutor, restricted: b
           );
 }
 
+/** Bind both native executor kinds to their durable execution rather than a transport connection. */
+function nativeExecutionProvenance(
+  ctx: McpContext,
+  executor: ToolboxExecutor,
+  sessionId: string | null,
+): ProvenanceBase {
+  const base = executorProvenance(executor, sessionId) ?? mcpProvenance(ctx, sessionId);
+  return { ...base, ...(sessionId ? { agentSessionId: sessionId } : {}) };
+}
+
 /**
  * Open the toolbox for one executor: the catalog tools it may call, with first-party hints
  * attached, and the session id the plan tools bind a plan to.
@@ -367,7 +379,7 @@ export async function openToolbox(
   // The Athena session id rides into the server so a tool that creates a conversation-owned
   // artifact (a plan draft) can attach itself to the conversation that opened it. Athena runs
   // with its owner's authority but records itself as the performer.
-  const server = buildServer(ctx, sessionId, executorProvenance(executor, sessionId));
+  const server = buildServer(ctx, sessionId, nativeExecutionProvenance(ctx, executor, sessionId));
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
   await server.connect(serverTransport);
   const client = new Client({ name: 'athena-loop', version: '1.0.0' });

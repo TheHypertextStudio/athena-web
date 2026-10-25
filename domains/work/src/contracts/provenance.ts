@@ -148,6 +148,10 @@ export interface ChangeOrigin {
   readonly integration?: ProvenanceIntegration;
   /** The MCP session or Athena session the change arrived on. */
   readonly sessionId?: string;
+  /** Client-supplied logical work correlation; never an authorization or transport handle. */
+  readonly activitySessionId?: string;
+  /** Durable execution identity set only by the native executor, distinct from MCP transport. */
+  readonly agentSessionId?: string;
   /** The plan draft this change confirmed, when it came from the planning canvas. */
   readonly planId?: string;
   /** The user who owns {@link ChangeOrigin.planId}. */

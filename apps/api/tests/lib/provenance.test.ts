@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { describe, expect, it } from 'vitest';
 
+import { onError } from '../../src/error';
 import type { AppEnv, CallerPrincipal } from '../../src/context';
 import { clientDisplayName } from '../../src/lib/provenance/clients';
 import {
@@ -155,6 +156,26 @@ describe('mcpProvenance', () => {
 });
 
 describe('ProvenanceRegistrar', () => {
+  it('records per-call work metadata without carrying it into another request', () => {
+    const calls: unknown[] = [];
+    const inner = {
+      registerTool: ((_name: string, _config: unknown, cb: (...args: unknown[]) => unknown) => {
+        cb({}, { _meta: { 'io.docket/activity-session': 'work_1' } });
+        cb({}, {});
+        return {};
+      }) as unknown as McpRegistrar['registerTool'],
+    } as McpRegistrar;
+    const base = mcpProvenance(
+      { principal: USER_PRINCIPAL, clientId: 'codex', scopes: [] },
+      'transport',
+    );
+    new ProvenanceRegistrar(inner, base).registerTool('probe', {}, (() => {
+      calls.push(currentProvenance());
+    }) as never);
+    expect(calls[0]).toMatchObject({ activitySessionId: 'work_1', sessionId: 'transport' });
+    expect(calls[1]).not.toHaveProperty('activitySessionId');
+  });
+
   /** A registrar that records what reached it and invokes tool callbacks immediately. */
   function recordingRegistrar(): McpRegistrar & { readonly calls: string[] } {
     const calls: string[] = [];
@@ -191,6 +212,7 @@ describe('ProvenanceRegistrar', () => {
 /** A router that answers with the provenance its request ran inside. */
 function appWith(principal: CallerPrincipal | null): Hono<AppEnv> {
   const app = new Hono<AppEnv>();
+  app.onError(onError);
   app.use('*', async (c, next) => {
     c.set('principal', principal);
     await next();
@@ -245,6 +267,24 @@ describe('provenanceMiddleware', () => {
       client: 'cursor.com',
       clientId: 'https://cursor.com/oauth',
     });
+  });
+
+  it('accepts a logical work key only for an authenticated OAuth integration', async () => {
+    const oauth = appWith({
+      kind: 'oauth',
+      userId: 'user_1',
+      user: {},
+      clientId: 'codex',
+      scopes: [],
+    } as unknown as CallerPrincipal);
+    expect(await baseFor(oauth, { 'Docket-Activity-Session': 'work_1' })).toMatchObject({
+      activitySessionId: 'work_1',
+    });
+    expect(
+      await baseFor(appWith(session), { 'Docket-Activity-Session': 'work_1' }),
+    ).not.toHaveProperty('activitySessionId');
+    const bad = await oauth.request('/', { headers: { 'Docket-Activity-Session': 'bad key' } });
+    expect(bad.status).toBe(422);
   });
 
   it('declares nothing for an anonymous request', async () => {

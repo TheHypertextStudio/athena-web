@@ -99,6 +99,7 @@ const ALLOWED_REQUEST_HEADERS = [
   'Idempotency-Key',
   // The app surface a write came from, recorded as provenance.
   SURFACE_HEADER,
+  'Docket-Activity-Session',
 ];
 
 /** Object-command POSTs may bind an offline-capable write to its captured account. */

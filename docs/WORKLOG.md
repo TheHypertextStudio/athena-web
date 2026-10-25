@@ -13703,6 +13703,16 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
   pass. Native cache type generation, TypeScript and ESLint pass. No provider settings changed.
 - **Learnings**: Deployment-only metadata belongs outside the shipped runtime source boundary;
   changing that boundary does not require weakening the runtime policy.
+### [ACTIVITY-ICON-CRAFT] Recognizable agents and aligned activity content
+
+- **Completed**: 2026-10-25
+- **Summary**: Resolve real agent/client artwork through the existing activity API, retain a named glyph fallback, and align session identity, content, questions and semantic change icons on a shared gutter. Keep recorded work visible and preserve time-bound sessions without inferred ownership or a mandatory final update.
+- **Files changed**: Activity response contract and API artwork resolver; real MCP/native/legacy regressions; shared ActorAvatar, DecorativeIcon and Bot export; task activity presentation and browser checks; web README, session protocol specification and `docs/design/audits/2026-10-25-task-activity-icons.md`.
+- **Validation**: 29 API tests, 25 web presentation/grouping tests and 2 shared UI tests pass. Four browser checks pass for geometry, both-theme scoped axe AA, keyboard focus, reduced motion, 200% text, title/action bounds and 320px touch targets. The focused fifth browser check passes for image loading and failed-image fallback. All affected package builds/typechecks/lint, focused browser-file lint, formatting and the unchanged complexity ledger pass. Twelve standard desktop/phone frames across three states and both themes were captured and inspected; 320px overflow checks pass. The stack was stopped and the shared development database reset.
+- **Review**: Source was self-reviewed. The eight-dimension audit records evidence and limits. No production deployment or manual screen-reader study is claimed; external Slack/Discord mention aggregation remains separate unfinished integration work.
+- **Learnings**: Shared avatar fallbacks need an explicit named image role, including glyph-only identities. Image-failure tests need a distinct unavailable URL to avoid service-worker cache interference. Read responses can enrich registered identity without changing opaque correlation keys or borrowing authorizing-person artwork.
+- **Retrospection**: Kept the accepted entity-history model and normal typography while improving scanability. Real writer tests protected the protocol boundary. Runtime admission repeatedly deferred under the required capacity guard; validation failures were corrected locally before committing, without expanding resource limits.
+
 ### [ACTIVITY-COMPOSITION-RECOVERY] Restore content-first, time-bound work contributions
 
 - **Completed**: 2026-10-25

@@ -62,6 +62,8 @@ export interface ActorAvatarProps {
   avatarUrl?: string | null | undefined;
   /** Size in pixels for the square avatar box. Defaults to `24`. */
   size?: number | undefined;
+  /** Optional glyph or content when no image can load; defaults to name initials. */
+  fallback?: React.ReactNode;
   /** Extra classes merged onto the avatar box. */
   className?: string | undefined;
 }
@@ -82,24 +84,30 @@ export function ActorAvatar({
   name,
   avatarUrl,
   size = 24,
+  fallback,
   className,
 }: ActorAvatarProps): React.JSX.Element {
   const dimension = { height: size, width: size };
   return (
     <span className="relative inline-flex" data-actor-kind={kind}>
       <Avatar
+        role="img"
         aria-label={name}
         title={name}
         style={dimension}
         className={cn('h-auto w-auto overflow-hidden', KIND_SHAPE_CLASS[kind], className)}
       >
         {avatarUrl ? (
-          <AvatarImage src={avatarUrl} alt={name} className={KIND_SHAPE_CLASS[kind]} />
+          <AvatarImage
+            src={avatarUrl}
+            alt=""
+            className={cn(KIND_SHAPE_CLASS[kind], kind === 'agent' && 'object-contain')}
+          />
         ) : null}
         <AvatarFallback
           className={cn('text-label-small', KIND_SHAPE_CLASS[kind], KIND_TONE_CLASS[kind])}
         >
-          {initialsOf(name)}
+          {fallback ?? initialsOf(name)}
         </AvatarFallback>
       </Avatar>
     </span>

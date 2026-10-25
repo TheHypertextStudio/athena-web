@@ -78,6 +78,19 @@ describe('activity session authority', () => {
     const db = schema.db;
     const seed = await seedMcpUpdateOrg(db, schema, ['view', 'contribute', 'comment']);
     const taskId = await seedMcpUpdateTask(db, schema, seed, { title: 'Creative request' });
+    await db
+      .insert(schema.oauthClient)
+      .values({
+        clientId: 'codex-test',
+        name: 'Codex',
+        icon: 'https://client.example.test/agent.png',
+        redirectUris: ['https://client.example.test/callback'],
+        type: 'public',
+      })
+      .onConflictDoUpdate({
+        target: schema.oauthClient.clientId,
+        set: { icon: 'https://client.example.test/agent.png' },
+      });
     const first = await connect(seed.ctx);
     await call(first, 'update', {
       orgId: seed.orgId,
@@ -132,6 +145,8 @@ describe('activity session authority', () => {
     const a = items.find((item) => item.body === 'First result.');
     const b = items.find((item) => item.body === 'Second result.');
     expect(a?.actorId).toBeNull();
+    expect(a?.agentIconUrl).toBe('https://client.example.test/agent.png');
+    expect(mutation?.agentIconUrl).toBe('https://client.example.test/agent.png');
     expect(a?.session?.id).toBe(mutation?.session?.id);
     expect(b?.session?.id).not.toBe(a?.session?.id);
   });

@@ -153,3 +153,19 @@ in time. A different performer starts another chronological contribution with it
 even when the underlying session identity is shared. An agent's authorizing person is not confused
 with its displayed authorship, so OAuth comments and mutations from the same performer still group.
 Legacy connection metadata remains labeled as connection activity rather than a declared work run.
+
+## Agent artwork and semantic alignment
+
+The activity response may include `agentIconUrl`, resolved from a registered agent's stored avatar
+or its authenticated OAuth client's stored logo. Lookups are bounded batches on the authorized,
+filtered page. Native performer and actor lookups stay within the workspace context and select
+agent actors; an authorizing human's image is never used as agent artwork. Legacy records without
+provenance can use a known registered agent actor's avatar. Their optional `actorKind` also preserves
+agent identity when no image exists; recorded provenance remains authoritative when present. No display-name brand guessing or
+provider fetch happens during the activity read.
+
+The UI uses real artwork when available, an explicit agent/assistant glyph when it is absent or
+fails, and the existing human identities for people. Artwork is not identity verification or task
+ownership. A shared identity/content grid aligns the header, content previews, relationship rows,
+property transitions and disclosures. Semantic icons annotate the type of work, rather than adding
+repeated agent avatars or decorating every paragraph. No endpoint or database migration is required.

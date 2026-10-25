@@ -249,3 +249,8 @@ Task activity groups adjacent intentional agent comments and recorded mutations 
 metadata. A session can touch several entities and does not require a closing update. Agent
 conversation stays in session history. See the [protocol and identity contract](../../docs/engineering/specs/task-activity-sessions.md)
 and [timeline geometry guidance](../../docs/design/references/detail-page-layout.md#activity-timeline-exception).
+
+Agent identity images in task activity use the optional server-resolved `agentIconUrl`. Registered
+agent avatars take precedence over stored OAuth client logos; unknown or failed artwork uses the
+shared agent glyph fallback. Activity does not infer a brand from a display name or borrow the
+authorizing person's avatar.

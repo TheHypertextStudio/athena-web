@@ -2,9 +2,23 @@
 
 /** A geometric contribution in the task's one shared chronological timeline. */
 import type { TaskActivityOut } from '@docket/connections/activity-contract';
-import { ChevronDown } from '@docket/ui/icons';
+import {
+  Calendar,
+  CheckCircle2,
+  ChevronDown,
+  CircleAlert,
+  FileText,
+  Flag,
+  Link,
+  MessageSquare,
+  Edit,
+  User,
+} from '@docket/ui/icons';
+import { ActorAvatar, type ActorKind } from '@docket/ui/components';
+import { ActivityAgentAvatar } from './activity-agent-avatar';
 import {
   Button,
+  DecorativeIcon,
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
@@ -16,7 +30,7 @@ import type { JSX, ReactNode } from 'react';
 import { relativeTime } from '@/components/project-detail/format-time';
 import type { ActivitySessionGroup } from './activity-session-groups';
 import { consolidateTaskChanges, type ConsolidatedTaskChange } from './consolidated-task-changes';
-import { formatProvenance } from '@/lib/provenance/format';
+import { activityPerformer } from './format-activity';
 import { StaticMarkdown } from '@/components/editor/static-markdown';
 
 /** Disclosure retains shared keyboard, focus and reduced-motion behavior. */
@@ -109,18 +123,23 @@ function SessionChange({ entry, history }: ConsolidatedTaskChange): JSX.Element 
       ? `View ${history.length} ${change.label.toLowerCase()} edits`
       : `View ${change.label.toLowerCase()} change`;
   return (
-    <li className="flex min-w-0 flex-col gap-2">
-      {entry.subjectTaskTitle ? (
-        <p className="text-label-medium">{entry.subjectTaskTitle}</p>
-      ) : null}
-      <ChangeContent entry={entry} />
-      <Disclosure label={label}>
-        <ol className="flex flex-col gap-4">
-          {history.map((edit) => (
-            <ChangeDetails key={edit.id} entry={edit} />
-          ))}
-        </ol>
-      </Disclosure>
+    <li className="grid min-w-0 grid-cols-[32px_minmax(0,1fr)] items-start gap-x-3 gap-y-1">
+      <DecorativeIcon variant="inline" icon={changeIcon(change.field)} />
+      <div className="min-w-0">
+        {entry.subjectTaskTitle ? (
+          <p className="text-label-medium">{entry.subjectTaskTitle}</p>
+        ) : null}
+        <ChangeContent entry={entry} />
+      </div>
+      <div className="col-start-2 -ml-3 min-w-0">
+        <Disclosure label={label}>
+          <ol className="flex flex-col gap-4">
+            {history.map((edit) => (
+              <ChangeDetails key={edit.id} entry={edit} />
+            ))}
+          </ol>
+        </Disclosure>
+      </div>
     </li>
   );
 }
@@ -152,6 +171,21 @@ function ChangeDetails({ entry }: { readonly entry: TaskActivityOut }): JSX.Elem
   );
 }
 
+/** Semantic glyphs make different effects scannable without decorating each line of prose. */
+function changeIcon(field: string) {
+  const icons: Partial<Record<string, typeof Edit>> = {
+    description: FileText,
+    dependency: Link,
+    relatedTask: Link,
+    assigneeId: User,
+    priority: Flag,
+    state: CheckCircle2,
+    dueDate: Calendar,
+    startDate: Calendar,
+  };
+  return icons[field] ?? Edit;
+}
+
 /** Show recorded content and values directly, without manufacturing an agent-authored report. */
 function ChangeContent({ entry }: { readonly entry: TaskActivityOut }): JSX.Element | null {
   const change = entry.change;
@@ -163,7 +197,11 @@ function ChangeContent({ entry }: { readonly entry: TaskActivityOut }): JSX.Elem
         {change.to ? (
           <StaticMarkdown
             value={change.to}
-            className="text-body-medium line-clamp-6 [overflow-wrap:anywhere] [&>*]:max-w-none"
+            className={
+              change.to.length > 600
+                ? 'text-body-medium line-clamp-6 [overflow-wrap:anywhere] [&>*]:max-w-none'
+                : 'text-body-medium [overflow-wrap:anywhere] [&>*]:max-w-none'
+            }
           />
         ) : (
           <p className="text-body-medium">Description removed</p>
@@ -172,18 +210,18 @@ function ChangeContent({ entry }: { readonly entry: TaskActivityOut }): JSX.Elem
     );
   if (change.field === 'dependency' && change.to)
     return (
-      <div>
-        <p className="text-label-medium text-on-surface-variant mb-1">
+      <div className="text-body-medium flex min-w-0 flex-wrap items-baseline gap-x-2">
+        <span className="text-on-surface-variant">
           {change.to.startsWith('Blocked by ') ? 'Blocked by' : 'Blocks'}
-        </p>
-        <p className="text-body-medium [overflow-wrap:anywhere]">
+        </span>
+        <span className="[overflow-wrap:anywhere]">
           {change.to.replace(/^(Blocks|Blocked by) /, '')}
-        </p>
+        </span>
       </div>
     );
   return (
-    <div>
-      <p className="text-label-medium text-on-surface-variant mb-1">{change.label}</p>
+    <div className="flex min-w-0 flex-wrap items-baseline gap-x-3">
+      <p className="text-label-medium text-on-surface-variant">{change.label}</p>
       <p className="text-body-medium [overflow-wrap:anywhere]">
         {change.from ? (
           <>
@@ -242,34 +280,50 @@ function contributionParts(entries: readonly TaskActivityOut[]) {
 function sessionAttribution(group: ActivitySessionGroup): {
   performer: string;
   detail: string | null;
+  avatarKind: ActorKind;
 } {
   const entry = group.entries[0];
-  const fallback = { performer: group.session?.title ?? 'Agent', detail: null };
-  if (!entry?.origin) return fallback;
-  return (
-    formatProvenance(entry.origin, { actorId: entry.actorId, name: entry.actorName }, null) ??
-    fallback
-  );
+  if (entry && (entry.origin || entry.actorId)) {
+    const performer = activityPerformer(entry, null);
+    return {
+      performer: performer.name,
+      detail: performer.detail,
+      avatarKind: performer.avatarKind,
+    };
+  }
+  return { performer: group.session?.title ?? 'Agent', detail: null, avatarKind: 'agent' };
 }
 
 /** One identity header on the spine; the time describes this visible contribution, not runtime. */
 function SessionHeader({ group }: { readonly group: ActivitySessionGroup }): JSX.Element {
   const attribution = sessionAttribution(group);
+  const artwork = group.entries.find((entry) => entry.agentIconUrl)?.agentIconUrl;
   return (
     <Surface
       as="header"
       tone="floating"
       shape="none"
       pad="comfortable"
-      className="flex min-w-0 flex-col gap-1"
+      className="grid min-w-0 grid-cols-[32px_minmax(0,1fr)] items-start gap-x-3"
     >
-      <h3 className="text-title-small">{contributionHeading(group)}</h3>
-      <div className="text-body-small text-on-surface-variant flex flex-wrap items-baseline gap-x-2">
-        <span>{attribution.performer}</span>
-        {attribution.detail ? <span>{attribution.detail}</span> : null}
-        {group.session?.kind === 'connection' ? <span>Connection activity</span> : null}
-        {group.continued ? <span>Continued</span> : null}
-        <ContributionTime entries={group.entries} />
+      {attribution.avatarKind === 'agent' ? (
+        <ActivityAgentAvatar
+          name={attribution.performer}
+          iconUrl={artwork ?? null}
+          native={group.entries[0]?.origin?.performerKind === 'athena'}
+        />
+      ) : (
+        <ActorAvatar kind={attribution.avatarKind} name={attribution.performer} size={32} />
+      )}
+      <div className="flex min-w-0 flex-col gap-1">
+        <h3 className="text-title-small">{contributionHeading(group)}</h3>
+        <div className="text-body-small text-on-surface-variant flex flex-wrap items-baseline gap-x-2">
+          <span>{attribution.performer}</span>
+          {attribution.detail ? <span>{attribution.detail}</span> : null}
+          {group.session?.kind === 'connection' ? <span>Connection activity</span> : null}
+          {group.continued ? <span>Continued</span> : null}
+          <ContributionTime entries={group.entries} />
+        </div>
       </div>
     </Surface>
   );
@@ -355,14 +409,24 @@ export function TaskActivitySession({
             const notice = entry.sessionEvent === 'question' || entry.sessionEvent === 'error';
             const content = <ol>{renderEntry(entry, true)}</ol>;
             return notice ? (
-              <Surface key={entry.id} as="section" tone="page" shape="small" pad="comfortable">
-                <p className="text-label-large mb-2">
-                  {entry.sessionEvent === 'question' ? 'Question' : 'Execution issue'}
-                </p>
-                {content}
-              </Surface>
+              <div
+                key={entry.id}
+                className="grid min-w-0 grid-cols-[32px_minmax(0,1fr)] items-start gap-x-3"
+              >
+                <DecorativeIcon
+                  variant="inline"
+                  className="mt-3"
+                  icon={entry.sessionEvent === 'question' ? MessageSquare : CircleAlert}
+                />
+                <Surface as="section" tone="page" shape="small" pad="comfortable">
+                  <p className="text-label-large mb-2">
+                    {entry.sessionEvent === 'question' ? 'Question' : 'Execution issue'}
+                  </p>
+                  {content}
+                </Surface>
+              </div>
             ) : (
-              <div key={entry.id} className="min-w-0">
+              <div key={entry.id} className="min-w-0 pl-11">
                 {content}
               </div>
             );

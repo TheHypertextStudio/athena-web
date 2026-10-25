@@ -80,7 +80,11 @@ export function activityPerformer(
       ? null
       : formatProvenance(origin, { actorId: entry.actorId, name: entry.actorName }, currentActorId);
   if (display === null) {
-    return { name: activityActorName(entry), avatarKind: 'human', detail: null };
+    return {
+      name: activityActorName(entry),
+      avatarKind: origin === null ? (entry.actorKind ?? 'human') : 'human',
+      detail: null,
+    };
   }
   return { name: display.performer, avatarKind: display.avatarKind, detail: display.detail };
 }

@@ -7,7 +7,8 @@ import { expect, test } from '../helpers/fixtures';
 import { apiJson } from '../helpers/net';
 
 /** Use a real task and an explicit activity fixture; no provider execution is simulated as real. */
-async function openTimeline(page: Page): Promise<void> {
+async function openTimeline(page: Page, artwork = false): Promise<() => void> {
+  const agentName = artwork ? 'Task automation' : 'Codex';
   const { orgId } = await signUpAndOnboard(page, 'BlueprintTimeline');
   const teams = await apiJson<{ items: { id: string }[] }>(page, `/v1/orgs/${orgId}/teams`);
   const task = await apiJson<{ id: string }>(page, `/v1/orgs/${orgId}/tasks`, {
@@ -22,8 +23,8 @@ async function openTimeline(page: Page): Promise<void> {
     channel: 'mcp',
     surface: null,
     performerKind: 'agent',
-    performerName: 'Codex',
-    clientName: 'Codex',
+    performerName: agentName,
+    clientName: agentName,
     provider: null,
   };
   const base = {
@@ -40,7 +41,8 @@ async function openTimeline(page: Page): Promise<void> {
     origin: null,
     session: null,
   };
-  const session = { id: 'fixture-session', kind: 'work', title: 'Codex session' };
+  const session = { id: 'fixture-session', kind: 'work', title: `${agentName} session` };
+  const agentIconUrl = artwork ? '/icons/icon-192.png' : undefined;
   const items = [
     { ...base, id: 'human-before' },
     {
@@ -51,6 +53,7 @@ async function openTimeline(page: Page): Promise<void> {
       body: null,
       origin,
       session,
+      agentIconUrl,
       change: {
         field: 'description',
         label: 'Description',
@@ -58,7 +61,14 @@ async function openTimeline(page: Page): Promise<void> {
         to: 'Revised brief',
       },
     },
-    { ...base, id: 'agent-result', origin, session, body: 'The brief is ready for review.' },
+    {
+      ...base,
+      id: 'agent-result',
+      origin,
+      session,
+      agentIconUrl,
+      body: 'The brief is ready for review.',
+    },
     { ...base, id: 'human-after', body: 'Reusable layouts can start.' },
   ];
   await page.route(`**/tasks/${task.id}/activity*`, (route) =>
@@ -72,9 +82,14 @@ async function openTimeline(page: Page): Promise<void> {
     waitUntil: 'domcontentloaded',
     timeout: TIMEOUTS.pageReady,
   });
-  await expect(page.getByRole('article', { name: 'Codex session' })).toBeVisible({
+  await expect(page.getByRole('article', { name: session.title })).toBeVisible({
     timeout: TIMEOUTS.pageReady,
   });
+  return () => {
+    for (const item of items) {
+      if ('agentIconUrl' in item) item.agentIconUrl = '/__fixture-missing-agent-artwork.png';
+    }
+  };
 }
 
 for (const width of [390, 1440, 1920]) {
@@ -178,4 +193,26 @@ test.describe('touch activity controls', () => {
       false,
     );
   });
+});
+
+test('shows supplied agent artwork and retains a named glyph if the image fails', async ({
+  page,
+}) => {
+  // Use the existing local app image as fixture artwork, not a claimed third-party brand logo.
+  const failArtwork = await openTimeline(page, true);
+  const contribution = page.getByRole('article', { name: 'Task automation session' });
+  const image = contribution.locator('img');
+  await expect(image).toBeVisible();
+  expect(
+    await image.evaluate((element) => (element as HTMLImageElement).naturalWidth),
+  ).toBeGreaterThan(0);
+  await page.route('**/__fixture-missing-agent-artwork.png', (route) => route.abort());
+  failArtwork();
+  await page.reload();
+  await expect(page.getByRole('article', { name: 'Task automation session' })).toBeVisible();
+  await expect(contribution.locator('img')).toHaveCount(0);
+  await expect(contribution.getByRole('img', { name: 'Task automation' })).toBeVisible();
+  await expect(
+    contribution.getByRole('img', { name: 'Task automation', exact: true }).locator('svg'),
+  ).toBeVisible();
 });

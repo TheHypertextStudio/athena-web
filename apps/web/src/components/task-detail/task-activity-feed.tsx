@@ -16,6 +16,7 @@ import {
   Timeline,
   TimelineItem,
 } from '@docket/ui/primitives';
+import { ActivityAgentAvatar } from './activity-agent-avatar';
 import type { JSX } from 'react';
 import { useMemo, useState } from 'react';
 
@@ -139,6 +140,34 @@ function CommentEditNote({ entry, orgId }: ActivityRowProps): JSX.Element | null
   );
 }
 
+/** Prefer recorded agent artwork while retaining the existing human and system identities. */
+function ActivityIdentity({
+  entry,
+  name,
+  kind,
+}: {
+  readonly entry: TaskActivityOut;
+  readonly name: string;
+  readonly kind: 'human' | 'agent' | 'team';
+}): JSX.Element {
+  if (
+    entry.agentIconUrl ||
+    entry.actorKind === 'agent' ||
+    entry.origin?.performerKind === 'agent' ||
+    entry.origin?.performerKind === 'athena'
+  ) {
+    return (
+      <ActivityAgentAvatar
+        name={name}
+        iconUrl={entry.agentIconUrl ?? null}
+        native={entry.origin?.performerKind === 'athena'}
+        size={24}
+      />
+    );
+  }
+  return <ActorAvatar kind={kind} name={name} size={24} />;
+}
+
 /** One chronological Activity row, naming whoever performed the change. */
 function ActivityRow({ entry, orgId, compact = false }: ActivityRowProps): JSX.Element {
   const viewerActorId = useViewerActorId(orgId, entry.origin?.channel === 'mcp');
@@ -171,7 +200,7 @@ function ActivityRow({ entry, orgId, compact = false }: ActivityRowProps): JSX.E
   if (compact) return <li className="min-w-0">{content}</li>;
   return (
     <TimelineItem
-      node={<ActorAvatar kind={performer.avatarKind} name={performer.name} size={24} />}
+      node={<ActivityIdentity entry={entry} name={performer.name} kind={performer.avatarKind} />}
     >
       <div className="px-3">{content}</div>
     </TimelineItem>

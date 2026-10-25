@@ -1,3 +1,4 @@
+import { withTaskActivityAgentIcons } from './task-activity-icons';
 import { readTaskSessionActivity } from './task-activity-session-source';
 /**
  * `@docket/api` — one chronological Activity projection for a task.
@@ -348,17 +349,18 @@ export const taskActivityRoutes = new Hono<AppEnv>().get(
     );
 
     const created = await originOf('task', taskRow.id);
+    const sources = {
+      childCreations,
+      directLedger,
+      comments,
+      timerEvents,
+      taskSessions,
+      childLedger,
+      blockerLedger,
+    };
     const entries: ActivityEntry[] = [
       creationEntry(taskRow, creatorRows[0]?.name ?? null, created?.origin ?? null),
-      ...activityEntries(id, {
-        childCreations,
-        directLedger,
-        comments,
-        timerEvents,
-        taskSessions,
-        childLedger,
-        blockerLedger,
-      }),
+      ...activityEntries(id, sources),
     ];
 
     const ordered = entries
@@ -369,7 +371,10 @@ export const taskActivityRoutes = new Hono<AppEnv>().get(
           : a.createdAt.localeCompare(b.createdAt),
       );
     const after = afterCursor(ordered, query.cursor);
-    const items = after.slice(0, query.limit);
+    const items = await withTaskActivityAgentIcons(after.slice(0, query.limit), sources, orgId, {
+      taskId: id,
+      origin: created?.origin ?? null,
+    });
     const next = after[query.limit];
     const lastItem = items.at(-1);
     return ok(c, pageOf(TaskActivityOut), {

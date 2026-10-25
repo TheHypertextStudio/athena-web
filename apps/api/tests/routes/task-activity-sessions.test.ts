@@ -1,5 +1,6 @@
 /** Native execution messages and mutations share identity without claiming human input. */
 import type { TaskActivityOut } from '@docket/connections/activity-contract';
+import { eq } from 'drizzle-orm';
 import { beforeAll, describe, expect, it } from 'vitest';
 import type * as DbModule from '@docket/db';
 import type tasksRouter from '../../src/routes/tasks';
@@ -30,6 +31,7 @@ describe('native task activity sessions', () => {
           organizationId: org.orgId,
           kind: 'agent',
           displayName: 'Task automation',
+          avatar: 'https://agent.example.test/automation.png',
         })
         .returning(),
     );
@@ -152,6 +154,7 @@ describe('native task activity sessions', () => {
     const { items } = (await response.json()) as { items: TaskActivityOut[] };
     expect(items.find((item) => item.body === 'Brief ready.')).toBeUndefined();
     const mutation = items.find((item) => item.change?.field === 'description');
+    expect(mutation?.agentIconUrl).toBe('https://agent.example.test/automation.png');
     expect(mutation?.session).toMatchObject({ kind: 'native', title: 'Task automation session' });
     expect(items.find((item) => item.sessionEvent === 'question')?.session?.id).toBe(
       mutation?.session?.id,
@@ -178,5 +181,57 @@ describe('native task activity sessions', () => {
       origin: null,
       session: null,
     });
+  });
+  it('uses a registered legacy agent avatar without using a human authorizing avatar', async () => {
+    const org = await seedTaskAccessOrg(db, schema);
+    const row = await seedTask(db, schema, org.statusId, {
+      organizationId: org.orgId,
+      teamId: org.teamId,
+      title: 'Legacy work',
+      state: 'todo',
+    });
+    await db
+      .update(schema.actor)
+      .set({ avatar: 'https://people.example.test/owner.png' })
+      .where(eq(schema.actor.id, org.humanActorId));
+    const legacy = one(
+      await db
+        .insert(schema.actor)
+        .values({
+          organizationId: org.orgId,
+          kind: 'agent',
+          displayName: 'Registered automation',
+          avatar: 'https://agent.example.test/legacy.png',
+        })
+        .returning(),
+    );
+    await db.insert(schema.comment).values([
+      {
+        organizationId: org.orgId,
+        subjectType: 'task',
+        subjectId: row.id,
+        authorId: legacy.id,
+        createdBy: org.humanActorId,
+        body: 'Registered legacy agent.',
+      },
+      {
+        organizationId: org.orgId,
+        subjectType: 'task',
+        subjectId: row.id,
+        authorId: org.humanActorId,
+        createdBy: org.humanActorId,
+        body: 'Human discussion.',
+      },
+    ]);
+    const response = await appWithActor(tasks, org.orgId, ['view'], org.humanActorId).request(
+      `/${row.id}/activity`,
+    );
+    expect(response.status).toBe(200);
+    const { items } = (await response.json()) as { items: TaskActivityOut[] };
+    expect(items.find((item) => item.body === 'Registered legacy agent.')?.agentIconUrl).toBe(
+      'https://agent.example.test/legacy.png',
+    );
+    expect(items.find((item) => item.body === 'Human discussion.')?.agentIconUrl).toBeUndefined();
+    expect(items.find((item) => item.body === 'Registered legacy agent.')?.actorKind).toBe('agent');
   });
 });

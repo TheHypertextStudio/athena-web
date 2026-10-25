@@ -23,6 +23,7 @@ export { default as ArrowRight } from '@mui/icons-material/ArrowForward';
 export { default as ArrowUp } from '@mui/icons-material/ArrowUpward';
 export { default as AtSign } from '@mui/icons-material/AlternateEmail';
 export { default as Building } from '@mui/icons-material/CorporateFare';
+export { default as Bot } from '@mui/icons-material/SmartToyOutlined';
 export { default as Blueprint } from '@mui/icons-material/ArchitectureOutlined';
 export { default as AlarmClock } from '@mui/icons-material/Alarm';
 export { default as BarChart } from '@mui/icons-material/BarChartRounded';

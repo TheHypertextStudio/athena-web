@@ -11,5 +11,5 @@ export function activityContributorKey(entry: TaskActivityOut): string {
   if (origin && origin.performerKind !== 'person') {
     return JSON.stringify([origin.performerKind, origin.performerName ?? origin.clientName]);
   }
-  return JSON.stringify(['person', entry.actorId, entry.actorName]);
+  return JSON.stringify(['actor', entry.actorKind ?? 'human', entry.actorId, entry.actorName]);
 }

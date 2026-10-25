@@ -4,7 +4,7 @@
  * @remarks
  * Encodes the design-system rule that a *purely decorative* glyph — one that carries no
  * interaction and no standalone meaning (the title/label beside it does) — renders at 20px
- * (`size-5`) inside a padded, toned box. This is the counterpart to the 24px functional/interactive
+ * (`size-5`) inside a toned box or an unfilled inline gutter. This is the counterpart to the 24px functional/interactive
  * icon slots owned by {@link Button}, the dialog close, and the shell rails; centralizing it here
  * means callers stop hand-tuning `size-*` on decorative marks and the standard lives in one place.
  *
@@ -39,18 +39,21 @@ export interface DecorativeIconProps {
   readonly icon?: React.ComponentType<{ className?: string }>;
   /** The glyph element to frame, when not using {@link DecorativeIconProps.icon}. */
   readonly children?: React.ReactNode;
+  /** An inline glyph shares a content grid; the default owns a toned frame. */
+  readonly variant?: 'tonal' | 'inline';
   /** Extra classes merged onto the frame (e.g. to retint its tone). */
   readonly className?: string;
 }
 
 /**
- * A padded, toned box that frames a purely-decorative 20px glyph.
+ * A shared frame or inline gutter for a purely decorative 20px glyph.
  *
  * @param props - The {@link DecorativeIconProps}.
  * @returns the rendered decorative icon frame.
  */
 export function DecorativeIcon({
   icon: Icon,
+  variant = 'tonal',
   children,
   className,
 }: DecorativeIconProps): React.JSX.Element {
@@ -58,7 +61,8 @@ export function DecorativeIcon({
     <span
       aria-hidden="true"
       className={cn(
-        'bg-surface-container-high text-on-surface-variant inline-flex items-center justify-center rounded-lg p-2 [&>svg]:size-5',
+        'text-on-surface-variant inline-flex items-center justify-center [&>svg]:size-5',
+        variant === 'tonal' ? 'bg-surface-container-high rounded-lg p-2' : 'w-8',
         className,
       )}
     >

@@ -10,6 +10,7 @@
 import { z } from 'zod';
 
 import { ActorId, OrganizationId } from '@docket/identity-access/ids';
+import { ActorOut } from '@docket/identity-access/actor-contract';
 import { AuditEventId } from '../ids';
 import { TaskId } from '@docket/work/ids';
 import { ActivityOriginOut } from '@docket/work/provenance-contract';
@@ -212,6 +213,11 @@ export const TaskActivityOut = z
     actorId: ActorId.nullable().describe(
       'WHO made the change; null when the change was system- or automation-generated with no attributable actor.',
     ),
+    actorKind: ActorOut.shape.kind
+      .optional()
+      .describe(
+        'Server-resolved actor kind when legacy activity has no provenance; recorded origin remains authoritative.',
+      ),
     actorName: z
       .string()
       .nullable()
@@ -246,6 +252,13 @@ export const TaskActivityOut = z
     origin: ActivityOriginOut.nullable().describe(
       'Where the change came from: its channel and who performed it. Null when the source did not record provenance.',
     ),
+    agentIconUrl: z
+      .string()
+      .nullable()
+      .optional()
+      .describe(
+        'Server-resolved registered agent avatar or authenticated client logo; absent when no artwork is available.',
+      ),
     sessionEvent: z
       .enum(['update', 'question', 'error', 'change'])
       .optional()

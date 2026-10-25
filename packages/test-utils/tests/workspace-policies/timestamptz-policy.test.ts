@@ -40,7 +40,9 @@ const SCHEMA_DIR = resolve(WORKSPACE_ROOT, 'packages/db/src/schema');
  */
 const NAIVE_TIMESTAMP_DEBT: Readonly<Record<string, number>> = {
   'admin.ts': 12,
-  'agents.ts': 51,
+  // `agent_session_transcript.updated_at`, moved to `agent-transcript.ts` with its table.
+  'agent-transcript.ts': 1,
+  'agents.ts': 50,
   'athena-mail.ts': 3,
   // `audit_event.created_at`, moved here from `crosscutting.ts` with its table.
   'audit-event.ts': 1,

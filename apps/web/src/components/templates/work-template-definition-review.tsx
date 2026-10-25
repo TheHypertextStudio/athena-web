@@ -1,5 +1,6 @@
 'use client';
 import type { JSX } from 'react';
+import { Surface } from '@docket/ui/primitives';
 import { useApiQuery } from '@/lib/query';
 import { StaticMarkdown } from '@/components/editor/static-markdown';
 import { workTemplatesDef } from './work-template-queries';
@@ -74,24 +75,29 @@ function StartingWorkReview({
       <h2 tabIndex={-1} className="text-title-large">
         Starting work
       </h2>
-      <WorkTemplateReviewStartingValues
-        orgId={orgId}
-        payload={form.definition.payload}
-        defaultStatusKey={form.definition.defaultStatusKey}
-        heading={false}
-        compactProperties
-      >
-        {form.definition.payload.description ? (
-          <div className="min-w-0" aria-label="Starting document">
-            <StaticMarkdown
-              value={form.definition.payload.description}
-              className="text-body-large"
-            />
-          </div>
-        ) : (
-          <p className="text-body-medium text-on-surface-variant">Starts with an empty document.</p>
-        )}
-      </WorkTemplateReviewStartingValues>
+      <Surface tone="card" shape="medium" pad="comfortable" className="min-w-0">
+        <WorkTemplateReviewStartingValues
+          orgId={orgId}
+          payload={form.definition.payload}
+          defaultStatusKey={form.definition.defaultStatusKey}
+          heading={false}
+          compactProperties
+        >
+          {form.definition.payload.description ? (
+            <section className="flex min-w-0 flex-col gap-3" aria-label="Starting document">
+              <h3 className="text-label-large text-on-surface-variant">Document</h3>
+              <StaticMarkdown
+                value={form.definition.payload.description}
+                className="text-body-large"
+              />
+            </section>
+          ) : (
+            <p className="text-body-medium text-on-surface-variant">
+              Starts with an empty document.
+            </p>
+          )}
+        </WorkTemplateReviewStartingValues>
+      </Surface>
     </section>
   );
 }

@@ -22,6 +22,7 @@ vi.mock('../../src/lib/api', () => ({
   },
 }));
 
+import { RepeatProjectWork } from '../../src/components/recurrence/repeat-project-steps';
 import { RepeatProjectDialog } from '../../src/components/recurrence/repeat-project-dialog';
 import { assertDefined } from '@docket/test-utils';
 
@@ -74,6 +75,21 @@ function task(id: string, title: string): TaskOut {
 }
 
 describe('RepeatProjectDialog', () => {
+  it('omits empty categories from the summary while retaining the work outline', () => {
+    render(
+      <RepeatProjectWork
+        name={PROJECT.name}
+        projectNoun="Project"
+        milestones={[]}
+        tasks={[
+          { task: task('TSK00000000000000000000001', 'Reconcile accounts'), milestoneId: null },
+        ]}
+      />,
+    );
+    expect(screen.getByText('One project · 1 task')).toBeVisible();
+    expect(screen.queryByText(/0 milestones/)).not.toBeInTheDocument();
+    expect(screen.getByText('Reconcile accounts')).toBeVisible();
+  });
   it('reviews the concrete work and explains both release modes in product language', () => {
     const client = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
     render(
@@ -102,7 +118,7 @@ describe('RepeatProjectDialog', () => {
     );
 
     expect(screen.getByRole('heading', { name: 'Repeat this project' })).toBeTruthy();
-    expect(screen.getByText('One project, 1 milestone, and 3 tasks.')).toBeTruthy();
+    expect(screen.getByText('One project · 1 milestone · 3 tasks')).toBeTruthy();
     expect(screen.getByText('Publish the event')).toBeTruthy();
     expect(screen.getByText('Host workshop')).toBeTruthy();
     expect(screen.getByText('Send follow-ups')).toBeTruthy();

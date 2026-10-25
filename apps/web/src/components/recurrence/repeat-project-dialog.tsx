@@ -97,8 +97,8 @@ function RepeatProjectComposer({
         containerQuery
         presentation={{
           kind: 'responsive-fullscreen',
-          size: step === 1 ? 'large' : 'wide',
-          height: 'content',
+          size: 'wide',
+          height: 'tall',
         }}
         onEscapeKeyDown={prompt.onEscapeKeyDown}
       >

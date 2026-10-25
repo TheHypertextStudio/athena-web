@@ -59,13 +59,13 @@ function ReviewWaiting({
   return (
     <div className="flex flex-col gap-3">
       <h1 className="text-title-large sm:text-headline-medium px-3 sm:px-0">
-        Review your starting work
+        Review selected templates
       </h1>
       {empty ? (
         <>
-          <p className="px-3 sm:px-0">Choose the work your workspace needs before reviewing it.</p>
+          <p className="px-3 sm:px-0">Choose templates to add before reviewing your selection.</p>
           <Button className="mx-3 self-start sm:mx-0" onClick={back}>
-            Choose starting work
+            Choose starting points
           </Button>
         </>
       ) : error ? (

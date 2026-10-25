@@ -5,7 +5,7 @@ import { Plus } from '@docket/ui/icons';
 import Link from '@/components/docket-link';
 import { workTemplateHref } from '../work-template-navigation';
 
-/** Keep one primary entrance into authoring and one secondary entrance into curated starting work. */
+/** Keep one primary entrance into authoring and one secondary entrance into curated templates. */
 export function LibraryDefineEntry({ orgId }: { readonly orgId: string }): JSX.Element {
   return (
     <ControlGroup className="max-w-full flex-wrap gap-2">
@@ -34,8 +34,7 @@ export function LibraryEmptyState(): JSX.Element {
         What work do you do?
       </Text>
       <p className="text-body-large text-on-surface-variant max-w-prose">
-        A one-off project or an ongoing program can start with a clear purpose and a plan for what
-        it includes.
+        Create a plan you can use again.
       </p>
       <p className="text-body-medium text-on-surface-variant max-w-prose">
         Choose Define work to shape your own, or browse starting points to adapt an example. Save a

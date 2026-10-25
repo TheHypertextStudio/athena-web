@@ -174,7 +174,7 @@ function ReviewHeader({ workspaceName }: { readonly workspaceName: string }): JS
   return (
     <header className="flex min-w-0 flex-col gap-1 px-3 sm:px-0">
       <p className="text-label-large">Review for {workspaceName}</p>
-      <h1 className="text-title-large sm:text-headline-medium">Review your starting work</h1>
+      <h1 className="text-title-large sm:text-headline-medium">Review selected templates</h1>
     </header>
   );
 }

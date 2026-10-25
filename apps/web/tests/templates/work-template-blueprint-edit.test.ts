@@ -87,13 +87,32 @@ it('describes Program anchors as creation dates at the root and below a nested P
     offset: { days: 7, unit: 'calendar' },
   };
   expect(blueprintStepTiming(step, root, 'Community service', 'program')).toBe(
-    'Target 7 days after Community service creation date',
+    'Target 7 days after Community service’s creation date',
   );
   const nested = addBlueprintChild(root, 'program', null, 'Outreach');
   const program = nested.steps[1];
   if (!program) throw new Error('Missing program');
   step.parentStepKey = program.key;
   expect(blueprintStepTiming(step, nested, 'Community service', 'initiative')).toBe(
-    'Target 7 days after Outreach creation date',
+    'Target 7 days after Outreach’s creation date',
+  );
+});
+
+it.each([
+  ['task', 'due date'],
+  ['project', 'target date'],
+  ['initiative', 'target date'],
+  ['program', 'creation date'],
+] as const)('names the %s parent anchor as its %s', (kind, label) => {
+  const blueprint = addBlueprintChild({ steps: [], dependencies: [] }, 'task', null);
+  const step = blueprint.steps[0];
+  if (step?.kind !== 'task') throw new Error('Missing task');
+  step.dates.dueDate = {
+    kind: 'anchor',
+    anchor: { kind: 'parent' },
+    offset: { days: -2, unit: 'calendar' },
+  };
+  expect(blueprintStepTiming(step, blueprint, 'Accounts review', kind)).toBe(
+    `Due 2 days before Accounts review’s ${label}`,
   );
 });

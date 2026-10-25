@@ -152,6 +152,7 @@ test.describe('canonical template editor accessibility and recovery', () => {
     await save.click();
     await expect(page.getByText("Couldn't update the template", { exact: true })).toBeVisible();
     await expect(name).toHaveValue('Retained after a failed save');
+    await expect(page.getByRole('button', { name: 'Try again', exact: true })).toHaveCount(0);
     const captureOut = process.env['E2E_WORK_TEMPLATE_REVIEW_OUT'];
     if (captureOut) {
       mkdirSync(captureOut, { recursive: true });

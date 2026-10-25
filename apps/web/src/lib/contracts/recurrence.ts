@@ -616,6 +616,8 @@ export const OccurrenceOut = z.object({
   status: OccurrenceStatus,
   processInstanceId: ProcessInstanceId.nullable(),
   taskId: TaskId.nullable(),
+  /** First readable generated project, when the occurrence creates one. */
+  projectId: ProjectId.nullable().optional(),
   resolvedAt: z.string().nullable(),
 });
 /** Occurrence output value. */

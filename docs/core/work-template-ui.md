@@ -7,13 +7,18 @@ its purpose, kind and draft/publication state. Choose a definition to continue, 
 start your own, or Browse starting points to adapt a gallery example. Settings contains only
 Template permissions.
 
+The gallery offers starting points. Review selected templates and their required copies before
+saving private drafts or publishing copies to the workspace. Saving copies does not create work
+or start routines. Reopening a saved copy uses its recorded outcome; undo removes only copies
+that remain eligible and preserves templates that people have used or edited.
+
 Opening or creating a template replaces workspace navigation with a focused activity and an
 explicit way back. Purpose names the template and when to use it. Starting work defines the
 initial fields and document for one new item. On wide screens, the document and included-work
 outline occupy the main column, with defaults beside them. Phones show the work first and defaults
 below it. The inline outline shows names, optionality and relative dates; Edit included work opens
 the existing structure editor without losing the document. Review displays the starting document
-without a disclosure. Documents and included-work names use 16px MD3 roles. Dates, helper copy
+inside a shared preview surface without a disclosure. Documents and included-work names use 16px MD3 roles. Dates, helper copy
 and step labels use 14px roles; headings and control dimensions retain their existing scale.
 Included work defines children, relative dates,
 responsibility and Program routines. Review explains the resulting structure, publication
@@ -22,7 +27,7 @@ venue preparation, a Vendor booking definition and an event-day milestone.
 
 Save draft keeps a new template private. Save changes keeps edits separate from the
 published version. Publish to workspace makes the reviewed body visible to workspace members;
-team offerings control where it is suggested. Existing team-only templates remain team-visible
+the Available when creating work setting chooses which teams see it in creation pickers. All teams is the default. Existing team-only templates remain team-visible
 drafts until publication. Personal drafts remain author-only. Publishing a next version preserves
 all earlier versions and leaves existing work unchanged.
 
@@ -50,7 +55,7 @@ work; explicit section links retain their destination. Save changes appears only
 Review offers publication after those changes are saved. Publishing during editing keeps Review open
 so the author can inspect its history. Phones use a section chooser for editing and show the complete
 ordered sequence during creation. Private visibility is the default; disclose Draft privacy to choose
-a team before advancing. Values remain in memory between sections and after failed writes. There is
+a team before advancing. Values remain in memory between sections and after failed writes. A pending save locks editing while keeping the document readable. There is
 no autosave or reload recovery.
 
 Included work shows its ordered outline or one selected child/routine editor at any width.
@@ -89,7 +94,7 @@ stateDiagram-v2
 
 Use Repeat project from an existing project's actions. Work lists the included tasks and
 milestones and offers the existing release modes. Repeat shows cadence, start date, interval,
-and ending controls directly. More options exposes the existing advanced recurrence settings. Review shows the work,
+and ending controls directly. The dialog keeps one desktop frame across its steps. More options exposes the existing advanced recurrence settings. Review shows the work,
 release mode, schedule, and supported behavior before Start repeating saves the definition and
 schedule. Calendar materialization controls how far ahead Docket maintains generated work. It
 does not specify how many days before each occurrence to create it.
@@ -101,7 +106,7 @@ request. Closing the dialog discards its retry identity; this recovery does not 
 
 Open Manage repeating work from a generated task or project to change its future schedule,
 review upcoming occurrences and history, or pause, resume, or end the series. The direct series
-route presents the same controls. A future schedule revision retains recorded occurrence history.
+route presents the same controls. A future schedule revision retains recorded occurrence history. Each occurrence opens its generated project when one exists, including after its tasks are removed. Standalone task occurrences open their task. Docket shows only destinations the viewer can read and uses the workspace’s names for those links.
 
 A Program definition can include routines such as a monthly community dinner. Choose the published
 template each routine creates, name the schedule, set the new item's title and repeat pattern, and
@@ -117,7 +122,7 @@ original included work, and ends its unchanged installed routines; independent e
 already accepted runs and their history remain intact.
 
 Switching sections preserves values. Closing a changed draft requires explicit discard. A failed
-save retains the draft and shows a recoverable error. Unsaved editor changes survive navigation within the signed-in app session. Reloading does not
+save retains the draft and shows one inline error. Retry through the form so Docket keeps the reviewed revision and prevents duplicate submissions. Unsaved editor changes survive navigation within the signed-in app session. Reloading does not
 recover unsaved changes; save a draft before reloading. Account or permission changes clear private
 unsaved drafts. Leaving the authoring page with changed work requires explicit discard.
 

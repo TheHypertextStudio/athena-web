@@ -76,7 +76,7 @@ export function WorkTemplateArchiveAction({
     [parentOffset, setParentOffset] = useState(0),
     [scheduleOffset, setScheduleOffset] = useState(0),
     [error, setError] = useState<string | null>(null);
-  const writes = useWorkTemplateWrites(orgId);
+  const writes = useWorkTemplateWrites(orgId, 'silent');
   const query = useApiQuery({
     ...workTemplateArchiveImpactDef(orgId, id, parentOffset, scheduleOffset),
     enabled: open,

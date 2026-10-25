@@ -85,7 +85,7 @@ describe('blueprint sample authoring', () => {
         'Project lead · Same team as Project, or the team chosen for new work',
       ),
     ).toBeVisible();
-    expect(within(review).getByText('Due on Dinner day')).toBeVisible();
+    expect(within(review).getByText('Due on Dinner day’s target date')).toBeVisible();
     expect(within(review).queryByText('Unassigned')).not.toBeInTheDocument();
   });
   it('guides a new work definition and preserves child selection when revisiting sections', () => {
@@ -146,7 +146,7 @@ describe('blueprint sample authoring', () => {
     change('Due: days before (−) or after (+)', '-21');
     fireEvent.click(screen.getByRole('button', { name: 'Back to included work' }));
     expect(screen.queryByLabelText('Title')).not.toBeInTheDocument();
-    expect(screen.getByText('Due 21 days before Community dinner date')).toBeVisible();
+    expect(screen.getByText('Due 21 days before Community dinner’s target date')).toBeVisible();
     await waitFor(() => {
       expect(screen.getByRole('button', { name: 'Edit Book venue' })).toHaveFocus();
     });

@@ -53,7 +53,7 @@ export function GalleryEntry({
       <p className="text-body-medium px-3 sm:px-0">{detail.use}</p>
       {selectionFull && !selected ? (
         <p className="text-body-medium px-3 sm:px-0">
-          Review or remove some selected work before adding another template.
+          Remove a selected template before adding another.
         </p>
       ) : null}
       <GalleryWorkOutline definition={detail.definition} sources={[detail, ...detail.references]} />

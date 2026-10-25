@@ -55,7 +55,7 @@ test('keeps a reviewed Event privately, restores its outcome on reload, then und
   await expect(selected).toBeChecked();
   await page.getByRole('button', { name: 'Review selection', exact: true }).click();
   await expect(
-    page.getByRole('heading', { name: 'Review your starting work', exact: true }),
+    page.getByRole('heading', { name: 'Review selected templates', exact: true }),
   ).toBeVisible();
   const inspect = page.getByRole('button', { name: 'Inspect Event', exact: true });
   expect(await hasVisibleKeyboardFocus(page, inspect)).toBe(true);
@@ -141,7 +141,7 @@ test('reviews all sixty startup roots without truncating selection or mounting s
   expect(new Set(review.roots.map((root) => root.workTypeId)).size).toBe(60);
   expect(review.copies.length).toBeGreaterThanOrEqual(60);
   await expect(
-    page.getByRole('heading', { name: 'Review your starting work', exact: true }),
+    page.getByRole('heading', { name: 'Review selected templates', exact: true }),
   ).toBeVisible();
   await expect(
     page.getByRole('button', { name: 'Keep private drafts', exact: true }),

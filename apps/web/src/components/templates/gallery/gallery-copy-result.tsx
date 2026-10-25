@@ -34,9 +34,9 @@ export function GalleryCopyResult({
       </h1>
       <p className="text-body-medium">
         {undone
-          ? 'This copy is still undone. Choose starting work to make a new copy.'
+          ? 'This copy is still undone. Choose starting points to make a new copy.'
           : privateDrafts
-            ? 'Your selected work is ready to review. Only you can see these drafts. Share them when you are ready.'
+            ? 'Your selected templates are ready to review. Only you can see these drafts. Share them when you are ready.'
             : `These templates are ready to use in ${workspaceName}. Existing work stays as it is.`}
       </p>
       <div className="flex flex-wrap gap-3">
@@ -50,7 +50,7 @@ export function GalleryCopyResult({
           </Button>
         ) : null}
         <Button variant={undone ? 'default' : 'ghost'} onClick={onNew}>
-          Choose starting work
+          Choose starting points
         </Button>
       </div>
     </Surface>

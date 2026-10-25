@@ -30,14 +30,14 @@ it('keeps page identity and navigation while real body data is pending', () => {
   render(
     <WorkTemplateWorkspaceFrame
       orgId={orgId}
-      title="Choose starting work"
+      title="Choose starting points"
       parent={{ label: 'Work templates' }}
       loading
     >
       <p>Not loaded yet</p>
     </WorkTemplateWorkspaceFrame>,
   );
-  expect(screen.getByRole('heading', { level: 1, name: 'Choose starting work' })).toBeVisible();
+  expect(screen.getByRole('heading', { level: 1, name: 'Choose starting points' })).toBeVisible();
   expect(screen.getByRole('status', { name: 'Loading' })).toBeVisible();
   expect(screen.queryByText('Not loaded yet')).not.toBeInTheDocument();
 });

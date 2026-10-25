@@ -148,7 +148,7 @@ function useTemplateActions(
   onCreated: (id: string, created: WorkTemplateOut) => void,
   onPublished?: () => void,
 ) {
-  const writes = useWorkTemplateWrites(orgId);
+  const writes = useWorkTemplateWrites(orgId, 'silent');
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const writing = useRef(false);

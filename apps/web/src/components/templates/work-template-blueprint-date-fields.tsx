@@ -6,6 +6,7 @@ import { blueprintStepName } from './work-template-blueprint-edit';
 
 interface DateProps {
   label: string;
+  parentDateLabel?: string;
   value: BlueprintDateRule | undefined;
   siblings: readonly BlueprintStep[];
   disabled: boolean;
@@ -33,7 +34,14 @@ function changeKind(kind: string, value: BlueprintDateRule | undefined): Bluepri
 /** Relative civil-date controls; no absolute dates or concrete work IDs enter reusable steps. */
 export function WorkTemplateBlueprintDateFields(props: DateProps): JSX.Element {
   const tasks = useVocabulary('task', { plural: true });
-  const { label, value, siblings, disabled, onChange } = props;
+  const {
+    label,
+    value,
+    siblings,
+    disabled,
+    onChange,
+    parentDateLabel = 'The containing work’s target date',
+  } = props;
   return (
     <div className="flex min-w-0 flex-col gap-3">
       <Field label={label === 'Start' ? 'Starts' : label === 'Due' ? 'Is due' : 'Target date'}>
@@ -45,12 +53,12 @@ export function WorkTemplateBlueprintDateFields(props: DateProps): JSX.Element {
           }}
         >
           <option value="none">Choose later</option>
-          <option value="parent">The containing work’s date</option>
+          <option value="parent">{parentDateLabel}</option>
           {siblings
             .filter((step) => step.kind === 'milestone')
             .map((step) => (
               <option key={step.key} value={`milestone:${step.key}`}>
-                The date of {blueprintStepName(step)}
+                {blueprintStepName(step)}’s target date
               </option>
             ))}
           {siblings.some((step) => step.kind === 'task') ? (

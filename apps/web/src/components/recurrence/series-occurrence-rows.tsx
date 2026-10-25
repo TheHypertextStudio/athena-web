@@ -1,6 +1,7 @@
 'use client';
 
 import type { OccurrenceResolution, RecurrenceSeriesDetailOut } from '@/lib/contracts/recurrence';
+import { useVocabulary } from '@docket/ui/hooks';
 import { Button, Surface } from '@docket/ui/primitives';
 import Link from '@/components/docket-link';
 import { type JSX, useState } from 'react';
@@ -15,7 +16,7 @@ interface OccurrenceRowsProps {
     ((scheduledFor: string, resolution: OccurrenceResolution) => void) | undefined;
 }
 
-/** Calm rows linking generated ordinary tasks back into the rest of Docket. */
+/** Calm rows linking generated ordinary work back into the rest of Docket. */
 export function OccurrenceRows({ orgId, items, onResolve }: OccurrenceRowsProps): JSX.Element {
   return (
     <ul className="flex flex-col gap-1 overflow-hidden rounded-xl">
@@ -62,9 +63,15 @@ function OccurrenceRow({ orgId, item, onResolve }: OccurrenceRowProps): JSX.Elem
 }
 
 function OpenOccurrence({ orgId, item }: OccurrenceRowProps): JSX.Element | null {
-  return item.taskId ? (
+  const project = useVocabulary('project').toLocaleLowerCase();
+  const task = useVocabulary('task').toLocaleLowerCase();
+  const id = item.projectId ?? item.taskId;
+  const collection = item.projectId ? 'projects' : 'tasks';
+  return id ? (
     <Button asChild variant="ghost" size="sm" className="min-h-10">
-      <Link href={`/orgs/${orgId}/tasks/${item.taskId}`}>Open task</Link>
+      <Link href={`/orgs/${orgId}/${collection}/${id}`}>
+        Open {item.projectId ? project : task}
+      </Link>
     </Button>
   ) : null;
 }

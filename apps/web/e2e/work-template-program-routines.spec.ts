@@ -58,6 +58,8 @@ test('authors reusable Program routines and keeps created Program schedules inde
 test('manages canonical Program schedules and recovers a lost committed run response', async ({
   page,
 }) => {
+  // Signup backoff shares this budget with lifecycle and committed-response recovery.
+  test.setTimeout(240_000);
   await verifyCanonicalProgramSchedule(page);
 });
 

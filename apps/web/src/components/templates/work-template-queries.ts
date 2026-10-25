@@ -52,8 +52,11 @@ export function workTemplateVersionsDef(orgId: string, id: string) {
   );
 }
 
-/** Draft, publication and archive mutations through the canonical typed API. */
-export function useWorkTemplateWrites(orgId: string) {
+/**
+ * Draft, publication and archive mutations through the canonical typed API.
+ * @param failure - Use silent when the caller owns error presentation and coordinated retries.
+ */
+export function useWorkTemplateWrites(orgId: string, failure: 'toast' | 'silent' = 'toast') {
   const invalidateKeys = [queryKeys.templates(orgId)];
   return {
     create: useApiMutation({
@@ -64,6 +67,7 @@ export function useWorkTemplateWrites(orgId: string) {
           'Could not save the template draft.',
         ),
       invalidateKeys,
+      failure,
     }),
     draft: useApiMutation({
       mutationFn: ({ id, ...input }: WorkTemplateDraftUpdate & { id: string }) =>
@@ -76,6 +80,7 @@ export function useWorkTemplateWrites(orgId: string) {
           'Could not save the template draft.',
         ),
       invalidateKeys,
+      failure,
     }),
     publish: useApiMutation({
       mutationFn: ({ id, ...input }: WorkTemplatePublish & { id: string }) =>
@@ -88,6 +93,7 @@ export function useWorkTemplateWrites(orgId: string) {
           'Could not publish the template.',
         ),
       invalidateKeys,
+      failure,
     }),
     archive: useApiMutation({
       mutationFn: (id: string) =>
@@ -99,6 +105,7 @@ export function useWorkTemplateWrites(orgId: string) {
           'Could not archive the template.',
         ),
       invalidateKeys,
+      failure,
     }),
   };
 }

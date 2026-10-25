@@ -17,6 +17,8 @@ test('content tabs preserve panel associations and reach every destination at na
   const today = new Date().toLocaleDateString('en-CA', { timeZone: preferences.timezone });
   await page.goto(`/plan/day?date=${today}`);
   await expect(page.getByRole('heading', { name: 'Plan today' })).toBeVisible();
+  const pageErrors: string[] = [];
+  page.on('pageerror', (error) => pageErrors.push(error.message));
   const routes = [
     { path: '/inbox', label: 'Inbox filters' },
     { path: `tasks/${fixture.taskId}`, label: 'Task sections' },
@@ -58,6 +60,7 @@ test('content tabs preserve panel associations and reach every destination at na
       await expect(page.locator(`[id="${target}"]`)).toHaveCount(1);
     }
     const selected = tabs.getByRole('tab', { selected: true });
+    expect(pageErrors, `${route.label} must hydrate without replacing its controls`).toEqual([]);
     await expect(selected).toBeFocused();
     const controls = await selected.getAttribute('aria-controls');
     expect(controls).toBeTruthy();

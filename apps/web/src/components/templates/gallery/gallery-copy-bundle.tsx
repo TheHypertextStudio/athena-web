@@ -102,7 +102,7 @@ export function GalleryCopyBundle({
     <div className="flex min-w-0 flex-col gap-3 sm:gap-5">
       <BundleNextReview bundle={bundle} next={next} orgId={orgId} onNew={onNew} />
       <Surface as="section" shape="medium" pad="comfortable" aria-label="Selected templates">
-        <h2 className="text-title-large">Chosen work</h2>
+        <h2 className="text-title-large">Selected templates</h2>
         <ul>
           {roots.map((entry) => (
             <BundleEntry key={entry.key} entry={entry} bundle={bundle} orgId={orgId} />
@@ -164,7 +164,7 @@ function BundleNextReview({
       ) : null}
       {undone ? (
         <Button className="self-start" onClick={onNew}>
-          Choose starting work
+          Choose starting points
         </Button>
       ) : null}
       <p className="text-body-small text-on-surface-variant">Only you can see this copy review</p>
@@ -174,7 +174,7 @@ function BundleNextReview({
 
 function nextReviewInstructions(undone: boolean, consumers: readonly string[]): string {
   if (undone)
-    return 'Templates already used or edited stay available. Choose starting work to make another copy.';
+    return 'Templates already used or edited stay available. Choose starting points to make another copy.';
   if (!consumers.length) return 'Open a saved template to continue setup.';
   return `${consumers.join(' and ')} ${consumers.length === 1 ? 'uses' : 'use'} this template. Review and share it first.`;
 }

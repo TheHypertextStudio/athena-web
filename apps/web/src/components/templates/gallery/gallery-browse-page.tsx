@@ -43,8 +43,8 @@ export function GalleryBrowsePage(): JSX.Element {
   return (
     <WorkTemplateWorkspaceFrame
       orgId={state.scope.orgId}
-      title="Choose starting work"
-      description="Start with an outcome, then review the actual work and routines your workspace needs."
+      title="Choose starting points"
+      description="Review templates and save your own copies."
       loading={catalog.pending || fork.pending}
       parent={{ label: 'Work templates' }}
     >

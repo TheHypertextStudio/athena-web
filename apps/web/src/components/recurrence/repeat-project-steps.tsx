@@ -35,9 +35,15 @@ export function RepeatProjectWork({
         Work included
       </h3>
       <p className="text-body-small text-on-surface-variant">
-        One {projectNoun.toLowerCase()}, {milestones.length} milestone
-        {milestones.length === 1 ? '' : 's'}, and {tasks.length} task{tasks.length === 1 ? '' : 's'}
-        .
+        {[
+          `One ${projectNoun.toLowerCase()}`,
+          milestones.length
+            ? `${milestones.length} milestone${milestones.length === 1 ? '' : 's'}`
+            : '',
+          tasks.length ? `${tasks.length} task${tasks.length === 1 ? '' : 's'}` : '',
+        ]
+          .filter(Boolean)
+          .join(' · ')}
       </p>
       <Surface tone="card" shape="medium" pad="roomy" className="flex flex-col gap-4">
         <h4 className="text-title-medium flex items-center gap-2">

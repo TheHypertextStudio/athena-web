@@ -110,7 +110,7 @@ describe('durable private copy review', () => {
     expect(screen.getByRole('heading', { name: 'This copy was undone' })).toBeVisible();
     expect(screen.queryByRole('button', { name: 'Open drafts' })).not.toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Private drafts kept' })).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Choose starting work' })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Choose starting points' })).toBeVisible();
   });
 });
 
@@ -208,6 +208,6 @@ it('explains the next real prerequisite before its parent without repeating page
   expect(
     screen.getByText('Edited community dinner uses this template. Review and share it first.'),
   ).toBeVisible();
-  expect(screen.getByRole('heading', { name: 'Chosen work', level: 2 })).toBeVisible();
+  expect(screen.getByRole('heading', { name: 'Selected templates', level: 2 })).toBeVisible();
   expect(screen.queryByRole('heading', { level: 1 })).not.toBeInTheDocument();
 });

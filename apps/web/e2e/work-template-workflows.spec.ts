@@ -39,6 +39,29 @@ async function changeCadence(page: Page, cadence: string): Promise<void> {
   await page.getByRole('button', { name: 'Done', exact: true }).click();
 }
 
+async function verifyProjectOccurrenceDestination(
+  page: Page,
+  orgId: string,
+  path: string,
+  seriesId: string,
+): Promise<RecurrenceSeriesDetailOut> {
+  const before = await apiJson<RecurrenceSeriesDetailOut>(page, path);
+  expect(before.trigger.kind).toBe('calendar');
+  if (before.trigger.kind === 'calendar') expect(before.trigger.schedule.kind).toBe('daily');
+  const link = page.getByRole('link', { name: 'Open project', exact: true }).first();
+  const href = await link.getAttribute('href');
+  if (!href) throw new Error('A generated project must have an accessible destination.');
+  expect(before.occurrences.map((item) => `/orgs/${orgId}/projects/${item.projectId}`)).toContain(
+    href,
+  );
+  const destination = new URL(href, page.url()).href;
+  await link.click();
+  await expect(page).toHaveURL(destination);
+  await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+  await page.goto(`/orgs/${orgId}/recurrence-series/${seriesId}`, { waitUntil: 'commit' });
+  return before;
+}
+
 for (const kind of ['Task', 'Project', 'Initiative', 'Program'] as const) {
   test(`${kind.toLowerCase()} templates persist work fields, edited metadata, and sharing after reopening`, async ({
     page,
@@ -243,9 +266,7 @@ test('a project repeats through persisted setup and future revisions preserve oc
       .getByRole('region', { name: 'History', exact: true })
       .getByText('skipped', { exact: true }),
   ).toBeVisible();
-  const before = await apiJson<RecurrenceSeriesDetailOut>(page, path);
-  expect(before.trigger.kind).toBe('calendar');
-  if (before.trigger.kind === 'calendar') expect(before.trigger.schedule.kind).toBe('daily');
+  const before = await verifyProjectOccurrenceDestination(page, orgId, path, series.id);
   const paused = waitForApiResponse(page, /\/lifecycle$/, { method: 'POST' });
   await page.getByRole('button', { name: 'Pause', exact: true }).click();
   expect((await paused).ok()).toBe(true);

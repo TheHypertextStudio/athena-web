@@ -3,7 +3,7 @@ import type {
   BlueprintDateRule,
   BlueprintStep,
 } from '@docket/work/work-template-blueprint';
-import type { TemplateTargetType } from '@docket/work/template-contract';
+import type { BlueprintWorkKind } from '@docket/work/blueprints';
 import { blueprintStepName } from './work-template-blueprint-edit';
 
 function ruleAnchor(
@@ -21,7 +21,7 @@ function ruleAnchor(
   if (rule.anchor.kind === 'parent') return parentDate;
   const key = rule.anchor.stepKey;
   const anchor = blueprint.steps.find((step) => step.key === key);
-  return anchor ? blueprintStepName(anchor) : 'Milestone date';
+  return anchor ? `${blueprintStepName(anchor)}’s target date` : 'Milestone target date';
 }
 
 function describeRule(
@@ -50,13 +50,9 @@ export function blueprintStepTiming(
   step: BlueprintStep,
   blueprint: Blueprint,
   rootName = 'parent',
-  rootKind: TemplateTargetType = 'project',
+  rootKind: BlueprintWorkKind = 'project',
 ): string {
-  const parent = blueprint.steps.find((value) => value.key === step.parentStepKey);
-  const parentDate =
-    parent?.kind === 'milestone'
-      ? blueprintStepName(parent)
-      : `${parent ? blueprintStepName(parent) : rootName}${(parent?.kind ?? rootKind) === 'program' ? ' creation' : ''} date`;
+  const parentDate = blueprintParentDateLabel(step, blueprint, rootName, rootKind);
   const labels: Readonly<Record<string, string>> = {
     startDate: 'Starts',
     dueDate: 'Due',
@@ -68,4 +64,17 @@ export function blueprintStepTiming(
       : [],
   );
   return dates.length ? dates.join(' · ') : 'No dates set';
+}
+
+/** Name the exact date used by the domain's blueprintAnchor calculation. */
+export function blueprintParentDateLabel(
+  step: BlueprintStep,
+  blueprint: Blueprint,
+  rootName = 'The containing work',
+  rootKind: BlueprintWorkKind = 'project',
+): string {
+  const parent = blueprint.steps.find((value) => value.key === step.parentStepKey);
+  const kind = parent?.kind ?? rootKind;
+  const date = kind === 'program' ? 'creation date' : kind === 'task' ? 'due date' : 'target date';
+  return `${parent ? blueprintStepName(parent) : rootName}’s ${date}`;
 }

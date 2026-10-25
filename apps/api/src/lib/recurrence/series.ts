@@ -1,3 +1,4 @@
+import { occurrenceOutputs } from './series-occurrence-output';
 import {
   lockRegisteredSeriesDefinition,
   insertCanonicalCompatibilitySeries,
@@ -22,7 +23,6 @@ import {
   type Database,
 } from '@docket/db';
 import {
-  OccurrenceOut,
   ProcessTrigger,
   RecurrenceSeriesCreate,
   RecurrenceSeriesDetailOut,
@@ -48,7 +48,7 @@ import { listRecurrenceSeriesIds } from './list-store';
 import { loadNativeGeneratedWorkRecurrence } from './schedule-native-backlinks';
 import { requireLegacyActor, requireLegacyDefinitionAccess } from './legacy-definition-access';
 import { requireScheduleAccess } from './schedule-access';
-import { readableLegacyWork, visibleLegacyWorkReference } from './legacy-work-visibility';
+import { visibleLegacyWorkReference } from './legacy-work-visibility';
 
 /** Database transaction surface shared by atomic recurrence authoring operations. */
 export type RecurrenceTransaction = Parameters<Parameters<Database['transaction']>[0]>[0];
@@ -424,70 +424,6 @@ export async function listRecurrenceSeries(
 ): Promise<z.input<typeof RecurrenceSeriesOut>[]> {
   const rows = await listRecurrenceSeriesIds(database, organizationId, pagination);
   return Promise.all(rows.map((row) => loadRecurrenceSeries(database, organizationId, row.id)));
-}
-
-/** Serialize one durable occurrence and its first generated task when present. */
-async function occurrenceOutputs(
-  database: Database,
-  organizationId: string,
-  seriesId: string,
-  actorId: string,
-): Promise<z.input<typeof OccurrenceOut>[]> {
-  const rows = await database
-    .select({ occurrence: processOccurrence, instanceId: processInstance.id })
-    .from(processOccurrence)
-    .leftJoin(
-      processInstance,
-      and(
-        eq(processInstance.occurrenceId, processOccurrence.id),
-        eq(processInstance.organizationId, organizationId),
-      ),
-    )
-    .where(
-      and(
-        eq(processOccurrence.organizationId, organizationId),
-        eq(processOccurrence.seriesId, seriesId),
-      ),
-    )
-    .orderBy(processOccurrence.scheduledFor);
-  const instanceIds = rows.flatMap((row) => (row.instanceId ? [row.instanceId] : []));
-  const taskRows =
-    instanceIds.length === 0
-      ? []
-      : await database
-          .select({
-            instanceId: processInstanceTask.instanceId,
-            taskId: processInstanceTask.taskId,
-          })
-          .from(processInstanceTask)
-          .where(
-            and(
-              eq(processInstanceTask.organizationId, organizationId),
-              inArray(processInstanceTask.instanceId, instanceIds),
-            ),
-          );
-  const visible = await readableLegacyWork(
-    database,
-    { organizationId, actorId },
-    taskRows.map(({ taskId }) => ({ kind: 'task' as const, id: taskId })),
-  );
-  const firstTaskByInstance = new Map<string, string>();
-  for (const row of taskRows) {
-    if (visible.has(`task:${row.taskId}`) && !firstTaskByInstance.has(row.instanceId))
-      firstTaskByInstance.set(row.instanceId, row.taskId);
-  }
-  return rows.map((row) =>
-    OccurrenceOut.parse({
-      id: row.occurrence.id,
-      seriesId: row.occurrence.seriesId,
-      scheduledFor: row.occurrence.scheduledFor,
-      originalScheduledFor: row.occurrence.originalScheduledFor,
-      status: row.occurrence.status,
-      processInstanceId: row.instanceId,
-      taskId: row.instanceId ? (firstTaskByInstance.get(row.instanceId) ?? null) : null,
-      resolvedAt: row.occurrence.resolvedAt?.toISOString() ?? null,
-    }),
-  );
 }
 
 /** Serialize every immutable trigger revision for one org-scoped recurrence series. */

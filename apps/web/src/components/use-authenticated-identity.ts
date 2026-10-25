@@ -1,7 +1,7 @@
 'use client';
 
 import { useQueryClient } from '@tanstack/react-query';
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { useAuthenticationInterlock } from '@/components/authentication-interlock';
 import { waitForOutboxSessionTransition } from '@/components/pwa/outbox';
 import { purgeOfflineDocuments } from '@/components/pwa/purge-offline-documents';
@@ -14,6 +14,7 @@ import { resolveSessionStatus } from '@/lib/session-status';
 import { useOnlineStatus } from '@/lib/use-online-status';
 
 const SESSION_PEND_BUDGET_MS = 8_000;
+const subscribeToHydration = (): (() => void) => () => undefined;
 
 /** Shared identity state for authenticated workspace and activity layouts. */
 export interface AuthenticatedIdentity {
@@ -87,9 +88,17 @@ export function useAuthenticatedIdentity(
   const [renderedUserId, setRenderedUserId] = useState<string | null>(
     () => snapshot?.userId ?? userId,
   );
-  const identitySwitching = renderedUserId !== userId;
+  const hydrated = useSyncExternalStore(
+    subscribeToHydration,
+    () => true,
+    () => false,
+  );
+  const identityChanged = renderedUserId !== userId;
+  // The disk snapshot cannot alter the hydration tree. Clear private caches in the first layout
+  // effect even while reproducing the server markup, before restored account data can paint.
+  const identitySwitching = hydrated && identityChanged;
   useLayoutEffect(() => {
-    if (!identitySwitching) return undefined;
+    if (!identityChanged) return undefined;
     let current = true;
     queryClient.clear();
     clearSessionSnapshot();
@@ -103,7 +112,7 @@ export function useAuthenticatedIdentity(
     return () => {
       current = false;
     };
-  }, [identitySwitching, queryClient, userId]);
+  }, [identityChanged, queryClient, userId]);
 
   // Re-ask ONLY on the offline -> online edge, never on `status`.
   //

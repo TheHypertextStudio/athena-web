@@ -21,7 +21,7 @@ describe('actual catalog work structure', () => {
       vendor = source('vendor-booking');
     const nodes = galleryStructure(event.definition, [event, vendor]);
     expect(nodes[0]?.name).toBe('Book venue');
-    expect(nodes[0]?.timing).toContain('21 days before Event date');
+    expect(nodes[0]?.timing).toContain('21 days before Event’s target date');
     expect(nodes[0]?.children.map((child) => child.name)).toEqual([
       'Get quote',
       'Confirm booking',

@@ -14,7 +14,7 @@
     "dev": "portless run --force",
     "dev:app": "tsx ../../scripts/portless-env.ts sh -c 'tsx ../../packages/service-worker/bin/build.ts --app-root=. && next dev'",
     "start": "next start",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "NODE_OPTIONS=--max-old-space-size=4096 tsc --noEmit",
     "lint": "NODE_OPTIONS=--max-old-space-size=4096 eslint . --cache --cache-location ../../node_modules/.cache/eslint/web --cache-strategy content",
     "lint:fix": "NODE_OPTIONS=--max-old-space-size=4096 eslint . --fix --cache --cache-location ../../node_modules/.cache/eslint/web --cache-strategy content",
     "test": "NODE_OPTIONS=\"${NODE_OPTIONS:+$NODE_OPTIONS }--no-experimental-webstorage\" vitest run",

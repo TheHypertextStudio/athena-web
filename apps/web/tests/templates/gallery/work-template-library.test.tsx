@@ -206,7 +206,7 @@ describe('organization work definition library', () => {
   it('introduces first use for one-off and ongoing work without empty publication queues', () => {
     render(<WorkTemplateLibrary orgId="01ARZ3NDEKTSV4RRFFQ69G5FAX" items={[]} />);
     expect(screen.getByRole('heading', { name: 'What work do you do?' })).toBeVisible();
-    expect(screen.getByText(/one-off project or an ongoing program/)).toBeVisible();
+    expect(screen.getByText('Create a plan you can use again.')).toBeVisible();
     expect(screen.queryByRole('heading', { name: 'Ready to use' })).not.toBeInTheDocument();
     expect(
       screen.queryByRole('textbox', { name: 'Search work templates' }),

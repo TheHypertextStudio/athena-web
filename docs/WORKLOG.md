@@ -1,7 +1,7 @@
 # Project Athena Work Log
 
 > **Purpose**: Comprehensive tracking of all work - past, present, and future.
-> **Last Updated**: 2026-10-16
+> **Last Updated**: 2026-10-24
 
 ---
 
@@ -13657,6 +13657,20 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
 ---
 
 ## Completed Tasks
+
+### [WORK-TEMPLATE-FINAL-RELEASE-20261024] Reconcile and validate the complete feature
+
+- **Completed**: 2026-10-24
+- **Summary**: Reconciled five feature commits with main `0b27c3615`, fixed the release blockers, completed the design pass and validated the feature for local integration. Preserved the previous history and the old feature branch. Integration, push and deployment remain excluded.
+- **Plan and approach**: Preserve current authoring and resolve the shared-tab conflict without restoring old dialogs. Keep main's selected-tab reveal and scrollbar treatment alongside contained-tab sizing. Install scoped dependencies, diagnose failures from persisted production journeys, fix the owning behavior, then validate the affected graph and actual desktop/phone states. Use one worker or Turbo concurrency one for heavy checks.
+- **Behavior**: Hydration preserves the server tree and focus while private caches still clear before paint. Occurrence history opens an authorized generated Project, including when its tasks are removed. Forms own failed-write feedback and coordinated retries. Drafts remain readable during saves. Date anchors, team availability, Review hierarchy, repeat-frame stability and required-copy disclosure now communicate their behavior. Gallery language distinguishes copied templates from created work and uses no fixed work-kind names in the empty-library explanation.
+- **Files changed**: The identity hook and hydration regression; API occurrence contracts/projection and web occurrence rows; template, gallery and repeat components; component/browser/PostgreSQL regression coverage; the web typecheck script; the setup guide and final release audits.
+- **Validation**: 843 API/contract/security tests across 103 files, 351 UI tests across 52 files, 662 work-domain tests across 68 files, 25 shared-tab tests and 21 PostgreSQL 18 acceptance tests across three files passed. All 37 production browser cases passed. After the final corrections, fresh production builds and the owning 11-case and eight-case follow-ups passed with retries disabled. API/web/admin/UI checks, lint, complexity, documentation build/link/accessibility and 52-page source checks passed. All eight documentation coverage-policy tests passed. The complexity ledger is unchanged.
+- **Rendered evidence**: Accepted 232 native screenshots across 29 states, four viewport sizes and both themes. The additional DOM pass accepted 48 layout/theme combinations, 1,130 AA text samples with a 4.63:1 minimum, and 102 touch targets of at least 40px. The final audit records all eight craft dimensions at three and clears all five gates. Capture receipts exclude failed diagnostics and superseded frames.
+- **Decisions**: Keep the current API and recurrence semantics and add no migration. Pin only web typechecking to a per-process 4GB heap after its adaptive 2GB limit failed. Retain drafts in memory without adding autosave or reload recovery. Reuse current composers, shared surfaces and dialog primitives. Keep the daily-planning defect outside this delivery.
+- **Learnings and retrospective**: Independent review and persisted journeys exposed the useful defects. Concurrent dev compilation obscured the first runtime failure classification, so isolated production runs established recurrence acceptance. Native screenshots exposed the duplicate error retry that component-only inspection missed. Touch geometry needs a touch-enabled browser context, and contrast sampling must composite translucent backgrounds. Future audits should establish those inputs before classifying failures.
+- **Cleanup and launch boundary**: Reset verification fixtures, remove saved authentication files and stop the local stack and owned acceptance containers/volumes. The final source manifest and release handoff tie evidence to committed blobs. No local feature blocker remains. Hosted checks, integration, deployment and deployed smoke verification remain external gates and have not been represented as passes.
+- **Audit**: [Work-template final release acceptance](design/audits/2026-10-24-work-template-final-release.md).
 
 ### [MCP-LIBRARY-LIVE-ACCEPTANCE] Restore Library discovery and verify production reads
 

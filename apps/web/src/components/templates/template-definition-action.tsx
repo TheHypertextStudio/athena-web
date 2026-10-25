@@ -86,7 +86,7 @@ function TemplateSaveStatus({
   form: WorkTemplateFormState;
   saved: boolean;
 }): JSX.Element {
-  const visibility = form.dirty || form.pending ? '' : 'sr-only';
+  const visibility = form.dirty && !form.pending ? '' : 'sr-only';
   return (
     <span role="status" className={`text-body-small text-on-surface-variant ${visibility}`}>
       {saveStatus(form, saved)}

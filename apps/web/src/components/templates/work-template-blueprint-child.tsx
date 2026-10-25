@@ -20,6 +20,7 @@ import {
   WorkTemplateBlueprintStartingProperties,
 } from './work-template-blueprint-step-fields';
 import { WorkTemplateBlueprintReferenceFields } from './work-template-blueprint-reference-fields';
+import { blueprintParentDateLabel } from './work-template-blueprint-timing';
 import { WorkTemplateBlueprintDateFields } from './work-template-blueprint-date-fields';
 import {
   WorkTemplateBlueprintDependencies,
@@ -118,7 +119,14 @@ export function BlueprintChildCard(
         <OptionalFields step={step} disabled={disabled} onChange={update} />
       </section>
       <TemplateDisclosure title="Dates">
-        <ChildDates step={step} siblings={siblings} disabled={disabled} onChange={update} />
+        <ChildDates
+          step={step}
+          blueprint={blueprint}
+          rootKind={props.rootKind}
+          siblings={siblings}
+          disabled={disabled}
+          onChange={update}
+        />
         <WorkTemplateBlueprintDependencies
           blueprint={blueprint}
           step={step}
@@ -256,11 +264,15 @@ function ParentField({
 }
 function ChildDates({
   step,
+  blueprint,
+  rootKind,
   siblings,
   disabled,
   onChange,
 }: {
   step: BlueprintStep;
+  blueprint: Blueprint;
+  rootKind: BlueprintWorkKind;
   siblings: readonly BlueprintStep[];
   disabled: boolean;
   onChange: (step: BlueprintStep) => void;
@@ -278,6 +290,12 @@ function ChildDates({
       {fields.map((field) => (
         <WorkTemplateBlueprintDateFields
           key={field}
+          parentDateLabel={blueprintParentDateLabel(
+            step,
+            blueprint,
+            'The containing work',
+            rootKind,
+          )}
           label={field === 'startDate' ? 'Start' : field === 'dueDate' ? 'Due' : 'Target'}
           value={field in step.dates ? step.dates[field as keyof typeof step.dates] : undefined}
           siblings={siblings}

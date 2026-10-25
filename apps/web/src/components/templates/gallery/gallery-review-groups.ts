@@ -77,6 +77,6 @@ export function galleryReviewGroups(
     assign(category.label, (item) => item.category === category.value);
   });
   const other = selected.filter((copy) => !assigned.has(gallerySourceKey(copy.source)));
-  if (other.length) groups.push({ name: 'Other selected work', copies: other });
+  if (other.length) groups.push({ name: 'Other selected templates', copies: other });
   return groups;
 }

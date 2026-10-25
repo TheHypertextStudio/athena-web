@@ -1,5 +1,7 @@
 # Work-template release verification
 
+The [current-main reconciliation audit](2026-10-24-work-template-final-release.md) supersedes this release verdict. Counts and captures below describe the earlier source and do not establish acceptance of the reconciled branch.
+
 Reader: A Docket maintainer deciding whether to integrate the work-definition feature.
 
 **Verdict: SHIP within the local delivery boundary.** All required feature checks and rendered craft gates pass.

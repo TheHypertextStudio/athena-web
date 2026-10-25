@@ -11,7 +11,7 @@ import {
   CollapsibleTrigger,
   Surface,
 } from '@docket/ui/primitives';
-import { ChevronRight } from '@docket/ui/icons';
+import { ChevronDown, ChevronRight } from '@docket/ui/icons';
 import { useVocabulary } from '@docket/ui/hooks';
 import { gallerySourceKey } from './gallery-metadata';
 
@@ -157,7 +157,7 @@ export function GalleryReviewOrganization({
   const groups = galleryReviewGroups(preview, selectedItems, outcomes);
   const selectedCount = preview.roots.length;
   return (
-    <section aria-label="Your starting work" className="flex min-w-0 flex-col gap-3">
+    <section aria-label="Selected templates" className="flex min-w-0 flex-col gap-3">
       <p className="text-body-medium text-on-surface-variant px-3 sm:px-0">
         {selectedCount} selected · {preview.copies.length} templates
       </p>
@@ -208,9 +208,15 @@ export function GalleryRequiredCopies({
       <CollapsibleTrigger asChild>
         <Button
           variant="ghost"
-          className="h-auto min-h-10 px-3 text-left whitespace-normal sm:px-0"
+          className="group h-auto min-h-10 gap-2 px-3 text-left whitespace-normal sm:px-0"
         >
-          {required.length} required {required.length === 1 ? 'template' : 'templates'}
+          <ChevronDown
+            aria-hidden="true"
+            className="size-5 shrink-0 transition-transform group-data-[state=open]:rotate-180 motion-reduce:transition-none"
+          />
+          <span>
+            {required.length} required {required.length === 1 ? 'template' : 'templates'}
+          </span>
         </Button>
       </CollapsibleTrigger>
       <CollapsibleContent>

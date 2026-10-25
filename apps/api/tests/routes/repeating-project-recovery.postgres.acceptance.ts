@@ -66,4 +66,5 @@ afterAll(async () => {
 });
 
 import './recurrence-creation-retry.test';
+import './generated-occurrence-navigation.test';
 import './process-definition-creation-retry.test';

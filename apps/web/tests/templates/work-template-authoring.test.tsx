@@ -47,13 +47,16 @@ vi.mock('@/components/editor/freeform-text', () => ({
     value,
     onChange,
     ariaLabel,
+    readOnly,
   }: {
     value: string;
     onChange: (value: string) => void;
     ariaLabel: string;
+    readOnly?: boolean;
   }) => (
     <textarea
       aria-label={ariaLabel}
+      readOnly={readOnly}
       value={value}
       onChange={(event) => {
         onChange(event.target.value);
@@ -114,6 +117,24 @@ describe('work-template sample authoring', () => {
       expect(mocks.publish).not.toHaveBeenCalled();
     },
   );
+  it('locks editing during a save without disabling the readable document', async () => {
+    mocks.create.mockImplementationOnce(() => new Promise(() => undefined));
+    render(<WorkTemplateForm orgId="org" initial={null} onCreated={vi.fn()} />);
+    fireEvent.change(screen.getByLabelText('Template name'), {
+      target: { value: 'Accounts review' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Continue to starting work' }));
+    fireEvent.change(screen.getByLabelText('Document'), {
+      target: { value: 'Keep the receipts.' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Save draft' }));
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Saving…' })).toBeDisabled();
+    });
+    expect(screen.getByLabelText('Document')).toHaveValue('Keep the receipts.');
+    expect(screen.getByLabelText('Document')).toHaveAttribute('readonly');
+    expect(screen.getByLabelText('Document')).toBeEnabled();
+  });
   it.each([false, true])(
     'offers team controls only to workspace administrators (manager=%s)',
     (canManage) => {
@@ -121,7 +142,7 @@ describe('work-template sample authoring', () => {
       render(<WorkTemplateForm orgId="org" initial={null} onCreated={vi.fn()} />);
       fireEvent.change(screen.getByLabelText('Template name'), { target: { value: 'Event' } });
       fireEvent.click(screen.getByRole('button', { name: 'Continue to starting work' }));
-      const control = screen.getByRole('button', { name: /Offer to teams/ });
+      const control = screen.getByRole('button', { name: /Available when creating work/ });
       if (canManage) expect(control).toBeEnabled();
       else expect(control).toBeDisabled();
     },

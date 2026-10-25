@@ -113,7 +113,7 @@ describe('real callback gallery review', () => {
       />,
     );
     fireEvent.click(
-      within(screen.getByRole('region', { name: 'Your starting work' })).getByRole('button', {
+      within(screen.getByRole('region', { name: 'Selected templates' })).getByRole('button', {
         name: 'Inspect Event',
       }),
     );
@@ -147,7 +147,7 @@ describe('real callback gallery review', () => {
     );
     expect(
       screen
-        .getByRole('region', { name: 'Your starting work' })
+        .getByRole('region', { name: 'Selected templates' })
         .compareDocumentPosition(
           screen.getByRole('region', { name: 'Destination and visibility' }),
         ) & Node.DOCUMENT_POSITION_FOLLOWING,
@@ -313,8 +313,8 @@ it('reviews one chosen work directly without category and kind heading wrappers'
       onBack={vi.fn()}
     />,
   );
-  const work = within(screen.getByRole('region', { name: 'Your starting work' }));
-  expect(work.queryByRole('heading', { name: 'Your starting work' })).not.toBeInTheDocument();
+  const work = within(screen.getByRole('region', { name: 'Selected templates' }));
+  expect(work.queryByRole('heading', { name: 'Selected templates' })).not.toBeInTheDocument();
   expect(work.queryByRole('heading', { name: /Events|Projects/ })).not.toBeInTheDocument();
   expect(work.getByRole('button', { name: 'Inspect Event' })).toBeVisible();
 });

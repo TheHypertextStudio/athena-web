@@ -116,8 +116,7 @@ function TemplateSampleWork({ orgId, form }: { orgId: string; form: Form }): JSX
                 : { ...value, payload: { ...value.payload, description } },
             );
           }}
-          disabled={form.pending}
-          readOnly={!form.canEdit}
+          readOnly={form.pending || !form.canEdit}
           placeholder="Add notes, instructions, or a checklist…"
           ariaLabel="Document"
           mentionOrgId={orgId}
@@ -144,12 +143,12 @@ function TeamOfferingField({
   const disabled = form.pending || !form.canEdit || loading || !canManage;
   return (
     <Field
-      label="Offer to teams"
+      label="Available when creating work"
       description={
         <Text token="body-medium">
           {canManage
-            ? 'Leave empty to offer throughout the workspace. Published templates are visible to everyone.'
-            : 'Administrators choose team offerings. Published templates remain visible throughout the workspace.'}
+            ? 'Choose which teams see this template when creating work. Everyone in the workspace can view published templates.'
+            : 'Administrators choose which teams see this template when creating work. Everyone in the workspace can view published templates.'}
         </Text>
       }
     >
@@ -163,8 +162,8 @@ function TeamOfferingField({
             ids.includes(id) ? ids.filter((value) => value !== id) : [...ids, id],
           );
         }}
-        placeholder="Every team"
-        ariaLabel="Offer to teams"
+        placeholder="All teams"
+        ariaLabel="Available when creating work"
         disabled={disabled}
       />
     </Field>

@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AppEnv } from '../../src/context';
 import type * as AuthModule from '@docket/auth';
 import type * as OAuthBearerModule from '../../src/auth/oauth-bearer';
+import type * as IdempotencyModule from '../../src/lib/idempotency';
 import type * as StaffGuardModule from '../../src/permissions/staff-guard';
 
 const verifyRestBearer = vi.fn();
@@ -29,12 +30,14 @@ vi.mock('../../src/auth/oauth-bearer', async (importOriginal) => {
   return { ...actual, verifyRestBearer };
 });
 
-vi.mock('../../src/lib/idempotency', () => {
+vi.mock('../../src/lib/idempotency', async (importOriginal) => {
+  const actual = await importOriginal<typeof IdempotencyModule>();
   const middleware = async (_context: unknown, next: () => Promise<void>): Promise<void> => {
     idempotencyCalls();
     await next();
   };
   return {
+    ...actual,
     idempotency: middleware,
     idempotencyFor: () => middleware,
   };

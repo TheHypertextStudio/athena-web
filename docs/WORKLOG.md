@@ -13686,6 +13686,16 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
 
 ## Completed Tasks
 
+### [SESSION-ACCEPTANCE-EXPORTS] Preserve the composed session-only acceptance checks
+
+- **Completed**: 2026-10-25
+- **Summary**: Retain the real idempotency module exports while replacing only the middleware
+  observed by the session-only authorization tests. Server route composition remains fully exercised.
+- **Validation**: The missing body-capture export reproduces the current main CI failure. All 60
+  production-composed session-only cases pass with the corrected partial mock.
+- **Learnings**: A focused middleware mock must preserve unrelated real exports consumed by the
+  production server; otherwise the suite fails before reaching its authorization assertions.
+
 ### [CACHE-CONFIG-BOUNDARY] Keep deployment metadata outside application runtime
 
 - **Completed**: 2026-10-25

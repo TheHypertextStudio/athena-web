@@ -122,7 +122,7 @@ function registerRepeatTask(server: McpRegistrar, ctx: McpContext): void {
     {
       title: 'Repeat task',
       description:
-        'Create an ordinary repeating task and its rolling window. Discover a task template with list_templates; preserve the literal Markdown structure in payload.description and fill its sections. Pass template ID/name or workTypeId with optional workTypeVersionId. Explicit recurringTask.task fields override defaults. If relevant templates exist, choose one or supply withoutTemplateReason; undecided calls create nothing. Supports calendar and after-completion recurrence through the underlying one-step process',
+        'Create a repeating task with calendar or actual-completion recurrence. Call list_templates; preserve payload.description Markdown. Pass workTypeId + optional workTypeVersionId or legacy ID/name; explicit task fields win. Select a relevant template or provide withoutTemplateReason; undecided calls create nothing.',
       inputSchema: {
         orgId: orgIdParam,
         recurringTask: RecurringTaskCreate.describe(

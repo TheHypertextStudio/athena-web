@@ -90,6 +90,40 @@ describe('gallery acceptance and known outcomes', () => {
   it('refuses a missing root outcome rather than inventing its destination', () => {
     expect(() => galleryCopyReceipt({ ...status(), entries: [] })).toThrow();
   });
+  it('reserves different releases of the same definition as distinct exact sources', async () => {
+    const entry = GALLERY_CATALOG.find(
+      (item) =>
+        item.definition.payload.targetType === 'task' &&
+        item.definition.blueprint.steps.length === 0,
+    );
+    if (!entry) throw new Error('Missing task catalog fixture');
+    const first = await catalogCopySource(entry);
+    const second = { ...first, identity: { ...first.identity, release: 2 } };
+    const sources = [first, second];
+    const input = {
+      destinationOrganizationId: OrganizationId.parse(id(99)),
+      roots: sources.map((source) => source.identity),
+      sources,
+      bindings: [],
+    };
+    const checked = await previewTemplateCopySources(input);
+    const review = WorkTemplateGalleryPreview.parse({
+      ...checked,
+      mode: 'private_drafts',
+      copies: checked.copies.map((copy) => ({
+        source: copy.source,
+        dependencies: copy.dependencies,
+        offeredTeamIds: copy.offeredTeamIds,
+        definition: copy.previewDefinition,
+        name: copy.previewDefinition.name,
+        targetType: copy.kind,
+      })),
+    });
+    const accepted = galleryAcceptanceFacts(status().requestId, input, review, hash);
+    expect(new Set(accepted.entries.map((copy) => copy.key)).size).toBe(2);
+    expect(accepted.roots).toEqual(accepted.entries.map((copy) => copy.key));
+    expect(accepted.entries.map((copy) => copy.source)).toEqual(input.roots);
+  });
   it('keeps actual Event dependencies first with their exact immutable catalog hashes', async () => {
     const sources = await Promise.all(GALLERY_CATALOG.map(catalogCopySource));
     const entry = GALLERY_CATALOG.find((source) => source.slug === 'event');
@@ -127,6 +161,10 @@ describe('gallery acceptance and known outcomes', () => {
         true,
       );
     }
-    expect(accepted.roots).toEqual([rootSource.identity.workTypeId]);
+    expect(accepted.roots).toEqual([
+      accepted.entries.find(
+        (copy) => copyIdentityKey(copy.source) === copyIdentityKey(rootSource.identity),
+      )?.key,
+    ]);
   });
 });

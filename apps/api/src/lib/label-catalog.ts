@@ -105,8 +105,12 @@ export function tidyLabelName(name: string): string {
  *
  * @throws {NotFoundError} When the group is unknown or belongs to another org.
  */
-export async function requireLabelGroup(orgId: string, groupId: string): Promise<LabelGroupRow> {
-  const [row] = await db
+export async function requireLabelGroup(
+  orgId: string,
+  groupId: string,
+  client: Pick<typeof db, 'select'> = db,
+): Promise<LabelGroupRow> {
+  const [row] = await client
     .select()
     .from(labelGroup)
     .where(and(eq(labelGroup.id, groupId), eq(labelGroup.organizationId, orgId)))

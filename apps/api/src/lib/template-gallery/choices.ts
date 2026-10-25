@@ -1,6 +1,5 @@
 import { canActor } from '@docket/authz';
 import { label, team } from '@docket/db';
-import type { WorkTemplateGalleryPreviewRequest } from '@docket/work/template-gallery-contract';
 import { and, eq, inArray, isNull } from 'drizzle-orm';
 import { CapabilityError, NotFoundError } from '../../error';
 import { mayManageTemplateOfferings, type TemplateActor } from '../templates/authorization';
@@ -10,7 +9,10 @@ import type { TemplateTransaction } from '../templates/persistence';
 export async function requireGalleryChoices(
   tx: TemplateTransaction,
   caller: TemplateActor,
-  body: WorkTemplateGalleryPreviewRequest,
+  body: {
+    readonly labels: readonly { readonly destinationLabelId: string }[];
+    readonly offerings: readonly { readonly teamIds: readonly string[] }[];
+  },
 ): Promise<void> {
   const ids = [...new Set(body.labels.map((choice) => choice.destinationLabelId))];
   if (ids.length) {

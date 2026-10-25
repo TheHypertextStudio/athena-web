@@ -1,8 +1,15 @@
 /** Retry-safe project snapshots through the existing publication writer and canonical receipt. */
-import { blueprintConversion, blueprintInvocation, db, processRevision } from '@docket/db';
+import {
+  blueprintConversion,
+  blueprintInvocation,
+  db,
+  processRevision,
+  invocationRevision,
+} from '@docket/db';
 import { and, eq } from 'drizzle-orm';
 import type { Context, MiddlewareHandler } from 'hono';
 import type { AppEnv } from '../context';
+import { ConflictError } from '../error';
 import {
   ProcessDefinitionDetailOut,
   ProcessDefinitionFromProjectCreate,
@@ -81,37 +88,70 @@ export const resumeProjectSnapshot: MiddlewareHandler<AppEnv> = async (c, next) 
   const response = ProcessDefinitionDetailOut.parse(await c.res.clone().json());
   const { orgId, actorId } = c.get('actorCtx');
   await loadProcessDefinitionDetail(db, orgId, response.id, actorId);
-  const rows = await db
+  const registered = await db
     .select({ manifest: blueprintInvocation.manifest })
-    .from(blueprintInvocation)
+    .from(invocationRevision)
     .innerJoin(
-      blueprintConversion,
+      blueprintInvocation,
       and(
-        eq(blueprintConversion.invocationId, blueprintInvocation.id),
-        eq(blueprintConversion.organizationId, orgId),
-      ),
-    )
-    .innerJoin(
-      processRevision,
-      and(
-        eq(processRevision.id, blueprintConversion.legacyProcessRevisionId),
-        eq(processRevision.organizationId, orgId),
+        eq(blueprintInvocation.id, invocationRevision.invocationId),
+        eq(blueprintInvocation.organizationId, orgId),
       ),
     )
     .where(
       and(
-        eq(blueprintInvocation.organizationId, orgId),
-        eq(processRevision.definitionId, response.id),
-        eq(processRevision.id, response.revision.id),
+        eq(invocationRevision.id, response.revision.id),
+        eq(invocationRevision.headId, response.id),
+        eq(invocationRevision.organizationId, orgId),
       ),
     );
+  const rows = registered.length
+    ? registered
+    : await db
+        .select({ manifest: blueprintInvocation.manifest })
+        .from(blueprintInvocation)
+        .innerJoin(
+          blueprintConversion,
+          and(
+            eq(blueprintConversion.invocationId, blueprintInvocation.id),
+            eq(blueprintConversion.organizationId, orgId),
+          ),
+        )
+        .innerJoin(
+          processRevision,
+          and(
+            eq(processRevision.id, blueprintConversion.legacyProcessRevisionId),
+            eq(processRevision.organizationId, orgId),
+          ),
+        )
+        .where(
+          and(
+            eq(blueprintInvocation.organizationId, orgId),
+            eq(processRevision.definitionId, response.id),
+            eq(processRevision.id, response.revision.id),
+          ),
+        );
   await reconcileTemplateCreationEffects(
-    rows.flatMap(({ manifest }) =>
-      manifest.roots.flatMap((root) =>
+    rows.flatMap(({ manifest }) => {
+      if (manifest.kind === 'private_definition')
+        return manifest.roots.flatMap((root) =>
+          root.template
+            ? [
+                {
+                  organizationId: orgId,
+                  templateId: root.template.workTypeId,
+                  operation: 'upsert' as const,
+                },
+              ]
+            : [],
+        );
+      if (manifest.kind !== 'published' && manifest.kind !== 'pending_draft')
+        throw new ConflictError('The process publication binding changed.');
+      return manifest.roots.flatMap((root) =>
         root.workTypeId === null
           ? []
           : [{ organizationId: orgId, templateId: root.workTypeId, operation: 'upsert' as const }],
-      ),
-    ),
+      );
+    }),
   );
 };

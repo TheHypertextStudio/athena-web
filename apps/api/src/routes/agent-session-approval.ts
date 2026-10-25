@@ -1,3 +1,5 @@
+import { requireAthenaOwner as athenaOwner } from '../agent/session-executor';
+import { requireOrdinaryProposal } from '../agent/template-proposal-reference';
 import { workflowIdFor } from '@docket/athena/execution-protocol';
 import {
   actor,
@@ -16,6 +18,7 @@ import type { SessionApprovalDecision } from '@docket/athena/agent-contract';
 import { and, asc, desc, eq, isNotNull, isNull } from 'drizzle-orm';
 
 import { approvalOutcome, proposalOrganizationId } from '../agent/proposals';
+import { rejectChangedProposal, reviewedProposalWhere } from '../agent/proposal-decision';
 import { persistWaitingAthenaWake } from '../agent/async-runner';
 import { ConflictError, NotFoundError } from '../error';
 import { insertAuditEvents } from '../lib/provenance/audit-events';
@@ -308,6 +311,7 @@ async function authorizeApprovalTarget(
   fallbackOrganizationId: string,
   fallbackApproverActorId: string | null,
 ): Promise<ApprovalAuthorization> {
+  requireOrdinaryProposal(action.body.action?.toolCall?.input);
   if (session.executorKind === 'athena') {
     const ownerUserId = athenaOwner(session);
     const organizationId = proposalOrganizationId(action, fallbackOrganizationId);
@@ -368,18 +372,6 @@ async function authorizeApprovalTargets(
     );
   }
   return authorizations;
-}
-
-/** Return an Athena owner after checking the persisted executor shape. */
-function athenaOwner(session: SessionRow): string {
-  // Every call site here already checked `executorKind === 'athena'`, and
-  // `agent_session_executor_shape_check` guarantees a non-null `ownerUserId` for every `athena`
-  // row, so this condition is never true.
-  /* v8 ignore next -- @preserve defensive: see above */
-  if (session.executorKind !== 'athena' || !session.ownerUserId) {
-    throw new Error('Athena session is missing its owner');
-  }
-  return session.ownerUserId;
 }
 
 /** Structured origin fields attached to user-owned Athena audit events. */
@@ -534,18 +526,16 @@ export async function decideActivity(
       const authorization = authorizations[index];
       /* v8 ignore next -- @preserve defensive: authorizations are built from the same targets */
       if (!authorization) throw new Error('approval authorization returned no row');
-      const nextApprovalStatus = decision.decision === 'approve' ? 'approved' : 'rejected';
       const [decidedRow] = await tx
         .update(sessionActivity)
         .set({
-          approvalStatus: nextApprovalStatus,
+          approvalStatus: decision.decision === 'approve' ? 'approved' : 'rejected',
           organizationId: authorization.organizationId,
         })
-        .where(
-          and(eq(sessionActivity.id, action.id), eq(sessionActivity.approvalStatus, 'proposed')),
-        )
+        .where(reviewedProposalWhere(action))
         .returning();
       if (!decidedRow) {
+        await rejectChangedProposal(tx, action);
         if (action.id === activityId) {
           throw new ConflictError('Activity is not a proposed action');
         }
@@ -690,11 +680,12 @@ export async function decideProposalGroup(
           approvalStatus: decision === 'approve' ? 'approved' : 'rejected',
           organizationId: authorization.organizationId,
         })
-        .where(
-          and(eq(sessionActivity.id, action.id), eq(sessionActivity.approvalStatus, 'proposed')),
-        )
+        .where(reviewedProposalWhere(action))
         .returning();
-      if (!row) continue;
+      if (!row) {
+        await rejectChangedProposal(tx, action);
+        continue;
+      }
       await insertAuditEvents(tx, 'decide_action_group', {
         organizationId: authorization.organizationId,
         actorId: authorization.actorId,

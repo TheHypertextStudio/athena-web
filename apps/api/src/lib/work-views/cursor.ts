@@ -122,6 +122,7 @@ function executableQuery(
     context: input['context'],
     filter,
     arrangement: definition['arrangement'],
+    ...(input['activeOnly'] === true ? { activeOnly: true } : {}),
     execution,
   };
 }

@@ -1,7 +1,14 @@
 import type { RetainedRootBinding } from './retained-authority';
 import type { ScheduleRootBinding } from '../recurrence/schedule-authority';
+import type { SchedulePlacementPreview } from '../recurrence/schedule-root-placement';
+import type { PrivateScheduleRootPlacement } from '@docket/work/work-schedule-forest-v2';
 import type { WorkScheduleDraft } from '@docket/work/work-schedule';
 import type { WorkScheduleForest } from '@docket/work/work-schedule-forest';
+import type {
+  WorkScheduleFieldTarget,
+  WorkScheduleFieldTiming,
+} from '@docket/work/work-schedule-field-timing';
+import type { PrivateScheduleTitle } from '../recurrence/schedule-v2';
 import type { BlueprintNodeOverride } from '@docket/work/blueprints';
 import type { TaskCreate } from '@docket/work/task-model';
 import type { InitiativeCreate } from '@docket/work/initiative-contract';
@@ -47,6 +54,9 @@ export interface TrustedCreationInvocation {
     readonly draft: WorkScheduleDraft;
     readonly runDate: string;
     readonly timingOverrides?: readonly BlueprintNodeOverride[];
+    readonly legacyTitles?: readonly PrivateScheduleTitle[];
+    readonly rootPlacement?: PrivateScheduleRootPlacement;
+    readonly placementPreview?: SchedulePlacementPreview;
   };
   readonly scheduleBinding?: ScheduleRootBinding;
 }
@@ -165,6 +175,10 @@ export interface WorkCreationBatchCommand {
   readonly invocation: TrustedCreationInvocation;
   /** Private qualified timing remains outside reusable definitions and public create DTOs. */
   readonly scheduleTiming?: WorkScheduleForest['timing'];
+  readonly scheduleFieldTiming?: {
+    readonly timing: WorkScheduleFieldTiming;
+    readonly absentFields: readonly WorkScheduleFieldTarget[];
+  };
 }
 
 /** A validated ordinary dependency joining roots in an existing trusted forest. */

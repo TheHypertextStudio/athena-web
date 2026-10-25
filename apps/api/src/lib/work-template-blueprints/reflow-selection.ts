@@ -1,4 +1,6 @@
 import type { ExistingBlueprintNode } from '@docket/work/blueprints';
+import { affectedBlueprintDateFields, type BlueprintFieldChanges } from './reflow-selection-fields';
+export { affectedBlueprintDateFields, type BlueprintFieldChanges };
 
 function referencesChanged(node: ExistingBlueprintNode, changed: ReadonlySet<string>): boolean {
   return Object.values(node.dateReferences ?? {}).some((refs) =>
@@ -12,7 +14,12 @@ export function affectedBlueprintNodes(
   nodes: readonly ExistingBlueprintNode[],
   seeds: ReadonlySet<string>,
   anchors: ReadonlySet<string>,
+  changes?: BlueprintFieldChanges,
 ): ReadonlySet<string> {
+  if (changes)
+    return new Set(
+      [...affectedBlueprintDateFields(nodes, seeds, changes).keys()].filter((id) => !seeds.has(id)),
+    );
   const affected = new Set<string>();
   const changed = new Set(seeds);
   let again = true;

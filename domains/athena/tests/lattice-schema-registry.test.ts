@@ -153,6 +153,54 @@ describe('lossless local-model schema pooling', () => {
     expect((pooled['$defs'] as Schema)['0']).toEqual(definition);
     expect(expanded(pooled)).toEqual(expanded(original));
   });
+  it.each(['tool0', 'tool~/'])(
+    'preserves nested reference targets under %s when a repeated parent could be pooled',
+    (name) => {
+      const tools = toolbox(true);
+      const original: Schema = {
+        ...tools,
+        properties: {
+          ...(tools['properties'] as Schema),
+          [name]: (tools['properties'] as Schema)['tool0'],
+          selected: {
+            $ref: `#/properties/${name.replaceAll('~', '~0').replaceAll('/', '~1')}/properties/id`,
+          },
+        },
+      };
+      expect(expanded(shareLargeSchemaFragments(original))).toEqual(expanded(original));
+    },
+  );
+  it('leaves an unresolved reference untouched rather than pooling its surrounding schemas', () => {
+    const tools = toolbox(true);
+    const original = {
+      ...tools,
+      properties: {
+        ...(tools['properties'] as Schema),
+        selected: { $ref: '#/missing/definition' },
+      },
+    };
+    expect(shareLargeSchemaFragments(original)).toBe(original);
+  });
+  it.each(['unevaluatedItems', 'contentSchema', 'dependencies'])(
+    'preserves nested pointers inside %s',
+    (keyword) => {
+      const tools = toolbox(true);
+      const reference = { $ref: '#/properties/tool0/properties/id' };
+      const selected =
+        keyword === 'dependencies'
+          ? { dependencies: { present: reference } }
+          : { [keyword]: reference };
+      const original: Schema = {
+        ...tools,
+        properties: { ...(tools['properties'] as Schema), selected },
+      };
+      const pooled = shareLargeSchemaFragments(original);
+      const properties = pooled['properties'] as Schema;
+      const parent = properties['tool0'] as Schema;
+      expect((parent['properties'] as Schema)['id']).toBeDefined();
+      expect(expanded(pooled)).toEqual(expanded(original));
+    },
+  );
 
   it.each(['$id', '$anchor', '$dynamicAnchor', '$dynamicRef'])(
     'preserves a document with %s rather than moving its reference-resolution scope',

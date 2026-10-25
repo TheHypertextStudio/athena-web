@@ -23,6 +23,7 @@ import {
   requireDefinitionKind,
   requireRevision,
   versionsFor,
+  type TemplateTransaction,
 } from './persistence';
 import { visibleTemplateWhere } from './visibility';
 import { serializableTx } from '../serializable-tx';
@@ -116,43 +117,60 @@ export async function editWorkTemplateDraft(
   await getWorkTemplate(actor, id);
   await requireTemplateAuthor(actor);
   const canManageOfferings = await mayManageTemplateOfferings(actor);
-  const row = await serializableTx(async (tx) => {
-    const current = await lockTemplate(tx, actor.orgId, id, actor.actorId);
-    requireRevision(current, body.expectedRevision);
-    const previous = draftOf(current);
-    const definition =
-      body.definition === undefined
-        ? previous
-        : {
-            ...body.definition,
-            ...(current.isBase ? { name: previous.name, icon: previous.icon } : {}),
-          };
-    requireDefinitionKind(current, definition);
-    if (body.offeredTeamIds !== undefined)
-      await replaceOfferings(tx, actor, current, body.offeredTeamIds, canManageOfferings);
-    const projection =
-      current.publicationState === 'draft'
-        ? {
-            name: definition.name,
-            description: definition.description,
-            icon: definition.icon,
-            payload: definition.payload,
-          }
-        : {};
-    const [updated] = await tx
-      .update(template)
-      .set({
-        ...projection,
-        draftDefinition: definition,
-        draftRevision: current.draftRevision + 1,
-      })
-      .where(and(eq(template.organizationId, actor.orgId), eq(template.id, id)))
-      .returning();
-    if (!updated) throw new NotFoundError('Template not found');
-    return updated;
-  }).catch(templateReferenceWriteError);
+  const row = await serializableTx((tx) =>
+    editWorkTemplateDraftInTransaction(tx, actor, id, body, canManageOfferings),
+  ).catch(templateReferenceWriteError);
   await reconcileTemplateImages(actor.orgId, row.id, 'upsert');
   return row;
+}
+
+/**
+ * Edit through the canonical revision writer on the caller's transaction, deferring image work.
+ * Rechecks live authoring and visibility so trusted automated writers can share one atomic receipt.
+ * @throws When visibility, authoring, reviewed revision or definition validation fails.
+ */
+export async function editWorkTemplateDraftInTransaction(
+  tx: TemplateTransaction,
+  actor: TemplateActor,
+  id: string,
+  body: WorkTemplateDraftUpdate,
+  canManageOfferings?: boolean,
+): Promise<TemplateRow> {
+  await requireTemplateAuthor(actor, tx);
+  const manage = canManageOfferings ?? (await mayManageTemplateOfferings(actor, tx));
+  const current = await lockTemplate(tx, actor.orgId, id, actor.actorId);
+  requireRevision(current, body.expectedRevision);
+  const previous = draftOf(current);
+  const definition =
+    body.definition === undefined
+      ? previous
+      : {
+          ...body.definition,
+          ...(current.isBase ? { name: previous.name, icon: previous.icon } : {}),
+        };
+  requireDefinitionKind(current, definition);
+  if (body.offeredTeamIds !== undefined)
+    await replaceOfferings(tx, actor, current, body.offeredTeamIds, manage);
+  const projection =
+    current.publicationState === 'draft'
+      ? {
+          name: definition.name,
+          description: definition.description,
+          icon: definition.icon,
+          payload: definition.payload,
+        }
+      : {};
+  const [updated] = await tx
+    .update(template)
+    .set({
+      ...projection,
+      draftDefinition: definition,
+      draftRevision: current.draftRevision + 1,
+    })
+    .where(and(eq(template.organizationId, actor.orgId), eq(template.id, id)))
+    .returning();
+  if (!updated) throw new NotFoundError('Template not found');
+  return updated;
 }
 
 /** Publish one reviewed revision, appending an immutable version in the same transaction. */

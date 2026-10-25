@@ -27,26 +27,9 @@ function principal(c: Context<AppEnv>): TemplateCopyPrincipal {
 }
 const bundleParam = z.object({ bundleId: z.ulid() });
 
-/** Manual copy acceptance/reentry/Undo share current principal checks and the canonical receipt engine. */
-const copies = new Hono<AppEnv>()
+/** Saved receipts, checked bundle reads and Undo shared by every manual copy source. */
+export const templateCopyReceiptRoutes = new Hono<AppEnv>()
   .use('*', capabilityGuard('view', { sharedWorkMutation: false }))
-  .post(
-    '/',
-    apiDoc({
-      tag: 'Templates',
-      summary: 'Keep reviewed independent work definitions',
-      response: WorkTemplateCopyReceipt,
-      description:
-        'Keep the exact reviewed catalog selection as private drafts or explicitly publish it. Retry the same request identity and choices after an interrupted response. New writes recheck current authoring; known terminal outcomes require only current View rights and never overwrite later edits.',
-    }),
-    zJson(WorkTemplateGalleryAcceptRequest),
-    async (c) =>
-      ok(
-        c,
-        WorkTemplateCopyReceipt,
-        await acceptTemplateGalleryCopy(principal(c), c.req.valid('json')),
-      ),
-  )
   .get(
     '/requests/:requestId',
     apiDoc({
@@ -95,4 +78,25 @@ const copies = new Hono<AppEnv>()
       ),
   );
 
+/** Manual copy acceptance/reentry/Undo share current principal checks and the canonical receipt engine. */
+const copies = new Hono<AppEnv>()
+  .use('*', capabilityGuard('view', { sharedWorkMutation: false }))
+  .post(
+    '/',
+    apiDoc({
+      tag: 'Templates',
+      summary: 'Keep reviewed independent work definitions',
+      response: WorkTemplateCopyReceipt,
+      description:
+        'Keep the exact reviewed catalog selection as private drafts or explicitly publish it. Retry the same request identity and choices after an interrupted response. New writes recheck current authoring; known terminal outcomes require only current View rights and never overwrite later edits.',
+    }),
+    zJson(WorkTemplateGalleryAcceptRequest),
+    async (c) =>
+      ok(
+        c,
+        WorkTemplateCopyReceipt,
+        await acceptTemplateGalleryCopy(principal(c), c.req.valid('json')),
+      ),
+  )
+  .route('/', templateCopyReceiptRoutes);
 export default copies;

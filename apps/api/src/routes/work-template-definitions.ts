@@ -1,3 +1,4 @@
+import proposals from './work-template-proposals';
 import { previewWorkTemplateArchive } from '../lib/templates/archive-impact';
 import {
   WorkTemplateArchiveImpact,
@@ -29,6 +30,8 @@ import { zJson, zParam, zQuery } from '../lib/validate';
 import { capabilityGuard } from '../permissions/capability-guard';
 import identities from './work-template-identities';
 import gallery from './work-template-gallery';
+import sourceCopies from './work-template-source-copies';
+import labelConversions from './work-template-label-conversion';
 import blueprints from './work-template-blueprints';
 
 const idParam = z.object({ id: z.string() });
@@ -42,7 +45,10 @@ const doc = (summary: string, response: z.ZodType, status: 200 | 201 = 200) =>
 
 /** Revision-aware work-template definition and immutable publication routes. */
 const definitions = new Hono<AppEnv>()
+  .route('/proposals', proposals)
   .route('/gallery', gallery)
+  .route('/copies', sourceCopies)
+  .route('/label-conversions', labelConversions)
   .route('/', identities)
   .route('/', blueprints)
   .get(

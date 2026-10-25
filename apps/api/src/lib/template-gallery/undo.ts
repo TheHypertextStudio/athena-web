@@ -1,6 +1,6 @@
 import { changeSet, db, workTemplateCopyBundle, type TemplateCopyUndoOutcome } from '@docket/db';
 import { and, eq } from 'drizzle-orm';
-import type { UndoOutcome } from '../../mcp/change-set';
+import type { UndoAccessCheck, UndoOutcome } from '../../mcp/change-set';
 import { ConflictError, NotFoundError } from '../../error';
 import { requireTemplateAuthor } from '../templates/authorization';
 import { templateChangeSetHasCopyBundle } from '../templates/copy-reference-integrity';
@@ -75,6 +75,7 @@ function publicOutcome(
 
 /**
  * Dispatch actual copy receipts before ordinary Undo filters; never use their recorded actor as authority.
+ * @param guard - Runs inside each copy transaction attempt against its verified original receipt.
  * @returns Null only for an ordinary receipt; a hidden or unauthorized registered copy fails closed.
  * @throws On changed membership/authoring, corrupt binding, concurrent reference conflict or missing caller.
  */
@@ -82,6 +83,7 @@ export async function tryUndoTemplateCopyChangeSet(
   orgId: string,
   receiptId: string,
   caller: TemplateCopyUndoCaller | undefined,
+  guard?: UndoAccessCheck,
 ): Promise<TemplateCopyUndoResult | null> {
   const result = await serializableTx(async (tx) => {
     if (!(await templateChangeSetHasCopyBundle(tx, orgId, receiptId))) return null;
@@ -89,7 +91,7 @@ export async function tryUndoTemplateCopyChangeSet(
     const { actor, principal } = await templateCopyUndoContext(tx, caller);
     const bundle = await lockTemplateCopyUndoBundle(tx, actor, receiptId);
     const entries = await lockTemplateCopyUndoEntries(tx, bundle);
-    const summary = await lockTemplateCopyUndoReceipt(tx, bundle, entries);
+    const summary = await lockTemplateCopyUndoReceipt(tx, bundle, entries, guard);
     const ids = new Map(entries.map((entry) => [entry.entryKey, entry.destinationWorkTypeId]));
     if (bundle.state === 'undone') {
       if (!bundle.undoOutcomes) throw new ConflictError('Copy outcome is unavailable');

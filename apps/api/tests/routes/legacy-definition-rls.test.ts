@@ -24,12 +24,14 @@ it('denies stale old creator fallback for a null-owner converted head hidden by 
       tasks: [{ key: 'work', title: 'Private body', teamId: f.teamId }],
     }),
   });
-  await schema.db.insert(schema.invocationHead).values({
-    id: definition.definitionId,
-    organizationId: f.orgId,
-    ownerActorId: null,
-    name: 'Private converted head',
-  });
+  await schema.db
+    .update(schema.invocationHead)
+    .set({
+      ownerActorId: null,
+      name: 'Private converted head',
+      revision: 2,
+    })
+    .where(eq(schema.invocationHead.id, definition.definitionId));
   await schema.db
     .delete(schema.grant)
     .where(and(eq(schema.grant.organizationId, f.orgId), eq(schema.grant.subjectKind, 'role')));

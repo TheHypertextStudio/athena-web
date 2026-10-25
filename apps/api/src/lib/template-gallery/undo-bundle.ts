@@ -7,6 +7,7 @@ import {
 } from '@docket/db';
 import { and, asc, eq, inArray } from 'drizzle-orm';
 import { ConflictError, NotFoundError } from '../../error';
+import type { UndoAccessCheck } from '../../mcp/change-set';
 import type { TemplateActor } from '../templates/authorization';
 import type { TemplateCopyBundleRow, TemplateCopyEntryRow } from '../templates/copy-reservation';
 import type { TemplateTransaction } from '../templates/persistence';
@@ -36,11 +37,35 @@ export async function lockTemplateCopyUndoBundle(
   return bundle;
 }
 
-/** Lock and verify the exact immutable aggregate receipt rather than accepting a matching tool name. */
+/** Compare only the exact original aggregate members; receipt attribution grants no access. */
+function hasExactCopyEntries(
+  recorded: readonly (typeof changeSetEntry.$inferSelect)[],
+  entries: readonly TemplateCopyEntryRow[],
+): boolean {
+  const ids = new Set(entries.map((entry) => entry.destinationWorkTypeId));
+  return (
+    recorded.length === entries.length &&
+    new Set(recorded.map((entry) => entry.entityId)).size === entries.length &&
+    recorded.every(
+      (entry) =>
+        entry.entityKind === 'template' &&
+        entry.op === 'create' &&
+        entry.before === null &&
+        entry.after !== null &&
+        ids.has(entry.entityId),
+    )
+  );
+}
+
+/**
+ * Lock and verify the exact immutable aggregate receipt rather than accepting a matching tool name.
+ * @param guard - Recheck the adapter's live authority on these exact entries before Undo can mutate.
+ */
 export async function lockTemplateCopyUndoReceipt(
   tx: TemplateTransaction,
   bundle: TemplateCopyBundleRow,
   entries: readonly TemplateCopyEntryRow[],
+  guard?: UndoAccessCheck,
 ): Promise<string> {
   if (!bundle.receiptKey) throw new ConflictError('Copy receipt is unavailable');
   const [receipt] = await tx
@@ -56,22 +81,13 @@ export async function lockTemplateCopyUndoReceipt(
     .select()
     .from(changeSetEntry)
     .where(eq(changeSetEntry.changeSetId, receipt.id));
-  const ids = new Set(entries.map((entry) => entry.destinationWorkTypeId));
   if (
-    recorded.length !== entries.length ||
-    new Set(recorded.map((entry) => entry.entityId)).size !== entries.length ||
-    recorded.some(
-      (entry) =>
-        entry.entityKind !== 'template' ||
-        entry.op !== 'create' ||
-        entry.before !== null ||
-        entry.after === null ||
-        !ids.has(entry.entityId),
-    ) ||
+    !hasExactCopyEntries(recorded, entries) ||
     (bundle.state === 'installed' && receipt.undoneAt !== null) ||
     (bundle.state === 'undone' && receipt.undoneAt === null)
   )
     throw new ConflictError('Copy receipt changed');
+  if (guard) await guard(tx, recorded);
   return receipt.summary;
 }
 

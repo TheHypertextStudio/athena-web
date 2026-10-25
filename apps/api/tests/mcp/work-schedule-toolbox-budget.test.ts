@@ -35,6 +35,19 @@ it('keeps canonical schedule authoring inside the existing 64000-character toolb
       page = await client.listTools({ cursor: page.nextCursor });
       tools.push(...page.tools);
     }
+    expect(tools.map((tool) => tool.name)).toEqual(
+      expect.arrayContaining([
+        'define_process',
+        'schedule_process',
+        'repeat_task',
+        'define_template',
+        'list_templates',
+        'copy_work_templates',
+        'list_work_schedules',
+        'manage_work_schedule',
+      ]),
+    );
+    const originalTools = structuredClone(tools);
     const [system] = buildLatticeTurnMessages({
       system: 'You are Athena.',
       messages: [],
@@ -47,6 +60,7 @@ it('keeps canonical schedule authoring inside the existing 64000-character toolb
         ASK_USER_DEF,
       ],
     });
+    expect(tools).toEqual(originalTools);
     expect(
       system?.content.length,
       `Toolbox prompt: ${system?.content.length} (${tools.length} tools) characters; largest inputs: ${JSON.stringify(

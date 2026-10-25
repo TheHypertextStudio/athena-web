@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest';
 import { ValidationError } from '../../src/error';
 
 import {
+  decodeIdCursor,
+  decodeTupleCursor,
   encodeIdCursor,
   encodeListCursor,
   pageResult,
@@ -72,5 +74,26 @@ describe('id-only cursor pagination', () => {
       { teamId: 'a', actorId: 'b' },
     ]);
     expect(first.nextCursor).toEqual(expect.any(String));
+  });
+});
+
+describe('retained malformed cursor regressions', () => {
+  it.each(['{not json', '{"id":"row_1"}', '[]'])(
+    'rejects a structurally invalid composite cursor: %s',
+    (value) => {
+      const cursor = `tuple1:${Buffer.from(value).toString('base64url')}`;
+      expect(() => decodeTupleCursor(cursor)).toThrow(ValidationError);
+    },
+  );
+  it.each(['2026-06-01T00:00:00.000Z|', 'yesterday|row_1'])(
+    'rejects a timestamp cursor without a valid position: %s',
+    (value) => {
+      expect(() =>
+        seekAfter(task.createdAt, task.id, Buffer.from(value).toString('base64url')),
+      ).toThrow(ValidationError);
+    },
+  );
+  it('rejects an empty ID under a valid cursor prefix', () => {
+    expect(() => decodeIdCursor('id1:')).toThrow(ValidationError);
   });
 });

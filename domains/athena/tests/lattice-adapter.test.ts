@@ -243,7 +243,6 @@ describe('compactToolSchema', () => {
     expect(at(compact, 'additionalProperties')).toBe(false);
     expect(at(compact, 'properties', 'workspaceId')).toEqual({ type: 'string' });
     expect(at(compact, 'properties', 'status')).toEqual({
-      type: 'string',
       enum: ['backlog', 'in_progress', 'done'],
     });
     expect(at(compact, 'properties', 'filters', 'properties', 'assignee')).toEqual({
@@ -270,7 +269,50 @@ describe('compactToolSchema', () => {
     compactToolSchema(schema);
     expect(JSON.stringify(schema)).toBe(before);
   });
-
+  it('keeps a declared reference scope isolated instead of stripping its base URI', () => {
+    const schema = {
+      $id: 'https://example.test/tools/input',
+      type: 'object',
+      definitions: { Value: { type: 'string', minLength: 1 } },
+      properties: { value: { $ref: '#/definitions/Value' } },
+    };
+    expect(compactToolSchema(schema)).toHaveProperty('$id', schema.$id);
+    expect(
+      renderToolInstructions([
+        { name: 'scoped', description: 'Read scoped input', inputSchema: schema },
+      ]),
+    ).toContain('separate schema document');
+  });
+  it('omits only types already forced by every literal choice and retains contradictory constraints', () => {
+    const cases: readonly { input: Record<string, unknown>; expected: Record<string, unknown> }[] =
+      [
+        {
+          input: { type: 'string', enum: ['draft', 'published'], minLength: 1 },
+          expected: { enum: ['draft', 'published'], minLength: 1 },
+        },
+        { input: { type: 'number', const: 1.5 }, expected: { const: 1.5 } },
+        { input: { type: 'integer', const: 2, maximum: 10 }, expected: { const: 2, maximum: 10 } },
+        { input: { type: 'boolean', const: false }, expected: { const: false } },
+        { input: { type: 'null', const: null }, expected: { const: null } },
+        { input: { type: 'array', const: ['a'] }, expected: { const: ['a'] } },
+        {
+          input: { type: 'object', const: { enabled: true }, additionalProperties: false },
+          expected: { const: { enabled: true }, additionalProperties: false },
+        },
+        {
+          input: { type: ['string', 'null'], enum: ['open', null] },
+          expected: { enum: ['open', null] },
+        },
+        {
+          input: { type: 'string', enum: ['open', 2] },
+          expected: { type: 'string', enum: ['open', 2] },
+        },
+        { input: { type: 'integer', const: 1.5 }, expected: { type: 'integer', const: 1.5 } },
+        { input: { type: 'object', const: [] }, expected: { type: 'object', const: [] } },
+        { input: { type: 'string', enum: [] }, expected: { type: 'string', enum: [] } },
+      ];
+    for (const { input, expected } of cases) expect(compactToolSchema(input)).toEqual(expected);
+  });
   it('drops a pattern its format already names, and safe-integer bounds, but no real limit', () => {
     const compact = compactToolSchema({
       type: 'object',

@@ -1,4 +1,5 @@
 import { authorizeRecordedIdentities } from './change-set-identity';
+import { tryUndoTemplateReceipt } from '../agent/template-proposal-undo';
 import { restoreRecordedContainer } from './change-set-work-restore';
 /**
  * `@docket/api` — recording and reversing MCP change sets.
@@ -58,7 +59,10 @@ import {
   type TaskStateMutation,
 } from '../lib/task-state';
 import { planTaskReparents } from '../services/task-hierarchy';
-import { tryUndoTemplateCopyChangeSet } from '../lib/template-gallery/undo';
+import {
+  requiresAtomicWorkUndo,
+  requireLabelConversionUndo,
+} from '../lib/label-template-conversion/undo-access';
 import type { UndoAccessCheck, UndoOutcome, UndoRevertedHandler } from './change-set-undo-access';
 export type { UndoAccessCheck, UndoOutcome } from './change-set-undo-access';
 
@@ -624,10 +628,10 @@ export async function undoChangeSet(
   changeSetId: string,
   guard?: UndoAccessCheck,
 ): Promise<{ summary: string; outcomes: UndoOutcome[] }> {
-  const copy = await tryUndoTemplateCopyChangeSet(orgId, changeSetId, guard?.templateCopyCaller);
+  const copy = await tryUndoTemplateReceipt(orgId, changeSetId, guard);
   if (copy) return copy;
   const sets = await db
-    .select({ id: changeSet.id, summary: changeSet.summary })
+    .select({ id: changeSet.id, summary: changeSet.summary, origin: changeSet.origin })
     .from(changeSet)
     .where(
       and(
@@ -645,14 +649,7 @@ export async function undoChangeSet(
     .from(changeSetEntry)
     .where(eq(changeSetEntry.changeSetId, changeSetId));
 
-  if (
-    entries.some(
-      (entry) =>
-        entry.entityKind === 'native_schedule_date_ownership' ||
-        entry.entityKind === 'retained_date_ownership' ||
-        entry.entityKind === 'program_default_schedule',
-    )
-  )
+  if (requiresAtomicWorkUndo(set.origin, entries))
     return undoChangeSetAtomically(orgId, changeSetId, undefined, guard);
 
   const outcomes: UndoOutcome[] = [];
@@ -670,11 +667,17 @@ export async function undoChangeSetAtomically(
   onReverted?: UndoRevertedHandler,
   guard?: UndoAccessCheck,
 ): Promise<{ summary: string; outcomes: UndoOutcome[] }> {
-  const copy = await tryUndoTemplateCopyChangeSet(orgId, changeSetId, guard?.templateCopyCaller);
+  const copy = await tryUndoTemplateReceipt(orgId, changeSetId, guard);
   if (copy) return copy;
   const result = await serializableTx(async (tx) => {
     const [set] = await tx
-      .select({ id: changeSet.id, summary: changeSet.summary })
+      .select({
+        id: changeSet.id,
+        summary: changeSet.summary,
+        origin: changeSet.origin,
+        actorId: changeSet.actorId,
+        templateReviewActorId: changeSet.templateReviewActorId,
+      })
       .from(changeSet)
       .where(
         and(
@@ -691,6 +694,7 @@ export async function undoChangeSetAtomically(
       .from(changeSetEntry)
       .where(eq(changeSetEntry.changeSetId, changeSetId));
     if (guard) await guard(tx, entries);
+    await requireLabelConversionUndo(tx, orgId, set, entries, guard);
     await prelockCatalogTemplates(entries, orgId, tx);
     const taskEntries = entries.filter((entry) => entry.entityKind === 'task');
     const taskIds = [...new Set(taskEntries.map((entry) => entry.entityId))].sort();

@@ -148,6 +148,15 @@ function validTimezone(timezone: string | undefined): string {
   }
 }
 
+/** Capture the live creator planning timezone using the ordinary work creation policy. */
+export async function currentBlueprintPlanningTimezone(
+  tx: TemplateTransaction,
+  organizationId: string,
+  actorId: string,
+): Promise<string> {
+  return validTimezone((await loadCreator(tx, organizationId, actorId))?.timezone);
+}
+
 /** Validate live team availability and caller visibility for newly created nodes, preserving existing rows separately. */
 export async function validateBlueprintCreationTeams(
   tx: TemplateTransaction,

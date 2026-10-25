@@ -107,7 +107,7 @@ export function registerOrganizeTool(server: McpRegistrar, ctx: McpContext): voi
     {
       title: 'Organize work',
       description:
-        'Create or match a plan of initiatives, programs, projects, milestones, and tasks in one transaction. For tasks, projects, initiatives, or programs, call list_templates first: read literal Markdown in payload.description, retain its structure, and fill its sections instead of inventing a format. Select template by ID/name or workTypeId with optional workTypeVersionId. Omitted fields copy defaults; explicit fields win. Results include saved bodies for update. Use withoutTemplateReason for freeform work; undecided calls return choices without writes. Milestones have no templates. Published blueprints may create children. Give each item a local ref; children name their parent ref. Existing project/program/initiative fields attach to saved work. Repeated names in the same placement match existing items. Use capture for a single task',
+        'Create or match related work atomically. Call list_templates first for tasks, projects, programs and initiatives; preserve payload.description Markdown. Select workTypeId + optional workTypeVersionId or legacy ID/name. Explicit fields win; withoutTemplateReason allows freeform, otherwise undecided calls return choices without writes. Blueprints may add children; milestones have no templates. Use local parent refs or saved container fields. Names match within placement. Saved bodies are returned; capture handles one task.',
       inputSchema: {
         orgId: orgIdParam,
         items: z

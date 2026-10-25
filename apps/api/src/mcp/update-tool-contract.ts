@@ -89,7 +89,7 @@ export const updateSetFields = {
 export const updateToolDefinition = {
   title: 'Update work',
   description:
-    'Change work by describing which work, not by listing ids. One call changes up to 100 items: the scope takes the same filters as list_work, so "everything Sarah has open in the migration project" is one call, and `scope.ids` takes as many ids as you have. Never call this once per item — put every id in one call, or the person watching gets a separate card for each one. Every row you may not write is reported back with a reason rather than skipped quietly, and the whole call is reversible with `undo`. `update` sets where work sits — a task’s project, milestone, cycle, program, or team, a project’s program, and which initiatives projects and programs contribute to. A relation between two particular items (blocks, relates_to, subtask_of, nested_under) is `link`’s.',
+    'Change up to 100 items in one reversible call using list_work filters or scope.ids; batch all IDs. Reports unwritable rows. Sets task project/milestone/cycle/program/team, project program, and initiative contributions for projects/programs. Use link for blocks, relates_to, subtask_of or nested_under between specific items.',
   inputSchema: {
     orgId: orgIdParam,
     entity: z.enum(WORK_ENTITIES).describe('What kind of work to update.'),

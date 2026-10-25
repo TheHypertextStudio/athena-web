@@ -30,7 +30,7 @@ export function registerDirectiveTools(server: McpRegistrar, ctx: McpContext): v
     {
       title: 'Acknowledge a directive',
       description:
-        'Report what the calling client did with a directive read from `docket://hub/directive`: which posture it acted on, whether it changed device state in response, and an optional note. Echo the `directiveId` from the payload that was acted on — an id the caller was never issued (or one superseded by a posture change since the read) is refused with not_found; re-read the resource and acknowledge the current state. Retries are safe — a directive holds one acknowledgment, and a repeat call overwrites it rather than appending a duplicate.',
+        "Acknowledge the directiveId read from docket://hub/directive with posture acted on, device-state changes and optional note. Unknown or superseded IDs return not_found: reread and acknowledge current state. Retrying replaces that directive's acknowledgment.",
       inputSchema: {
         directiveId: z
           .string()

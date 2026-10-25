@@ -25,6 +25,9 @@ function fixture(category: string, date: string) {
   const facts = {
     organizationId: 'org',
     authority: {},
+    // This focused query fixture exercises the unchanged native v1 ownership branch.
+    document: { kind: 'forest', revision: 1 },
+    timezone: 'UTC',
     roots: [
       {
         key: 'one',

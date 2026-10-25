@@ -292,7 +292,7 @@ export function registerViewPlanTools(server: McpRegistrar, ctx: McpContext): vo
     {
       title: 'List work',
       description:
-        'Enumerate tasks, projects, programs, or initiatives matching exact criteria — everything assigned to someone, everything blocked, everything due this week, everything unfiled. Filters accept names as well as ids. Use find instead when you know roughly what something is called but not where it lives; this returns live rows, find reads a search index that trails writes.',
+        'Enumerate live tasks, projects, programs or initiatives using exact filters such as assignee, blocked, due or unfiled. Names and IDs accepted. Use find for relevance search; its index briefly trails writes.',
       inputSchema: listWorkInputSchema,
       outputSchema: listWorkOutputSchema,
       _meta: widgetMeta(WIDGET.workList),
@@ -365,7 +365,7 @@ export function registerViewPlanTools(server: McpRegistrar, ctx: McpContext): vo
     {
       title: 'Find',
       description:
-        'Search a workspace by relevance across every kind of thing in it — tasks, projects, programs, initiatives, cycles, milestones, comments, updates, attachments, calendar events, agent sessions, teams, members, and labels. Ranked, so the best match comes first; use this when you know roughly what something is called but not exactly where it lives. To enumerate everything matching exact criteria instead, use list_work. Results come from a search index that trails writes by a moment, so something created seconds ago may not appear yet — use the id returned by the tool that created it rather than searching for it.',
+        "Search all workspace content by relevance, including work, comments, updates, files, events, agent sessions, teams, members and labels. Use list_work for exact enumeration. The index briefly trails writes; reuse a newly created item's returned ID.",
       inputSchema: findInputSchema,
       outputSchema: findOutputSchema,
       annotations: {

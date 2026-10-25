@@ -5,6 +5,7 @@ import type { ResolvedForestDependency } from '../work-template-blueprints/fores
 import { genId } from '@docket/db';
 import type { TemplateTransaction } from '../templates/persistence';
 import { resolveRetainedRootPlacement } from '../recurrence/work-template-placement';
+import { resolveScheduleRootPlacement } from '../recurrence/schedule-root-placement';
 import {
   prepareBlueprintCreation,
   type PreparedBlueprintCreation,
@@ -106,11 +107,12 @@ export async function prepareCreationForest(
   input: WorkCreationBatchCommand,
 ): Promise<PreparedBlueprintCreation[]> {
   const prepared = await prepareUntimedForest(tx, input);
-  if (!input.scheduleTiming?.length) return prepared;
+  if (!input.scheduleTiming?.length && !input.scheduleFieldTiming) return prepared;
   const timed = compileScheduleTiming(
     input,
     prepared.map((plan) => ({
       tree: plan.tree,
+      workingWeekdays: plan.context.workingWeekdays,
       replan: (command) => {
         const root = plan.entries[0];
         if (root?.kind !== 'ordinary')
@@ -133,10 +135,10 @@ async function prepareUntimedForest(
   const plans = new Map<string, PreparedBlueprintCreation>();
   const references = new Map<string, ProspectiveWorkReference>();
   for (const root of input.roots) {
-    let command = withPlacement(
-      root.command,
-      await resolveRetainedRootPlacement(tx, root.command, plans),
-    );
+    let command = withPlacement(root.command, {
+      ...(await resolveRetainedRootPlacement(tx, root.command, plans)),
+      ...resolveScheduleRootPlacement(tx, root.command, plans),
+    });
     const retained = retainedRootBinding(tx, command);
     const mapped = retained?.occurrence.mappedWork.get(retained.root.sourceStepId);
     if (!mapped) {

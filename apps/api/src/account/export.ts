@@ -1,3 +1,4 @@
+import { collectTemplateProposalExport } from '../agent/template-proposal-review';
 /**
  * `@docket/api` — the asynchronous personal-data export.
  *
@@ -210,6 +211,7 @@ export async function collectAccountExport(
       follows,
       workLocation,
       deviceNotifications,
+      templateProposals,
     ] = await Promise.all([
       hubId
         ? db.select().from(dailyPlanItem).where(eq(dailyPlanItem.hubId, hubId))
@@ -234,6 +236,7 @@ export async function collectAccountExport(
         : [],
       collectWorkLocationExport(db, hubId),
       collectDeviceNotificationExport(db, hubId),
+      includesPersonal ? collectTemplateProposalExport(db, userId) : [],
     ]);
     return {
       hub: hubRow ?? null,
@@ -246,6 +249,7 @@ export async function collectAccountExport(
       streamSubscriptions: follows,
       workLocation,
       deviceNotifications,
+      templateProposals,
     };
   })();
 

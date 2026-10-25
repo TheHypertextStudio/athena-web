@@ -19,7 +19,7 @@ import { orgIdParam } from './tools-shared';
 export const defineTemplateDefinition = {
   title: 'Define template',
   description:
-    'Create or edit reusable work templates.\n\nPut literal Markdown in payload.description; description summarizes usage. Omit template to create with name and payload; otherwise edit by ID/name. payload replaces the draft. Legacy workspace writes publish immediately. action draft saves included child work in blueprint without publishing; publish requires expectedRevision, and archive retires. Blueprints require explicit draft authoring. Undo preserves publication history',
+    'Create or edit reusable work templates.\n\nPut literal Markdown in payload.description; description summarizes usage. Omit template to create with name and payload; otherwise edit by ID/name. payload replaces the draft. Human legacy workspace writes publish immediately. Trusted Athena calls always save private unpublished drafts under current Pro and authoring rights; review-first requires approval of the exact action. Automated calls cannot publish or archive. action draft saves included child work in blueprint without publishing; human publish requires expectedRevision, and archive retires. Undo preserves publication history',
   inputSchema: {
     orgId: orgIdParam,
     action: z

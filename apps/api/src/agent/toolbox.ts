@@ -41,6 +41,8 @@ import { internalAgentContext, internalUserContext } from '../mcp/internal-sessi
 import { buildServer } from '../mcp/server';
 import type { ToolAnnotationHints, ToolAnnotationSource } from './approval-policy';
 import { listConnectedMcpTools } from './list-mcp-tools';
+import { registerTemplateExecutor } from './template-authority';
+import { tailoringToolboxRestricted } from './template-tailoring-policy';
 
 /** The toolbox connection key for Docket's own in-process tools. */
 export const DOCKET_CONNECTION = 'docket';
@@ -303,6 +305,51 @@ function executorProvenance(
   return athenaProvenance(surface, sessionId ?? undefined);
 }
 
+/** Bind one internal transport context to its server-owned persisted session identity. */
+async function registeredExecutorContext(executor: ToolboxExecutor, sessionId: string | null) {
+  const ctx =
+    executor.kind === 'athena'
+      ? await internalUserContext(executor.ownerUserId)
+      : await internalAgentContext(executor.organizationId, executor.agentId);
+  registerTemplateExecutor(ctx, sessionId);
+  return ctx;
+}
+
+async function toolboxRemoteConnections(executor: ToolboxExecutor, restricted: boolean) {
+  return restricted
+    ? []
+    : executor.kind === 'registered_agent'
+      ? (
+          await db
+            .select({ id: integration.id, config: integration.config })
+            .from(integration)
+            .where(
+              and(
+                eq(integration.organizationId, executor.organizationId),
+                eq(integration.provider, 'mcp'),
+                eq(integration.status, 'connected'),
+              ),
+            )
+        ).map((row) => {
+          const config = row.config as unknown as { readonly url: string; readonly alias: string };
+          return { id: row.id, url: config.url, alias: config.alias, name: config.alias };
+        })
+      : await db
+          .select({
+            id: personalMcpConnection.id,
+            url: personalMcpConnection.url,
+            alias: personalMcpConnection.alias,
+            name: personalMcpConnection.name,
+          })
+          .from(personalMcpConnection)
+          .where(
+            and(
+              eq(personalMcpConnection.ownerUserId, executor.ownerUserId),
+              eq(personalMcpConnection.status, 'connected'),
+            ),
+          );
+}
+
 /**
  * Open the toolbox for one executor: the catalog tools it may call, with first-party hints
  * attached, and the session id the plan tools bind a plan to.
@@ -315,10 +362,8 @@ export async function openToolbox(
   executor: ToolboxExecutor,
   sessionId: string | null = null,
 ): Promise<Toolbox> {
-  const ctx =
-    executor.kind === 'athena'
-      ? await internalUserContext(executor.ownerUserId)
-      : await internalAgentContext(executor.organizationId, executor.agentId);
+  const restricted = await tailoringToolboxRestricted(executor, sessionId);
+  const ctx = await registeredExecutorContext(executor, sessionId);
   // The Athena session id rides into the server so a tool that creates a conversation-owned
   // artifact (a plan draft) can attach itself to the conversation that opened it. Athena runs
   // with its owner's authority but records itself as the performer.
@@ -351,42 +396,7 @@ export async function openToolbox(
     string,
     { readonly id: string; readonly name: string; readonly session: RemoteMcpSession }
   >();
-  const remoteRows: {
-    readonly id: string;
-    readonly url: string;
-    readonly alias: string;
-    readonly name: string;
-  }[] =
-    executor.kind === 'registered_agent'
-      ? (
-          await db
-            .select({ id: integration.id, config: integration.config })
-            .from(integration)
-            .where(
-              and(
-                eq(integration.organizationId, executor.organizationId),
-                eq(integration.provider, 'mcp'),
-                eq(integration.status, 'connected'),
-              ),
-            )
-        ).map((row) => {
-          const config = row.config as unknown as { readonly url: string; readonly alias: string };
-          return { id: row.id, url: config.url, alias: config.alias, name: config.alias };
-        })
-      : await db
-          .select({
-            id: personalMcpConnection.id,
-            url: personalMcpConnection.url,
-            alias: personalMcpConnection.alias,
-            name: personalMcpConnection.name,
-          })
-          .from(personalMcpConnection)
-          .where(
-            and(
-              eq(personalMcpConnection.ownerUserId, executor.ownerUserId),
-              eq(personalMcpConnection.status, 'connected'),
-            ),
-          );
+  const remoteRows = await toolboxRemoteConnections(executor, restricted);
   for (const row of remoteRows) {
     const credRows =
       executor.kind === 'registered_agent'
@@ -491,7 +501,7 @@ export async function openToolbox(
   };
 
   return {
-    tools: defs,
+    tools: restricted ? defs.filter((tool) => tool.name === 'define_template') : defs,
     annotations: (name) => annotationsByName.get(name),
     // Deliberately the same test `resolve` applies, because the two must agree on what "Docket's
     // own" means: `ask_user` is loop-owned and appended straight to `defs`, so it is never in
@@ -504,6 +514,8 @@ export async function openToolbox(
       docketNames.has(name) || name === ASK_USER_TOOL ? 'first_party' : 'remote',
     resolve,
     callTool: async (name, input) => {
+      if (restricted)
+        return { content: 'This session may only propose templates for review.', isError: true };
       const target = resolve(name);
       if (target.connection !== DOCKET_CONNECTION) {
         const remote = remoteSessions.get(target.connection);

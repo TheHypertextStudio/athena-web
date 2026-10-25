@@ -1,3 +1,4 @@
+import { requireOrdinaryProposal } from './template-proposal-reference';
 /**
  * `@docket/api` — the ghost projection: pending proposals as reviewable data.
  *
@@ -286,6 +287,7 @@ export async function editProposalInput(
     if (row.type !== 'action' || row.approvalStatus !== 'proposed' || !action?.toolCall) {
       throw new ConflictError('Activity is not an editable pending proposal');
     }
+    requireOrdinaryProposal(action.toolCall.input);
     const inputOrganizationId = proposalInputOrganizationId(input);
     let organizationId = row.organizationId;
     if (authorization?.athenaOwnerUserId) {
@@ -314,6 +316,7 @@ export async function editProposalInput(
     ) {
       throw new NotFoundError('Workspace not found');
     }
+    // Approval may win after the initial read; never replace an already-reviewed tool input.
     const [updated] = await tx
       .update(sessionActivity)
       .set({
@@ -323,10 +326,15 @@ export async function editProposalInput(
           action: { ...action, toolCall: { ...action.toolCall, input } },
         },
       })
-      .where(eq(sessionActivity.id, activityId))
+      .where(
+        and(
+          eq(sessionActivity.id, activityId),
+          eq(sessionActivity.sessionId, sessionId),
+          eq(sessionActivity.approvalStatus, 'proposed'),
+        ),
+      )
       .returning();
-    /* v8 ignore next -- @preserve defensive: update always returns a row */
-    if (!updated) throw new Error('activity update returned no row');
+    if (!updated) throw new ConflictError('Activity is not an editable pending proposal');
     return updated;
   });
 }

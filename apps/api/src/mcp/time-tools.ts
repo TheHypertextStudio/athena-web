@@ -127,7 +127,7 @@ export function registerTimeTools(server: McpRegistrar, ctx: McpContext): void {
     {
       title: 'Track time',
       description:
-        'The universal timer. Start tracking a task (by `taskId`, by `label` alone — which creates an ordinary Docket task with that name — or with neither, which starts the clock on work that gets named later), pause and resume it, switch to different work, stop it, read what is running, or list the segments recorded in a period. Restarting the same task within a minute continues the previous segment instead of recording a break. A session can never be *finished* without a named task: pass `label` to `stop` to name an unnamed one. `status` also reports what Docket thinks the person should be tracking, drawn from their own calendar and day plan — a suggestion to offer, never something to act on unasked.',
+        'Start, pause, resume, switch, stop or inspect timers and list dated segments. taskId tracks saved work; label creates a task. Omit both to start unnamed work. stop requires a named task or label. Restarting the same task within a minute continues its segment. status includes calendar/plan suggestions; never act on them unasked.',
       inputSchema: {
         action: z
           .enum(TRACK_ACTIONS)

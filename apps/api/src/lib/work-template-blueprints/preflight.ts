@@ -259,7 +259,7 @@ async function resolveCreationRoot(
   },
 ) {
   const { selected, retained, binding, preparationContext } = input;
-  await validateSchedulePlacement(tx, selected);
+  await validateSchedulePlacement(tx, selected, preparationContext);
   const root = retained?.root ? null : await prepareOrdinaryWork(tx, selected, preparationContext);
   if (root) {
     applyScheduleRootClears(selected, root);

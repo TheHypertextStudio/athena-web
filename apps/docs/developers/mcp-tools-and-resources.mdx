@@ -11,7 +11,7 @@ can change after consent or grant changes, so handle `notifications/tools/list_c
 The work and planning tools are `workspaces`, `find`, `list_work`, `list_resources`, `get_resources`, `brief`, `capture`, `organize`,
 `update`, `milestones`, `comment`, `report_status`, `link`, `archive`, `plan_day`, `undo`,
 `retrospect`, `view_workload`, `define_process`, `schedule_process`, `repeat_task`, `define_labels`,
-`define_template`, `list_templates`, `list_work_schedules`, `manage_work_schedule`, `plan_start`, `plan_read`, `plan_draft`, `plan_commit`, and `track`.
+`define_template`, `list_templates`, `browse_work_templates`, `copy_work_templates`, `list_work_schedules`, `manage_work_schedule`, `plan_start`, `plan_read`, `plan_draft`, `plan_commit`, and `track`.
 
 The agent, session, connector, and directive tools are `run_agent`, `manage_session`,
 `link_external`, `acknowledge_directive`, `pause_athena_assignment_trigger`, and
@@ -93,6 +93,28 @@ A Program template can define up to 20 `defaultSchedules` through `define_templa
 people, teams, destinations or provider identifiers. Omission preserves existing defaults; `[]`
 clears them. New Programs receive independent schedule copies. Editing an outline leaves existing
 Programs' schedules alone; use `manage_work_schedule` to revise those copies.
+
+### Choose and copy starting work
+
+Use `browse_work_templates` with `query.action: "browse"` for a filtered page, `"detail"` for one
+outline by slug, or `"fork"` for a complete startup, nonprofit, agency or personal set. A full fork
+returns all of its intended starting definitions, including entries beyond the first browse page.
+Discovery installs nothing.
+
+Use `copy_work_templates` with the destination `orgId` and `query.action: "preview"`. Select catalog
+roots by slug/release, or workspace drafts and publications by their actual source workspace and
+template IDs. Publications support an exact pin or a latest selection resolved for the review.
+The signed-in person must be able to read every source and author templates in the destination.
+Unmapped labels, images, people and teams are omitted rather than copied across workspaces silently.
+
+After inspecting the complete included work and omissions, call `query.action: "keep"` with the
+same choices, a fresh `requestId`, and the returned `expectedReviewFingerprint`. Use
+`mode: "private_drafts"` to retain author-only drafts. `mode: "published"` explicitly publishes the
+new independent definitions; it never changes the source. A changed source requires a new review.
+After an interrupted response, `query.action: "reconcile"` with the original `requestId` returns the
+original result without overwriting later edits. The receipt's `changeSetId` works with ordinary
+`undo`, preserving later work and publications. Automatic Athena callers use Inbox review rather
+than keeping or publishing through this manual tool. Ordinary MCP channel access rules still apply.
 
 ### Create work from a template body
 

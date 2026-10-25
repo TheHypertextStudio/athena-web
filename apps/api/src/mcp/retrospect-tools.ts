@@ -29,7 +29,7 @@ export function registerRetrospectTools(server: McpRegistrar, ctx: McpContext): 
     {
       title: 'Retrospect',
       description:
-        'What a person actually did on a given day, gathered from every tool they have connected and grouped so that a run of work on one thing reads as one entry. Spans every organization they belong to. Each entry carries where it came from, when it happened, and a sentence describing it. Use this when asked what got done, what a day looked like, or to write a summary of work already completed — `brief` answers the opposite question, what is still waiting.',
+        'Review what the caller actually did on a day across connected tools and workspaces, grouped by related work with sources and timestamps. Use for completed-work summaries; brief shows what is still waiting.',
       inputSchema: {
         date: z.iso
           .date()

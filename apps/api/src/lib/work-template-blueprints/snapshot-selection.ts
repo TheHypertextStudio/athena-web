@@ -43,7 +43,12 @@ export function selectBlueprintSnapshotRows(
       'blueprint_invalid',
       'Affected snapshots require an exact initiating work reference.',
     );
-  const writes = affectedBlueprintNodes(nodes, seeds, new Set(options.dateAnchors ?? []));
+  const writes = affectedBlueprintNodes(
+    nodes,
+    seeds,
+    new Set(options.dateAnchors ?? []),
+    options.fieldChanges,
+  );
   if (writes.size > 500)
     throw new BlueprintError('blueprint_limit', 'Reflow at most 500 affected descendants.');
   const required = new Set([...seeds, ...writes]);

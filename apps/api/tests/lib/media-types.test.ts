@@ -39,3 +39,28 @@ describe('negotiateMediaType', () => {
     expect(negotiateMediaType('not-a-media-range', ['application/json'])).toBeNull();
   });
 });
+
+describe('retained media negotiation regressions', () => {
+  it.each([
+    '*/json',
+    'application/json;charset',
+    'application/json;=utf-8',
+    'application/json;q=2',
+    'application/json;q=0.5555',
+  ])('refuses malformed ranges: %s', (accept) => {
+    expect(negotiateMediaType(accept, ['application/json'])).toBeNull();
+  });
+  it('preserves quoted commas while honoring a representation refusal', () => {
+    expect(
+      negotiateMediaType('text/plain;note="a,b";q=0, application/json', [
+        'text/plain',
+        'application/json',
+      ]),
+    ).toBe('application/json');
+  });
+  it('treats a blank header as missing and skips invalid offers during matching', () => {
+    expect(negotiateMediaType('   ', ['text/csv', 'application/json'])).toBe('text/csv');
+    expect(negotiateMediaType('*/*', ['not-a-type', 'application/json'])).toBe('application/json');
+    expect(negotiateMediaType('application/json', [])).toBeNull();
+  });
+});

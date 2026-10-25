@@ -66,3 +66,10 @@ export async function saveTranscript(
       },
     });
 }
+
+/** Read model tool uses from the exact durable content blocks without replaying other content. */
+export function toolUsesOf(message: TurnMessage): { id: string; name: string; input: unknown }[] {
+  return message.content.flatMap((block) =>
+    block.type === 'tool_use' ? [{ id: block.id, name: block.name, input: block.input }] : [],
+  );
+}

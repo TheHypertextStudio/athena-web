@@ -16,6 +16,7 @@ import { TaskId } from '@docket/work/ids';
 import { z } from 'zod';
 
 import { requireUndoReceiptAccess } from './undo-access';
+import { tryAutomatedTemplateUndo } from '../agent/template-undo';
 import { workScheduleUndoAccess } from '../lib/recurrence/work-schedule-undo-access';
 import { NotFoundError } from '../error';
 import { createCapturedTasks } from './capture-template-tasks';
@@ -33,11 +34,21 @@ import { WIDGET, widgetMeta } from './apps';
 import { authorize, jsonResult, runTool, scopedActor } from './result';
 import { orgIdParam } from './tools-shared';
 import { latestOwnChangeSet } from './undo-target';
+import { undoInputSchema } from './undo-tools-contract';
 import { entityHref, entityListHref } from './entity-href';
 
 /** Keep the authenticated caller's protected-receipt guard on the existing undo transaction. */
-function undoWithAccess(caller: Pick<ActorCtx, 'orgId' | 'actorId'>, changeSetId: string) {
-  return undoChangeSet(caller.orgId, changeSetId, workScheduleUndoAccess(caller));
+async function undoWithAccess(
+  ctx: McpContext,
+  caller: Pick<ActorCtx, 'orgId' | 'actorId'>,
+  changeSetId: string,
+  input: unknown,
+) {
+  const guard = workScheduleUndoAccess(caller);
+  return (
+    (await tryAutomatedTemplateUndo(ctx, caller, changeSetId, input, guard)) ??
+    undoChangeSet(caller.orgId, changeSetId, guard)
+  );
 }
 
 /**
@@ -91,7 +102,7 @@ export function registerWriteTools(server: McpRegistrar, ctx: McpContext): void 
     {
       title: 'Capture',
       description:
-        'Create tasks from text. Call list_templates before writing structured Markdown: preserve payload.description sections and fill them instead of inventing a format. Select template ID/name or workTypeId with optional workTypeVersionId. With a template, one-line text is the title; multiline text is an explicit body. Omitted fields inherit defaults; explicit description, priority, and labelIds win. Results include saved bodies for update. Use withoutTemplateReason for freeform or quick capture; undecided calls return choices without writes. Text accepts one string or a list. Team, workflow, cycle, and assignee are resolved automatically. Use organize to place work under containers',
+        'Create tasks from a text string or list; use organize for placement. Call list_templates; preserve payload.description Markdown sections. Select workTypeId + optional workTypeVersionId or legacy ID/name. With a template, one-line text sets title; multiline supplies body. Explicit fields win. withoutTemplateReason allows freeform; undecided calls return choices without writes. Team, workflow, cycle and assignee resolve automatically. Saved bodies are returned.',
       inputSchema: {
         orgId: orgIdParam,
         ...templateDecisionFields,
@@ -219,13 +230,7 @@ export function registerWriteTools(server: McpRegistrar, ctx: McpContext): void 
       title: 'Undo',
       description:
         'Reverse a change a tool made, by its changeSetId. Omit the id to reverse the most recent change you made in this workspace. Anything edited by someone else since is left alone and reported back rather than overwritten, so a partial undo is a normal outcome worth reading.',
-      inputSchema: {
-        orgId: orgIdParam,
-        changeSetId: z
-          .string()
-          .optional()
-          .describe('The change to reverse. Defaults to your most recent one in this workspace.'),
-      },
+      inputSchema: undoInputSchema,
       outputSchema: {
         summary: z.string().describe('What the reversed change had done.'),
         reverted: z.number().int().describe('How many entities were put back.'),
@@ -258,7 +263,7 @@ export function registerWriteTools(server: McpRegistrar, ctx: McpContext): void 
         if (!targetId) throw new NotFoundError('Nothing to undo');
 
         await requireUndoReceiptAccess(actorCtx, targetId);
-        const { summary, outcomes } = await undoWithAccess(actorCtx, targetId);
+        const { summary, outcomes } = await undoWithAccess(ctx, actorCtx, targetId, input);
         for (const outcome of outcomes) {
           if (reindexes(outcome)) await enqueueSearchUpsert(input.orgId, outcome.kind, outcome.id);
         }

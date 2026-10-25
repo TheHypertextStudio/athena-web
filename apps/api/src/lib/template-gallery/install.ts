@@ -5,7 +5,6 @@ import {
   planTemplateCopySources,
   type TemplateCopySourcesInput,
 } from '@docket/work/template-copy';
-import type { WorkTemplateGalleryPreview } from '@docket/work/template-gallery-contract';
 import { ConflictError } from '../../error';
 import { catalogChange } from '../../mcp/change-set-catalog';
 import { recordChangeSetInTransaction } from '../../mcp/change-set';
@@ -20,6 +19,7 @@ import {
 } from '../templates/copy-reservation';
 import type { TemplateTransaction } from '../templates/persistence';
 import { fingerprintCopiedTemplateState } from './copy-state';
+import { templateCopyEntryKey, type ReviewedTemplateCopy } from './acceptance-facts';
 
 type Reserved = Extract<TemplateCopyReservationResult, { kind: 'reserved' }>;
 
@@ -31,7 +31,7 @@ export async function installGalleryCopy(
   tx: TemplateTransaction,
   reserved: Reserved,
   input: TemplateCopySourcesInput,
-  review: WorkTemplateGalleryPreview,
+  review: ReviewedTemplateCopy,
 ): Promise<readonly TemplateCreationEffect[]> {
   const plan = await planTemplateCopySources({
     ...input,
@@ -51,7 +51,7 @@ export async function installGalleryCopy(
     fingerprints = [],
     effects: TemplateCreationEffect[] = [];
   for (const copy of plan.copies) {
-    const capability = reserved.reservations.get(copy.source.workTypeId);
+    const capability = reserved.reservations.get(templateCopyEntryKey(copy.source));
     if (!capability) throw new ConflictError('Copy reservation is unavailable');
     const created = await createWorkTemplateInTransaction(
       tx,
@@ -67,7 +67,7 @@ export async function installGalleryCopy(
     );
     changes.push(catalogChange('template', null, created.row));
     fingerprints.push({
-      key: copy.source.workTypeId,
+      key: templateCopyEntryKey(copy.source),
       fingerprint: await fingerprintCopiedTemplateState(
         created.row,
         copy.offeredTeamIds,

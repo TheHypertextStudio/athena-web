@@ -1,4 +1,10 @@
-import { copyIdentityKey, type TemplateCopySourcesInput } from '@docket/work/template-copy';
+import { createHash } from 'node:crypto';
+import {
+  copyIdentityKey,
+  type CopySourceIdentity,
+  type WorkTemplateSourceCopyPreview,
+  type TemplateCopySourcesInput,
+} from '@docket/work/template-copy';
 import {
   WorkTemplateCopyReceipt,
   type WorkTemplateGalleryPreview,
@@ -9,9 +15,12 @@ import type {
 } from '../templates/copy-reservation';
 import { ConflictError } from '../../error';
 
-/** Keep the actual catalog identity as the bounded bundle key; never use a destination or publication claim. */
-function entryKey(source: WorkTemplateGalleryPreview['roots'][number]): string {
-  return source.workTypeId;
+/** Both canonical preview protocols share the single acceptance writer. */
+export type ReviewedTemplateCopy = WorkTemplateGalleryPreview | WorkTemplateSourceCopyPreview;
+
+/** Bound the complete immutable source identity to a storage-safe key, including its tenant and revision. */
+export function templateCopyEntryKey(source: CopySourceIdentity): string {
+  return createHash('sha256').update(copyIdentityKey(source)).digest('hex');
 }
 
 /**
@@ -21,7 +30,7 @@ function entryKey(source: WorkTemplateGalleryPreview['roots'][number]): string {
 export function galleryAcceptanceFacts(
   requestId: string,
   input: TemplateCopySourcesInput,
-  review: WorkTemplateGalleryPreview,
+  review: ReviewedTemplateCopy,
   choicesFingerprint: string,
 ): CopyBundleAcceptance {
   const sources = new Map(
@@ -32,16 +41,16 @@ export function galleryAcceptanceFacts(
     reviewFingerprint: review.reviewFingerprint,
     choicesFingerprint,
     mode: review.mode,
-    roots: review.roots.map(entryKey),
+    roots: review.roots.map(templateCopyEntryKey),
     entries: review.copies.map((copy) => {
       const checked = sources.get(copyIdentityKey(copy.source));
       if (!checked) throw new ConflictError('Reviewed source is unavailable');
       return {
-        key: entryKey(copy.source),
+        key: templateCopyEntryKey(copy.source),
         kind: copy.targetType,
         source: copy.source,
         sourceFingerprint: checked.fingerprint,
-        dependencies: copy.dependencies.map(entryKey),
+        dependencies: copy.dependencies.map(templateCopyEntryKey),
       };
     }),
   };

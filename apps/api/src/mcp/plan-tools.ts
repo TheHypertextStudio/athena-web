@@ -106,7 +106,7 @@ export function registerPlanTools(server: McpRegistrar, ctx: McpContext): void {
     {
       title: 'Brief',
       description:
-        "Everything waiting on the caller for a given day, in one call: today's plan, what is blocked, what is awaiting their approval, what is due, and how much is sitting unread in the inbox. This spans every organization they belong to, because attention does not respect org boundaries. Start here when asked what to work on.",
+        "Read the caller's day plan, blockers, pending approvals, due work and unread Inbox across all their workspaces. Start here when asked what to work on.",
       inputSchema: {
         date: z.iso
           .date()
@@ -147,7 +147,7 @@ export function registerPlanTools(server: McpRegistrar, ctx: McpContext): void {
     {
       title: 'Plan a day',
       description:
-        "Read a day's plan and change it in the same call: add tasks, drop them, tick them off, or set a timebox. Set `autoPlan` to build the day first — the planner orders the caller's tasks for the day by dependency then priority, and timeboxes them into their real availability. Edits apply after that, in the order given, so a hand edit always wins. The whole day is returned afterwards so the caller sees the result rather than inferring it. Call with no edits and no `autoPlan` just to read.",
+        "Read or edit a day's plan: add, remove or complete tasks and set timeboxes. autoPlan orders tasks by dependency then priority within actual availability, then applies your edits in order. Returns the resulting whole day. Omit edits and autoPlan to read.",
       inputSchema: {
         orgId: orgIdParam,
         date: z.iso.date().describe('The day, as `YYYY-MM-DD`.'),

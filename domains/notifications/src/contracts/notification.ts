@@ -35,9 +35,19 @@ export const NotificationType = z
 /** Notification-type value. */
 export type NotificationType = z.infer<typeof NotificationType>;
 
+/** Safe Inbox reference to a recipient-authorized template proposal; contains no template document. */
+export const TemplateReviewReference = z.strictObject({
+  activityId: z.string().min(1),
+  sessionId: z.string().min(1),
+  allowedActions: z.array(z.enum(['keep', 'adjust', 'dismiss', 'undo'])),
+});
+/** Safe template review reference value. */
+export type TemplateReviewReference = z.infer<typeof TemplateReviewReference>;
+
 /** Notification payload; `title` is required, the rest is type-specific. */
 export const NotificationBody = z
   .looseObject({
+    templateReview: TemplateReviewReference.optional(),
     title: z
       .string()
       .describe(

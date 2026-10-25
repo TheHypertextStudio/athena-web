@@ -1,3 +1,4 @@
+import { writeTemplateProposal } from '../agent/template-proposal-write';
 /**
  * `@docket/api` — the `define_template` tool.
  *
@@ -11,7 +12,7 @@
  * wrote "Bug" deserves to hear that Bug belongs to another team now rather than when someone
  * creates a task from the template.
  */
-import { db, team } from '@docket/db';
+import { changeSet, db, team } from '@docket/db';
 import { TemplateCreate, TemplateUpdate, type TemplateDraft } from '@docket/work/template-contract';
 import { eq } from 'drizzle-orm';
 import { WorkTemplateCreate, WorkTemplateDefinition } from '@docket/work/work-template-contract';
@@ -20,9 +21,20 @@ import {
   createWorkTemplate,
   editWorkTemplateDraft,
   publishWorkTemplate,
+  createWorkTemplateInTransaction,
+  editWorkTemplateDraftInTransaction,
+  reconcileTemplateCreationEffects,
 } from '../lib/templates/service';
+import { lockTemplate, requireRevision } from '../lib/templates/persistence';
+import { reconcileTemplateImages } from '../lib/templates/images';
+import { serializableTx } from '../lib/serializable-tx';
+import {
+  isAutomatedTemplateContext,
+  requireAutomatedTemplateAuthor,
+  registeredTemplateSessionId,
+} from '../agent/template-authority';
 import { draftOf } from '../lib/templates/model';
-import type { z } from 'zod';
+import { z } from 'zod';
 
 import { ValidationError } from '../error';
 import { resolveAttachedLabels, resolveLabelSet } from '../lib/labels';
@@ -31,7 +43,7 @@ import { createTemplate, updateTemplate, type TemplateRow } from '../lib/templat
 import type { McpActor, McpContext } from './auth';
 import type { McpRegistrar } from './catalog';
 import { fieldDiffs, nameOf, type CatalogRow } from './catalog-rows';
-import { recordChangeSet } from './change-set';
+import { recordChangeSet, recordChangeSetInTransaction } from './change-set';
 import { catalogChange } from './change-set-catalog';
 import { resolveDescriptor, resolveOptional } from './descriptors';
 import { entityListHref } from './entity-href';
@@ -40,11 +52,7 @@ import { defineTemplateDefinition } from './template-tools-contract';
 import { resolveVisibleTemplate } from './template-application';
 
 /** The tool's validated input. */
-type DefineTemplateInput = {
-  [K in keyof typeof defineTemplateDefinition.inputSchema]: z.infer<
-    (typeof defineTemplateDefinition.inputSchema)[K]
-  >;
-};
+type DefineTemplateInput = z.infer<z.ZodObject<typeof defineTemplateDefinition.inputSchema>>;
 
 /** Payload keys renamed for the card, where they would otherwise read as the template's own. */
 const DRAFT_FIELD: Record<string, string> = {
@@ -265,6 +273,103 @@ async function writeCanonicalTemplate(
   return { before, after: await createWorkTemplate(context, body) };
 }
 
+/** Normalize a session proposal with the same definition construction as the actual tool. */
+export async function prepareTemplateProposal(
+  orgId: string,
+  actorId: string,
+  raw: unknown,
+): Promise<{ definition: WorkTemplateDefinition; input: Record<string, unknown> }> {
+  const input = z.object(defineTemplateDefinition.inputSchema).parse(raw);
+  if (input.orgId !== orgId || input.action === 'publish' || input.action === 'archive')
+    invalid('action', 'Only unpublished template proposals are supported.');
+  const before = input.template
+    ? await resolveVisibleTemplate(orgId, actorId, input.template)
+    : null;
+  if (before) requireRevision(before, reviewedRevision(input));
+  const definition = await canonicalDefinition(
+    { ...input, action: 'draft', scope: undefined, team: undefined },
+    before,
+    undefined,
+  );
+  return { definition, input: JSON.parse(JSON.stringify(input)) as Record<string, unknown> };
+}
+
+/** Automated writes use the canonical writer and receipt in one checked transaction. */
+async function writeAutomatedTemplate(
+  ctx: McpContext,
+  actor: McpActor,
+  input: DefineTemplateInput,
+): Promise<{ before: TemplateRow | null; after: TemplateRow; changeSetId: string | null }> {
+  await requireAutomatedTemplateAuthor(ctx, actor, input);
+  if (input.action === 'publish' || input.action === 'archive')
+    invalid('action', 'A person must explicitly publish or archive a template.');
+  const selected = input.template
+    ? await resolveVisibleTemplate(input.orgId, actor.actorId, input.template)
+    : null;
+  if (selected) {
+    assertSomethingToChange(input);
+    requireRevision(selected, reviewedRevision(input));
+  }
+  const draftInput = { ...input, action: 'draft' as const, scope: undefined, team: undefined };
+  const definition = await canonicalDefinition(draftInput, selected, undefined);
+  // Editing an existing publication or another visible shared definition creates a separate
+  // owner-private draft. Its immutable publication and existing work remain unchanged.
+  const before =
+    selected?.scope === 'personal' &&
+    selected.ownerActorId === actor.actorId &&
+    selected.publicationState === 'draft'
+      ? selected
+      : null;
+  const result = await serializableTx(async (tx) => {
+    await requireAutomatedTemplateAuthor(ctx, actor, input, tx);
+    if (selected && !before) {
+      const current = await lockTemplate(tx, actor.orgId, selected.id, actor.actorId);
+      requireRevision(current, reviewedRevision(input));
+    }
+    const creation = before
+      ? {
+          row: await editWorkTemplateDraftInTransaction(tx, actor, before.id, {
+            expectedRevision: reviewedRevision(input),
+            definition,
+          }),
+          effects: [],
+        }
+      : await createWorkTemplateInTransaction(
+          tx,
+          actor,
+          parsed(WorkTemplateCreate, {
+            targetType: definition.payload.targetType,
+            scope: 'personal',
+            definition,
+          }),
+        );
+    const after = creation.row;
+    const changeSetId = await recordChangeSetInTransaction(tx, {
+      orgId: actor.orgId,
+      actorId: actor.actorId,
+      origin: originFor('define_template'),
+      summary: `${before ? 'Edited' : 'Created'} template "${definition.name}"`,
+      changes: [catalogChange('template', before, after)],
+    });
+    if (!changeSetId) throw new Error('Template write did not retain a receipt');
+    await tx
+      .update(changeSet)
+      .set({ templateReviewActorId: actor.actorId })
+      .where(eq(changeSet.id, changeSetId));
+    await writeTemplateProposal(tx, {
+      sessionId: registeredTemplateSessionId(ctx),
+      orgId: actor.orgId,
+      definition,
+      input: JSON.parse(JSON.stringify(input)) as Record<string, unknown>,
+      applied: { templateId: after.id, revision: after.draftRevision, changeSetId },
+    });
+    return { before, after, changeSetId, effects: creation.effects };
+  });
+  if (result.effects.length) await reconcileTemplateCreationEffects(result.effects);
+  else await reconcileTemplateImages(actor.orgId, result.after.id, 'upsert');
+  return result;
+}
+
 /** Flatten a template into the fields its card row compares, with ids turned into names. */
 function snapshot(
   row: TemplateRow,
@@ -362,16 +467,23 @@ export function registerTemplateTools(server: McpRegistrar, ctx: McpContext): vo
         id: input.orgId,
         orgId: input.orgId,
       });
-      const { before, after } = await writeTemplate(actor, input);
-      const row = await rowFor(input.orgId, before, after, input.action);
+      const automated = isAutomatedTemplateContext(ctx);
+      const written = automated
+        ? await writeAutomatedTemplate(ctx, actor, input)
+        : await writeTemplate(actor, input);
+      const { before, after } = written;
+      const row = await rowFor(input.orgId, before, after, automated ? 'draft' : input.action);
       const changed = !row.matched;
-      const changeSetId = await recordChangeSet({
-        orgId: input.orgId,
-        actorId: actor.actorId,
-        origin: originFor('define_template'),
-        summary: `${before ? 'Edited' : 'Created'} template "${after.name}"`,
-        changes: changed ? [catalogChange('template', before, after)] : [],
-      });
+      const changeSetId =
+        'changeSetId' in written
+          ? written.changeSetId
+          : await recordChangeSet({
+              orgId: input.orgId,
+              actorId: actor.actorId,
+              origin: originFor('define_template'),
+              summary: `${before ? 'Edited' : 'Created'} template "${after.name}"`,
+              changes: changed ? [catalogChange('template', before, after)] : [],
+            });
       return jsonResult({
         changed: changed ? 1 : 0,
         revision: after.draftRevision,

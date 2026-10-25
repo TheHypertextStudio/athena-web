@@ -121,6 +121,9 @@ export const TOOL_SCOPE: Readonly<Record<string, McpScope>> = {
   // work:read — reads exposed as tools
   list_work: 'work:read',
   list_templates: 'work:read',
+  browse_work_templates: 'work:read',
+  // Preview/reconcile are reads; the handler requires work:write only when keeping copies.
+  copy_work_templates: 'work:read',
   list_work_schedules: 'work:read',
   find: 'work:read',
   list_resources: 'work:read',

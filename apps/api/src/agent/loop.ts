@@ -1,3 +1,24 @@
+import {
+  isTemplateTailoring,
+  requireTailoringTool,
+  mayExecuteTemplateAutomatically,
+} from './template-tailoring-policy';
+import {
+  sessionGenerationAuthorized,
+  turnContextAuthorized,
+} from './template-tailoring-session-policy';
+import {
+  toolOrganizationId,
+  toolboxExecutor,
+  requireAthenaOwner,
+  requireRegisteredAgentId,
+  generalActivityOrganizationId,
+} from './session-executor';
+import {
+  persistTemplateToolProposal,
+  templateToolExecutionInput,
+  templateSafeActionResult,
+} from './template-proposal-loop';
 import { mailElicitationAttachmentContext } from '../services/athena-mail/attachments';
 import { isMailSession, mailSessionAuthorized } from '../services/athena-mail/session-auth';
 import { collectProviderTurn } from './provider-turn';
@@ -63,10 +84,10 @@ import {
   ASK_USER_TOOL,
   DOCKET_CONNECTION,
   openToolbox,
-  type ToolboxExecutor,
   type ToolboxResult,
+  type ToolboxExecutor,
 } from './toolbox';
-import { loadTranscript, saveTranscript, type DbHandle } from './transcript';
+import { loadTranscript, saveTranscript, toolUsesOf, type DbHandle } from './transcript';
 import {
   checkpointRunGeneration,
   claimRunGeneration,
@@ -144,68 +165,7 @@ async function principalAthenaPreferences(session: SessionRow): Promise<{
   };
 }
 
-/** Return the workspace named by a Docket tool input, when present. */
-function toolOrganizationId(input: unknown): string | null {
-  if (!input || typeof input !== 'object') return null;
-  const value = (input as Record<string, unknown>)['orgId'];
-  return typeof value === 'string' && value.length > 0 ? value : null;
-}
-
-/** Build the toolbox identity exclusively from the persisted executor columns. */
-function toolboxExecutor(session: SessionRow): ToolboxExecutor {
-  if (session.executorKind === 'athena') {
-    /* v8 ignore next -- @preserve defensive: agent_session_executor_shape_check guarantees an
-       athena session's ownerUserId is NOT NULL at the database level */
-    if (!session.ownerUserId) throw new Error('Athena session is missing its owner');
-    return { kind: 'athena', ownerUserId: session.ownerUserId, sessionKind: session.kind };
-  }
-  /* v8 ignore next 3 -- @preserve defensive: agent_session_executor_shape_check guarantees a
-     registered_agent session's organizationId and agentId are both NOT NULL at the database
-     level */
-  if (!session.organizationId || !session.agentId) {
-    throw new Error('Registered-agent session is missing its workspace identity');
-  }
-  return {
-    kind: 'registered_agent',
-    organizationId: session.organizationId,
-    agentId: session.agentId,
-  };
-}
-
-/** Return an Athena owner after checking the persisted executor shape. */
-function requireAthenaOwner(session: SessionRow): string {
-  /* v8 ignore next 3 -- @preserve defensive: the sole caller only invokes this inside an
-     `executorKind === 'athena'` branch, and agent_session_executor_shape_check guarantees such a
-     session's ownerUserId is NOT NULL at the database level */
-  if (session.executorKind !== 'athena' || !session.ownerUserId) {
-    throw new Error('Athena session is missing its owner');
-  }
-  return session.ownerUserId;
-}
-
-/** Return a registered agent id after checking the persisted executor shape. */
-function requireRegisteredAgentId(session: SessionRow): string {
-  /* v8 ignore next 3 -- @preserve defensive: every caller only invokes this inside an
-     `executorKind === 'registered_agent'` branch, and agent_session_executor_shape_check
-     guarantees such a session's agentId is NOT NULL at the database level */
-  if (session.executorKind !== 'registered_agent' || !session.agentId) {
-    throw new Error('Registered-agent session is missing its agent');
-  }
-  return session.agentId;
-}
-
-/** Workspace attribution for personal-neutral versus registered-agent activity. */
-function generalActivityOrganizationId(session: SessionRow): string | null {
-  return session.executorKind === 'athena' ? null : session.organizationId;
-}
-
 /** Extract the tool_use blocks of a message. */
-function toolUsesOf(message: TurnMessage): ToolUse[] {
-  return message.content.flatMap((b) =>
-    b.type === 'tool_use' ? [{ id: b.id, name: b.name, input: b.input }] : [],
-  );
-}
-
 /** Insert one activity row and return it. */
 async function insertActivity(
   handle: DbHandle,
@@ -538,7 +498,7 @@ async function driveSessionWithAdmission(
     // Resolve after entering the generation's settlement scope. An expired personal grant can
     // refuse before the first model call; that must release the claimed run instead of leaving it
     // in "running" until the lease expires. Resolution never falls back to a cloud model.
-    if (!(await mailSessionAuthorized(session))) return await settleOwned('canceled');
+    if (!(await sessionGenerationAuthorized(session))) return await settleOwned('canceled');
     const triageBrief = await notificationTriageBrief(session);
     if (triageBrief === null) return await settleOwned('canceled');
     const turnRuntime = deps.turnRuntime ?? (await resolveOwnerTurnRuntime(session.ownerUserId));
@@ -559,7 +519,7 @@ async function driveSessionWithAdmission(
     });
 
     for (;;) {
-      if (!(await mailSessionAuthorized(session))) return await settleOwned('canceled');
+      if (!(await sessionGenerationAuthorized(session))) return await settleOwned('canceled');
       if ((await notificationTriageBrief(session)) === null) return await settleOwned('canceled');
       const execution = await executeApprovedActions(orgId, sessionId, lease, deps);
       if (execution !== 'settled') {
@@ -626,6 +586,7 @@ async function driveSessionWithAdmission(
         turnRuntime,
         { system, messages, tools: openedToolbox.tools, subjectTask: context.subjectTask },
         async (type, text) => {
+          if (isTemplateTailoring(session)) return;
           await persistGenerationEffect(
             lease,
             deps,
@@ -638,7 +599,7 @@ async function driveSessionWithAdmission(
           );
         },
       );
-      if ((await notificationTriageBrief(session)) === null) return await settleOwned('canceled');
+      if (!(await turnContextAuthorized(session))) return await settleOwned('canceled');
       generationTurns += 1;
 
       if (stopReason === 'refusal') {
@@ -658,6 +619,9 @@ async function driveSessionWithAdmission(
 
       messages = [...messages, assistantMessage];
       const uses = toolUsesOf(assistantMessage);
+      uses.forEach((use) => {
+        requireTailoringTool(session, use.name, use.input);
+      });
       const proposalGroupId = genId();
 
       // Persist the transcript and the gated/elicitation rows atomically, so a crash
@@ -704,6 +668,19 @@ async function driveSessionWithAdmission(
             ),
           );
           const target = openedToolbox.resolve(use.name);
+          if (target.connection === DOCKET_CONNECTION && target.rawName === 'define_template') {
+            const targetOrg = toolOrganizationId(use.input) ?? session.organizationId;
+            if (!targetOrg) throw new NotFoundError('Workspace not found');
+            await persistTemplateToolProposal(tx, {
+              sessionId,
+              orgId: targetOrg,
+              toolUseId: use.id,
+              proposalGroupId,
+              raw: use.input,
+              execute: mayExecuteTemplateAutomatically(session, decision),
+            });
+            continue;
+          }
           await tx.insert(sessionActivity).values({
             sessionId,
             organizationId:
@@ -932,18 +909,19 @@ export async function executeApprovedActions(
           await persistGenerationEffect(lease, deps, 'action-dispatch', async () => undefined);
           const name =
             call.connection === DOCKET_CONNECTION ? call.tool : `${call.connection}__${call.tool}`;
-          const result = await toolbox.callTool(name, call.input);
+          const executionInput = await templateToolExecutionInput(
+            db,
+            session.id,
+            claimed.id,
+            call.input,
+          );
+          const result = await toolbox.callTool(name, executionInput);
           executionFailed = result.isError;
           body = {
             ...claimed.body,
             action: {
               ...claimed.body.action,
-              result: {
-                content: result.content,
-                isError: result.isError,
-                ...(result.presentation ? { presentation: result.presentation } : {}),
-                ...(result.presentationUnavailable ? { presentationUnavailable: true } : {}),
-              },
+              result: templateSafeActionResult(call.tool, claimed.id, result),
             },
           };
         }

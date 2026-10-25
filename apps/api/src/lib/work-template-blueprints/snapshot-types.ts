@@ -7,6 +7,7 @@ import type { ActorCtx } from '../../context';
 import type { InsertedWork } from '../work-creation/writers';
 import type { RetainedOccurrenceAuthority } from '../work-creation/retained-authority';
 import type { NativeScheduleSnapshotAuthority } from '../recurrence/schedule-native-facts';
+import type { BlueprintFieldChanges } from './reflow-selection-fields';
 
 /** Exact physical identity; a logical template path never grants access to it. */
 export interface BlueprintWorkRef {
@@ -23,6 +24,7 @@ export interface BlueprintSnapshotOptions {
   readonly scope: 'tree' | 'retained' | 'affected' | 'reference';
   readonly seeds?: readonly BlueprintWorkRef[];
   readonly dateAnchors?: readonly string[];
+  readonly fieldChanges?: BlueprintFieldChanges;
   readonly ancestorIds?: readonly string[];
   readonly access?: 'view' | 'edit';
   readonly forUpdate?: boolean;

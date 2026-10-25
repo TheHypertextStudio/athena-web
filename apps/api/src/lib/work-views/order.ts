@@ -162,10 +162,12 @@ async function assertVisibleInContext(input: ReorderWorkViewInput): Promise<void
       uniqueItemIds.map((itemId) => sql`${itemId}`),
       sql`, `,
     )})`,
-    sql`e.id in (${sql.join(
-      uniqueItemIds.map((itemId) => sql`${itemId}`),
-      sql`, `,
-    )})`,
+    {
+      authorizationScope: sql`e.id in (${sql.join(
+        uniqueItemIds.map((itemId) => sql`${itemId}`),
+        sql`, `,
+      )})`,
+    },
   );
   const found = await executeOne(
     input.database,

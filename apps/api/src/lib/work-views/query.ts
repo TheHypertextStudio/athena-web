@@ -44,6 +44,7 @@ export interface QueryWorkViewInput {
 }
 
 interface InternalRequest {
+  readonly activeOnly: boolean;
   readonly target: ViewTarget;
   readonly definition: {
     readonly filter: ExecutableFilterNode | null;
@@ -78,6 +79,17 @@ interface PageSql {
 
 const cursorScalarSchema = z.union([z.string(), z.number(), z.boolean(), z.null()]);
 const callerRowSchema = z.object({ user_id: z.string().nullable() }).loose();
+/** Resolve the live human identity once for this permission-scoped query. */
+async function loadQueryUserId(input: QueryWorkViewInput): Promise<string | null> {
+  const callers = await executeRows(
+    input.database,
+    sql`select user_id from actor
+      where id=${input.actorId} and organization_id=${input.organizationId}
+        and kind='human' and status='active' and archived_at is null`,
+    callerRowSchema,
+  );
+  return callers[0]?.user_id ?? null;
+}
 const workViewPageRecordSchema = z
   .object({
     id: z.string(),
@@ -131,6 +143,7 @@ function filterSql(
 
 function internalRequest(request: WorkViewQueryRequest): InternalRequest {
   return {
+    activeOnly: request.activeOnly === true,
     target: request.target,
     definition: request.definition,
     temporaryFilter: request.temporaryFilter,
@@ -284,17 +297,10 @@ export async function queryWorkView(input: QueryWorkViewInput): Promise<WorkView
   }
   const asOf = suppliedCursor?.asOf ?? (input.now ?? new Date()).toISOString();
   const timeZone = input.timeZone ?? 'UTC';
-  const callerRows = await executeRows(
-    input.database,
-    sql`select user_id from actor
-      where id=${input.actorId} and organization_id=${input.organizationId}
-        and kind='human' and status='active' and archived_at is null`,
-    callerRowSchema,
-  );
   const execution = {
     organizationId: input.organizationId,
     actorId: input.actorId,
-    userId: callerRows[0]?.user_id ?? null,
+    userId: await loadQueryUserId(input),
     timeZone,
     asOf,
   };
@@ -307,6 +313,7 @@ export async function queryWorkView(input: QueryWorkViewInput): Promise<WorkView
     input.actorId,
     execution.userId,
     filter,
+    { activeOnly: request.activeOnly },
   );
   const fingerprint = fingerprintWorkViewQuery(input.request, execution);
   const cursor = request.cursor

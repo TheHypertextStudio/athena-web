@@ -13,6 +13,8 @@ import { createRequire } from 'node:module';
 import { dirname, join, resolve } from 'node:path';
 
 import { PGlite } from '@electric-sql/pglite';
+import { drizzle } from 'drizzle-orm/pglite';
+import { fullSchema, preparePrivateIdentityNamespace } from '@docket/db';
 
 const REPO_ROOT = resolve(import.meta.dirname, '../../../..');
 const MIGRATIONS = join(REPO_ROOT, 'packages/db/drizzle');
@@ -56,6 +58,7 @@ function templatePath(sql: string): string {
   const key = createHash('sha256')
     .update(sql)
     .update(readFileSync(import.meta.filename))
+    .update(readFileSync(join(REPO_ROOT, 'packages/db/src/work-template-identity-namespace.ts')))
     .update(pgliteVersion())
     .digest('hex')
     .slice(0, 16);
@@ -97,6 +100,9 @@ export async function ensurePgliteTemplate(): Promise<string> {
   const source = new PGlite('memory://');
   try {
     await source.exec(sql);
+    // The fresh schema has no retained IDs. Run the real committed namespace
+    // checkpoint so a clone can admit authored heads under the same SQL guards.
+    await preparePrivateIdentityNamespace(drizzle(source, { schema: fullSchema }));
     const dump = await source.dumpDataDir('none');
     const scratch = `${path}.${process.pid}.tmp`;
     writeFileSync(scratch, Buffer.from(await dump.arrayBuffer()));
@@ -121,7 +127,7 @@ export async function loadPgliteTemplate(): Promise<Blob> {
  * Open a new in-memory PGlite that already holds the migrated schema.
  *
  * @remarks
- * The snapshot carries the schema only. The complimentary-Pro trigger from
+ * The snapshot carries the schema and its empty identity-namespace receipt. The complimentary-Pro trigger from
  * `installTestProductEntitlementFixture` is a per-suite choice, so a suite that wants it installs
  * it on the returned client, as `getMigratedDb` does.
  *

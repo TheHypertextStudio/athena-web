@@ -6,6 +6,7 @@ const namedSchemas = new Set([
   '$defs',
   'definitions',
   'dependentSchemas',
+  'dependencies',
 ]);
 const childSchemas = new Set([
   'items',
@@ -14,6 +15,8 @@ const childSchemas = new Set([
   'contains',
   'additionalProperties',
   'unevaluatedProperties',
+  'unevaluatedItems',
+  'contentSchema',
   'propertyNames',
   'not',
   'if',
@@ -86,14 +89,57 @@ function fingerprintOf(schema: Schema): string {
       : value,
   );
 }
+/** A pointer may address a nested schema; moving its ancestors would make that path disappear. */
+function protectPointerAncestors(
+  root: Schema,
+  ref: string,
+  protectedNodes: WeakSet<object>,
+): boolean {
+  if (ref === '#') return true;
+  if (!ref.startsWith('#/')) return false;
+  let tokens: string[];
+  try {
+    tokens = decodeURIComponent(ref.slice(1)).slice(1).split('/');
+  } catch {
+    return false;
+  }
+  let current: unknown = root;
+  for (const token of tokens) {
+    if (!record(current) && !Array.isArray(current)) return false;
+    protectedNodes.add(current);
+    const key = token.replaceAll('~1', '/').replaceAll('~0', '~');
+    if (!Object.hasOwn(current, key)) return false;
+    current = Reflect.get(current, key) as unknown;
+  }
+  return record(current) || typeof current === 'boolean';
+}
+function referenceAncestors(root: Schema): WeakSet<object> | null {
+  const protectedNodes = new WeakSet();
+  const references: string[] = [];
+  const visit = (schema: Schema): Schema => {
+    const ref = schema['$ref'];
+    if (typeof ref === 'string') references.push(ref);
+    mapChildren(schema, visit);
+    return schema;
+  };
+  visit(root);
+  return references.every((ref) => protectPointerAncestors(root, ref, protectedNodes))
+    ? protectedNodes
+    : null;
+}
 function repeatedSchemas(
   root: Schema,
   minimumFingerprintLength: number,
+  protectedNodes: WeakSet<object>,
 ): Map<string, RepeatedSchema> {
   const repeated = new Map<string, RepeatedSchema>();
   const visit = (schema: Schema): Schema => {
     const fingerprint = fingerprintOf(schema);
-    if (fingerprint.length >= minimumFingerprintLength && schema['$ref'] === undefined) {
+    if (
+      !protectedNodes.has(schema) &&
+      fingerprint.length >= minimumFingerprintLength &&
+      schema['$ref'] === undefined
+    ) {
       const found = repeated.get(fingerprint);
       if (found) found.count += 1;
       else repeated.set(fingerprint, { schema, count: 1 });
@@ -180,10 +226,16 @@ function inlineSingleUse(root: Schema, definitions: Map<string, Schema>): Schema
 function shareSchemaFragments(root: Schema, minimumFingerprintLength: number): Schema {
   // Moving an anchored scope could change relative resolution. Preserve such documents verbatim.
   if (/"\$(?:id|anchor|dynamicAnchor|dynamicRef)":/.test(JSON.stringify(root))) return root;
+  const protectedNodes = referenceAncestors(root);
+  if (!protectedNodes) return root;
   const existing = record(root['$defs']) ? root['$defs'] : {};
   const names = new Map<string, string>();
   const originals = new Map<string, Schema>();
-  for (const [fingerprint, entry] of repeatedSchemas(root, minimumFingerprintLength)) {
+  for (const [fingerprint, entry] of repeatedSchemas(
+    root,
+    minimumFingerprintLength,
+    protectedNodes,
+  )) {
     let index = names.size;
     let name = index.toString(36);
     while (Object.hasOwn(existing, name) || originals.has(name)) name = (++index).toString(36);
@@ -196,7 +248,7 @@ function shareSchemaFragments(root: Schema, minimumFingerprintLength: number): S
   }
   if (!names.size) return root;
   const rewrite = (schema: Schema): Schema => {
-    const name = names.get(fingerprintOf(schema));
+    const name = protectedNodes.has(schema) ? undefined : names.get(fingerprintOf(schema));
     return name ? { $ref: `#/$defs/${name}` } : mapChildren(schema, rewrite);
   };
   let transformed = mapChildren(root, rewrite);

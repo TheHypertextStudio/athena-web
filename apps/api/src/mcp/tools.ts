@@ -35,6 +35,7 @@ import { registerRetrospectTools } from './retrospect-tools';
 import { registerRepeatingWorkTools } from './repeating-work-tools';
 import { registerSessionTools } from './session-tools';
 import { registerTemplateTools } from './template-tools';
+import { registerTemplateCopyTools } from './template-copy-tools';
 import { registerTemplateDiscoveryTool } from './template-discovery-tool';
 
 import { registerWorkloadTool } from './workload-tool';
@@ -86,6 +87,7 @@ export function registerTools(
   registerMilestoneTool(server, ctx);
   registerLabelTools(server, ctx);
   registerTemplateTools(server, ctx);
+  registerTemplateCopyTools(server, ctx);
   registerTemplateDiscoveryTool(server, ctx);
   registerPlanTools(server, ctx);
   registerPlanDraftTools(server, ctx, sessionId);

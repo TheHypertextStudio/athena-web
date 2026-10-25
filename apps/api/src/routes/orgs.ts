@@ -64,6 +64,7 @@ import calendarSchedules from './calendar-schedules';
 import comments from './comments';
 import cycles from './cycles';
 import documentImages from './document-images';
+import { deliverableRoutes } from './deliverables';
 import emailSuggestions from './email-suggestions';
 import entityDisplay from './entity-display';
 import dependencyGraph from './dependency-graph';
@@ -485,6 +486,7 @@ Every new organization includes the Owner, Admin, Member, and Guest roles plus a
   .route('/:orgId/labels', labels)
   .route('/:orgId/comments', comments)
   .route('/:orgId/images', documentImages)
+  .route('/:orgId/deliverables', deliverableRoutes)
   .route('/:orgId/updates', updates)
   .route('/:orgId/saved-views', savedViews)
   .route('/:orgId/work-views', workViews)

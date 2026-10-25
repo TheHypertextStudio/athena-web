@@ -35,6 +35,7 @@ const migrationsFolder = resolve(dirname(fileURLToPath(import.meta.url)), '../dr
  * - `sync_run_purpose.notion_mirror` — added by 0075, written by the Notion mirror's sync runs.
  * - `sync_run_purpose.activity_pull` — written by the activity poll's sync runs.
  * - `event_kind.meeting_attended` — written by the calendar activity projection.
+ * - `attachment_subject_type.draft/comment/update` — used by the deliverable draft partial indexes.
  *
  * The last two are listed for consistency with the `notion_mirror` precedent and as defence in
  * depth, not because a migration references them today: 55P04 bites only when a *migration
@@ -52,6 +53,9 @@ export const ENUM_PREFLIGHT: readonly string[] = [
   `ALTER TYPE "public"."sync_run_purpose" ADD VALUE IF NOT EXISTS 'notion_mirror'`,
   `ALTER TYPE "public"."sync_run_purpose" ADD VALUE IF NOT EXISTS 'activity_pull'`,
   `ALTER TYPE "public"."event_kind" ADD VALUE IF NOT EXISTS 'meeting_attended'`,
+  `ALTER TYPE "public"."attachment_subject_type" ADD VALUE IF NOT EXISTS 'draft'`,
+  `ALTER TYPE "public"."attachment_subject_type" ADD VALUE IF NOT EXISTS 'comment'`,
+  `ALTER TYPE "public"."attachment_subject_type" ADD VALUE IF NOT EXISTS 'update'`,
 ];
 
 /**

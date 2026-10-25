@@ -2,6 +2,7 @@
  * `domain packages` — Update (status post) slice DTOs.
  */
 import { z } from 'zod';
+import { DeliverableIds, DeliverableOut } from './attachment';
 import { ActivityOriginOut } from './provenance';
 
 import { Health } from './capability';
@@ -31,6 +32,7 @@ export type UpdateListQuery = z.infer<typeof UpdateListQuery>;
 
 /** Body for posting an Update; the latest health also sets the subject's current health. */
 const updateCreateFields = {
+  attachmentIds: DeliverableIds,
   health: Health.optional().describe(
     "Optional health signal: 'on_track' | 'at_risk' | 'off_track'. When set, it also overwrites the subject's current health (latest health-bearing update wins). Omit to post a narrative-only update that leaves subject health untouched.",
   ),
@@ -51,6 +53,7 @@ export type UpdateCreate = z.infer<typeof UpdateCreate>;
 /** Full update representation returned by reads. */
 export const UpdateOut = z
   .object({
+    attachments: z.array(DeliverableOut).optional().describe('Files attached to this post.'),
     id: UpdateId.describe('Opaque update id.'),
     organizationId: OrganizationId.describe('Owning org id (the tenant key).'),
     authorId: ActorId.nullable()
@@ -90,6 +93,18 @@ export const UpdateAuthorReference = z
 /** A named author for a deferred update feed. */
 export type UpdateAuthorReference = z.infer<typeof UpdateAuthorReference>;
 
+/** A paginated update result with only the bounded author references used by its rows. */
+export const UpdatePage = z
+  .object({
+    items: z.array(UpdateOut),
+    nextCursor: z.string().optional(),
+    authors: z.array(UpdateAuthorReference),
+  })
+  .strict()
+  .meta({ id: 'UpdatePage', description: 'A page of status updates and their named authors.' });
+/** Paginated update result value. */
+export type UpdatePage = z.infer<typeof UpdatePage>;
+
 /** A bounded update section with only the actors referenced by its update rows. */
 export const UpdateFeed = z
   .object({ items: z.array(UpdateOut), authors: z.array(UpdateAuthorReference) })
@@ -114,3 +129,9 @@ export const UpdateRemoved = z
   .meta({ id: 'UpdateRemoved', description: 'A deleted-update acknowledgement.' });
 /** Removal acknowledgement value. */
 export type UpdateRemoved = z.infer<typeof UpdateRemoved>;
+
+/** Composer fields shared by update mutations, with the parent supplied by the page. */
+export type UpdatePostInput = Pick<
+  z.input<typeof UpdateCreate>,
+  'body' | 'health' | 'attachmentIds'
+>;

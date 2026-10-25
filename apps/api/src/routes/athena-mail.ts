@@ -55,7 +55,7 @@ const idParam = z.object({ id: z.string() });
 const attachmentParam = z.object({ id: z.string(), attachmentId: z.string() });
 const listQuery = CursorQuery;
 const attachedQuery = CursorQuery.extend({
-  subjectType: AttachmentSubjectType,
+  subjectType: AttachmentSubjectType.extract(['task', 'project', 'initiative']),
   subjectId: z.string().min(1),
   organizationId: z.string().min(1),
 });

@@ -30,6 +30,7 @@ afterEach(() => {
 function renderPanel(onPost: UpdatesPanelProps['onPost']): void {
   render(
     <UpdatesPanel
+      submissionScope="update:test"
       updates={[]}
       loading={false}
       resolveActor={() => ({ name: 'Grace Hopper', kind: 'human' })}
@@ -56,6 +57,7 @@ describe('UpdatesPanel history', () => {
   it('names the agent who wrote a status report without presenting it as the human author', () => {
     render(
       <UpdatesPanel
+        submissionScope="update:test"
         updates={[
           {
             id: UpdateId.parse('01ARZ3NDEKTSV4RRFFQ69G5FA1'),
@@ -91,6 +93,7 @@ describe('UpdatesPanel history', () => {
     const refetch = vi.fn();
     render(
       <UpdatesPanel
+        submissionScope="update:test"
         updates={[]}
         loading={false}
         loadFailure={{
@@ -122,7 +125,12 @@ describe('UpdatesPanel composer', () => {
     await waitFor(() => {
       expect(draftField().textContent).toBe('');
     });
-    expect(onPost).toHaveBeenCalledWith('Shipped the ingest rewrite.', undefined);
+    expect(onPost).toHaveBeenCalledWith(
+      'Shipped the ingest rewrite.',
+      undefined,
+      [],
+      expect.any(String),
+    );
   });
 
   it('keeps the draft when the post fails, so it can be retried', async () => {

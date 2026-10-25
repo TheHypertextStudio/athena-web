@@ -38,6 +38,33 @@ function fixtureApps(): { readonly app: AppInstance; readonly adminApp: AdminIns
     .get('/v1/config', route('Read configuration', 'Config'), (c) => c.json({ ok: true }))
     .get('/v1/orgs', route('List organizations', 'Orgs'), (c) => c.json({ ok: true }))
     .post('/v1/orgs', route('Create organization', 'Orgs'), (c) => c.json({ ok: true }))
+    .post(
+      '/v1/deliverable-uploads/:sessionId',
+      apiDoc({
+        operationId: 'uploadDeliverableBytesProbe',
+        tag: 'Comments',
+        summary: 'Upload deliverable bytes',
+        narrative: {
+          purpose: 'Test the scoped upload token security requirement.',
+          behavior: ['Accept one file with a valid short-lived upload token.'],
+        },
+        access: { kind: 'capability-token', header: 'X-Docket-Upload-Token' },
+        success: [
+          {
+            kind: 'json',
+            status: 200,
+            schema: z.object({ ok: z.boolean() }),
+            description: 'The upload response.',
+          },
+        ],
+        errors: [],
+        conditionalRead: false,
+        conditionalWrite: false,
+        idempotency: false,
+        related: [],
+      }),
+      (c) => c.json({ ok: true }),
+    )
     .get('/v1/me/account', route('Read account', 'Me'), (c) => c.json({ ok: true }))
     .get(
       '/v1/contract-public',
@@ -99,6 +126,9 @@ function expectSessionAndOAuthAssignments(document: SecurityDocument): void {
   ]);
   expect(document.paths['/v1/orgs']?.['post']?.security).toEqual([{ sessionCookie: [] }]);
   expect(document.paths['/v1/me/account']?.['get']?.security).toEqual([{ sessionCookie: [] }]);
+  expect(document.paths['/v1/deliverable-uploads/{sessionId}']?.['post']?.security).toEqual([
+    { deliverableUploadToken: [] },
+  ]);
 }
 
 function expectPublicAssignments(document: SecurityDocument): void {
@@ -144,6 +174,12 @@ describe('REST OpenAPI authentication contract', () => {
         in: 'header',
         name: 'X-Docket-Share-Token',
         description: expect.stringContaining('shared time status'),
+      },
+      deliverableUploadToken: {
+        type: 'apiKey',
+        in: 'header',
+        name: 'X-Docket-Upload-Token',
+        description: expect.stringContaining('short-lived, upload-only capability'),
       },
     });
     expect(document.components.securitySchemes).not.toHaveProperty('bearerAuth');

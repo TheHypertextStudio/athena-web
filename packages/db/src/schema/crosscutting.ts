@@ -848,15 +848,50 @@ export const attachment = pgTable(
     fileName: text('file_name'),
     mimeType: text('mime_type'),
     byteSize: integer('byte_size'),
+    draftOwnerActorId: text('draft_owner_actor_id'),
+    draftOwnerPerformerKind: text('draft_owner_performer_kind'),
+    draftOwnerPerformerId: text('draft_owner_performer_id'),
+    draftOwnerClientId: text('draft_owner_client_id'),
+    draftExpiresAt: timestamp('draft_expires_at', { withTimezone: true }),
+    draftUploadId: text('draft_upload_id'),
+    draftUploadHash: text('draft_upload_hash'),
     lastEmailStateAction: text('last_email_state_action'),
     lastEmailStateActionAt: timestamp('last_email_state_action_at'),
   },
   (t) => [
     index('attachment_subject_idx').on(t.subjectType, t.subjectId),
+    index('attachment_draft_owner_idx')
+      .on(t.organizationId, t.draftOwnerActorId, t.draftExpiresAt)
+      .where(sql`${t.draftExpiresAt} is not null`),
+    uniqueIndex('attachment_draft_upload_uq')
+      .on(t.organizationId, t.draftUploadId)
+      .where(sql`${t.draftUploadId} is not null`),
+    check(
+      'attachment_draft_owner_check',
+      sql`(${t.subjectType}::text = 'draft' and ${t.draftOwnerActorId} is not null and ${t.draftOwnerPerformerKind} is not null and ${t.draftExpiresAt} is not null) or (${t.subjectType}::text <> 'draft' and ${t.draftOwnerActorId} is null and ${t.draftOwnerPerformerKind} is null and ${t.draftOwnerPerformerId} is null and ${t.draftOwnerClientId} is null and ${t.draftExpiresAt} is null and ${t.draftUploadId} is null and ${t.draftUploadHash} is null)`,
+    ),
+    check(
+      'attachment_draft_upload_check',
+      sql`(${t.subjectType}::text = 'draft' and ((${t.draftUploadId} is null and ${t.draftUploadHash} is null) or (${t.draftUploadId} is not null and ${t.draftUploadHash} is not null))) or (${t.subjectType}::text <> 'draft' and ${t.draftUploadId} is null and ${t.draftUploadHash} is null)`,
+    ),
     uniqueIndex('attachment_source_uq')
       .on(t.sourceIntegrationId, t.externalId)
       .where(sql`${t.kind} = 'email'`),
   ],
+);
+
+/** Retryable deletion work for blobs whose owning attachment or draft was removed. */
+export const attachmentBlobCleanup = pgTable(
+  'attachment_blob_cleanup',
+  {
+    id: text('id').primaryKey(),
+    organizationId: text('organization_id').notNull(),
+    blobKey: text('blob_key').notNull().unique(),
+    attempts: integer('attempts').notNull().default(0),
+    nextAttemptAt: timestamp('next_attempt_at', { withTimezone: true }).notNull().defaultNow(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('attachment_blob_cleanup_due_idx').on(t.nextAttemptAt, t.id)],
 );
 
 /**

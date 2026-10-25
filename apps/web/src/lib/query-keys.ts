@@ -102,6 +102,8 @@ export const queryKeys = {
     ['org', orgId, 'teams', teamId, 'members'] as const,
   teamActivity: (orgId: string, teamId: string) =>
     ['org', orgId, 'teams', teamId, 'activity'] as const,
+  /** Private unclaimed uploads are removed when a post claims them or the owner discards them. */
+  deliverableDrafts: (orgId: string) => ['org', orgId, 'deliverables', 'drafts'] as const,
   // Keyed by subject type: the hub reads one type in bulk and each detail page reads one subject,
   // so the two never share a cache entry and invalidating a type does not disturb the others.
   entityDisplays: (orgId: string, subjectType: string) =>

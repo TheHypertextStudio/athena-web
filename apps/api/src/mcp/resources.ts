@@ -292,7 +292,13 @@ export async function readEntity(
   const actorCtx = await authorizeEntity(ctx, orgId, type, id);
   /* v8 ignore next -- @preserve authorizeEntity rejects an unknown type before this runs */
   if (!isReadableType(type)) throw new NotFoundError();
-  return hydrate(type, orgId, id, await buildTaskViewFilter(orgId, actorCtx.actorId), sink);
+  return hydrate(
+    type,
+    orgId,
+    id,
+    { canViewTask: await buildTaskViewFilter(orgId, actorCtx.actorId), actorId: actorCtx.actorId },
+    sink,
+  );
 }
 
 /**
@@ -313,9 +319,10 @@ async function hydrate(
   type: ReadableType,
   orgId: string,
   id: string,
-  canViewTask: TaskViewFilter,
+  access: { canViewTask: TaskViewFilter; actorId: string },
   sink?: ReadSink,
 ): Promise<unknown> {
+  const { canViewTask, actorId } = access;
   switch (type) {
     case 'org':
       return hydrateOrg(orgId, id);
@@ -332,9 +339,9 @@ async function hydrate(
     case 'team':
       return hydrateTeam(orgId, id);
     case 'update':
-      return hydrateUpdate(orgId, id);
+      return hydrateUpdate(orgId, id, actorId);
     case 'comment':
-      return hydrateComment(orgId, id, canViewTask);
+      return hydrateComment(orgId, id, canViewTask, actorId);
     case 'session':
       return hydrateSession(orgId, id, canViewTask);
     case 'agent':

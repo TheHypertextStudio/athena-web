@@ -13,14 +13,15 @@ import {
   Tabs,
 } from '@docket/ui/primitives';
 import type { AttachmentOut } from '@docket/work/attachment-contract';
-import type { Health } from '@docket/work/capability-contract';
 import type { LabelOut } from '@docket/work/label-contract';
 import type {
   ObjectCommandReceipt,
   ObjectCommandRequest,
   ObjectCommandResult,
 } from '../../../../../../lib/contracts/object-command';
-import type { UpdateOut } from '@docket/work/update-contract';
+import { postUpdateRequest } from '@/lib/update-post';
+import { updateActorResolver } from '@/lib/update-author';
+import type { UpdateOut, UpdatePostInput } from '@docket/work/update-contract';
 import { ProjectSubjectRef } from '@docket/work/subject-ref-contract';
 import type { PickerOption } from '@docket/ui/components';
 import { useVocabulary } from '@docket/ui/hooks';
@@ -193,7 +194,6 @@ export default function ProjectDetailPage(): JSX.Element {
   const aggregateQ = useApiQuery({ ...aggregateDef, enabled: aggregateEnabled });
   const terminalFailure = terminalDetailFailure(aggregateQ.error);
   const aggregate = aggregateQ.data ?? null;
-  const projectLead = aggregate?.references.lead ?? null;
   const initiativeNames =
     aggregate?.references.initiatives.map((initiative) => initiative.name) ?? [];
   const entityDisplay = useEntityDisplay({
@@ -267,6 +267,10 @@ export default function ProjectDetailPage(): JSX.Element {
       'Could not load updates.',
       { enabled: aggregate !== null && (tab === 'overview' || tab === 'updates') },
     ),
+  );
+  const resolveUpdateActor = updateActorResolver(
+    updatesQ.data?.authors,
+    aggregate?.references.lead,
   );
   const resourcesKey = [...aggregateKey, 'resources'] as const;
   const resourcesQ = useApiQuery(
@@ -422,17 +426,9 @@ export default function ProjectDetailPage(): JSX.Element {
       ),
     invalidateKeys: [resourcesKey],
   });
-  const postUpdate = useApiMutation<UpdateOut, { body: string; health?: Health }>({
-    mutationFn: (input) =>
-      unwrap(
-        () =>
-          api.v1.orgs[':orgId'].updates.$post({
-            param: { orgId },
-            json: { ...subject, ...input },
-          }),
-        'Could not post the update.',
-      ),
-    invalidateKeys: [updatesKey, aggregateKey],
+  const postUpdate = useApiMutation<UpdateOut, UpdatePostInput & { requestId?: string }>({
+    mutationFn: (input) => postUpdateRequest(orgId, subject, input),
+    invalidateKeys: [updatesKey, aggregateKey, queryKeys.deliverableDrafts(orgId)],
   });
   const restoreController = useProjectRestoreController({
     scope: { accountId, organizationId: orgId, projectId },
@@ -787,13 +783,7 @@ export default function ProjectDetailPage(): JSX.Element {
             <LatestUpdateSummary
               updates={updatesQ.data?.items ?? []}
               loading={updatesQ.isPending}
-              resolveActor={(actorId) => ({
-                name:
-                  projectLead !== null && projectLead.actorId === actorId
-                    ? projectLead.displayName
-                    : 'Unknown',
-                kind: 'human',
-              })}
+              resolveActor={resolveUpdateActor}
             />
             <TemplateAwareEntityDocument
               orgId={orgId}
@@ -855,20 +845,22 @@ export default function ProjectDetailPage(): JSX.Element {
         render={() => (
           <>
             <UpdatesPanel
+              orgId={orgId}
+              submissionScope={`update:${orgId}:project:${projectId}`}
               updates={updatesQ.data?.items ?? []}
               loading={updatesQ.isPending}
               loadFailure={updatesQ.isError ? updatesQ : null}
-              resolveActor={(actorId) => ({
-                name:
-                  aggregate?.references.lead?.actorId === actorId
-                    ? (aggregate?.references.lead?.displayName ?? 'Unknown')
-                    : 'Unknown',
-                kind: 'human' as const,
-              })}
+              resolveActor={resolveUpdateActor}
               posting={postUpdate.isPending}
-              onPost={async (body) => {
-                await postUpdate.mutateAsync({ body });
-              }}
+              onPost={(body, _health, attachmentIds, requestId) =>
+                postUpdate
+                  .mutateAsync({
+                    body,
+                    ...(attachmentIds ? { attachmentIds } : {}),
+                    ...(requestId ? { requestId } : {}),
+                  })
+                  .then(() => undefined)
+              }
               showHealthComposer={false}
             />
           </>

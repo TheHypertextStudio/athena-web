@@ -317,6 +317,14 @@ const SHARE_TOKEN_SCHEME = {
     'A revocable share token for the public shared time status operation. It is not a browser session or an OAuth access token.',
 };
 
+const DELIVERABLE_UPLOAD_TOKEN_SCHEME = {
+  type: 'apiKey' as const,
+  in: 'header' as const,
+  name: 'X-Docket-Upload-Token',
+  description:
+    'A short-lived, upload-only capability returned by an authenticated agent upload-session tool. It cannot read files or create posts.',
+};
+
 const OPENAPI_METHODS = [
   'get',
   'put',
@@ -341,13 +349,15 @@ function securityForAccess(access: ApiAccess): readonly SecurityRequirement[] {
       return [{ sessionCookie: [] }];
     case 'share-token':
       return [{ shareToken: [] }];
+    case 'capability-token':
+      return [{ deliverableUploadToken: [] }];
   }
 }
 
 function applyRestOperationSecurity(document: PublicDocument, app: AppInstance): PublicDocument {
   const declaredAccess = new Map(
     collectApiOperationContracts(app).map(({ method, path, contract }) => [
-      `${method.toUpperCase()} ${path}`,
+      `${method.toUpperCase()} ${path.replace(/:([^/]+)/gu, '{$1}')}`,
       contract.access,
     ]),
   );
@@ -396,6 +406,7 @@ function buildDocumentation() {
           },
         },
         shareToken: SHARE_TOKEN_SCHEME,
+        deliverableUploadToken: DELIVERABLE_UPLOAD_TOKEN_SCHEME,
       },
     },
     // The post-generation registry pass installs explicit per-operation requirements. This

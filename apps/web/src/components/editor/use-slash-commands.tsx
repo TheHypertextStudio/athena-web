@@ -43,7 +43,7 @@ export interface SlashCommands {
   readonly attach: (editor: Editor | null) => void;
   /** The floating menu, or `null` when no run is open. */
   readonly menu: JSX.Element | null;
-  /** True while the menu is open, so the host can mark the editor `aria-expanded`. */
+  /** True while the menu is open, so the host can connect the editor to its listbox. */
   readonly isOpen: boolean;
   /** Id of the owned listbox, for the host editor's `aria-controls`. */
   readonly listboxId: string;

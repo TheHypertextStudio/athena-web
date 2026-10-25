@@ -15,7 +15,8 @@
  * change when it is not.
  */
 import { OrganizationId } from '@docket/identity-access/ids';
-import { type AttachmentSubjectType } from '@docket/work/attachment-contract';
+import type { AthenaMailAttachBody } from '@docket/athena/athena-mail-contract';
+type MailAttachmentSubject = AthenaMailAttachBody['subjectType'];
 import { type SearchOut } from '../../lib/contracts/search';
 import { Folder, Search as SearchIcon, TaskAlt, Target } from '@docket/ui/icons';
 import {
@@ -47,7 +48,7 @@ import { attachMessage, mailAttachmentsKey, mailListKey, mailMessageKey } from '
 
 /** One thing a received message can be attached to. */
 interface AttachCandidate {
-  readonly subjectType: AttachmentSubjectType;
+  readonly subjectType: MailAttachmentSubject;
   readonly subjectId: string;
   readonly title: string;
 }
@@ -91,7 +92,7 @@ function toCandidates(result: SearchOut | undefined): readonly AttachCandidate[]
     if (seen.has(key)) continue;
     seen.add(key);
     out.push({
-      subjectType: hit.kind as AttachmentSubjectType,
+      subjectType: hit.kind as MailAttachmentSubject,
       subjectId: route.entityId,
       title: hit.title,
     });
@@ -100,14 +101,14 @@ function toCandidates(result: SearchOut | undefined): readonly AttachCandidate[]
 }
 
 /** The leading glyph for each attachable kind. */
-function kindIcon(kind: AttachmentSubjectType): JSX.Element {
+function kindIcon(kind: MailAttachmentSubject): JSX.Element {
   if (kind === 'project') return <Folder aria-hidden="true" className="size-4" />;
   if (kind === 'initiative') return <Target aria-hidden="true" className="size-4" />;
   return <TaskAlt aria-hidden="true" className="size-4" />;
 }
 
 /** Human label for each attachable kind. */
-const KIND_LABEL: Readonly<Record<AttachmentSubjectType, string>> = {
+const KIND_LABEL: Readonly<Record<MailAttachmentSubject, string>> = {
   task: 'Task',
   project: 'Project',
   initiative: 'Initiative',

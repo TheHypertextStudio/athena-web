@@ -1,5 +1,6 @@
 import { withTaskActivityAgentIcons } from './task-activity-icons';
 import { readTaskSessionActivity } from './task-activity-session-source';
+import { withDeliverables } from '../content/deliverables';
 /**
  * `@docket/api` — one chronological Activity projection for a task.
  *
@@ -375,10 +376,26 @@ export const taskActivityRoutes = new Hono<AppEnv>().get(
       taskId: id,
       origin: created?.origin ?? null,
     });
+    const commentFiles = await withDeliverables(
+      orgId,
+      actorId,
+      'comment',
+      items
+        .filter((entry) => entry.type === 'comment')
+        .map((entry) => ({ id: entry.id.slice('comment:'.length) })),
+    );
+    const filesByComment = new Map(
+      commentFiles.map((entry) => [`comment:${entry.id}`, entry.attachments]),
+    );
+    const itemsWithFiles = items.map((entry) =>
+      filesByComment.get(entry.id)
+        ? { ...entry, attachments: filesByComment.get(entry.id) }
+        : entry,
+    );
     const next = after[query.limit];
     const lastItem = items.at(-1);
     return ok(c, pageOf(TaskActivityOut), {
-      items,
+      items: itemsWithFiles,
       ...(next && lastItem ? { nextCursor: encodeActivityCursor(lastItem) } : {}),
     });
   },

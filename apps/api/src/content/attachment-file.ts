@@ -1,6 +1,7 @@
 import { actor, attachment, db, initiative, project, role } from '@docket/db';
 import { and, eq, isNull } from 'drizzle-orm';
 
+import { assertPostVisible } from './post-access';
 import { getContainer } from '../container';
 import { NotFoundError } from '../error';
 import { buildTaskViewFilter, loadTask } from '../routes/task-helpers';
@@ -30,7 +31,10 @@ export async function loadReadableAttachment(
   if (!row || (taskId !== undefined && (row.subjectType !== 'task' || row.subjectId !== taskId))) {
     throw new NotFoundError();
   }
-  if (row.subjectType === 'task') {
+  if (row.subjectType === 'draft') throw new NotFoundError();
+  if (row.subjectType === 'comment' || row.subjectType === 'update') {
+    await assertPostVisible(orgId, actorId, row.subjectType, row.subjectId);
+  } else if (row.subjectType === 'task') {
     const target = await loadTask(orgId, row.subjectId);
     const canView = await buildTaskViewFilter(orgId, actorId);
     if (!canView(target)) throw new NotFoundError();
@@ -44,6 +48,7 @@ async function assertContainerAttachmentVisible(
   row: typeof attachment.$inferSelect,
   actorId: string,
 ): Promise<void> {
+  if (row.subjectType !== 'project' && row.subjectType !== 'initiative') throw new NotFoundError();
   const orgId = row.organizationId;
   const table = row.subjectType === 'project' ? project : initiative;
   const [subject] = await db

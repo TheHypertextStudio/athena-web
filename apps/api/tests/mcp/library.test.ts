@@ -402,3 +402,50 @@ describe('MCP Library', () => {
     await expect(authorizeResourceUri(s.ctx, uri)).rejects.toThrow();
   });
 });
+
+describe('Library deliverables', () => {
+  it('discovers files attached to both comments and updates, and reads their bytes', async () => {
+    const s = await seed();
+    await schema.db.insert(schema.grant).values({
+      organizationId: s.orgId,
+      subjectKind: 'actor',
+      subjectId: s.actorId,
+      resourceKind: 'organization',
+      resourceId: s.orgId,
+      capabilities: ['view'],
+      effect: 'allow',
+      cascades: false,
+    });
+    const client = await connect(s.ctx);
+    for (const kind of ['comment', 'update'] as const) {
+      const [post] = await schema.db
+        .insert(kind === 'comment' ? schema.comment : schema.update)
+        .values({
+          organizationId: s.orgId,
+          createdBy: s.actorId,
+          authorId: s.actorId,
+          subjectType: 'project',
+          subjectId: s.projectId,
+          body: 'Finished work',
+        })
+        .returning({ id: kind === 'comment' ? schema.comment.id : schema.update.id });
+      const postId = assertDefined(post).id;
+      const id = await file(s);
+      await schema.db
+        .update(schema.attachment)
+        .set({ subjectType: kind, subjectId: postId })
+        .where(eq(schema.attachment.id, id));
+      await index('attachment', id);
+      expect((await list(client, { orgId: s.orgId })).items.map((item) => item.id)).toContain(id);
+      const read = await client.readResource({ uri: `docket://${s.orgId}/${kind}/${postId}` });
+      const content = assertDefined(read.contents[0]);
+      expect('text' in content && JSON.parse(content.text)).toMatchObject({
+        attachments: [{ id }],
+      });
+      expect(await get(client, s.orgId, 'attachment', id)).toMatchObject({
+        status: 'ok',
+        resource: { content: { status: 'available' } },
+      });
+    }
+  });
+});

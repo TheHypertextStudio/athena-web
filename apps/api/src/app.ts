@@ -82,6 +82,7 @@ import { createNotificationIntentRoutes } from './routes/notification-intent-rou
 import { createNotificationPreferenceRoutes } from './routes/notification-preferences';
 import oauthClients from './routes/oauth-clients';
 import orgs from './routes/orgs';
+import { deliverableUploadRoutes } from './routes/deliverable-uploads';
 import {
   authoritativeSessionMiddleware,
   replayOwnerSessionMiddleware,
@@ -233,6 +234,7 @@ function verificationAvailability(identity: {
 // Keep the organization island named in the public contract instead of serializing its full
 // nested template/schedule shape into every remaining route. This mounts the same router once.
 app.route('/orgs', orgs);
+app.route('/deliverable-uploads', deliverableUploadRoutes);
 
 /** The remaining chained route tree; each island retains its exact public RPC schema. */
 // eslint-disable-next-line @typescript-eslint/no-unused-vars

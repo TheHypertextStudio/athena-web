@@ -35,6 +35,8 @@
 - **Decisions**: Migration 0180 is hand-written because drizzle snapshots stop at 0170 and a generated diff pulls in unrelated policy changes. The admin router mounts resources, Athena usage and costs through one `adminUsageRoutes` sub-router, which also keeps `createAdminRoutes` under its ledgered length.
 - **Learnings**: Existing metering already separates unmeasured from zero; the ledger keeps that rule.
 
+---
+
 ### [WORK-TEMPLATE-PRODUCTION-20261024] Publish validated work templates
 
 - **Status**: IN_PROGRESS
@@ -13767,6 +13769,55 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
 ---
 
 ## Completed Tasks
+
+### [DELIVERABLE-RECOVERY-UX] Make comment and update deliverables recoverable and previewable
+
+- **Completed**: 2026-10-26
+- **Priority**: P1
+- **Description**: Make human and agent deliverable uploads recoverable across interrupted work, safe to retry after uncertain post responses, reliably clean up stored bytes, and practical to upload and inspect.
+- **Plan**: Add explicit draft ownership and expiry, restore pending drafts to their owner, and sweep expired drafts through a durable blob-cleanup queue. Add atomic idempotency to comment/update posts for REST and MCP. Let agents upload UTF-8 deliverables directly, stream local binary files through short-lived scoped sessions, and discover/recover drafts. Give people per-file upload progress, retry and cancel, recoverable selections, and safe raster image, audio, and video previews. Keep one composer action bar with file and health controls on the left, the post action on the right, and selected files or transfer feedback above it. Resolve update author names from the feed's bounded author references while preserving existing comment/update read boundaries.
+- **Files changed**: Deliverable schema/content/routes/MCP, comment/update mutation routes and callers, cron cleanup, post composers/rendering, author resolver, focused contracts and behavior tests, API documentation, migration history, and this worklog.
+- **Risks**: Retries must replay only after current authorization and must not create duplicate posts; cleanup failures must retain enough durable information for retry; previews must keep active content out of inline execution; interrupted drafts must remain private to the original performer.
+- **Validation**: The focused backend suite passes 132 tests, the final web/editor slice passes 38 tests, and attachment-contract tests pass. Affected package typechecks and lint, API/web production builds, the unchanged complexity ledger and fresh PGlite migration replay pass. Two browser journeys cover updates and task comments, failed-post retry, exact downloads, persistence, named authors, actual image previews, keyboard file selection, per-file failure/cancellation/retry, mobile touch targets and settled-theme accessibility. Thirty-two focused captures cover four composer/file/media surfaces at desktop and three phone sizes in both themes; the craft review is in `docs/design/audits/2026-10-26-deliverable-composers.md`. The dev stack was stopped and seeded database reset.
+- **Decisions and learnings**: Put attachment and submit controls in one shared footer, with file feedback above it. Keep long filenames out of narrow action columns. A multiline textbox uses list autocomplete relationships rather than unsupported expanded state. Reuse the existing bounded capture-animation helper: waiting on every animation includes paused effects and can hang an otherwise healthy browser journey.
+- **Delivery**: Integrate the validated slice directly with linear history. Use the per-commit hosted-CI skip directive under the owner's local-validation instruction and no-hosted-spending policy. Production migration/rollout and external-client acceptance remain separate.
+
+### [DELIVERABLE-ATTACHMENTS] Attach deliverables to updates and comments
+
+- **Completed**: 2026-10-25
+- **Summary**: People can choose and remove files in update and task-comment composers. Agents can upload files, attach their IDs through comment/report_status, list them, and discover/read them through Library and canonical post resources. Posts retain selected files through failures, save all claims atomically, and expose authenticated downloads under current parent access. The limit is ten files per post and 4 MB per file.
+- **Approach and decisions**: Extended existing attachment storage with private drafts and comment/update subjects. Draft ownership includes the authorizing actor and verified performer/client. Claims use a conditional update inside the post transaction; search publication follows commit. Removing a post removes attachment records transactionally and cleans up blobs afterward. Existing email attachment targets remain limited to tasks, projects and initiatives.
+- **Files changed**: Work/comment/update and activity contracts; additive attachment enum migration and snapshot; API content/authorization, routes, MCP and search/Library adapters; shared web file picker, draft hook, comment/update composers and feeds; focused contract, API, MCP, component and browser tests; README and user/agent documentation.
+- **Validation**: Affected API/MCP and contract/component tests pass, including full-size base64, performer ownership, cross-workspace rejection, atomic rollback/retry, private-task access, canonical resource reads, Library discovery, and post/blob deletion. API and web typechecks, affected lint, the unchanged complexity ledger, API runtime build, and web production build pass. The real browser flow uploads, preserves a failed draft, retries, downloads exact bytes, and retains posted files after reload for both updates and task comments. Eight rendered captures cover desktop/phone and light/dark themes. The local stack was stopped and its seeded database reset afterward.
+- **Review and learnings**: Independent review identified and corrected publication before transaction commit and a Library filter that excluded post files. A boundary probe exposed regex stack overflow at 4 MB; bounded canonical base64 decoding replaces it. Shared controllers keep composer behavior consistent without increasing complexity allowances. The subsequent deliverable recovery slice resolves non-lead human and agent author names from bounded feed references.
+- **Verification limits**: Production deployment and hosted acceptance were not requested or performed. The additive migration must precede rollout. Full docs-site validation could not install the private web-docs package because the registry returned HTTP 403; both edited MDX files pass their pinned formatter.
+
+### [CANONICAL-ALIAS-ORIGIN] Route the Athena alias directly to the configured app
+
+- **Completed**: 2026-10-25
+- **Summary**: Resolve legacy Athena redirects to the configured canonical app in both Next and
+  Workers, preserving the full authentication callback path and query without an intermediate host.
+  Slack setup comments now describe the configured API and local tunnel hostname.
+- **Validation**: All 10 affected Next and Workers configuration cases pass, including alternative
+  app origins and preserved OAuth query parameters.
+
+### [WORKTREE-HOST-CASE] Keep worktree hosts consistent with browser URLs
+
+- **Completed**: 2026-10-25
+- **Summary**: Normalize worktree host prefixes to lowercase, including detached HEAD checkouts,
+  so generated origins and the browser agree during authenticated development.
+- **Validation**: The detached/uppercase-host regression fails before the correction; all 47
+  topology tests, typechecking, and affected lint pass afterward.
+
+### [SESSION-ACCEPTANCE-EXPORTS] Preserve the composed session-only acceptance checks
+
+- **Completed**: 2026-10-25
+- **Summary**: Retain the real idempotency module exports while replacing only the middleware
+  observed by the session-only authorization tests. Server route composition remains fully exercised.
+- **Validation**: The missing body-capture export reproduces the current main CI failure. All 60
+  production-composed session-only cases pass with the corrected partial mock.
+- **Learnings**: A focused middleware mock must preserve unrelated real exports consumed by the
+  production server; otherwise the suite fails before reaching its authorization assertions.
 
 ### [CACHE-CONFIG-BOUNDARY] Keep deployment metadata outside application runtime
 

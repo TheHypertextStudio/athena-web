@@ -1,3 +1,5 @@
+import { postUpdateRequest } from './update-post';
+import type { UpdatePostInput } from '@docket/work/update-contract';
 import { ActorId } from '@docket/identity-access/ids';
 import { type Health, type Visibility } from '@docket/work/capability-contract';
 import { type ProgramDetailAggregate } from './contracts/detail-aggregate';
@@ -52,7 +54,12 @@ function toProgramPatchBody(patch: ProgramPatch): ProgramUpdate {
 export interface ProgramMutations {
   patchProgram: (patch: ProgramPatch) => void;
   /** Post an update; the promise settles with the write so the composer can clear only on success. */
-  postUpdate: (body: string, health: Health | undefined) => Promise<void>;
+  postUpdate: (
+    body: string,
+    health: Health | undefined,
+    attachmentIds?: string[],
+    requestId?: string,
+  ) => Promise<void>;
   propsPending: boolean;
   updatePosting: boolean;
 }
@@ -119,19 +126,9 @@ export function useProgramMutations(
   );
 
   const postUpdateM = useApiMutation({
-    mutationFn: ({ body, health }: { body: string; health: Health | undefined }) =>
-      unwrap(
-        () =>
-          api.v1.orgs[':orgId'].updates.$post({
-            param: { orgId },
-            json: {
-              ...subject,
-              body,
-              ...(health ? { health } : {}),
-            },
-          }),
-        'Could not post your update.',
-      ),
+    mutationFn: (input: UpdatePostInput & { requestId?: string }) =>
+      postUpdateRequest(orgId, subject, input),
+    invalidateKeys: [queryKeys.deliverableDrafts(orgId)],
     onSuccess: (_created, { health }) => {
       if (health) patchCachedProgram((cur) => ({ ...cur, health }));
     },
@@ -173,8 +170,13 @@ export function useProgramMutations(
 
   return {
     patchProgram: patch.mutate,
-    postUpdate: async (body, health) => {
-      await postUpdateM.mutateAsync({ body, health });
+    postUpdate: async (body, health, attachmentIds, requestId) => {
+      await postUpdateM.mutateAsync({
+        body,
+        ...(health ? { health } : {}),
+        ...(requestId ? { requestId } : {}),
+        ...(attachmentIds ? { attachmentIds } : {}),
+      });
     },
     propsPending: patch.isPending,
     updatePosting: postUpdateM.isPending,

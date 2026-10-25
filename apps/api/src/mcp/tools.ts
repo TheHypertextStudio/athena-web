@@ -23,6 +23,7 @@ import type { McpContext } from './auth';
 import type { ProvenanceBase } from '../lib/provenance/context';
 import { mcpProvenance } from './provenance';
 import { registerArchiveTool } from './archive-tool';
+import { registerDeliverableTools } from './deliverables';
 import { registerContentTools } from './content-tools';
 import { registerDirectiveTools } from './directive-tools';
 import { registerLabelTools } from './label-tools';
@@ -75,6 +76,7 @@ export function registerTools(
 ): void {
   const server = new ProvenanceRegistrar(registrar, provenance);
   registerContentTools(server, ctx);
+  registerDeliverableTools(server, ctx);
   registerLibraryTools(server, ctx);
   registerAthenaMailTools(server, ctx, sessionId);
   registerSessionTools(server, ctx);

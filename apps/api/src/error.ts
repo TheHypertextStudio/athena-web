@@ -460,6 +460,7 @@ function authenticationChallenge(error: ApiError, context: Context<AppEnv>): str
     return `Bearer realm="docket", resource_metadata="${restResourceMetadataUrl()}", scope="${access.scopes.join(' ')}"`;
   }
   if (access.kind === 'share-token') return 'DocketShareToken realm="docket"';
+  if (access.kind === 'capability-token') return 'DocketUploadToken realm="deliverable-upload"';
   return docketSessionChallenge(error);
 }
 

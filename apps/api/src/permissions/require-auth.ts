@@ -91,6 +91,11 @@ async function enforceOperationAccess(
  */
 export const requireAuth: MiddlewareHandler<AppEnv> = async (c, next) => {
   const access = accessForRequest(c);
+  if (access.kind === 'capability-token') {
+    if (!c.req.header(access.header)) throw new AuthError();
+    await next();
+    return;
+  }
   const principal = await operationPrincipal(c);
   c.set('principal', principal);
 

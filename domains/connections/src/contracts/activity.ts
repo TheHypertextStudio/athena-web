@@ -1,3 +1,4 @@
+import { DeliverableOut } from '@docket/work/attachment-contract';
 /**
  * `domain packages` — Activity (audit-feed) slice DTOs.
  *
@@ -204,6 +205,7 @@ export type TaskActivitySession = z.infer<typeof TaskActivitySession>;
  */
 export const TaskActivityOut = z
   .object({
+    attachments: z.array(DeliverableOut).optional(),
     id: z
       .string()
       .describe(

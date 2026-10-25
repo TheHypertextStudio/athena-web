@@ -357,3 +357,35 @@ resource after the signal because Docket does not replay a notification stream.
 The server also advertises `resources.listChanged`, `prompts.listChanged`, completions, and logging.
 Experimental MCP task support depends on the deployment configuration and is not a public REST API
 capability.
+
+## Deliverables on comments and updates
+
+For a file already on the agent's machine, call `create_deliverable_upload_session` with `orgId`,
+`fileName`, and its `mimeType`. Then stream the local bytes with an ordinary multipart HTTP request:
+
+```sh
+curl --fail-with-body --request POST "$UPLOAD_URL" \
+  --header "X-Docket-Upload-Token: $UPLOAD_TOKEN" \
+  --form "file=@/path/to/report.pdf"
+```
+
+Use `uploadUrl` and `uploadToken` from the tool result. The token can upload only that file and
+expires after 15 minutes; retry with the same bytes if the HTTP response is uncertain. The upload
+response includes a private draft `id`, display metadata, and an authenticated download URL. This
+streams files directly without putting binary data in an MCP JSON argument.
+
+When the agent runtime cannot make a separate HTTP request, use `upload_deliverable` instead. Pass
+generated text through `textContent` (UTF-8) or binary bytes as canonical `base64`; files are limited
+to 4 MB. The server cannot read a local path from an MCP tool call.
+
+Pass up to ten returned IDs in `attachmentIds` when calling `comment` or `report_status`. A comment
+can be on a task, project, program, or initiative, including a reply. Status updates belong to a
+project, program, or initiative. Uploads remain private until the post and all its attachments are
+saved together. Only the same performer under the same workspace authority can claim them; an
+attached file cannot be moved to another post. Reuse the upload IDs if posting fails.
+
+Use `list_deliverables` with `orgId`, `subjectType` (`comment` or `update`), and `subjectId` to read a
+post's files. Posted files also appear in Library discovery. Pass their IDs to `get_resources` with
+`kind: "attachment"` and read bytes through the returned content URI. Every read checks current
+access to the parent work, including private tasks. `discard_deliverable` removes an unused upload
+owned by the caller. Deleting a post removes its attached files.

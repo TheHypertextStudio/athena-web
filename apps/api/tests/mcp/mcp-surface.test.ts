@@ -18,7 +18,7 @@ import '../support/auth-mock';
 import { getMigratedDb } from '../support/db';
 import { assertDefined } from '@docket/test-utils';
 import { defaultCycleName } from '@docket/work/cycle-contract';
-import { seedMcpSurfaceOrg } from './mcp-surface-fixtures';
+import { seedMcpSurfaceOrg, seedMcpPostFiles, expectMcpPostFiles } from './mcp-surface-fixtures';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -1387,6 +1387,7 @@ describe('hydrated resources', () => {
         createdBy: s.actorId,
       })
       .returning({ id: schema.comment.id });
+    await seedMcpPostFiles(db, schema, s, upd, cmt);
     const [sess] = await db
       .insert(schema.agentSession)
       .values({
@@ -1478,12 +1479,7 @@ describe('hydrated resources', () => {
 
     // Entity cards lead with people and work the reader can recognise. Never make a widget turn an
     // opaque actor or task id into its own fallback copy just because the resource omitted context.
-    const updateRes = await client.readResource({
-      uri: `docket://${s.orgId}/update/${assertDefined(upd).id}`,
-    });
-    expect(readJson(updateRes.contents)['author']).toEqual(
-      expect.objectContaining({ id: s.actorId, displayName: 'Ada' }),
-    );
+    await expectMcpPostFiles(client, s, upd, cmt, readJson);
     const sessionRes = await client.readResource({
       uri: `docket://${s.orgId}/session/${assertDefined(sess).id}`,
     });

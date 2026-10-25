@@ -15,7 +15,14 @@ import { AttachmentId } from '../ids';
 import { OrganizationId } from '@docket/identity-access/ids';
 
 /** The polymorphic subject kinds an Attachment can attach to. */
-export const AttachmentSubjectType = z.enum(['task', 'initiative', 'project']);
+export const AttachmentSubjectType = z.enum([
+  'task',
+  'initiative',
+  'project',
+  'draft',
+  'comment',
+  'update',
+]);
 /** Attachment subject-type value. */
 export type AttachmentSubjectType = z.infer<typeof AttachmentSubjectType>;
 
@@ -162,3 +169,48 @@ export const AttachmentRemoved = z
   .meta({ id: 'AttachmentRemoved', description: 'A removed-attachment acknowledgement.' });
 /** Removal acknowledgement value. */
 export type AttachmentRemoved = z.infer<typeof AttachmentRemoved>;
+
+/** Uploaded file IDs claimed atomically when a comment or update is posted. */
+export const DeliverableIds = z
+  .array(AttachmentId)
+  .max(10)
+  .refine((ids) => new Set(ids).size === ids.length, { message: 'Choose each file only once.' })
+  .optional()
+  .describe(
+    'Up to ten private upload IDs returned by upload_deliverable. Files must belong to the current performer and may be attached only once.',
+  );
+
+/** Safe metadata and an authenticated download URL for one deliverable. */
+export const DeliverableOut = z.object({
+  id: AttachmentId,
+  title: z.string(),
+  fileName: z.string(),
+  mimeType: z.string(),
+  byteSize: z.number().int(),
+  downloadUrl: z.string(),
+  previewUrl: z.string().min(1).optional(),
+});
+/** A file selected for, or attached to, a comment or update. */
+export type DeliverableOut = z.infer<typeof DeliverableOut>;
+
+/** A recoverable private upload owned by the current performer and expiring automatically. */
+export const DeliverableDraftOut = DeliverableOut.extend({
+  expiresAt: z.iso.datetime(),
+}).meta({ id: 'DeliverableDraftOut', description: 'A private upload awaiting attachment.' });
+/** Recoverable private upload value. */
+export type DeliverableDraftOut = z.infer<typeof DeliverableDraftOut>;
+
+/** Short-lived capability for streaming one private draft file from an agent workspace. */
+export const DeliverableUploadSessionOut = z
+  .object({
+    uploadUrl: z.url(),
+    uploadToken: z.string().min(32),
+    fileName: z.string().min(1),
+    expiresAt: z.iso.datetime(),
+  })
+  .meta({
+    id: 'DeliverableUploadSessionOut',
+    description: 'A short-lived token and URL for one scoped multipart upload.',
+  });
+/** Upload capability returned by the agent session creation tool. */
+export type DeliverableUploadSessionOut = z.infer<typeof DeliverableUploadSessionOut>;

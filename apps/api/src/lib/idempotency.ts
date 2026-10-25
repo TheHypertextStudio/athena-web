@@ -546,7 +546,9 @@ export const idempotency: MiddlewareHandler<AppEnv> = async (c, next) => {
   // This legacy route claims its receipt only after workspace and capability checks.
   if (
     c.req.method === 'POST' &&
-    /^\/v1\/orgs\/[^/]+\/(?:recurrence-series|process-definitions\/from-project)\/?$/u.test(path)
+    /^\/v1\/orgs\/[^/]+\/(?:comments|updates|recurrence-series|process-definitions\/from-project)\/?$/u.test(
+      path,
+    )
   )
     return next();
   return idempotencyFor(false)(c, next);

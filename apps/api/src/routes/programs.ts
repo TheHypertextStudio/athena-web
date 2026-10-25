@@ -1,3 +1,4 @@
+import { withDeliverables } from '../content/deliverables';
 import { originFor } from '../lib/provenance/context';
 import { createWork } from '../lib/work-creation/service';
 import { deleteProgramPreservingScheduleHistory } from '../lib/program-removal';
@@ -504,7 +505,7 @@ const programs = new Hono<AppEnv>()
     }),
     zParam(idParam),
     async (c) => {
-      const { orgId } = c.get('actorCtx');
+      const { orgId, actorId } = c.get('actorCtx');
       const { id } = c.req.valid('param');
       await loadProgram(orgId, id);
 
@@ -537,17 +538,22 @@ const programs = new Hono<AppEnv>()
               .where(and(eq(actor.organizationId, orgId), inArray(actor.id, authorIds)));
 
       return ok(c, UpdateFeed, {
-        items: rows.map((u) => ({
-          id: u.id,
-          organizationId: u.organizationId,
-          authorId: u.authorId,
-          origin: contentOrigin(u.origin),
-          subjectType: u.subjectType,
-          subjectId: u.subjectId,
-          health: u.health,
-          body: u.body,
-          createdAt: u.createdAt.toISOString(),
-        })),
+        items: await withDeliverables(
+          orgId,
+          actorId,
+          'update',
+          rows.map((u) => ({
+            id: u.id,
+            organizationId: u.organizationId,
+            authorId: u.authorId,
+            origin: contentOrigin(u.origin),
+            subjectType: u.subjectType,
+            subjectId: u.subjectId,
+            health: u.health,
+            body: u.body,
+            createdAt: u.createdAt.toISOString(),
+          })),
+        ),
         authors,
       });
     },

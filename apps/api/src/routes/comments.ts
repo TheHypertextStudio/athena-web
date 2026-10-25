@@ -24,8 +24,21 @@ import { Hono } from 'hono';
 import type { MiddlewareHandler } from 'hono';
 import { z } from 'zod';
 
+import {
+  claimDeliverables,
+  indexDeliverables,
+  withDeliverables,
+  withPostDeliverables,
+  removePostDeliverables,
+  cleanupPostDeliverables,
+} from '../content/deliverables';
 import type { AppEnv } from '../context';
 import { CapabilityError, NotFoundError, ValidationError } from '../error';
+import {
+  completeIdempotencyInTransaction,
+  captureIdempotencyBody,
+  idempotencyFor,
+} from '../lib/idempotency';
 import { created, ok } from '../lib/ok';
 import {
   authoredContent,
@@ -81,6 +94,27 @@ async function loadComment(orgId: string, id: string): Promise<CommentRow> {
   const row = rows[0];
   if (!row) throw new NotFoundError('Comment not found');
   return row;
+}
+
+/** Reapply idempotent comment projections after a fresh write or an uncertain-response replay. */
+async function projectCommentWrite(
+  orgId: string,
+  row: CommentRow,
+  attachmentIds: readonly string[] = [],
+): Promise<void> {
+  await indexDeliverables(orgId, attachmentIds);
+  await emitEvent({
+    organizationId: orgId,
+    kind: 'comment',
+    occurredAt: row.createdAt,
+    dedupeToken: row.id,
+    actorId: row.authorId,
+    actorRef: contentEventActor(row.origin),
+    title: row.body,
+    summary: row.body,
+    subject: { type: row.subjectType, id: row.subjectId },
+  });
+  await enqueueSearchUpsert(orgId, 'comment', row.id);
 }
 
 /**
@@ -216,7 +250,11 @@ const comments = new Hono<AppEnv>()
       return ok(
         c,
         pageOf(CommentOut),
-        pageResult(rows.map(toOut), limit, (item) => new Date(item.createdAt)),
+        pageResult(
+          await withDeliverables(orgId, actorId, 'comment', rows.map(toOut)),
+          limit,
+          (item) => new Date(item.createdAt),
+        ),
       );
     },
   )
@@ -230,9 +268,73 @@ const comments = new Hono<AppEnv>()
       response: CommentOut,
       description: `Post a comment on a subject. Task comments require \`contribute\` on the current task; non-task comments retain the \`comment\` capability, distinctly lower than \`contribute\`. The verified request origin identifies the performer. A connected agent without its own Actor has a null authorId and an agent origin; the authorizing human is retained separately.
 
-Threading is single-level. Omit \`parentCommentId\` for a root comment; supply it to reply. A reply's parent must be an existing comment in the SAME org on the SAME subject (else 422), and the parent must itself be a root comment — replying to a reply is rejected (422), keeping the thread a strict two-level tree. Side effect: emits a \`comment\` observation onto the subject so its owners/followers are notified. Returns the created {@link CommentOut}.`,
+Threading is single-level. Omit \`parentCommentId\` for a root comment; supply it to reply. A reply's parent must be an existing comment in the SAME org on the SAME subject (else 422), and the parent must itself be a root comment — replying to a reply is rejected (422), keeping the thread a strict two-level tree. Side effect: emits a \`comment\` observation onto the subject so its owners/followers are notified. Returns the created {@link CommentOut}. An optional \`Idempotency-Key\` is retained for 48 hours; reuse it with the identical request after an uncertain response to recover the original comment.`,
+      extra: {
+        'x-docket-idempotency': 'atomic-receipt',
+        parameters: [
+          {
+            name: 'Idempotency-Key',
+            in: 'header',
+            required: false,
+            description:
+              'Reuse the same key and identical request after an uncertain result; retained for 48 hours.',
+            schema: { type: 'string', minLength: 1 },
+          },
+        ],
+      },
     }),
+    captureIdempotencyBody,
     zJson(CommentCreate),
+    async (c, next) => {
+      const { orgId, actorId, capabilities } = c.get('actorCtx');
+      const body = c.req.valid('json');
+      if (body.subjectType === 'task')
+        await assertTaskCommentContribution(orgId, actorId, body.subjectId);
+      else assertCommentCapability(capabilities as Capability[]);
+      if (body.parentCommentId !== undefined) {
+        const parent = await loadComment(orgId, body.parentCommentId);
+        if (parent.subjectType !== body.subjectType || parent.subjectId !== body.subjectId)
+          throw new ValidationError(
+            new z.ZodError([
+              {
+                code: 'custom',
+                path: ['parentCommentId'],
+                message: 'Parent comment is on a different subject',
+                input: body.parentCommentId,
+              },
+            ]),
+          );
+        if (parent.parentCommentId !== null)
+          throw new ValidationError(
+            new z.ZodError([
+              {
+                code: 'custom',
+                path: ['parentCommentId'],
+                message: 'Cannot reply to a reply; replies are single-level',
+                input: body.parentCommentId,
+              },
+            ]),
+          );
+      }
+      await assertSharedWorkWritable(orgId, c.get('actorCtx').isPersonal);
+      await next();
+    },
+    async (c, next) => {
+      await next();
+      if (c.res.headers.get('Idempotency-Replayed') !== 'true') return;
+      const { orgId, actorId } = c.get('actorCtx');
+      const body = CommentOut.parse(await c.res.clone().json());
+      const request = c.req.valid('json');
+      const row = await loadComment(orgId, body.id);
+      if (row.subjectType === 'task') await assertTaskCommentVisible(orgId, actorId, row.subjectId);
+      await projectCommentWrite(orgId, row, request.attachmentIds);
+      return created(
+        c,
+        CommentOut,
+        await withPostDeliverables(orgId, actorId, 'comment', toOut(row)),
+      );
+    },
+    idempotencyFor('atomic-receipt'),
     async (c) => {
       const { orgId, actorId, capabilities } = c.get('actorCtx');
       const body = c.req.valid('json');
@@ -276,34 +378,48 @@ Threading is single-level. Omit \`parentCommentId\` for a root comment; supply i
         }
       }
 
-      const inserted = await db
-        .insert(comment)
-        .values({
-          organizationId: orgId,
-          ...authoredContent(actorId, 'comment'),
-          subjectType: body.subjectType,
-          subjectId: body.subjectId,
-          body: body.body,
-          parentCommentId: body.parentCommentId,
-          createdBy: actorId,
-        })
-        .returning();
-      const row = inserted[0];
-      /* v8 ignore next -- @preserve defensive: insert/update always returns a row */
-      if (!row) throw new Error('comment insert returned no row');
+      const claim = c.get('idempotencyClaim');
+      const row = await db.transaction(async (tx) => {
+        const inserted = await tx
+          .insert(comment)
+          .values({
+            organizationId: orgId,
+            ...authoredContent(actorId, 'comment'),
+            subjectType: body.subjectType,
+            subjectId: body.subjectId,
+            body: body.body,
+            parentCommentId: body.parentCommentId,
+            createdBy: actorId,
+          })
+          .returning();
+        const row = inserted[0];
+        /* v8 ignore next -- @preserve defensive: insert/update always returns a row */
+        if (!row) throw new Error('comment insert returned no row');
 
-      // Stream: a comment surfaces to the commented subject's owners/followers.
-      await emitEvent({
-        organizationId: orgId,
-        kind: 'comment',
-        actorId: row.authorId,
-        actorRef: contentEventActor(row.origin),
-        title: row.body,
-        summary: row.body,
-        subject: { type: row.subjectType, id: row.subjectId },
+        await claimDeliverables(
+          tx,
+          orgId,
+          actorId,
+          { kind: 'comment', id: row.id },
+          body.attachmentIds,
+        );
+        if (claim)
+          await completeIdempotencyInTransaction(tx, claim, {
+            organizationId: orgId,
+            responseStatus: 201,
+            responseBody: toOut(row),
+            responseHeaders: { 'content-type': 'application/json' },
+          });
+        return row;
       });
-      await enqueueSearchUpsert(orgId, 'comment', row.id);
-      return created(c, CommentOut, toOut(row));
+      if (claim) c.set('idempotencyCompleted', true);
+
+      await projectCommentWrite(orgId, row, body.attachmentIds);
+      return created(
+        c,
+        CommentOut,
+        await withPostDeliverables(orgId, actorId, 'comment', toOut(row)),
+      );
     },
   )
   .get(
@@ -322,7 +438,7 @@ Threading is single-level. Omit \`parentCommentId\` for a root comment; supply i
       if (row.subjectType === 'task') {
         await assertTaskCommentVisible(orgId, actorId, row.subjectId);
       }
-      return ok(c, CommentOut, toOut(row));
+      return ok(c, CommentOut, await withPostDeliverables(orgId, actorId, 'comment', toOut(row)));
     },
   )
   .patch(
@@ -366,7 +482,7 @@ Threading is single-level. Omit \`parentCommentId\` for a root comment; supply i
       /* v8 ignore next -- @preserve defensive: loadComment already proved the row exists */
       if (!row) throw new NotFoundError('Comment not found');
       await enqueueSearchUpsert(orgId, 'comment', row.id);
-      return ok(c, CommentOut, toOut(row));
+      return ok(c, CommentOut, await withPostDeliverables(orgId, actorId, 'comment', toOut(row)));
     },
   )
   .delete(
@@ -408,12 +524,13 @@ Replies to a deleted root comment become root comments, so the discussion remain
           .delete(comment)
           .where(and(eq(comment.id, id), eq(comment.organizationId, orgId)))
           .returning();
-        return deleted[0];
+        return { row: deleted[0], files: await removePostDeliverables(tx, orgId, 'comment', id) };
       });
       /* v8 ignore next -- @preserve defensive: loadComment already proved the row exists */
-      if (!removed) throw new NotFoundError('Comment not found');
-      await enqueueSearchDelete(orgId, 'comment', removed.id);
-      return ok(c, CommentRemoved, { id: removed.id, removed: true });
+      if (!removed.row) throw new NotFoundError('Comment not found');
+      await cleanupPostDeliverables(orgId, removed.files);
+      await enqueueSearchDelete(orgId, 'comment', removed.row.id);
+      return ok(c, CommentRemoved, { id: removed.row.id, removed: true });
     },
   );
 

@@ -237,6 +237,8 @@ function accessDescription(contract: ApiOperationContract): string {
       return `A first-party Docket session or an OAuth access token with ${contract.access.scopes.map((scope) => `\`${scope}\``).join(', ')} is required.`;
     case 'share-token':
       return `A valid \`${contract.access.header}\` share token is required.`;
+    case 'capability-token':
+      return `A valid, short-lived \`${contract.access.header}\` upload token is required.`;
   }
 }
 

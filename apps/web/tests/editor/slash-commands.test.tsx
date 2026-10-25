@@ -177,11 +177,14 @@ describe('the slash insert menu', () => {
     );
     const first = await screen.findByRole('textbox', { name: 'First description' });
     const second = await screen.findByRole('textbox', { name: 'Second description' });
+    expect(first).not.toHaveAttribute('aria-expanded');
+    expect(first).toHaveAttribute('aria-autocomplete', 'list');
 
     await user.click(first);
     await user.keyboard('/');
     const firstMenu = await screen.findByRole('listbox', { name: 'Insert a block' });
     await waitFor(() => expect(first).toHaveAttribute('aria-controls', firstMenu.id));
+    expect(first).not.toHaveAttribute('aria-expanded');
     const firstListboxId = first.getAttribute('aria-controls');
     const firstActiveId = first.getAttribute('aria-activedescendant');
     const firstListbox = firstListboxId === null ? null : document.getElementById(firstListboxId);

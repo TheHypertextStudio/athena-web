@@ -281,3 +281,16 @@ for client coordination and device-bound recovery after interrupted credential p
 `view_workload` opens a read-only daily workload App in an MCP Apps-capable host, with plans,
 tracked utilization, capacity assumptions, and project/task/priority breakdowns. Its text and JSON
 results also work in hosts without embedded Apps. See [calculation rules and local verification](docs/engineering/specs/daily-workload.md).
+
+## Deliverables on comments and updates
+
+People can attach up to ten files (4 MB each) when posting updates and task comments. Agents can
+stream local files through a short-lived upload session, or use `upload_deliverable` with UTF-8
+`textContent` for generated text and canonical `base64` when direct HTTP upload is unavailable. Pass
+returned file IDs as `attachmentIds` to `comment` or `report_status`.
+`list_my_deliverable_drafts` recovers private uploads for seven days after an interruption; optional
+`requestId` values make comment and update retries safe for 48 hours. Images, audio, and video have
+authenticated inline previews. Uploads stay private until the post commits; downloads inherit the
+parent work's access. See
+[updates and attachments](apps/docs/guides/concepts/updates-and-health.mdx) and the
+[MCP workflow](apps/docs/developers/mcp-tools-and-resources.mdx).

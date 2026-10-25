@@ -1,3 +1,5 @@
+import { postSubject } from '../../content/post-access';
+import { NotFoundError } from '../../error';
 import { markdownToPlainText } from '../../content/markdown-links';
 import { baseRankFor } from '../rank';
 import { contentRoute } from '../routes';
@@ -125,23 +127,35 @@ export const attachmentSearchProjector = preloadedProjector<
     mimeType?: string | null | undefined;
     byteSize?: number | null | undefined;
   }
->('attachment', (row) => ({
-  ...contentDocument(row, 'attachment', row.title, row.subjectType, row.subjectId, {
-    summary: row.url ?? row.kind,
-    body: row.url,
-    externalUrl: row.url ?? null,
-    facet: {
-      attachmentKind: row.kind,
-      sourceIntegrationId: row.sourceIntegrationId,
-      externalId: row.externalId,
-      metadata: row.metadata,
-      fileName: row.fileName,
-      mimeType: row.mimeType,
-      byteSize: row.byteSize,
-    },
-  }),
-  sourceTable: 'attachment',
-}));
+>('attachment', async (row) => {
+  if (row.subjectType === 'draft') return null;
+  let parent = { kind: row.subjectType, id: row.subjectId };
+  if (row.subjectType === 'comment' || row.subjectType === 'update') {
+    try {
+      parent = await postSubject(row.organizationId, row.subjectType, row.subjectId);
+    } catch (error) {
+      if (error instanceof NotFoundError) return null;
+      throw error;
+    }
+  }
+  return {
+    ...contentDocument(row, 'attachment', row.title, parent.kind, parent.id, {
+      summary: row.url ?? row.kind,
+      body: row.url,
+      externalUrl: row.url ?? null,
+      facet: {
+        attachmentKind: row.kind,
+        sourceIntegrationId: row.sourceIntegrationId,
+        externalId: row.externalId,
+        metadata: row.metadata,
+        fileName: row.fileName,
+        mimeType: row.mimeType,
+        byteSize: row.byteSize,
+      },
+    }),
+    sourceTable: 'attachment',
+  };
+});
 
 /** Search projectors registered for content-family documents. */
 export const contentSearchProjectors = [

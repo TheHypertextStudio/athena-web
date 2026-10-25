@@ -2,6 +2,7 @@
  * `domain packages` — Comment slice DTOs.
  */
 import { z } from 'zod';
+import { DeliverableIds, DeliverableOut } from './attachment';
 
 import {
   CycleSubjectRef,
@@ -30,6 +31,7 @@ export type CommentListQuery = z.infer<typeof CommentListQuery>;
 
 /** Body for creating a Comment (authorId comes from the actor context, never the body). */
 const commentCreateFields = {
+  attachmentIds: DeliverableIds,
   body: z.string().min(1).describe('Comment text (markdown). Required, non-empty.'),
   parentCommentId: CommentId.optional().describe(
     'Set to reply to an existing comment. The parent must be a ROOT comment on the SAME subject and org — replies are single-level (no replies to replies). Omit for a root comment.',
@@ -66,6 +68,7 @@ export type CommentUpdate = z.infer<typeof CommentUpdate>;
 /** Full comment representation returned by reads. */
 export const CommentOut = z
   .object({
+    attachments: z.array(DeliverableOut).optional().describe('Files attached to this post.'),
     id: CommentId.describe('Opaque comment id.'),
     organizationId: OrganizationId.describe('Owning org id (the tenant key).'),
     authorId: ActorId.nullable()

@@ -21,6 +21,44 @@ function sessionPrincipal(userId: string) {
 }
 
 describe('idempotency authorization boundary', () => {
+  it.each(['comments', 'updates'])(
+    'lets %s enforce authorization before its declared retry handler',
+    async (resource) => {
+      const principal = sessionPrincipal(`content-boundary-${crypto.randomUUID()}`);
+      const app = new Hono<AppEnv>();
+      const path = `/v1/orgs/org-1/${resource}`;
+      let authorized = false;
+      let calls = 0;
+      app.use('*', async (c, next) => {
+        c.set('principal', principal);
+        c.set('session', { user: principal.user, session: principal.session });
+        await next();
+      });
+      app.use('*', idempotency);
+      app.post(
+        path,
+        async (_c, next) => {
+          if (!authorized) throw new CapabilityError();
+          await next();
+        },
+        idempotencyFor('json-receipt'),
+        (c) => c.json({ call: ++calls }, 201),
+      );
+      app.onError(onError);
+      const request = () =>
+        app.request(path, {
+          method: 'POST',
+          headers: { ...JSON_HEADERS, 'Idempotency-Key': crypto.randomUUID() },
+          body: '{}',
+        });
+      expect((await request()).status).toBe(403);
+      expect(calls).toBe(0);
+      authorized = true;
+      expect((await request()).status).toBe(201);
+      expect(calls).toBe(1);
+    },
+  );
+
   it('rejects a key on an undeclared legacy operation before its handler executes', async () => {
     const principal = sessionPrincipal(`receipt-legacy-undeclared-${crypto.randomUUID()}`);
     const app = new Hono<AppEnv>();

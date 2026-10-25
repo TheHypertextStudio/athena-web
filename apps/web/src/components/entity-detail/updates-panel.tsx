@@ -16,6 +16,8 @@
  * Loading uses {@link Skeleton} rows; the empty state invites the first post; a failed load
  * renders a {@link QueryLoadFailure} panel in place of the history.
  */
+import type { DeliverableOut } from '@docket/work/attachment-contract';
+import { DeliverableList, DeliverablePicker } from './deliverables';
 import type { Health } from '@docket/work/capability-contract';
 import type { UpdateOut } from '@docket/work/update-contract';
 import { cn, relativeTime } from '@docket/ui';
@@ -29,6 +31,7 @@ import {
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
   Skeleton,
+  Surface,
 } from '@docket/ui/primitives';
 import type { JSX } from 'react';
 import { useRef, useState } from 'react';
@@ -39,6 +42,7 @@ import { FreeformTextEditor } from '@/components/editor/freeform-text';
 import { StaticMarkdown } from '@/components/editor/static-markdown';
 import { QueryLoadFailure, type QueryFailureSource } from '@/components/feedback';
 import { contentAuthor } from './content-author';
+import { clearContentPostRequestKey, contentPostRequestKey } from '@/lib/content-post-retry';
 
 /** Resolve an actor id to a display name + kind (passed by the caller). */
 export type ResolveActor = (actorId: string | null | undefined) => {
@@ -64,6 +68,10 @@ function choiceLabel(choice: HealthChoice): string {
 
 /** Props for {@link UpdatesPanel}. */
 export interface UpdatesPanelProps {
+  /** Workspace owning this post; defaults to the active workspace. */
+  orgId?: string | undefined;
+  /** Stable identity for retry keys; includes the update's organization and subject. */
+  submissionScope: string;
   /** The program's updates, newest-first. */
   updates: readonly UpdateOut[];
   /** Whether the updates are still loading. */
@@ -82,7 +90,12 @@ export interface UpdatesPanelProps {
    * and preserve the draft on failure. The write's own mutation presents a rejection as a notice;
    * the panel swallows it rather than re-reporting.
    */
-  onPost: (body: string, health: Health | undefined) => Promise<void>;
+  onPost: (
+    body: string,
+    health: Health | undefined,
+    attachmentIds?: string[],
+    requestId?: string,
+  ) => Promise<void>;
   /**
    * Show the "Set health" composer control. Defaults to `true`; pass `false` on surfaces where
    * health is not update-driven (e.g. Project) so the composer posts a plain update.
@@ -97,6 +110,8 @@ export interface UpdatesPanelProps {
  * @returns the rendered panel.
  */
 export function UpdatesPanel({
+  orgId,
+  submissionScope,
   updates,
   loading,
   loadFailure = null,
@@ -106,9 +121,12 @@ export function UpdatesPanel({
   showHealthComposer = true,
 }: UpdatesPanelProps): JSX.Element {
   const [body, setBody] = useState('');
+  const [files, setFiles] = useState<DeliverableOut[]>([]);
+  const [filesBusy, setFilesBusy] = useState(false);
   const bodyRef = useRef('');
   const [composerKey, setComposerKey] = useState(0);
-  const activeOrgId = useActiveOrgIdOptional();
+  const contextOrgId = useActiveOrgIdOptional();
+  const activeOrgId = orgId ?? contextOrgId;
   const [health, setHealth] = useState<HealthChoice>('');
 
   /**
@@ -120,19 +138,35 @@ export function UpdatesPanel({
    */
   async function submit(): Promise<void> {
     const trimmed = bodyRef.current.trim();
-    if (trimmed.length === 0 || posting) return;
+    if (trimmed.length === 0 || posting || filesBusy) return;
     try {
-      await onPost(trimmed, health === '' ? undefined : health);
+      const payload = {
+        body: trimmed,
+        health: health === '' ? undefined : health,
+        attachmentIds: files.map((file) => file.id),
+      };
+      const requestId = await contentPostRequestKey(submissionScope, payload);
+      await onPost(payload.body, payload.health, payload.attachmentIds, requestId);
+      await clearContentPostRequestKey(submissionScope, payload, requestId);
     } catch {
       // The parent's mutation presents the failure as a notice; keep the draft to retry.
       return;
     }
     bodyRef.current = '';
     setBody('');
+    setFiles([]);
     setComposerKey((current) => current + 1);
     setHealth('');
   }
 
+  const healthAction = showHealthComposer ? (
+    <UpdateHealthPicker health={health} onChange={setHealth} />
+  ) : null;
+  const submitAction = (
+    <Button type="submit" size="sm" disabled={posting || filesBusy || body.trim().length === 0}>
+      {posting ? 'Posting…' : 'Post update'}
+    </Button>
+  );
   return (
     <div className="flex flex-col gap-6">
       <form
@@ -140,81 +174,121 @@ export function UpdatesPanel({
           event.preventDefault();
           void submit();
         }}
-        className="bg-surface-container-low flex flex-col gap-3 rounded-xl p-4"
       >
-        <p className="text-on-surface text-label-large">Post an update</p>
-        <FreeformTextEditor
-          key={composerKey}
-          value={body}
-          onChange={(next) => {
-            bodyRef.current = next;
-            setBody(next);
-          }}
-          {...(activeOrgId === null ? {} : { mentionOrgId: activeOrgId })}
-          ariaLabel="Post an update"
-          placeholder="Share how this line of work is flowing — wins, risks, or what changed…"
-          className="bg-surface-container-high hover:bg-surface-container-highest min-h-20 rounded-lg p-3 transition-colors"
-          disabled={posting}
-          onSubmit={() => {
-            void submit();
-          }}
-        />
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          {showHealthComposer ? (
-            <div className="flex items-center gap-2">
-              <span className="text-on-surface-variant text-body-medium">Set health</span>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="secondary" size="sm" className="gap-1.5">
-                    {health !== '' ? (
-                      <span
-                        aria-hidden="true"
-                        className={cn('size-1.5 rounded-full', HEALTH_FILL_CLASS[health])}
-                      />
-                    ) : null}
-                    <span>{choiceLabel(health)}</span>
-                    <ChevronDown className="h-4 w-4 opacity-60" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" width="sm">
-                  <DropdownMenuRadioGroup
-                    value={health}
-                    onValueChange={(next) => {
-                      setHealth(next as HealthChoice);
-                    }}
-                  >
-                    {HEALTH_OPTIONS.map((option) => (
-                      <DropdownMenuRadioItem key={option.value || 'none'} value={option.value}>
-                        <span className="flex items-center gap-2">
-                          {option.value !== '' ? (
-                            <span
-                              aria-hidden="true"
-                              className={cn(
-                                'size-1.5 rounded-full',
-                                HEALTH_FILL_CLASS[option.value],
-                              )}
-                            />
-                          ) : null}
-                          {option.label}
-                        </span>
-                      </DropdownMenuRadioItem>
-                    ))}
-                  </DropdownMenuRadioGroup>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
+        <Surface tone="card" pad="roomy" className="flex flex-col gap-3">
+          <p className="text-on-surface text-label-large">Post an update</p>
+          <FreeformTextEditor
+            key={composerKey}
+            value={body}
+            onChange={(next) => {
+              bodyRef.current = next;
+              setBody(next);
+            }}
+            {...(activeOrgId === null ? {} : { mentionOrgId: activeOrgId })}
+            ariaLabel="Post an update"
+            placeholder="Share how this line of work is flowing — wins, risks, or what changed…"
+            className="bg-surface-container-high hover:bg-surface-container-highest min-h-20 rounded-lg p-3 transition-colors"
+            disabled={posting}
+            onSubmit={() => {
+              void submit();
+            }}
+          />
+          {activeOrgId ? (
+            <DeliverablePicker
+              orgId={activeOrgId}
+              files={files}
+              onChange={setFiles}
+              onBusy={setFilesBusy}
+              disabled={posting}
+              secondaryActions={healthAction}
+              primaryAction={submitAction}
+            />
           ) : (
-            <span />
+            <div className="flex items-center justify-between gap-2">
+              {healthAction}
+              {submitAction}
+            </div>
           )}
-          <Button type="submit" size="sm" disabled={posting || body.trim().length === 0}>
-            {posting ? 'Posting…' : 'Post update'}
-          </Button>
-        </div>
+        </Surface>
       </form>
 
       {/* placeholder: the posted updates — how many there are, who wrote each one, when, and what
           it says. The composer above stays usable throughout, so someone can post before the
           history has arrived. */}
+      <UpdateHistory
+        updates={updates}
+        loading={loading}
+        loadFailure={loadFailure}
+        resolveActor={resolveActor}
+      />
+    </div>
+  );
+}
+
+function UpdateHealthPicker({
+  health,
+  onChange,
+}: {
+  readonly health: HealthChoice;
+  readonly onChange: (health: HealthChoice) => void;
+}): JSX.Element {
+  return (
+    <div className="flex items-center gap-2">
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            className="gap-1.5"
+            aria-label={`Set health: ${choiceLabel(health)}`}
+          >
+            {health !== '' ? (
+              <span
+                aria-hidden="true"
+                className={cn('size-1.5 rounded-full', HEALTH_FILL_CLASS[health])}
+              />
+            ) : null}
+            <span>{health === '' ? 'Health' : choiceLabel(health)}</span>
+            <ChevronDown className="h-4 w-4 opacity-60" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start" width="sm">
+          <DropdownMenuRadioGroup
+            value={health}
+            onValueChange={(next) => {
+              onChange(next as HealthChoice);
+            }}
+          >
+            {HEALTH_OPTIONS.map((option) => (
+              <DropdownMenuRadioItem key={option.value || 'none'} value={option.value}>
+                <span className="flex items-center gap-2">
+                  {option.value !== '' ? (
+                    <span
+                      aria-hidden="true"
+                      className={cn('size-1.5 rounded-full', HEALTH_FILL_CLASS[option.value])}
+                    />
+                  ) : null}
+                  {option.label}
+                </span>
+              </DropdownMenuRadioItem>
+            ))}
+          </DropdownMenuRadioGroup>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
+  );
+}
+
+function UpdateHistory({
+  updates,
+  loading,
+  loadFailure,
+  resolveActor,
+}: Pick<UpdatesPanelProps, 'updates' | 'loading' | 'loadFailure' | 'resolveActor'>): JSX.Element {
+  return (
+    <>
+      {' '}
       {loading ? (
         <div className="flex flex-col gap-4">
           {[0, 1].map((i) => (
@@ -257,12 +331,13 @@ export function UpdatesPanel({
                     ) : null}
                   </div>
                   <StaticMarkdown value={update.body} className="max-w-none" />
+                  <DeliverableList files={update.attachments} />
                 </div>
               </li>
             );
           })}
         </ol>
       )}
-    </div>
+    </>
   );
 }

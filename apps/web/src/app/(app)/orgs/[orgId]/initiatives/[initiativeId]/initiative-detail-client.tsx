@@ -88,10 +88,10 @@ const RELATIONSHIP_TABS: readonly TabId[] = ['overview', 'subinitiatives', 'work
 /** A stable empty list, so the connected-work memos do not rebuild on every render. */
 const NO_CONNECTED_WORK: readonly InitiativeConnectedWork[] = [];
 
-/** How this page names the person behind an update. */
+/** How this page names the performer behind an update. */
 interface ResolvedActor {
   readonly name: string;
-  readonly kind: 'human';
+  readonly kind: 'human' | 'agent' | 'team';
 }
 
 /** One actor named by the roster, falling back to the Initiative's owner and then to Unknown. */
@@ -260,21 +260,33 @@ export default function InitiativeDetailPage(): JSX.Element {
     mutations,
   });
   const createLabel = useCreateLabel(orgId);
-  const postUpdate = useApiMutation<UpdateOut, { body: string; health?: Health }>({
-    mutationFn: (input) =>
+  const postUpdate = useApiMutation<
+    UpdateOut,
+    { body: string; health?: Health; attachmentIds?: string[]; requestId?: string }
+  >({
+    mutationFn: ({ requestId, ...input }) =>
       unwrap(
         () =>
-          api.v1.orgs[':orgId'].updates.$post({
-            param: { orgId },
-            json: {
-              ...subject,
-              body: input.body,
-              ...(input.health ? { health: input.health } : {}),
+          api.v1.orgs[':orgId'].updates.$post(
+            {
+              param: { orgId },
+              json: {
+                ...subject,
+                body: input.body,
+                ...(input.health ? { health: input.health } : {}),
+                ...(input.attachmentIds?.length ? { attachmentIds: input.attachmentIds } : {}),
+              },
             },
-          }),
+            requestId ? { headers: { 'Idempotency-Key': requestId } } : undefined,
+          ),
         'Could not post the update.',
       ),
-    invalidateKeys: [updatesKey, aggregateKey, queryKeys.initiatives(orgId)],
+    invalidateKeys: [
+      updatesKey,
+      aggregateKey,
+      queryKeys.initiatives(orgId),
+      queryKeys.deliverableDrafts(orgId),
+    ],
   });
   const addResource = useApiMutation<AttachmentOut, { title: string; url: string }>({
     mutationFn: (json) =>
@@ -345,8 +357,12 @@ export default function InitiativeDetailPage(): JSX.Element {
     return <QueryLoadFailure title={`This ${initiativeNoun.toLowerCase()}`} query={aggregateQ} />;
   if (!detail) return <p className="mx-auto max-w-7xl p-6">Initiative not found.</p>;
 
-  const resolveActor = (actorId: string | null | undefined): ResolvedActor =>
-    resolveInitiativeActor(members, initiativeOwner, actorId);
+  const resolveActor = (actorId: string | null | undefined): ResolvedActor => {
+    const author = updatesQ.data?.authors.find((candidate) => candidate.actorId === actorId);
+    return author
+      ? { name: author.displayName, kind: author.kind }
+      : resolveInitiativeActor(members, initiativeOwner, actorId);
+  };
   const ownerName = aggregate?.references.owner?.displayName ?? '—';
   const initiativeObject = {
     kind: 'initiative' as const,
@@ -580,13 +596,20 @@ export default function InitiativeDetailPage(): JSX.Element {
         render={() => (
           <>
             <UpdatesPanel
+              orgId={orgId}
+              submissionScope={`update:${orgId}:initiative:${initiativeId}`}
               updates={updates}
               loading={updatesLoading}
               loadFailure={updatesQ.isError ? updatesQ : null}
               resolveActor={resolveActor}
               posting={postUpdate.isPending}
-              onPost={async (body, health) => {
-                await postUpdate.mutateAsync({ body, ...(health ? { health } : {}) });
+              onPost={async (body, health, attachmentIds, requestId) => {
+                await postUpdate.mutateAsync({
+                  body,
+                  ...(health ? { health } : {}),
+                  ...(attachmentIds?.length ? { attachmentIds } : {}),
+                  ...(requestId ? { requestId } : {}),
+                });
               }}
               showHealthComposer
             />
@@ -686,7 +709,7 @@ export default function InitiativeDetailPage(): JSX.Element {
         <LatestUpdateSummary
           updates={updates}
           loading={updatesLoading}
-          resolveActor={(actorId) => resolveInitiativeActor([], initiativeOwner, actorId)}
+          resolveActor={resolveActor}
         />
       </TabPanel>
     </EntityDetailLayout>

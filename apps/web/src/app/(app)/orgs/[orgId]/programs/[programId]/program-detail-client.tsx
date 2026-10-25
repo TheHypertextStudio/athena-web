@@ -473,14 +473,14 @@ export default function ProgramDetailPage(): JSX.Element {
         render={() => (
           <>
             <UpdatesPanel
+              orgId={orgId}
+              submissionScope={`update:${orgId}:program:${programId}`}
               updates={updates}
               loading={updatesQ.isPending}
               loadFailure={updatesQ.isError ? updatesQ : null}
               resolveActor={resolveActor}
               posting={updatePosting}
-              onPost={(body, postHealth) => {
-                return postUpdate(body, postHealth);
-              }}
+              onPost={postUpdate}
             />
           </>
         )}

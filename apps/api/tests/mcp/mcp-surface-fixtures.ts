@@ -1,3 +1,5 @@
+import type { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { expect } from 'vitest';
 import type * as DbModule from '@docket/db';
 import type { Capability } from '@docket/identity-access/capabilities';
 import { assertDefined } from '@docket/test-utils';
@@ -232,4 +234,66 @@ export async function seedMcpSurfaceOrg(
     statusId,
     ctx,
   };
+}
+
+/** Add representative deliverables to the authored posts in the resource-hydration fixture. */
+export async function seedMcpPostFiles(
+  db: typeof DbModule.db,
+  schema: typeof DbModule,
+  s: McpSurfaceSeed,
+  upd: { id: string } | undefined,
+  cmt: { id: string } | undefined,
+): Promise<void> {
+  await db.insert(schema.attachment).values([
+    {
+      organizationId: s.orgId,
+      createdBy: s.actorId,
+      subjectType: 'update',
+      subjectId: assertDefined(upd).id,
+      kind: 'file',
+      title: 'Release notes',
+      fileName: 'release-notes.txt',
+      mimeType: 'text/plain',
+      byteSize: 16,
+      blobKey: `attachments/${s.orgId}/release-notes`,
+    },
+    {
+      organizationId: s.orgId,
+      createdBy: s.actorId,
+      subjectType: 'comment',
+      subjectId: assertDefined(cmt).id,
+      kind: 'file',
+      title: 'Screenshot',
+      fileName: 'screenshot.png',
+      mimeType: 'image/png',
+      byteSize: 32,
+      blobKey: `attachments/${s.orgId}/screenshot`,
+    },
+  ]);
+}
+
+/** Verify MCP readers expose both post deliverables and the update's named author. */
+export async function expectMcpPostFiles(
+  client: Client,
+  s: McpSurfaceSeed,
+  upd: { id: string } | undefined,
+  cmt: { id: string } | undefined,
+  readJson: (contents: readonly unknown[]) => Record<string, unknown>,
+): Promise<void> {
+  const updateRes = await client.readResource({
+    uri: `docket://${s.orgId}/update/${assertDefined(upd).id}`,
+  });
+  const updateDto = readJson(updateRes.contents);
+  expect(updateDto['author']).toEqual(
+    expect.objectContaining({ id: s.actorId, displayName: 'Ada' }),
+  );
+  expect(updateDto['attachments']).toEqual([
+    expect.objectContaining({ fileName: 'release-notes.txt', mimeType: 'text/plain' }),
+  ]);
+  const commentRes = await client.readResource({
+    uri: `docket://${s.orgId}/comment/${assertDefined(cmt).id}`,
+  });
+  expect(readJson(commentRes.contents)['attachments']).toEqual([
+    expect.objectContaining({ fileName: 'screenshot.png', mimeType: 'image/png' }),
+  ]);
 }

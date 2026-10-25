@@ -84,7 +84,7 @@ export interface TaskMutations {
   patchTask: (patch: TaskPatch) => void;
   addSubtask: (title: string) => Promise<void>;
   toggleSubtask: (subtaskId: string, done: boolean) => Promise<void>;
-  addComment: (body: string) => Promise<void>;
+  addComment: (body: string, attachmentIds?: string[], requestId?: string) => Promise<void>;
   /**
    * Archive (soft-delete) the task. Fires the DELETE mutation and invalidates the org task list;
    * the caller supplies `onSuccess` to close its confirm dialog and navigate away.
@@ -400,17 +400,23 @@ export function useTaskMutations(
     invalidateKeys: [detailKey, queryKeys.tasks(orgId)],
   });
 
-  const commentMutation = useApiMutation<CommentOut, string>({
-    mutationFn: (body) =>
+  const commentMutation = useApiMutation<
+    CommentOut,
+    { body: string; attachmentIds?: string[]; requestId?: string }
+  >({
+    mutationFn: ({ body, attachmentIds, requestId }) =>
       unwrap(
         () =>
-          api.v1.orgs[':orgId'].comments.$post({
-            param: { orgId },
-            json: { ...subject, body },
-          }),
+          api.v1.orgs[':orgId'].comments.$post(
+            {
+              param: { orgId },
+              json: { ...subject, body, ...(attachmentIds?.length ? { attachmentIds } : {}) },
+            },
+            requestId ? { headers: { 'Idempotency-Key': requestId } } : undefined,
+          ),
         'Could not post the comment.',
       ),
-    invalidateKeys: [activityKey],
+    invalidateKeys: [activityKey, queryKeys.deliverableDrafts(orgId)],
   });
 
   const deleteMutation = useApiMutation<TaskArchived, undefined>({
@@ -447,7 +453,14 @@ export function useTaskMutations(
     [toggleSubtaskMutation],
   );
   const addComment = useCallback(
-    (body: string): Promise<void> => commentMutation.mutateAsync(body).then(() => undefined),
+    (body: string, attachmentIds?: string[], requestId?: string): Promise<void> =>
+      commentMutation
+        .mutateAsync({
+          body,
+          ...(attachmentIds ? { attachmentIds } : {}),
+          ...(requestId ? { requestId } : {}),
+        })
+        .then(() => undefined),
     [commentMutation],
   );
   const deleteTask = useCallback(

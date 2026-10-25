@@ -2,20 +2,35 @@
  * `@docket/api` — updates router (mounted at `/v1/orgs/:orgId/updates`).
  */
 import { type Capability, satisfies } from '@docket/authz';
-import { db, initiative, program, project, update } from '@docket/db';
-import { CursorQuery, pageOf } from '../contracts/pagination';
+import { actor, db, initiative, program, project, update } from '@docket/db';
+import { CursorQuery } from '../contracts/pagination';
 import {
   UpdateCreate,
   UpdateListQuery,
   UpdateOut,
+  UpdatePage,
+  UpdateAuthorReference,
   UpdateRemoved,
 } from '@docket/work/update-contract';
-import { and, desc, eq } from 'drizzle-orm';
+import { and, desc, eq, inArray } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
 
+import {
+  claimDeliverables,
+  indexDeliverables,
+  withDeliverables,
+  withPostDeliverables,
+  removePostDeliverables,
+  cleanupPostDeliverables,
+} from '../content/deliverables';
 import type { AppEnv } from '../context';
 import { CapabilityError, NotFoundError } from '../error';
+import {
+  completeIdempotencyInTransaction,
+  captureIdempotencyBody,
+  idempotencyFor,
+} from '../lib/idempotency';
 import { created, ok } from '../lib/ok';
 import {
   authoredContent,
@@ -54,7 +69,7 @@ const PaginatedUpdateListQuery = UpdateListQuery.and(CursorQuery);
 
 /** Assert an Update subject belongs to the caller's organization. */
 async function assertSubjectInOrg(
-  tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
+  tx: typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0],
   orgId: string,
   subjectType: UpdateRow['subjectType'],
   subjectId: string,
@@ -89,6 +104,31 @@ async function loadUpdate(orgId: string, id: string): Promise<UpdateRow> {
   const row = rows[0];
   if (!row) throw new NotFoundError('Update not found');
   return row;
+}
+
+/** Reapply idempotent update projections after a fresh write or an uncertain-response replay. */
+async function projectUpdateWrite(
+  orgId: string,
+  row: UpdateRow,
+  attachmentIds: readonly string[] = [],
+): Promise<void> {
+  await indexDeliverables(orgId, attachmentIds);
+  await emitEvent({
+    organizationId: orgId,
+    kind: 'status_change',
+    occurredAt: row.createdAt,
+    dedupeToken: row.id,
+    actorId: row.authorId,
+    actorRef: contentEventActor(row.origin),
+    title: 'Posted an update',
+    summary: row.body,
+    subject: { type: row.subjectType, id: row.subjectId },
+    ...(row.health
+      ? { detail: { schema: 'docket.state_change', fromState: null, toState: row.health } }
+      : {}),
+  });
+  await enqueueSearchUpsert(orgId, 'update', row.id);
+  await enqueueSearchUpsert(orgId, row.subjectType, row.subjectId);
 }
 
 /**
@@ -168,12 +208,12 @@ const updates = new Hono<AppEnv>()
     apiDoc({
       tag: 'Updates',
       summary: 'List updates',
-      response: pageOf(UpdateOut),
+      response: UpdatePage,
       description: `List the status updates posted on one subject. Results use \`createdAt DESC, id DESC\`, default to 50 items, accept at most 100, and omit \`nextCursor\` at exhaustion. Reuse a cursor only with the same \`subjectType\` and \`subjectId\`. Scoped to the caller's org.`,
     }),
     zQuery(PaginatedUpdateListQuery),
     async (c) => {
-      const { orgId } = c.get('actorCtx');
+      const { orgId, actorId } = c.get('actorCtx');
       const { subjectType, subjectId, cursor, limit } = c.req.valid('query');
       const rows = await db
         .select()
@@ -188,11 +228,24 @@ const updates = new Hono<AppEnv>()
         )
         .orderBy(desc(update.createdAt), desc(update.id))
         .limit(limit + 1);
-      return ok(
-        c,
-        pageOf(UpdateOut),
-        pageResult(rows.map(toOut), limit, (item) => new Date(item.createdAt)),
-      );
+      const items = await withDeliverables(orgId, actorId, 'update', rows.map(toOut));
+      const page = pageResult(items, limit, (item) => new Date(item.createdAt));
+      const authorIds = [
+        ...new Set(page.items.flatMap((item) => (item.authorId ? [item.authorId] : []))),
+      ];
+      const authors =
+        authorIds.length === 0
+          ? []
+          : await db
+              .select({
+                actorId: actor.id,
+                displayName: actor.displayName,
+                avatar: actor.avatar,
+                kind: actor.kind,
+              })
+              .from(actor)
+              .where(and(eq(actor.organizationId, orgId), inArray(actor.id, authorIds)));
+      return ok(c, UpdatePage, { ...page, authors: UpdateAuthorReference.array().parse(authors) });
     },
   )
   .post(
@@ -206,13 +259,50 @@ const updates = new Hono<AppEnv>()
       response: UpdateOut,
       description: `Post a status update on a project, program, or initiative and return the created {@link UpdateOut}. Docket records the verified performer as the author and retains the authorizing actor separately; the request body cannot name another author. \`body\` is required and \`health\` is optional.
 
-When \`health\` is supplied, Docket also sets the resource's current health to the same value. Both changes succeed together or neither change is stored. An update without \`health\` leaves the resource's current health unchanged. The operation adds a \`status_change\` event to organization activity.`,
+When \`health\` is supplied, Docket also sets the resource's current health to the same value. Both changes succeed together or neither change is stored. An update without \`health\` leaves the resource's current health unchanged. The operation adds a \`status_change\` event to organization activity. An optional \`Idempotency-Key\` is retained for 48 hours; reuse it with the identical request after an uncertain response to recover the original update.`,
+      extra: {
+        'x-docket-idempotency': 'atomic-receipt',
+        parameters: [
+          {
+            name: 'Idempotency-Key',
+            in: 'header',
+            required: false,
+            description:
+              'Reuse the same key and identical request after an uncertain result; retained for 48 hours.',
+            schema: { type: 'string', minLength: 1 },
+          },
+        ],
+      },
     }),
+    captureIdempotencyBody,
     zJson(UpdateCreate),
+    async (c, next) => {
+      const { orgId } = c.get('actorCtx');
+      const body = c.req.valid('json');
+      await assertSubjectInOrg(db, orgId, body.subjectType, body.subjectId);
+      await next();
+    },
+    async (c, next) => {
+      await next();
+      if (c.res.headers.get('Idempotency-Replayed') !== 'true') return;
+      const { orgId, actorId } = c.get('actorCtx');
+      const body = UpdateOut.parse(await c.res.clone().json());
+      const request = c.req.valid('json');
+      const row = await loadUpdate(orgId, body.id);
+      await assertSubjectInOrg(db, orgId, row.subjectType, row.subjectId);
+      await projectUpdateWrite(orgId, row, request.attachmentIds);
+      return created(
+        c,
+        UpdateOut,
+        await withPostDeliverables(orgId, actorId, 'update', toOut(row)),
+      );
+    },
+    idempotencyFor('atomic-receipt'),
     async (c) => {
       const { orgId, actorId } = c.get('actorCtx');
       const body = c.req.valid('json');
 
+      const claim = c.get('idempotencyClaim');
       const row = await db.transaction(async (tx) => {
         await assertSubjectInOrg(tx, orgId, body.subjectType, body.subjectId);
         const inserted = await tx
@@ -239,25 +329,30 @@ When \`health\` is supplied, Docket also sets the resource's current health to t
             .where(and(eq(table.id, body.subjectId), eq(table.organizationId, orgId)));
         }
 
+        await claimDeliverables(
+          tx,
+          orgId,
+          actorId,
+          { kind: 'update', id: created.id },
+          body.attachmentIds,
+        );
+        if (claim)
+          await completeIdempotencyInTransaction(tx, claim, {
+            organizationId: orgId,
+            responseStatus: 201,
+            responseBody: toOut(created),
+            responseHeaders: { 'content-type': 'application/json' },
+          });
         return created;
       });
+      if (claim) c.set('idempotencyCompleted', true);
 
-      // Stream: a posted status update surfaces on its subject (project/initiative/program).
-      await emitEvent({
-        organizationId: orgId,
-        kind: 'status_change',
-        actorId: row.authorId,
-        actorRef: contentEventActor(row.origin),
-        title: 'Posted an update',
-        summary: row.body,
-        subject: { type: row.subjectType, id: row.subjectId },
-        ...(row.health
-          ? { detail: { schema: 'docket.state_change', fromState: null, toState: row.health } }
-          : {}),
-      });
-      await enqueueSearchUpsert(orgId, 'update', row.id);
-      await enqueueSearchUpsert(orgId, row.subjectType, row.subjectId);
-      return created(c, UpdateOut, toOut(row));
+      await projectUpdateWrite(orgId, row, body.attachmentIds);
+      return created(
+        c,
+        UpdateOut,
+        await withPostDeliverables(orgId, actorId, 'update', toOut(row)),
+      );
     },
   )
   .get(
@@ -270,10 +365,10 @@ When \`health\` is supplied, Docket also sets the resource's current health to t
     }),
     zParam(idParam),
     async (c) => {
-      const { orgId } = c.get('actorCtx');
+      const { orgId, actorId } = c.get('actorCtx');
       const { id } = c.req.valid('param');
       const row = await loadUpdate(orgId, id);
-      return ok(c, UpdateOut, toOut(row));
+      return ok(c, UpdateOut, await withPostDeliverables(orgId, actorId, 'update', toOut(row)));
     },
   )
   .delete(
@@ -301,11 +396,13 @@ After deletion, Docket recalculates the subject's health from its newest remaini
       // Hard delete (the `update` table carries no soft-delete column), then recompute the
       // subject health from the newest remaining health-bearing update — in one transaction
       // so a concurrent read never sees the row gone but the stale health still attached.
-      await db.transaction(async (tx) => {
+      const removedFiles = await db.transaction(async (tx) => {
         await tx.delete(update).where(and(eq(update.id, id), eq(update.organizationId, orgId)));
         await recomputeSubjectHealth(tx, orgId, existing.subjectType, existing.subjectId);
+        return removePostDeliverables(tx, orgId, 'update', id);
       });
 
+      await cleanupPostDeliverables(orgId, removedFiles);
       await enqueueSearchDelete(orgId, 'update', id);
       await enqueueSearchUpsert(orgId, existing.subjectType, existing.subjectId);
       return ok(c, UpdateRemoved, { id, removed: true });

@@ -149,12 +149,16 @@ describe('updates list-by-subject (GET /)', () => {
 
     const res = await w.request(`/?subjectType=project&subjectId=${subjectId}`);
     expect(res.status).toBe(200);
-    const list = await json<{ items: { id: string; createdAt: string }[] }>(res);
+    const list = await json<{
+      items: { id: string; createdAt: string }[];
+      authors: { actorId: string; displayName: string }[];
+    }>(res);
     const ids = list.items.map((u) => u.id);
     // Subject isolation: exactly this subject's two updates, never the other subject's.
     expect(ids).toHaveLength(2);
     expect(ids).toEqual(expect.arrayContaining([first, second]));
     expect(ids).not.toContain(elsewhere);
+    expect(list.authors).toContainEqual(expect.objectContaining({ actorId: humanActorId }));
     // Newest-first: the feed is sorted by createdAt descending (ties keep both present).
     const times = list.items.map((u) => Date.parse(u.createdAt));
     expect(assertDefined(times[0])).toBeGreaterThanOrEqual(assertDefined(times[1]));

@@ -1275,6 +1275,20 @@
       "when": 1792986835842,
       "tag": "0181_usage_cost_ledger",
       "breakpoints": true
+    },
+    {
+      "idx": 182,
+      "version": "7",
+      "when": 1793028816994,
+      "tag": "0182_deliverable_subject_types",
+      "breakpoints": true
+    },
+    {
+      "idx": 183,
+      "version": "7",
+      "when": 1793029433677,
+      "tag": "0183_deliverable_draft_storage",
+      "breakpoints": true
     }
   ]
 }

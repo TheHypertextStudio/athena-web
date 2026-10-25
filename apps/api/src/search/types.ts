@@ -52,7 +52,7 @@ export interface SearchProjector<Row = unknown> {
 /** Build a projector whose unit-test path receives a preloaded source row. */
 export function preloadedProjector<Row>(
   sourceTable: string,
-  project: (row: Row) => SearchDocumentDraft | null,
+  project: (row: Row) => SearchDocumentDraft | null | Promise<SearchDocumentDraft | null>,
 ): SearchProjector<Row> {
   return {
     sourceTable,

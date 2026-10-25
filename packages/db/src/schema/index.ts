@@ -39,6 +39,8 @@ export * from './recurrence';
 export * from './plan-draft';
 export * from './composer-draft';
 export * from './source-person';
+export * from './deliverable-upload-session';
+export * from './content-receipt';
 
 export * from './actor-alias';
 export * from './device-notification';

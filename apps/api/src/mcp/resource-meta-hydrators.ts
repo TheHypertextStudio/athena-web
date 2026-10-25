@@ -1,3 +1,4 @@
+import { withPostDeliverables } from '../content/deliverables';
 import {
   actor,
   agent,
@@ -67,7 +68,7 @@ export async function hydrateTeam(orgId: string, id: string): Promise<unknown> {
 }
 
 /** Update: author, subject ref, health, body, timestamp. */
-export async function hydrateUpdate(orgId: string, id: string): Promise<unknown> {
+export async function hydrateUpdate(orgId: string, id: string, actorId: string): Promise<unknown> {
   const rows = await db
     .select()
     .from(update)
@@ -83,7 +84,7 @@ export async function hydrateUpdate(orgId: string, id: string): Promise<unknown>
         .limit(1)
     : [];
   const author = authorRows[0] ?? null;
-  return {
+  return withPostDeliverables(orgId, actorId, 'update', {
     id: u.id,
     authorId: u.authorId,
     origin: contentOrigin(u.origin),
@@ -94,7 +95,7 @@ export async function hydrateUpdate(orgId: string, id: string): Promise<unknown>
     health: u.health,
     body: u.body,
     createdAt: u.createdAt.toISOString(),
-  };
+  });
 }
 
 /** Comment: author, subject ref, body, thread parent. */
@@ -102,6 +103,7 @@ export async function hydrateComment(
   orgId: string,
   id: string,
   canViewTask: TaskViewFilter,
+  actorId: string,
 ): Promise<unknown> {
   const rows = await db
     .select()
@@ -134,7 +136,7 @@ export async function hydrateComment(
         .limit(1)
     : [];
   const author = authorRows[0] ?? null;
-  return {
+  return withPostDeliverables(orgId, actorId, 'comment', {
     id: c.id,
     authorId: c.authorId,
     origin: contentOrigin(c.origin),
@@ -148,7 +150,7 @@ export async function hydrateComment(
     editedById: c.editedById,
     editedOrigin: contentOrigin(c.editedOrigin),
     createdAt: c.createdAt.toISOString(),
-  };
+  });
 }
 
 /** Agent Session: status, agent, task ref, trigger, accountability, activity stream. */

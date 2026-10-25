@@ -34,6 +34,12 @@ import { sweepDailyDigests } from './daily-digest';
 import { sweepLinearAgentSessions } from './linear-agent-sweep';
 import { getContainer } from '../container';
 import { sweepLegacyMentions } from '../content/legacy-mention-sweep';
+import {
+  processAttachmentBlobCleanup,
+  sweepExpiredDeliverableDrafts,
+  sweepExpiredDeliverableUploadSessions,
+} from '../content/deliverables';
+import { sweepExpiredMcpContentReceipts } from '../mcp/content-receipts';
 import { sweepResourceUnfurls } from '../content/unfurl-sweep';
 import {
   createDrizzleDocumentImageCleanupStorage,
@@ -115,6 +121,10 @@ const cron = new Hono()
     // Suggestion expiry/retention rides the same daily tick (transient proposals, not records).
     const suggestions = await sweepEmailSuggestionLifecycle(now);
     const oauth = await sweepOAuthLifecycle(now);
+    const expiredDeliverableDrafts = await sweepExpiredDeliverableDrafts(now);
+    const attachmentBlobCleanup = await processAttachmentBlobCleanup(100);
+    const deliverableUploadSessions = await sweepExpiredDeliverableUploadSessions(now);
+    const expiredMcpContentReceipts = await sweepExpiredMcpContentReceipts(now);
     return c.json({
       swept: false,
       reason: 'billing_data_deletion_disabled',
@@ -122,6 +132,10 @@ const cron = new Hono()
       toDeleted: 0,
       suggestions,
       oauth,
+      expiredDeliverableDrafts,
+      attachmentBlobCleanup,
+      deliverableUploadSessions,
+      expiredMcpContentReceipts,
     });
   })
   // Background connector mirroring: re-syncs every due `mirror` integration so connectors

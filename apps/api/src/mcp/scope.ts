@@ -87,6 +87,10 @@ export const TOOL_SCOPE: Readonly<Record<string, McpScope>> = {
   // work:write — work-layer mutations
   comment: 'work:write',
   report_status: 'work:write',
+  upload_deliverable: 'work:write',
+  create_deliverable_upload_session: 'work:write',
+  discard_deliverable: 'work:write',
+  list_deliverables: 'work:read',
   capture: 'work:write',
   update: 'work:write',
   organize: 'work:write',
@@ -120,6 +124,7 @@ export const TOOL_SCOPE: Readonly<Record<string, McpScope>> = {
   review_work_destination: 'agents:run',
   // work:read — reads exposed as tools
   list_work: 'work:read',
+  list_my_deliverable_drafts: 'work:read',
   list_templates: 'work:read',
   browse_work_templates: 'work:read',
   // Preview/reconcile are reads; the handler requires work:write only when keeping copies.

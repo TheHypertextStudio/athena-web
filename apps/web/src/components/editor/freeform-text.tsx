@@ -469,7 +469,7 @@ export function FreeformTextEditor({
         ? slash.listboxId
         : undefined;
     const activeKey = mentions.open ? mentions.activeKey : slash.activeKey;
-    textbox.setAttribute('aria-expanded', String(mentions.open || slash.isOpen));
+    textbox.setAttribute('aria-autocomplete', 'list');
     if (controls === undefined) textbox.removeAttribute('aria-controls');
     else textbox.setAttribute('aria-controls', controls);
     if (activeKey === undefined) textbox.removeAttribute('aria-activedescendant');

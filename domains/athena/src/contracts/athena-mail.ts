@@ -166,7 +166,9 @@ export type AthenaMailboxOut = z.infer<typeof AthenaMailboxOut>;
 /** Body for attaching a received message to a Docket entity. */
 export const AthenaMailAttachBody = z
   .object({
-    subjectType: AttachmentSubjectType.describe('Which kind of entity to attach the message to.'),
+    subjectType: AttachmentSubjectType.extract(['task', 'project', 'initiative']).describe(
+      'Which kind of entity to attach the message to.',
+    ),
     subjectId: z.string().min(1).describe('Id of the entity to attach the message to.'),
     organizationId: OrganizationId.describe('Workspace the target entity belongs to.'),
   })
@@ -183,7 +185,9 @@ export const AthenaMailAttachmentTargetOut = z
     attachmentId: z
       .string()
       .describe('Identifier for the attachment linking this message to the entity.'),
-    subjectType: AttachmentSubjectType.describe('Kind of entity the message is attached to.'),
+    subjectType: AttachmentSubjectType.extract(['task', 'project', 'initiative']).describe(
+      'Kind of entity the message is attached to.',
+    ),
     subjectId: z.string().describe('Id of that entity.'),
     subjectTitle: z.string().describe('That entity’s current title.'),
     organizationId: OrganizationId.describe('Workspace the entity belongs to.'),

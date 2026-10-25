@@ -1,4 +1,13 @@
-import { attachment, db, externalResource, initiative, project, task } from '@docket/db';
+import {
+  attachment,
+  comment,
+  db,
+  externalResource,
+  initiative,
+  project,
+  task,
+  update,
+} from '@docket/db';
 import { and, inArray, isNull } from 'drizzle-orm';
 import type { z } from 'zod';
 
@@ -134,6 +143,8 @@ async function activeSubjects(entries: LibraryEntry[]): Promise<LibraryEntry[]> 
         ['task', task],
         ['project', project],
         ['initiative', initiative],
+        ['comment', comment],
+        ['update', update],
       ] as const
     ).map(async ([kind, table]) => {
       const sources = entries.flatMap(({ source }) =>

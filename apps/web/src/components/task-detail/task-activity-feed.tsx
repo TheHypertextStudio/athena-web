@@ -1,6 +1,7 @@
 'use client';
 
 /** One filterable, chronological task Activity surface. */
+import type { DeliverableOut } from '@docket/work/attachment-contract';
 import type { TaskActivityCategory, TaskActivityOut } from '@docket/connections/activity-contract';
 import { ActorAvatar, InlineBanner } from '@docket/ui/components';
 import { ChevronDown } from '@docket/ui/icons';
@@ -22,8 +23,10 @@ import { useMemo, useState } from 'react';
 
 import { FreeformTextEditor } from '@/components/editor/freeform-text';
 import { QueryLoadFailure } from '@/components/feedback';
+import { DeliverableList, DeliverablePicker } from '@/components/entity-detail/deliverables';
 import { api } from '@/lib/api';
 import { apiInfiniteQueryOptions, queryKeys, useInfiniteApiQuery } from '@/lib/query';
+import { clearContentPostRequestKey, contentPostRequestKey } from '@/lib/content-post-retry';
 
 import { activityPerformer } from './format-activity';
 import { TaskActivityContent } from './task-activity-content';
@@ -51,7 +54,8 @@ export interface TaskActivityFeedProps {
   readonly orgId: string;
   readonly taskId: string;
   /** Posts a comment through the task page's canonical mutation. */
-  readonly onComment?: ((body: string) => Promise<void>) | undefined;
+  readonly onComment?:
+    ((body: string, attachmentIds?: string[], requestId?: string) => Promise<void>) | undefined;
   /** Whether the current viewer may add a task comment. */
   readonly canComment?: boolean | undefined;
 }
@@ -127,7 +131,12 @@ function ActivityIdentity({
 /** One chronological Activity row, naming whoever performed the change. */
 function ActivityRow({ entry, compact = false }: ActivityRowProps): JSX.Element {
   const performer = activityPerformer(entry, null);
-  const content = <TaskActivityContent entry={entry} showPerformer={!compact} />;
+  const content = (
+    <>
+      <TaskActivityContent entry={entry} showPerformer={!compact} />
+      <DeliverableList files={entry.attachments} />
+    </>
+  );
   if (compact) return <li className="min-w-0">{content}</li>;
   return (
     <TimelineItem
@@ -167,8 +176,6 @@ export function TaskActivityFeed({
   canComment = false,
 }: TaskActivityFeedProps): JSX.Element {
   const [filter, setFilter] = useState<ActivityFilter>(ALL_CATEGORIES);
-  const [body, setBody] = useState('');
-  const [posting, setPosting] = useState(false);
   const activityQuery = useMemo(
     () =>
       apiInfiniteQueryOptions(
@@ -191,21 +198,6 @@ export function TaskActivityFeed({
   );
   const query = useInfiniteApiQuery(activityQuery);
   const entries = query.data?.pages.flatMap((page) => page.items) ?? [];
-
-  async function post(): Promise<void> {
-    const text = body.trim();
-    if (!onComment || !canComment || posting || text.length === 0) return;
-    setPosting(true);
-    try {
-      await onComment(text);
-      setBody('');
-    } catch {
-      // The failed write reaches the person as a notice, raised by the mutation layer, and the
-      // draft stays in the composer so posting again is one press.
-    } finally {
-      setPosting(false);
-    }
-  }
 
   return (
     <>
@@ -259,33 +251,86 @@ export function TaskActivityFeed({
           </div>
         ) : null}
 
-        {canComment && onComment ? (
-          <form
-            onSubmit={(event) => {
-              event.preventDefault();
-              void post();
-            }}
-          >
-            <Surface tone="floating" pad="comfortable" className="flex flex-col gap-2">
-              <FreeformTextEditor
-                value={body}
-                onChange={setBody}
-                placeholder="Leave a comment…"
-                ariaLabel="Add a comment"
-                onSubmit={() => {
-                  void post();
-                }}
-                className="rounded-md p-3"
-              />
-              <div className="flex items-center justify-end">
-                <Button type="submit" size="sm" disabled={posting || body.trim().length === 0}>
-                  {posting ? 'Posting…' : 'Comment'}
-                </Button>
-              </div>
-            </Surface>
-          </form>
-        ) : null}
+        <TaskCommentComposer
+          orgId={orgId}
+          taskId={taskId}
+          onComment={onComment}
+          canComment={canComment}
+        />
       </DetailSection>
     </>
+  );
+}
+
+function TaskCommentComposer({
+  orgId,
+  taskId,
+  onComment,
+  canComment,
+}: Pick<
+  TaskActivityFeedProps,
+  'orgId' | 'taskId' | 'onComment' | 'canComment'
+>): JSX.Element | null {
+  const [body, setBody] = useState('');
+  const [files, setFiles] = useState<DeliverableOut[]>([]);
+  const [filesBusy, setFilesBusy] = useState(false);
+  const [posting, setPosting] = useState(false);
+  async function post(): Promise<void> {
+    const text = body.trim();
+    if (!onComment || !canComment || posting || filesBusy || text.length === 0) return;
+    setPosting(true);
+    try {
+      const payload = { body: text, attachmentIds: files.map((file) => file.id) };
+      const scope = `comment:${orgId}:task:${taskId}`;
+      const requestId = await contentPostRequestKey(scope, payload);
+      await onComment(payload.body, payload.attachmentIds, requestId);
+      await clearContentPostRequestKey(scope, payload, requestId);
+      setFiles([]);
+      setBody('');
+    } catch {
+      // The mutation layer shows the failure; keep the draft and uploaded files for retry.
+    } finally {
+      setPosting(false);
+    }
+  }
+  if (!canComment || !onComment) return null;
+  return (
+    <form
+      onSubmit={(event) => {
+        event.preventDefault();
+        void post();
+      }}
+    >
+      <Surface tone="floating" pad="comfortable" className="flex flex-col gap-2">
+        <FreeformTextEditor
+          mentionOrgId={orgId}
+          disabled={posting}
+          value={body}
+          onChange={setBody}
+          placeholder="Leave a comment…"
+          ariaLabel="Add a comment"
+          onSubmit={() => {
+            void post();
+          }}
+          className="rounded-md p-3"
+        />
+        <DeliverablePicker
+          orgId={orgId}
+          files={files}
+          disabled={posting}
+          onChange={setFiles}
+          onBusy={setFilesBusy}
+          primaryAction={
+            <Button
+              type="submit"
+              size="sm"
+              disabled={posting || filesBusy || body.trim().length === 0}
+            >
+              {posting ? 'Posting…' : 'Comment'}
+            </Button>
+          }
+        />
+      </Surface>
+    </form>
   );
 }

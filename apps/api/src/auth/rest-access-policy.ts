@@ -18,7 +18,8 @@ export type ApiAccess =
       readonly kind: 'session-or-oauth';
       readonly scopes: readonly OAuthCapabilityScope[];
     }
-  | { readonly kind: 'share-token'; readonly header: 'X-Docket-Share-Token' };
+  | { readonly kind: 'share-token'; readonly header: 'X-Docket-Share-Token' }
+  | { readonly kind: 'capability-token'; readonly header: 'X-Docket-Upload-Token' };
 
 /** Human-readable descriptions for every scope the REST authorization flow can request. */
 export const REST_OAUTH_SCOPE_DESCRIPTIONS: Readonly<Record<OAuthIssuableScope, string>> = {

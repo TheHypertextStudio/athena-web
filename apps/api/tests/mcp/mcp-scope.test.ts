@@ -223,6 +223,7 @@ describe('scope helpers', () => {
 
   it('TOOL_SCOPE maps reads/mutations/agents/connectors and covers every registered tool', () => {
     expect(scopeMod.TOOL_SCOPE['list_work']).toBe('work:read');
+    expect(scopeMod.TOOL_SCOPE['list_my_deliverable_drafts']).toBe('work:read');
     expect(scopeMod.TOOL_SCOPE['capture']).toBe('work:write');
     expect(scopeMod.TOOL_SCOPE['run_agent']).toBe('agents:run');
     expect(scopeMod.TOOL_SCOPE['link_external']).toBe('connectors:link');

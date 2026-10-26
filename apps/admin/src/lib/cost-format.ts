@@ -81,7 +81,31 @@ export function formatQuantity(resource: CostResource, quantity: number): string
  * @returns the price per million units.
  */
 export function formatRate(microsPerMillionUnits: number): string {
-  return formatCost(microsPerMillionUnits);
+  return (microsPerMillionUnits / MICROS_PER_DOLLAR).toLocaleString(undefined, {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 6,
+  });
+}
+
+/**
+ * Write the day a price starts applying.
+ *
+ * @remarks
+ * Prices start on a UTC day, so the date is written in UTC; a local time of day would move the day
+ * for anyone west of Greenwich.
+ *
+ * @param iso - The start instant, ISO-8601.
+ * @returns the calendar day, e.g. `Jan 1, 2026`.
+ */
+export function formatDay(iso: string): string {
+  return new Date(iso).toLocaleDateString(undefined, {
+    timeZone: 'UTC',
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  });
 }
 
 /**

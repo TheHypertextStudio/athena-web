@@ -3,7 +3,9 @@ import { describe, expect, it } from 'vitest';
 import {
   formatCost,
   formatCostFloor,
+  formatDay,
   formatQuantity,
+  formatRate,
   holderName,
   parseRate,
 } from '../../src/lib/cost-format';
@@ -23,6 +25,24 @@ describe('cost formatting', () => {
   it('writes storage as bytes and tokens as counts', () => {
     expect(formatQuantity('object_bytes', 4_100)).toBe('4.1 KB');
     expect(formatQuantity('ai_input_tokens', 1_234_567)).toBe((1_234_567).toLocaleString());
+  });
+});
+
+describe('price formatting', () => {
+  it('keeps the precision a per-million price needs', () => {
+    expect(formatRate(11_667)).toBe('$0.011667');
+    expect(formatRate(3_000_000)).toBe('$3.00');
+  });
+
+  it('writes a start day in UTC, whatever the viewer’s zone', () => {
+    expect(formatDay('2026-01-01T00:00:00.000Z')).toBe(
+      new Date('2026-01-01T12:00:00Z').toLocaleDateString(undefined, {
+        timeZone: 'UTC',
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+      }),
+    );
   });
 });
 

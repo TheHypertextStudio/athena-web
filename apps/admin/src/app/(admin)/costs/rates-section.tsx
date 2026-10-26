@@ -20,8 +20,13 @@ import { AsyncContent, ListSkeleton, QueryErrorBanner } from '@/components/admin
 import { AdminSection } from '@/components/admin-page';
 import { AdminList, AdminListRow } from '@/components/admin-table';
 import { api } from '@/lib/api';
-import { RESOURCE_LABEL, formatRate, parseRate, type CostResource } from '@/lib/cost-format';
-import { formatTimestamp } from '@/lib/lifecycle';
+import {
+  RESOURCE_LABEL,
+  formatDay,
+  formatRate,
+  parseRate,
+  type CostResource,
+} from '@/lib/cost-format';
 import { STALE, apiQueryOptions, queryKeys, useApiMutation, useApiQuery } from '@/lib/query';
 
 /** Every metered resource, in the order the picker lists them. */
@@ -66,7 +71,7 @@ export function RatesSection(): JSX.Element {
               interactive={false}
               title={RESOURCE_LABEL[rate.resource]}
               subtitle={[rate.dimension, rate.note].filter(Boolean).join(' · ') || undefined}
-              meta={`from ${formatTimestamp(rate.effectiveFrom)}`}
+              meta={`from ${formatDay(rate.effectiveFrom)}`}
               trailing={
                 <Text as="span" token="body-small" numeric>
                   {`${formatRate(rate.microsPerMillionUnits)} per million`}

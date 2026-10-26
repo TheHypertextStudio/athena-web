@@ -574,6 +574,9 @@ importers:
       '@docket/automation':
         specifier: workspace:*
         version: link:../../domains/automation
+      '@docket/blob-store':
+        specifier: workspace:*
+        version: link:../../packages/blob-store
       '@docket/connections':
         specifier: workspace:*
         version: link:../../domains/connections

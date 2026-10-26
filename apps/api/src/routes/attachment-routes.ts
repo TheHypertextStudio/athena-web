@@ -1,3 +1,6 @@
+import { randomUUID } from 'node:crypto';
+import { uploadBuffered } from '../content/upload-buffered';
+import { attachmentStream } from '../content/attachment-stream';
 /**
  * `@docket/api` — attachment routes, mounted on the tasks router at `/`
  * (so the surface is `/v1/orgs/:orgId/tasks/:id/attachments`).
@@ -11,7 +14,7 @@
  * tenant boundary for the whole router. Reads require org membership; mutations require
  * `contribute`, matching the tasks router.
  */
-import { attachment, db, externalResource, genId, integration } from '@docket/db';
+import { attachment, db, externalResource, integration } from '@docket/db';
 import {
   AttachmentCreate,
   AttachmentOut,
@@ -23,12 +26,7 @@ import { and, asc, eq, isNull } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
 
-import { getContainer } from '../container';
-import {
-  loadReadableAttachment,
-  MAX_ATTACHMENT_BYTES,
-  readAttachmentFile,
-} from '../content/attachment-file';
+import { loadReadableAttachment, MAX_ATTACHMENT_BYTES } from '../content/attachment-file';
 import type { AppEnv } from '../context';
 import { NotFoundError } from '../error';
 import { created, ok } from '../lib/ok';
@@ -287,50 +285,18 @@ The \`kind\` determines the required fields, enforced at the schema edge: a \`ur
       const target = await loadTask(orgId, id);
       await assertTaskCapability(orgId, actorId, target, 'contribute');
 
-      // Deterministic, id-scoped key (no filename in the path → no traversal surface).
-      const attachmentId = genId();
-      const blobKey = `attachments/${orgId}/${attachmentId}`;
-      const mimeType = file.type || 'application/octet-stream';
-      const bytes = new Uint8Array(await file.arrayBuffer());
-      await getContainer().blob.put(blobKey, bytes, mimeType);
-
-      let row: AttachmentRow | undefined;
-      try {
-        const inserted = await db
-          .insert(attachment)
-          .values({
-            id: attachmentId,
-            organizationId: orgId,
-            createdBy: actorId,
-            subjectType: 'task',
-            subjectId: id,
-            kind: 'file',
-            title: title ?? file.name,
-            blobKey,
-            fileName: file.name,
-            mimeType,
-            byteSize: file.size,
-          })
-          .returning();
-        row = inserted[0];
-      } catch (error) {
-        // The blob is already written; drop it so a failed insert doesn't orphan bytes.
-        await getContainer()
-          .blob.delete(blobKey)
-          .catch(() => undefined);
-        throw error;
-      }
-      /* v8 ignore next -- @preserve defensive: insert always returns a row */
-      if (!row) throw new Error('attachment insert returned no row');
-      await recordTaskChanges({
-        organizationId: orgId,
-        taskId: id,
-        title: target.title,
+      const { row } = await uploadBuffered(
+        orgId,
         actorId,
-        changes: [{ field: 'resource', label: 'Resource', from: null, to: row.title }],
-      });
-      await enqueueSearchUpsert(orgId, 'attachment', row.id);
-      await enqueueSearchUpsert(orgId, 'task', id);
+        {
+          requestId: randomUUID(),
+          fileName: file.name,
+          title,
+          mimeType: file.type || 'application/octet-stream',
+          destination: { kind: 'work', subjectType: 'task', subjectId: id },
+        },
+        new Uint8Array(await file.arrayBuffer()),
+      );
       return ok(c, AttachmentOut, toOut(row));
     },
   )
@@ -346,21 +312,7 @@ The \`kind\` determines the required fields, enforced at the schema edge: a \`ur
       const { orgId, actorId } = c.get('actorCtx');
       const { id, attachmentId } = c.req.valid('param');
       const row = await loadReadableAttachment(orgId, actorId, attachmentId, id);
-      const file = await readAttachmentFile(row);
-      if (file.status !== 'available')
-        throw new NotFoundError('Attachment file is no longer available.');
-      const bytes = file.bytes;
-      const filename = row.fileName ?? 'download';
-      // Copy into a fresh `ArrayBuffer`-backed Uint8Array so the body is a valid `BodyInit`
-      // (mirrors the account-export download).
-      return new Response(new Uint8Array(bytes), {
-        status: 200,
-        headers: {
-          'Content-Type': row.mimeType ?? 'application/octet-stream',
-          // RFC 5987 `filename*` avoids header-injection from user-supplied names.
-          'Content-Disposition': `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`,
-        },
-      });
+      return attachmentStream(row, c.req.header('Range'));
     },
   )
   .delete(

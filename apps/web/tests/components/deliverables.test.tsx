@@ -21,8 +21,42 @@ vi.mock('../../src/lib/query', () => ({
       if (!response.ok) throw new Error('request_failed');
       return response.json();
     }),
-  useApiMutation: () => ({ mutateAsync: discard }),
+  useApiMutation: (options: { mutationFn: (input: unknown) => Promise<unknown> }) => ({
+    mutateAsync: options.mutationFn,
+  }),
   useApiQuery: () => ({ data: { items: [] } }),
+}));
+vi.mock('../../src/lib/upload-control', () => ({ uploadControl: () => ({}) }));
+vi.mock('../../src/lib/resumable-upload', () => ({
+  transferFile: (input: {
+    file: File;
+    requestId: string;
+    signal?: AbortSignal;
+    onProgress?: (n: number) => void;
+  }) =>
+    new Promise((resolve, reject) => {
+      const xhr = new FakeUploadRequest();
+      xhr.upload.onprogress = (event) =>
+        input.onProgress?.(Math.floor((event.loaded / event.total) * 100));
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) resolve(uploaded);
+        else reject(new Error('upload_failed'));
+      };
+      xhr.onabort = () => {
+        reject(new Error('upload_cancelled'));
+      };
+      input.signal?.addEventListener(
+        'abort',
+        () => {
+          xhr.abort();
+        },
+        { once: true },
+      );
+      const form = new FormData();
+      form.set('file', input.file);
+      form.set('uploadId', input.requestId);
+      xhr.send(form);
+    }),
 }));
 import {
   DeliverableList,
@@ -154,7 +188,7 @@ describe('deliverable picker', () => {
       uploaded.previewUrl,
     );
     expect(FakeUploadRequest.requests[0]?.sent?.get('file')).toBeInstanceOf(File);
-    expect(FakeUploadRequest.requests[0]?.withCredentials).toBe(true);
+    expect(FakeUploadRequest.requests[0]?.withCredentials).toBe(false);
     await user.click(screen.getByRole('button', { name: `Remove ${uploaded.title}` }));
     await waitFor(() => expect(screen.queryByText(uploaded.title)).not.toBeInTheDocument());
   });
@@ -180,9 +214,9 @@ describe('deliverable picker', () => {
     );
     await user.upload(
       screen.getByLabelText('Choose files to attach'),
-      new File([new Uint8Array(4 * 1024 * 1024 + 1)], 'large.pdf'),
+      Object.defineProperty(new File(['x'], 'large.pdf'), 'size', { value: 100 * 1024 * 1024 + 1 }),
     );
-    expect(await screen.findByText('Choose non-empty files up to 4 MB each.')).toBeVisible();
+    expect(await screen.findByText('Choose non-empty files up to 100 MiB each.')).toBeVisible();
     expect(FakeUploadRequest.requests).toHaveLength(2);
   });
 

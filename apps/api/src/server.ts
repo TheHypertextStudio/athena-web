@@ -11,6 +11,7 @@
  * Loading the empty `@docket/api/rpc-contract` facade does not start this server; only
  * `node dist/server.js` / `tsx watch src/server.ts` does.
  */
+import { uploadBytesRoutes } from './routes/uploads';
 import { serve } from '@hono/node-server';
 import { auth } from '@docket/auth';
 import { Hono } from 'hono';
@@ -214,6 +215,8 @@ server.route('/webhooks/mail', inboundMail);
 // owns POST /v1/me/account/exports).
 server.use('/v1/stream/*', requireSessionPrincipal);
 server.use('/v1/me/account/exports/:exportId/file', requireSessionPrincipal);
+// Local byte capabilities authorize themselves; bytes never pass the session/OAuth control plane.
+server.route('/v1/file-uploads', uploadBytesRoutes);
 server.route('/v1/stream', streamSse);
 server.route('/v1/me/account/exports', meAccountExportDownload);
 // The anonymous published-brief read. Mounted HERE, before the typed `/v1` app, precisely so it

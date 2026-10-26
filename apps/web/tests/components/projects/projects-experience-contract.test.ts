@@ -21,6 +21,10 @@ const detailPath = join(
   root,
   'apps/web/src/app/(app)/orgs/[orgId]/projects/[projectId]/project-detail-client.tsx',
 );
+const workResourcesPanelPath = join(
+  root,
+  'apps/web/src/components/entity-detail/work-resources-panel.tsx',
+);
 const documentPath = join(root, 'apps/web/src/components/editor/entity-document.tsx');
 const documentContentsPath = join(root, 'apps/web/src/components/editor/document-contents.tsx');
 const editorPath = join(root, 'apps/web/src/components/editor/freeform-text.tsx');
@@ -233,13 +237,31 @@ describe('Projects experience contract', () => {
     // Matched across whatever line breaks formatting chooses: the contract is that the tab exists,
     // not that its object literal fits on one line.
     expect(detail).toMatch(/value: 'resources',\s*\n?\s*label: 'Resources'/);
-    expect(detail).toContain('<ResourcesTab');
+    const panel = /<WorkResourcesPanel\b[^>]*\/>/.exec(detail)?.[0];
+    expect(panel).toBeDefined();
+    expect(panel).toContain('orgId={orgId}');
+    expect(panel).toContain('subjectType="project"');
+    expect(panel).toContain('subjectId={projectId}');
+    expect(panel).toContain('canEdit={canEdit}');
+    const resources = source(workResourcesPanelPath);
+    expect(resources).toContain('useWorkResources(orgId, subjectType, subjectId)');
+    expect(resources).toContain('<ResourcesTab');
+    expect(resources).toContain('canEdit={canEdit}');
+    expect(resources).toContain(
+      'subject: { type: subjectType, id: subjectId, organizationId: orgId }',
+    );
   });
 
   it('keeps the Resources tab count-free while the panel still receives derived references', () => {
     const detail = source(detailPath);
     expect(detail).not.toMatch(/value: 'resources'[^}]*badge:/);
-    expect(detail).toContain('mentionedExternal={entityMentions.external}');
-    expect(detail).toContain('mentionedEntities={entityMentions.entities}');
+    const panel = /<WorkResourcesPanel\b[^>]*\/>/.exec(detail)?.[0];
+    expect(panel).toContain('description={project.description}');
+    expect(panel).toContain('mentions={entityMentions}');
+    const resources = source(workResourcesPanelPath);
+    expect(resources).toContain('mentionedExternal={mentions.external}');
+    expect(resources).toContain('mentionedEntities={mentions.entities}');
+    expect(resources).toContain('mentionsPending={mentions.isPending}');
+    expect(resources).toContain("hasProse={(description ?? '').trim().length > 0}");
   });
 });

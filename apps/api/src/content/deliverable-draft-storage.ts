@@ -1,16 +1,14 @@
 import { createHash } from 'node:crypto';
-import { attachment, db, genId } from '@docket/db';
+import { attachment, db } from '@docket/db';
 import type { DeliverableOut } from '@docket/work/attachment-contract';
 import { and, eq, isNull } from 'drizzle-orm';
 import { getContainer } from '../container';
-import { IdempotencyConflictError, NotFoundError } from '../error';
-import { hasSqlState } from '../lib/sql-state';
+import { ConflictError, IdempotencyConflictError, NotFoundError } from '../error';
+import { uploadBuffered } from './upload-buffered';
 import { MAX_ATTACHMENT_BYTES } from './attachment-file';
 import { enqueueBlobCleanup, processAttachmentBlobCleanup } from './deliverable-blob-cleanup';
 import { deliverableOut, draftBlobKey, draftOwnerWhere, uploadOwner } from './deliverable-model';
 import type { AttachmentRow, DraftOwner } from './deliverable-model';
-
-const DRAFT_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 
 interface DraftStorageInput {
   readonly orgId: string;
@@ -48,23 +46,23 @@ export async function storeDeliverableDraft(input: DraftStorageInput): Promise<D
     const existing = await findDraft(input);
     if (existing) return restoreDraft(input, existing, uploadHash);
   }
-  let row: AttachmentRow;
   try {
-    row = await insertDraft(input, mimeType, uploadHash);
+    const { row } = await uploadBuffered(
+      input.orgId,
+      input.actorId,
+      {
+        requestId: input.uploadId,
+        fileName: input.file.name,
+        mimeType,
+        title: input.title,
+        destination: { kind: 'draft' },
+      },
+      input.file.bytes,
+      input.owner,
+    );
+    return deliverableOut(row);
   } catch (error) {
-    if (!uploadId || !hasSqlState(error, '23505')) throw error;
-    return restoreDraft(input, await findDraft(input), uploadHash);
-  }
-  try {
-    return await writeDraftBytes(input, row);
-  } catch (error) {
-    // Retain an uncertain keyed upload so the same identity can restore its bytes on retry.
-    if (uploadId) throw error;
-    await db.transaction(async (tx) => {
-      await enqueueBlobCleanup(tx, input.orgId, draftBlobKey(input.orgId, row.id));
-      await tx.delete(attachment).where(eq(attachment.id, row.id));
-    });
-    await processAttachmentBlobCleanup(10);
+    if (error instanceof ConflictError) throw new IdempotencyConflictError();
     throw error;
   }
 }
@@ -107,45 +105,6 @@ async function restoreDraft(
   if (existing?.draftUploadHash !== uploadHash) throw new IdempotencyConflictError();
   if (!existing.draftExpiresAt || existing.draftExpiresAt <= new Date()) throw new NotFoundError();
   return writeDraftBytes(input, existing);
-}
-
-async function insertDraft(
-  input: DraftStorageInput,
-  mimeType: string,
-  uploadHash: string | null,
-): Promise<AttachmentRow> {
-  const { orgId, actorId, file, owner, uploadId, title } = input;
-  const id = genId();
-  const [row] = await db
-    .insert(attachment)
-    .values({
-      id,
-      organizationId: orgId,
-      createdBy: actorId,
-      subjectType: 'draft',
-      subjectId: JSON.stringify([
-        owner.actorId,
-        owner.performerKind,
-        owner.performerId,
-        owner.clientId,
-      ]),
-      draftOwnerActorId: owner.actorId,
-      draftOwnerPerformerKind: owner.performerKind,
-      draftOwnerPerformerId: owner.performerId,
-      draftOwnerClientId: owner.clientId,
-      draftExpiresAt: new Date(Date.now() + DRAFT_RETENTION_MS),
-      draftUploadId: uploadId ?? null,
-      draftUploadHash: uploadHash,
-      kind: 'file',
-      title: title ?? file.name,
-      fileName: file.name,
-      mimeType,
-      byteSize: file.bytes.length,
-      blobKey: null,
-    })
-    .returning();
-  if (!row) throw new Error('File upload did not persist.');
-  return row;
 }
 
 function validatedMimeType(input: DraftStorageInput): string {

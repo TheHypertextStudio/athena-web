@@ -7,6 +7,15 @@
  * under `.data/exports`. No business logic lives here; only the storage edge does.
  */
 
+import type { BlobTransfer } from './transfer';
+export type {
+  BlobTransfer,
+  BlobMetadata,
+  BlobRange,
+  TransferOptions,
+  TransferProgress,
+} from './transfer';
+
 /** Result of storing a blob. */
 export interface BlobPutResult {
   /** The key the blob was stored under. */
@@ -20,6 +29,8 @@ export interface BlobPutResult {
  * binary artifacts by key. Implemented by `GcsBlob` and `LocalDiskBlob`.
  */
 export interface BlobStore {
+  /** Bounded transfer, streaming reads and storage-side copies. */
+  readonly transfer: BlobTransfer;
   /**
    * Store bytes under a key.
    *

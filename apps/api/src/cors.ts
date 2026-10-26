@@ -197,12 +197,20 @@ export function buildCorsMiddleware(trustedOrigins: readonly string[]): Middlewa
     allowHeaders: SIGN_OUT_ALLOWED_REQUEST_HEADERS,
     exposeHeaders: EXPOSED_RESPONSE_HEADERS,
   });
+  const uploadCors = cors({
+    origin: [...trustedOrigins],
+    credentials: false,
+    allowMethods: ['PUT', 'OPTIONS'],
+    allowHeaders: ['Content-Type', 'Content-Range', 'X-Docket-Upload-Token'],
+    exposeHeaders: ['Range'],
+  });
   const publicOAuthCors = cors({
     origin: '*',
     allowHeaders: [...ALLOWED_REQUEST_HEADERS, SHARE_TOKEN_HEADER],
     exposeHeaders: EXPOSED_RESPONSE_HEADERS,
   });
   return (c, next) => {
+    if (/^\/v1\/file-uploads\/[^/]+\/bytes$/u.test(c.req.path)) return uploadCors(c, next);
     if (usesPublicCors(c.req.path) || usesBearerCors(c)) return publicOAuthCors(c, next);
 
     const method =

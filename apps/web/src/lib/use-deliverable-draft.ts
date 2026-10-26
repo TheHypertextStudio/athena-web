@@ -3,6 +3,8 @@ import { useEffect, useRef, useState, type RefObject } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import type { DeliverableDraftOut, DeliverableOut } from '@docket/work/attachment-contract';
 import { api } from './api';
+import { transferFile, type FileTransfer } from './resumable-upload';
+import { uploadControl } from './upload-control';
 import { ApiRequestError } from './query-core';
 import { apiQueryOptions, queryKeys, unwrap, useApiMutation, useApiQuery } from './query';
 import {
@@ -49,7 +51,17 @@ export function useDeliverableDraft({
   const queryClient = useQueryClient();
   const [pending, setPending] = useState<PendingDeliverableUpload[]>([]);
   const [error, setError] = useState('');
-  const xhrs = useRef(new Map<string, XMLHttpRequest>());
+  const controllers = useRef(new Map<string, AbortController>());
+  const sessions = useRef(new Map<string, string>());
+  const transfer = useApiMutation({
+    mutationFn: (input: Omit<FileTransfer, 'control'>) =>
+      transferFile({ ...input, control: uploadControl(orgId) }),
+    failure: 'silent',
+  });
+  const retire = useApiMutation({
+    mutationFn: (id: string) => uploadControl(orgId).cancel(id),
+    failure: 'silent',
+  });
   const uploadStates = useRef(new Map<string, PendingDeliverableUpload['state']>());
   const filesRef = useRef<DeliverableOut[]>([...files]);
   const recoveredFor = useRef<string | null>(null);
@@ -84,7 +96,10 @@ export function useDeliverableDraft({
     fileCount: files.length,
     pending,
     states: uploadStates.current,
-    xhrs: xhrs.current,
+    controllers: controllers.current,
+    sessions: sessions.current,
+    transfer: transfer.mutateAsync,
+    retire: retire.mutateAsync,
     setPending,
     setError,
     onUploaded(uploaded) {

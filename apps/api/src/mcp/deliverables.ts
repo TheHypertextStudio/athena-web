@@ -83,7 +83,7 @@ export function registerDeliverableTools(server: McpRegistrar, ctx: McpContext):
     {
       title: 'Upload deliverable',
       description:
-        'Upload private UTF-8 textContent (without base64 expansion or text changes) or canonical binary base64, up to 4 MB. The server cannot read local paths. After an uncertain result, reuse uploadId with identical file details/bytes. Recover private uploads via list_my_deliverable_drafts; attach IDs in comment/report_status. Drafts expire in seven days; posts allow ten files. Never send credentials or upload without permission.',
+        'Upload private UTF-8 textContent (without base64 expansion or text changes) or canonical binary base64, up to 4 MiB; use manage_upload for larger files. The server cannot read local paths. After an uncertain result, reuse uploadId with identical file details/bytes. Recover private uploads via list_my_deliverable_drafts; attach IDs in comment/report_status. Drafts expire in seven days; posts allow ten files. Never send credentials or upload without permission.',
       inputSchema: uploadInput.shape,
       outputSchema: DeliverableOut.shape,
       annotations: {
@@ -127,7 +127,7 @@ function registerDeliverableReadTools(server: McpRegistrar, ctx: McpContext): vo
     {
       title: 'Recover my deliverable drafts',
       description:
-        'List your own unexpired private uploads after interruption. Draft ownership includes the verified performer and connected client. Attach a returned id to comment or report_status; unclaimed drafts expire after seven days.',
+        'Recover this performer/client’s private drafts. Attach IDs to comment/report_status within seven days.',
       inputSchema: { orgId: orgIdParam },
       outputSchema: { items: z.array(DeliverableDraftOut) },
       annotations: {
@@ -148,7 +148,7 @@ function registerDeliverableReadTools(server: McpRegistrar, ctx: McpContext): vo
     {
       title: 'List deliverables',
       description:
-        'List files attached to a comment or status update. Requires current access to the parent work. Read uploaded bytes through get_resources and its content URI using kind attachment and the returned file id.',
+        'List readable comment/update files. Read small files with get_resources (kind attachment); use downloadUrl for larger files.',
       inputSchema: {
         orgId: orgIdParam,
         subjectType: z.enum(['comment', 'update']),
@@ -179,8 +179,7 @@ function registerDeliverableReadTools(server: McpRegistrar, ctx: McpContext): vo
     'discard_deliverable',
     {
       title: 'Discard pending deliverable',
-      description:
-        'Remove an unattached upload belonging to this performer. Posted files stay with their post.',
+      description: 'Discard this performer’s private draft; posted files are retained.',
       inputSchema: { orgId: orgIdParam, id: z.string().min(1) },
       outputSchema: { removed: z.literal(true) },
       annotations: {
@@ -205,7 +204,7 @@ function registerDeliverableUploadSessionTool(server: McpRegistrar, ctx: McpCont
     {
       title: 'Prepare a deliverable upload',
       description:
-        'Create a private 15-minute upload-only URL for a local agent file: orgId, fileName, optional mimeType/title. Stream multipart field `file` to uploadUrl with header `X-Docket-Upload-Token: uploadToken`, avoiding base64/large MCP requests. The token accepts only that file, expires in 15 minutes, and retries need identical bytes. The upload response returns a private draft file ID for comment/report_status. Never share tokens or upload without permission.',
+        'Legacy private 4 MiB upload-only URL for a local agent file: orgId, fileName, optional mimeType/title. POST multipart field `file` to uploadUrl with header `X-Docket-Upload-Token: uploadToken`, avoiding base64/large MCP requests. The token accepts only that file, expires in 15 minutes, and retries need identical bytes. The upload response returns a private draft file ID for comment/report_status. Never share tokens or upload without permission. Prefer manage_upload for resumable files.',
       inputSchema: uploadSessionInput.shape,
       outputSchema: DeliverableUploadSessionOut.shape,
       annotations: {

@@ -38,6 +38,7 @@ export function WorkResourcesPanel({
       onRemove={data.remove}
       onUpload={data.upload}
       uploading={data.uploading}
+      uploadProgress={data.uploadProgress}
       downloadHref={data.downloadHref}
       onRetry={data.retry}
       {...(subjectType === 'program'

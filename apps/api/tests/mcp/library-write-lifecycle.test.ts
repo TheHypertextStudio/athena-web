@@ -64,8 +64,8 @@ describe('files on work containers', () => {
       expect(
         await schema.db
           .select()
-          .from(schema.resourceWriteReceipt)
-          .where(eq(schema.resourceWriteReceipt.attachmentId, id)),
+          .from(schema.fileUpload)
+          .where(eq(schema.fileUpload.attachmentId, id)),
       ).toHaveLength(1);
     },
   );

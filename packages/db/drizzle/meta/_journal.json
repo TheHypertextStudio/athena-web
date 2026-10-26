@@ -1331,6 +1331,13 @@
       "when": 1793106700001,
       "tag": "0189_mcp_resource_writes",
       "breakpoints": true
+    },
+    {
+      "idx": 188,
+      "version": "7",
+      "when": 1793059387186,
+      "tag": "0188_resumable_file_uploads",
+      "breakpoints": true
     }
   ]
 }

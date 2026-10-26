@@ -68,3 +68,5 @@ export * from './work-template-private-step';
 export * from './usage-cost';
 export * from './ai-call-usage';
 export * from './resource-write';
+
+export * from './file-upload';

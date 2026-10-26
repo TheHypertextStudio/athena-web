@@ -345,6 +345,7 @@ describe('buildAppContainer', () => {
       PUSH_API_KEY: 'push-key',
       PUSH_APP_ID: 'push-app',
       GCS_BLOB_BUCKET: 'studio-artifacts',
+      WEB_URL: 'https://docket.example',
       OPENAI_API_KEY: 'sk-openai-x',
     });
     expect(container.sms).toBeInstanceOf(RealSmsSender);
@@ -376,6 +377,7 @@ describe('buildAppContainer', () => {
       PUSH_API_KEY: 'push-key',
       PUSH_APP_ID: 'push-app',
       GCS_BLOB_BUCKET: 'studio-artifacts',
+      WEB_URL: 'https://docket.example',
     });
     expect(container.billing).toBeDefined();
     expect(container.blob).toBeDefined();

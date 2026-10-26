@@ -182,7 +182,7 @@ function DeliverableActions({
             </Button>
           </TooltipTrigger>
           <TooltipContent>
-            Up to 10 files · 4 MB each
+            Up to 10 files · 100 MiB each
             <br />
             Unposted files kept privately for 7 days.
           </TooltipContent>

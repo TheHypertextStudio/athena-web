@@ -15,7 +15,8 @@ import {
   readableDeliverable,
   uploadDeliverable,
 } from '../content/deliverables';
-import { MAX_ATTACHMENT_BYTES, readAttachmentFile } from '../content/attachment-file';
+import { attachmentStream } from '../content/attachment-stream';
+import { MAX_ATTACHMENT_BYTES } from '../content/attachment-file';
 
 interface UploadedFile {
   readonly name: string;
@@ -118,18 +119,7 @@ export const deliverableRoutes = new Hono<AppEnv>()
         )
       )
         throw new NotFoundError();
-      const file = await readAttachmentFile(row);
-      if (file.status !== 'available') throw new NotFoundError();
-      return new Response(new Uint8Array(file.bytes), {
-        headers: {
-          'Content-Type': mimeType,
-          'Content-Disposition': `inline; filename*=UTF-8''${encodeURIComponent(row.fileName ?? 'media')}`,
-          'X-Content-Type-Options': 'nosniff',
-          'Content-Security-Policy':
-            "sandbox; default-src 'none'; img-src 'self'; media-src 'self'",
-          'Cache-Control': 'private, no-store',
-        },
-      });
+      return attachmentStream(row, c.req.header('Range'), true);
     },
   )
   .get(
@@ -144,16 +134,7 @@ export const deliverableRoutes = new Hono<AppEnv>()
     async (c) => {
       const { orgId, actorId } = c.get('actorCtx');
       const row = await readableDeliverable(orgId, actorId, c.req.valid('param').id);
-      const file = await readAttachmentFile(row);
-      if (file.status !== 'available') throw new NotFoundError();
-      return new Response(new Uint8Array(file.bytes), {
-        headers: {
-          'Content-Type': row.mimeType ?? 'application/octet-stream',
-          'Content-Disposition': `attachment; filename*=UTF-8''${encodeURIComponent(row.fileName ?? 'download')}`,
-          'X-Content-Type-Options': 'nosniff',
-          'Cache-Control': 'private, no-store',
-        },
-      });
+      return attachmentStream(row, c.req.header('Range'));
     },
   )
   .delete(

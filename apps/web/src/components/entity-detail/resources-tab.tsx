@@ -38,6 +38,7 @@ export interface ResourcesTabProps {
   onUpload?: (file: File) => void;
   /** Whether a file upload is in flight. */
   uploading?: boolean;
+  uploadProgress?: number | undefined;
   /** Return a same-origin download URL for a file attachment. */
   downloadHref?: (resourceId: string) => string;
   /**
@@ -155,6 +156,7 @@ export function ResourcesTab({
   onRetry,
   onUpload,
   uploading = false,
+  uploadProgress,
   downloadHref,
   subject,
   mentionedExternal = [],
@@ -329,7 +331,12 @@ export function ResourcesTab({
         />
       )}
       {canEdit && onUpload ? (
-        <ResourceFileUpload onUpload={onUpload} pending={pending} uploading={uploading} />
+        <ResourceFileUpload
+          onUpload={onUpload}
+          pending={pending}
+          uploading={uploading}
+          progress={uploadProgress}
+        />
       ) : null}
       {subject ? (
         <MailAttachmentsPanel

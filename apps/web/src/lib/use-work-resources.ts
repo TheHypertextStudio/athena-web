@@ -1,5 +1,8 @@
 'use client';
 
+import { useState } from 'react';
+import { transferFile } from './resumable-upload';
+import { uploadControl } from './upload-control';
 import type { AttachmentOut, WorkResourceSubjectType } from '@docket/work/attachment-contract';
 import { api } from './api';
 import { fetchAllCursorPages } from './fetch-all-cursor-pages';
@@ -12,6 +15,7 @@ export interface WorkResourcesData {
   readonly loading: boolean;
   readonly pending: boolean;
   readonly uploading: boolean;
+  readonly uploadProgress: number;
   readonly error: string | null;
   readonly loadFailure: unknown;
   readonly add: (input: { title: string; url: string }) => void;
@@ -27,6 +31,7 @@ export function useWorkResources(
   subjectType: WorkResourceSubjectType,
   subjectId: string,
 ): WorkResourcesData {
+  const [uploadProgress, setUploadProgress] = useState(0);
   const param = { orgId, subjectType, subjectId };
   const route = api.v1.orgs[':orgId']['work-resources'][':subjectType'][':subjectId'];
   const key = ['work-resources', orgId, subjectType, subjectId] as const;
@@ -49,11 +54,16 @@ export function useWorkResources(
     invalidateKeys: [key],
   });
   const upload = useApiMutation({
-    mutationFn: (form: { file: File; requestId: string }) =>
-      unwrap(
-        () => route.upload.$post({ param, form }),
-        'Could not upload the file. Files must be 4 MiB or smaller.',
-      ),
+    mutationFn: ({ file, requestId }: { file: File; requestId: string }) => {
+      setUploadProgress(0);
+      return transferFile({
+        file,
+        requestId,
+        destination: { kind: 'work', subjectType, subjectId },
+        control: uploadControl(orgId),
+        onProgress: setUploadProgress,
+      });
+    },
     invalidateKeys: [key],
   });
   const remove = useApiMutation({
@@ -72,6 +82,7 @@ export function useWorkResources(
     loading: list.isPending,
     pending: add.isPending || upload.isPending || remove.isPending,
     uploading: upload.isPending,
+    uploadProgress,
     error: error ? userErrorMessage(error, 'Could not load resources.') : null,
     loadFailure: list.error,
     add: (input: { title: string; url: string }): void => {

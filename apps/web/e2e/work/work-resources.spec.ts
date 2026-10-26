@@ -27,30 +27,35 @@ test('people upload, retry, download and remove context on every work type', asy
     });
     const upload = page.getByRole('button', { name: 'Upload file', exact: true });
     await expect(upload).toBeVisible({ timeout: 40_000 });
-    const endpoint = `**/v1/orgs/${orgId}/work-resources/${kind}/${work.id}/upload`;
+    const endpoint = `**/v1/orgs/${orgId}/uploads`;
+    const byteEndpoint = `**/v1/file-uploads/*/bytes`;
+    const offsets: number[] = [];
     const requestIds: string[] = [];
     if (kind === 'program') {
       await page.route(endpoint, async (route) => {
-        const body = route.request().postDataBuffer()?.toString('utf8') ?? '';
-        const id = /name="requestId"\r\n\r\n([^\r]+)/.exec(body)?.[1];
-        requestIds.push(id ?? '');
-        if (requestIds.length === 1) {
-          await route.fulfill({
-            status: 503,
-            contentType: 'application/json',
-            body: JSON.stringify({ type: 'about:blank', title: 'Unavailable', status: 503 }),
-          });
-        } else await route.continue();
+        requestIds.push((route.request().postDataJSON() as { requestId: string }).requestId);
+        await route.continue();
+      });
+      await page.route(byteEndpoint, async (route) => {
+        const start = Number(
+          /bytes (\d+)-/.exec(route.request().headers()['content-range'] ?? '')?.[1],
+        );
+        offsets.push(start);
+        if (offsets.length === 2) await route.fulfill({ status: 503 });
+        else await route.continue();
       });
     }
     const fileName = `${kind}-context.txt`;
-    const contents = `Acceptance fixture for ${kind} context`;
+    const contents =
+      kind === 'program'
+        ? Buffer.alloc(12 * 1024 * 1024, 97)
+        : Buffer.from(`Acceptance fixture for ${kind} context`);
     await upload.focus();
     const [chooser] = await Promise.all([page.waitForEvent('filechooser'), upload.press('Enter')]);
     await chooser.setFiles({
       name: fileName,
       mimeType: 'text/plain',
-      buffer: Buffer.from(contents),
+      buffer: contents,
     });
     if (kind === 'program') {
       await page.getByRole('button', { name: 'Try again', exact: true }).click();
@@ -61,12 +66,14 @@ test('people upload, retry, download and remove context on every work type', asy
       expect(requestIds).toHaveLength(2);
       expect(requestIds[0]).not.toBe('');
       expect(requestIds[1]).toBe(requestIds[0]);
+      expect(offsets).toEqual([0, 8 * 1024 * 1024, 8 * 1024 * 1024]);
       await page.unroute(endpoint);
+      await page.unroute(byteEndpoint);
     }
     const [download] = await Promise.all([page.waitForEvent('download'), file.click()]);
     const downloaded = info.outputPath(fileName);
     await download.saveAs(downloaded);
-    expect(readFileSync(downloaded, 'utf8')).toBe(contents);
+    expect(readFileSync(downloaded)).toEqual(contents);
     await page.getByRole('button', { name: `Remove ${fileName}`, exact: true }).click();
     await expect(file).toHaveCount(0);
     await page.reload();

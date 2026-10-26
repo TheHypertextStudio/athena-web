@@ -38,6 +38,9 @@ export function summarizeLibraryResource(
           fileName: source.fileName,
           mimeType: source.mimeType,
           byteSize: source.byteSize,
+          ...(source.kind === 'file'
+            ? { downloadUrl: `/v1/orgs/${ref.orgId}/deliverables/${source.id}/download` }
+            : {}),
         },
   });
 }

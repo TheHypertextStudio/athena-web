@@ -87,6 +87,7 @@ export const TOOL_SCOPE: Readonly<Record<string, McpScope>> = {
   // work:write — work-layer mutations
   comment: 'work:write',
   upload_resource: 'work:write',
+  manage_upload: 'work:write',
   attach_resource: 'work:write',
   report_status: 'work:write',
   upload_deliverable: 'work:write',

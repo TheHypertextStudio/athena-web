@@ -6,7 +6,8 @@
   "license": "UNLICENSED",
   "description": "Blob storage contract, local filesystem double, and private Google Cloud Storage adapter.",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./checksum": "./src/checksum.ts"
   },
   "main": "./src/index.ts",
   "types": "./src/index.ts",

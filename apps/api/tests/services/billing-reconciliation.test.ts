@@ -1,6 +1,6 @@
 import { InMemoryBillingGateway } from '@docket/billing/adapters/in-memory';
 import type { Subscription } from '@docket/billing/contracts';
-import type { BlobStore } from '@docket/blob-store';
+import { LocalDiskBlob, type BlobStore } from '@docket/blob-store';
 import { and, eq } from 'drizzle-orm';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -26,12 +26,12 @@ function blobDouble(): { blob: BlobStore; deleteBlob: ReturnType<typeof vi.fn> }
   const deleteBlob = vi.fn().mockResolvedValue(undefined);
   return {
     deleteBlob,
-    blob: {
+    blob: Object.assign(new LocalDiskBlob(), {
       put: vi.fn(),
       get: vi.fn(),
       url: vi.fn(),
       delete: deleteBlob,
-    },
+    }),
   };
 }
 

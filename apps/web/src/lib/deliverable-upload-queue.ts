@@ -1,9 +1,7 @@
 import type { Dispatch, SetStateAction } from 'react';
 import type { DeliverableOut } from '@docket/work/attachment-contract';
-import { surfaceHeaders } from './provenance/surface';
-
-/** Typed local abort signal, distinct from provider or exception text. */
-class UploadCancelledError extends Error {}
+import { MAX_UPLOAD_BYTES } from '@docket/work/attachment-contract';
+import type { FileTransfer } from './resumable-upload';
 
 /** One browser-local upload that can be retried or cancelled before it becomes a draft. */
 export interface PendingDeliverableUpload {
@@ -20,7 +18,10 @@ export interface UploadQueueContext {
   readonly fileCount: number;
   readonly pending: readonly PendingDeliverableUpload[];
   readonly states: Map<string, PendingDeliverableUpload['state']>;
-  readonly xhrs: Map<string, XMLHttpRequest>;
+  readonly controllers: Map<string, AbortController>;
+  readonly sessions: Map<string, string>;
+  readonly transfer: (input: Omit<FileTransfer, 'control'>) => Promise<DeliverableOut>;
+  readonly retire: (id: string) => Promise<unknown>;
   readonly setPending: Dispatch<SetStateAction<PendingDeliverableUpload[]>>;
   readonly setError: Dispatch<SetStateAction<string>>;
   readonly onUploaded: (file: DeliverableOut) => void;
@@ -43,49 +44,26 @@ async function uploadOne(queue: UploadQueueContext, item: PendingDeliverableUplo
   queue.setError('');
   updatePending(queue, item.key, { state: 'uploading', progress: 0 });
   try {
-    const uploaded = await new Promise<DeliverableOut>((resolve, reject) => {
-      const xhr = new XMLHttpRequest();
-      queue.xhrs.set(item.key, xhr);
-      xhr.open('POST', `/v1/orgs/${encodeURIComponent(queue.orgId)}/deliverables`);
-      xhr.withCredentials = true;
-      for (const [name, value] of Object.entries(surfaceHeaders()))
-        xhr.setRequestHeader(name, value);
-      xhr.upload.onprogress = (event) => {
-        if (event.lengthComputable)
-          updatePending(queue, item.key, {
-            progress: Math.min(99, Math.floor((event.loaded / event.total) * 100)),
-          });
-      };
-      xhr.onload = () => {
-        queue.xhrs.delete(item.key);
-        if (xhr.status < 200 || xhr.status >= 300) {
-          reject(new Error('upload_failed'));
-          return;
-        }
-        try {
-          resolve(JSON.parse(xhr.responseText) as DeliverableOut);
-        } catch {
-          reject(new Error('upload_failed'));
-        }
-      };
-      xhr.onerror = () => {
-        queue.xhrs.delete(item.key);
-        reject(new Error('upload_failed'));
-      };
-      xhr.onabort = () => {
-        queue.xhrs.delete(item.key);
-        reject(new UploadCancelledError());
-      };
-      const form = new FormData();
-      form.set('file', item.file);
-      form.set('uploadId', item.key);
-      xhr.send(form);
+    const controller = new AbortController();
+    queue.controllers.set(item.key, controller);
+    const uploaded = await queue.transfer({
+      file: item.file,
+      requestId: item.key,
+      destination: { kind: 'draft' },
+      signal: controller.signal,
+      onSession: (id) => queue.sessions.set(item.key, id),
+      onProgress: (progress) => {
+        updatePending(queue, item.key, { progress });
+      },
     });
+    queue.controllers.delete(item.key);
+    queue.sessions.delete(item.key);
     queue.onUploaded(uploaded);
     queue.setPending((current) => current.filter((candidate) => candidate.key !== item.key));
     queue.states.delete(item.key);
-  } catch (caught) {
-    const state = caught instanceof UploadCancelledError ? 'cancelled' : 'failed';
+  } catch {
+    const state = queue.controllers.get(item.key)?.signal.aborted ? 'cancelled' : 'failed';
+    queue.controllers.delete(item.key);
     queue.states.set(item.key, state);
     updatePending(queue, item.key, {
       state,
@@ -106,8 +84,8 @@ export async function selectUploads(
     queue.setError('Attach up to 10 files per post.');
     return;
   }
-  if (selected.some((file) => file.size === 0 || file.size > 4 * 1024 * 1024)) {
-    queue.setError('Choose non-empty files up to 4 MB each.');
+  if (selected.some((file) => file.size === 0 || file.size > MAX_UPLOAD_BYTES)) {
+    queue.setError('Choose non-empty files up to 100 MiB each.');
     return;
   }
   const queued = selected.map((file) => ({
@@ -133,13 +111,17 @@ export async function retryUpload(queue: UploadQueueContext, key: string): Promi
 /** Cancel a queued file or abort its current byte transfer. */
 export function cancelUpload(queue: UploadQueueContext, key: string): void {
   queue.states.set(key, 'cancelled');
-  const xhr = queue.xhrs.get(key);
-  if (xhr) xhr.abort();
+  const controller = queue.controllers.get(key);
+  if (controller) controller.abort();
   else updatePending(queue, key, { state: 'cancelled' });
 }
 
 /** Forget an unposted local file after it has stopped uploading. */
 export function removePendingUpload(queue: UploadQueueContext, key: string): void {
+  const session = queue.sessions.get(key);
+  if (session) void queue.retire(session).catch(() => undefined);
+  queue.sessions.delete(key);
+  queue.controllers.delete(key);
   queue.states.delete(key);
   queue.setPending((current) => current.filter((item) => item.key !== key));
 }

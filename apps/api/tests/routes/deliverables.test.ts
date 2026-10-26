@@ -123,17 +123,14 @@ describe('deliverables on posts', () => {
     const uploadId = crypto.randomUUID();
     expect((await upload(f.app, file, uploadId)).status).toBe(500);
     const incomplete = one(
-      await db
-        .select()
-        .from(schema.attachment)
-        .where(eq(schema.attachment.draftUploadId, uploadId)),
+      await db.select().from(schema.fileUpload).where(eq(schema.fileUpload.requestId, uploadId)),
     );
     expect(await (await f.app.request('/deliverables/drafts')).json()).toEqual({ items: [] });
-    expect((await post(f.app, f.taskId, [incomplete.id])).status).toBe(404);
+    expect((await post(f.app, f.taskId, [incomplete.attachmentId])).status).toBe(404);
     const retry = await upload(f.app, file, uploadId);
     expect(retry.status).toBe(201);
     const uploaded = DeliverableOut.parse(await retry.json());
-    expect(uploaded.id).toBe(incomplete.id);
+    expect(uploaded.id).toBe(incomplete.attachmentId);
     const drafts = await (await f.app.request('/deliverables/drafts')).json();
     expect(drafts).toMatchObject({ items: [expect.objectContaining({ id: uploaded.id })] });
     put.mockRestore();
@@ -163,8 +160,7 @@ describe('deliverables on posts', () => {
   it('reclaims stored bytes after an unconfirmed draft expires', async () => {
     const f = await fixture();
     const { getContainer } = await import('../../src/container');
-    const { sweepExpiredDeliverableDrafts, processAttachmentBlobCleanup } =
-      await import('../../src/content/deliverables');
+    const { processAttachmentBlobCleanup } = await import('../../src/content/deliverables');
     const blob = getContainer().blob;
     const write = blob.put.bind(blob);
     vi.spyOn(blob, 'put').mockImplementationOnce(async (...args) => {
@@ -174,18 +170,16 @@ describe('deliverables on posts', () => {
     const uploadId = crypto.randomUUID();
     expect((await upload(f.app, undefined, uploadId)).status).toBe(500);
     const incomplete = one(
-      await db
-        .select()
-        .from(schema.attachment)
-        .where(eq(schema.attachment.draftUploadId, uploadId)),
+      await db.select().from(schema.fileUpload).where(eq(schema.fileUpload.requestId, uploadId)),
     );
-    const blobKey = `attachments/${f.orgId}/${incomplete.id}`;
+    const blobKey = incomplete.blobKey;
     expect(await blob.get(blobKey)).not.toBeNull();
     await db
-      .update(schema.attachment)
-      .set({ draftExpiresAt: new Date(Date.now() - 1_000) })
-      .where(eq(schema.attachment.id, incomplete.id));
-    expect(await sweepExpiredDeliverableDrafts()).toBe(1);
+      .update(schema.fileUpload)
+      .set({ expiresAt: new Date(Date.now() - 1_000) })
+      .where(eq(schema.fileUpload.id, incomplete.id));
+    const { sweepExpiredUploads } = await import('../../src/content/upload-cleanup');
+    expect(await sweepExpiredUploads()).toBe(1);
     await processAttachmentBlobCleanup();
     expect(await blob.get(blobKey)).toBeNull();
   });

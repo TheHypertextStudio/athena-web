@@ -118,6 +118,7 @@ export interface AppRuntimeEnv {
   readonly PUSH_API_KEY?: string;
   readonly PUSH_APP_ID?: string;
   readonly GCS_BLOB_BUCKET?: string;
+  readonly WEB_URL?: string;
   readonly GITHUB_API_BASE?: string;
   readonly LINEAR_API_BASE?: string;
   readonly GOOGLE_GMAIL_API_BASE?: string;
@@ -536,7 +537,10 @@ export function buildAppContainer(runtimeEnv: AppRuntimeEnv = toAppRuntimeEnv())
   const blob = lazyValue(() =>
     mock
       ? new LocalDiskBlob()
-      : new GcsBlob({ bucket: required('GCS_BLOB_BUCKET', runtimeEnv.GCS_BLOB_BUCKET) }),
+      : new GcsBlob({
+          bucket: required('GCS_BLOB_BUCKET', runtimeEnv.GCS_BLOB_BUCKET),
+          uploadOrigin: required('WEB_URL', runtimeEnv.WEB_URL),
+        }),
   );
   const placeGeocoder = lazyValue(() => buildPlaceGeocoder(runtimeEnv));
 

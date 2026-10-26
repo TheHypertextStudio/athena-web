@@ -1,16 +1,19 @@
 /** Private Google Cloud Storage adapter authenticated with Application Default Credentials. */
 import { Storage } from '@google-cloud/storage';
 
+import { GcsTransfer, type TransferObject } from './gcs-transfer';
 import type { BlobPutResult, BlobStore } from './index';
 
 /** Non-secret configuration for the private artifact bucket. */
 export interface GcsBlobConfig {
   /** Bucket owned by the deployment's Google Cloud project. */
   readonly bucket: string;
+  /** Validated application origin for browser resumable session CORS. */
+  readonly uploadOrigin?: string;
 }
 
 /** Object operations used at the Google Cloud Storage provider boundary. */
-export interface GcsObject {
+export interface GcsObject extends TransferObject {
   /** Store bytes and metadata, replacing any existing object at this key. */
   save(
     data: Buffer,
@@ -49,6 +52,8 @@ function objectKey(key: string): string {
  */
 export class GcsBlob implements BlobStore {
   private readonly bucket: GcsBucket;
+  /** Direct resumable transfers, streamed reads and provider-side copies. */
+  readonly transfer: GcsTransfer;
 
   /** @param config Non-secret bucket configuration. @param bucket Optional provider IO boundary. */
   constructor(
@@ -56,6 +61,7 @@ export class GcsBlob implements BlobStore {
     bucket?: GcsBucket,
   ) {
     this.bucket = bucket ?? new Storage().bucket(config.bucket);
+    this.transfer = new GcsTransfer(this.bucket, fetch, config.uploadOrigin);
   }
 
   /** {@inheritDoc BlobStore.put} */

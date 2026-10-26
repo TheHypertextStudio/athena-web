@@ -135,6 +135,7 @@ export function toAppRuntimeEnv(): AppRuntimeEnv {
     ...telephonyRuntimeEnv(),
     ...integrationRuntimeEnv(),
     ...(env.GCS_BLOB_BUCKET ? { GCS_BLOB_BUCKET: env.GCS_BLOB_BUCKET } : {}),
+    ...(env.WEB_URL ? { WEB_URL: env.WEB_URL } : {}),
     ...(env.MAPBOX_ACCESS_TOKEN ? { MAPBOX_ACCESS_TOKEN: env.MAPBOX_ACCESS_TOKEN } : {}),
   };
 }

@@ -41,6 +41,7 @@ import {
 } from '../content/deliverables';
 import { sweepExpiredMcpContentReceipts } from '../mcp/content-receipts';
 import { sweepResourceUnfurls } from '../content/unfurl-sweep';
+import { sweepExpiredUploads } from '../content/upload-cleanup';
 import { sweepAbandonedResourceWrites } from '../content/resource-write-receipt';
 import {
   createDrizzleDocumentImageCleanupStorage,
@@ -218,6 +219,7 @@ const cron = new Hono()
     if (!authorized(c)) return c.json({ error: 'unauthorized' }, 401);
     const result = await sweepResourceUnfurls(getContainer().unfurler, new Date());
     const abandonedWritesCleaned = await sweepAbandonedResourceWrites();
+    await sweepExpiredUploads();
     const removedAttachmentsCleaned = await processAttachmentBlobCleanup(50);
     return c.json({ swept: true, ...result, abandonedWritesCleaned, removedAttachmentsCleaned });
   })

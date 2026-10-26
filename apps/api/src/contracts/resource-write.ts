@@ -3,7 +3,7 @@ import { WorkResourceSubjectType, MAX_ATTACHMENT_BYTES } from '@docket/work/atta
 import { OrganizationId } from '@docket/identity-access/ids';
 import { LibraryKind, LibrarySummary } from './library';
 
-/** Existing attachment transport limit, including copied files. */
+/** Inline and legacy multipart limit; storage-side copies use the larger resumable file ceiling. */
 export const MAX_RESOURCE_BYTES = MAX_ATTACHMENT_BYTES;
 
 /** Safe display filename; storage paths never use this value. */

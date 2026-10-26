@@ -1,7 +1,9 @@
+import { writeResourceBytes } from './resource-write-storage';
 import {
   attachment,
   db,
   externalResource,
+  fileUpload,
   genId,
   organization,
   resourceWriteReceipt,
@@ -54,7 +56,7 @@ export async function persistResourceWrite(
     requestHash: input.requestHash,
     attachmentId,
     blobKey: material.kind === 'file' ? `attachments/${input.orgId}/${attachmentId}` : null,
-    byteSize: material.bytes?.byteLength ?? null,
+    byteSize: material.byteSize ?? material.bytes?.byteLength ?? null,
   });
   return db
     .transaction(async (tx) => {
@@ -67,13 +69,7 @@ export async function persistResourceWrite(
       await authorizeResourceSubject(input, 'contribute', tx);
       await authorizeMaterialSource(tx, input, material);
       if (receipt.completedAt) return replayResourceWrite(tx, receipt);
-      if (material.bytes && receipt.blobKey) {
-        await getContainer().blob.put(
-          receipt.blobKey,
-          material.bytes,
-          material.mimeType ?? 'application/octet-stream',
-        );
-      }
+      await writeResourceBytes(receipt.blobKey, material);
       const [row] = await tx
         .insert(attachment)
         .values({
@@ -89,7 +85,7 @@ export async function persistResourceWrite(
           blobKey: receipt.blobKey,
           fileName: material.fileName,
           mimeType: material.mimeType,
-          byteSize: material.bytes?.byteLength,
+          byteSize: material.byteSize ?? material.bytes?.byteLength,
         })
         .returning();
       if (!row) throw new Error('Resource attachment insert returned no row');
@@ -150,7 +146,16 @@ async function reserveReceipt(input: typeof resourceWriteReceipt.$inferInsert): 
           gt(resourceWriteReceipt.createdAt, new Date(Date.now() - 60_000)),
         ),
       );
-    if ((recent?.total ?? 0) >= 30) throw new RateLimitedError(60);
+    const [uploads] = await tx
+      .select({ total: count() })
+      .from(fileUpload)
+      .where(
+        and(
+          eq(fileUpload.organizationId, input.organizationId),
+          gt(fileUpload.createdAt, new Date(Date.now() - 60_000)),
+        ),
+      );
+    if ((recent?.total ?? 0) + (uploads?.total ?? 0) >= 30) throw new RateLimitedError(60);
     await tx.insert(resourceWriteReceipt).values(input).onConflictDoNothing();
   });
 }
@@ -218,9 +223,10 @@ async function replayResourceWrite(
   return { row, replayed: true };
 }
 
-async function recordResourceWrite(
+/** Record direct file publication with durable resource activity and search jobs. */
+export async function recordResourceWrite(
   tx: Tx,
-  input: ResourceWriteIdentity,
+  input: ResourceSubject,
   row: typeof attachment.$inferSelect,
 ): Promise<void> {
   await insertAuditEvents(tx, 'resource_attach', {

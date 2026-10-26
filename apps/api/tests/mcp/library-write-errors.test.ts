@@ -226,8 +226,8 @@ describe('Library write failure boundaries', () => {
     expect(
       await schema.db
         .select()
-        .from(schema.resourceWriteReceipt)
-        .where(eq(schema.resourceWriteReceipt.organizationId, s.orgId)),
+        .from(schema.fileUpload)
+        .where(eq(schema.fileUpload.organizationId, s.orgId)),
     ).toHaveLength(1);
   });
 });

@@ -1,5 +1,5 @@
 import { InMemoryBillingGateway } from '@docket/billing/adapters/in-memory';
-import type { BlobStore } from '@docket/blob-store';
+import { LocalDiskBlob, type BlobStore } from '@docket/blob-store';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type * as DbModule from '@docket/db';
@@ -21,6 +21,7 @@ beforeEach(async () => {
 
 function blobDouble(): BlobStore {
   return {
+    transfer: new LocalDiskBlob().transfer,
     put: vi.fn(),
     get: vi.fn(),
     url: vi.fn(),

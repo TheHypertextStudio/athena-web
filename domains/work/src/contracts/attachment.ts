@@ -14,8 +14,12 @@ import { z } from 'zod';
 import { AttachmentId } from '../ids';
 import { OrganizationId } from '@docket/identity-access/ids';
 
-/** Maximum bytes accepted for one uploaded or copied attachment. */
+/** Maximum inline or legacy multipart body size; resumable files use MAX_UPLOAD_BYTES. */
 export const MAX_ATTACHMENT_BYTES = 4 * 1024 * 1024;
+/** Maximum accepted file size, independent of inline transport limits. */
+export const MAX_UPLOAD_BYTES = 100 * 1024 * 1024;
+/** Recommended bounded transfer chunk (a multiple of the provider’s 256 KiB alignment). */
+export const UPLOAD_CHUNK_BYTES = 8 * 1024 * 1024;
 
 /** The polymorphic subject kinds an Attachment can attach to. */
 export const AttachmentSubjectType = z.enum([

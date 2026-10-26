@@ -1,3 +1,5 @@
+import { uploadBuffered } from '../content/upload-buffered';
+import { attachmentStream } from '../content/attachment-stream';
 import { createHash, randomUUID } from 'node:crypto';
 import { attachment, db } from '@docket/db';
 import {
@@ -16,7 +18,7 @@ import {
 } from '../contracts/resource-write';
 import { CursorQuery, pageOf } from '../contracts/pagination';
 import { attachmentOutput, authorizeResourceSubject } from '../content/resource-subject';
-import { loadReadableAttachment, readAttachmentFile } from '../content/attachment-file';
+import { loadReadableAttachment } from '../content/attachment-file';
 import { removeResourceAttachment } from '../content/resource-removal';
 import { linkedResourceMaterial } from '../content/resource-url';
 import { persistResourceWrite } from '../content/resource-write-receipt';
@@ -135,10 +137,11 @@ const workResources = new Hono<AppEnv>()
       const fileName = ResourceFileName.parse(file.name);
       const mimeType = ResourceMimeType.parse(file.type || 'application/octet-stream');
       const bytes = new Uint8Array(await file.arrayBuffer());
-      const { row } = await persist(
-        subject,
-        { kind: 'file', title: fileName, fileName, mimeType, bytes, disposition: 'uploaded' },
-        requestId,
+      const { row } = await uploadBuffered(
+        orgId,
+        actorId,
+        { requestId, fileName, mimeType, destination: { kind: 'work', ...c.req.valid('param') } },
+        bytes,
       );
       return ok(c, AttachmentOut, attachmentOutput(row));
     },
@@ -154,15 +157,7 @@ const workResources = new Hono<AppEnv>()
       const row = await loadReadableAttachment(orgId, actorId, input.attachmentId);
       if (row.subjectType !== input.subjectType || row.subjectId !== input.subjectId)
         throw new NotFoundError();
-      const file = await readAttachmentFile(row, MAX_RESOURCE_BYTES);
-      if (file.status !== 'available') throw new NotFoundError();
-      return new Response(new Uint8Array(file.bytes), {
-        headers: {
-          'Content-Type': row.mimeType ?? 'application/octet-stream',
-          'Content-Disposition': `attachment; filename*=UTF-8''${encodeURIComponent(row.fileName ?? 'download')}`,
-          'Cache-Control': 'private, no-store',
-        },
-      });
+      return attachmentStream(row, c.req.header('Range'));
     },
   )
   .delete(

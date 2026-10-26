@@ -23,6 +23,7 @@ const AttachmentMetadata = z.object({
   fileName: z.string().nullable(),
   mimeType: z.string().nullable(),
   byteSize: z.number().nullable(),
+  downloadUrl: z.string().optional(),
 });
 
 /** Safe Library metadata; arbitrary attachment metadata and integration/storage internals are excluded. */

@@ -7,10 +7,12 @@ export function ResourceFileUpload({
   onUpload,
   pending,
   uploading,
+  progress,
 }: {
   readonly onUpload: (file: File) => void;
   readonly pending: boolean;
   readonly uploading: boolean;
+  readonly progress?: number | undefined;
 }): JSX.Element {
   const fileInput = useRef<HTMLInputElement>(null);
   const limitId = useId();
@@ -25,10 +27,10 @@ export function ResourceFileUpload({
         aria-describedby={limitId}
         onClick={() => fileInput.current?.click()}
       >
-        {uploading ? 'Uploading file…' : 'Upload file'}
+        {uploading ? `Uploading ${progress ?? 0}%` : 'Upload file'}
       </Button>
       <Text as="span" id={limitId} token="label-small" tone="muted">
-        Up to 4 MiB
+        Up to 100 MiB
       </Text>
       <input
         ref={fileInput}

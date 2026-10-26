@@ -44,6 +44,7 @@ const FULL_ENV = {
   PUSH_API_KEY: 'push-key',
   PUSH_APP_ID: 'push-app',
   GCS_BLOB_BUCKET: 'studio-artifacts',
+  WEB_URL: 'https://docket.example',
   OPENAI_API_KEY: 'sk-openai-x',
   VOICE_REALTIME_MODEL: 'gpt-realtime-x',
   VOICE_REALTIME_VOICE: 'sage',

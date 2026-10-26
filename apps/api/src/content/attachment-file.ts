@@ -7,7 +7,7 @@ import { NotFoundError } from '../error';
 import { buildTaskViewFilter, loadTask } from '../routes/task-helpers';
 import { resolveResourceAccessForActors, resourceAccessKey } from '../permissions/resource-access';
 
-/** Maximum supported uploaded attachment size, shared by upload and MCP reads. */
+/** Maximum inline/legacy upload body and inline MCP content-read size. */
 export { MAX_ATTACHMENT_BYTES } from '@docket/work/attachment-contract';
 
 /** Load an active attachment after checking its current subject, independently of the search index. */

@@ -36,6 +36,7 @@
     "@dnd-kit/dom": "catalog:",
     "@dnd-kit/react": "catalog:",
     "@docket/api": "workspace:*",
+    "@docket/blob-store": "workspace:*",
     "@docket/athena": "workspace:*",
     "@docket/automation": "workspace:*",
     "@docket/connections": "workspace:*",

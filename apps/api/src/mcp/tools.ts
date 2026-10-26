@@ -1,3 +1,4 @@
+import { registerUploadTools } from './uploads';
 import { registerAthenaMailTools } from './athena-mail-tools';
 import { registerLibraryTools } from './library';
 import { registerResourceWriteTools } from './resource-write-tools';
@@ -79,6 +80,7 @@ export function registerTools(
   const server = new ProvenanceRegistrar(registrar, provenance);
   registerContentTools(server, ctx);
   registerDeliverableTools(server, ctx);
+  registerUploadTools(server, ctx);
   registerLibraryTools(server, ctx);
   registerResourceWriteTools(server, ctx);
   registerAthenaMailTools(server, ctx, sessionId);

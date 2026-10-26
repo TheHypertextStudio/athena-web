@@ -13,6 +13,7 @@ import {
   uploadMaterial,
   type ResourceMaterial,
 } from '../content/resource-write-input';
+import { uploadBuffered } from '../content/upload-buffered';
 import { persistResourceWrite } from '../content/resource-write-receipt';
 import { summarizeLibraryResource } from '../content/library-source';
 import type { McpActor, McpContext } from './auth';
@@ -60,15 +61,28 @@ async function write(
   const subject = { ...actor, subjectType: input.subjectType, subjectId: input.subjectId };
   await authorizeResourceSubject(subject, 'contribute');
   const material = await prepare(actor);
-  const result = await persistResourceWrite(
-    {
-      ...subject,
-      requestId: input.requestId,
-      namespace: ctx.clientId ? `oauth:${ctx.clientId}` : `internal:${ctx.principal.kind}`,
-      requestHash: createHash('sha256').update(JSON.stringify(input)).digest('hex'),
-    },
-    material,
-  );
+  const result = material.bytes
+    ? await uploadBuffered(
+        input.orgId,
+        actor.actorId,
+        {
+          requestId: input.requestId,
+          fileName: material.fileName ?? '',
+          mimeType: material.mimeType ?? 'application/octet-stream',
+          title: material.title,
+          destination: { kind: 'work', subjectType: input.subjectType, subjectId: input.subjectId },
+        },
+        material.bytes,
+      )
+    : await persistResourceWrite(
+        {
+          ...subject,
+          requestId: input.requestId,
+          namespace: ctx.clientId ? `oauth:${ctx.clientId}` : `internal:${ctx.principal.kind}`,
+          requestHash: createHash('sha256').update(JSON.stringify(input)).digest('hex'),
+        },
+        material,
+      );
   return jsonResult({
     resource: summarizeLibraryResource(
       { orgId: input.orgId, kind: 'attachment', id: result.row.id },
@@ -88,7 +102,7 @@ export function registerResourceWriteTools(server: McpRegistrar, ctx: McpContext
     {
       title: 'Upload a resource',
       description:
-        'Upload a file to work (all four types). Destination viewers can read it. Max 4 MiB, canonical base64; reuse requestId for identical retries. Returns safe metadata and read URIs.',
+        'Upload canonical base64 to work (4 MiB). Reuse requestId for identical retries. Destination viewers can read it. Larger files: manage_upload.',
       inputSchema: uploadTransport.shape,
       outputSchema: ResourceWriteOutput.shape,
       annotations,
@@ -104,7 +118,7 @@ export function registerResourceWriteTools(server: McpRegistrar, ctx: McpContext
     {
       title: 'Attach a Library resource',
       description:
-        'Attach readable same-workspace Library material to work. Files are independent copies shared with destination viewers and survive source removal/revocation; links stay canonical. Reuse requestId for identical retries.',
+        'Attach readable same-workspace Library context. Files are independent destination-owned copies; links stay canonical. Reuse requestId for identical retries.',
       inputSchema: attachTransport.shape,
       outputSchema: ResourceWriteOutput.shape,
       annotations,

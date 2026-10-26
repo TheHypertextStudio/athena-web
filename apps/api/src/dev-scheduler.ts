@@ -21,6 +21,7 @@ import { sweepAccountDeletions } from './account/lifecycle';
 import { getContainer } from './container';
 import { sweepLegacyMentions } from './content/legacy-mention-sweep';
 import { sweepResourceUnfurls } from './content/unfurl-sweep';
+import { sweepExpiredUploads } from './content/upload-cleanup';
 import { sweepAbandonedResourceWrites } from './content/resource-write-receipt';
 import { processAttachmentBlobCleanup } from './content/deliverable-blob-cleanup';
 import { sweepCalendarSync } from './routes/calendar-sync-sweep';
@@ -65,6 +66,7 @@ export function startDevScheduler(): void {
       await processSearchIndexJobs({ limit: 50 });
       await sweepResourceUnfurls(getContainer().unfurler, now);
       await sweepAbandonedResourceWrites(now);
+      await sweepExpiredUploads(now);
       await processAttachmentBlobCleanup(50);
       await sweepLegacyMentions();
       await sweepExpiredComposerDrafts(now);

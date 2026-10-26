@@ -9,7 +9,8 @@ import { invalidResourceField } from './resource-validation';
 import type { LibraryRef } from '../contracts/library';
 import type { SearchCaller } from '../search/query';
 import { loadLibrarySource } from './library-reader';
-import { readAttachmentFile } from './attachment-file';
+import { getContainer } from '../container';
+import { MAX_UPLOAD_BYTES } from '@docket/work/attachment-contract';
 import { linkedResourceMaterial } from './resource-url';
 
 /** Validated material for one destination-owned attachment; never carries provider credentials. */
@@ -17,6 +18,9 @@ export interface ResourceMaterial {
   readonly kind: 'file' | 'url';
   readonly title: string;
   readonly bytes?: Uint8Array;
+  readonly copyFromKey?: string;
+  readonly byteSize?: number;
+  readonly crc32c?: string;
   readonly fileName?: string;
   readonly mimeType?: string;
   readonly url?: string;
@@ -78,8 +82,10 @@ async function fileSnapshot(
   title: string | undefined,
   source: LibraryRef,
 ): Promise<ResourceMaterial> {
-  const file = await readAttachmentFile(row, MAX_RESOURCE_BYTES);
-  if (file.status !== 'available' || file.bytes.byteLength === 0) invalidResourceField('resource');
+  if (!row.blobKey) invalidResourceField('resource');
+  const file = await getContainer().blob.transfer.stat(row.blobKey);
+  if (!file || file.byteSize === 0 || file.byteSize > MAX_UPLOAD_BYTES)
+    invalidResourceField('resource');
   const metadata = UploadResourceInput.pick({ fileName: true, mimeType: true }).safeParse({
     fileName: row.fileName,
     mimeType: row.mimeType ?? 'application/octet-stream',
@@ -88,7 +94,9 @@ async function fileSnapshot(
   return {
     kind: 'file',
     title: title ?? row.title,
-    bytes: file.bytes,
+    copyFromKey: row.blobKey,
+    byteSize: file.byteSize,
+    crc32c: file.crc32c,
     ...metadata.data,
     disposition: 'copied',
     source,

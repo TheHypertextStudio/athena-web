@@ -249,9 +249,9 @@ export async function readableDeliverable(
       row.draftExpiresAt <= new Date()
     )
       throw new NotFoundError();
-  } else if (row.subjectType === 'comment' || row.subjectType === 'update') {
+  } else {
     await loadReadableAttachment(orgId, actorId, id);
-  } else throw new NotFoundError();
+  }
   return row;
 }
 

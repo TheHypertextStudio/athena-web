@@ -314,8 +314,11 @@ results also work in hosts without embedded Apps. See [calculation rules and loc
 
 ## Deliverables on comments and updates
 
-People can attach up to ten files (4 MB each) when posting updates and task comments. Agents can
-stream local files through a short-lived upload session, or use `upload_deliverable` with UTF-8
+People can attach up to ten files (100 MiB each) when posting updates and task comments.
+Work resources and private deliverables share resumable uploads. Agents use `manage_upload` to
+begin a file, transfer bounded chunks directly to storage, recover acknowledged progress and complete
+the upload. The same path accepts task, project, program and initiative resource destinations.
+Small files can use `upload_deliverable` (4 MiB maximum) with UTF-8
 `textContent` for generated text and canonical `base64` when direct HTTP upload is unavailable. Pass
 returned file IDs as `attachmentIds` to `comment` or `report_status`.
 `list_my_deliverable_drafts` recovers private uploads for seven days after an interruption; optional

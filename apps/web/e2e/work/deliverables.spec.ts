@@ -171,7 +171,7 @@ test('keyboard upload controls preserve other files through failure, cancellatio
   await expect(attach).toBeFocused();
   await captureUploadState(page, testInfo, 'keyboard-picker-focus', attach);
   await expect(attach).toBeFocused();
-  const endpoint = `**/v1/orgs/${orgId}/deliverables`;
+  const endpoint = `**/v1/orgs/${orgId}/uploads`;
   await page.route(endpoint, (route) => route.fulfill({ status: 503, body: '' }), { times: 1 });
   const chooser = page.waitForEvent('filechooser');
   await page.keyboard.press('Enter');

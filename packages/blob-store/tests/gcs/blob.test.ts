@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { GcsBlob, type GcsBucket } from '../../src/gcs';
 
@@ -8,6 +8,10 @@ function storage() {
   let failure: Error | undefined;
   const bucket: GcsBucket = {
     file: (key) => ({
+      createResumableUpload: vi.fn(),
+      getMetadata: vi.fn(),
+      createReadStream: vi.fn(),
+      copy: vi.fn(),
       save: async (bytes, options) => {
         if (failure) throw failure;
         objects.set(key, {

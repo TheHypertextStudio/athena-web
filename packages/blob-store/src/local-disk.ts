@@ -12,6 +12,7 @@ import { existsSync, writeFileSync } from 'node:fs';
 import { dirname, isAbsolute, join, normalize, resolve, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
+import { LocalTransfer } from './local-transfer';
 import type { BlobPutResult, BlobStore } from './index';
 
 /** Construction options for {@link LocalDiskBlob}. */
@@ -47,12 +48,15 @@ function safeKey(key: string): string {
  */
 export class LocalDiskBlob implements BlobStore {
   private readonly root: string;
+  /** Bounded local byte transfer and reads. */
+  readonly transfer: LocalTransfer;
 
   /**
    * @param options - Optional root directory for stored artifacts.
    */
   constructor(options: LocalDiskBlobOptions = {}) {
     this.root = resolve(options.root ?? join('.data', 'exports'));
+    this.transfer = new LocalTransfer((key) => this.pathFor(key));
   }
 
   private pathFor(key: string): string {

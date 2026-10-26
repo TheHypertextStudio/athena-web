@@ -1,7 +1,7 @@
 /** Project snapshot retries retain one private publication through response and image-work failures. */
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import type * as DbModule from '@docket/db';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { Hono } from 'hono';
 import type { AppEnv } from '../../src/context';
 import type { ProcessDefinitionDetailOut } from '../../src/contracts/recurrence';
@@ -68,11 +68,12 @@ async function fixture() {
   return { org, project, base, app, router, input, request };
 }
 
+/** Private definition identities; retained and canonical authoring both register one head each. */
 async function definitions(organizationId: string) {
   return schema.db
     .select()
-    .from(schema.processDefinition)
-    .where(eq(schema.processDefinition.organizationId, organizationId));
+    .from(schema.invocationHead)
+    .where(eq(schema.invocationHead.organizationId, organizationId));
 }
 
 describe('project snapshot creation receipts', () => {
@@ -143,10 +144,15 @@ describe('project snapshot creation receipts', () => {
     const first = await f.request('definition-revoked');
     expect(first.status).toBe(200);
     const result = (await first.json()) as ProcessDefinitionDetailOut;
+    const archivedAt = new Date();
     await schema.db
       .update(schema.processDefinition)
-      .set({ archivedAt: new Date() })
+      .set({ archivedAt })
       .where(eq(schema.processDefinition.id, result.id));
+    await schema.db
+      .update(schema.invocationHead)
+      .set({ archivedAt, revision: sql`${schema.invocationHead.revision} + 1` })
+      .where(eq(schema.invocationHead.id, result.id));
     expect((await f.request('definition-revoked')).status).toBe(404);
   });
 

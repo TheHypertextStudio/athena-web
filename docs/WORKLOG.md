@@ -7,6 +7,15 @@
 
 ## Active Tasks
 
+### [MCP-GRAPH-INTEGRATION] Integrate and verify the hosted work graph
+
+- **Status**: IN_PROGRESS
+- **Description**: Integrate the accepted read-only graph into current remote main and verify the connected MCP App in inline and expanded views, prioritizing narrow mobile layouts.
+- **Plan**: Preserve the unrelated dirty primary checkout. Rebase the six graph commits onto the current remote tip, validate the combined MCP registration/data/runtime path and API build through the capacity guard, then push one linear delivery directly to main. Let the established release workflow publish the backend. Inspect the actual connected app's entry point, display negotiation, search, Back and narrow/wide presentation; keep deployed connector evidence separate from the local sandbox matrix. Record concrete external blockers without substituting fixture rendering for host acceptance.
+- **Source preparation**: Rebased cleanly onto remote main `897152679`; no primary-checkout files or local main history were changed. The four upstream commits add deliverables and demo reviewer access, so MCP registration and affected API type/build checks need integration coverage.
+- **Tracking**: No matching saved graph task was found in the connected Studio workspace; this work continues under the repository work log without creating or changing unrelated Docket work.
+- **Integration checks**: All 134 focused graph, authorization, scope, resource/runtime and MCP-surface tests pass after rebase, along with the API dependency-graph production build, API typecheck, affected-source lint, unchanged complexity ratchet and work-log formatting. Frozen installation refreshed only the affected workspace graph. Real hosted UI acceptance remains pending release and an accessible app tab.
+
 ### [REVIEWER-DEMO-PRODUCTION] Deploy and provision guarded reviewer access
 
 - **Status**: IN_PROGRESS
@@ -21,6 +30,7 @@
 - **Staging finding**: The deployed magic-link exchange authenticates correctly, but its low-level auth client call does not refresh the reactive session store. Repair that transition and cover it with the actual client before promoting. Headless staging checks stop at staff Access; use the authorized staff browser for hosted acceptance. The staging-only link was rotated and its test sessions revoked after the Access redirect appeared in a failure log.
 - **Client repair validation**: A regression using the actual Better Auth client first reproduced the stale signed-out observer, then passed after the custom exchange notified the session signal. All 192 auth-related web tests, web typecheck and focused lint pass. Excluding generated OpenNext JavaScript preserves the declared native-worker type boundary and avoids exhausting the existing heap limit after a deployment build.
 - **Remaining**: Accept the corrected staging frontend with the existing API image, then deploy production and provision/verify its private reviewer link. No production deployment or credential is claimed yet.
+
 ### [MCP-GRAPH-WORKSPACE] Rebuild mobile framing and honor actual MCP host space
 
 - **Status**: REVIEW

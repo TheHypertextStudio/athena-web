@@ -119,6 +119,8 @@ export function buildServer(
   const server = new McpServer(serverInfo(), {
     instructions: `${TEMPLATE_GUIDANCE}
 
+Use view_work_graph for questions about remaining project work, blockers, upcoming dependencies, or how programs and initiatives fit together. It returns a read-only graph with visible external context and expandable completed work.
+
 Proactively use view_workload during scheduling, daily planning, adding work, and feasibility discussions. Use the human caller’s local date, timezone, and explicit day-hours budget. Explain missing estimates and workspace scope. Viewing capacity never authorizes scheduling or rescheduling.`,
     capabilities: {
       tools: { listChanged: true },

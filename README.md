@@ -141,6 +141,10 @@ Android devices send selected notification captures and removals to the authenti
 and durable scheduled dispatch. See [personal inbound events](docs/engineering/specs/personal-inbound.md)
 for schemas, settlement, lifecycle rules, and the dispatch kill switch.
 
+The MCP tools include a read-only work graph for exploring project, program, initiative, and task
+dependencies, including completed branches and visible external blockers. See the
+[work graph contract](docs/engineering/specs/mcp-work-graph.md).
+
 ## Public documentation
 
 Public legal policies are served at `/terms` and `/privacy`; `/legal/history` links to complete

@@ -16,6 +16,7 @@
  * span every team in the org, so there is no way to know what "done" is called on the team that
  * owns a row. The entity card, which is about one task on one team, is where that edit belongs.
  */
+import { GRAPH_SCRIPT } from './work-graph';
 import { appDocument } from './runtime';
 
 const SCRIPT = String.raw`
@@ -23,6 +24,7 @@ const SCRIPT = String.raw`
   const d = window.docket;
   const INLINE_ROWS = 5;
   let state = null;
+  const graph = window.docketGraph.create();
 
   const GROUP_ORDER = ['started', 'unstarted', 'backlog', 'completed', 'canceled'];
   const GROUP_NAME = { started: 'In progress', unstarted: 'Not started', backlog: 'Backlog', completed: 'Done', canceled: 'Canceled' };
@@ -118,6 +120,7 @@ const SCRIPT = String.raw`
   }
 
   function draw() {
+    if (graph.active) { graph.draw(); return; }
     if (!state) return;
     const items = state.items || [];
     const noun = nounOf(state.entity);
@@ -130,6 +133,9 @@ const SCRIPT = String.raw`
       chips: [items.length > 0 && scope ? count : ''],
       lede: items.length === 0 ? scope : '',
     }));
+    if (state.graphScope) {
+      view.appendChild(d.button('View work graph', () => graph.open(state.graphScope, d.input.orgId, draw, null, d.input)));
+    }
     if (items.length === 0) return;
     const varying = new Set(items.map((item) => item.assignee).filter(Boolean)).size > 1;
     if (d.fullscreen) {
@@ -178,7 +184,7 @@ const SCRIPT = String.raw`
     }, { tonal: true });
   }
 
-  d.onDisplayMode(draw);
+  d.onDisplayMode(() => { if (!graph.mode()) draw(); });
   d.onData((data) => {
     state = data;
     draw();
@@ -187,4 +193,6 @@ const SCRIPT = String.raw`
 `;
 
 /** The rendered work-list document. */
-export const WORK_LIST_HTML = appDocument('Work list', SCRIPT, { skeletonRows: 4 });
+export const WORK_LIST_HTML = appDocument('Work list', `${GRAPH_SCRIPT}\n${SCRIPT}`, {
+  skeletonRows: 4,
+});

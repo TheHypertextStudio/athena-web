@@ -568,10 +568,8 @@ export const RUNTIME_JS = String.raw`
         url: /^[a-z][a-z0-9+.-]*:/i.test(url) ? url : origin + url,
       });
     },
-    say(text) {
-      // The spec requires a role, and only 'user' is permitted.
-      return request('ui/message', { role: 'user', content: [{ type: 'text', text }] });
-    },
+    updateContext(params) { return request('ui/update-model-context', params); },
+    say(text) { return request('ui/message', { role: 'user', content: [{ type: 'text', text }] }); },
     openButton(item) {
       // Every list tool puts an href on its rows, so a card never assembles a route or needs the
       // workspace id. Rows that predate that just get no button.

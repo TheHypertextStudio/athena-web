@@ -116,6 +116,7 @@ function runRuntime() {
       canDisplay(mode: string): boolean;
       requestDisplayMode(mode: string): Promise<string>;
       link(url: string): Promise<unknown>;
+      updateContext(params: Record<string, unknown>): Promise<unknown>;
     },
   };
 }
@@ -264,5 +265,19 @@ describe('Athena MCP App production runtime', () => {
     });
     runtime.send({ jsonrpc: '2.0', id: 'teardown-1', method: 'ui/resource-teardown', params: {} });
     expect(runtime.posted).toContainEqual({ jsonrpc: '2.0', id: 'teardown-1', result: {} });
+  });
+});
+
+describe('selection context in graph apps', () => {
+  it('sends explicit context without starting a conversation turn', () => {
+    const runtime = runRuntime();
+    expect(runtime.posted.some((m) => m.method === 'ui/update-model-context')).toBe(false);
+    void runtime.docket.updateContext({
+      structuredContent: { selected: { kind: 'task', id: 'task_1' } },
+    });
+    expect(runtime.request('ui/update-model-context').params).toEqual({
+      structuredContent: { selected: { kind: 'task', id: 'task_1' } },
+    });
+    expect(runtime.posted.some((m) => m.method === 'ui/message')).toBe(false);
   });
 });

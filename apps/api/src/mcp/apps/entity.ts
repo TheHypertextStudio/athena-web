@@ -12,6 +12,7 @@
  * payload and as a block model in the result's `_meta` (see `entity-render.ts`). The card draws only
  * the block model; a host that drops `_meta` gets the summary and never raw Markdown.
  */
+import { GRAPH_SCRIPT } from './work-graph';
 import { PROJECT_SCRIPT } from './project-card';
 import { appDocument } from './runtime';
 
@@ -34,6 +35,7 @@ const SCRIPT = String.raw`
 (() => {
   const d = window.docket;
   const P = window.docketProject;
+  const graph = window.docketGraph.create();
   /**
    * Rows per section inline. A card sits in a conversation beside the model's answer, so inline it
    * is a glance: a few rows per section and a way into fullscreen, where every section shows all of
@@ -378,6 +380,7 @@ const SCRIPT = String.raw`
   }
 
   function draw() {
+    if (graph.active) { graph.draw(); return; }
     const view = d.canvas();
     if (items.length === 0) {
       view.appendChild(d.header({ kind: type, title: 'Nothing found' }));
@@ -385,6 +388,10 @@ const SCRIPT = String.raw`
       const build = d.own(SINGLE, type);
       const parts = build ? build(items[0]) : [d.header({ kind: type, kicker: labelOf(type), title: nameOf(items[0]) })];
       for (const part of parts) if (part) view.appendChild(part);
+      if (['task','project','program','initiative'].includes(type)) {
+        const item = items[0];
+        view.appendChild(d.button(type === 'task' || type === 'project' ? 'View dependencies' : 'View work graph', () => graph.open({ kind: type, id: item.id }, d.input.orgId, draw)));
+      }
     } else {
       view.appendChild(d.header({ kind: type, title: plural(items.length, labelOf(type).toLowerCase()) }));
       view.appendChild(batchSection(items));
@@ -394,6 +401,7 @@ const SCRIPT = String.raw`
 
   P.setRedraw(() => draw());
   d.onDisplayMode((mode) => {
+    if (graph.mode()) return;
     P.onMode(mode);
     if (items.length > 0 || missing.length > 0) draw();
   });
@@ -407,7 +415,7 @@ const SCRIPT = String.raw`
 
 /** Build the legacy generic entity document or a document dedicated to one readable entity type. */
 export function entityDocument(entityType?: EntityDocumentType): string {
-  const script = `${PROJECT_SCRIPT}\nconst entityType = ${JSON.stringify(entityType ?? null)};\n${SCRIPT}`;
+  const script = `${GRAPH_SCRIPT}\n${PROJECT_SCRIPT}\nconst entityType = ${JSON.stringify(entityType ?? null)};\n${SCRIPT}`;
   return appDocument(entityType ? `${entityType} details` : 'Entity', script, { skeletonRows: 3 });
 }
 

@@ -72,7 +72,8 @@
     "./work-schedule-import-receipt": "./src/contracts/work-schedule-import-receipt.ts",
     "./schedule-import-receipt": "./src/schedule-import-receipt.ts",
     "./work-schedule-forest-v2": "./src/contracts/work-schedule-forest-v2.ts",
-    "./work-private-definition": "./src/contracts/work-private-definition.ts"
+    "./work-private-definition": "./src/contracts/work-private-definition.ts",
+    "./graph-layout": "./src/graph-layout.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
@@ -86,12 +87,14 @@
   "dependencies": {
     "@docket/identity-access": "workspace:*",
     "zod": "catalog:",
-    "@docket/automation": "workspace:*"
+    "@docket/automation": "workspace:*",
+    "dagre": "^0.8.5"
   },
   "devDependencies": {
     "@docket/eslint-config": "workspace:*",
     "@docket/tsconfig": "workspace:*",
     "vite": "catalog:",
-    "vitest": "catalog:"
+    "vitest": "catalog:",
+    "@types/dagre": "^0.7.54"
   }
 }

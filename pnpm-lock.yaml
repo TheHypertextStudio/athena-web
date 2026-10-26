@@ -1011,6 +1011,9 @@ importers:
       '@docket/identity-access':
         specifier: workspace:*
         version: link:../identity-access
+      dagre:
+        specifier: ^0.8.5
+        version: 0.8.5
       zod:
         specifier: 'catalog:'
         version: 4.4.3
@@ -1021,6 +1024,9 @@ importers:
       '@docket/tsconfig':
         specifier: workspace:*
         version: link:../../tooling/tsconfig
+      '@types/dagre':
+        specifier: ^0.7.54
+        version: 0.7.54
       vite:
         specifier: ^8.0.0
         version: 8.1.2(@types/node@26.1.1)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.36.0)(tsx@4.23.12)(yaml@2.9.0)

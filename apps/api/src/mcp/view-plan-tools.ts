@@ -2,6 +2,8 @@ import { SearchDocumentKind, type SearchResult, type SearchRoute } from '../cont
 import { z } from 'zod';
 
 import { type SearchCaller, searchWorkspace } from '../search/query';
+import { graphViewableKeys } from '../work-graph/access';
+import type { McpActor } from './auth';
 import type { McpContext } from './auth';
 import { registerOptionalTaskTool, type McpRegistrar } from './catalog';
 import { WIDGET, widgetMeta } from './apps';
@@ -131,7 +133,7 @@ async function readEntities(
     work: only?.workIndex ? { [only.id]: only.workIndex } : undefined,
   };
 }
-import { listWork, listWorkFilters, WORK_ENTITIES, WorkRow } from './list-work';
+import { listWork, listWorkFilters, WORK_ENTITIES, WorkRow, type ListWorkInput } from './list-work';
 import { decodeWorkCursor, orgIdParam, pageWorkRows } from './tools-shared';
 
 const listWorkInputSchema = {
@@ -146,6 +148,7 @@ const listWorkInputSchema = {
 };
 
 const listWorkOutputSchema = {
+  graphScope: z.object({ kind: z.literal('project'), id: z.string() }).optional(),
   entity: z.enum(WORK_ENTITIES),
   items: z.array(WorkRow),
   listHref: z
@@ -254,6 +257,13 @@ function findItem(item: SearchResult) {
   };
 }
 
+async function listGraphScope(actor: McpActor, entity: string, filters: ListWorkInput) {
+  if (entity !== 'task' || !filters.project || filters.archived === true) return {};
+  const id = await resolveDescriptor(actor.orgId, 'project', filters.project, 'project');
+  const keys = await graphViewableKeys(actor, [{ kind: 'project', id }]);
+  return keys.has(`project:${id}`) ? { graphScope: { kind: 'project' as const, id } } : {};
+}
+
 /** Register list_work, find, and get on `server`. */
 export function registerViewPlanTools(server: McpRegistrar, ctx: McpContext): void {
   const listWorkTool = (input: z.infer<z.ZodObject<typeof listWorkInputSchema>>) =>
@@ -281,6 +291,7 @@ export function registerViewPlanTools(server: McpRegistrar, ctx: McpContext): vo
       return jsonResult({
         entity,
         items,
+        ...(await listGraphScope(actorCtx, entity, filters)),
         listHref: entityListHref(orgId, entity),
         ...(nextCursor ? { nextCursor } : {}),
       });
@@ -292,7 +303,7 @@ export function registerViewPlanTools(server: McpRegistrar, ctx: McpContext): vo
     {
       title: 'List work',
       description:
-        'Enumerate live tasks, projects, programs or initiatives using exact filters such as assignee, blocked, due or unfiled. Names and IDs accepted. Use find for relevance search; its index briefly trails writes.',
+        'Enumerate live tasks, projects, programs or initiatives using exact filters such as assignee, blocked, due or unfiled. Names and IDs accepted. Use view_work_graph to explore dependencies and remaining work. Use find for relevance search; its index briefly trails writes.',
       inputSchema: listWorkInputSchema,
       outputSchema: listWorkOutputSchema,
       _meta: widgetMeta(WIDGET.workList),

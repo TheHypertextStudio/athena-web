@@ -39,6 +39,7 @@ import { registerTemplateTools } from './template-tools';
 import { registerTemplateCopyTools } from './template-copy-tools';
 import { registerTemplateDiscoveryTool } from './template-discovery-tool';
 
+import { registerWorkGraphTool } from './work-graph-tool';
 import { registerWorkloadTool } from './workload-tool';
 import { registerTimeTools } from './time-tools';
 import { registerUpdateTool } from './update-tool';
@@ -101,5 +102,6 @@ export function registerTools(
   registerAthenaAssignmentTools(server, ctx);
   registerTimeTools(server, ctx);
   registerWorkloadTool(server, ctx);
+  registerWorkGraphTool(server, ctx);
   registerWorkDestinationReviewTool(server, ctx);
 }

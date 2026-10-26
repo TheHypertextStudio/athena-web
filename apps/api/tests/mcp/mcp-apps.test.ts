@@ -133,6 +133,7 @@ describe('ui:// widget resources', () => {
       'ui://docket/teams',
       'ui://docket/updates',
       'ui://docket/views',
+      'ui://docket/work-graph',
       'ui://docket/work-list',
       'ui://docket/workload',
     ]);
@@ -183,7 +184,7 @@ describe('ui:// widget resources', () => {
     expect(html).toContain('ui/notifications/initialized');
     expect(html).toContain('ui/notifications/tool-result');
     expect(html).toContain('ui/notifications/tool-input');
-    expect(html).not.toContain('ui/update-model-context');
+    expect(html).toContain('ui/update-model-context');
     expect(html).not.toContain('iframe-ready');
     // ChatGPT's Apps SDK, which this is deliberately not.
     expect(html).not.toContain('window.openai');

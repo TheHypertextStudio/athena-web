@@ -5,7 +5,7 @@ not load a second application shell or brand font. This review covers the produc
 the local sandbox acceptance host with explicitly synthetic work, not a hosted connector.
 
 Screenshots: `/Volumes/WillieDrive/CodexScratch/docket-mcp-graph-craft/captures/`.
-The 26 captures include inline, expanded overview, selected expanded, and search reveal at
+The 30 captures include inline, expanded overview, selected expanded, search results, and search reveal at
 390×844 and 1440×900 in both themes, plus empty, completed, disconnected, oversized and long-title
 states in both themes. `results.json` records the width/theme accessibility and overflow results.
 
@@ -20,15 +20,14 @@ states in both themes. `results.json` records the width/theme accessibility and 
 | 7. States completeness            | 3     | `empty-light.png` offers the existing Docket destination. Completed work remains searchable; oversized results reveal work beyond the loaded page. Failed refresh retains content and retry. Search races and late neighborhood responses cannot replace newer navigation.        |
 | 8. Detail craft                   | 3     | `expanded-390-dark.png` docks the scrollable inspector below readable selected work; map controls remain above it. Focus rings, scoped borders, title clamping and 40px mobile search/buttons preserve precision in both themes.                                                  |
 
-Gates: A11y PASS (zero axe violations in the relationship-list width/theme matrix, keyboard journeys and visible
+Gates: A11y PASS (zero axe violations for the map, search results and relationship list across the width/theme matrix, keyboard journeys and visible
 focus; mobile controls/search checked) · Responsive PASS (320px overflow check plus narrow/wide
 captures) · Theme parity PASS · No placeholder PASS (synthetic data is confined to the documented
 acceptance harness) · Screenshot-verified PASS.
 
-An additional map/search-popup axe pass was added to the verifier but could not obtain capacity:
-the guard queued it behind `logdate-play-location-demo`, which exceeded its declared write
-allocation. The queued probe was canceled without starting a browser. These additional assertions
-and the four search-popup captures remain unverified; the completed run contains 26 captures.
+The extended browser verifier completed after capacity became available. Map, search-popup and
+relationship-list axe checks pass in both widths and themes. All thirty captures and the search,
+framing, paging, inline-only host, refresh and Back regressions pass.
 
 ## Findings resolved
 

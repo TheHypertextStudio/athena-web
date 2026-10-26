@@ -64,8 +64,12 @@ function steps(definition: ProcessDefinitionCreate): AuthoredStep[] {
 function source(step: AuthoredStep, aliases: ReadonlyMap<string, string>): Source {
   const value = step.value;
   const body: Readonly<Record<string, unknown>> = value;
-  const fields = {
-    ...privateDefinitionFields(value, 'labelIds' in value ? (value.labelIds ?? []) : []),
+  const labelIds = 'labelIds' in value ? (value.labelIds ?? []) : undefined;
+  // Prepared authoring already resolved template defaults, so an empty list means no labels and
+  // must not fall back to the selected template's default labels.
+  const fields: Record<string, string | number | readonly string[] | null> = {
+    ...privateDefinitionFields(value, labelIds ?? []),
+    ...(labelIds ? { labelIds } : {}),
   };
   for (const [key, column] of [
     ['projectKey', 'project_step_id'],

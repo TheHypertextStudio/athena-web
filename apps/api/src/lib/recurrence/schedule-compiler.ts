@@ -191,11 +191,16 @@ function rootValues(
       ? draft.template.selection.workTypeVersionId
       : undefined;
   const version = accepted?.versionId ?? pinned;
-  const fields = Object.fromEntries(
+  const { labelIds, ...authored } = Object.fromEntries(
     Object.entries(draft.root.fields).filter(
       ([key, value]) => value !== null || key === 'health' || key === 'estimateMinutes',
     ),
   );
+  // An ordinary Task body names its labels `labels`; a Project body keeps `labelIds`.
+  const fields =
+    labelIds === undefined
+      ? authored
+      : { ...authored, [draft.root.kind === 'task' ? 'labels' : 'labelIds']: labelIds };
   const dates = {
     [draft.root.kind === 'task' ? 'dueDate' : 'targetDate']: runDate,
     ...draft.root.dates,

@@ -256,6 +256,5 @@ shared agent glyph fallback. Activity does not infer a brand from a display name
 authorizing person's avatar.
 
 Task activity sessions are outlined metadata wrappers around the same rows used in the main
-activity feed. Their recorded-activity inspector preserves each loaded source edit. Native
-“Open full session” destinations appear only when authorized by the activity API; external
-correlation keys do not imply an external session URL.
+activity feed. Inline change disclosures preserve each source edit and its exact timestamp.
+Session-wide inspection and new drill-through controls remain deferred pending acceptance.

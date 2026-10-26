@@ -1,4 +1,3 @@
-import { withTaskActivitySessionLinks } from './task-activity-session-links';
 import { withTaskActivityAgentIcons } from './task-activity-icons';
 import { readTaskSessionActivity } from './task-activity-session-source';
 /**
@@ -372,16 +371,7 @@ export const taskActivityRoutes = new Hono<AppEnv>().get(
           : a.createdAt.localeCompare(b.createdAt),
       );
     const after = afterCursor(ordered, query.cursor);
-    const decorated = await withTaskActivityAgentIcons(
-      after.slice(0, query.limit),
-      sources,
-      orgId,
-      {
-        taskId: id,
-        origin: created?.origin ?? null,
-      },
-    );
-    const items = await withTaskActivitySessionLinks(decorated, sources, c, {
+    const items = await withTaskActivityAgentIcons(after.slice(0, query.limit), sources, orgId, {
       taskId: id,
       origin: created?.origin ?? null,
     });

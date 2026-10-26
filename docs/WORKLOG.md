@@ -13715,6 +13715,17 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
   pass. Native cache type generation, TypeScript and ESLint pass. No provider settings changed.
 - **Learnings**: Deployment-only metadata belongs outside the shipped runtime source boundary;
   changing that boundary does not require weakening the runtime policy.
+
+### [ACTIVITY-READY-UI] Keep the accepted timeline UI and defer unfinished drill-through
+
+- **Completed**: 2026-10-25
+- **Summary**: Kept outlined session metadata, shared chronological activity rows, agent artwork, compact authority attribution, recorded time ranges and inline source-edit disclosures. Excluded the unfinished inspector and new session-link UI/API enrichment while preserving their complete checkpoint. Bounded long change headings after fresh phone captures exposed control clipping.
+- **Validation**: 75 API tests covering activity, executor loops, toolbox/template integration and review routes pass, alongside 26 web behavior tests and the shared-avatar coverage. Affected package builds, typechecks, lint and unchanged complexity checks pass. Five browser checks pass against the final source, including keyboard/axe in both themes, 320px touch/control bounds with a long relationship, 200% text, reduced motion, title/action bounds and artwork fallback. Twelve final frames capture conversation, mutation-only and expanded states in both themes at desktop/phone widths; the narrowed craft audit records all eight dimensions and local gates.
+- **Cleanup**: Removed only this checkout’s regenerable Next output, API build output and local tool caches, bringing free space to about 23 GiB before validation. After renewed disk pressure, also removed immutable Turbo cache files older than 24 hours and the inactive sites-worktree Next compiler cache, bringing free space to about 26 GiB. Left the cache with open files untouched. Guarded the complete validation/runtime lifecycle at the existing reserves; stopped the stack, reset the seeded database and removed regenerated development output afterward.
+- **Delivery**: User authorized committing and integrating the ready slice. Integration targets remote main with linear history; the older local main checkout contains unrelated edits and is preserved untouched. Rebased onto current remote main and preserved its template executor bindings while applying explicit activity roles; filtered offline installation refreshed the changed workspace links. The full checkpoint is `fc4bbd47a` on `codex/task-activity-full-checkpoint`; inspector, session drill-through and external mentions remain in Docket. No production acceptance is claimed.
+- **Files changed**: Task activity rows/session presentation, browser/presentation regressions, removal of unfinished session-link enrichment, README/protocol documentation and the ready-UI craft audit.
+- **Learnings**: Document-level overflow can miss a clipped control inside a shell. Bound the actual change trigger and test its rectangle with long content; preserve UI scope by excluding unaccepted controls rather than blocking independent timeline improvements.
+
 ### [ACTIVITY-ICON-CRAFT] Recognizable agents and aligned activity content
 
 - **Completed**: 2026-10-25

@@ -27,14 +27,8 @@ function reference(origin: ChangeOrigin | null): IconReference {
   };
 }
 
-/**
- * Match stored identity references to the existing public activity ids.
- * @param sources - Authorized source records already selected for this task.
- * @param taskId - Task owning the creation activity.
- * @param createdOrigin - Creation's stored provenance.
- * @returns Performer, client and native-session references by activity id.
- */
-export function taskActivityReferences(
+/** Match each source to its already-established public activity id. */
+function references(
   sources: ActivitySources,
   taskId: string,
   createdOrigin: ChangeOrigin | null,
@@ -91,7 +85,7 @@ export async function withTaskActivityAgentIcons(
   orgId: string,
   created: { readonly taskId: string; readonly origin: ChangeOrigin | null },
 ): Promise<ActivityEntry[]> {
-  const byEntry = taskActivityReferences(sources, created.taskId, created.origin);
+  const byEntry = references(sources, created.taskId, created.origin);
   const eligible = entries.filter(
     (entry) =>
       entry.origin?.performerKind === 'agent' ||

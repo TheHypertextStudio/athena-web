@@ -1,5 +1,9 @@
 # Task activity metadata wrapper — 2026-10-25
 
+Historical checkpoint review: the inspector and new session drill-through are excluded from the
+ready timeline slice. See `2026-10-25-task-activity-ready-ui.md` for its final acceptance; this
+file retains the full checkpoint's findings and outstanding inspector work.
+
 Verdict: **BELOW BAR — narrow-screen inspector acceptance remains open.**
 
 The wrapper now shares the surrounding page tone and uses an explicit shared outline boundary.

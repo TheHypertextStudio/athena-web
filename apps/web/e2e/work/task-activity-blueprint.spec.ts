@@ -63,6 +63,21 @@ async function openTimeline(page: Page, artwork = false): Promise<() => void> {
     },
     {
       ...base,
+      id: 'agent-relationship',
+      type: 'updated',
+      category: 'relationship',
+      body: null,
+      origin,
+      session,
+      change: {
+        field: 'dependency',
+        label: 'Dependency',
+        from: null,
+        to: 'Blocks the November Urbanist Social Club announcement and reminder on the main Instagram account',
+      },
+    },
+    {
+      ...base,
       id: 'agent-result',
       origin,
       session,
@@ -187,6 +202,14 @@ test.describe('touch activity controls', () => {
     await page.setViewportSize({ width: 320, height: 844 });
     const description = page.getByRole('button', { name: 'updated the description' });
     expect((await description.boundingBox())?.height).toBeGreaterThanOrEqual(40);
+    const contribution = page.getByRole('article', { name: 'Codex session' });
+    const relationship = contribution.getByRole('button', { name: /^Blocks the November/ });
+    const contentBounds = await contribution.boundingBox();
+    const controlBounds = await relationship.boundingBox();
+    if (!contentBounds || !controlBounds) throw new Error('Missing activity control bounds');
+    expect(controlBounds.x + controlBounds.width).toBeLessThanOrEqual(
+      contentBounds.x + contentBounds.width,
+    );
     await description.tap();
     await expect(page.getByText('Revised brief').first()).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(
@@ -215,19 +238,4 @@ test('shows supplied agent artwork and retains a named glyph if the image fails'
   await expect(
     contribution.getByRole('img', { name: 'Task automation', exact: true }).locator('svg'),
   ).toBeVisible();
-});
-
-test('opens recorded session activity and restores focus to its header control', async ({
-  page,
-}) => {
-  await openTimeline(page);
-  const opener = page.getByRole('button', { name: 'View session activity' });
-  await opener.click();
-  const inspector = page.getByRole('dialog', { name: 'Codex session' });
-  await expect(inspector).toBeVisible();
-  await expect(inspector.getByText('Original brief', { exact: true })).toBeVisible();
-  await expect(inspector.getByText('The brief is ready for review.')).toBeVisible();
-  await page.keyboard.press('Escape');
-  await expect(inspector).toHaveCount(0);
-  await expect(opener).toBeFocused();
 });

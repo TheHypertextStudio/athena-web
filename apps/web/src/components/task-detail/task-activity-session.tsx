@@ -14,8 +14,6 @@ import {
   Link as LinkIcon,
   MessageSquare,
   User,
-  OpenInNew,
-  ListBulleted,
 } from '@docket/ui/icons';
 import {
   Button,
@@ -23,18 +21,11 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
   DecorativeIcon,
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-  SheetTrigger,
   Card,
   TimelineItem,
   TimelineMarker,
 } from '@docket/ui/primitives';
 import type { JSX } from 'react';
-import Link from '@/components/docket-link';
 import type { ActivitySessionGroup } from './activity-session-groups';
 import { ActivityAgentAvatar } from './activity-agent-avatar';
 import { consolidateTaskChanges, type ConsolidatedTaskChange } from './consolidated-task-changes';
@@ -116,38 +107,6 @@ function visibleRecord(entry: TaskActivityOut): boolean {
   return Boolean(entry.body) && entry.sessionEvent !== 'change';
 }
 
-/** Inspect every loaded source record without inventing a provider transcript or destination. */
-function ActivityDetails({ group }: { readonly group: ActivitySessionGroup }): JSX.Element {
-  return (
-    <Sheet>
-      <SheetTrigger asChild>
-        <Button
-          variant="ghost"
-          size="icon"
-          aria-label="View session activity"
-          title="View session activity"
-        >
-          <ListBulleted aria-hidden="true" />
-        </Button>
-      </SheetTrigger>
-      <SheetContent side="right" size="wide">
-        <SheetHeader>
-          <SheetTitle>{group.session?.title ?? 'Recorded activity'}</SheetTitle>
-          <SheetDescription>
-            Recorded activity on this task in this part of the session.
-          </SheetDescription>
-          <ContributionTime entries={group.entries} />
-        </SheetHeader>
-        <ol className="flex min-w-0 flex-col gap-6 p-4">
-          {group.entries.filter(visibleRecord).map((entry) => (
-            <RecordedRow key={entry.id} entry={entry} detail />
-          ))}
-        </ol>
-      </SheetContent>
-    </Sheet>
-  );
-}
-
 /** Prefer verified performer identity, retaining a label for historical anonymous records. */
 function sessionName(group: ActivitySessionGroup): string {
   const first = group.entries[0];
@@ -172,23 +131,6 @@ function SessionAuthority({
       <ActorAvatar kind="human" name={name} size={16} />
       <span className="[overflow-wrap:anywhere]">{name}</span>
     </span>
-  );
-}
-
-/** Native transcript navigation is present only when the API supplied an authorized destination. */
-function SessionActions({ group }: { readonly group: ActivitySessionGroup }): JSX.Element {
-  const href = group.session?.detailUrl;
-  return (
-    <div className="ml-auto flex items-center">
-      <ActivityDetails group={group} />
-      {href ? (
-        <Button variant="ghost" size="icon" asChild>
-          <Link href={href} aria-label="Open full session" title="Open full session">
-            <OpenInNew aria-hidden="true" />
-          </Link>
-        </Button>
-      ) : null}
-    </div>
   );
 }
 
@@ -217,7 +159,6 @@ function SessionHeader({ group }: { readonly group: ActivitySessionGroup }): JSX
         ) : null}
         <ContributionTime entries={group.entries} />
       </div>
-      <SessionActions group={group} />
     </header>
   );
 }

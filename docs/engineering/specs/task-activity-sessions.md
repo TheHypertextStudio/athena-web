@@ -175,7 +175,7 @@ repeated agent avatars or decorating every paragraph. No endpoint or database mi
 A session contribution uses the surrounding page tone with a thin shared outline boundary. It
 annotates the existing chronological rail rather than introducing a separate work object. Its
 header contains agent identity, a smaller authorizing-person avatar/name when recorded, the
-observed time range and detail controls. No wording implies that the authorizing person owns the
+observed time range. No wording implies that the authorizing person owns the
 session or participated continuously. “Continued” remains in chronological position.
 
 Grouped and standalone records use the same action, comment and change-content renderer. Ordinary
@@ -184,11 +184,8 @@ latest source positions. A description edit has one expandable action heading an
 content preview; expanding it shows individual source timestamps and before/after values without
 an additional “View description change” control. Only unusually long lists fold their middle.
 
-The activity inspector shows every loaded task-relevant source record in this contiguous part of
-the session, without scalar consolidation or execution chatter. It is not a claim to contain
-unloaded pages, filtered-out activity or an external tool's conversation. An optional session
-`detailUrl` links to the existing native detail page only when that caller may read the session:
-registered sessions retain workspace/task visibility and Athena retains owner-only access. This
-check does not remove otherwise-visible recorded task edits. External work keys do not imply a
-URL and are never decoded into a fabricated provider destination. No migration or endpoint is
-added; existing opaque identities, REST headers and MCP metadata keys remain unchanged.
+Inline change disclosures preserve every individual recorded edit and its exact timestamp.
+Session-wide inspection and new session drill-through controls are deferred pending their own
+responsive, accessibility and navigation acceptance. External work keys do not imply a URL and
+must never be decoded into a fabricated provider destination. Existing opaque identities,
+REST headers and MCP metadata keys remain unchanged.

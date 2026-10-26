@@ -199,7 +199,7 @@ describe('session presentation', () => {
     expect(screen.getByRole('button', { name: /Field 4\b/ })).toBeVisible();
     expect(screen.getByRole('button', { name: /Field 9\b/ })).toBeVisible();
   });
-  it('keeps authored updates and mutations in recorded order and offers full source activity', () => {
+  it('keeps authored updates and mutations in recorded order without exposing the unfinished inspector', () => {
     show([
       entry('comment-one', { type: 'comment', body: 'Starting with the reusable kit.' }),
       entry('edit-one', {
@@ -217,11 +217,7 @@ describe('session presentation', () => {
     expect(rows[2]).toHaveTextContent('Urgent');
     expect(screen.queryByText('for Willie')).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Open full session' })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'View session activity' }));
-    const detail = screen.getByRole('dialog');
-    expect(within(detail).getAllByText('High')).toHaveLength(2);
-    expect(within(detail).getByText('Starting with the reusable kit.')).toBeVisible();
-    expect(within(detail).getByText('The venue is still open.')).toBeVisible();
+    expect(screen.queryByRole('button', { name: 'View session activity' })).not.toBeInTheDocument();
   });
 
   it('does not render transcript-only sessions as task contributions', () => {

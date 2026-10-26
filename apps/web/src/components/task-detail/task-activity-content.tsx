@@ -101,7 +101,7 @@ function ChangeTrigger({ children }: { readonly children: ReactNode }): JSX.Elem
       <Button
         variant="ghost"
         size="sm"
-        className="group coarse:min-h-10 text-label-medium -ml-2 h-auto min-h-8 min-w-0 justify-start gap-2 px-2 text-left whitespace-normal"
+        className="group coarse:min-h-10 text-label-medium -ml-2 h-auto min-h-8 max-w-full min-w-0 justify-start gap-2 px-2 text-left whitespace-normal"
       >
         <span className="min-w-0 [overflow-wrap:anywhere]">{children}</span>
         <ChevronDown

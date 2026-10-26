@@ -184,12 +184,6 @@ export const TaskActivitySession = z
     title: z
       .string()
       .describe('Application-owned performer and session label; never implies delegation.'),
-    detailUrl: z
-      .string()
-      .optional()
-      .describe(
-        'Authorized native session detail path; absent for external correlation keys and inaccessible sessions.',
-      ),
   })
   .meta({ id: 'TaskActivitySession' });
 /** Session descriptor used to group adjacent contributions in the shared timeline. */

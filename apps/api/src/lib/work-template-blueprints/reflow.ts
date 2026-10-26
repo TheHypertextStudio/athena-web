@@ -195,10 +195,11 @@ export async function prepareBlueprintReflow(
     (field) => request[field] !== undefined,
   );
   const anchorIds = new Set(explicitDates.length ? [reference.id] : []);
+  // Affected work counts the dependents a change rewrites, not the row being changed.
   const affectedWorkIds = new Set([
     ...affectedBlueprintNodes(snapshot.nodes, new Set([reference.id]), anchorIds),
     ...(await privateCompletionFootprint(tx, retained, reference)),
-    ...(native?.affectedWorkIds ?? []),
+    ...[...(native?.affectedWorkIds ?? [])].filter((id) => id !== reference.id),
   ]);
   if (affectedWorkIds.size > 500)
     throw new BlueprintError('blueprint_limit', 'Reflow at most 500 affected work items.');

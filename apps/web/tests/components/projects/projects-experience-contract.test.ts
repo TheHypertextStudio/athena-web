@@ -26,6 +26,14 @@ const documentContentsPath = join(root, 'apps/web/src/components/editor/document
 const editorPath = join(root, 'apps/web/src/components/editor/freeform-text.tsx');
 const pageLayoutPath = join(root, 'apps/web/src/components/views/page-layout.tsx');
 const entityDetailLayoutPath = join(root, 'apps/web/src/components/views/entity-detail-layout.tsx');
+const entityDetailHeaderPath = join(
+  root,
+  'apps/web/src/components/views/entity-detail-header-content.tsx',
+);
+const projectHeaderActionsPath = join(
+  root,
+  'apps/web/src/components/project-detail/project-header-actions.tsx',
+);
 
 function source(path: string): string {
   return readFileSync(path, 'utf8');
@@ -94,28 +102,37 @@ describe('Projects experience contract', () => {
 
   it('keeps Project identity and work ahead of progressive metadata', () => {
     const detail = source(detailPath);
-    const layout = source(entityDetailLayoutPath);
+    const header = source(entityDetailHeaderPath);
     // Identity + arrangement come from the one shared shell; the page composes it and never
     // hand-rolls its own masthead or restates the canonical title token.
     expect(detail).toContain('<EntityDetailLayout');
-    expect(detail).toContain('<EntityMetadataRow ariaLabel="Project properties">');
+    expect(detail).toMatch(/<EntityMetadataRow\s+ariaLabel="Project properties"\s+layout="wrap"/);
     expect(detail).toContain('<PropertiesPanel');
     expect(detail).toContain('<ProjectPeopleRow');
     expect(detail).toContain('<EntityIconPicker');
-    expect(detail.indexOf('<ProjectPeopleRow')).toBeLessThan(
-      detail.indexOf('<EntityMetadataRow ariaLabel="Project properties">'),
+    // The owner is a primary visible property inside the shared row, ahead of status and dates.
+    expect(detail).toMatch(
+      /<EntityMetadataRow[\s\S]*?<EntityMetadataItem priority=\{0\}[^>]*>\s*<ProjectPeopleRow/,
     );
+    expect(detail.indexOf('<ProjectPeopleRow')).toBeLessThan(detail.indexOf('<PropertiesPanel'));
     expect(detail).toContain('ownerId={project.leadId ?? null}');
     expect(detail).toContain('patchProject({ leadId })');
     expect(detail).not.toContain('aria-label="Project people"');
-    // The canonical title token lives once in the shell as headline-medium; no detail page may
-    // diverge to headline-large or restate the token.
-    expect(layout).toContain('text-headline-medium');
+    // Shared identity markup owns the title scale, including legacy stacked headers.
+    expect(header).toContain('text-headline-medium');
     expect(detail).not.toContain('text-headline-large');
-    // In the shell the property chips render in the metadata slot below the subtitle — never inline
-    // with the <h1> — and the identity block precedes the metadata row.
-    expect(layout.indexOf('</h1>')).toBeLessThan(layout.indexOf('{metadata}'));
-    expect(layout.indexOf('{subtitle}')).toBeLessThan(layout.indexOf('{metadata}'));
+    // Both work and legacy masthead identities precede the subtitle and metadata section.
+    const masthead = header.slice(
+      header.indexOf('export function FullDetailMasthead'),
+      header.indexOf('function ResponsiveWorkIdentity'),
+    );
+    expect(masthead.indexOf('<ResponsiveWorkIdentity')).toBeGreaterThan(-1);
+    expect(masthead.indexOf('<MastheadIdentity')).toBeGreaterThan(-1);
+    expect(masthead.indexOf('<ResponsiveWorkIdentity')).toBeLessThan(
+      masthead.indexOf('{metadata}'),
+    );
+    expect(masthead.indexOf('<MastheadIdentity')).toBeLessThan(masthead.indexOf('{metadata}'));
+    expect(masthead.indexOf('{subtitle}')).toBeLessThan(masthead.indexOf('{metadata}'));
     expect(detail).not.toContain('Project lead');
     expect(detail).not.toContain('Contributor');
     expect(detail).not.toContain('No people yet');
@@ -131,22 +148,22 @@ describe('Projects experience contract', () => {
     expect(detail).toContain('<AgentsStrip');
     expect(detail).toContain('<AgentActivityFeed');
     expect(detail).toContain('<ProjectDependenciesPanel');
-    expect(detail.indexOf('<LatestUpdateSummary')).toBeLessThan(
-      detail.indexOf('<TemplateAwareEntityDocument'),
+    expect(detail.indexOf('<TemplateAwareEntityDocument')).toBeLessThan(
+      detail.indexOf('<LatestUpdateSummary'),
     );
+    expect(detail).toMatch(/<TemplateAwareEntityDocument\s+presentation="writing"/);
     expect(detail).toContain("tab === 'overview' || tab === 'tasks'");
   });
 
   it('keeps Repeat project inside the Project actions menu', () => {
     const detail = source(detailPath);
-    const repeatMutation = detail.indexOf('setRepeatProjectOpen(true)');
-    const containingMenuItem = detail.lastIndexOf('<DropdownMenuItem', repeatMutation);
-    const containingButton = detail.lastIndexOf('<Button', repeatMutation);
-
-    expect(repeatMutation).toBeGreaterThan(-1);
-    expect(containingMenuItem).toBeGreaterThan(containingButton);
-    expect(detail.slice(containingMenuItem, repeatMutation + 200)).toContain(
-      'Repeat {projectNoun.toLowerCase()}',
+    const actions = source(projectHeaderActionsPath);
+    expect(detail).toMatch(
+      /<ProjectHeaderActions[\s\S]*?onRepeat=\{\(\) => \{\s*setRepeatProjectOpen\(true\)/,
+    );
+    expect(actions).toMatch(/<WorkTemplateHeader[\s\S]*?presentation="menu"[\s\S]*?menuItems=/);
+    expect(actions).toMatch(
+      /canEdit \? \(\s*<DropdownMenuItem onSelect=\{onRepeat\}>[\s\S]*?Repeat \{noun\.toLowerCase\(\)\}[\s\S]*?<\/DropdownMenuItem>/,
     );
   });
 
@@ -162,18 +179,20 @@ describe('Projects experience contract', () => {
     expect(detail).not.toContain('permanently removes');
   });
 
-  it('operates properties as an inline metadata chip row, not an anchored disclosure', () => {
+  it('keeps primary properties visible in a wrapping row with supplemental properties in overflow', () => {
     const detail = source(detailPath);
     const layout = source(entityDetailLayoutPath);
-    // Properties are the inline chip row in the masthead, not a popover the user must open first.
+    // Primary properties remain visible; the shared row owns supplemental disclosure.
     expect(detail).not.toContain('propertiesOpen');
     expect(detail).not.toContain('<Popover open=');
     expect(detail).not.toContain('<PopoverContent');
     expect(detail).not.toContain('aria-label="Open project properties"');
-    expect(detail).toContain('<EntityMetadataRow ariaLabel="Project properties">');
+    expect(detail).toMatch(/<EntityMetadataRow\s+ariaLabel="Project properties"\s+layout="wrap"/);
+    expect(detail).toContain('overflowLabel="Properties"');
+    expect(detail).toContain('<EntityMetadataItem priority={6} overflowOnly>');
     // Every chip reads as the same calm pill, wired once through the shell's shared chip class.
     expect(layout).toContain('bg-surface-container-low hover:bg-surface-container-high');
-    // The tab bar adopts the shared Tabs primitive (which owns the 40px touch-target floor and its
+    // The tab bar adopts the shared Tabs primitive (which owns the touch-target floor and its
     // own track styling), so the shell draws no rule beneath it. The header still needs a boundary
     // — it is sticky and opaque, and content passes behind it — and M3 expresses that with the
     // scrolled app bar's tonal step rather than a hairline or a shadow. `.detail-header` takes

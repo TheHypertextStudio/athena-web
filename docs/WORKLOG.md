@@ -13889,6 +13889,18 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
 
 ## Completed Tasks
 
+### [PROJECT-UI-RELEASE] Prepare the refined project UI for deployment
+
+- **Completed**: 2026-10-26
+- **Description**: Publish the approved project identity, visible essential context and description-first layout through the existing web deployment targets. Preserve authored types and existing appearance editing; leave custom properties out of scope.
+- **Summary**: Updated structural contracts for the refined shared header, corrected the authenticated download location on upload responses, isolated the cancellation transport fixture, and kept the complete local-model toolbox within its existing prompt limit using equivalent schema references and concise guidance.
+- **Acceptance**:
+  - [x] Required workspace typechecks, lint, complexity and tests pass.
+  - [x] Upload Location and cancellation behavior retain regression coverage.
+  - [x] All tools, validation constraints, defaults and authority guidance remain available within the existing prompt ceiling.
+  - [x] The approved project layout retains rendered desktop/phone review and browser coverage.
+- **Delivery boundary**: Local release-candidate preparation. Deployment and target verification are recorded separately in the owned shipping build records.
+
 ### [REVIEWER-DEMO-PRODUCTION] Guarded production reviewer access
 
 - **Completed**: 2026-10-26
@@ -13908,6 +13920,15 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
 - **Pre-existing API failures**: Current main's deliverables operation lacks an OpenAPI tag. Eight assertions in `openapi-richness`, `infra` and `notification-boundary`, plus `security/route-auth` suite setup, fail identically on clean HEAD and the changed source. The exact failure names were compared after a clean-HEAD run; source restoration was verified byte-for-byte. The prior series/MCP and database failures no longer occur. This feature adds no failing tests.
 - **Review and learnings**: Independent source review has no remaining findings. Its existing-account redirect findings have regression coverage. Make the credential exchange the sole demo access decision, keep test identities distinct, and inspect current migration ownership before integrating a long-lived branch.
 - **Remaining operational scope**: Hosted account/link provisioning and actual platform review acceptance are separate from this local implementation. Per-person provisioning, copying, scheduled resets/expiry operations and admin screens remain deferred. Existing sessions retain their normal lifecycle after new demo sign-ins are disabled.
+
+### [PROJECT-IDENTITY-CLEANUP] Separate project navigation from authored identity
+
+- **Completed**: 2026-10-26
+- **Summary**: Projects is a back link beside actions at all widths. Default folder badges and base-type labels are omitted using saved flags; authored type names and customized icons remain near the full-width title. Existing icon editing is available under Properties. Essential properties and substantial description space are preserved; custom properties remain excluded.
+- **Validation**: Thirty-six component tests and four browser journeys pass, including real custom-type creation, persistence, appearance editing access and back navigation. Affected lint, web typecheck and complexity pass. Thirty-two captures cover four states at desktop and phone widths in both themes; actual default, custom and long-title screens were inspected. The stack was stopped and seeded database reset.
+- **Review**: `docs/design/audits/2026-10-26-project-description.md`.
+- **Delivery boundary**: Local implementation and visual verification; no push, integration or deployment.
+
 ### [PROJECT-WRITING-SPACE] Restore readable tabs and substantial description space
 
 - **Completed**: 2026-10-26

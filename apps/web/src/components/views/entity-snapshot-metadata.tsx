@@ -240,17 +240,18 @@ export function ContainerDetailLoading({
     <EntityDetailSkeleton
       hasEyebrow={target === 'project'}
       identityLayout={target === 'project' ? 'inline' : 'stacked'}
-      typeLabel={target === 'project' ? entityName : undefined}
       chipCount={target === 'project' ? 6 : undefined}
       tabCount={tabCount}
       entityName={entityName}
       title={snapshot?.name}
       icon={
-        <EntityIconSlot
-          display={defaultEntityDisplay(target, id)}
-          entityName={snapshot?.name ?? entityName}
-          size={target === 'project' ? 40 : 48}
-        />
+        target === 'project' ? null : (
+          <EntityIconSlot
+            display={defaultEntityDisplay(target, id)}
+            entityName={snapshot?.name ?? entityName}
+            size={48}
+          />
+        )
       }
       snapshotMetadata={snapshot ? <EntitySnapshotMetadata snapshot={snapshot} /> : undefined}
     />

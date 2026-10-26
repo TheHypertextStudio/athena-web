@@ -1,5 +1,6 @@
 /** Browser acceptance for project identity, essential context and progressive properties. */
 import { readFileSync } from 'node:fs';
+import type { WorkTemplateOut } from '@docket/work/work-template-contract';
 import type { Locator, Page } from '@playwright/test';
 import axe, { type AxeStatic } from 'axe-core';
 import { signUpAndOnboard } from '../helpers/app';
@@ -53,6 +54,14 @@ async function verifyIdentityGeometry(
     header.boundingBox(),
   ]);
   if (!titleBox || !actionsBox || !headerBox) throw new Error('Project identity is missing.');
+  expect(actionsBox.y + actionsBox.height).toBeLessThanOrEqual(titleBox.y);
+  const backBox = await header.getByRole('link', { name: 'Projects', exact: true }).boundingBox();
+  if (!backBox) throw new Error('Missing Projects back link');
+  expect(
+    Math.abs(backBox.y + backBox.height / 2 - actionsBox.y - actionsBox.height / 2),
+  ).toBeLessThanOrEqual(2);
+  await expect(header.getByText('Project', { exact: true })).toHaveCount(0);
+  await expect(header.getByRole('button', { name: /Customize .* icon/ })).toHaveCount(0);
   if (headerBox.width < 576) {
     expect(actionsBox.y + actionsBox.height).toBeLessThanOrEqual(titleBox.y);
     expect(titleBox.width).toBeGreaterThan(headerBox.width - 40);
@@ -80,9 +89,6 @@ async function verifyIdentityGeometry(
       expect(metrics.height).toBeGreaterThanOrEqual(48);
       expect(metrics.fits).toBe(true);
     }
-  } else {
-    expect(actionsBox.y).toBeLessThan(titleBox.y + titleBox.height);
-    expect(actionsBox.x).toBeGreaterThanOrEqual(titleBox.x + titleBox.width);
   }
 }
 
@@ -251,16 +257,11 @@ test('description leads Overview, saves through reload and keeps real parent nav
   });
   await page.goto(`/orgs/${orgId}/projects/${project.id}`, { waitUntil: 'domcontentloaded' });
   const trail = page.getByRole('navigation', { name: 'Breadcrumb', exact: true });
-  const parent = trail.getByRole('link', {
-    name: 'Neighborhood access and community conversations',
-  });
-  await expect(parent).toHaveAttribute('href', `/orgs/${orgId}/programs/${program.id}`);
+  const parent = trail.getByRole('link', { name: 'Projects', exact: true });
+  await expect(parent).toHaveAttribute('href', `/orgs/${orgId}/projects`);
   const description = page.getByRole('region', { name: 'Description', exact: true });
   for (const width of [1440, 390, 320]) {
     await page.setViewportSize({ width, height: 844 });
-    const collection = trail.getByRole('link', { name: 'Programs', exact: true });
-    if (width === 1440) await expect(collection).toBeVisible();
-    else await expect(collection).toBeHidden();
     await expect(parent).toBeVisible();
     const [breadcrumbBox, titleBox, descriptionBox, updateBox] = await Promise.all([
       trail.boundingBox(),
@@ -292,5 +293,67 @@ test('description leads Overview, saves through reload and keeps real parent nav
     'Riders will agree the station access priorities and next steps.',
   );
   await parent.click();
-  await expect(page).toHaveURL(new RegExp(`/programs/${program.id}`));
+  await expect(page).toHaveURL(new RegExp(`/orgs/${orgId}/projects$`));
+});
+
+test('custom authored type names remain near the title without the default badge', async ({
+  page,
+}) => {
+  const orgId = await workspace(page);
+  const definitions = `/v1/orgs/${orgId}/templates/definitions`;
+  const draft = await apiJson<WorkTemplateOut>(page, definitions, {
+    method: 'POST',
+    body: {
+      targetType: 'project',
+      scope: 'organization',
+      definition: { name: 'Community gathering', payload: { targetType: 'project' } },
+    },
+  });
+  const published = await apiJson<WorkTemplateOut>(page, `${definitions}/${draft.id}/publish`, {
+    method: 'POST',
+    body: { expectedRevision: draft.revision },
+  });
+  if (!published.latestVersion) throw new Error('Missing custom type publication');
+  const project = await apiJson<{ id: string }>(page, `/v1/orgs/${orgId}/projects`, {
+    method: 'POST',
+    body: {
+      name: 'Neighborhood gathering',
+      workTypeId: draft.id,
+      workTypeVersionId: published.latestVersion.id,
+    },
+  });
+  await page.setViewportSize({ width: 320, height: 844 });
+  await page.goto(`/orgs/${orgId}/projects/${project.id}`, { waitUntil: 'domcontentloaded' });
+  const header = page.locator('header.detail-header');
+  const type = header.getByText('Community gathering', { exact: true });
+  await expect(type).toBeVisible();
+  await expect(header.getByText('Project', { exact: true })).toHaveCount(0);
+  const typeBox = await type.boundingBox();
+  const titleBox = await header
+    .getByRole('heading', { name: 'Neighborhood gathering', exact: true })
+    .boundingBox();
+  if (!typeBox || !titleBox) throw new Error('Missing authored identity');
+  expect(titleBox.y - typeBox.y - typeBox.height).toBeLessThanOrEqual(8);
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await expect(type).toBeVisible();
+  await apiJson(page, `/v1/orgs/${orgId}/display/project/${project.id}`, {
+    method: 'PUT',
+    body: {
+      glyph: { kind: 'emoji', hexcode: '1F33F' },
+      colorKey: 'neutral',
+      customColor: null,
+    },
+  });
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await expect(
+    header
+      .getByRole('heading', { name: 'Neighborhood gathering', exact: true })
+      .locator('xpath=..')
+      .getByText('🌿', { exact: true }),
+  ).toBeVisible();
+  await expect(type).toBeVisible();
+  await page.getByRole('button', { name: 'Properties', exact: true }).click();
+  await expect(
+    page.getByRole('button', { name: 'Customize Neighborhood gathering icon', exact: true }),
+  ).toBeVisible();
 });

@@ -136,7 +136,7 @@ export function EntityDetailSkeleton({
         }
         icon={
           // placeholder (only when the glyph cannot be derived): the entity's icon.
-          icon ?? <SkeletonGlyph />
+          icon === undefined ? <SkeletonGlyph /> : icon
         }
         title={<DetailSkeletonTitle title={title} inline={identityLayout === 'inline'} />}
         subtitle={

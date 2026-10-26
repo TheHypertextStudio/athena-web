@@ -9,7 +9,7 @@ vi.mock('@/components/docket-link', () => ({
 
 describe('ProjectBreadcrumb', () => {
   it('returns to the workspace project collection when there is no resolved program', () => {
-    render(<ProjectBreadcrumb orgId="org" projectLabel="Projects" programLabel="Programs" />);
+    render(<ProjectBreadcrumb orgId="org" projectLabel="Projects" />);
     expect(screen.getByRole('navigation', { name: 'Breadcrumb' })).toBeVisible();
     expect(screen.getByRole('link', { name: 'Projects' })).toHaveAttribute(
       'href',
@@ -17,24 +17,11 @@ describe('ProjectBreadcrumb', () => {
     );
   });
 
-  it('links to the actual program without confusing it with a work type', () => {
-    const name = 'Community gatherings and neighborhood access';
-    render(
-      <ProjectBreadcrumb
-        orgId="org"
-        projectLabel="Projects"
-        programLabel="Portfolios"
-        program={{ id: 'program', name }}
-      />,
-    );
-    expect(screen.getByRole('link', { name: 'Portfolios' })).toHaveAttribute(
+  it('keeps the collection route while honoring workspace vocabulary', () => {
+    render(<ProjectBreadcrumb orgId="org" projectLabel="Campaigns" />);
+    expect(screen.getByRole('link', { name: 'Campaigns' })).toHaveAttribute(
       'href',
-      '/orgs/org/programs',
+      '/orgs/org/projects',
     );
-    expect(screen.getByRole('link', { name })).toHaveAttribute(
-      'href',
-      '/orgs/org/programs/program',
-    );
-    expect(screen.queryByText('Projects')).not.toBeInTheDocument();
   });
 });

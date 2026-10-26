@@ -134,24 +134,24 @@ function ResponsiveWorkIdentity({
   eyebrow,
 }: Pick<DetailHeaderProps, 'icon' | 'title' | 'typeLabel' | 'actions' | 'eyebrow'>): JSX.Element {
   return (
-    <div className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2">
-      <div className="col-start-2 row-start-1 min-w-0 @xl:col-span-3 @xl:col-start-1">
-        {eyebrow}
-      </div>
-      <div className="col-start-1 row-start-1 @xl:row-start-2 @xl:self-start">{icon}</div>
-      {actions ? (
-        <div
-          role="group"
-          aria-label="Entity actions"
-          className="col-start-3 row-start-1 flex items-center gap-1 @xl:row-start-2 @xl:self-start"
-        >
-          {actions}
-        </div>
-      ) : null}
-      <div className="col-span-3 row-start-2 min-w-0 @xl:col-span-1 @xl:col-start-2">
-        {typeLabel ? (
-          <div className="text-on-surface-variant text-label-medium">{typeLabel}</div>
+    <div className="flex min-w-0 flex-col gap-2">
+      <div className="flex min-w-0 items-center gap-3">
+        <div className="min-w-0 flex-1">{eyebrow}</div>
+        {actions ? (
+          <div
+            role="group"
+            aria-label="Entity actions"
+            className="flex shrink-0 items-center gap-1"
+          >
+            {actions}
+          </div>
         ) : null}
+      </div>
+      <div className="min-w-0">
+        <div className="text-on-surface-variant text-label-medium flex min-w-0 items-center gap-2 empty:hidden">
+          {icon}
+          {typeLabel}
+        </div>
         <h1 className="text-on-surface text-title-large min-w-0 pt-1 break-words">{title}</h1>
       </div>
     </div>

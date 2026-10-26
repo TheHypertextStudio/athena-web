@@ -13,8 +13,12 @@ const collapseBehavior = readFileSync(
 );
 const css = readFileSync(join(root, 'packages/ui/src/styles/globals.css'), 'utf8');
 
-function literalClassToken(token: string): RegExp {
-  return new RegExp(`className="[^"]*\\b${token}\\b[^"]*"`, 'g');
+function classToken(token: string): RegExp {
+  // Shared identity markup selects inline or stacked classes at runtime.
+  return new RegExp(
+    `className=(?:"[^"]*\\b${token}\\b[^"]*"|\\{[^}]*['"]${token}['"][^}]*\\})`,
+    'g',
+  );
 }
 
 describe('entity detail collapse contract', () => {
@@ -36,11 +40,11 @@ describe('entity detail collapse contract', () => {
   });
 
   it('morphs one identity from stacked to compact without duplicating the icon', () => {
-    expect(layout).toMatch(literalClassToken('detail-identity'));
-    expect(layout).toMatch(literalClassToken('detail-primary'));
-    expect(layout).toMatch(literalClassToken('detail-masthead'));
-    expect(layout).toMatch(literalClassToken('detail-tabs'));
-    expect(layout.match(literalClassToken('detail-glyph'))).toHaveLength(1);
+    expect(layout).toMatch(classToken('detail-identity'));
+    expect(layout).toMatch(classToken('detail-primary'));
+    expect(layout).toMatch(classToken('detail-masthead'));
+    expect(layout).toMatch(classToken('detail-tabs'));
+    expect(layout.match(classToken('detail-glyph'))).toHaveLength(1);
     expect(layout.indexOf('detail-glyph')).toBeLessThan(layout.indexOf('detail-title'));
     expect(css).toMatch(
       /\.detail-primary\s*\{[\s\S]*\[identity\] var\(--detail-expanded-glyph-size\)/,
@@ -76,7 +80,7 @@ describe('entity detail collapse contract', () => {
     // `padding-block-start` moved off `.detail-header` onto `.masthead-content` — a sibling of the
     // cover rather than an ancestor of it, so the cover's `inset-0` against `.masthead-band` isn't
     // pushed down by the same padding that indents the eyebrow/title text.
-    expect(layout).toMatch(literalClassToken('masthead-content'));
+    expect(layout).toMatch(classToken('masthead-content'));
     expect(css).not.toMatch(/\.detail-header\s*\{[^}]*padding-block-start/);
     expect(css).toMatch(
       /@keyframes detail-title-collapse\s*\{[\s\S]*from\s*\{[\s\S]*white-space:\s*normal/,

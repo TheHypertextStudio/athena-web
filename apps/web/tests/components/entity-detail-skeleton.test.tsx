@@ -48,6 +48,15 @@ function renderLoaded() {
 }
 
 describe('EntityDetailSkeleton', () => {
+  it('does not invent a badge when a page explicitly supplies no icon', () => {
+    const { container } = render(
+      <EntityDetailSkeleton entityName="Project" identityLayout="inline" icon={null} />,
+    );
+    const labelRow = container.querySelector('h1')?.previousElementSibling;
+    expect(labelRow?.textContent).toBe('');
+    expect(labelRow?.querySelector('[data-slot="skeleton"]')).toBeNull();
+  });
+
   it('renders the same structural regions as the loaded page', () => {
     const loading = render(<EntityDetailSkeleton entityName="Project" />);
     const loaded = renderLoaded();

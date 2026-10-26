@@ -33,6 +33,7 @@ import { EditableSubtitle } from '@/components/editor/editable-subtitle';
 import { EditableTitle } from '@/components/editor/editable-title';
 import { PartialLoadBanner, QueryLoadFailure } from '@/components/feedback';
 import { EntityIconPicker } from '@/components/entity-display/entity-icon-picker';
+import { EntityIconSlot } from '@/components/entity-display/entity-icon-glyph';
 import { useEntityDisplay } from '@/components/entity-display/use-entity-display';
 import { LatestUpdateSummary } from '@/components/entity-detail/latest-update-summary';
 import {
@@ -175,7 +176,6 @@ export default function ProjectDetailPage(): JSX.Element {
   const queryClient = useQueryClient();
   const accountId = useResolvedAccountId();
   const projectNoun = useVocabulary('project');
-  const programsNoun = useVocabulary('program', { plural: true });
   const projectPlural = useVocabulary('project', { plural: true });
   const refreshTitle = `Could not refresh this ${projectNoun.toLowerCase()}`;
   const workTitle = `${projectNoun} work could not load`;
@@ -567,14 +567,7 @@ export default function ProjectDetailPage(): JSX.Element {
         />
       }
       object={{ kind: 'project', id: projectId, organizationId: orgId, title: project.name }}
-      eyebrow={
-        <ProjectBreadcrumb
-          orgId={orgId}
-          projectLabel={projectPlural}
-          programLabel={programsNoun}
-          program={aggregate?.references.program}
-        />
-      }
+      eyebrow={<ProjectBreadcrumb orgId={orgId} projectLabel={projectPlural} />}
       printSummary={
         <DetailPrintSummary
           title={project.name}
@@ -594,19 +587,9 @@ export default function ProjectDetailPage(): JSX.Element {
         />
       }
       icon={
-        <EntityIconPicker
-          display={entityDisplay.display}
-
-          workspaceId={orgId}
-          entityName={project.name}
-          editable={canEdit}
-          pending={entityDisplay.mutation.isPending}
-          loading={entityDisplay.loading}
-          size={40}
-          onChange={(glyph, colorKey, customColor) => {
-            entityDisplay.mutation.mutate({ glyph, colorKey, customColor });
-          }}
-        />
+        entityDisplay.display.customized ? (
+          <EntityIconSlot display={entityDisplay.display} entityName={project.name} size={32} />
+        ) : null
       }
       title={
         <EditableTitle
@@ -714,6 +697,24 @@ export default function ProjectDetailPage(): JSX.Element {
                 );
               }}
             />
+            <EntityMetadataItem priority={6} overflowOnly>
+              <div className="flex items-center gap-2">
+                <span className="text-body-medium">Icon</span>
+                <EntityIconPicker
+                  display={entityDisplay.display}
+
+                  workspaceId={orgId}
+                  entityName={project.name}
+                  editable={canEdit}
+                  pending={entityDisplay.mutation.isPending}
+                  loading={entityDisplay.loading}
+                  size={40}
+                  onChange={(glyph, colorKey, customColor) => {
+                    entityDisplay.mutation.mutate({ glyph, colorKey, customColor });
+                  }}
+                />
+              </div>
+            </EntityMetadataItem>
             <CreatedOriginChip createdAt={project.createdAt} />
           </EntityMetadataRow>
           <HeaderLoadFailureBanner

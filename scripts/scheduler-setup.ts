@@ -169,6 +169,13 @@ export const JOBS: readonly CronJob[] = [
       'Docket: expired-session sweep (deletes session rows past their expiresAt — Better Auth only prunes these lazily).',
   },
   {
+    name: 'docket-usage-rollup',
+    path: '/internal/cron/usage-rollup',
+    schedule: '0 4 * * *',
+    description:
+      'Docket: usage ledger rollup (recomputes recent AI token days and snapshots Postgres and object storage per owner).',
+  },
+  {
     name: 'docket-expired-drafts-sweep',
     path: '/internal/cron/expired-drafts-sweep',
     schedule: '30 3 * * *',

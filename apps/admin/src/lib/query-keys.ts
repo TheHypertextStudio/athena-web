@@ -30,6 +30,16 @@ export const queryKeys = {
   /** Headline platform metrics. */
   staff: () => [...queryKeys.all, 'staff'] as const,
   athenaUsage: () => [...queryKeys.all, 'athena-usage'] as const,
+  /** Every read of the cost ledger and its price list. */
+  costs: () => [...queryKeys.all, 'costs'] as const,
+  /** The ranked cost report for a month under a lens. */
+  costReport: (month: string, lens: string) =>
+    [...queryKeys.costs(), 'report', month, lens] as const,
+  /** One holder's cost detail. */
+  costHolder: (key: string, month: string, lens: string) =>
+    [...queryKeys.costs(), 'holder', key, month, lens] as const,
+  /** The price list. */
+  costRates: () => [...queryKeys.costs(), 'rates'] as const,
   status: () => [...queryKeys.all, 'status'] as const,
   resources: () => [...queryKeys.all, 'resources'] as const,
   metrics: () => [...queryKeys.all, 'metrics'] as const,

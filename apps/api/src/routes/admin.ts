@@ -57,8 +57,7 @@ import {
 } from './admin-serializers';
 import { adminBillingRoutes } from './admin-billing-routes';
 import { adminDiscountRoutes } from './admin-discount-routes';
-import { adminResourceRoutes } from './admin-resource-routes';
-import { adminAthenaUsageRoutes } from './admin-athena-usage-routes';
+import { adminUsageRoutes } from './admin-usage-routes';
 import { adminStatusRoutes } from './admin-status-routes';
 import { adminSettingsRoutes } from './admin-settings-routes';
 import { adminStaffRoutes } from './admin-staff-routes';
@@ -394,8 +393,7 @@ export function createAdminRoutes<
         },
       )
       // ---- Service controls (sub-router) -------------------------------------
-      .route('/resources', adminResourceRoutes)
-      .route('/athena-usage', adminAthenaUsageRoutes)
+      .route('/', adminUsageRoutes)
       .route('/status', adminStatusRoutes)
       .route('/service-controls', adminSettingsRoutes)
       // ---- Staff management (sub-router) ------------------------------------

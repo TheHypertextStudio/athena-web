@@ -62,3 +62,4 @@ export * from './template-proposals';
 export * from './work-template-identity-namespace';
 export * from './work-template-alias-reference-checkpoint';
 export * from './work-template-private-step';
+export * from './usage-cost';

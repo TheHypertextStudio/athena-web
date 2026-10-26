@@ -147,6 +147,8 @@ function constrainedStringExample(schema: JsonObject, variant: number): string |
     'example.value',
     '#336699',
     '09:30',
+    '2026-09',
+    '0123456789abcdef'.repeat(4),
     'field_name',
     '12-3456789',
     '+12025550123',

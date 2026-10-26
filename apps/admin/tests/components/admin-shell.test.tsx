@@ -127,6 +127,7 @@ describe('AdminShell', () => {
         '/notifications',
         '/status',
         '/athena',
+        '/costs',
         '/audit',
         '/lifecycle',
         '/operators',

@@ -56,6 +56,7 @@ import { createGoogleWorkLocationTransport } from '../services/work-location/goo
 import { sweepWorkLocations } from '../services/work-location/sweep';
 import { runScheduledBillingReconciliation } from '../services/scheduled-billing-reconciliation';
 import { readLatticeServiceControls } from '../services/service-controls';
+import { runUsageRollup } from '../services/usage-cost/rollup';
 
 /** Extract the presented cron secret from `Authorization: Bearer …` or `x-cron-secret`. */
 function presentedSecret(
@@ -358,6 +359,12 @@ const cron = new Hono()
     const result = await sweepExpiredComposerDrafts(now);
     const deviceNotifications = await sweepExpiredDeviceNotifications(now);
     return c.json({ swept: true, ...result, deviceNotifications });
+  })
+  // Fills the usage ledger: trailing AI token days plus today's storage snapshots. Each meter is
+  // independent and replaces its own rows, so a retry or an overlapping tick is harmless.
+  .post('/usage-rollup', async (c) => {
+    if (!authorized(c)) return c.json({ error: 'unauthorized' }, 401);
+    return c.json({ meters: await runUsageRollup(new Date()) });
   });
 
 export default cron;

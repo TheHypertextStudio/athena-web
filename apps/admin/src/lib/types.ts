@@ -105,3 +105,24 @@ export type AdminAthenaUsage = InferResponseType<(typeof api.admin)['athena-usag
 
 /** One dimension's share of that work. */
 export type AdminUsageSlice = AdminAthenaUsage['byModel'][number];
+
+/** Everyone's metered cost for a month, ranked. */
+export type AdminCosts = InferResponseType<typeof api.admin.costs.$get>;
+
+/** One person's or workspace's total in that ranking. */
+export type AdminCostHolder = AdminCosts['holders'][number];
+
+/** One holder's cost by resource, workspace and day. */
+export type AdminCostDetail = InferResponseType<
+  (typeof api.admin.costs.holders)[':key']['$get'],
+  200
+>;
+
+/** One resource line in a holder's detail. */
+export type AdminCostLine = AdminCostDetail['lines'][number];
+
+/** The price list. */
+export type AdminRates = InferResponseType<typeof api.admin.costs.rates.$get>;
+
+/** One price on that list. */
+export type AdminRate = AdminRates['rates'][number];

@@ -18,6 +18,21 @@
 - **Implemented locally**: Outlined metadata wrapper at the surrounding page tone; common activity content for grouped/standalone rows; visible comments in source order; one expandable change heading; compact authority avatar; recorded-activity inspector; permission-filtered native session links. Correlation identities and transport metadata are unchanged.
 - **Validation**: 30 API, 26 web, 7 UI and 6 browser tests pass. Affected builds, typechecks, lint and the unchanged complexity ledger pass. Sixteen standard captures cover four states in both themes at desktop/phone widths. The local stack was stopped and its seeded database reset.
 - **Remaining**: Phone captures reveal clipped inspector relationship text and control reachability needs review. Correct narrow-pane sizing/reflow, strengthen inspector-specific overflow/accessibility assertions, finish the craft audit and verify native detail navigation before integration. External provider-session URLs and Slack/Discord entity mentions remain separate integration work. The current refinement is preserved as a branch checkpoint at the user’s request; no integration or deployment is claimed. Work stopped at the user's quota constraint, with pending work captured in the Hypertext Studio Docket.
+### [USAGE-COST-ATTRIBUTION] Quantify cost per user and workspace
+
+- **Status**: IN_PROGRESS
+- **Started**: 2026-10-25
+- **Priority**: P1
+- **Description**: Record every metered resource per user and workspace, price it from an editable rate card, and show cost by who caused it and by who pays, so unit economics against the $8 Docket Pro price are known before user growth.
+- **Plan**: Spec at `docs/superpowers/specs/2026-10-25-usage-cost-attribution-design.md`. Phase 1 adds the usage ledger, rate card, AI token rollup from `agent_session_run`, Postgres and object storage snapshots by owner, a daily rollup job, and the admin Costs page.
+- **Subtasks**:
+  - [x] Phase 1 schema, rate lookup, token and storage meters, rollup job
+  - [x] Phase 1 admin routes and Costs page
+  - [ ] Audit model callers outside session runs (phase 1.5)
+  - [ ] Phases 0, 2, 3, 4, 5 per the spec
+- **Files changed**: `packages/db/src/schema/usage-cost.ts`, `packages/db/drizzle/0180_usage_cost_ledger.sql`, `apps/api/src/services/usage-cost/*`, `apps/api/src/routes/admin-cost-routes.ts`, `apps/api/src/routes/admin-usage-routes.ts`, `apps/api/src/admin-cost-dto.ts`, cron endpoint and scheduler job `usage-rollup`, `apps/admin/src/app/(admin)/costs/*`.
+- **Decisions**: Migration 0180 is hand-written because drizzle snapshots stop at 0170 and a generated diff pulls in unrelated policy changes. The admin router mounts resources, Athena usage and costs through one `adminUsageRoutes` sub-router, which also keeps `createAdminRoutes` under its ledgered length.
+- **Learnings**: Existing metering already separates unmeasured from zero; the ledger keeps that rule.
 
 ### [WORK-TEMPLATE-PRODUCTION-20261024] Publish validated work templates
 

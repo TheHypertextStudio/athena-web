@@ -29,6 +29,7 @@ const CRON_PATHS: readonly string[] = [
   '/expired-drafts-sweep',
   '/expired-sessions-sweep',
   '/staff-google-sync',
+  '/usage-rollup',
 ];
 
 /** The migrated db module plus the lazily-imported cron router. */

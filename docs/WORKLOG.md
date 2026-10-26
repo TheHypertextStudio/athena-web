@@ -138,9 +138,12 @@
     project and milestone; claim and selected-work validators that accept a private origin only
     when it matches the registry; and `docket_private_structure_schema_ready()`. It changes no
     existing row and enables no writer.
-  - Migration 0181 is the conditional alias-reference enforcement that was prepared as the private
-    0180 candidate. It is renumbered unchanged apart from its number; its readiness already requires
-    `docket_private_structure_schema_ready()`.
+  - Migration 0182 is the conditional alias-reference enforcement that was prepared as the private
+    0180 candidate (0181 went to the usage cost ledger). It is renumbered unchanged apart from its
+    number; its readiness already requires `docket_private_structure_schema_ready()`.
+  - Enforcement activates only when every normalized definition has a canonically owned retained
+    head, so journaling 0182 alone keeps production on the retained path until existing schedules
+    are adopted.
   - Private step paths are blueprint scope paths: every step beneath a root has the path `[key]`
     and its containment is its registered parent alias. The planner and claim validator compare
     these paths, so containment paths would never match.
@@ -151,8 +154,8 @@
   - Inline roots and inline children select the organization's base Task or Project publication.
     Selected Task and Project publications keep their real pinned closure and public origins.
     Milestones keep a private origin and no template identity.
-  - `canonicalAliasReferencesEnforced` stays closed until 0181 is journaled with compatible runtime
-    consumers, so normal routes keep the retained authoring path.
+  - `canonicalAliasReferencesEnforced` stays closed until 0182 is journaled and enforced, so normal
+    routes keep the retained authoring path.
 - **Subtasks**:
   - [x] Second-viewer privacy regression in the default suite
   - [x] 0180 private structure schema, guards and readiness function
@@ -160,9 +163,11 @@
   - [x] Private snapshot in the shared planner and private origin columns in the writer
   - [x] Scheduled run loads the private structure through the publication factory
   - [x] Install and run regression: forest, parentage, Milestone and forged-origin refusals
-  - [ ] Selected nested publication and multiple-root runs
-  - [ ] Real PostgreSQL forged-origin, tenant, purge and fresh/populated upgrade proofs
-  - [ ] 0181 alias enforcement with runtime compatibility (separate delivery)
+  - [x] Selected nested publication and multiple-root runs
+  - [x] Real PostgreSQL fresh/populated upgrade, purge and viewer isolation proofs
+  - [x] Canonical runtime compatibility with enforcement on: labels and batch reflow cap fixed
+  - [ ] 0182 PostgreSQL proofs: covered, deferred, retry, wrong identities, races, denied role
+  - [ ] Retained schedule adoption before production enforcement
 
 ### [PRODUCT-ADMIN-CACHE-CI] Register private Product Admin CI
 

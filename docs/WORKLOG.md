@@ -7,21 +7,6 @@
 
 ## Active Tasks
 
-### [REVIEWER-DEMO-PRODUCTION] Deploy and provision guarded reviewer access
-
-- **Status**: IN_PROGRESS
-- **Started**: 2026-10-26
-- **Description**: Publish the reviewer magic-link flow and issue a private production link for the designated OpenAI reviewer account, with server-side abuse protection independent of link secrecy.
-- **Plan**: Audit and test sign-in and authenticated REST/MCP admission, add shared persistent reviewer budgets and bounded expensive operations where missing, support explicitly targeted hosted provisioning, validate the candidate and migrations on isolated staging, then deploy the accepted API/frontend and provision the production account. Verify correct account/workspace/task access and rate-limit responses before handing over the private link.
-- **Constraints**: Keep existing provider identities, quotas, service scale limits and deployment rollback paths. Use guarded local builds and native deployments; hosted GitHub Actions spending stays disabled. Preserve normal accounts and do not copy production account/grant rows to staging. Keep private links and cloud secret values out of logs and repository history.
-- **Acceptance**: Server-side limits hold across processes, IPs and new sessions; rejected traffic performs no work. Staging and production use separate credentials/data. The production link signs into the designated account immediately and exposes four sample tasks. Verify the actual deployed revisions and keep a rollback to the prior compatible artifact.
-- **Implemented**: Shared durable request/write/sign-in/model-turn/byte budgets, bounded stream slots and body sizes, token-upload admission, account/workspace confinement and explicitly targeted hosted seeding. Reviewer counters use a dedicated table so authentication cleanup cannot erase daily allowances. Browser Realtime credentials are refused for reviewers because direct provider generation bypasses server metering. Repaired the existing unknown deliverables OpenAPI tag using the canonical Comments tag.
-- **Validation**: 616 auth tests and 572 API/agent/voice tests pass. Root lint, complexity, typecheck and formatting pass; the final membership-removal adjustment passes its focused API, lint and auth typecheck checks. Both migrations apply on fresh PGlite and a disposable Neon child of the isolated staging database. Production/staging endpoints are distinct and their account ID intersection is empty. Read-only security review found no remaining blockers after the two provider/cleanup bypasses were repaired.
-- **Browser acceptance**: The real magic link switches accounts, survives cleared-cookie and existing-session reuse, scrubs its fragment and renders all four assigned sample tasks. A rejected oversized bulk call returns 429 and leaves the task count unchanged. The guarded stack was stopped and its database reset.
-- **Staging finding**: The deployed magic-link exchange authenticates correctly, but its low-level auth client call does not refresh the reactive session store. Repair that transition and cover it with the actual client before promoting. Headless staging checks stop at staff Access; use the authorized staff browser for hosted acceptance. The staging-only link was rotated and its test sessions revoked after the Access redirect appeared in a failure log.
-- **Client repair validation**: A regression using the actual Better Auth client first reproduced the stale signed-out observer, then passed after the custom exchange notified the session signal. All 192 auth-related web tests, web typecheck and focused lint pass. Excluding generated OpenNext JavaScript preserves the declared native-worker type boundary and avoids exhausting the existing heap limit after a deployment build.
-- **Remaining**: Accept the corrected staging frontend with the existing API image, then deploy production and provision/verify its private reviewer link. No production deployment or credential is claimed yet.
-
 ### [ACTIVITY-METADATA-WRAPPER] Integrate session groups with ordinary activity
 
 - **Status**: REVIEW
@@ -13784,6 +13769,15 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
 ---
 
 ## Completed Tasks
+
+### [REVIEWER-DEMO-PRODUCTION] Guarded production reviewer access
+
+- **Completed**: 2026-10-26
+- **Summary**: Operator-supplied magic links open the designated pre-seeded reviewer account without registration, password entry or inbox access. Durable shared budgets cover sign-ins, requests, bulk work, upload bytes, streams and actual model turns across REST/MCP. Direct browser Realtime credentials are unavailable to reviewers because their generation bypasses server metering.
+- **Files changed**: Auth budget/admission modules and schema migration; API/MCP/provider/upload boundaries; hosted seed guards; reviewer sign-in/session handling and tests; web typecheck configuration and verification documentation.
+- **Validation**: 616 auth tests, 572 API/agent/voice tests and 192 auth-related web tests pass. Root typecheck, lint, complexity and formatting pass, supplemented by focused checks after the final web repair. Fresh PGlite and isolated Neon migrations pass. The local and production browser journeys verify account identity, reusable links, cleared-cookie sign-in, a scrubbed fragment and all four rendered sample tasks. Hosted API checks verify HTTP 429 with Retry-After and unchanged task counts after refused bulk work.
+- **Deployment**: Accepted the deployed staging browser/API before production promotion. Production browser/API checks and repeated health probes pass against the selected API/frontend versions. Existing capacity settings, managed domains and certificates are unchanged. Private links and detailed provider receipts remain outside Git; no hosted CI spending or pull requests were used.
+- **Learnings**: Reviewer counters need their own table because authentication cleanup removes short-lived buckets. Custom auth exchanges must refresh the reactive session store. Generated OpenNext JavaScript belongs outside source typechecking. Explicit Studio credentials keep native cache population on the intended Cloudflare account.
 
 ### [REVIEWER-DEMO-SIGN-IN] Immediate reviewer access through supplied magic links
 

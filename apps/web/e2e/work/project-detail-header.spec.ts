@@ -68,8 +68,18 @@ async function verifyIdentityGeometry(
       ),
     );
     expect(new Set(controls.map((box) => Math.round(box?.y ?? -1))).size).toBe(1);
-    for (const name of ['Overview', 'Tasks', 'Updates', 'Resources'])
-      await visibleInHeader(header.getByRole('tab', { name, exact: true }));
+    for (const name of ['Overview', 'Tasks', 'Updates', 'Resources']) {
+      const tab = header.getByRole('tab', { name, exact: true });
+      await visibleInHeader(tab);
+      const metrics = await tab.evaluate((element) => ({
+        size: parseFloat(getComputedStyle(element).fontSize),
+        height: element.getBoundingClientRect().height,
+        fits: element.scrollWidth <= element.clientWidth + 1,
+      }));
+      expect(metrics.size).toBeGreaterThanOrEqual(14);
+      expect(metrics.height).toBeGreaterThanOrEqual(48);
+      expect(metrics.fits).toBe(true);
+    }
   } else {
     expect(actionsBox.y).toBeLessThan(titleBox.y + titleBox.height);
     expect(actionsBox.x).toBeGreaterThanOrEqual(titleBox.x + titleBox.width);
@@ -204,7 +214,8 @@ test('long project names and unset essential fields remain usable on a phone', a
     .getByRole('region', { name: 'Description', exact: true })
     .locator('.entity-document')
     .boundingBox();
-  expect(emptyBox?.height).toBeLessThanOrEqual(80);
+  expect(emptyBox?.height).toBeGreaterThanOrEqual(844 * 0.2);
+  expect(emptyBox?.height).toBeGreaterThanOrEqual(192);
   for (const label of [
     /^Project owner/,
     /^Status —/,

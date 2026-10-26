@@ -116,7 +116,7 @@ export interface TabsProps {
   readonly className?: string;
   readonly variant?: TabsVariant;
   readonly layout?: TabsLayout;
-  /** Compact labels and gutters for short navigation within a narrow work pane. */
+  /** Compact gutters for narrow work panes; labels retain the full Material type size. */
   readonly density?: 'comfortable' | 'compact' | undefined;
 }
 
@@ -204,7 +204,7 @@ function handleTabKey(
   if (tab.dataset['value'] !== undefined) onChange(tab.dataset['value'], 'keyboard');
 }
 
-/** Lay out up to four equal-width tabs when they fit; otherwise keep all destinations scrollable. */
+/** Fit up to four tabs; compact lanes use content widths, while comfortable lanes use equal widths. */
 export function TabList({ label, className, children }: TabListProps): React.JSX.Element {
   const { value, variant, layout, density, onValueChange } = useTabsContext();
   const ref = React.useRef<HTMLDivElement>(null);
@@ -214,21 +214,22 @@ export function TabList({ label, className, children }: TabListProps): React.JSX
     if (!list) return;
     const measure = (): void => {
       const tabs = Array.from(list.querySelectorAll<HTMLElement>('[role="tab"]'));
-      const widest = Math.max(
-        0,
-        ...tabs.map((tab) => {
-          const content = tab.querySelector<HTMLElement>('[data-tab-content]');
-          return (
-            (content?.getBoundingClientRect().width ?? 0) +
-            (density === 'compact' ? 16 : variant === 'contained' ? 32 : 48)
-          );
-        }),
-      );
+      const widths = tabs.map((tab) => {
+        const content = tab.querySelector<HTMLElement>('[data-tab-content]');
+        return (
+          (content?.getBoundingClientRect().width ?? 0) +
+          (density === 'compact' ? 16 : variant === 'contained' ? 32 : 48)
+        );
+      });
       const selected = list.querySelector<HTMLElement>('[aria-selected="true"]');
       if (selected) revealTab(list, selected);
       const available =
         list.clientWidth - (variant === 'contained' ? 8 + 4 * Math.max(0, tabs.length - 1) : 0);
-      setScrollable(layout === 'scrollable' || tabs.length > 4 || widest * tabs.length > available);
+      const required =
+        density === 'compact'
+          ? widths.reduce((total, width) => total + width, 0)
+          : Math.max(0, ...widths) * tabs.length;
+      setScrollable(layout === 'scrollable' || tabs.length > 4 || required > available);
     };
     measure();
     const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure);
@@ -257,7 +258,11 @@ export function TabList({ label, className, children }: TabListProps): React.JSX
         }}
         className={cn(
           'relative flex h-12 w-full min-w-0 shrink-0 scrollbar-none overflow-x-auto overflow-y-hidden',
-          scrollable ? '[&>[role=tab]]:flex-none' : '[&>[role=tab]]:flex-1',
+          scrollable
+            ? '[&>[role=tab]]:flex-none'
+            : density === 'compact'
+              ? '[&>[role=tab]]:flex-auto'
+              : '[&>[role=tab]]:flex-1',
           variant === 'contained'
             ? 'gap-1 p-1'
             : scrollable && density !== 'compact' && 'ps-[52px]',
@@ -327,9 +332,9 @@ export function Tab({
         context.onValueChange(value, event.detail === 0 ? 'keyboard' : 'pointer');
       }}
       className={cn(
-        'text-label-large hover:bg-on-surface/8 active:bg-on-surface/12 relative inline-flex h-full min-w-0 shrink-0 items-center justify-center px-6 whitespace-nowrap transition-colors disabled:opacity-50',
+        'text-title-small hover:bg-on-surface/8 active:bg-on-surface/12 relative inline-flex h-full min-w-0 shrink-0 items-center justify-center px-6 whitespace-nowrap transition-colors disabled:opacity-50',
         context.variant === 'contained' && 'rounded-full px-4',
-        context.density === 'compact' && 'text-label-medium px-2',
+        context.density === 'compact' && 'min-w-max px-2',
         selected ? SELECTED_TAB_CLASSES[context.variant] : 'text-on-surface-variant',
         focusRingInset,
         className,

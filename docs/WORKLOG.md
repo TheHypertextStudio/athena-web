@@ -13908,6 +13908,16 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
 - **Pre-existing API failures**: Current main's deliverables operation lacks an OpenAPI tag. Eight assertions in `openapi-richness`, `infra` and `notification-boundary`, plus `security/route-auth` suite setup, fail identically on clean HEAD and the changed source. The exact failure names were compared after a clean-HEAD run; source restoration was verified byte-for-byte. The prior series/MCP and database failures no longer occur. This feature adds no failing tests.
 - **Review and learnings**: Independent source review has no remaining findings. Its existing-account redirect findings have regression coverage. Make the credential exchange the sole demo access decision, keep test identities distinct, and inspect current migration ownership before integrating a long-lived branch.
 - **Remaining operational scope**: Hosted account/link provisioning and actual platform review acceptance are separate from this local implementation. Per-person provisioning, copying, scheduled resets/expiry operations and admin screens remain deferred. Existing sessions retain their normal lifecycle after new demo sign-ins are disabled.
+### [PROJECT-WRITING-SPACE] Restore readable tabs and substantial description space
+
+- **Completed**: 2026-10-26
+- **Summary**: Restored Material Title Small typography on tabs instead of the 12px compact override, retaining 48px targets. Compact lanes fit individual label widths instead of shrinking text to fit the widest label across equal columns. The project description now reserves at least 20% of the viewport, with a 12rem floor, and grows with its content. The compact header and visible essential properties are preserved; custom properties remain excluded.
+- **Files changed**: Shared tab presentation/measurement, optional document writing presentation, shared layout CSS, project composition, browser geometry assertions, README, plan and existing craft review.
+- **Validation**: Twenty-six shared tab tests, five editor tests and three browser journeys pass. UI/web typechecks, affected lint and complexity pass. Twenty-four standard captures cover both themes and desktop/phone sizes; actual empty and populated writing regions were inspected. Browser checks verify label size, touch target height, unclipped names, the 20% minimum and persistence through reload. The standard stack was stopped and seeded database reset.
+- **Research**: Google's current generated Material navigation-tab tokens use Title Small and a 48dp container; the Type Scale supplies 14sp / 20sp medium text. Context7 was quota-blocked, so the Google-published sources were read directly. The web layout remains an adaptation, not a complete Expressive conformance certification.
+- **Learnings**: Compact navigation should reduce unused spacing without shrinking the prescribed type. A work description needs a substantial writing area even when empty; its floor can be independent of header density.
+- **Delivery boundary**: Local implementation and visual verification; no integration or deployment.
+
 ### [PROJECT-MOBILE-COMPOSITION] Make the mobile page serve the work
 
 - **Completed**: 2026-10-26

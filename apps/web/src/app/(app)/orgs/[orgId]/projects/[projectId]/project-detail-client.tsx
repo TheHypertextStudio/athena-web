@@ -772,7 +772,7 @@ export default function ProjectDetailPage(): JSX.Element {
             <section aria-label="Description" className="min-w-0 space-y-3">
               <h2 className="text-title-medium text-on-surface">Description</h2>
               <TemplateAwareEntityDocument
-                presentation="compact"
+                presentation="writing"
                 orgId={orgId}
                 kind="project"
                 currentActorId={aggregate?.viewer.actorId ?? null}

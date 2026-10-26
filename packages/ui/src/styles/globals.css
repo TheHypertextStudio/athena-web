@@ -1270,6 +1270,11 @@
   padding-block-end: max(var(--page-gutter), env(safe-area-inset-bottom));
 }
 
+/* Writing is the work surface, not a compact metadata field. It grows beyond this viewport floor. */
+.entity-document[data-document-presentation='writing'] {
+  min-block-size: max(12rem, 20svh);
+}
+
 [data-entity-metadata-overflow] [data-entity-metadata-item] {
   width: 100%;
   max-width: none;

@@ -46,8 +46,8 @@ export interface EntityDocumentProps {
   contents?: boolean;
   /** Feature behavior delegated to the editor without adding document-layout chrome. */
   contributions?: readonly EditorContribution[];
-  /** Let short work descriptions grow naturally instead of reserving a document-sized floor. */
-  presentation?: 'document' | 'compact';
+  /** Choose a normal document floor, natural compact content, or substantial viewport-relative writing space. */
+  presentation?: 'document' | 'compact' | 'writing';
 }
 
 /** A document-style entity body with a responsive generated table of contents. */
@@ -92,6 +92,7 @@ export function EntityDocument({
         {hasContents ? <DocumentContentsDisclosure contents={documentContents} /> : null}
         <div
           ref={rootRef}
+          data-document-presentation={presentation}
           // `min-h-32` (128px), not `min-h-56` (224px). The floor exists so a click-to-edit body is
           // an obvious target rather than a single bare line, and 128px is four lines of
           // `body-medium` plus the padding — comfortably that. At 224px a one-line description
@@ -103,7 +104,7 @@ export function EntityDocument({
           )}
         >
           <EditableFreeformText
-            compact={presentation === 'compact'}
+            compact={presentation !== 'document'}
             value={value}
             placeholder={placeholder}
             canEdit={canEdit}

@@ -13908,6 +13908,16 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
 - **Pre-existing API failures**: Current main's deliverables operation lacks an OpenAPI tag. Eight assertions in `openapi-richness`, `infra` and `notification-boundary`, plus `security/route-auth` suite setup, fail identically on clean HEAD and the changed source. The exact failure names were compared after a clean-HEAD run; source restoration was verified byte-for-byte. The prior series/MCP and database failures no longer occur. This feature adds no failing tests.
 - **Review and learnings**: Independent source review has no remaining findings. Its existing-account redirect findings have regression coverage. Make the credential exchange the sole demo access decision, keep test identities distinct, and inspect current migration ownership before integrating a long-lived branch.
 - **Remaining operational scope**: Hosted account/link provisioning and actual platform review acceptance are separate from this local implementation. Per-person provisioning, copying, scheduled resets/expiry operations and admin screens remain deferred. Existing sessions retain their normal lifecycle after new demo sign-ins are disabled.
+### [PROJECT-DESCRIPTION-UI] Put description and location first
+
+- **Completed**: 2026-10-26
+- **Summary**: Overview begins with a clearly labeled description, ahead of updates and execution detail. Breadcrumbs above identity link to the actual program or Projects collection; narrow panes show the immediate parent. The user-defined type label remains near the title. Existing rich-text editing, autosave and permissions are retained. Custom properties and configurable tabs remain later work.
+- **Files changed**: Project detail composition, new ProjectBreadcrumb and its tests, shared loading breadcrumb presentation, the project browser journey, README and design documentation.
+- **Validation**: Twenty-eight affected component tests pass; the two breadcrumb tests pass again after the responsive correction. Three final browser journeys pass, including description editing through reload, actual program navigation, empty content, long names, header accessibility and responsive geometry. Changed-file lint, web typecheck, complexity and production build pass. Twenty-four final standard captures cover three states at desktop and phone sizes in both themes. The stack was stopped and its seeded database reset.
+- **Review**: `docs/design/audits/2026-10-26-project-description.md`. The initial mobile breadcrumb used a separate collection row; the final version collapses to the immediate parent to keep the description prominent.
+- **Learnings**: Description prominence comes from content order and clear hierarchy rather than adding a new tab or property grid. Location and work type communicate different relationships and should remain distinct.
+- **Delivery boundary**: Validated locally; integration and deployment are not part of this delivery. No matching Docket task was found, so no unrelated task was updated.
+
 ### [PROJECT-HEADER-UX] Clarify project identity and essential properties
 
 - **Completed**: 2026-10-26

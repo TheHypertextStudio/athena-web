@@ -17,6 +17,7 @@
  */
 import { Skeleton, SkeletonChip, SkeletonGlyph, SkeletonText } from '@docket/ui/primitives';
 import type { JSX, ReactNode } from 'react';
+import { cn } from '@docket/ui/lib/utils';
 
 import {
   EntityDetailLayout,
@@ -126,7 +127,13 @@ export function EntityDetailSkeleton({
         // A breadcrumb renders at the 20px line of `text-sm` / `text-body-medium`, taller than the
         // 16px body-copy line a bare `SkeletonText` stands in for; at `h-4` the whole page stepped
         // down 4px when the real trail arrived.
-        eyebrow={hasEyebrow ? <SkeletonText className="h-5 w-48" /> : undefined}
+        eyebrow={
+          hasEyebrow ? (
+            <SkeletonText
+              className={cn('h-5 w-48', identityLayout === 'inline' && 'pointer-coarse:h-10')}
+            />
+          ) : undefined
+        }
         icon={
           // placeholder (only when the glyph cannot be derived): the entity's icon.
           icon ?? <SkeletonGlyph />

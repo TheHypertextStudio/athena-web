@@ -85,6 +85,10 @@ on demand, and creates or links work without leaving the page. Quick-add keeps f
 name and retains failed entries for retry. A Program's existing-project suggestions preserve that
 Program's placement; the object's Move action handles placement changes.
 
+Project Overview starts with the editable description, followed by updates and execution detail.
+Breadcrumbs above the header link to the containing Program or the Projects collection; the
+user-defined work type remains beside the title. Custom property fields are separate future work.
+
 Work templates has its own workspace destination at `/orgs/[orgId]/work-templates`, available
 from workspace navigation. Choose a definition from a compact library or use **Define work**;
 **Browse starting points** opens the gallery. Each definition appears once with its purpose, kind

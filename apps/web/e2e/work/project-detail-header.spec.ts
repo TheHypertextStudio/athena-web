@@ -159,6 +159,10 @@ test('long project names and unset essential fields remain usable on a phone', a
   await page.setViewportSize({ width: 320, height: 844 });
   await page.goto(`/orgs/${orgId}/projects/${project.id}`, { waitUntil: 'domcontentloaded' });
   await expect(page.getByRole('heading', { name, exact: true })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Description', exact: true })).toBeVisible();
+  await expect(
+    page.getByRole('textbox', { name: 'Description', exact: true }).locator('.is-editor-empty'),
+  ).toHaveAttribute('data-placeholder', 'Describe this work and why it matters…');
   for (const label of [
     /^Project owner/,
     /^Status —/,
@@ -173,4 +177,67 @@ test('long project names and unset essential fields remain usable on a phone', a
     );
   }
   expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false);
+});
+
+test('description leads Overview, saves through reload and keeps real parent navigation above identity', async ({
+  page,
+}) => {
+  const orgId = await workspace(page);
+  const program = await apiJson<{ id: string }>(page, `/v1/orgs/${orgId}/programs`, {
+    method: 'POST',
+    body: { name: 'Neighborhood access and community conversations' },
+  });
+  const project = await apiJson<{ id: string }>(page, `/v1/orgs/${orgId}/projects`, {
+    method: 'POST',
+    body: {
+      name: 'Rider town hall',
+      programId: program.id,
+      description:
+        'Bring riders and transit staff together to identify the most useful station access changes.\n\nLeave with a short list of priorities and an owner for each next step.',
+    },
+  });
+  await page.goto(`/orgs/${orgId}/projects/${project.id}`, { waitUntil: 'domcontentloaded' });
+  const trail = page.getByRole('navigation', { name: 'Breadcrumb', exact: true });
+  const parent = trail.getByRole('link', {
+    name: 'Neighborhood access and community conversations',
+  });
+  await expect(parent).toHaveAttribute('href', `/orgs/${orgId}/programs/${program.id}`);
+  const description = page.getByRole('region', { name: 'Description', exact: true });
+  for (const width of [1440, 390, 320]) {
+    await page.setViewportSize({ width, height: 844 });
+    const collection = trail.getByRole('link', { name: 'Programs', exact: true });
+    if (width === 1440) await expect(collection).toBeVisible();
+    else await expect(collection).toBeHidden();
+    await expect(parent).toBeVisible();
+    const [breadcrumbBox, titleBox, descriptionBox, updateBox] = await Promise.all([
+      trail.boundingBox(),
+      page.getByRole('heading', { name: 'Rider town hall', exact: true }).boundingBox(),
+      description.boundingBox(),
+      page.getByRole('heading', { name: 'Latest update', exact: true }).boundingBox(),
+    ]);
+    if (!breadcrumbBox || !titleBox || !descriptionBox || !updateBox)
+      throw new Error('Project context missing');
+    expect(breadcrumbBox.y + breadcrumbBox.height).toBeLessThanOrEqual(titleBox.y);
+    expect(descriptionBox.y + descriptionBox.height).toBeLessThanOrEqual(updateBox.y);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(
+      false,
+    );
+  }
+  const saved = page.waitForResponse(
+    (response) =>
+      response.request().method() === 'PATCH' &&
+      response.url().includes(`/projects/${project.id}`) &&
+      response.ok(),
+  );
+  await description
+    .getByRole('textbox', { name: 'Description', exact: true })
+    .fill('Riders will agree the station access priorities and next steps.');
+  await parent.focus();
+  await saved;
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await expect(description).toContainText(
+    'Riders will agree the station access priorities and next steps.',
+  );
+  await parent.click();
+  await expect(page).toHaveURL(new RegExp(`/programs/${program.id}`));
 });

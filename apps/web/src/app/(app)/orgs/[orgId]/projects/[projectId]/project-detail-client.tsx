@@ -57,6 +57,7 @@ import { ProjectPeopleRow } from '@/components/project-detail/project-people-row
 import { PropertiesPanel } from '@/components/project-detail/properties-panel';
 import { WorkTypeLabel } from '@/components/templates/work-type-label';
 import { ProjectHeaderActions } from '@/components/project-detail/project-header-actions';
+import { ProjectBreadcrumb } from '@/components/project-detail/project-breadcrumb';
 import { RepeatProjectDialog } from '@/components/recurrence/repeat-project-dialog';
 import { useResolvedAccountId } from '@/components/resolved-account';
 import { ContainerDetailLoading } from '@/components/views/entity-snapshot-metadata';
@@ -174,6 +175,7 @@ export default function ProjectDetailPage(): JSX.Element {
   const queryClient = useQueryClient();
   const accountId = useResolvedAccountId();
   const projectNoun = useVocabulary('project');
+  const programsNoun = useVocabulary('program', { plural: true });
   const projectPlural = useVocabulary('project', { plural: true });
   const refreshTitle = `Could not refresh this ${projectNoun.toLowerCase()}`;
   const workTitle = `${projectNoun} work could not load`;
@@ -565,6 +567,14 @@ export default function ProjectDetailPage(): JSX.Element {
         />
       }
       object={{ kind: 'project', id: projectId, organizationId: orgId, title: project.name }}
+      eyebrow={
+        <ProjectBreadcrumb
+          orgId={orgId}
+          projectLabel={projectPlural}
+          programLabel={programsNoun}
+          program={aggregate?.references.program}
+        />
+      }
       printSummary={
         <DetailPrintSummary
           title={project.name}
@@ -757,22 +767,27 @@ export default function ProjectDetailPage(): JSX.Element {
         className="flex min-w-0 flex-col gap-8"
         render={() => (
           <>
+            <section aria-label="Description" className="min-w-0 space-y-3">
+              <h2 className="text-title-medium text-on-surface">Description</h2>
+              <TemplateAwareEntityDocument
+                orgId={orgId}
+                kind="project"
+                currentActorId={aggregate?.viewer.actorId ?? null}
+                teamId={project.teamId ?? null}
+                value={project.description}
+                canEdit={canEdit}
+                onSave={(description) => {
+                  mutations.patchProject({ description });
+                }}
+                placeholder={
+                  canEdit ? 'Describe this work and why it matters…' : 'No description yet.'
+                }
+              />
+            </section>
             <LatestUpdateSummary
               updates={updatesQ.data?.items ?? []}
               loading={updatesQ.isPending}
               resolveActor={resolveUpdateActor}
-            />
-            <TemplateAwareEntityDocument
-              orgId={orgId}
-              kind="project"
-              currentActorId={aggregate?.viewer.actorId ?? null}
-              teamId={project.teamId ?? null}
-              value={project.description}
-              canEdit={canEdit}
-              onSave={(description) => {
-                mutations.patchProject({ description });
-              }}
-              placeholder="Add the Project brief…"
             />
             {workQ.isError ? (
               <PartialLoadBanner title={workTitle} onRetry={() => void workQ.refetch()} />

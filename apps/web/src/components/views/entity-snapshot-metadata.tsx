@@ -238,6 +238,7 @@ export function ContainerDetailLoading({
 }: ContainerDetailLoadingProps): JSX.Element {
   return (
     <EntityDetailSkeleton
+      hasEyebrow={target === 'project'}
       identityLayout={target === 'project' ? 'inline' : 'stacked'}
       typeLabel={target === 'project' ? entityName : undefined}
       chipCount={target === 'project' ? 6 : undefined}

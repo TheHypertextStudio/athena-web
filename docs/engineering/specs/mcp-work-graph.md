@@ -51,7 +51,8 @@ work is explicitly included when chosen. Typing and selecting never start a conv
 counts retain every authorized off-view connection; each boundary names at most twenty endpoints
 for direct reveal, with neighborhood navigation for the rest. These counts never imply readiness.
 
-Fullscreen supports prerequisite/downstream tracing. An equivalent relationship list supports keyboard and assistive navigation.
+Fullscreen can highlight prerequisite and downstream connections. Inspector actions say Highlight
+and Clear highlights; a Highlight action is offered only when a displayed connection exists. An equivalent relationship list supports keyboard and assistive navigation.
 
 Inspector `details` carry original relationship endpoints for each displayed identity, with separate
 incoming/outgoing totals and at most ten items per side. Collapsed visual arrows are not added as

@@ -45,10 +45,13 @@ window.docketGraphInspector = function (state, act) {
       title.prepend(icon);
     }
     head.appendChild(title);
-    if (items.length)
+    const visibleConnection = state.snapshot.edges.some(
+      (edge) => (incoming ? edge.target : edge.source) === node.key,
+    );
+    if (items.length && visibleConnection)
       head.appendChild(
-        d.button('Trace', () => act.trace(incoming ? 'before' : 'after'), {
-          label: incoming ? 'Trace prerequisites' : 'Show what this unlocks',
+        d.button('Highlight', () => act.trace(incoming ? 'before' : 'after'), {
+          label: incoming ? 'Highlight prerequisites' : 'Highlight downstream work',
         }),
       );
     section.appendChild(head);
@@ -91,7 +94,7 @@ window.docketGraphInspector = function (state, act) {
     return section;
   }
   panel.append(section(true), section(false));
-  if (state.trace.size) panel.appendChild(d.button('Clear trace', () => act.trace('clear')));
+  if (state.trace.size) panel.appendChild(d.button('Clear highlights', () => act.trace('clear')));
   const navigation = d.el('div', 'graph-actions');
   if (node.childCount)
     navigation.appendChild(

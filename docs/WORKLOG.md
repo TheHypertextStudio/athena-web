@@ -21,6 +21,15 @@
 - **Staging finding**: The deployed magic-link exchange authenticates correctly, but its low-level auth client call does not refresh the reactive session store. Repair that transition and cover it with the actual client before promoting. Headless staging checks stop at staff Access; use the authorized staff browser for hosted acceptance. The staging-only link was rotated and its test sessions revoked after the Access redirect appeared in a failure log.
 - **Client repair validation**: A regression using the actual Better Auth client first reproduced the stale signed-out observer, then passed after the custom exchange notified the session signal. All 192 auth-related web tests, web typecheck and focused lint pass. Excluding generated OpenNext JavaScript preserves the declared native-worker type boundary and avoids exhausting the existing heap limit after a deployment build.
 - **Remaining**: Accept the corrected staging frontend with the existing API image, then deploy production and provision/verify its private reviewer link. No production deployment or credential is claimed yet.
+### [MCP-GRAPH-LANGUAGE] Use plain language for dependency highlighting
+
+- **Status**: REVIEW
+- **Description**: Replace implementation jargon in the inspector with clear Highlight and Clear highlights actions. Offer highlighting only when a displayed relationship can actually be highlighted.
+- **Plan and validation**: Update inspector copy and eligibility, exercise highlighting/clearing in the existing browser journey, verify no Trace action remains, and run affected lint/type/build checks under the capacity guard before committing.
+- **Outcome**: Inspector actions say Highlight and Clear highlights. Connections outside the displayed graph retain their existing reveal link without an ineffective highlight action.
+- **Validation**: The 34-capture browser matrix, visible-path highlighting/clearing assertions, zero Trace actions, accessibility/overflow checks, affected lint and API production build pass under the capacity guard.
+- **Learning**: Product copy should describe the visible action rather than the graph algorithm.
+
 ### [MCP-WORK-GRAPH-ORIENTATION] Clarify relationships and preserve exploration context
 
 - **Status**: REVIEW

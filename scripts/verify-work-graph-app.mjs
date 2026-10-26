@@ -189,7 +189,20 @@ try {
       await app.getByRole('button', { name: 'Expand group', exact: true }).click();
       await app.locator('.graph-node').filter({ hasText: 'Review team permissions' }).waitFor();
       await app.locator('.graph-node').filter({ hasText: 'Review team permissions' }).click();
-      await app.getByRole('button', { name: 'Trace prerequisites', exact: true }).click();
+      assert.equal(await app.getByRole('button', { name: /trace/i }).count(), 0);
+      assert.equal(
+        await app.getByRole('button', { name: 'Highlight prerequisites', exact: true }).count(),
+        0,
+        'No highlight action for prerequisites outside the displayed graph',
+      );
+      await app.getByRole('button', { name: 'Highlight downstream work', exact: true }).click();
+      assert(
+        (await app.locator('.graph-node[data-traced=true]').count()) >= 2,
+        'Highlight connects visible work',
+      );
+      await app.getByRole('button', { name: 'Clear highlights', exact: true }).click();
+      assert.equal(await app.locator('.graph-node[data-traced=true]').count(), 0);
+      await app.getByRole('button', { name: 'Highlight downstream work', exact: true }).click();
       await app.getByRole('button', { name: 'Ask about this', exact: true }).click();
       await page.waitForFunction(() => window.contexts.length > 0 && window.messages.length === 1);
       await app.locator('body').evaluate(() => {

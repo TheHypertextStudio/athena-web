@@ -90,6 +90,7 @@ interface TabsContextValue {
   readonly onValueChange: (value: string, source?: TabsActivation) => void;
   readonly variant: TabsVariant;
   readonly layout: TabsLayout;
+  readonly density: 'comfortable' | 'compact';
   readonly scope: string;
 }
 const TabsContext = React.createContext<TabsContextValue | null>(null);
@@ -115,6 +116,8 @@ export interface TabsProps {
   readonly className?: string;
   readonly variant?: TabsVariant;
   readonly layout?: TabsLayout;
+  /** Compact labels and gutters for short navigation within a narrow work pane. */
+  readonly density?: 'comfortable' | 'compact' | undefined;
 }
 
 /** Retain a keyboard entry point when form validity disables the selected destination. */
@@ -134,14 +137,15 @@ export function Tabs({
   className,
   variant = 'primary',
   layout = 'auto',
+  density = 'comfortable',
 }: TabsProps): React.JSX.Element {
   const inheritedScope = React.useContext(ScopeContext);
   const ownScope = React.useId();
   const scope = inheritedScope ?? ownScope;
   const focusValue = tabFocusValue(items, value);
   const context = React.useMemo(
-    () => ({ value, focusValue, onValueChange, variant, layout, scope }),
-    [value, focusValue, onValueChange, variant, layout, scope],
+    () => ({ value, focusValue, onValueChange, variant, layout, density, scope }),
+    [value, focusValue, onValueChange, variant, layout, density, scope],
   );
   return (
     <TabsContext.Provider value={context}>
@@ -202,7 +206,7 @@ function handleTabKey(
 
 /** Lay out up to four equal-width tabs when they fit; otherwise keep all destinations scrollable. */
 export function TabList({ label, className, children }: TabListProps): React.JSX.Element {
-  const { value, variant, layout, onValueChange } = useTabsContext();
+  const { value, variant, layout, density, onValueChange } = useTabsContext();
   const ref = React.useRef<HTMLDivElement>(null);
   const [scrollable, setScrollable] = React.useState(layout === 'scrollable');
   React.useLayoutEffect(() => {
@@ -215,7 +219,8 @@ export function TabList({ label, className, children }: TabListProps): React.JSX
         ...tabs.map((tab) => {
           const content = tab.querySelector<HTMLElement>('[data-tab-content]');
           return (
-            (content?.getBoundingClientRect().width ?? 0) + (variant === 'contained' ? 32 : 48)
+            (content?.getBoundingClientRect().width ?? 0) +
+            (density === 'compact' ? 16 : variant === 'contained' ? 32 : 48)
           );
         }),
       );
@@ -230,7 +235,7 @@ export function TabList({ label, className, children }: TabListProps): React.JSX
     observer?.observe(list);
     list.querySelectorAll('[data-tab-content]').forEach((content) => observer?.observe(content));
     return () => observer?.disconnect();
-  }, [children, layout, variant]);
+  }, [children, layout, variant, density]);
   React.useLayoutEffect(() => {
     const list = ref.current;
     const selected = list?.querySelector<HTMLElement>('[aria-selected="true"]');
@@ -253,7 +258,9 @@ export function TabList({ label, className, children }: TabListProps): React.JSX
         className={cn(
           'relative flex h-12 w-full min-w-0 shrink-0 scrollbar-none overflow-x-auto overflow-y-hidden',
           scrollable ? '[&>[role=tab]]:flex-none' : '[&>[role=tab]]:flex-1',
-          variant === 'contained' ? 'gap-1 p-1' : scrollable && 'ps-[52px]',
+          variant === 'contained'
+            ? 'gap-1 p-1'
+            : scrollable && density !== 'compact' && 'ps-[52px]',
           className,
         )}
       >
@@ -322,6 +329,7 @@ export function Tab({
       className={cn(
         'text-label-large hover:bg-on-surface/8 active:bg-on-surface/12 relative inline-flex h-full min-w-0 shrink-0 items-center justify-center px-6 whitespace-nowrap transition-colors disabled:opacity-50',
         context.variant === 'contained' && 'rounded-full px-4',
+        context.density === 'compact' && 'text-label-medium px-2',
         selected ? SELECTED_TAB_CLASSES[context.variant] : 'text-on-surface-variant',
         focusRingInset,
         className,

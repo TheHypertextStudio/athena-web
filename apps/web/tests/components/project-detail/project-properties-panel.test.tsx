@@ -67,9 +67,9 @@ describe('Project PropertiesPanel', () => {
     renderPanel();
 
     expect(screen.queryByText('Not set')).toBeNull();
-    expect(screen.getByText('Set health')).toBeTruthy();
-    expect(screen.getByText('Set start date')).toBeTruthy();
-    expect(screen.getByText('Set target date')).toBeTruthy();
+    expect(screen.getByText('Health')).toBeTruthy();
+    expect(screen.getByText('Start date')).toBeTruthy();
+    expect(screen.getByText('Target date')).toBeTruthy();
     expect(screen.getByText('Set program')).toBeTruthy();
     expect(screen.getByText('Add initiatives')).toBeTruthy();
   });

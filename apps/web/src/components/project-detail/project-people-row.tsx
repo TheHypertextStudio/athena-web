@@ -92,7 +92,7 @@ export function ProjectPeopleRow({
         options={ownerOptions}
         value={ownerId}
         onChange={onOwnerChange}
-        placeholder="Set owner"
+        placeholder="Owner"
         clearLabel="No owner"
         searchPlaceholder="Search people…"
         ariaLabel="Project owner"
@@ -100,7 +100,7 @@ export function ProjectPeopleRow({
         loading={ownerLoading}
         {...(onOwnerPickerOpenChange ? { onOpenChange: onOwnerPickerOpenChange } : {})}
         triggerVariant="ghost"
-        triggerClassName={`${ENTITY_METADATA_CHIP_CLASS} max-w-56`}
+        triggerClassName={`${ENTITY_METADATA_CHIP_CLASS} max-w-56 @max-xl:w-full @max-xl:max-w-full @max-xl:justify-start`}
       />
       {uniqueOthers.length > 0 ? (
         <div

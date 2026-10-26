@@ -98,12 +98,18 @@ export function FullDetailMasthead({
             *that* element would push the cover down with it and reopen the exact gap this whole
             restructuring exists to close. */}
       <div className="masthead-content">
-        {eyebrow ? <div className="mb-3 min-w-0">{eyebrow}</div> : null}
+        {identityLayout !== 'inline' && eyebrow ? (
+          <div className="mb-3 min-w-0">{eyebrow}</div>
+        ) : null}
 
         {cover ? <div aria-hidden="true" className="detail-backdrop-space" /> : null}
 
         <div className="detail-masthead">
-          <MastheadIdentity {...{ icon, title, typeLabel, actions, identityLayout }} />
+          {identityLayout === 'inline' ? (
+            <ResponsiveWorkIdentity {...{ icon, title, typeLabel, actions, eyebrow }} />
+          ) : (
+            <MastheadIdentity {...{ icon, title, typeLabel, actions, identityLayout }} />
+          )}
 
           <div className="detail-secondary">
             <div className="flex min-w-0 flex-col gap-3">
@@ -114,6 +120,39 @@ export function FullDetailMasthead({
             </div>
           </div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+/** Keep context and actions compact while giving narrow-pane work titles the entire measure. */
+function ResponsiveWorkIdentity({
+  icon,
+  title,
+  typeLabel,
+  actions,
+  eyebrow,
+}: Pick<DetailHeaderProps, 'icon' | 'title' | 'typeLabel' | 'actions' | 'eyebrow'>): JSX.Element {
+  return (
+    <div className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2">
+      <div className="col-start-2 row-start-1 min-w-0 @xl:col-span-3 @xl:col-start-1">
+        {eyebrow}
+      </div>
+      <div className="col-start-1 row-start-1 @xl:row-start-2 @xl:self-start">{icon}</div>
+      {actions ? (
+        <div
+          role="group"
+          aria-label="Entity actions"
+          className="col-start-3 row-start-1 flex items-center gap-1 @xl:row-start-2 @xl:self-start"
+        >
+          {actions}
+        </div>
+      ) : null}
+      <div className="col-span-3 row-start-2 min-w-0 @xl:col-span-1 @xl:col-start-2">
+        {typeLabel ? (
+          <div className="text-on-surface-variant text-label-medium">{typeLabel}</div>
+        ) : null}
+        <h1 className="text-on-surface text-title-large min-w-0 pt-1 break-words">{title}</h1>
       </div>
     </div>
   );

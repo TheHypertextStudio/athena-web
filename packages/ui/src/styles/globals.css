@@ -1207,6 +1207,16 @@
   margin-block-start: 0.5rem;
 }
 
+/* A narrow work masthead already ends with an interactive property row. Keep its tabs adjacent. */
+@container (max-width: 35.999rem) {
+  [data-detail-identity='inline'] .masthead-content {
+    padding-block-end: 0;
+  }
+  [data-detail-identity='inline'] .detail-tabs {
+    margin-block-start: 0;
+  }
+}
+
 /*
  * The scrolled top app bar, M3's on-scroll behaviour.
  *

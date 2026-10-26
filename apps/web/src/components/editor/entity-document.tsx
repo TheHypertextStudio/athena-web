@@ -46,6 +46,8 @@ export interface EntityDocumentProps {
   contents?: boolean;
   /** Feature behavior delegated to the editor without adding document-layout chrome. */
   contributions?: readonly EditorContribution[];
+  /** Let short work descriptions grow naturally instead of reserving a document-sized floor. */
+  presentation?: 'document' | 'compact';
 }
 
 /** A document-style entity body with a responsive generated table of contents. */
@@ -57,6 +59,7 @@ export function EntityDocument({
   placeholder = 'Add a description',
   contents = true,
   contributions = [],
+  presentation = 'document',
 }: EntityDocumentProps): JSX.Element {
   const rootRef = useRef<HTMLDivElement>(null);
   // A document that is the page owns the URL, so its rail may link to a section.
@@ -94,9 +97,13 @@ export function EntityDocument({
           // `body-medium` plus the padding — comfortably that. At 224px a one-line description
           // rendered inside an empty box two-thirds of it tall, which reads as a loading state
           // that never resolved; it was the largest empty region on the task detail page.
-          className="entity-document bg-surface-container-low flex min-h-32 w-full min-w-0 flex-1 flex-col rounded-xl p-4 print:bg-transparent print:p-0"
+          className={cn(
+            'entity-document bg-surface-container-low flex w-full min-w-0 flex-1 flex-col rounded-xl p-4 print:bg-transparent print:p-0',
+            presentation === 'document' && 'min-h-32',
+          )}
         >
           <EditableFreeformText
+            compact={presentation === 'compact'}
             value={value}
             placeholder={placeholder}
             canEdit={canEdit}

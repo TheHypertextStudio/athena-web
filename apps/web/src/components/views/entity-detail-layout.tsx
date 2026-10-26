@@ -193,6 +193,7 @@ function DetailHeader({
   return (
     <header
       ref={headerRef}
+      data-detail-identity={identityLayout}
       {...(object ? { ...objectTargetProps(object), [OBJECT_PAGE_ATTRIBUTE]: '' } : {})}
       // The two ends of M3's on-scroll app bar, as roles from the documented ramp rather than as
       // tokens. A static `Surface` cannot express this: the bar interpolates between two tones as

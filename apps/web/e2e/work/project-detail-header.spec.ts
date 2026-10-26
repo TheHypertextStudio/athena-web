@@ -40,6 +40,42 @@ async function visibleInHeader(control: Locator): Promise<void> {
   ).toBe(true);
 }
 
+/** Verify the work identity arrangement from actual pane width, rather than device labels. */
+async function verifyIdentityGeometry(
+  title: Locator,
+  actions: Locator,
+  metadata: Locator,
+): Promise<void> {
+  const header = title.locator('xpath=ancestor::header');
+  const [titleBox, actionsBox, headerBox] = await Promise.all([
+    title.boundingBox(),
+    actions.boundingBox(),
+    header.boundingBox(),
+  ]);
+  if (!titleBox || !actionsBox || !headerBox) throw new Error('Project identity is missing.');
+  if (headerBox.width < 576) {
+    expect(actionsBox.y + actionsBox.height).toBeLessThanOrEqual(titleBox.y);
+    expect(titleBox.width).toBeGreaterThan(headerBox.width - 40);
+    const [metadataBox, tabsBox] = await Promise.all([
+      metadata.boundingBox(),
+      header.getByRole('tablist').boundingBox(),
+    ]);
+    if (!metadataBox || !tabsBox) throw new Error('Missing properties or sections');
+    expect(tabsBox.y - metadataBox.y - metadataBox.height).toBeLessThanOrEqual(8);
+    const controls = await Promise.all(
+      [/^Project owner/, /^Status —/, /^Health —/].map((name) =>
+        metadata.getByRole('button', { name }).boundingBox(),
+      ),
+    );
+    expect(new Set(controls.map((box) => Math.round(box?.y ?? -1))).size).toBe(1);
+    for (const name of ['Overview', 'Tasks', 'Updates', 'Resources'])
+      await visibleInHeader(header.getByRole('tab', { name, exact: true }));
+  } else {
+    expect(actionsBox.y).toBeLessThan(titleBox.y + titleBox.height);
+    expect(actionsBox.x).toBeGreaterThanOrEqual(titleBox.x + titleBox.width);
+  }
+}
+
 /** Check real geometry, accessible controls and settled themes at one pane width. */
 async function verifyHeaderAtWidth(page: Page, width: number): Promise<void> {
   const title = page.getByRole('heading', { name: 'Station access review', exact: true });
@@ -63,10 +99,7 @@ async function verifyHeaderAtWidth(page: Page, width: number): Promise<void> {
     ]) {
       await visibleInHeader(metadata.getByRole('button', { name }));
     }
-    const [titleBox, actionsBox] = await Promise.all([title.boundingBox(), actions.boundingBox()]);
-    if (!titleBox || !actionsBox) throw new Error('Project identity is missing.');
-    expect(actionsBox.y).toBeLessThan(titleBox.y + titleBox.height);
-    expect(actionsBox.x).toBeGreaterThanOrEqual(titleBox.x + titleBox.width);
+    await verifyIdentityGeometry(title, actions, metadata);
     expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(
       false,
     );
@@ -159,10 +192,19 @@ test('long project names and unset essential fields remain usable on a phone', a
   await page.setViewportSize({ width: 320, height: 844 });
   await page.goto(`/orgs/${orgId}/projects/${project.id}`, { waitUntil: 'domcontentloaded' });
   await expect(page.getByRole('heading', { name, exact: true })).toBeVisible();
+  const titleBox = await page.getByRole('heading', { name, exact: true }).boundingBox();
+  if (!titleBox) throw new Error('Missing title');
+  expect(titleBox.width).toBeGreaterThan(280);
+  expect(titleBox.height).toBeLessThanOrEqual(120);
   await expect(page.getByRole('region', { name: 'Description', exact: true })).toBeVisible();
   await expect(
     page.getByRole('textbox', { name: 'Description', exact: true }).locator('.is-editor-empty'),
   ).toHaveAttribute('data-placeholder', 'Describe this work and why it matters…');
+  const emptyBox = await page
+    .getByRole('region', { name: 'Description', exact: true })
+    .locator('.entity-document')
+    .boundingBox();
+  expect(emptyBox?.height).toBeLessThanOrEqual(80);
   for (const label of [
     /^Project owner/,
     /^Status —/,

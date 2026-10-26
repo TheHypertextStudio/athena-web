@@ -636,6 +636,7 @@ export default function ProjectDetailPage(): JSX.Element {
             ariaLabel="Project properties"
             layout="wrap"
             overflowLabel="Properties"
+            className="@max-xl:grid @max-xl:grid-cols-3 @max-xl:[&_[aria-label='Timeline']]:grid @max-xl:[&_[aria-label='Timeline']]:grid-cols-2 @max-xl:[&_[data-entity-metadata-item]]:max-w-full @max-xl:[&_[data-entity-metadata-priority='2']]:col-span-full @max-xl:[&>button]:col-span-full @max-xl:[&>button]:justify-self-start"
           >
             <EntityMetadataItem priority={0} className="max-w-full">
               <ProjectPeopleRow
@@ -743,6 +744,7 @@ export default function ProjectDetailPage(): JSX.Element {
       }
       tabs={
         <Tabs
+          density="compact"
           value={tab}
           onValueChange={(value) => {
             setTab(value as TabId);
@@ -770,6 +772,7 @@ export default function ProjectDetailPage(): JSX.Element {
             <section aria-label="Description" className="min-w-0 space-y-3">
               <h2 className="text-title-medium text-on-surface">Description</h2>
               <TemplateAwareEntityDocument
+                presentation="compact"
                 orgId={orgId}
                 kind="project"
                 currentActorId={aggregate?.viewer.actorId ?? null}

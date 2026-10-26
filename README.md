@@ -88,6 +88,8 @@ Program's placement; the object's Move action handles placement changes.
 Project Overview starts with the editable description, followed by updates and execution detail.
 Breadcrumbs above the header link to the containing Program or the Projects collection; the
 user-defined work type remains beside the title. Custom property fields are separate future work.
+On phones, the title uses the full pane width, essential properties remain visible in compact rows,
+and all four project sections fit in a compact tab strip. Short descriptions grow with their prose.
 
 Work templates has its own workspace destination at `/orgs/[orgId]/work-templates`, available
 from workspace navigation. Choose a definition from a compact library or use **Define work**;

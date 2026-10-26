@@ -13908,6 +13908,17 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
 - **Pre-existing API failures**: Current main's deliverables operation lacks an OpenAPI tag. Eight assertions in `openapi-richness`, `infra` and `notification-boundary`, plus `security/route-auth` suite setup, fail identically on clean HEAD and the changed source. The exact failure names were compared after a clean-HEAD run; source restoration was verified byte-for-byte. The prior series/MCP and database failures no longer occur. This feature adds no failing tests.
 - **Review and learnings**: Independent source review has no remaining findings. Its existing-account redirect findings have regression coverage. Make the credential exchange the sole demo access decision, keep test identities distinct, and inspect current migration ownership before integrating a long-lived branch.
 - **Remaining operational scope**: Hosted account/link provisioning and actual platform review acceptance are separate from this local implementation. Per-person provisioning, copying, scheduled resets/expiry operations and admin screens remain deferred. Existing sessions retain their normal lifecycle after new demo sign-ins are disabled.
+### [PROJECT-MOBILE-COMPOSITION] Make the mobile page serve the work
+
+- **Completed**: 2026-10-26
+- **Summary**: A compact context row holds the icon, breadcrumb and actions; the type and title use the full mobile measure. Owner/status/health and both dates remain visible in two essential rows. Compact shared tabs show all four section names at 320px, and the description grows with its content instead of reserving a large empty box. Custom properties remain excluded.
+- **Files changed**: Shared detail masthead/layout, project properties/people/breadcrumb composition, optional compact EntityDocument presentation, shared Tabs density and layout CSS, affected tests, README, plan and existing craft review.
+- **Validation**: Forty-five affected web and 26 shared UI component tests pass across focused runs. UI/web typechecks, affected lint, complexity and structural production build pass. Three final browser journeys verify width/alignment/tab geometry, touch targets, header accessibility, save/reload and navigation. Twenty-four final standard captures cover empty/populated/long-title states in both themes. The final spacing-only CSS correction was compiled and browser-verified through the standard dev stack. The stack was stopped and seeded database reset.
+- **Review**: `docs/design/audits/2026-10-26-project-description.md` replaces the previous mobile acceptance with an inspection of the actual rejected case. The title now occupies three lines at 320px, essential fields occupy two rows, every section name is readable, and the empty description is compact.
+- **Learnings**: Overflow checks cannot detect a badly composed mobile page. Verify meaningful geometry and inspect the longest real case. Shared unlayered layout rules must own their responsive spacing; lower-layer utilities cannot override them.
+- **Resource handling**: Local capacity delayed the browser run. Only this stopped checkout's reproducible build outputs were discarded; source, build logs and external captures were preserved. No unrelated process, shared cache or image was changed.
+- **Delivery boundary**: Local implementation and verification; no integration or deployment.
+
 ### [PROJECT-DESCRIPTION-UI] Put description and location first
 
 - **Completed**: 2026-10-26

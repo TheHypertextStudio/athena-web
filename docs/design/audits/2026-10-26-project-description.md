@@ -19,27 +19,31 @@ gates:
   screenshots: true
 ---
 
-# Design review: Project description — 2026-10-26
+# Design review: Project description and mobile composition — 2026-10-26
 
-Scope: the approved general UI phase: description prominence, breadcrumb location, and the existing type label near the title. Custom properties and configurable tabs are excluded. This is local UI acceptance, not integration or deployment.
+This review replaces the earlier mobile acceptance. The user correctly rejected the long-title frame: its seven-line middle column, three essential-property rows, clipped navigation and oversized empty editor did not serve the work. Passing overflow checks had not established a coherent composition.
 
-Screenshots: `/Volumes/WillieDrive/CodexScratch/athena-project-header-ui/description-final-captures/`. Three states (populated description, empty description, long project name) at 1440×900, 390×844, 320×844 and 390×600, in both themes. The standard capture tool checks overflow and settled rendering.
+Scope: the general project UI, including full-width mobile titles, compact context/actions, essential properties, section navigation and the description. Custom properties and configurable tabs remain excluded.
 
-| Dimension                      | Score | Evidence                                                                                                                                                                                                             |
-| ------------------------------ | ----- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Brand identity & voice         | 3     | The captured header retains the app's Plex and neutral surface register. Breadcrumbs express real program placement; Project remains a quiet type label.                                                             |
-| Typographic craft              | 3     | Description has a structural heading and readable prose before the smaller Latest update heading. The work title remains dominant.                                                                                   |
-| Spatial rhythm & density       | 3     | Description aligns with the surrounding Overview sections. Narrow panes show only the immediate parent, removing the extra breadcrumb row seen in the initial capture.                                               |
-| Hierarchy & information design | 3     | Populated and empty descriptions are first in Overview; updates and execution detail follow. Metadata remains secondary to the prose.                                                                                |
-| Color discipline               | 3     | Both captured themes use existing semantic surfaces and text. Only semantic states and selected navigation use accent color.                                                                                         |
-| Motion & feedback              | 3     | The existing editor saves on blur; the browser journey verifies the save response and restored prose after reload. The loading breadcrumb reserves the known trail space.                                            |
-| States completeness            | 3     | Empty descriptions offer a useful writing prompt; long names wrap while retaining actions. The read-only branch keeps the existing editor permissions and uses No description yet instead of an editing instruction. |
-| Detail craft                   | 3     | Parent text wraps at 320px without clipping. The full desktop trail and compact phone trail both remain above identity; shared focus styling is used on links.                                                       |
+Screenshots: `/Volumes/WillieDrive/CodexScratch/athena-project-header-ui/mobile-final-captures/`. Twenty-four named frames cover populated description, empty description and the rejected long-title case at 1440×900, 390×844, 320×844 and 390×600 in both themes. The actual 320px long-title frame was explicitly inspected before committing.
 
-Gates: scoped accessibility, responsive, theme parity, no placeholder capability, and screenshot verification pass. Header axe checks, keyboard focus return, description editing/reload, actual parent navigation and responsive geometry pass in the browser. Twenty-eight affected component tests passed; the two breadcrumb tests were rerun after the responsive correction. Lint, typechecking, complexity and the production build pass for the final source.
+| Dimension                      | Score | Evidence                                                                                                                                                                                                     |
+| ------------------------------ | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Brand identity & voice         | 3     | The app's neutral Plex register is retained. Navigation conveys real location; the user-defined type stays near the title. Empty prompts name Owner, Health and dates directly.                              |
+| Typographic craft              | 3     | The long title spans the pane and reads in three lines at 320px. Compact labels fit all four tabs, while Description remains a distinct structural heading.                                                  |
+| Spatial rhythm & density       | 3     | Icon, breadcrumb and actions share one context row on phones. Owner/status/health share one row, dates another. Shared stylesheet rules remove the extra 16px between metadata and tabs.                     |
+| Hierarchy & information design | 3     | The title receives full width; metadata is grouped, not scattered. Overview starts with the description; empty prose no longer reserves a large form-shaped area.                                            |
+| Color discipline               | 3     | Existing semantic surfaces and text carry the composition in both captured themes. Health and active navigation retain meaningful color.                                                                     |
+| Motion & feedback              | 3     | The existing editor still saves on blur and survives reload. Existing picker, menu and dialog focus behavior passes. Header height continues to be measured by the shared collapse controller.               |
+| States completeness            | 3     | Captures cover filled dates/health, unset fields, long names and short/long prose. The compact description grows naturally with content; default document presentation remains available for other surfaces. |
+| Detail craft                   | 3     | No clipped Updates label remains at 320px. Header geometry assertions now verify title width, property-row alignment, tab reachability and the metadata/tab gap rather than only page overflow.              |
 
-## Findings and corrections
+Gates: scoped accessibility, responsive behavior, theme parity, no placeholder capability, and screenshot verification pass. All five essential property controls remain visible and meet the existing mobile touch-target check. Keyboard tab behavior, description persistence, program navigation and menu focus return pass. The matrices use normal text scale; this is not manual screen-reader certification.
 
-The first phone capture split Programs and its parent across two rows, delaying the description. The final implementation shows only the immediate parent below the small-pane breakpoint, with the complete trail on wider panes. Browser assertions cover both arrangements. The commit policy also caught an unnecessary raw corner-radius class on breadcrumb links; it was removed in favor of the shared focus styling. This does not change resting layout.
+## Evidence and corrections
 
-No blocking finding remains in the reviewed scope. Very long titles at 320px retain their full editable text and can place body content below the fold; the existing scroll behavior remains usable. The readonly presentation was source-reviewed; the authenticated browser matrix exercises an editor. This review does not claim manual screen-reader certification or new property capabilities.
+- Forty-five affected web component tests pass across the focused runs, including the corrected single Owner prompt expectation. Twenty-six shared UI tab tests pass.
+- UI/web typechecks, affected lint, complexity and the production build passed for the structural change. The final shared CSS spacing correction was compiled by the standard dev stack and verified by the three final browser journeys and the final capture matrix; no redundant production build was required for that correction.
+- The first rendered revision still had an extra 16px before the tabs because an unlayered shared stylesheet overrode the utility classes. The correction lives beside the existing shared layout rules, scoped to the inline identity presentation and narrow panes. A browser assertion limits the metadata/tab gap to 8px.
+
+No blocking finding remains in this scope. Long parent names truncate within the compact context row while retaining their full accessible link name and native title. The editor's read-only behavior is unchanged. Integration and deployment are outside this local delivery.

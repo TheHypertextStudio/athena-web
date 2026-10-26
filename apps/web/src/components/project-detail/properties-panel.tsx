@@ -76,7 +76,16 @@ export interface PropertiesPanelProps {
 }
 
 /** Shared chip trigger wiring so every property in the metadata row reads as the same pill. */
-const CHIP = { triggerVariant: 'ghost', triggerClassName: ENTITY_METADATA_CHIP_CLASS } as const;
+const CHIP = {
+  triggerVariant: 'ghost',
+  triggerClassName: `${ENTITY_METADATA_CHIP_CLASS} @max-xl:w-full @max-xl:justify-start`,
+} as const;
+const TIMELINE_LABELS = {
+  startLabel: 'Start date',
+  startPlaceholder: 'Start date',
+  targetLabel: 'Target date',
+  targetPlaceholder: 'Target date',
+} as const;
 
 /**
  * Render the full Project property set as inline chip pickers.
@@ -165,7 +174,7 @@ export function PropertiesPanel({
           options={HEALTH_OPTIONS}
           value={health}
           onChange={onHealthChange}
-          placeholder="Set health"
+          placeholder="Health"
           triggerIcon={<Activity className="text-on-surface-variant size-4" />}
           clearLabel="No health"
           ariaLabel="Health"
@@ -179,8 +188,7 @@ export function PropertiesPanel({
           fiscalYearStartMonth={fiscalYearStartMonth}
           onChange={onTimelineChange}
           ariaLabel="Timeline"
-          startLabel="Start date"
-          targetLabel="Target date"
+          {...TIMELINE_LABELS}
           readOnly={readOnly}
           disabled={planningCalendarLoading}
           {...(onTimelinePickerOpenChange ? { onOpenChange: onTimelinePickerOpenChange } : {})}

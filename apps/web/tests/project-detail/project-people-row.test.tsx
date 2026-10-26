@@ -61,8 +61,8 @@ describe('ProjectPeopleRow', () => {
       />,
     );
 
-    expect(screen.getByRole('button', { name: /Project owner/ })).toHaveTextContent('Set owner');
-    expect(screen.queryByText('Owner', { exact: true })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Project owner/ })).toHaveTextContent('Owner');
+    expect(screen.getAllByText('Owner', { exact: true })).toHaveLength(1);
   });
 
   it('reports an owner selection through the project mutation callback', async () => {

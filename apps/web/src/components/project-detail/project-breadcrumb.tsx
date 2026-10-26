@@ -24,7 +24,7 @@ export function ProjectBreadcrumb({
       aria-label="Breadcrumb"
       className="no-print text-on-surface-variant text-body-medium @container"
     >
-      <ol className="flex min-w-0 flex-wrap items-center gap-x-2">
+      <ol className="flex min-w-0 items-center gap-x-2">
         <li className={cn('min-w-0', program && 'hidden @sm:block')}>
           <Link href={`/orgs/${orgId}/${program ? 'programs' : 'projects'}`} className={linkClass}>
             {program ? programLabel : projectLabel}
@@ -34,7 +34,9 @@ export function ProjectBreadcrumb({
           <li className="flex max-w-full min-w-0 items-center gap-2">
             <ChevronRight className="hidden size-4 shrink-0 @sm:block" aria-hidden />
             <Link href={`/orgs/${orgId}/programs/${program.id}`} className={linkClass}>
-              {program.name}
+              <span className="truncate" title={program.name}>
+                {program.name}
+              </span>
             </Link>
           </li>
         ) : null}

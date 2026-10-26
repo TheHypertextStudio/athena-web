@@ -10,12 +10,22 @@ import { Tab, TabList, Tabs, type TabsItem } from '../../src/primitives/tabs';
 function DataDrivenTabs({
   items,
   initial,
+  density,
 }: {
   readonly items: readonly TabsItem[];
   readonly initial: string;
+  readonly density?: 'comfortable' | 'compact';
 }): React.JSX.Element {
   const [value, setValue] = useState(initial);
-  return <Tabs value={value} onValueChange={setValue} label="Project sections" items={items} />;
+  return (
+    <Tabs
+      value={value}
+      onValueChange={setValue}
+      label="Project sections"
+      items={items}
+      density={density}
+    />
+  );
 }
 
 const ITEMS: TabsItem[] = [
@@ -23,6 +33,27 @@ const ITEMS: TabsItem[] = [
   { value: 'tasks', label: 'Tasks', count: 4 },
   { value: 'settings', label: 'Settings', disabled: true },
 ];
+
+it('keeps compact work sections keyboard reachable with complete names', () => {
+  render(
+    <DataDrivenTabs
+      density="compact"
+      initial="overview"
+      items={[
+        { value: 'overview', label: 'Overview' },
+        { value: 'tasks', label: 'Tasks' },
+        { value: 'updates', label: 'Updates' },
+        { value: 'resources', label: 'Resources' },
+      ]}
+    />,
+  );
+  screen.getByRole('tab', { name: 'Overview' }).focus();
+  fireEvent.keyDown(screen.getByRole('tablist'), { key: 'End' });
+  expect(screen.getByRole('tab', { name: 'Resources' })).toHaveFocus();
+  expect(screen.getByRole('tab', { name: 'Resources' })).toHaveAttribute('aria-selected', 'true');
+  fireEvent.keyDown(screen.getByRole('tablist'), { key: 'ArrowRight' });
+  expect(screen.getByRole('tab', { name: 'Overview' })).toHaveFocus();
+});
 
 describe('Tabs variants', () => {
   it.each(['primary', 'secondary'] as const)('uses the %s content indicator', (variant) => {

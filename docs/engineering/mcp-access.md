@@ -153,6 +153,7 @@ the normal action policy still decide whether Athena may execute it or must requ
 - **Tools** (27) — named for what someone is trying to do, not for the table underneath:
   - _Read_ — `workspaces` (which workspaces you belong to), `find` (ranked search), `list_work` (filtered sets), `get` (hydrate by id or name), `brief` (what needs me today).
   - _Write_ — `capture` (a sentence becomes a task), `organize` (a whole plan in one call, reconciled so a re-run does not duplicate), `update` (change work by describing which work), `link`, `archive`, `comment`, `report_status`, `plan_day`, `undo`.
+  - _Resources_ — `list_resources`, `get_resources`, `upload_resource`, `attach_resource`. Writes attach material to any work type with source/destination permission checks and stable retry identity. Reused files are independent copies; external references retain canonical Library identity.
   - _Time and reflection_ — `track`, `retrospect`.
   - _Repeating work_ — `define_process`, `schedule_process`, `repeat_task`.
   - _Labels and templates_ — `define_labels` (create or edit label groups and labels, reconciled by name), `define_template` (create or edit one template). Putting labels on work is `update` with `set.labels`.

@@ -1,7 +1,6 @@
 'use client';
 
 import { TabPanel, Button, Surface, Tabs } from '@docket/ui/primitives';
-import type { AttachmentOut } from '@docket/work/attachment-contract';
 import type { LabelOut } from '@docket/work/label-contract';
 import type {
   ObjectCommandReceipt,
@@ -51,7 +50,7 @@ import {
 } from '@/components/project-detail/project-restore-controller';
 import { DetailUnavailable } from '@/components/entity-detail/detail-unavailable';
 import { HeaderLoadFailureBanner } from '@/components/entity-detail/header-load-failure';
-import { ResourcesTab } from '@/components/entity-detail/resources-tab';
+import { WorkResourcesPanel } from '@/components/entity-detail/work-resources-panel';
 import { UpdatesPanel } from '@/components/entity-detail/updates-panel';
 import { memberActorOptions } from '@/components/pickers/options';
 import { ProjectPeopleRow } from '@/components/project-detail/project-people-row';
@@ -267,19 +266,6 @@ export default function ProjectDetailPage(): JSX.Element {
     updatesQ.data?.authors,
     aggregate?.references.lead,
   );
-  const resourcesKey = [...aggregateKey, 'resources'] as const;
-  const resourcesQ = useApiQuery(
-    apiQueryOptions(
-      resourcesKey,
-      () =>
-        api.v1.orgs[':orgId'].projects[':id'].resources.$get({
-          param: { orgId, id: projectId },
-          query: { limit: '100' },
-        }),
-      'Could not load resources.',
-      { enabled: aggregate !== null && tab === 'resources' },
-    ),
-  );
   const workDef = projectWorkSectionsDef(orgId, projectId);
   const workQ = useApiQuery({
     ...workDef,
@@ -398,29 +384,6 @@ export default function ProjectDetailPage(): JSX.Element {
   }, [aggregate]);
   useProjectPageIdentity(orgId, projectId, project?.name ?? navigationSnapshot?.name);
 
-  const addResource = useApiMutation<AttachmentOut, { title: string; url: string }>({
-    mutationFn: (json) =>
-      unwrap(
-        () =>
-          api.v1.orgs[':orgId'].projects[':id'].resources.$post({
-            param: { orgId, id: projectId },
-            json,
-          }),
-        'Could not add the resource.',
-      ),
-    invalidateKeys: [resourcesKey],
-  });
-  const removeResource = useApiMutation<{ id: string; removed: true }, string>({
-    mutationFn: (resourceId) =>
-      unwrap(
-        () =>
-          api.v1.orgs[':orgId'].projects[':id'].resources[':resourceId'].$delete({
-            param: { orgId, id: projectId, resourceId },
-          }),
-        'Could not remove the resource.',
-      ),
-    invalidateKeys: [resourcesKey],
-  });
   const postUpdate = useApiMutation<UpdateOut, UpdatePostInput & { requestId?: string }>({
     mutationFn: (input) => postUpdateRequest(orgId, subject, input),
     invalidateKeys: [updatesKey, aggregateKey, queryKeys.deliverableDrafts(orgId)],
@@ -867,19 +830,13 @@ export default function ProjectDetailPage(): JSX.Element {
         value="resources"
         render={() => (
           <>
-            <ResourcesTab
-              resources={resourcesQ.data?.items ?? []}
-              loading={resourcesQ.isPending}
+            <WorkResourcesPanel
+              orgId={orgId}
+              subjectType="project"
+              subjectId={projectId}
               canEdit={canEdit}
-              pending={addResource.isPending || removeResource.isPending}
-              error={resourcesQ.isError ? 'Could not load resources.' : null}
-              onAdd={addResource.mutate}
-              onRemove={removeResource.mutate}
-              subject={{ type: 'project', id: projectId, organizationId: orgId }}
-              mentionedExternal={entityMentions.external}
-              mentionedEntities={entityMentions.entities}
-              mentionsPending={entityMentions.isPending}
-              hasProse={(project.description ?? '').trim().length > 0}
+              description={project.description}
+              mentions={entityMentions}
             />
           </>
         )}

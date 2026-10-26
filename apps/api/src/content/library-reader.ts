@@ -56,6 +56,14 @@ async function currentResource(
   return { source, scored };
 }
 
+/** Load a current Library source for reuse after enforcing the normal Library visibility policy. */
+export async function loadLibrarySource(
+  caller: SearchCaller,
+  ref: LibraryRef,
+): Promise<LibrarySource> {
+  return (await currentResource(caller, ref)).source;
+}
+
 /** Read current metadata, visible usage and explicit uploaded-content availability. */
 export async function readLibraryResource(
   caller: SearchCaller,

@@ -86,6 +86,8 @@ export const CONNECT_SCOPES: readonly string[] = OAUTH_ISSUABLE_SCOPES;
 export const TOOL_SCOPE: Readonly<Record<string, McpScope>> = {
   // work:write — work-layer mutations
   comment: 'work:write',
+  upload_resource: 'work:write',
+  attach_resource: 'work:write',
   report_status: 'work:write',
   upload_deliverable: 'work:write',
   create_deliverable_upload_session: 'work:write',

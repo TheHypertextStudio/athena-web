@@ -2,7 +2,7 @@
 import { useState, type JSX } from 'react';
 import type { WorkTemplateOut } from '@docket/work/work-template-contract';
 import type { WorkScheduleCreate, WorkScheduleOut } from '@docket/work/work-schedule-management';
-import { Button, Surface } from '@docket/ui/primitives';
+import { Button, Surface, TabPanel } from '@docket/ui/primitives';
 import { ConfirmDestructiveDialog, InlineBanner } from '@docket/ui/components';
 import { Plus, RefreshCw } from '@docket/ui/icons';
 import { useApiQuery, useInfiniteApiQuery } from '@/lib/query';
@@ -358,5 +358,32 @@ export function ProgramScheduleContext({
         Program details
       </Button>
     </div>
+  );
+}
+
+/** Keep schedule content mounted while preserving its existing lazy reads. */
+export function ProgramSchedulePanel({
+  orgId,
+  programId,
+  programName,
+  canEdit,
+  active,
+}: {
+  readonly orgId: string;
+  readonly programId: string;
+  readonly programName: string;
+  readonly canEdit: boolean;
+  readonly active: boolean;
+}): JSX.Element {
+  return (
+    <TabPanel value="schedules" hidden={!active}>
+      <ProgramSchedules
+        orgId={orgId}
+        programId={programId}
+        programName={programName}
+        canEdit={canEdit}
+        enabled={active}
+      />
+    </TabPanel>
   );
 }

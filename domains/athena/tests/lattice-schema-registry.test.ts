@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { shareLargeSchemaFragments } from '../src/turn/internal/lattice-schema-registry';
+import {
+  schemaNeedsIsolation,
+  shareLargeSchemaFragments,
+} from '../src/turn/internal/lattice-schema-registry';
 
 type Schema = Record<string, unknown>;
 const NAMED = new Set([
@@ -231,10 +234,11 @@ describe('lossless local-model schema pooling', () => {
     },
   );
 
-  it.each(['$id', '$anchor', '$dynamicAnchor', '$dynamicRef'])(
+  it.each(['$id', '$anchor', '$dynamicAnchor', '$dynamicRef', '$recursiveAnchor', '$recursiveRef'])(
     'preserves a document with %s rather than moving its reference-resolution scope',
     (keyword) => {
       const original = { ...toolbox(), [keyword]: 'scope' };
+      expect(schemaNeedsIsolation(original)).toBe(true);
       expect(shareLargeSchemaFragments(original)).toBe(original);
     },
   );

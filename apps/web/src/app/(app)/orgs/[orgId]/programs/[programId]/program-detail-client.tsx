@@ -16,6 +16,7 @@ import { EditableSubtitle } from '@/components/editor/editable-subtitle';
 import { EntityIconPicker } from '@/components/entity-display/entity-icon-picker';
 import { useEntityDisplay } from '@/components/entity-display/use-entity-display';
 import { useCategoryOf } from '@/components/entity-display/use-work-status';
+import { ProgramResourcesSection } from '@/components/programs/program-resources-section';
 import { LatestUpdateSummary } from '@/components/entity-detail/latest-update-summary';
 import { PartialLoadBanner, QueryLoadFailure } from '@/components/feedback';
 import { PageContainer } from '@/components/views/page-layout';
@@ -31,7 +32,7 @@ import { ProgramPropertiesPanel } from '@/components/programs/properties-panel';
 import { ProgramWorkView } from '@/components/programs/program-work-view';
 import { ProgramHeaderActions } from '@/components/programs/program-detail-header-actions';
 import {
-  ProgramSchedules,
+  ProgramSchedulePanel,
   ProgramScheduleContext,
 } from '@/components/work-schedules/program-schedules';
 import { DetailUnavailable } from '@/components/entity-detail/detail-unavailable';
@@ -56,8 +57,8 @@ import {
 import { useAppRouter } from '@/lib/interactions/navigation';
 import { openProjectRecord } from '@/lib/local-first-navigation';
 
-type TabId = 'overview' | 'projects' | 'work' | 'schedules' | 'updates';
-const PROGRAM_TABS = ['overview', 'projects', 'work', 'schedules', 'updates'] as const;
+type TabId = 'overview' | 'projects' | 'work' | 'schedules' | 'updates' | 'resources';
+const PROGRAM_TABS = ['overview', 'projects', 'work', 'schedules', 'updates', 'resources'] as const;
 
 const PROGRAM_TAB_ITEMS: readonly TabsItem[] = [
   { value: 'overview', label: 'Overview' },
@@ -65,6 +66,7 @@ const PROGRAM_TAB_ITEMS: readonly TabsItem[] = [
   { value: 'work', label: 'Work' },
   { value: 'schedules', label: 'Schedules' },
   { value: 'updates', label: 'Updates' },
+  { value: 'resources', label: 'Resources' },
 ];
 
 const PROGRAM_HEADER_DENSITY = {
@@ -73,6 +75,7 @@ const PROGRAM_HEADER_DENSITY = {
   work: 'full',
   schedules: 'compact',
   updates: 'full',
+  resources: 'full',
 } as const;
 const PROGRAM_HEADER_PRESENTATION = {
   full: { iconSize: 48, titleClass: 'text-headline-medium text-on-surface' },
@@ -443,47 +446,47 @@ export default function ProgramDetailPage(): JSX.Element {
         hidden={!(tab === 'projects')}
         value="projects"
         render={() => (
-          <>
-            <ProgramProjectsPanel
-              orgId={orgId}
-              programId={programId}
-              projectNoun={projectNounCased}
-              canEdit={canEdit}
-              onOpenProject={(project) => {
-                openProjectRecord(project);
-              }}
-            />
-          </>
+          <ProgramProjectsPanel
+            orgId={orgId}
+            programId={programId}
+            projectNoun={projectNounCased}
+            canEdit={canEdit}
+            onOpenProject={(project) => {
+              openProjectRecord(project);
+            }}
+          />
         )}
       />
 
       <TabPanel
         hidden={!(tab === 'work')}
         value="work"
-        render={() => (
-          <>
-            <ProgramWorkView orgId={orgId} programId={programId} />
-          </>
-        )}
+        render={() => <ProgramWorkView orgId={orgId} programId={programId} />}
       />
 
       <TabPanel
         hidden={!(tab === 'updates')}
         value="updates"
         render={() => (
-          <>
-            <UpdatesPanel
-              orgId={orgId}
-              submissionScope={`update:${orgId}:program:${programId}`}
-              updates={updates}
-              loading={updatesQ.isPending}
-              loadFailure={updatesQ.isError ? updatesQ : null}
-              resolveActor={resolveActor}
-              posting={updatePosting}
-              onPost={postUpdate}
-            />
-          </>
+          <UpdatesPanel
+            orgId={orgId}
+            submissionScope={`update:${orgId}:program:${programId}`}
+            updates={updates}
+            loading={updatesQ.isPending}
+            loadFailure={updatesQ.isError ? updatesQ : null}
+            resolveActor={resolveActor}
+            posting={updatePosting}
+            onPost={postUpdate}
+          />
         )}
+      />
+
+      <ProgramResourcesSection
+        orgId={orgId}
+        subjectId={programId}
+        active={tab === 'resources'}
+        canEdit={aggregate?.capabilities.contribute ?? false}
+        description={program.description}
       />
 
       <ProgramSchedulePanel
@@ -508,31 +511,5 @@ export default function ProgramDetailPage(): JSX.Element {
         }}
       />
     </EntityDetailLayout>
-  );
-}
-
-function ProgramSchedulePanel({
-  orgId,
-  programId,
-  programName,
-  canEdit,
-  active,
-}: {
-  readonly orgId: string;
-  readonly programId: string;
-  readonly programName: string;
-  readonly canEdit: boolean;
-  readonly active: boolean;
-}): JSX.Element {
-  return (
-    <TabPanel value="schedules" hidden={!active}>
-      <ProgramSchedules
-        orgId={orgId}
-        programId={programId}
-        programName={programName}
-        canEdit={canEdit}
-        enabled={active}
-      />
-    </TabPanel>
   );
 }

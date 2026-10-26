@@ -10,7 +10,6 @@ import {
   DropdownMenuTrigger,
   Tabs,
 } from '@docket/ui/primitives';
-import type { AttachmentOut } from '@docket/work/attachment-contract';
 import type { Health } from '@docket/work/capability-contract';
 import type { UpdateOut } from '@docket/work/update-contract';
 import type { InitiativeConnectedWork } from '@docket/work/initiative-contract';
@@ -30,7 +29,7 @@ import { PlanWithAthenaAction } from '@/components/initiatives/plan-with-athena-
 import { EditableSubtitle } from '@/components/editor/editable-subtitle';
 import { EditableTitle } from '@/components/editor/editable-title';
 import { DetailUnavailable } from '@/components/entity-detail/detail-unavailable';
-import { ResourcesTab } from '@/components/entity-detail/resources-tab';
+import { WorkResourcesPanel } from '@/components/entity-detail/work-resources-panel';
 import { useEntityMentions } from '@/lib/use-entity-mentions';
 import { UpdatesPanel } from '@/components/entity-detail/updates-panel';
 import { EntityIconPicker } from '@/components/entity-display/entity-icon-picker';
@@ -178,15 +177,6 @@ export default function InitiativeDetailPage(): JSX.Element {
     ),
   );
   const labelsQ = useApiListQuery({ ...labelsDef(orgId), enabled: labelsPickerOpen });
-  const resourcesKey = [...aggregateKey, 'resources'] as const;
-  const resourcesQ = useApiQuery(
-    apiQueryOptions(
-      resourcesKey,
-      () => orgPages.fetchAllInitiativeResources(api, orgId, initiativeId),
-      'Could not load resources.',
-      { enabled: aggregate !== null && tab === 'resources' },
-    ),
-  );
   const updatesKey = [...aggregateKey, 'updates'] as const;
   const updatesEnabled = aggregate !== null && (tab === 'overview' || tab === 'updates');
   const updatesQ = useApiQuery(
@@ -287,29 +277,6 @@ export default function InitiativeDetailPage(): JSX.Element {
       queryKeys.initiatives(orgId),
       queryKeys.deliverableDrafts(orgId),
     ],
-  });
-  const addResource = useApiMutation<AttachmentOut, { title: string; url: string }>({
-    mutationFn: (json) =>
-      unwrap(
-        () =>
-          api.v1.orgs[':orgId'].initiatives[':id'].resources.$post({
-            param: { orgId, id: initiativeId },
-            json,
-          }),
-        'Could not add the resource.',
-      ),
-    invalidateKeys: [resourcesKey],
-  });
-  const removeResource = useApiMutation<{ id: string; removed: true }, string>({
-    mutationFn: (resourceId) =>
-      unwrap(
-        () =>
-          api.v1.orgs[':orgId'].initiatives[':id'].resources[':resourceId'].$delete({
-            param: { orgId, id: initiativeId, resourceId },
-          }),
-        'Could not remove the resource.',
-      ),
-    invalidateKeys: [resourcesKey],
   });
   const deleteInitiative = useApiMutation({
     mutationFn: () =>
@@ -624,19 +591,13 @@ export default function InitiativeDetailPage(): JSX.Element {
         className="no-print"
         render={() => (
           <>
-            <ResourcesTab
-              resources={resourcesQ.data?.items ?? []}
-              loading={resourcesQ.isPending}
+            <WorkResourcesPanel
+              orgId={orgId}
+              subjectType="initiative"
+              subjectId={initiativeId}
               canEdit={canEdit}
-              pending={addResource.isPending || removeResource.isPending}
-              error={resourcesQ.isError ? 'Could not load resources.' : null}
-              onAdd={addResource.mutate}
-              onRemove={removeResource.mutate}
-              subject={{ type: 'initiative', id: initiativeId, organizationId: orgId }}
-              mentionedExternal={entityMentions.external}
-              mentionedEntities={entityMentions.entities}
-              mentionsPending={entityMentions.isPending}
-              hasProse={(detail.description ?? '').trim().length > 0}
+              description={detail.description}
+              mentions={entityMentions}
             />
           </>
         )}

@@ -68,6 +68,7 @@ import publications from './publish';
 import publishingAddresses from './domains';
 import projectRollup from './project-rollup';
 import projectResources from './project-resources';
+import workResources from './work-resources';
 import provenance from './provenance';
 import roles from './roles';
 import savedViews from './saved-views';
@@ -389,6 +390,7 @@ Every new organization includes the Owner, Admin, Member, and Guest roles plus a
   .route('/:orgId/object-commands', objectCommands)
   .route('/:orgId/projects', projectRollup)
   .route('/:orgId/projects', projectResources)
+  .route('/:orgId/work-resources', workResources)
   .route('/:orgId/tasks', tasks)
   .route('/:orgId/graph', dependencyGraph)
   .route('/:orgId/initiatives', initiatives)

@@ -1,4 +1,4 @@
-import { actor, attachment, db, initiative, project, role } from '@docket/db';
+import { actor, attachment, db, initiative, program, project, role } from '@docket/db';
 import { and, eq, isNull } from 'drizzle-orm';
 
 import { assertPostVisible } from './post-access';
@@ -8,7 +8,7 @@ import { buildTaskViewFilter, loadTask } from '../routes/task-helpers';
 import { resolveResourceAccessForActors, resourceAccessKey } from '../permissions/resource-access';
 
 /** Maximum supported uploaded attachment size, shared by upload and MCP reads. */
-export const MAX_ATTACHMENT_BYTES = 4 * 1024 * 1024;
+export { MAX_ATTACHMENT_BYTES } from '@docket/work/attachment-contract';
 
 /** Load an active attachment after checking its current subject, independently of the search index. */
 export async function loadReadableAttachment(
@@ -48,9 +48,15 @@ async function assertContainerAttachmentVisible(
   row: typeof attachment.$inferSelect,
   actorId: string,
 ): Promise<void> {
-  if (row.subjectType !== 'project' && row.subjectType !== 'initiative') throw new NotFoundError();
+  if (
+    row.subjectType !== 'project' &&
+    row.subjectType !== 'initiative' &&
+    row.subjectType !== 'program'
+  )
+    throw new NotFoundError();
   const orgId = row.organizationId;
-  const table = row.subjectType === 'project' ? project : initiative;
+  const table =
+    row.subjectType === 'project' ? project : row.subjectType === 'program' ? program : initiative;
   const [subject] = await db
     .select({ id: table.id })
     .from(table)

@@ -106,7 +106,7 @@ export function registerPlanTools(server: McpRegistrar, ctx: McpContext): void {
     {
       title: 'Brief',
       description:
-        "Read the caller's day plan, blockers, pending approvals, due work and unread Inbox across all their workspaces. Start here when asked what to work on.",
+        "Read day plans, blockers, approvals, due work and Inbox across workspaces. Start here to choose work.\n\nRead the caller's day plan, blockers, pending approvals, due work and unread Inbox across all their workspaces. Start here when asked what to work on.",
       inputSchema: {
         date: z.iso
           .date()
@@ -147,7 +147,7 @@ export function registerPlanTools(server: McpRegistrar, ctx: McpContext): void {
     {
       title: 'Plan a day',
       description:
-        "Read or edit a day's plan: add, remove or complete tasks and set timeboxes. autoPlan orders tasks by dependency then priority within actual availability, then applies your edits in order. Returns the resulting whole day. Omit edits and autoPlan to read.",
+        "Read/edit a day plan. Add/remove/complete work or set timeboxes; autoPlan uses availability, dependencies and priority before applying edits.\n\nRead or edit a day's plan: add, remove or complete tasks and set timeboxes. autoPlan orders tasks by dependency then priority within actual availability, then applies your edits in order. Returns the resulting whole day. Omit edits and autoPlan to read.",
       inputSchema: {
         orgId: orgIdParam,
         date: z.iso.date().describe('The day, as `YYYY-MM-DD`.'),

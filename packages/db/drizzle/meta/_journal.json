@@ -1324,6 +1324,13 @@
       "when": 1793106700000,
       "tag": "0188_direct_ai_call_usage",
       "breakpoints": true
+    },
+    {
+      "idx": 189,
+      "version": "7",
+      "when": 1793106700001,
+      "tag": "0189_mcp_resource_writes",
+      "breakpoints": true
     }
   ]
 }

@@ -92,6 +92,11 @@ const definitions = [
         'Manage labels used to classify and filter work. Labels belong to a defined scope and provide reusable metadata without changing the permissions of the items they label.',
       ],
       [
+        'Resources',
+        'Resources',
+        'Manage files and links attached to tasks, projects, programs, and initiatives. Resource reads follow the current work permissions; contribution permits adding and removing supporting material.',
+      ],
+      [
         'Comments',
         'Comments',
         'Read and manage discussions attached to work items. Comments let collaborators contribute context without requiring the same capability as changing the underlying work.',

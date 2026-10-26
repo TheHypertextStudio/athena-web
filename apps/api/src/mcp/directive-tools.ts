@@ -30,7 +30,7 @@ export function registerDirectiveTools(server: McpRegistrar, ctx: McpContext): v
     {
       title: 'Acknowledge a directive',
       description:
-        "Acknowledge the directiveId read from docket://hub/directive with posture acted on, device-state changes and optional note. Unknown or superseded IDs return not_found: reread and acknowledge current state. Retrying replaces that directive's acknowledgment.",
+        "Acknowledge the current docket://hub/directive id and posture. Superseded IDs return not_found; reread. Retrying replaces the acknowledgment.\n\nAcknowledge the directiveId read from docket://hub/directive with posture acted on, device-state changes and optional note. Unknown or superseded IDs return not_found: reread and acknowledge current state. Retrying replaces that directive's acknowledgment.",
       inputSchema: {
         directiveId: z
           .string()

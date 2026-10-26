@@ -4,6 +4,7 @@ import {
   db,
   externalResource,
   initiative,
+  program,
   project,
   task,
   update,
@@ -145,6 +146,7 @@ async function activeSubjects(entries: LibraryEntry[]): Promise<LibraryEntry[]> 
         ['initiative', initiative],
         ['comment', comment],
         ['update', update],
+        ['program', program],
       ] as const
     ).map(async ([kind, table]) => {
       const sources = entries.flatMap(({ source }) =>

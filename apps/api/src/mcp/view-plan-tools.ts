@@ -325,7 +325,7 @@ export function registerViewPlanTools(server: McpRegistrar, ctx: McpContext): vo
       name,
       {
         title: `Get ${title}`,
-        description: `Read one or more ${title.toLowerCase()} in full. Results render through Docket's ${title.toLowerCase()} view.`,
+        description: `Read ${title.toLowerCase()} by ID.`,
         inputSchema: { orgId: orgIdParam, refs: entityRefsSchema },
         outputSchema: entityReadOutputSchema,
         _meta: widgetMeta(widget),
@@ -376,7 +376,7 @@ export function registerViewPlanTools(server: McpRegistrar, ctx: McpContext): vo
     {
       title: 'Find',
       description:
-        "Search all workspace content by relevance, including work, comments, updates, files, events, agent sessions, teams, members and labels. Use list_work for exact enumeration. The index briefly trails writes; reuse a newly created item's returned ID.",
+        "Search workspace content by relevance. Use list_work for exact enumeration. Indexing trails writes; reuse newly created IDs.\n\nSearch all workspace content by relevance, including work, comments, updates, files, events, agent sessions, teams, members and labels. Use list_work for exact enumeration. The index briefly trails writes; reuse a newly created item's returned ID.",
       inputSchema: findInputSchema,
       outputSchema: findOutputSchema,
       annotations: {

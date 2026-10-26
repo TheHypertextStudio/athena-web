@@ -89,7 +89,7 @@ export const updateSetFields = {
 export const updateToolDefinition = {
   title: 'Update work',
   description:
-    'Change up to 100 items in one reversible call using list_work filters or scope.ids; batch all IDs. Reports unwritable rows. Sets task project/milestone/cycle/program/team, project program, and initiative contributions for projects/programs. Use link for blocks, relates_to, subtask_of or nested_under between specific items.',
+    'Reversibly edit up to 100 selected work items, including fields and placements. Reports unwritable rows. Use link for dependencies/relationships.\n\nReversibly change up to 100 work items using filters or scope.ids. Sets fields, placements and initiative contributions; reports unwritable rows. Use link for dependencies, related tasks, subtasks and initiative nesting.',
   inputSchema: {
     orgId: orgIdParam,
     entity: z.enum(WORK_ENTITIES).describe('What kind of work to update.'),

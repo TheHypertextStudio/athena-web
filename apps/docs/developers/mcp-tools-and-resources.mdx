@@ -9,7 +9,7 @@ can change after consent or grant changes, so handle `notifications/tools/list_c
 ## Tools
 
 The work and planning tools are `workspaces`, `find`, `list_work`, `list_resources`, `get_resources`, `brief`, `capture`, `organize`,
-`update`, `milestones`, `comment`, `report_status`, `link`, `archive`, `plan_day`, `undo`,
+`upload_resource`, `attach_resource`, `update`, `milestones`, `comment`, `report_status`, `link`, `archive`, `plan_day`, `undo`,
 `retrospect`, `view_work_graph`, `view_workload`, `define_process`, `schedule_process`, `repeat_task`, `define_labels`,
 `define_template`, `list_templates`, `browse_work_templates`, `copy_work_templates`, `list_work_schedules`, `manage_work_schedule`, `plan_start`, `plan_read`, `plan_draft`, `plan_commit`, and `track`.
 
@@ -296,12 +296,12 @@ MCP callers cannot send directly. Received UTF-8 text, Markdown and CSV files ca
 
 ### Scopes per tool
 
-| Scope             | Covers                                                                                                                                                                                                                                                                                                       |
-| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `work:read`       | `workspaces`, `find`, `list_work`, `list_templates`, `list_resources`, `get_resources`, `get`, `brief`, `milestones` with `list`, and every resource read                                                                                                                                                    |
-| `work:write`      | `capture`, `organize`, `update`, `milestones` with `create`, `update`, or `delete`, `comment`, `report_status`, `link`, `archive`, `plan_day`, `undo`, `track`, `retrospect`, `acknowledge_directive`, `define_process`, `schedule_process`, `repeat_task`, `define_labels`, `define_template`, `send_email` |
-| `agents:run`      | `run_agent`, `manage_session`, `pause_athena_assignment_trigger`, `remove_athena_assignment_trigger`, `review_work_destination`                                                                                                                                                                              |
-| `connectors:link` | `link_external`                                                                                                                                                                                                                                                                                              |
+| Scope             | Covers                                                                                                                                                                                                                                                                                                                                             |
+| ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `work:read`       | `workspaces`, `find`, `list_work`, `list_templates`, `list_resources`, `get_resources`, `get`, `brief`, `milestones` with `list`, and every resource read                                                                                                                                                                                          |
+| `work:write`      | `capture`, `organize`, `update`, `milestones` with `create`, `update`, or `delete`, `comment`, `report_status`, `upload_resource`, `attach_resource`, `link`, `archive`, `plan_day`, `undo`, `track`, `retrospect`, `acknowledge_directive`, `define_process`, `schedule_process`, `repeat_task`, `define_labels`, `define_template`, `send_email` |
+| `agents:run`      | `run_agent`, `manage_session`, `pause_athena_assignment_trigger`, `remove_athena_assignment_trigger`, `review_work_destination`                                                                                                                                                                                                                    |
+| `connectors:link` | `link_external`                                                                                                                                                                                                                                                                                                                                    |
 
 See [Authentication](/developers/authentication#request-the-smallest-scope) for requesting and stepping up scopes.
 
@@ -352,6 +352,55 @@ live, scrape web pages, or convert documents.
 Linked metadata retains Library's workspace visibility. Attachments follow their current subject's
 visibility, and usage lists omit work the caller cannot read. Credentials, storage keys, arbitrary
 attachment metadata and internal integration identifiers are excluded.
+
+### Write Library resources
+
+Use `upload_resource` to store a file directly on a task, project, program, or initiative. Supply
+`orgId`, `subjectType`, `subjectId`, `requestId`, `fileName`, and `contentBase64`; `title` and `mimeType`
+are optional. The MIME default is `application/octet-stream`. Base64 must be canonical, padded, and
+contain 1–4,194,304 decoded bytes. A data URL, local filesystem path, or URL to fetch is not an upload.
+Filenames cannot contain path separators or control characters. MIME types are media-type essences,
+without parameters or header controls. Titles are limited to 500 characters; filenames to 255.
+
+```json
+{
+  "orgId": "<workspace ID>",
+  "subjectType": "program",
+  "subjectId": "<program ID>",
+  "requestId": "research-report-1",
+  "fileName": "report.txt",
+  "mimeType": "text/plain",
+  "contentBase64": "UmVwb3J0"
+}
+```
+
+Use `attach_resource` with the same destination and retry fields plus
+`resource: { "kind": "external_resource" | "attachment", "id": "..." }`. Discover that reference with
+`list_resources` or `get_resources`; its workspace is the destination workspace. An optional `title`
+sets the destination label. A linked source retains its canonical external resource identity. A file
+attachment creates an independent byte-for-byte copy with a new attachment reference and storage
+allocation. Provider-backed email and calendar attachments cannot be copied through this tool.
+
+Both tools require `work:write`, the workspace's current MCP entitlement, and `contribute` on the
+destination. Reuse additionally requires current access to the source. **The destination audience
+can read the attached file.** Source revocation, editing, or removal does not retract a completed file
+copy. The tools do not change the work description or grant new access to an external provider.
+
+Use a stable, unique `requestId` of 1–128 characters for a single logical write. Repeating the same
+normalized arguments as the same client and actor in the same workspace returns the existing
+attachment with `replayed: true`; changing arguments conflicts. Replays recheck access. Removing an
+accepted attachment does not let the old request ID recreate it: use a new request ID for an
+intentional new upload or copy. Concurrent identical requests cannot allocate multiple files.
+
+Results contain safe `resource` metadata and a detail URI, `replayed`, and `disposition` (`uploaded`,
+`copied`, or `linked`). Reuse also returns `source`. Retrieve a file through its Library content URI
+or download it from the work item's Resources tab. Results never echo file bytes or storage keys.
+New resource writes have a safety rate of 30 per minute per workspace across clients and work types;
+identical retries consume no additional slot. File copies count toward recorded workspace storage.
+
+Base64 is about one third larger than the file and can consume model context. Prefer reusing a Library
+reference, and let the host supply bytes directly when it supports doing so. This surface does not
+promise unlimited storage, parse or execute uploaded files, or mirror private provider documents.
 
 ## Resources
 
@@ -419,6 +468,11 @@ can be on a task, project, program, or initiative, including a reply. Status upd
 project, program, or initiative. Uploads remain private until the post and all its attachments are
 saved together. Only the same performer under the same workspace authority can claim them; an
 attached file cannot be moved to another post. Reuse the upload IDs if posting fails.
+
+Use `list_my_deliverable_drafts` with `orgId` to recover your own unexpired uploads after an
+interruption. Ownership includes the verified performer and connected client. Unclaimed drafts expire
+after seven days and are outside the Library; publish them with a comment or update before reusing
+them as Library context. This recovery tool requires `work:read`.
 
 Use `list_deliverables` with `orgId`, `subjectType` (`comment` or `update`), and `subjectId` to read a
 post's files. Posted files also appear in Library discovery. Pass their IDs to `get_resources` with

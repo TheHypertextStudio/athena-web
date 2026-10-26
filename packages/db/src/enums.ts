@@ -379,6 +379,7 @@ export const attachmentSubjectType = pgEnum('attachment_subject_type', [
   'draft',
   'comment',
   'update',
+  'program',
 ]);
 /**
  * The kind of resource an Attachment references.

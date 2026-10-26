@@ -102,7 +102,7 @@ export function registerWriteTools(server: McpRegistrar, ctx: McpContext): void 
     {
       title: 'Capture',
       description:
-        'Create tasks from a text string or list; use organize for placement. Call list_templates; preserve payload.description Markdown sections and fill them instead of inventing a format. Select workTypeId + optional workTypeVersionId or legacy ID/name. With a template, one-line text sets title; multiline supplies body. Explicit fields win. withoutTemplateReason allows freeform; undecided calls return choices without writes. Team, workflow, cycle and assignee resolve automatically. Saved bodies are returned.',
+        'Capture tasks from text. Read list_templates and fill its Markdown body; select workTypeId/version or give withoutTemplateReason. Explicit fields win.\n\nCapture tasks from text. First read list_templates; keep and fill payload.description headings. Select workTypeId/version or a legacy template, or give withoutTemplateReason. Explicit fields win. With a template, one line sets title; multiple lines replace body. Returns saved bodies. Use organize for placement.',
       inputSchema: {
         orgId: orgIdParam,
         ...templateDecisionFields,
@@ -229,7 +229,7 @@ export function registerWriteTools(server: McpRegistrar, ctx: McpContext): void 
     {
       title: 'Undo',
       description:
-        'Reverse a change a tool made, by its changeSetId. Omit the id to reverse the most recent change you made in this workspace. Anything edited by someone else since is left alone and reported back rather than overwritten, so a partial undo is a normal outcome worth reading.',
+        "Reverse a tool's changeSetId, or your latest change if omitted. Later edits by others stay intact and are reported; inspect partial results.",
       inputSchema: undoInputSchema,
       outputSchema: {
         summary: z.string().describe('What the reversed change had done.'),

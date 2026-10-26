@@ -35,6 +35,15 @@ export interface DetailHeaderCollapse {
   readonly headerRef: RefObject<HTMLElement | null>;
 }
 
+/** Keep content reachable when enlarged text makes the masthead consume most of its scrollport. */
+function publishHeaderGeometry(scroller: HTMLDivElement, header: HTMLElement): void {
+  const height = header.offsetHeight;
+  // Keep at least half the pane available for the work content below a sticky masthead.
+  const oversized = scroller.clientHeight > 0 && height > scroller.clientHeight / 2;
+  header.style.position = oversized ? 'relative' : '';
+  scroller.style.setProperty('--detail-header-height', `${oversized ? 0 : height}px`);
+}
+
 /**
  * Connects a detail scroller to the shared paused collapse keyframes without React rerenders, and
  * publishes the sticky header's measured height as `--detail-header-height`.
@@ -66,20 +75,14 @@ export function useDetailHeaderCollapse({
     // `border-box` rather than `getBoundingClientRect`: the collapse animates a `scale` transform
     // on the glyph, and a bounding rect reports the transformed box. The occluding surface is the
     // layout box, which is what the header actually reserves at the top of the scrollport.
-    const publishHeaderHeight = (height: number): void => {
-      scroller.style.setProperty('--detail-header-height', `${height}px`);
+    const publishHeaderHeight = (): void => {
+      publishHeaderGeometry(scroller, header);
     };
-    publishHeaderHeight(header.offsetHeight);
-
-    const headerObserver =
-      typeof ResizeObserver === 'undefined'
-        ? null
-        : new ResizeObserver(([entry]) => {
-            if (!entry) return;
-            const [box] = entry.borderBoxSize;
-            publishHeaderHeight(box ? box.blockSize : header.offsetHeight);
-          });
-    headerObserver?.observe(header);
+    publishHeaderHeight();
+    const layoutObserver =
+      typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(publishHeaderHeight);
+    layoutObserver?.observe(header);
+    layoutObserver?.observe(scroller);
 
     const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
     const rootFontSize = Number.parseFloat(
@@ -110,7 +113,7 @@ export function useDetailHeaderCollapse({
     reducedMotion.addEventListener('change', queueProgress);
 
     return () => {
-      headerObserver?.disconnect();
+      layoutObserver?.disconnect();
       scroller.removeEventListener('scroll', queueProgress);
       reducedMotion.removeEventListener('change', queueProgress);
       if (frame !== null) window.cancelAnimationFrame(frame);

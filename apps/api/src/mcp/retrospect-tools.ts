@@ -29,7 +29,7 @@ export function registerRetrospectTools(server: McpRegistrar, ctx: McpContext): 
     {
       title: 'Retrospect',
       description:
-        'Review what the caller actually did on a day across connected tools and workspaces, grouped by related work with sources and timestamps. Use for completed-work summaries; brief shows what is still waiting.',
+        'Review completed work on a day across connected tools/workspaces, with sources and timestamps. Use brief for waiting work.\n\nReview what the caller actually did on a day across connected tools and workspaces, grouped by related work with sources and timestamps. Use for completed-work summaries; brief shows what is still waiting.',
       inputSchema: {
         date: z.iso
           .date()

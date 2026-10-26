@@ -63,6 +63,14 @@ metadata and source URLs. These reads require `work:read`, retain current worksp
 permissions, and keep registered agents within their own workspace. See
 [Library resources over MCP](apps/docs/developers/mcp-tools-and-resources.mdx#library-resources).
 
+Agents can use `upload_resource` to leave a file with a task, project, program, or initiative, and
+`attach_resource` to reuse readable material from the same workspace's Library. Files are limited to
+4 MiB and become independent destination-owned copies when reused; external links keep their canonical
+Library identity. Both tools require `work:write`, destination contribution, and a stable `requestId`
+for retries. The Resources tab on each work type supports download and removal. New resource writes
+are limited to 30 per minute per workspace; identical retries reuse the accepted write. See
+[writing Library resources](apps/docs/developers/mcp-tools-and-resources.mdx#write-library-resources).
+
 MCP clients can link project dependencies, related tasks, subtasks, initiative contributions, and
 initiative hierarchy. Bulk updates can move tasks between cycles and change initiative membership.
 Initiative-rooted plans show visible existing work, reject dependency cycles, and record added links

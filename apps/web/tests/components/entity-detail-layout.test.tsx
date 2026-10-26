@@ -202,7 +202,10 @@ describe('EntityDetailLayout aside', () => {
 
   beforeEach(() => {
     paneWidth = 1200;
-    resize = null;
+    const callbacks = new Set<ResizeObserverCallback>();
+    resize = (entries, observer) => {
+      for (const callback of callbacks) callback(entries, observer);
+    };
     vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (
       this: HTMLElement,
     ) {
@@ -228,15 +231,15 @@ describe('EntityDetailLayout aside', () => {
           this.callback = callback;
         }
 
-        // Only the observer on the scroll container is the aside's; the header has its own.
+        // Broadcast to every observer of the scroller, as the browser does for its geometry.
         observe(target: Element): void {
-          if (target.hasAttribute('data-detail-panel-scroll')) resize = this.callback;
+          if (target.hasAttribute('data-detail-panel-scroll')) callbacks.add(this.callback);
         }
         unobserve(): void {
           return undefined;
         }
         disconnect(): void {
-          return undefined;
+          callbacks.delete(this.callback);
         }
       },
     );

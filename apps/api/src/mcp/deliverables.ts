@@ -83,7 +83,7 @@ export function registerDeliverableTools(server: McpRegistrar, ctx: McpContext):
     {
       title: 'Upload deliverable',
       description:
-        'Upload textContent as UTF-8 text (at most 4 MB), preserving text without base64 expansion; binary media needs canonical base64. The server cannot read local paths. After an uncertain result, reuse uploadId with identical file details/bytes. Recover private uploads via list_my_deliverable_drafts; attach IDs in comment/report_status. Drafts expire in seven days; posts allow ten files. Never send credentials or upload without permission.',
+        'Upload private UTF-8 textContent (without base64 expansion or text changes) or canonical binary base64, up to 4 MB. The server cannot read local paths. After an uncertain result, reuse uploadId with identical file details/bytes. Recover private uploads via list_my_deliverable_drafts; attach IDs in comment/report_status. Drafts expire in seven days; posts allow ten files. Never send credentials or upload without permission.',
       inputSchema: uploadInput.shape,
       outputSchema: DeliverableOut.shape,
       annotations: {
@@ -205,7 +205,7 @@ function registerDeliverableUploadSessionTool(server: McpRegistrar, ctx: McpCont
     {
       title: 'Prepare a deliverable upload',
       description:
-        'Create a 15-minute upload-only URL for a local agent file: orgId, fileName, optional mimeType/title. Stream multipart field `file` to uploadUrl with header `X-Docket-Upload-Token: uploadToken`, avoiding base64/large MCP requests. The token accepts only that file, expires in 15 minutes, and retries need identical bytes. The upload response returns a private draft file ID for comment/report_status. Never share tokens or upload without permission.',
+        'Create a private 15-minute upload-only URL for a local agent file: orgId, fileName, optional mimeType/title. Stream multipart field `file` to uploadUrl with header `X-Docket-Upload-Token: uploadToken`, avoiding base64/large MCP requests. The token accepts only that file, expires in 15 minutes, and retries need identical bytes. The upload response returns a private draft file ID for comment/report_status. Never share tokens or upload without permission.',
       inputSchema: uploadSessionInput.shape,
       outputSchema: DeliverableUploadSessionOut.shape,
       annotations: {

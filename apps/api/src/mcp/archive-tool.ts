@@ -65,7 +65,7 @@ export function registerArchiveTool(server: McpRegistrar, ctx: McpContext): void
     {
       title: 'Archive work',
       description:
-        'Take work out of view without deleting it — ids and references survive, so this is always reversible. The scope takes the same filters as list_work. Pass `restore: true` to bring archived work back, in which case the scope reads the archived pool. Anything you may not write is reported rather than skipped quietly.',
+        'Reversibly hide selected work; restore:true restores archived items. Keeps IDs/references. Reports unwritable rows.\n\nReversibly hide work without deleting IDs or references. Select with list_work filters; restore:true selects archived work and restores it. Reports items the caller cannot write.',
       inputSchema: {
         orgId: orgIdParam,
         entity: z.enum(WORK_ENTITIES).describe('What kind of work to archive.'),

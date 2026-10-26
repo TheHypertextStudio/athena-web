@@ -81,6 +81,23 @@ describe('hrefForSearchRoute', () => {
     ).toBe(`/orgs/${ORG}/projects/project_1?commentId=comment_1`);
   });
 
+  it.each(['task', 'project', 'program', 'initiative'] as const)(
+    'opens %s attachment context in Resources',
+    (subjectKind) => {
+      expect(
+        hrefForSearchRoute({
+          type: 'content',
+          organizationId: ORG,
+          subjectKind,
+          subjectId: 'work_1',
+          contentKind: 'attachment',
+          contentId: 'file_1',
+          href: '/search',
+        }),
+      ).toBe(`/orgs/${ORG}/${subjectKind}s/work_1?tab=resources&attachmentId=file_1`);
+    },
+  );
+
   it('prefers external activity URLs and marks them as external', () => {
     const href = hrefForSearchRoute({
       type: 'activity',

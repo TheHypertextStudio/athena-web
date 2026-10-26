@@ -9,9 +9,8 @@
  */
 import type { JSX } from 'react';
 
-import { ResourcesTab } from '@/components/entity-detail/resources-tab';
+import { WorkResourcesPanel } from '@/components/entity-detail/work-resources-panel';
 import type { EntityMentionsData } from '@/lib/use-entity-mentions';
-import { useTaskAttachments } from '@/lib/use-attachments';
 
 /** Props for {@link TaskResourcesPanel}. */
 export interface TaskResourcesPanelProps {
@@ -37,29 +36,14 @@ export function TaskResourcesPanel({
   description,
   mentions,
 }: TaskResourcesPanelProps): JSX.Element {
-  const { attachments, addUrl, addFile, remove, downloadUrl, isUploading, actionError } =
-    useTaskAttachments(orgId, taskId);
   return (
-    <ResourcesTab
-      resources={attachments}
+    <WorkResourcesPanel
+      orgId={orgId}
+      subjectType="task"
+      subjectId={taskId}
       canEdit={canEdit}
-      pending={isUploading}
-      error={actionError}
-      onAdd={(resource) => {
-        void addUrl(resource);
-      }}
-      onRemove={(resourceId) => {
-        void remove(resourceId);
-      }}
-      onUpload={(file) => {
-        void addFile({ file });
-      }}
-      uploading={isUploading}
-      downloadHref={downloadUrl}
-      mentionedExternal={mentions.external}
-      mentionedEntities={mentions.entities}
-      mentionsPending={mentions.isPending}
-      hasProse={(description ?? '').trim().length > 0}
+      description={description}
+      mentions={mentions}
     />
   );
 }

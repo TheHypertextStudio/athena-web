@@ -53,7 +53,9 @@ export function schemaNeedsIsolation(schema: Schema): boolean {
   let isolated = false;
   const visit = (value: Schema): Schema => {
     if (
-      ['$id', '$anchor', '$dynamicAnchor', '$dynamicRef'].some((key) => Object.hasOwn(value, key))
+      ['$id', '$anchor', '$dynamicAnchor', '$dynamicRef', '$recursiveAnchor', '$recursiveRef'].some(
+        (key) => Object.hasOwn(value, key),
+      )
     )
       isolated = true;
     const ref = value['$ref'];
@@ -225,7 +227,12 @@ function inlineSingleUse(root: Schema, definitions: Map<string, Schema>): Schema
  */
 function shareSchemaFragments(root: Schema, minimumFingerprintLength: number): Schema {
   // Moving an anchored scope could change relative resolution. Preserve such documents verbatim.
-  if (/"\$(?:id|anchor|dynamicAnchor|dynamicRef)":/.test(JSON.stringify(root))) return root;
+  if (
+    /"\$(?:id|anchor|dynamicAnchor|dynamicRef|recursiveAnchor|recursiveRef)":/.test(
+      JSON.stringify(root),
+    )
+  )
+    return root;
   const protectedNodes = referenceAncestors(root);
   if (!protectedNodes) return root;
   const existing = record(root['$defs']) ? root['$defs'] : {};
@@ -322,9 +329,13 @@ function shareAnchoredFragments(root: Schema): Schema {
 
 /** Pick the shorter lossless registry while preserving anchored scopes and literal values. */
 export function shareLargeSchemaFragments(root: Schema): Schema {
-  const existing = shareSchemaFragments(root, 40);
-  const smallFragments = shareSchemaFragments(root, 20);
-  return [existing, smallFragments, shareAnchoredFragments(root)].reduce((shortest, candidate) =>
-    JSON.stringify(candidate).length < JSON.stringify(shortest).length ? candidate : shortest,
+  const candidates = [20, 40, 80, 160, 320, 640, 1280].map((minimum) =>
+    shareSchemaFragments(root, minimum),
+  );
+  candidates.push(shareAnchoredFragments(root));
+  return candidates.reduce(
+    (best, candidate) =>
+      JSON.stringify(candidate).length < JSON.stringify(best).length ? candidate : best,
+    root,
   );
 }

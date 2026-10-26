@@ -42,7 +42,7 @@ export function registerContentTools(server: McpRegistrar, ctx: McpContext): voi
     {
       title: 'Comment',
       description:
-        'Post a comment on a task, project, program, or initiative, as the caller. Attach private deliverable draft IDs from upload_deliverable or create_deliverable_upload_session; the response returns their file metadata and download URLs. Replies are one level deep — a reply cannot itself be replied to. Use report_status instead when the point is how a container is tracking rather than a remark on it.',
+        'Post Markdown on work with optional private upload attachmentIds. Replies are one level deep; use report_status for container progress/health.\n\nPost Markdown on work. Attach private draft IDs from upload_deliverable or create_deliverable_upload_session; returns files and download URLs. Replies are one level deep. For container progress/health, use report_status.',
       inputSchema: {
         orgId: orgIdParam,
         subjectType: z
@@ -174,7 +174,7 @@ export function registerContentTools(server: McpRegistrar, ctx: McpContext): voi
     {
       title: 'Report status',
       description:
-        'Explain project/program/initiative status in prose with optional health rating, which becomes its current health. Attach private draft IDs from upload_deliverable/create_deliverable_upload_session for file metadata and download URLs. Use this to explain health; update sets the field without explaining why.',
+        'Explain project/program/initiative status in prose with optional health rating, which becomes its current health. Attach private draft IDs from upload_deliverable/create_deliverable_upload_session as attachmentIds for file metadata and download URLs. For tasks, use comment. Use this to explain health; update sets the field without explaining why.',
       inputSchema: {
         orgId: orgIdParam,
         subjectType: z

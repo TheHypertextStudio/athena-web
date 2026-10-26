@@ -6,12 +6,14 @@ import { type AttachmentOut } from '@docket/work/attachment-contract';
 import { type EntityMention } from '../../lib/contracts/mention';
 import { formatBytes } from '@docket/ui';
 import { Calendar, FileText, Link as LinkIcon, Mail, Plus, Trash2 } from '@docket/ui/icons';
-import { EmptyState } from '@docket/ui/components';
-import { Button, Input, Text } from '@docket/ui/primitives';
+import { EmptyState, InlineBanner } from '@docket/ui/components';
+import { Button, Input } from '@docket/ui/primitives';
 import type { JSX } from 'react';
 import { useMemo, useState } from 'react';
 
 import MentionedResources from './mentioned-resources';
+import { ResourceFileUpload } from './resource-file-upload';
+import { LoadFailure } from '@/components/feedback';
 
 import {
   MailAttachmentsPanel,
@@ -26,8 +28,12 @@ export interface ResourcesTabProps {
   canEdit: boolean;
   pending: boolean;
   error: string | null;
+  /** Structured read failure, interpreted only by the shared application presentation. */
+  loadFailure?: unknown;
   onAdd: (resource: { title: string; url: string }) => void;
   onRemove: (resourceId: string) => void;
+  /** Retry loading after a recoverable resource error. */
+  onRetry?: () => void;
   /** Upload a file into the same attachment collection. */
   onUpload?: (file: File) => void;
   /** Whether a file upload is in flight. */
@@ -123,7 +129,10 @@ function attachmentPresentation(resource: AttachmentOut): {
       return {
         label: 'File',
         detail:
-          [resource.fileName, resource.byteSize === null ? null : formatBytes(resource.byteSize)]
+          [
+            resource.fileName === resource.title ? null : resource.fileName,
+            resource.byteSize === null ? null : formatBytes(resource.byteSize),
+          ]
             .filter(Boolean)
             .join(' · ') || null,
         Icon: FileText,
@@ -140,8 +149,10 @@ export function ResourcesTab({
   canEdit,
   pending,
   error,
+  loadFailure,
   onAdd,
   onRemove,
+  onRetry,
   onUpload,
   uploading = false,
   downloadHref,
@@ -171,8 +182,8 @@ export function ResourcesTab({
   const hasDerived = derivedExternal.length > 0 || mentionedEntities.length > 0;
 
   return (
-    <div className="flex w-full min-w-0 flex-col gap-4">
-      <div className="flex items-center justify-between gap-3">
+    <div className="@container flex w-full min-w-0 flex-col gap-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-on-surface text-title-small">Resources</h2>
         {canEdit ? (
           <Button
@@ -249,9 +260,9 @@ export function ResourcesTab({
             return (
               <li
                 key={resource.id}
-                className="hover:bg-surface-container-high flex min-h-14 items-center gap-3 rounded-lg px-3 py-2 transition-colors"
+                className="hover:bg-surface-container-high flex min-h-14 items-start gap-3 rounded-lg px-3 py-2 transition-colors"
               >
-                <span className="bg-primary-container text-on-primary-container flex size-8 shrink-0 items-center justify-center rounded-full">
+                <span className="bg-primary-container text-on-primary-container flex size-8 shrink-0 items-center justify-center rounded-full @max-xs:hidden">
                   <presentation.Icon aria-hidden className="size-5" />
                 </span>
                 <span className="min-w-0 flex-1">
@@ -261,7 +272,8 @@ export function ResourcesTab({
                         href={href}
                         download
                         aria-label={title}
-                        className="text-on-surface text-body-small block truncate hover:underline"
+                        title={resource.title}
+                        className="text-on-surface text-body-small block min-h-10 content-center break-words whitespace-normal hover:underline"
                       >
                         {resource.title}
                       </a>
@@ -270,7 +282,8 @@ export function ResourcesTab({
                         href={href}
                         target="_blank"
                         rel="noreferrer"
-                        className="text-on-surface text-body-small block truncate hover:underline"
+                        title={resource.title}
+                        className="text-on-surface text-body-small block min-h-10 content-center break-words whitespace-normal hover:underline"
                       >
                         {resource.title}
                       </a>
@@ -304,26 +317,19 @@ export function ResourcesTab({
             );
           })}
         </ul>
-      ) : hasDerived ? null : (
+      ) : hasDerived || error ? null : (
         // `frame="none"`: the panel frame draws a hairline, and §8 keeps a border to the three
         // things that earn one. The section's heading and its "Add resource" button already bound
         // this region, so the atom supplies the treatment without a line around it.
-        <EmptyState icon={LinkIcon} title="No linked resources yet" frame="none" />
+        <EmptyState
+          icon={LinkIcon}
+          title="No resources yet"
+          body="Keep the files and links needed for this work here."
+          frame="none"
+        />
       )}
       {canEdit && onUpload ? (
-        <label className="text-primary text-body-small hover:bg-surface-container-high flex min-h-10 w-fit cursor-pointer items-center rounded-md px-3">
-          {uploading ? 'Uploading file…' : 'Upload file'}
-          <input
-            type="file"
-            className="sr-only"
-            disabled={uploading}
-            onChange={(event) => {
-              const file = event.target.files?.[0];
-              event.target.value = '';
-              if (file) onUpload(file);
-            }}
-          />
-        </label>
+        <ResourceFileUpload onUpload={onUpload} pending={pending} uploading={uploading} />
       ) : null}
       {subject ? (
         <MailAttachmentsPanel
@@ -345,11 +351,27 @@ export function ResourcesTab({
         pending={mentionsPending}
         hasProse={hasProse}
       />
-      {error ? (
-        <Text as="p" token="body-small" tone="error" role="alert">
-          {error}
-        </Text>
-      ) : null}
+      {error ? <ResourceFailure message={error} failure={loadFailure} onRetry={onRetry} /> : null}
     </div>
+  );
+}
+
+function ResourceFailure({
+  message,
+  failure,
+  onRetry,
+}: {
+  readonly message: string;
+  readonly failure: unknown;
+  readonly onRetry: (() => void) | undefined;
+}): JSX.Element {
+  if (failure !== undefined && failure !== null)
+    return <LoadFailure title="Resources" error={failure} onRetry={onRetry} size="panel" />;
+  return (
+    <InlineBanner
+      tone="critical"
+      title={message}
+      {...(onRetry ? { action: { label: 'Try again', onSelect: onRetry } } : {})}
+    />
   );
 }

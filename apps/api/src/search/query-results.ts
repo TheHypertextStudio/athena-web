@@ -48,13 +48,16 @@ export function actionFor(row: SearchDocumentRow): SearchOut['items'][number]['a
     row.kind === 'attachment' &&
     facet['attachmentKind'] === 'file' &&
     row.organizationId &&
-    row.subjectKind === 'task' &&
+    ['task', 'project', 'program', 'initiative'].includes(row.subjectKind ?? '') &&
     row.subjectId
   ) {
     actions.push({
       kind: 'download',
       label: 'Download',
-      href: `/v1/orgs/${row.organizationId}/tasks/${row.subjectId}/attachments/${row.entityId}/download`,
+      href:
+        row.subjectKind === 'task'
+          ? `/v1/orgs/${row.organizationId}/tasks/${row.subjectId}/attachments/${row.entityId}/download`
+          : `/v1/orgs/${row.organizationId}/work-resources/${row.subjectKind}/${row.subjectId}/${row.entityId}/download`,
     });
   }
   if (row.externalUrl) {

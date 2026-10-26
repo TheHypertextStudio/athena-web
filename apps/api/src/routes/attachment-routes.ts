@@ -35,8 +35,10 @@ import { created, ok } from '../lib/ok';
 import { pageResult, seekAfter } from '../lib/list-cursor';
 import { apiDoc } from '../lib/openapi-route';
 import { zForm, zJson, zParam, zQuery } from '../lib/validate';
-import { enqueueSearchDelete, enqueueSearchUpsert } from '../search/write-through';
-import { recordTaskChanges } from '../lib/task-audit';
+import { enqueueSearchUpsert } from '../search/write-through';
+import { announceTaskChanges, recordTaskChanges } from '../lib/task-audit';
+import { deferAfterResponse } from '../lib/after-response';
+import { removeResourceAttachment } from '../content/resource-removal';
 import { assertTaskCapability, buildTaskViewFilter, loadTask } from './task-helpers';
 
 type AttachmentRow = typeof attachment.$inferSelect;
@@ -368,7 +370,7 @@ The \`kind\` determines the required fields, enforced at the schema edge: a \`ur
       summary: 'Remove a task attachment',
       capability: 'contribute',
       response: AttachmentRemoved,
-      description: `Hard-delete an attachment from a task. Requires \`contribute\`. The host task is loaded first so a cross-org or unknown task id 404s before the attachment is addressable — the attachment id alone never leaks across tenants. The delete is additionally scoped to (\`organizationId\`, \`subjectType = task\`, \`subjectId = :id\`), so an attachment id that belongs to a different task or org 404s (\`Attachment not found\`). Returns an {@link AttachmentRemoved} acknowledgement.`,
+      description: `Remove an attachment from a task. File cleanup is durably retried if storage is unavailable; removed material is hidden immediately. Requires \`contribute\`. The host task is loaded first so a cross-org or unknown task id 404s before the attachment is addressable — the attachment id alone never leaks across tenants. The delete is additionally scoped to (\`organizationId\`, \`subjectType = task\`, \`subjectId = :id\`), so an attachment id that belongs to a different task or org 404s (\`Attachment not found\`). Returns an {@link AttachmentRemoved} acknowledgement.`,
     }),
     zParam(attParam),
     async (c) => {
@@ -379,35 +381,19 @@ The \`kind\` determines the required fields, enforced at the schema edge: a \`ur
       const target = await loadTask(orgId, id);
       await assertTaskCapability(orgId, actorId, target, 'contribute');
 
-      const removed = await db
-        .delete(attachment)
-        .where(
-          and(
-            eq(attachment.id, attachmentId),
-            eq(attachment.organizationId, orgId),
-            eq(attachment.subjectType, 'task'),
-            eq(attachment.subjectId, id),
-          ),
-        )
-        .returning();
-      const row = removed[0];
-      if (!row) throw new NotFoundError('Attachment not found');
-      await recordTaskChanges({
-        organizationId: orgId,
-        taskId: id,
-        title: target.title,
-        actorId,
-        changes: [{ field: 'resource', label: 'Resource', from: row.title, to: null }],
-      });
-      // Best-effort blob cleanup for file attachments — an orphaned blob must never block the
-      // user-facing delete, which already succeeded above.
-      if (row.kind === 'file' && row.blobKey) {
-        await getContainer()
-          .blob.delete(row.blobKey)
-          .catch(() => undefined);
-      }
-      await enqueueSearchDelete(orgId, 'attachment', row.id);
-      await enqueueSearchUpsert(orgId, 'task', id);
-      return ok(c, AttachmentRemoved, { id: row.id, removed: true });
+      const removedTitle = await removeResourceAttachment(
+        { orgId, actorId, subjectType: 'task', subjectId: id },
+        attachmentId,
+      );
+      deferAfterResponse('task-resource-removed', () =>
+        announceTaskChanges({
+          organizationId: orgId,
+          taskId: id,
+          title: target.title,
+          actorId,
+          changes: [{ field: 'resource', label: 'Resource', from: removedTitle, to: null }],
+        }),
+      );
+      return ok(c, AttachmentRemoved, { id: attachmentId, removed: true });
     },
   );

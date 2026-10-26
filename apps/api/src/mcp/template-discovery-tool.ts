@@ -32,7 +32,7 @@ const cursorCodec = createCursorCodec({
 const definition = {
   title: 'List templates',
   description:
-    'Discover published versions, blank bases and readable legacy drafts; creates no work. Fill payload.description Markdown, not the usage summary. capture, organize and repeat_task accept workTypeId + optional workTypeVersionId or legacy ID/name; legacy drafts keep base identity. Explicit fields win; withoutTemplateReason chooses freeform. plan_draft applies defaults; define_template authors templates.',
+    'Read available work types and template bodies. Fill payload.description. Select workTypeId/version for creation, or give withoutTemplateReason.\n\nRead published work types, blank bases and readable legacy drafts. Fill payload.description, not the usage summary. Creation accepts workTypeId/version or a legacy reference; explicit fields win and withoutTemplateReason opts out. Draft planning applies defaults; define_template authors templates.',
   inputSchema: {
     orgId: orgIdParam,
     targetType: TemplateTargetType.optional().describe(

@@ -8,6 +8,7 @@ import { explicitBlueprintDatePatch } from '../lib/work-template-blueprints/date
 import { serializableTx } from '../lib/serializable-tx';
 import { validatedInitiativeIds } from '../lib/work-creation/ordinary-references';
 import { originFor } from '../lib/provenance/context';
+import { removeWorkResources } from '../content/resource-removal';
 import { createWork } from '../lib/work-creation/service';
 import { workTemplateAssignmentRoutes } from './work-template-assignment';
 import { workTemplateCaptureRoutes } from './work-template-capture';
@@ -752,6 +753,7 @@ const projects = new Hono<AppEnv>()
             ),
           );
         const deleted = await tx.delete(project).where(eq(project.id, id)).returning();
+        await removeWorkResources(tx, { orgId, subjectType: 'project', subjectId: id });
         const removed = await recordRemoval({ tx, orgId, actorId }, 'project', deleted[0]);
         return removed && { row: removed, milestoneIds: milestoneRows.map((m) => m.id) };
       });

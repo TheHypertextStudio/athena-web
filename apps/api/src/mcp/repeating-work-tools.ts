@@ -45,7 +45,7 @@ export function registerRepeatingWorkTools(server: McpRegistrar, ctx: McpContext
     {
       title: 'Define process',
       description:
-        'Save a private reusable Docket process. Its owner or a current workspace manager can read or schedule it. Step keys express dependencies and relative timing for related work that repeats; Docket validates and publishes the immutable revision.',
+        'Save a private reusable process with step dependencies and timing. Only its owner or current workspace manager may read/schedule it.\n\nSave a private reusable Docket process. Its owner or a current workspace manager can read or schedule it. Step keys express dependencies and relative timing for related work that repeats; Docket validates and publishes the immutable revision.',
       inputSchema: {
         orgId: orgIdParam,
         definition: ProcessDefinitionCreate.describe(
@@ -85,7 +85,7 @@ export function registerRepeatingWorkTools(server: McpRegistrar, ctx: McpContext
     {
       title: 'Schedule process',
       description:
-        'Schedule a private process you own or manage at workspace scope. Use a calendar rule, actual completion, event, or manual trigger. Docket owns rolling windows and missed work; pass the typed trigger without calculating occurrences yourself.',
+        'Schedule an owned/managed private process with a typed trigger. Docket calculates occurrences, rolling windows and missed work.\n\nSchedule a private process you own or manage at workspace scope. Use a calendar rule, actual completion, event, or manual trigger. Docket owns rolling windows and missed work; pass the typed trigger without calculating occurrences yourself.',
       inputSchema: {
         orgId: orgIdParam,
         series: RecurrenceSeriesCreate.describe(
@@ -122,7 +122,7 @@ function registerRepeatTask(server: McpRegistrar, ctx: McpContext): void {
     {
       title: 'Repeat task',
       description:
-        'Create a repeating task with calendar or actual-completion recurrence. Call list_templates; preserve payload.description Markdown. Pass workTypeId + optional workTypeVersionId or legacy ID/name; explicit task fields win. Select a relevant template or provide withoutTemplateReason; undecided calls create nothing.',
+        'Create recurring tasks. Read list_templates and fill its body; select workTypeId/version or give withoutTemplateReason. Undecided calls write nothing.\n\nCreate tasks on calendar or completion cadence. First read list_templates and fill its Markdown body, keeping headings. Select workTypeId/version or a legacy template, or give withoutTemplateReason. Explicit fields win; undecided calls write nothing.',
       inputSchema: {
         orgId: orgIdParam,
         recurringTask: RecurringTaskCreate.describe(

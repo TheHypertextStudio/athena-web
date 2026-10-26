@@ -14,17 +14,31 @@ import { z } from 'zod';
 import { AttachmentId } from '../ids';
 import { OrganizationId } from '@docket/identity-access/ids';
 
+/** Maximum bytes accepted for one uploaded or copied attachment. */
+export const MAX_ATTACHMENT_BYTES = 4 * 1024 * 1024;
+
 /** The polymorphic subject kinds an Attachment can attach to. */
 export const AttachmentSubjectType = z.enum([
   'task',
   'initiative',
   'project',
+  'program',
   'draft',
   'comment',
   'update',
 ]);
 /** Attachment subject-type value. */
 export type AttachmentSubjectType = z.infer<typeof AttachmentSubjectType>;
+
+/** Work records that can directly own attached context, distinct from drafts and posts. */
+export const WorkResourceSubjectType = AttachmentSubjectType.extract([
+  'task',
+  'project',
+  'program',
+  'initiative',
+]);
+/** A direct work-resource destination. */
+export type WorkResourceSubjectType = z.infer<typeof WorkResourceSubjectType>;
 
 /**
  * The kind of resource an Attachment references.

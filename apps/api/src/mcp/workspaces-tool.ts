@@ -25,7 +25,7 @@ export function registerWorkspacesTool(server: McpRegistrar, ctx: McpContext): v
     {
       title: 'My workspaces',
       description:
-        'List accessible workspaces, the caller’s actor ID in each, and active teams. Use these IDs for workspace-scoped calls and assignments. Library discovery through list_resources can also browse across workspaces without orgId.',
+        'List accessible workspaces, caller actor IDs and active teams for scoped calls and assignments.\n\nList accessible workspaces, the caller’s actor ID in each, and active teams. Use these IDs for workspace-scoped calls and assignments. Library discovery through list_resources can also browse across workspaces without orgId.',
       inputSchema: {},
       outputSchema: {
         workspaces: z

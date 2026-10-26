@@ -1,6 +1,7 @@
 import { program, recurrenceSeries, type Database } from '@docket/db';
 import { and, eq } from 'drizzle-orm';
 import { ConflictError, NotFoundError } from '../error';
+import { removeWorkResources } from '../content/resource-removal';
 
 /**
  * Remove a Program only when no independently owned schedule history depends on it.
@@ -32,6 +33,11 @@ export async function deleteProgramPreservingScheduleHistory(
       throw new ConflictError('Archive this Program to preserve its recurring work history.');
     const [removed] = await tx.delete(program).where(predicate).returning();
     if (!removed) throw new NotFoundError('Program not found');
+    await removeWorkResources(tx, {
+      orgId: organizationId,
+      subjectType: 'program',
+      subjectId: programId,
+    });
     return removed;
   });
 }

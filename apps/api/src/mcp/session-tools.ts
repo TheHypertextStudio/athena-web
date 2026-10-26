@@ -107,7 +107,7 @@ export function registerSessionTools(server: McpRegistrar, ctx: McpContext): voi
     {
       title: 'Run agent',
       description:
-        'Start an agent working — on a task, or on a freeform instruction. Returns the session, which manage_session then drives: answering its questions, approving or rejecting what it proposes, or stopping it.',
+        'Start an agent on a task or instruction. Use manage_session for its questions, approvals and cancellation.\n\nStart an agent working — on a task, or on a freeform instruction. Returns the session, which manage_session then drives: answering its questions, approving or rejecting what it proposes, or stopping it.',
       inputSchema: triggerAgentInputSchema,
       outputSchema: sessionRefOutputSchema,
       annotations: {
@@ -129,7 +129,7 @@ export function registerSessionTools(server: McpRegistrar, ctx: McpContext): voi
     {
       title: 'Manage agent session',
       description:
-        'Drive a running agent session: `respond` answers a question it asked, `approve` and `reject` decide on the action it is waiting on, and `cancel` stops it. These were four tools with four shapes, but they are one thing — a decision about a session that is waiting on you.',
+        'Respond to, approve, reject or cancel an agent session awaiting your decision.\n\nDrive a running agent session: `respond` answers a question it asked, `approve` and `reject` decide on the action it is waiting on, and `cancel` stops it. These were four tools with four shapes, but they are one thing — a decision about a session that is waiting on you.',
       inputSchema: {
         orgId: orgIdParam,
         sessionId: sessionIdParam,

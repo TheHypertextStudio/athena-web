@@ -5,7 +5,9 @@ import { AttachmentOut } from '@docket/work/attachment-contract';
 import { EntityMention } from '../../src/lib/contracts/mention';
 import { cleanup, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import userEvent from '@testing-library/user-event';
 
+import { ApiRequestError } from '../../src/lib/query-core';
 import { ResourcesTab } from '../../src/components/entity-detail/resources-tab';
 
 afterEach(cleanup);
@@ -130,6 +132,72 @@ const mentionedExternal: readonly EntityMention[] = [
 ].map((mention) => EntityMention.parse(mention));
 
 describe('task Resources', () => {
+  it('shows permission recovery instead of an empty collection or a futile retry', () => {
+    render(
+      <ResourcesTab
+        resources={[]}
+        canEdit={false}
+        pending={false}
+        error="Could not load resources."
+        loadFailure={
+          new ApiRequestError({
+            message: 'Could not load resources.',
+            status: 403,
+            code: 'forbidden',
+          })
+        }
+        onAdd={vi.fn()}
+        onRemove={vi.fn()}
+        onRetry={vi.fn()}
+      />,
+    );
+    expect(screen.queryByText('No resources yet')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Try again' })).not.toBeInTheDocument();
+    expect(screen.getByRole('alert')).toHaveTextContent(/permission/i);
+    expect(screen.getByRole('link')).toBeInTheDocument();
+  });
+
+  it('offers a keyboard-accessible retry after a resource read fails', async () => {
+    const retry = vi.fn();
+    render(
+      <ResourcesTab
+        resources={[]}
+        canEdit={false}
+        pending={false}
+        error="Could not load resources."
+        onAdd={vi.fn()}
+        onRemove={vi.fn()}
+        onRetry={retry}
+      />,
+    );
+    expect(screen.getByRole('alert')).toHaveTextContent('Could not load resources.');
+    await userEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(retry).toHaveBeenCalledOnce();
+  });
+
+  it('makes file upload reachable by keyboard and passes the selected file to the action', async () => {
+    const onUpload = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <ResourcesTab
+        resources={[]}
+        canEdit
+        pending={false}
+        error={null}
+        onAdd={vi.fn()}
+        onRemove={vi.fn()}
+        onUpload={onUpload}
+      />,
+    );
+    const upload = screen.getByRole('button', { name: 'Upload file' });
+    await user.tab();
+    await user.tab();
+    expect(upload).toHaveFocus();
+    const file = new File(['Brief'], 'brief.txt', { type: 'text/plain' });
+    await user.upload(screen.getByLabelText('File to upload'), file);
+    expect(onUpload).toHaveBeenCalledWith(file);
+  });
+
   it('shows task attachments and description references once in one collection', () => {
     render(
       <ResourcesTab

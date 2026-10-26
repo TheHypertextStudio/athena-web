@@ -1,4 +1,4 @@
-import { actor, comment, db, role, update } from '@docket/db';
+import { actor, comment, db, role, update, type Database } from '@docket/db';
 import { and, eq, isNull } from 'drizzle-orm';
 import { NotFoundError } from '../error';
 import { resolveResourceAccessForActors, resourceAccessKey } from '../permissions/resource-access';
@@ -9,9 +9,10 @@ export async function postSubject(
   orgId: string,
   kind: 'comment' | 'update',
   id: string,
+  database: Database = db,
 ): Promise<{ kind: 'task' | 'project' | 'program' | 'initiative' | 'cycle'; id: string }> {
   const table = kind === 'comment' ? comment : update;
-  const [post] = await db
+  const [post] = await database
     .select({ kind: table.subjectType, id: table.subjectId })
     .from(table)
     .where(and(eq(table.organizationId, orgId), eq(table.id, id), isNull(table.archivedAt)))
@@ -26,14 +27,15 @@ export async function assertPostVisible(
   actorId: string,
   kind: 'comment' | 'update',
   id: string,
+  database: Database = db,
 ): Promise<void> {
-  const subject = await postSubject(orgId, kind, id);
+  const subject = await postSubject(orgId, kind, id, database);
   if (subject.kind === 'task') {
-    const task = await loadTask(orgId, subject.id);
-    if (!(await buildTaskViewFilter(orgId, actorId))(task)) throw new NotFoundError();
+    const task = await loadTask(orgId, subject.id, database);
+    if (!(await buildTaskViewFilter(orgId, actorId, database))(task)) throw new NotFoundError();
     return;
   }
-  const [identity] = await db
+  const [identity] = await database
     .select({
       kind: actor.kind,
       roleId: actor.roleId,
@@ -66,6 +68,7 @@ export async function assertPostVisible(
       },
     ],
     [ref],
+    database,
   );
   if (!accesses.get(resourceAccessKey(ref))?.canView) throw new NotFoundError();
 }

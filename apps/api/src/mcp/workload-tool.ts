@@ -28,7 +28,7 @@ export function registerWorkloadTool(server: McpRegistrar, ctx: McpContext): voi
     {
       title: 'Daily workload',
       description:
-        'Read personal daily workload: visible workspace plans, tracked time, unknown estimates, and headroom against a full-day budget. Overlap counts once. Read-only; excludes meetings and other workspaces. Headroom is not free calendar time.',
+        'Read personal workload: plans, tracked time, unknown estimates and daily headroom. Overlap counts once; excludes meetings. Headroom is not free calendar time.\n\nRead personal daily workload: visible workspace plans, tracked time, unknown estimates, and headroom against a full-day budget. Overlap counts once. Read-only; excludes meetings and other workspaces. Headroom is not free calendar time.',
       inputSchema: {
         orgId: orgIdParam,
         date: z.iso.date().describe('Local calendar date, YYYY-MM-DD.'),

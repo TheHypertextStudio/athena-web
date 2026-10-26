@@ -50,7 +50,7 @@ export const browseWorkTemplatesDefinition = {
 export const copyWorkTemplatesDefinition = {
   title: 'Copy reviewed work definitions',
   description:
-    'Preview authorized workspace or catalog definitions in the destination, then keep that exact review as independent private drafts or explicitly publish. Reconcile interrupted outcomes by requestId. Automatic Athena writes use Inbox review instead.',
+    'Review authorized definitions, then keep that exact review as private drafts or explicitly publish. Retry/reconcile by requestId. Athena uses Inbox review.\n\nPreview authorized workspace or catalog definitions in the destination, then keep that exact review as independent private drafts or explicitly publish. Reconcile interrupted outcomes by requestId. Automatic Athena writes use Inbox review instead.',
   inputSchema: {
     orgId: orgIdParam,
     query: z.discriminatedUnion('action', [

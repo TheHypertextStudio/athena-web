@@ -11,6 +11,7 @@ import {
 import { explicitBlueprintDatePatch } from '../lib/work-template-blueprints/date-ownership';
 import { serializableTx } from '../lib/serializable-tx';
 import { originFor } from '../lib/provenance/context';
+import { removeWorkResources } from '../content/resource-removal';
 import { createWork } from '../lib/work-creation/service';
 
 import { workTemplateAssignmentRoutes } from './work-template-assignment';
@@ -476,6 +477,7 @@ const initiatives = new Hono<AppEnv>()
             ),
           );
         const deleted = await tx.delete(initiative).where(eq(initiative.id, id)).returning();
+        await removeWorkResources(tx, { orgId, subjectType: 'initiative', subjectId: id });
         return recordRemoval({ tx, orgId, actorId }, 'initiative', deleted[0]);
       });
       if (!row) throw new NotFoundError('Initiative not found');

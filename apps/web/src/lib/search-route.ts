@@ -86,7 +86,12 @@ function hrefForContent(route: Extract<SearchRoute, { type: 'content' }>): strin
     route.subjectId,
     route.href,
   );
-  return withQuery(subjectHref, `${route.contentKind}Id`, route.contentId);
+  const contextualHref =
+    route.contentKind === 'attachment' &&
+    ['task', 'project', 'program', 'initiative'].includes(route.subjectKind)
+      ? withQuery(subjectHref, 'tab', 'resources')
+      : subjectHref;
+  return withQuery(contextualHref, `${route.contentKind}Id`, route.contentId);
 }
 
 function activityFallbackHref(organizationId: string | null, eventId: string): string {

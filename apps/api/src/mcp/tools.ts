@@ -1,5 +1,6 @@
 import { registerAthenaMailTools } from './athena-mail-tools';
 import { registerLibraryTools } from './library';
+import { registerResourceWriteTools } from './resource-write-tools';
 /**
  * `@docket/api` — MCP mutation tools.
  *
@@ -79,6 +80,7 @@ export function registerTools(
   registerContentTools(server, ctx);
   registerDeliverableTools(server, ctx);
   registerLibraryTools(server, ctx);
+  registerResourceWriteTools(server, ctx);
   registerAthenaMailTools(server, ctx, sessionId);
   registerSessionTools(server, ctx);
   registerViewPlanTools(server, ctx);

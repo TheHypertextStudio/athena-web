@@ -127,7 +127,7 @@ export function registerTimeTools(server: McpRegistrar, ctx: McpContext): void {
     {
       title: 'Track time',
       description:
-        'Start, pause, resume, switch, stop or inspect timers and list dated segments. taskId tracks saved work; label creates a task. Omit both to start unnamed work. stop requires a named task or label. Restarting the same task within a minute continues its segment. status includes calendar/plan suggestions; never act on them unasked.',
+        'Control a timer or list segments. taskId names work; label creates it. Stop needs task or label. Status only suggests work; act only when asked.\n\nManage timers or list segments. taskId names saved work; label creates it; omit both to start unnamed. stop requires task or label. Restart within a minute continues the segment. status only suggests calendar/plan work; act only when asked.',
       inputSchema: {
         action: z
           .enum(TRACK_ACTIONS)

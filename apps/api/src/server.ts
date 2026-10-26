@@ -131,6 +131,7 @@ server.on(['POST', 'GET'], '/api/auth/*', (c) => auth.handler(c.req.raw));
 // The MCP Streamable HTTP endpoint lives OUTSIDE the typed `AppType` routes (like
 // `/api/auth`): it carries its own Origin + session guard and is not part of the RPC
 // contract consumed by `hc<AppType>`.
+server.use('/mcp', bodyLimit({ maxSize: MAX_REQUEST_BYTES, onError: () => rejectOversizedBody() }));
 server.on(['POST', 'GET', 'DELETE'], '/mcp', mcpHandler);
 // The MCP Apps sandbox proxy. The spec requires a web host to wrap third-party widget HTML in a
 // frame served from a DIFFERENT origin than the host page; this API is that origin. The document

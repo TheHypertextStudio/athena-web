@@ -41,6 +41,7 @@ import {
 } from '../content/deliverables';
 import { sweepExpiredMcpContentReceipts } from '../mcp/content-receipts';
 import { sweepResourceUnfurls } from '../content/unfurl-sweep';
+import { sweepAbandonedResourceWrites } from '../content/resource-write-receipt';
 import {
   createDrizzleDocumentImageCleanupStorage,
   sweepUnreferencedDocumentImages,
@@ -216,7 +217,9 @@ const cron = new Hono()
   .post('/unfurl-resources', async (c) => {
     if (!authorized(c)) return c.json({ error: 'unauthorized' }, 401);
     const result = await sweepResourceUnfurls(getContainer().unfurler, new Date());
-    return c.json({ swept: true, ...result });
+    const abandonedWritesCleaned = await sweepAbandonedResourceWrites();
+    const removedAttachmentsCleaned = await processAttachmentBlobCleanup(50);
+    return c.json({ swept: true, ...result, abandonedWritesCleaned, removedAttachmentsCleaned });
   })
   // Abandoned document-image cleanup: consider only uploads older than seven days whose derived
   // projection is empty, then re-read authoritative prose before removing bytes. This daily pass

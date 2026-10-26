@@ -3,13 +3,19 @@ import type * as DbModule from '@docket/db';
 import { and, eq, sql } from 'drizzle-orm';
 import { assertDefined } from '@docket/test-utils';
 import { ProcessDefinitionId } from '@docket/work/ids';
-import { WorkTemplateListQuery } from '@docket/work/work-template-contract';
+import { WorkTemplateDefinition, WorkTemplateListQuery } from '@docket/work/work-template-contract';
+import { BlueprintStep } from '@docket/work/work-template-blueprint';
+import { ProcessDefinitionCreate } from '../../src/contracts/recurrence';
 import { createCanonicalPrivateDefinition } from '../../src/lib/recurrence/private-definition-publication';
 import {
   createRecurrenceSeries,
   materializeSeriesOccurrence,
 } from '../../src/lib/recurrence/series';
-import { listWorkTemplates } from '../../src/lib/templates/service';
+import {
+  createWorkTemplate,
+  listWorkTemplates,
+  publishWorkTemplate,
+} from '../../src/lib/templates/service';
 import { loadCreationActor } from '../../src/lib/work-creation/context';
 import {
   getPrivatePublicationDb,
@@ -122,4 +128,95 @@ it('runs inline private structure under base identities with registered private 
   );
   expect(tasks.every((task) => task.privateInvocationId === invocationId)).toBe(true);
   expect(tasks.every((task) => task.blueprintStepId === null)).toBe(true);
+});
+
+it('places a selected Task publication with its real child under the private Project beside an inline root', async () => {
+  const f = await seedPrivatePublicationActor(schema.db, schema);
+  const caller = {
+    orgId: f.orgId,
+    actorId: f.humanActorId,
+    roleId: null,
+    capabilities: ['manage'],
+  };
+  const draft = await createWorkTemplate(caller, {
+    targetType: 'task',
+    scope: 'organization',
+    offeredTeamIds: [],
+    definition: WorkTemplateDefinition.parse({
+      name: 'Shopping run',
+      payload: { targetType: 'task', title: 'Shopping run' },
+      blueprint: {
+        steps: [
+          BlueprintStep.parse({
+            key: 'list',
+            kind: 'task',
+            parentStepKey: null,
+            sort: 0,
+            optional: { enabled: false, selectedByDefault: true },
+            template: null,
+            fields: { title: 'Write the list' },
+            teamRule: 'parent_team',
+            actorRule: 'unassigned',
+            cycleRule: 'none',
+            dates: {},
+          }),
+        ],
+        dependencies: [],
+      },
+    }),
+  });
+  const shopping = await publishWorkTemplate(caller, draft.id, draft.draftRevision);
+  const publication = await createCanonicalPrivateDefinition(schema.db, {
+    organizationId: f.orgId,
+    actorId: f.humanActorId,
+    definition: ProcessDefinitionCreate.parse({
+      name: 'Dinner with shopping',
+      project: { key: 'dinner', name: 'Dinner' },
+      tasks: [
+        { key: 'menu', title: 'Plan the menu', teamId: f.teamId, projectKey: 'dinner' },
+        {
+          key: 'shop',
+          title: 'Shop',
+          teamId: f.teamId,
+          projectKey: 'dinner',
+          workTypeId: shopping.id,
+          workTypeVersionId: assertDefined(shopping.latestPublishedVersionId),
+        },
+        { key: 'notes', title: 'Share notes', teamId: f.teamId },
+      ],
+    }),
+  });
+  const series = await createRecurrenceSeries(schema.db, {
+    organizationId: f.orgId,
+    actorId: f.humanActorId,
+    series: {
+      processDefinitionId: ProcessDefinitionId.parse(publication.definitionId),
+      name: 'Dinner with shopping',
+      effectiveFrom: '2026-10-26',
+      trigger: { kind: 'manual' },
+    },
+  });
+  const run = await materializeSeriesOccurrence(schema.db, {
+    organizationId: f.orgId,
+    actorId: f.humanActorId,
+    seriesId: series.id,
+    scheduledFor: '2026-10-26',
+  });
+  const projectId = assertDefined(run.projectIdsByKey['dinner']);
+  const tasks = await schema.db
+    .select()
+    .from(schema.task)
+    .where(eq(schema.task.organizationId, f.orgId));
+  const byId = new Map(tasks.map((task) => [task.id, task]));
+  const shop = assertDefined(byId.get(assertDefined(run.taskIdsByKey['shop'])));
+  expect(shop).toMatchObject({ projectId, workTypeId: shopping.id, privateStepAlias: null });
+  const list = assertDefined(tasks.find((task) => task.parentTaskId === shop.id));
+  expect(list.blueprintStepId).not.toBeNull();
+  expect(list.privateStepAlias).toBeNull();
+  const notes = assertDefined(byId.get(assertDefined(run.taskIdsByKey['notes'])));
+  expect(notes).toMatchObject({ projectId: null, privateStepAlias: null });
+  expect(assertDefined(byId.get(assertDefined(run.taskIdsByKey['menu'])))).toMatchObject({
+    projectId,
+    privateStepAlias: publication.stepIdsByKey['menu'],
+  });
 });

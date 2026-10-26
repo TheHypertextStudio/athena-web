@@ -69,6 +69,7 @@ export const GRAPH_RENDER_SCRIPT = String.raw`
   function graphNode(n, state, act) {
     const node = d.el('button', 'graph-node');
     node.type = 'button';
+    node.title = nodeName(n);
     Object.assign(node.style, {
       left: n.x + 'px',
       top: n.y + 'px',
@@ -76,12 +77,11 @@ export const GRAPH_RENDER_SCRIPT = String.raw`
       height: n.height + 'px',
     });
     node.dataset.key = n.key;
-    node.dataset.graphSelect=n.key;
-    node.dataset.container = String(state.snapshot.nodes.some((c) => c.parentKey === n.key));
-    node.dataset.muted = String(
-      !n.matched ||
-        (state.search && !nodeName(n).toLowerCase().includes(state.search.toLowerCase())),
-    );
+    node.dataset.graphSelect = n.key;
+    const container = state.snapshot.nodes.some((c) => c.parentKey === n.key);
+    node.dataset.container = String(container);
+    if (container) node.style.height = '62px';
+    node.dataset.muted = String(!n.matched);
     node.dataset.traced = String(state.trace.has(n.key));
     node.setAttribute('aria-pressed', String(state.selected === n.key));
     node.setAttribute(
@@ -105,6 +105,7 @@ export const GRAPH_RENDER_SCRIPT = String.raw`
     );
     node.appendChild(meta);
     node.addEventListener('click', () => act.select(n.key));
+    node.addEventListener('focus', () => act.ensureVisible(n.key));
     return node;
   }
   function stage(state, act) {
@@ -163,81 +164,45 @@ export const GRAPH_RENDER_SCRIPT = String.raw`
       }
     }
     world.appendChild(lines);
-    for (const n of [...snapshot.nodes].sort((a, b) => b.width * b.height - a.width * a.height))
-      world.appendChild(graphNode(n, state, act));
+    for (const n of [...snapshot.nodes].sort((a, b) => b.width * b.height - a.width * a.height)) {
+      const container = snapshot.nodes.some((c) => c.parentKey === n.key);
+      if (container) {
+        const region = d.el('div', 'graph-group');
+        Object.assign(region.style, {
+          left: n.x + 'px',
+          top: n.y + 'px',
+          width: n.width + 'px',
+          height: n.height + 'px',
+        });
+        world.appendChild(region);
+      }
+      const node = graphNode(n, state, act);
+      if (container) node.style.width = n.width - 42 + 'px';
+      world.appendChild(node);
+      if (n.childCount) {
+        const expanded = (state.args.expanded || []).includes(n.key);
+        const toggle = d.button(expanded ? '−' : '+', () => act.expand(n.key), {
+          label: (expanded ? 'Collapse ' : 'Expand ') + n.title,
+        });
+        toggle.classList.add('graph-group-toggle');
+        toggle.dataset.graphToggle = n.key;
+        toggle.setAttribute('aria-expanded', String(expanded));
+        Object.assign(toggle.style, { left: n.x + n.width - 44 + 'px', top: n.y + 10 + 'px' });
+        world.appendChild(toggle);
+      }
+    }
     stage.appendChild(world);
     act.attach(stage, world);
     return stage;
-  }
-  function inspector(state, act) {
-    const node = state.snapshot.nodes.find((n) => n.key === state.selected);
-    if (!node) return null;
-    const panel = d.el('aside', 'graph-inspector');
-    panel.setAttribute('aria-label', 'Selected work');
-    panel.appendChild(
-      d.el('p', 'graph-meta', node.kind + (node.external ? ' · Outside scope' : '')),
-    );
-    panel.appendChild(d.el('h2', '', nodeName(node)));
-    panel.appendChild(d.el('p', 'graph-meta', node.status));
-    const actions = d.el('div', 'graph-actions');
-    actions.appendChild(d.button('Open in Docket', () => d.link(node.href)));
-    if (node.childCount && node.key !== state.snapshot.scope.key) {
-      const expanded = (state.args.expanded || []).includes(node.key);
-      actions.appendChild(
-        d.button(expanded ? 'Collapse group' : 'Expand group', () => act.expand(node.key)),
-      );
-    }
-    actions.appendChild(
-      d.button('Open neighborhood', () => act.scope({ kind: node.kind, id: node.id })),
-    );
-    panel.appendChild(actions);
-    const byKey = new Map(state.snapshot.nodes.map((n) => [n.key, n]));
-    const relations = (incoming) => {
-      const section = d.el('div');
-      section.appendChild(
-        d.el('p', 'graph-meta', incoming ? 'Visible prerequisites' : 'Visible downstream work'),
-      );
-      const list = d.el('ul');
-      for (const e of state.snapshot.edges.filter(
-        (e) => (incoming ? e.target : e.source) === node.key,
-      )) {
-        const other = byKey.get(incoming ? e.source : e.target);
-        if (!other) continue;
-        const item = d.el('li');
-        item.appendChild(d.button(nodeName(other), () => act.select(other.key)));
-        list.appendChild(item);
-      }
-      section.appendChild(
-        list.childNodes.length ? list : d.el('p', 'graph-meta', 'None in this scene'),
-      );
-      return section;
-    };
-    panel.appendChild(relations(true));
-    panel.appendChild(relations(false));
-    const boundary = state.snapshot.boundaries.find((b) => b.key === node.key);
-    if (boundary)
-      panel.appendChild(
-        d.el(
-          'p',
-          'graph-meta',
-          String(boundary.incoming + boundary.outgoing) +
-            ' recorded connections outside this scene. Open the neighborhood to explore.',
-        ),
-      );
-    const traces = d.el('div', 'graph-actions');
-    traces.appendChild(d.button('Trace prerequisites', () => act.trace('before')));
-    traces.appendChild(d.button('Show what this unlocks', () => act.trace('after')));
-    if (state.trace.size) traces.appendChild(d.button('Clear trace', () => act.trace('clear')));
-    panel.appendChild(traces);
-    panel.appendChild(d.button('Ask about this', () => act.ask(node), { tonal: true }));
-    return panel;
   }
   function relationList(state, act) {
     const list = d.el('div', 'graph-relations');
     const byKey = new Map(state.snapshot.nodes.map((n) => [n.key, n]));
     for (const n of state.snapshot.nodes) {
       const row = d.el('div', 'graph-relation');
-      const select=d.button(nodeName(n),()=>act.select(n.key));select.dataset.graphSelect=n.key;row.appendChild(select);
+      const select = d.button(nodeName(n), () => act.select(n.key));
+      select.dataset.graphSelect = n.key;
+      row.appendChild(select);
       row.appendChild(
         d.el('span', 'graph-meta', n.status + (n.external ? ' · Outside scope' : '')),
       );
@@ -251,15 +216,19 @@ export const GRAPH_RENDER_SCRIPT = String.raw`
           d.el('p', 'graph-meta', nodeName(a) + ' → ' + nodeName(b) + ' · ' + lineLabel(e)),
         );
     }
-    byKey.set(state.snapshot.scope.key,state.snapshot.scope);
-    for(const relation of state.snapshot.relations){
-      const source=byKey.get(relation.source),target=byKey.get(relation.target);if(!source||!target)continue;
-      const text=relation.kind==='contains'?nodeName(source)+' contains '+nodeName(target):nodeName(target)+' contributes to '+nodeName(source);
-      list.appendChild(d.el('p','graph-meta',text));
+    byKey.set(state.snapshot.scope.key, state.snapshot.scope);
+    for (const relation of state.snapshot.relations) {
+      const source = byKey.get(relation.source),
+        target = byKey.get(relation.target);
+      if (!source || !target) continue;
+      const text =
+        relation.kind === 'contains'
+          ? nodeName(source) + ' contains ' + nodeName(target)
+          : nodeName(target) + ' contributes to ' + nodeName(source);
+      list.appendChild(d.el('p', 'graph-meta', text));
     }
     return list;
   }
-  window.docketGraphRender = { stage, inspector, relationList };
+  window.docketGraphRender = { stage, relationList };
 })();
-
 `;

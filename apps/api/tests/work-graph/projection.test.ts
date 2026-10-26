@@ -79,7 +79,7 @@ describe('work graph projection', () => {
     });
   });
 
-  it('limits inline work to six without losing scope totals or independent work', () => {
+  it('limits inline work to three without losing scope totals or independent work', () => {
     const nodes = Array.from({ length: 12 }, (_, i) => work(`a${i}`));
     const result = projectWorkGraph(
       {
@@ -88,9 +88,9 @@ describe('work graph projection', () => {
       },
       { ...input, display: 'inline' },
     );
-    expect(result.nodes).toHaveLength(6);
+    expect(result.nodes).toHaveLength(3);
     expect(result.totals.total).toBe(12);
-    expect(result.omitted).toBe(6);
+    expect(result.omitted).toBe(9);
   });
 
   it('keeps canceled separate and totals stable when completed work is hidden', () => {
@@ -139,7 +139,19 @@ describe('bounded and connected scenes', () => {
     expect(result.nodes).toHaveLength(100);
     expect(result.hasNextPage).toBe(true);
     expect(result.totals.total).toBe(250);
-    expect(result.boundaries).toContainEqual({ key: 'task:000', incoming: 0, outgoing: 1 });
+    expect(result.boundaries).toContainEqual(
+      expect.objectContaining({
+        key: 'task:000',
+        incoming: 0,
+        outgoing: 1,
+        connections: [
+          expect.objectContaining({
+            direction: 'outgoing',
+            work: expect.objectContaining({ key: 'task:249' }),
+          }),
+        ],
+      }),
+    );
   });
   it('prioritizes the selected task and its blockers before unrelated work', () => {
     const nodes = Array.from({ length: 12 }, (_, i) => work(`a${i}`));

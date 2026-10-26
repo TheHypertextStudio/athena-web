@@ -4,6 +4,7 @@ import { GraphInput, type GraphData, type GraphSnapshot, type GraphWork } from '
 import { isDependency, isEnded, orderWork, parentKeys, scopeKeys, inlineSlice } from './selection';
 import { positionScene } from './scene-layout';
 import { expandFocusedAncestors, pageGraphScene } from './scene-selection';
+import { searchScope, completedBranches, graphBoundaries } from './discovery';
 import { NotFoundError } from '../error';
 
 type SceneNode = GraphSnapshot['nodes'][number];
@@ -141,32 +142,6 @@ function groupCounts(
   }));
 }
 
-function boundaries(
-  data: GraphData,
-  shown: Set<string>,
-  edges: GraphSnapshot['edges'],
-): GraphSnapshot['boundaries'] {
-  return [...shown]
-    .map((key) => ({
-      key,
-      incoming: data.relations.filter(
-        (r) =>
-          isDependency(r) &&
-          r.target === key &&
-          !shown.has(r.source) &&
-          !edges.some((e) => e.target === key && e.source === r.source),
-      ).length,
-      outgoing: data.relations.filter(
-        (r) =>
-          isDependency(r) &&
-          r.source === key &&
-          !shown.has(r.target) &&
-          !edges.some((e) => e.source === key && e.target === r.target),
-      ).length,
-    }))
-    .filter((b) => b.incoming || b.outgoing);
-}
-
 function sceneNode(
   n: GraphWork,
   scoped: Set<string>,
@@ -219,7 +194,7 @@ export function projectWorkGraph(
     data.relations,
     input.focus,
   );
-  const limit = input.viewport === 'portrait' ? 2 : 6;
+  const limit = input.viewport === 'portrait' ? 2 : 3;
   const page =
     input.display === 'inline'
       ? {
@@ -253,7 +228,9 @@ export function projectWorkGraph(
     omitted: page.omitted,
     hasNextPage: page.hasNextPage,
     page: input.page,
-    boundaries: boundaries(data, shown, edges),
+    boundaries: graphBoundaries(data, shown),
+    completedBranches: completedBranches(data, shown),
+    search: searchScope(data, scoped, parents, input),
     ...geometry,
   };
 }

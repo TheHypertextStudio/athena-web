@@ -142,7 +142,9 @@ and durable scheduled dispatch. See [personal inbound events](docs/engineering/s
 for schemas, settlement, lifecycle rules, and the dispatch kill switch.
 
 The MCP tools include a read-only work graph for exploring project, program, initiative, and task
-dependencies, including completed branches and visible external blockers. See the
+dependencies, including completed branches and visible external blockers. Compact conversation
+views open into a spatial explorer; scope-wide search reveals matching work across collapsed
+groups, completion filters, and graph pages. See the
 [work graph contract](docs/engineering/specs/mcp-work-graph.md).
 
 ## Public documentation

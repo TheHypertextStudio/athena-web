@@ -31,11 +31,27 @@ Only recorded, visible dependencies are available; absence of an arrow is not pr
 
 ## Presentation and navigation
 
-Inline shows up to six work nodes (two in portrait), preferring a connected slice around focused
+Inline shows up to three work nodes (two in portrait), preferring a connected slice around focused
 or started work. Completed branches have expandable summaries. The map explicitly distinguishes
 its displayed scene from authorized scope totals and records connections continuing beyond it.
-Fullscreen supports nested groups, pan, zoom, fit, search, inspectors and prerequisite/downstream
-tracing. An equivalent relationship list supports keyboard and assistive navigation.
+Inline uses readable work rows with the scope totals and one Explore action; actual completed
+prerequisites attach to their dependent work. Secondary view controls are disclosed on demand.
+Fullscreen uses the host's available height, frames readable work by default and offers Fit all
+for an overview. Direct group controls, pan, centered zoom and a docked inspector support exploration;
+on narrow hosts selection details occupy the bottom of the map.
+
+`search` (up to 160 characters) searches all authorized work in the selected scope, independently
+of collapsed groups, completion display and scene pagination. All query terms match title or ID,
+case-insensitively. `searchOffset` pages twenty stable title/identity-ordered results. The snapshot's
+`search` includes total, offset, continuation and ancestor context for each match. Selecting a result
+reveals its ancestors, returns it on the first scene page and frames it at readable scale. Ended
+work is explicitly included when chosen. Typing and selecting never start a conversation turn.
+
+`completedBranches` names real completed prerequisite chains attached to displayed work. Boundary
+counts retain every authorized off-view connection; each boundary names at most twenty endpoints
+for direct reveal, with neighborhood navigation for the rest. These counts never imply readiness.
+
+Fullscreen supports prerequisite/downstream tracing. An equivalent relationship list supports keyboard and assistive navigation.
 
 Structural changes call the same read-only tool through the existing MCP bridge. Geometry uses
 shared React-independent Dagre layout. Selection, highlighting and viewport gestures stay local;

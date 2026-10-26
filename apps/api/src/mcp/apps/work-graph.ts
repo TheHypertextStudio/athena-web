@@ -2,6 +2,11 @@
 import { appDocument } from './runtime';
 import { GRAPH_CSS } from './work-graph-style';
 import { GRAPH_RENDER_SCRIPT } from './work-graph-render';
+import { GRAPH_CAMERA_SCRIPT } from './work-graph-camera';
+import { GRAPH_SEARCH_SCRIPT } from './work-graph-search';
+import { GRAPH_INLINE_SCRIPT } from './work-graph-inline';
+import { GRAPH_INSPECTOR_SCRIPT } from './work-graph-inspector';
+import { GRAPH_VIEW_SCRIPT } from './work-graph-view';
 
 const CONTROLLER = String.raw`
 (() => {
@@ -17,6 +22,9 @@ const CONTROLLER = String.raw`
       selected: null,
       trace: new Set(),
       search: '',
+      searchSerial: 0,
+      searchResult: null,
+      frame: null,
       list: false,
       exploring: false,
       camera: null,
@@ -26,254 +34,34 @@ const CONTROLLER = String.raw`
       serial: 0,
       busy: false,
     };
-    let stage = null,
-      world = null,
-      resizeTimer = null;
+    let resizeTimer = null;
+    const camera = window.docketGraphCamera(state);
     const viewport = () =>
       document.documentElement.clientWidth < 480
         ? 'portrait'
         : document.documentElement.clientWidth < 800
           ? 'square'
           : 'landscape';
-    const draw = () => {
+    function draw() {
       if (!state.active || !state.snapshot) return;
       document.body.dataset.workGraph = 'active';
-      const snapshot = state.snapshot;
-      const root = d.canvas();
-      const shell = d.el('div', 'graph-shell');
-      shell.dataset.exploring = String(state.exploring || d.fullscreen);
-      root.appendChild(shell);
-      const nav = d.el('div', 'graph-actions');
-      if (state.back || state.history.length) nav.appendChild(d.button('Back', back));
-      if (state.history.length)
-        nav.appendChild(
-          d.el('span', 'graph-meta', state.history.map((h) => h.snapshot.scope.title).join(' / ')),
-        );
-      if (nav.childNodes.length) shell.appendChild(nav);
-      shell.appendChild(
-        d.header({ kind: snapshot.scope.kind, kicker: 'Work graph', title: snapshot.scope.title }),
-      );
-      const summary = d.el('div', 'graph-summary');
-      for (const [key, label] of [
-        ['remaining', 'remaining'],
-        ['completed', 'completed'],
-        ['canceled', 'canceled'],
-      ]) {
-        const item = d.el('span');
-        item.appendChild(d.el('strong', '', String(snapshot.totals[key])));
-        item.appendChild(document.createTextNode(' ' + label));
-        summary.appendChild(item);
-      }
-      shell.appendChild(summary);
-      shell.appendChild(toolbar());
-      if (snapshot.completedGroups.length) {
-        const done = d.el('div', 'graph-done');
-        for (const group of snapshot.completedGroups)
-          done.appendChild(
-            d.button(
-              group.count + ' completed · ' + group.title,
-              () => read({ completion: 'all', focus: group.focus, page: 0 }),
-              { label: 'Expand completed work in ' + group.title },
-            ),
-          );
-        shell.appendChild(done);
-      }
-      const body = d.el('div', 'graph-body');
-      if (!snapshot.nodes.length) {
-        const empty = d.el('div', 'graph-empty');
-        empty.appendChild(
-          d.el(
-            'p',
-            '',
-            snapshot.totals.total ? 'No remaining work in this view' : 'No work recorded here yet',
-          ),
-        );
-        if (snapshot.totals.total)
-          empty.appendChild(
-            d.button('Show everything', () => read({ completion: 'all', page: 0 })),
-          );
-        body.appendChild(empty);
-      } else
-        body.appendChild(
-          state.list
-            ? window.docketGraphRender.relationList(state, actions)
-            : window.docketGraphRender.stage(state, actions),
-        );
-      const detail = window.docketGraphRender.inspector(state, actions);
-      if (detail) body.appendChild(detail);
-      shell.appendChild(body);
-      const caption = d.el('div', 'graph-caption');
-      caption.appendChild(
-        d.el(
-          'span',
-          '',
-          snapshot.nodes.length +
-            ' in this scene' +
-            (snapshot.omitted ? ' · ' + snapshot.omitted + ' more outside this scene' : ''),
-        ),
-      );
-      caption.appendChild(
-        d.el('span', '', 'As of ' + d.time(snapshot.asOf, { hour: 'numeric', minute: '2-digit' })),
-      );
-      shell.appendChild(caption);
-      const legend = d.el('div', 'graph-legend');
-      legend.appendChild(d.el('span', '', '→ Blocks'));
-      legend.appendChild(d.el('span', '', 'Dashed groups contain work · Dotted links contribute'));
-      shell.appendChild(legend);
-      if (snapshot.boundaries.length)
-        shell.appendChild(
-          d.el(
-            'p',
-            'graph-meta',
-            'Some recorded connections continue outside this scene. Select work to explore its neighborhood.',
-          ),
-        );
-      const paging = d.el('div', 'graph-actions');
-      if (snapshot.page > 0)
-        paging.appendChild(d.button('Previous page', () => read({ page: snapshot.page - 1 })));
-      if ((state.exploring || d.fullscreen) && snapshot.hasNextPage)
-        paging.appendChild(
-          d.button('Next page', () => read({ page: snapshot.page + 1, display: 'fullscreen' })),
-        );
-      if (paging.childNodes.length) shell.appendChild(paging);
-      if (stage && world && !state.list)
-        requestAnimationFrame(() => {
-          if (!state.camera) fit(false);
-          else transform();
-        });
-      d.resize();
-    };
-    function toolbar() {
-      const bar = d.el('div', 'graph-toolbar');
-      const modes = [
-        ['collapsed', 'Completed collapsed'],
-        ['all', 'Show everything'],
-        ['remaining', 'Remaining work'],
-      ];
-      const select = d.el('select');
-      select.setAttribute('aria-label', 'Completed work display');
-      for (const [value, label] of modes) {
-        const option = d.el('option', '', label);
-        option.value = value;
-        select.appendChild(option);
-      }
-      select.value = state.args.completion || 'collapsed';
-      select.addEventListener('change', () => read({ completion: select.value, page: 0 }));
-      bar.appendChild(select);
-      if (!state.exploring && !d.fullscreen)
-        bar.appendChild(
-          d.button(
-            'Explore graph',
-            async () => {
-              state.exploring = true;
-              const mode = await d.requestDisplayMode('fullscreen');
-              state.exploring = mode !== 'fullscreen';
-              await read({ display: 'fullscreen', viewport: viewport() });
-              if (mode !== 'fullscreen') draw();
-            },
-            { tonal: true },
-          ),
-        );
-      if (state.exploring || d.fullscreen) {
-        bar.appendChild(d.button('−', () => zoom(0.8), { label: 'Zoom out' }));
-        bar.appendChild(d.button('+', () => zoom(1.25), { label: 'Zoom in' }));
-        bar.appendChild(d.button('Fit', () => fit(true)));
-      }
-      bar.appendChild(
-        d.button(state.list ? 'Map' : 'Relationship list', () => {
-          state.list = !state.list;
-          draw();
-        }),
-      );
-      bar.appendChild(
-        d.button(state.busy ? 'Refreshing…' : 'Refresh', () => read({}), {
-          label: 'Refresh graph',
-        }),
-      );
-      if (state.exploring || d.fullscreen) {
-        const search = d.search('Find work', state.search, (value) => {
-          state.search = value;
-          for (const n of document.querySelectorAll('.graph-node')) {
-            const item = state.snapshot.nodes.find((item) => item.key === n.dataset.key);
-            n.dataset.muted = String(
-              !item.matched || !item.title.toLowerCase().includes(value.toLowerCase()),
-            );
-          }
-        });
-        search.classList.add('graph-search');
-        bar.appendChild(search);
-      }
-      return bar;
+      window.docketGraphView(state, actions);
     }
-    function transform() {
-      if (world && state.camera)
-        world.style.transform =
-          'translate(' +
-          state.camera.x +
-          'px,' +
-          state.camera.y +
-          'px) scale(' +
-          state.camera.scale +
-          ')';
+    async function explore() {
+      state.exploring = true;
+      const mode = await d.requestDisplayMode('fullscreen');
+      state.exploring = mode !== 'fullscreen';
+      await read({ display: 'fullscreen', viewport: viewport() });
     }
-    function fit(whole) {
-      if (whole) state.cameraTouched = true;
-      if (!stage || !state.snapshot) return;
-      const s = Math.min(
-        (stage.clientWidth - 24) / state.snapshot.width,
-        (stage.clientHeight - 24) / state.snapshot.height,
-        1,
-      );
-      const scale = whole ? Math.max(0.08, s) : Math.max(0.72, s);
-      state.camera = { x: 12, y: 12, scale };
-      transform();
-    }
-    function zoom(factor) {
-      state.cameraTouched = true;
-      if (!state.camera) return;
-      state.camera.scale = Math.max(0.08, Math.min(2, state.camera.scale * factor));
-      transform();
-    }
-    function attach(nextStage, nextWorld) {
-      stage = nextStage;
-      world = nextWorld;
-      let drag = null;
-      stage.addEventListener('pointerdown', (event) => {
-        if (event.target.closest('button') || !(state.exploring || d.fullscreen)) return;
-        state.cameraTouched = true;
-        drag = { x: event.clientX, y: event.clientY, camera: { ...state.camera } };
-        stage.setPointerCapture(event.pointerId);
+    async function reveal(node) {
+      const loaded = await read({
+        focus: node.key,
+        page: 0,
+        completion: ['completed', 'canceled'].includes(node.category)
+          ? 'all'
+          : state.args.completion,
       });
-      stage.addEventListener('pointermove', (event) => {
-        if (!drag) return;
-        state.camera = {
-          ...drag.camera,
-          x: drag.camera.x + event.clientX - drag.x,
-          y: drag.camera.y + event.clientY - drag.y,
-        };
-        transform();
-      });
-      stage.addEventListener('pointerup', () => {
-        drag = null;
-      });
-      stage.addEventListener('pointercancel', () => {
-        drag = null;
-      });
-      stage.addEventListener('keydown', (event) => {
-        if (event.target !== stage || !state.camera) return;
-        const movement = {
-          ArrowLeft: [40, 0],
-          ArrowRight: [-40, 0],
-          ArrowUp: [0, 40],
-          ArrowDown: [0, -40],
-        }[event.key];
-        if (movement) {
-          event.preventDefault();
-          state.camera.x += movement[0];
-          state.camera.y += movement[1];
-          transform();
-        }
-      });
+      if (loaded) select(node.key);
     }
     async function read(changes) {
       const serial = ++state.serial;
@@ -286,10 +74,15 @@ const CONTROLLER = String.raw`
         const snapshot = result && result.structuredContent;
         if (result.isError || !snapshot || !Array.isArray(snapshot.nodes))
           throw new Error('unavailable');
-        state.args = {...args,expanded:snapshot.expanded};
+        const modeChanged =
+          args.display !== state.args.display || args.viewport !== state.args.viewport;
+        state.args = { ...args, expanded: snapshot.expanded };
         state.snapshot = snapshot;
-        if(typeof changes.focus==='string')state.selected=changes.focus;
-        if (!state.cameraTouched) state.camera = null;
+        if (typeof changes.focus === 'string') {
+          state.selected = changes.focus;
+          state.frame = changes.focus;
+        }
+        if (modeChanged && !state.cameraTouched) state.camera = null;
         state.active = true;
         state.busy = false;
         d.notice('');
@@ -306,6 +99,7 @@ const CONTROLLER = String.raw`
       }
     }
     function select(key) {
+      const previous = state.selected;
       state.selected = key;
       state.trace.clear();
       draw();
@@ -321,11 +115,12 @@ const CONTROLLER = String.raw`
             },
           })
           .catch(() => {});
-      requestAnimationFrame(() =>
+      requestAnimationFrame(() => {
+        if (document.activeElement?.closest('.graph-search-wrap')) return;
         document
-          .querySelector('[data-graph-select="' + CSS.escape(key) + '"]')
-          ?.focus({ preventScroll: true }),
-      );
+          .querySelector('[data-graph-select="' + CSS.escape(key || previous || '') + '"]')
+          ?.focus({ preventScroll: true });
+      });
     }
     function trace(direction) {
       state.trace.clear();
@@ -351,7 +146,20 @@ const CONTROLLER = String.raw`
       const expanded = new Set(state.args.expanded || []);
       if (expanded.has(key)) expanded.delete(key);
       else expanded.add(key);
-      await read({ expanded: [...expanded], focus:undefined, display: 'fullscreen', page: 0 });
+      if (!state.exploring && !d.fullscreen) await explore();
+      const loaded = await read({
+        expanded: [...expanded],
+        focus: key,
+        display: 'fullscreen',
+        page: 0,
+      });
+      if (loaded !== true) return;
+      camera.frame(key);
+      requestAnimationFrame(() =>
+        document
+          .querySelector('[data-graph-toggle="' + CSS.escape(key) + '"]')
+          ?.focus({ preventScroll: true }),
+      );
     }
     async function scope(next) {
       const previous = {
@@ -359,21 +167,31 @@ const CONTROLLER = String.raw`
         args: { ...state.args },
         camera: state.camera,
         selected: state.selected,
+        search: state.search,
+        searchResult: state.searchResult,
+        trace: new Set(state.trace),
+        list: state.list,
       };
       state.camera = null;
+      state.search = '';
+      state.trace.clear();
+      state.searchResult = null;
+      state.searchSerial++;
       const loaded = await read({
         scope: next,
         page: 0,
         expanded: [],
         focus: next.kind + ':' + next.id,
       });
-      if (loaded) {
+      if (loaded === true) {
         state.history.push(previous);
         draw();
-      } else state.camera = previous.camera;
+      } else if (loaded === false) Object.assign(state, previous);
     }
     function back() {
       state.serial++;
+      state.searchSerial++;
+      state.frame = null;
       state.busy = false;
       const previous = state.history.pop();
       if (previous) {
@@ -407,7 +225,24 @@ const CONTROLLER = String.raw`
         );
       }
     }
-    const actions = { select, expand, scope, trace, ask, attach };
+    const actions = {
+      select,
+      expand,
+      scope,
+      trace,
+      ask,
+      read,
+      draw,
+      back,
+      explore,
+      reveal,
+      ...camera,
+    };
+    document.addEventListener('keydown', (event) => {
+      if (state.active && event.key === 'Escape' && !event.defaultPrevented) {
+        select(null);
+      }
+    });
     window.addEventListener('resize', () => {
       clearTimeout(resizeTimer);
       resizeTimer = setTimeout(() => {
@@ -422,6 +257,14 @@ const CONTROLLER = String.raw`
       async open(scopeValue, orgId, onBack, focusKeys, listInput) {
         state.back = onBack;
         state.history = [];
+        state.selected = null;
+        state.search = '';
+        state.searchResult = null;
+        state.searchSerial++;
+        state.trace.clear();
+        state.cameraTouched = false;
+        state.exploring = false;
+        state.list = false;
         state.args = {
           orgId,
           scope: scopeValue,
@@ -450,7 +293,7 @@ const CONTROLLER = String.raw`
           { completion: 'collapsed', expanded: [], display: 'inline', viewport: 'landscape' },
           args,
         );
-        state.args.expanded=snapshot.expanded;
+        state.args.expanded = snapshot.expanded;
         state.active = true;
         state.selected = args.focus || null;
         draw();
@@ -468,11 +311,10 @@ const CONTROLLER = String.raw`
   }
   window.docketGraph = { create };
 })();
-
 `;
 
 /** Install the same renderer/controller in graph, entity and scoped-list resources. */
-export const GRAPH_SCRIPT = `window.__docketGraphCss=${JSON.stringify(GRAPH_CSS)};\n${GRAPH_RENDER_SCRIPT}\n${CONTROLLER}`;
+export const GRAPH_SCRIPT = `window.__docketGraphCss=${JSON.stringify(GRAPH_CSS)};\n${GRAPH_RENDER_SCRIPT}\n${GRAPH_CAMERA_SCRIPT}\n${GRAPH_SEARCH_SCRIPT}\n${GRAPH_INLINE_SCRIPT}\n${GRAPH_INSPECTOR_SCRIPT}\n${GRAPH_VIEW_SCRIPT}\n${CONTROLLER}`;
 /** Standalone graph resource, using the existing host protocol and loading shell. */
 export const WORK_GRAPH_HTML = appDocument(
   'Work graph',

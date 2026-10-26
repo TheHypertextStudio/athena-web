@@ -88,12 +88,18 @@ describe('view_work_graph', () => {
       .where(eq(schema.grant.organizationId, s.orgId));
     await schema.db
       .update(schema.task)
-      .set({ visibility: 'private' })
+      .set({ visibility: 'private', projectId: s.projectId })
       .where(eq(schema.task.id, s.task2Id));
     const args = { orgId: s.orgId, scope: { kind: 'project', id: s.projectId } };
     const result = await s.client.callTool({ name: 'view_work_graph', arguments: args });
     expect(JSON.stringify(result)).not.toContain(s.task2Id);
     expect((result.structuredContent as GraphSnapshot).totals.total).toBe(1);
+    const searched = await s.client.callTool({
+      name: 'view_work_graph',
+      arguments: { ...args, search: 'Ship 2' },
+    });
+    expect(JSON.stringify(searched)).not.toContain(s.task2Id);
+    expect((searched.structuredContent as GraphSnapshot).search.total).toBe(0);
     await schema.db
       .update(schema.project)
       .set({ visibility: 'private' })

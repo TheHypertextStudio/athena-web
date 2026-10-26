@@ -37,7 +37,7 @@ export function positionScene(
     for (const n of members) {
       const nested = measure(n.key);
       n.width = Math.max(238, nested.width ? nested.width + 40 : 0);
-      n.height = nested.height ? nested.height + 82 : 96;
+      n.height = nested.height ? nested.height + 82 : 104;
     }
     const memberKeys = new Set(members.map((n) => n.key));
     const top = (key: string) => topLevelKey(key, byKey, memberKeys);

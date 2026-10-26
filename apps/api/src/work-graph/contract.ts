@@ -16,6 +16,12 @@ export const GraphInput = z.object({
   display: z.enum(['inline', 'fullscreen']).default('inline'),
   viewport: z.enum(['portrait', 'square', 'landscape']).default('landscape'),
   page: z.number().int().min(0).default(0),
+  search: z
+    .string()
+    .max(160)
+    .default('')
+    .describe('Search all authorized work in this scope, including collapsed and completed work.'),
+  searchOffset: z.number().int().min(0).default(0),
   depth: z.number().int().min(1).max(5).default(2),
   focusKeys: z.array(z.string()).max(200).default([]),
   focusFilter: z
@@ -82,10 +88,31 @@ export const GraphSnapshot = z.object({
   completedGroups: z.array(
     z.object({ key: z.string(), title: z.string(), count: z.number(), focus: z.string() }),
   ),
+  search: z.object({
+    query: z.string(),
+    total: z.number(),
+    offset: z.number(),
+    hasMore: z.boolean(),
+    results: z.array(
+      GraphWork.extend({ trail: z.array(z.object({ key: z.string(), title: z.string() })) }),
+    ),
+  }),
+  completedBranches: z.array(
+    z.object({ target: z.string(), focus: z.string(), count: z.number() }),
+  ),
   omitted: z.number(),
   hasNextPage: z.boolean(),
   page: z.number(),
-  boundaries: z.array(z.object({ key: z.string(), incoming: z.number(), outgoing: z.number() })),
+  boundaries: z.array(
+    z.object({
+      key: z.string(),
+      incoming: z.number(),
+      outgoing: z.number(),
+      connections: z.array(
+        z.object({ direction: z.enum(['incoming', 'outgoing']), work: GraphWork }),
+      ),
+    }),
+  ),
   width: z.number(),
   height: z.number(),
 });

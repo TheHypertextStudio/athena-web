@@ -16,7 +16,7 @@ export function registerWorkGraphTool(server: McpRegistrar, ctx: McpContext): vo
     {
       title: 'View work graph',
       description:
-        'See what remains, what blocks it, and what it unlocks. Read-only dependency graph for a task neighborhood, project, program or initiative, with expandable groups and completed work. Includes visible external dependency context; counts cover the selected scope, not just this scene.',
+        'See what remains, what blocks it, and what it unlocks. Read-only dependency graph for a task neighborhood, project, program or initiative, with expandable groups and completed work. Search finds authorized work across collapsed groups, completion filters and graph pages. Includes visible external dependency context; counts cover the selected scope, not just this scene.',
       inputSchema: {
         ...GraphInput.shape,
         focusFilter: z.object(listWorkFilters).strict().optional(),

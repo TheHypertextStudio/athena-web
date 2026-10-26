@@ -5,6 +5,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { getDb, one } from '../support/routes-harness';
+import { generatedDateOwnership } from '../support/generated-work';
 import { flushDeferredWork } from '../../src/lib/after-response';
 import {
   seedRetainedUpdateFixture,
@@ -103,12 +104,20 @@ describe('MCP retained completion footprint and private date reporting', () => {
       const f = await seedRetainedUpdateFixture(schema, 250);
       const id = f.secondIds[0];
       if (!id) throw new Error('Missing private consumer');
-      if (mode === 'manual')
-        await schema.db
-          .update(schema.retainedDateOwnership)
-          .set({ manual: true })
-          .where(eq(schema.retainedDateOwnership.workId, id));
-      else
+      if (mode === 'manual') {
+        const pinned = await (
+          await connect(f)
+        ).callTool({
+          name: 'update',
+          arguments: {
+            orgId: f.seed.orgId,
+            entity: 'task',
+            scope: { ids: [id] },
+            set: { dueDate: null },
+          },
+        });
+        expect(pinned.isError).toBeFalsy();
+      } else
         await schema.db
           .update(schema.task)
           .set({
@@ -118,6 +127,9 @@ describe('MCP retained completion footprint and private date reporting', () => {
           })
           .where(eq(schema.task.id, id));
       const before = await tasks(f.seed.orgId);
+      const updatesBefore = (await receipts(f.seed.orgId)).filter(
+        (receipt) => receipt.origin.tool === 'update',
+      ).length;
       const skipped = before.filter((row) => row.id === id || row.parentTaskId === id);
       const result = await complete(f);
       expect(result.isError).toBeFalsy();
@@ -134,7 +146,7 @@ describe('MCP retained completion footprint and private date reporting', () => {
       ).toBe(true);
       expect(
         (await receipts(f.seed.orgId)).filter((receipt) => receipt.origin.tool === 'update'),
-      ).toHaveLength(1);
+      ).toHaveLength(updatesBefore + 1);
     },
     120000,
   );
@@ -158,10 +170,9 @@ describe('MCP retained completion footprint and private date reporting', () => {
     });
     expect(result.isError).toBeFalsy();
     const ownership = one(
-      await schema.db
-        .select()
-        .from(schema.retainedDateOwnership)
-        .where(eq(schema.retainedDateOwnership.workId, id)),
+      (await generatedDateOwnership(schema, f.seed.orgId, id)).filter(
+        (row) => row.field === 'dueDate',
+      ),
     );
     expect(ownership.manual).toBe(true);
     expect(result.structuredContent).toMatchObject({

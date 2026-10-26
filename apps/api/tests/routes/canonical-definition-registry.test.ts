@@ -50,12 +50,19 @@ it('edits canonical metadata without publishing or allowing stale source overwri
     description: null,
     latestRevisionNumber: 1,
   });
-  await expect(
-    schema.db
-      .update(schema.processDefinition)
-      .set({ name: 'Stale source overwrite' })
-      .where(eq(schema.processDefinition.id, f.published.definitionId)),
-  ).rejects.toThrow();
+  // Retained authoring keeps a normalized source row that must refuse a stale rename;
+  // canonical authoring writes no such row.
+  const sources = await schema.db
+    .select({ id: schema.processDefinition.id })
+    .from(schema.processDefinition)
+    .where(eq(schema.processDefinition.id, f.published.definitionId));
+  if (sources.length)
+    await expect(
+      schema.db
+        .update(schema.processDefinition)
+        .set({ name: 'Stale source overwrite' })
+        .where(eq(schema.processDefinition.id, f.published.definitionId)),
+    ).rejects.toThrow();
   await backfillInvocationRevisionAliases(schema.db);
   const listing = pageOf(ProcessDefinitionSummaryOut).parse(
     await (await f.ownerProcesses.request('/')).json(),

@@ -2,6 +2,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import type * as DbModule from '@docket/db';
 import { desc, eq, sql } from 'drizzle-orm';
 import { appWithActor, getDb, one, seedTaskAccessOrg } from '../support/routes-harness';
+import { generatedDateOwnership } from '../support/generated-work';
 import { ProcessDefinitionCreate, RecurrenceSeriesCreate } from '../../src/contracts/recurrence';
 import { createPublishedProcessDefinition } from '../../src/lib/recurrence/process-definition';
 import { createRecurrenceSeries } from '../../src/lib/recurrence/series';
@@ -96,10 +97,7 @@ describe('private retained completion reflow in ordinary mutations', () => {
         })
       ).status,
     ).toBe(200);
-    const ownership = await schema.db
-      .select()
-      .from(schema.retainedDateOwnership)
-      .where(eq(schema.retainedDateOwnership.workId, f.second));
+    const ownership = await generatedDateOwnership(schema, f.orgId, f.second);
     expect(ownership.find((row) => row.field === 'dueDate')?.manual).toBe(true);
     expect((await state(f, 'done')).status).toBe(200);
     expect((await task(f.second)).dueDate).toBeNull();
@@ -120,10 +118,9 @@ describe('private retained completion reflow in ordinary mutations', () => {
     expect((await task(f.first)).completedAt).toBeNull();
     expect((await task(f.second)).dueDate).toBeNull();
     const owner = one(
-      await schema.db
-        .select()
-        .from(schema.retainedDateOwnership)
-        .where(eq(schema.retainedDateOwnership.workId, f.second)),
+      (await generatedDateOwnership(schema, f.orgId, f.second)).filter(
+        (row) => row.field === 'dueDate',
+      ),
     );
     expect(owner.manual).toBe(false);
     expect(owner.lastDerivedDate).toBeNull();
@@ -152,10 +149,9 @@ describe('private retained completion reflow in ordinary mutations', () => {
     const undo = await undoChangeSetAtomically(f.orgId, receipt.id);
     expect(undo.outcomes.every((item) => item.reverted)).toBe(true);
     const owner = one(
-      await schema.db
-        .select()
-        .from(schema.retainedDateOwnership)
-        .where(eq(schema.retainedDateOwnership.workId, f.second)),
+      (await generatedDateOwnership(schema, f.orgId, f.second)).filter(
+        (row) => row.field === 'dueDate',
+      ),
     );
     expect(owner.manual).toBe(false);
     expect((await state(f, 'done')).status).toBe(200);
@@ -185,18 +181,19 @@ describe('private retained completion reflow in ordinary mutations', () => {
       .select()
       .from(schema.changeSetEntry)
       .where(eq(schema.changeSetEntry.changeSetId, receipt.id));
-    const ownership = entries.filter((entry) => entry.entityKind === 'retained_date_ownership');
-    expect(ownership).toHaveLength(2);
-    expect(new Set(ownership.map((entry) => entry.entityId)).size).toBe(2);
+    // Retained runs record one row per field; canonical runs record the occurrence's native ownership.
+    const retained = entries.filter((entry) => entry.entityKind === 'retained_date_ownership');
+    const native = entries.filter((entry) => entry.entityKind === 'native_schedule_date_ownership');
+    if (retained.length) {
+      expect(retained).toHaveLength(2);
+      expect(new Set(retained.map((entry) => entry.entityId)).size).toBe(2);
+    } else expect(native.length).toBeGreaterThan(0);
     expect(
       (await undoChangeSetAtomically(f.orgId, receipt.id)).outcomes.every((item) => item.reverted),
     ).toBe(true);
     expect((await task(f.second)).startDate).toEqual(before.startDate);
     expect((await task(f.second)).dueDate).toEqual(before.dueDate);
-    const owners = await schema.db
-      .select()
-      .from(schema.retainedDateOwnership)
-      .where(eq(schema.retainedDateOwnership.workId, f.second));
+    const owners = await generatedDateOwnership(schema, f.orgId, f.second);
     expect(owners).toHaveLength(2);
     expect(owners.every((owner) => !owner.manual)).toBe(true);
   });

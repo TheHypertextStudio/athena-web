@@ -11,6 +11,7 @@ import type {
 import { createPublishedProcessDefinition } from '../../src/lib/recurrence/process-definition';
 import recurrenceSeries from '../../src/routes/recurrence-series';
 import { appWithActor, getDb, seedTaskAccessOrg } from '../support/routes-harness';
+import { generatedTaskIds } from '../support/generated-work';
 
 let schema: typeof DbModule;
 const JSON_HEADERS = { 'content-type': 'application/json' };
@@ -51,11 +52,11 @@ async function generatedProjectFixture() {
   });
   expect(result.status).toBe(200);
   const initial = (await result.json()) as RecurrenceSeriesDetailOut;
-  return { app, created, initial };
+  return { app, created, initial, org };
 }
 
 it('retains the generated Project destination before and after all its Tasks are removed', async () => {
-  const { app, created, initial } = await generatedProjectFixture();
+  const { app, created, initial, org } = await generatedProjectFixture();
   expect(initial.occurrences).toEqual([
     expect.objectContaining({
       scheduledFor: '2098-09-01',
@@ -65,17 +66,12 @@ it('retains the generated Project destination before and after all its Tasks are
     }),
   ]);
   const instanceId = assertDefined(initial.occurrences[0]?.processInstanceId);
-  const generatedTasks = await schema.db
-    .select({ id: schema.processInstanceTask.taskId })
-    .from(schema.processInstanceTask)
-    .where(eq(schema.processInstanceTask.instanceId, instanceId));
+  const generatedTasks = await generatedTaskIds(schema, {
+    organizationId: org.orgId,
+    instanceId,
+  });
   expect(generatedTasks).toHaveLength(1);
-  await schema.db.delete(schema.task).where(
-    inArray(
-      schema.task.id,
-      generatedTasks.map(({ id }) => id),
-    ),
-  );
+  await schema.db.delete(schema.task).where(inArray(schema.task.id, generatedTasks));
   const refreshed = await app.request(`/${created.id}`);
   expect(refreshed.status).toBe(200);
   const materialized = (await refreshed.json()) as RecurrenceSeriesDetailOut;

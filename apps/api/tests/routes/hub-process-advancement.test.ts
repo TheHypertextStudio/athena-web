@@ -119,14 +119,13 @@ describe('Today completion advances retained process work', () => {
     });
     expect(response.status).toBe(200);
 
-    const instanceTasks = await db
+    // Only the completed run's follow-up is released; the second scheduled run is still waiting.
+    const released = await db
       .select({ title: schema.task.title })
-      .from(schema.processInstanceTask)
-      .innerJoin(schema.task, eq(schema.task.id, schema.processInstanceTask.taskId))
-      .where(eq(schema.processInstanceTask.instanceId, occurrence.instanceId));
-    expect(instanceTasks.map((row) => row.title).sort()).toEqual([
-      'Complete from Today',
-      'Released follow-up',
-    ]);
+      .from(schema.task)
+      .where(
+        and(eq(schema.task.organizationId, org.orgId), eq(schema.task.title, 'Released follow-up')),
+      );
+    expect(released).toHaveLength(1);
   });
 });

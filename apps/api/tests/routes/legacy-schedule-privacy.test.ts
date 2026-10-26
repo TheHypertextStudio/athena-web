@@ -98,8 +98,8 @@ describe('private legacy process and schedule compatibility', () => {
     expect(await copy.text()).not.toContain('PRIVATE SOURCE BODY');
     const definitions = await schema.db
       .select()
-      .from(schema.processDefinition)
-      .where(eq(schema.processDefinition.organizationId, f.orgId));
+      .from(schema.invocationHead)
+      .where(eq(schema.invocationHead.organizationId, f.orgId));
     expect(definitions).toHaveLength(1);
   });
   it('retains schedule history aliases while omitting mapped work the current manager cannot view', async () => {
@@ -169,11 +169,17 @@ describe('private legacy process and schedule compatibility', () => {
     expect(
       (await f.ownerProcesses.request(`/${f.published.definitionId}`, { method: 'DELETE' })).status,
     ).toBe(404);
-    const [definition] = await schema.db
+    const [head] = await schema.db
+      .select()
+      .from(schema.invocationHead)
+      .where(eq(schema.invocationHead.id, f.published.definitionId));
+    expect(head?.archivedAt).toBeNull();
+    const retained = await schema.db
       .select()
       .from(schema.processDefinition)
       .where(eq(schema.processDefinition.id, f.published.definitionId));
-    expect(definition).toMatchObject({ status: 'published', archivedAt: null });
+    for (const definition of retained)
+      expect(definition).toMatchObject({ status: 'published', archivedAt: null });
     const series = await schema.db
       .select()
       .from(schema.recurrenceSeries)

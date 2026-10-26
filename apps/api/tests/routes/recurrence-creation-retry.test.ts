@@ -14,6 +14,7 @@ import { createPublishedProcessDefinition } from '../../src/lib/recurrence/proce
 import * as sweep from '../../src/lib/recurrence/sweep';
 import recurrenceSeries from '../../src/routes/recurrence-series';
 import { appWithAuthenticatedActor, getDb, seedTaskAccessOrg } from '../support/routes-harness';
+import { generatedTaskIds } from '../support/generated-work';
 
 let schema: typeof DbModule;
 beforeAll(async () => {
@@ -114,11 +115,7 @@ describe('recurrence creation receipts', () => {
       await f.app.request(`${f.base}/${result.id}`)
     ).json()) as RecurrenceSeriesDetailOut;
     expect(detail.occurrences).toHaveLength(1);
-    const tasks = await schema.db
-      .select()
-      .from(schema.processInstanceTask)
-      .where(eq(schema.processInstanceTask.organizationId, f.org.orgId));
-    expect(tasks).toHaveLength(1);
+    expect(await generatedTaskIds(schema, { organizationId: f.org.orgId })).toHaveLength(1);
   });
 
   it('retries after failure before initial work exists', async () => {

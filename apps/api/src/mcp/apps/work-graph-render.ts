@@ -13,8 +13,8 @@ export const GRAPH_RENDER_SCRIPT = String.raw`
     return edge.kind === 'project_dependency'
       ? 'Project dependency'
       : edge.aggregated
-        ? edge.count + ' task ' + (edge.count === 1 ? 'dependency' : 'dependencies')
-        : 'Blocks';
+        ? edge.count + ' work ' + (edge.count === 1 ? 'connection' : 'connections')
+        : 'Needed for';
   }
   function connection(edge, byKey, state) {
     const a = byKey.get(edge.source),
@@ -62,7 +62,10 @@ export const GRAPH_RENDER_SCRIPT = String.raw`
     const curve = svg('path', { d: path, 'marker-end': 'url(#graph-arrow)' });
     curve.dataset.traced = String(state.trace.has(edge.source) && state.trace.has(edge.target));
     const title = svg('title');
-    title.textContent = nodeName(a) + ' → ' + nodeName(b) + ': ' + lineLabel(edge);
+    title.textContent =
+      edge.kind === 'contributes'
+        ? nodeName(b) + ' contributes to ' + nodeName(a)
+        : nodeName(a) + ' → ' + nodeName(b) + ': ' + lineLabel(edge);
     curve.appendChild(title);
     return { curve, x: (x1 + x2) / 2, y: (y1 + y2) / 2 - 8 };
   }
@@ -92,7 +95,7 @@ export const GRAPH_RENDER_SCRIPT = String.raw`
         n.kind +
         ', ' +
         n.status +
-        (n.external ? ', outside selected scope' : ''),
+        (n.external ? ', ' + window.docketGraphUi.externalLabel(state) : ''),
     );
     const title = d.el('span', 'graph-node-heading');
     if (n.kind !== 'task') {
@@ -114,9 +117,9 @@ export const GRAPH_RENDER_SCRIPT = String.raw`
                   ' of ' +
                   n.childCount +
                   ' shown'
-                : n.childCount + ' inside')
+                : n.childCount + ' items')
             : '') +
-          (n.external ? ' · Outside scope' : ''),
+          (n.external ? ' · ' + window.docketGraphUi.externalLabel(state) : ''),
       ),
     );
     node.appendChild(meta);
@@ -129,7 +132,10 @@ export const GRAPH_RENDER_SCRIPT = String.raw`
     const stage = d.el('div', 'graph-stage');
     stage.tabIndex = 0;
     stage.setAttribute('role', 'region');
-    stage.setAttribute('aria-label', 'Dependency map. Tab to select work; use arrow keys to pan.');
+    stage.setAttribute(
+      'aria-label',
+      'Work dependencies. Tab through items; use arrow keys to move the graph.',
+    );
     const world = d.el('div', 'graph-world');
     Object.assign(world.style, { width: snapshot.width + 'px', height: snapshot.height + 'px' });
     const lines = svg('svg', {
@@ -199,7 +205,7 @@ export const GRAPH_RENDER_SCRIPT = String.raw`
       if (n.childCount) {
         const expanded = (state.args.expanded || []).includes(n.key);
         const toggle = d.button(expanded ? '−' : '+', () => act.expand(n.key), {
-          label: (expanded ? 'Collapse ' : 'Expand ') + n.title,
+          label: window.docketGraphUi.childrenLabel(n, expanded) + ' ' + n.title,
         });
         toggle.classList.add('graph-group-toggle');
         toggle.dataset.graphToggle = n.key;
@@ -223,7 +229,11 @@ export const GRAPH_RENDER_SCRIPT = String.raw`
       if (identity) select.prepend(identity);
       row.appendChild(select);
       row.appendChild(
-        d.el('span', 'graph-meta', n.status + (n.external ? ' · Outside scope' : '')),
+        d.el(
+          'span',
+          'graph-meta',
+          n.status + (n.external ? ' · ' + window.docketGraphUi.externalLabel(state) : ''),
+        ),
       );
       list.appendChild(row);
     }

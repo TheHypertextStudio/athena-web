@@ -113,6 +113,7 @@ function runRuntime() {
       readonly hostContext: Record<string, unknown>;
       readonly displayMode: string;
       onData(handler: (data: unknown) => void): void;
+      onHostContext(handler: (context: Record<string, unknown>) => void): void;
       canDisplay(mode: string): boolean;
       requestDisplayMode(mode: string): Promise<string>;
       link(url: string): Promise<unknown>;
@@ -279,5 +280,54 @@ describe('selection context in graph apps', () => {
       structuredContent: { selected: { kind: 'task', id: 'task_1' } },
     });
     expect(runtime.posted.some((m) => m.method === 'ui/message')).toBe(false);
+  });
+});
+
+describe('host sizing updates', () => {
+  it('clears an earlier maximum when a later dimension object leaves that axis unbounded', () => {
+    const runtime = runRuntime();
+    runtime.send({
+      jsonrpc: '2.0',
+      method: 'ui/notifications/host-context-changed',
+      params: { containerDimensions: { maxWidth: 390, maxHeight: 500 } },
+    });
+    runtime.send({
+      jsonrpc: '2.0',
+      method: 'ui/notifications/host-context-changed',
+      params: { containerDimensions: { height: 900 } },
+    });
+    expect(runtime.rootStyle.maxWidth).toBe('');
+    expect(runtime.rootStyle.maxHeight).toBe('');
+    expect(runtime.rootStyle.height).toBe('100vh');
+    runtime.send({
+      jsonrpc: '2.0',
+      method: 'ui/notifications/host-context-changed',
+      params: { containerDimensions: { width: 1200 } },
+    });
+    expect(runtime.rootStyle.height).toBe('');
+    expect(runtime.rootStyle.width).toBe('100vw');
+  });
+  it('applies safe areas and notifies app layout even when display mode does not change', () => {
+    const runtime = runRuntime();
+    const contexts: Record<string, unknown>[] = [];
+    runtime.docket.onHostContext((context) => contexts.push(context));
+    runtime.send({
+      jsonrpc: '2.0',
+      method: 'ui/notifications/host-context-changed',
+      params: {
+        containerDimensions: { width: 390, height: 844 },
+        safeAreaInsets: { top: 24, left: 0, right: 0, bottom: 34 },
+      },
+    });
+    expect(runtime.rootProperties.get('--docket-safe-top')).toBe('24px');
+    expect(runtime.rootProperties.get('--docket-safe-bottom')).toBe('34px');
+    expect(contexts.at(-1)?.['containerDimensions']).toEqual({ width: 390, height: 844 });
+    runtime.send({
+      jsonrpc: '2.0',
+      method: 'ui/notifications/host-context-changed',
+      params: { theme: 'dark' },
+    });
+    expect(runtime.rootProperties.get('--docket-safe-bottom')).toBe('34px');
+    expect(contexts.at(-1)?.['containerDimensions']).toEqual({ width: 390, height: 844 });
   });
 });

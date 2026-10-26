@@ -26,8 +26,8 @@ window.docketGraphInline = function (state, act) {
       const adjacent =
         before.length === 1 && ordered[ordered.indexOf(n) - 1]?.key === before[0].source;
       const label = adjacent
-        ? '↓ Blocks'
-        : '↓ Blocked by ' +
+        ? '↓ Needed for'
+        : 'Needs ' +
           before.map((e) => snapshot.nodes.find((p) => p.key === e.source)?.title).join(', ');
       const link = d.el('span', 'graph-inline-link', label);
       link.title = label;
@@ -42,14 +42,19 @@ window.docketGraphInline = function (state, act) {
     if (glyph) row.appendChild(glyph);
     const text = d.el('span', 'graph-inline-text');
     text.appendChild(d.el('strong', '', n.title));
-    text.appendChild(d.el('span', 'graph-meta', n.status + (n.external ? ' · Outside scope' : '')));
+    text.appendChild(
+      d.el(
+        'span',
+        'graph-meta',
+        n.status + (n.external ? ' · ' + window.docketGraphUi.externalLabel(state) : ''),
+      ),
+    );
     row.append(text, d.el('span', 'graph-inline-open', '›'));
     block.appendChild(row);
     const branch = snapshot.completedBranches?.find((b) => b.target === n.key);
     if (branch) {
-      const done = d.button(
-        branch.count + ' completed ' + (branch.count === 1 ? 'prerequisite' : 'prerequisites'),
-        () => act.reveal({ key: branch.focus, category: 'completed' }),
+      const done = d.button('Show completed work (' + branch.count + ')', () =>
+        act.reveal({ key: branch.focus, category: 'completed' }),
       );
       done.classList.add('graph-inline-completed');
       block.appendChild(done);

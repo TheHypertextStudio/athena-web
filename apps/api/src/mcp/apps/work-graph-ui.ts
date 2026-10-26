@@ -1,6 +1,16 @@
 /** Canonical icons and compact location context shared across graph controls and inspectors. */
 export const GRAPH_UI_SCRIPT = String.raw`
 window.docketGraphUi = {
+  externalLabel(state) {
+    const kind = state.snapshot.scope.kind;
+    return kind === 'task' ? 'Connected work' : 'Outside this ' + kind;
+  },
+  childrenLabel(node, expanded) {
+    return (expanded ? 'Hide ' : 'Show ') + (node.kind === 'task' ? 'subtasks' : 'work inside');
+  },
+  scopeLabel(node) {
+    return node.kind === 'task' ? 'Show connected work' : 'Show ' + node.kind + ' graph';
+  },
   button(text, icon, action, options) {
     const d = window.docket,
       node = d.button(text, action, options),
@@ -17,7 +27,7 @@ window.docketGraphUi = {
     path.forEach((item, index) => {
       if (index === 1 && detail?.trailTruncated) {
         const omitted = d.el('span', '', '…');
-        omitted.title = 'Earlier groups omitted';
+        omitted.title = 'More levels above';
         nav.appendChild(omitted);
       }
       if (index) nav.appendChild(d.el('span', 'graph-location-separator', '/'));

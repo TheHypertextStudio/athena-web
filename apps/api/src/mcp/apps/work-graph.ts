@@ -7,8 +7,8 @@ import { GRAPH_SEARCH_SCRIPT } from './work-graph-search';
 import { GRAPH_INLINE_SCRIPT } from './work-graph-inline';
 import { GRAPH_INSPECTOR_SCRIPT } from './work-graph-inspector';
 import { GRAPH_UI_SCRIPT } from './work-graph-ui';
-import { GRAPH_PORTALS_SCRIPT } from './work-graph-portals';
 import { GRAPH_NAVIGATION_SCRIPT } from './work-graph-navigation';
+import { GRAPH_WORKSPACE_SCRIPT } from './work-graph-workspace';
 import { GRAPH_VIEW_SCRIPT } from './work-graph-view';
 
 const CONTROLLER = String.raw`
@@ -38,6 +38,9 @@ const CONTROLLER = String.raw`
       history: [],
       serial: 0,
       busy: false,
+      detailExpanded: false,
+      pendingLayout: null,
+      layoutDirty: false,
     };
     let resizeTimer = null;
     const camera = window.docketGraphCamera(state, { select, reveal });
@@ -48,22 +51,65 @@ const CONTROLLER = String.raw`
       syncContext,
       viewport: () => viewport(),
     });
-    const viewport = () =>
-      document.documentElement.clientWidth < 480
+    const viewport = () => {
+      const width = document.body.clientWidth,
+        height = window.innerHeight;
+      return width < 600
         ? 'portrait'
-        : document.documentElement.clientWidth < 800
-          ? 'square'
-          : 'landscape';
+        : width / Math.max(1, height) < 0.85
+          ? 'portrait'
+          : width < 1000
+            ? 'square'
+            : 'landscape';
+    };
+    async function relayout() {
+      if (!state.active || state.transitioning) return;
+      window.docketGraphWorkspace.resize();
+      if (state.busy) {
+        state.layoutDirty = true;
+        return;
+      }
+      const display = d.fullscreen || state.exploring ? 'fullscreen' : 'inline',
+        shape = viewport(),
+        key = display + ':' + shape;
+      if (state.args.display !== display || state.args.viewport !== shape) {
+        if (state.pendingLayout === key) return;
+        state.pendingLayout = key;
+        await read({ display, viewport: shape });
+        if (state.pendingLayout === key) state.pendingLayout = null;
+      } else camera.resize();
+    }
+    function details() {
+      state.detailExpanded = !state.detailExpanded;
+      state.frame = state.selected;
+      draw();
+      requestAnimationFrame(() =>
+        document.querySelector('[data-details-toggle]')?.focus({ preventScroll: true }),
+      );
+    }
     function draw() {
       if (!state.active || !state.snapshot) return;
       document.body.dataset.workGraph = 'active';
       window.docketGraphView(state, actions);
     }
     async function explore() {
+      state.transitioning = true;
+      const focus =
+        state.selected ||
+        state.snapshot.nodes.find(
+          (n) => n.kind === 'task' && n.category === 'started' && !n.external,
+        )?.key;
       state.exploring = true;
       const mode = await d.requestDisplayMode('fullscreen');
       state.exploring = mode !== 'fullscreen';
-      await read({ display: 'fullscreen', viewport: viewport() });
+      const loaded = await read({
+        display: 'fullscreen',
+        viewport: viewport(),
+        ...(focus ? { focus } : {}),
+      });
+      state.transitioning = false;
+      if (loaded) syncContext();
+      void relayout();
     }
     async function reveal(node) {
       await navigation.searchJump(node);
@@ -73,6 +119,7 @@ const CONTROLLER = String.raw`
       const serial = ++state.serial;
       const args = Object.assign({}, state.args, changes);
       state.busy = true;
+      document.querySelector('.graph-workspace-header')?.setAttribute('aria-busy', 'true');
       d.notice('Loading graph…');
       try {
         const result = await d.call('view_work_graph', args);
@@ -96,17 +143,23 @@ const CONTROLLER = String.raw`
         if (modeChanged && !state.cameraTouched) state.camera = null;
         state.active = true;
         state.busy = false;
+        document.querySelector('.graph-workspace-header')?.setAttribute('aria-busy', 'false');
         d.notice('');
         draw();
         return true;
       } catch {
         if (serial !== state.serial) return;
         state.busy = false;
-        d.notice(
-          'The graph could not be loaded. Your previous view is preserved. Try Refresh or reopen the graph.',
-          'error',
-        );
+        document.querySelector('.graph-workspace-header')?.setAttribute('aria-busy', 'false');
+        d.notice('Couldn’t load the graph. Your current view is still here.', 'error');
+        const status = document.querySelector('.status');
+        if (status) status.appendChild(d.button('Retry', () => void read(changes)));
         return false;
+      } finally {
+        if (serial === state.serial && state.layoutDirty) {
+          state.layoutDirty = false;
+          schedule();
+        }
       }
     }
     function select(key) {
@@ -116,6 +169,11 @@ const CONTROLLER = String.raw`
       d.notice('');
       const previous = state.selected;
       state.selected = key;
+      if (!key) state.detailExpanded = false;
+      if (state.layoutDirty) {
+        state.layoutDirty = false;
+        schedule();
+      }
       state.trace.clear();
       draw();
       syncContext();
@@ -219,23 +277,18 @@ const CONTROLLER = String.raw`
     async function ask(n) {
       try {
         await d.say(
-          'What would unblock “' +
+          'What needs to be done before “' +
             n.title +
-            '”, and what would completing it unlock? Docket ' +
+            '”, and what work depends on it? Docket ' +
             n.kind +
             ' ' +
             n.id +
             ' in workspace ' +
             state.args.orgId +
-            '. Graph snapshot ' +
-            state.snapshot.asOf +
             '.',
         );
       } catch {
-        d.notice(
-          'Your host could not send the question. Ask about “' + n.title + '” in the conversation.',
-          'error',
-        );
+        d.notice('Couldn’t send the question. Ask about “' + n.title + '” in chat.', 'error');
       }
     }
     const actions = {
@@ -249,20 +302,23 @@ const CONTROLLER = String.raw`
       back,
       explore,
       reveal,
+      details,
       ...camera,
       ...navigation,
     };
     document.addEventListener('keydown', (event) => {
       if (state.active && event.key === 'Escape' && !event.defaultPrevented) {
-        select(null);
+        if (state.detailExpanded) details();
+        else select(null);
       }
     });
-    window.addEventListener('resize', () => {
+    const schedule = () => {
       clearTimeout(resizeTimer);
-      resizeTimer = setTimeout(() => {
-        if (state.active && state.args.viewport !== viewport()) void read({ viewport: viewport() });
-      }, 180);
-    });
+      resizeTimer = setTimeout(() => void relayout(), 80);
+    };
+    window.addEventListener('resize', schedule);
+    if ('ResizeObserver' in window) new ResizeObserver(schedule).observe(document.body);
+    d.onHostContext(schedule);
     return {
       get active() {
         return state.active;
@@ -271,6 +327,7 @@ const CONTROLLER = String.raw`
       async open(scopeValue, orgId, onBack, focusKeys, listInput) {
         state.back = onBack;
         state.history = [];
+        state.detailExpanded = false;
         state.searchReturn = null;
         state.matchNav = null;
         state.selected = null;
@@ -317,10 +374,7 @@ const CONTROLLER = String.raw`
       },
       mode() {
         if (!state.active) return false;
-        const mode = d.fullscreen || state.exploring ? 'fullscreen' : 'inline';
-        if (state.args.display !== mode || state.args.viewport !== viewport())
-          void read({ display: mode, viewport: viewport() });
-        else draw();
+        void relayout();
         return true;
       },
     };
@@ -330,7 +384,7 @@ const CONTROLLER = String.raw`
 `;
 
 /** Install the same renderer/controller in graph, entity and scoped-list resources. */
-export const GRAPH_SCRIPT = `window.__docketGraphCss=${JSON.stringify(GRAPH_CSS)};\n${GRAPH_RENDER_SCRIPT}\n${GRAPH_UI_SCRIPT}\n${GRAPH_PORTALS_SCRIPT}\n${GRAPH_CAMERA_SCRIPT}\n${GRAPH_SEARCH_SCRIPT}\n${GRAPH_INLINE_SCRIPT}\n${GRAPH_INSPECTOR_SCRIPT}\n${GRAPH_VIEW_SCRIPT}\n${GRAPH_NAVIGATION_SCRIPT}\n${CONTROLLER}`;
+export const GRAPH_SCRIPT = `window.__docketGraphCss=${JSON.stringify(GRAPH_CSS)};\n${GRAPH_RENDER_SCRIPT}\n${GRAPH_UI_SCRIPT}\n${GRAPH_CAMERA_SCRIPT}\n${GRAPH_SEARCH_SCRIPT}\n${GRAPH_INLINE_SCRIPT}\n${GRAPH_INSPECTOR_SCRIPT}\n${GRAPH_WORKSPACE_SCRIPT}\n${GRAPH_VIEW_SCRIPT}\n${GRAPH_NAVIGATION_SCRIPT}\n${CONTROLLER}`;
 /** Standalone graph resource, using the existing host protocol and loading shell. */
 export const WORK_GRAPH_HTML = appDocument(
   'Work graph',

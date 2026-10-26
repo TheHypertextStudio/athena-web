@@ -22,6 +22,7 @@ export const UI_MIME_TYPE = 'text/html;profile=mcp-app';
 
 import { RUNTIME_CSS } from './runtime-css';
 import { UI_JS } from './runtime-ui';
+import { HOST_LAYOUT_SCRIPT } from './runtime-host-layout';
 
 export { RUNTIME_CSS } from './runtime-css';
 
@@ -44,13 +45,14 @@ export { RUNTIME_CSS } from './runtime-css';
  * widget that never measures itself gets whatever height the host defaulted to and clips its own
  * content. `watchSize` reports on every layout change for the life of the document.
  */
-export const RUNTIME_JS = String.raw`
+const RUNTIME_CORE = String.raw`
 (() => {
   const pending = new Map();
   let nextId = 1;
   let lastResult = null;
   let toolInput = null;
   let lastHostContext = null;
+  const hostContextHandlers = new Set();
 
   function post(msg) {
     window.parent.postMessage(msg, '*');
@@ -106,33 +108,6 @@ export const RUNTIME_JS = String.raw`
     const locale = hostContext && hostContext.locale;
     // Without a lang a screen reader picks the wrong voice for every word on the card.
     document.documentElement.lang = typeof locale === 'string' && locale ? locale : 'en';
-  }
-
-  function applyContainerDimensions(hostContext) {
-    // host-context-changed carries a PARTIAL context, so an absent key means "unchanged", never
-    // "reset". Only act on dimensions the host actually sent.
-    const dims = hostContext && hostContext.containerDimensions;
-    if (!dims) {
-      return;
-    }
-    // A dimensions object that IS present is a complete statement about both axes, so the mode it
-    // does not name has to be cleared. Leaving a stale max-height behind is how an inline cap
-    // survives into fullscreen and clips the frame from the inside.
-    const root = document.documentElement;
-    if (typeof dims.height === 'number') {
-      root.style.height = '100vh';
-      root.style.removeProperty('max-height');
-    } else if (typeof dims.maxHeight === 'number') {
-      root.style.maxHeight = dims.maxHeight + 'px';
-      root.style.removeProperty('height');
-    }
-    if (typeof dims.width === 'number') {
-      root.style.width = '100vw';
-      root.style.removeProperty('max-width');
-    } else if (typeof dims.maxWidth === 'number') {
-      root.style.maxWidth = dims.maxWidth + 'px';
-      root.style.removeProperty('width');
-    }
   }
 
   let reportedHeight = 0;
@@ -287,7 +262,7 @@ export const RUNTIME_JS = String.raw`
     }
     applyTheme(hostContext);
     applyLocale(hostContext);
-    applyContainerDimensions(hostContext);
+    window.docketApplyHostLayout(hostContext);
     if (hostContext && hostContext.displayMode) {
       // The host can move the view on its own — a fullscreen card dismissed from the host's own
       // chrome arrives here as a context change, not as a reply to anything the view asked for.
@@ -299,6 +274,7 @@ export const RUNTIME_JS = String.raw`
       // that refuses itself when clicked.
       modeHandler(displayMode);
     }
+    for (const handler of hostContextHandlers) handler(lastHostContext || {});
     reportSize();
   }
 
@@ -584,12 +560,21 @@ export const RUNTIME_JS = String.raw`
       return button;
     },
     resize: reportSize,
+    /** Observe merged standard host context, including size-only and safe-area updates. */
+    onHostContext(handler) {
+      hostContextHandlers.add(handler);
+      handler(lastHostContext || {});
+      return () => hostContextHandlers.delete(handler);
+    },
     get hostContext() {
       return lastHostContext || {};
     },
   };
 })();
 `;
+
+/** Self-contained runtime, including standard host sizing before the protocol client boots. */
+export const RUNTIME_JS = `${HOST_LAYOUT_SCRIPT}\n${RUNTIME_CORE}`;
 
 /**
  * The product origin every widget link resolves against, with no trailing slash.

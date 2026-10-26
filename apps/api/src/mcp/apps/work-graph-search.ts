@@ -7,8 +7,10 @@ window.docketGraphSearch = function (state, act) {
   let timer,
     active = -1,
     items = [];
-  const field = d.search('Find work in this scope', state.search, (value) => {
+  const field = d.search('Search work', state.search, (value) => {
     state.search = value;
+    const pager = document.querySelector('.graph-match-nav');
+    if (pager) pager.hidden = !state.matchNav || state.matchNav.query !== value;
     state.searchResult = null;
     items = [];
     state.searchSerial++;
@@ -46,7 +48,7 @@ window.docketGraphSearch = function (state, act) {
       'graph-search-summary',
       result.total +
         ' ' +
-        (result.total === 1 ? 'match' : 'matches') +
+        (result.total === 1 ? 'result' : 'results') +
         ' · includes completed work',
     );
     summary.setAttribute('role', 'presentation');
@@ -70,10 +72,9 @@ window.docketGraphSearch = function (state, act) {
       );
       results.appendChild(row);
     });
-    if (!items.length)
-      results.appendChild(d.el('p', 'graph-search-summary', 'Try a title or work ID.'));
+    if (!items.length) results.appendChild(d.el('p', 'graph-search-summary', 'Try another name.'));
     if (result.hasMore) {
-      const more = d.button('More matches', () => search(result.offset + 20, true));
+      const more = d.button('More results', () => search(result.offset + 20, true));
       more.setAttribute('role', 'option');
       more.setAttribute('aria-selected', 'false');
       results.appendChild(more);
@@ -106,8 +107,8 @@ window.docketGraphSearch = function (state, act) {
     } catch {
       if (serial !== state.searchSerial || !wrap.isConnected) return;
       results.replaceChildren(
-        d.el('p', 'graph-search-summary', 'Search is unavailable.'),
-        d.button('Retry search', () => search(offset, append)),
+        d.el('p', 'graph-search-summary', 'Couldn’t load search results.'),
+        d.button('Try again', () => search(offset, append)),
       );
     }
   }

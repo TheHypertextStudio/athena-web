@@ -9,6 +9,7 @@ window.docketGraphNavigation = function (state, act) {
       camera: state.camera ? { ...state.camera } : null,
       cameraTouched: state.cameraTouched,
       selected: state.selected,
+      detailExpanded: state.detailExpanded,
       trace: new Set(state.trace),
       list: state.list,
       search: state.search,
@@ -26,7 +27,9 @@ window.docketGraphNavigation = function (state, act) {
       viewport = act.viewport();
     if (previous.args.display !== display || previous.args.viewport !== viewport) {
       const focus =
-        display === 'inline' ? { focus: previous.selected || previous.args.focus, page: 0 } : {};
+        display === 'inline'
+          ? { focus: previous.selected || previous.args.focus, page: 0 }
+          : {};
       void act
         .read({ ...previous.args, display, viewport, ...focus }, state.searchSerial)
         .then((loaded) => {
@@ -53,7 +56,9 @@ window.docketGraphNavigation = function (state, act) {
     requestAnimationFrame(() =>
       (
         document.querySelector('.graph-stage') ||
-        document.querySelector('[data-graph-select="' + CSS.escape(state.selected || '') + '"]')
+        document.querySelector(
+          '[data-graph-select="' + CSS.escape(state.selected || '') + '"]',
+        )
       )?.focus({ preventScroll: true }),
     );
   }
@@ -114,7 +119,7 @@ window.docketGraphNavigation = function (state, act) {
       await jump(next, matches);
     } catch {
       if (serial === state.searchSerial)
-        d.notice('Matching work could not be loaded. Try the match controls again.', 'error');
+        d.notice('Couldn’t load that result. Try again.', 'error');
     }
   }
   function returnSearch() {

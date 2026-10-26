@@ -5,12 +5,15 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { chromium } from '@playwright/test';
 import axe from 'axe-core';
+import { openWorkDetails, graphAction } from './verify-work-graph-actions.mjs';
+import { HOST_LAYOUT, verifyHostLayout } from './verify-work-graph-host.mjs';
 import {
   verifySearchReturn,
   verifyMatchPages,
   verifySelectionRace,
   verifyReturnAcrossModes,
   verifyRefreshAndBack,
+  verifyNarrowGraphActions,
 } from './verify-work-graph-search.mjs';
 import { API_TEST_ENV } from '../apps/api/tests/support/env.ts';
 Object.assign(process.env, API_TEST_ENV);
@@ -106,17 +109,18 @@ const resources=${JSON.stringify(resources).replaceAll('<', '\\u003c')};
 const scenes=${JSON.stringify(initialScenes).replaceAll('<', '\\u003c')};const initial=scenes[scenario]||scenes.populated;
 const entity=${JSON.stringify(entity)};const list=${JSON.stringify(list)};
 const frame=document.querySelector('iframe');document.body.style.setProperty('--bg',theme==='dark'?'#1c1c20':'#fff');
+${HOST_LAYOUT}
 window.expanded=false;window.calls=[];window.contexts=[];window.messages=[];window.pending=[];window.hold=false;window.fail=false;
 window.addEventListener('message',async event=>{
  if(event.source!==frame.contentWindow)return;const m=event.data;if(!m||m.jsonrpc!=='2.0')return;
  const send=result=>frame.contentWindow.postMessage({jsonrpc:'2.0',id:m.id,result},'*');
- if(m.method==='ui/initialize')send({protocolVersion:'2026-01-26',hostInfo:{name:'Acceptance host',version:'1'},hostCapabilities:{serverTools:{}},hostContext:{theme,locale:'en-US',availableDisplayModes:query.get('deny')?['inline']:['inline','fullscreen']}});
+ if(m.method==='ui/initialize')send({protocolVersion:'2026-01-26',hostInfo:{name:'Acceptance host',version:'1'},hostCapabilities:{serverTools:{}},hostContext:{theme,locale:'en-US',displayMode:'inline',containerDimensions:window.hostDimensions(),safeAreaInsets:safe,availableDisplayModes:query.get('deny')?['inline']:['inline','fullscreen']}});
  if(m.method==='ui/notifications/initialized'){
   frame.contentWindow.postMessage({jsonrpc:'2.0',method:'ui/notifications/tool-input',params:{arguments:kind==='list'?{orgId:'demo',entity:'task',project:'identity',state:['doing']}:kind==='entity'?{orgId:'demo',refs:['portal']}:{orgId:'demo',scope:{kind:'program',id:'portal'}}}},'*');
   frame.contentWindow.postMessage({jsonrpc:'2.0',method:'ui/notifications/tool-result',params:{structuredContent:kind==='entity'?entity:kind==='list'?list:initial,content:[]}},'*');
  }
- if(m.method==='ui/notifications/size-changed'&&!window.expanded)frame.style.height=m.params.height+'px';
- if(m.method==='ui/request-display-mode'){window.expanded=!query.get('deny')&&m.params.mode==='fullscreen';if(window.expanded)frame.style.height=window.innerHeight+'px';send({mode:window.expanded?'fullscreen':'inline'});}
+ if(m.method==='ui/notifications/size-changed'&&!window.expanded){frame.style.height=Math.min(window.currentDimensions.maxHeight||Infinity,m.params.height)+'px';if(maxWidth)frame.style.width=Math.min(maxWidth,m.params.width,window.innerWidth)+'px';}
+ if(m.method==='ui/request-display-mode'){window.expanded=!query.get('deny')&&!query.get('refuse')&&m.params.mode==='fullscreen';window.updateHost({displayMode:window.expanded?'fullscreen':'inline',containerDimensions:window.hostDimensions()});send({mode:window.expanded?'fullscreen':'inline'});}
  if(m.method==='ui/update-model-context'){window.contexts.push(m.params);send({});}
  if(m.method==='ui/message'){window.messages.push(m.params);send({});}
  if(m.method==='tools/call'){
@@ -171,7 +175,7 @@ try {
       page.on('pageerror', (error) => errors.push(error.message));
       await page.goto(base + '/?theme=' + theme);
       const app = page.frameLocator('iframe');
-      await app.getByRole('button', { name: 'Explore graph', exact: true }).waitFor();
+      await app.getByRole('button', { name: 'Open graph', exact: true }).waitFor();
       await app.locator('[data-graph-select]').first().waitFor();
       assert(
         (await page.locator('iframe').boundingBox()).height < 480,
@@ -180,35 +184,45 @@ try {
       await app
         .locator('.graph-shell')
         .screenshot({ path: resolve(output, `inline-${width}-${theme}.png`) });
-      await app.getByRole('button', { name: 'Explore graph', exact: true }).click();
+      await app.getByRole('button', { name: 'Open graph', exact: true }).click();
       await page.waitForFunction(() =>
         window.calls.some((c) => c.arguments.display === 'fullscreen'),
       );
       await page.screenshot({ path: resolve(output, `expanded-overview-${width}-${theme}.png`) });
-      await app.locator('.graph-node').filter({ hasText: 'Identity and access' }).click();
-      await app.getByRole('button', { name: 'Expand group', exact: true }).click();
+      const groupToggle = app.locator('[data-graph-toggle="project:identity"]');
+      if ((await groupToggle.getAttribute('aria-expanded')) === 'true') await groupToggle.click();
+      await groupToggle.click();
       await app.locator('.graph-node').filter({ hasText: 'Review team permissions' }).waitFor();
       await app.locator('.graph-node').filter({ hasText: 'Review team permissions' }).click();
+      await openWorkDetails(app);
       assert.equal(await app.getByRole('button', { name: /trace/i }).count(), 0);
       assert.equal(
-        await app.getByRole('button', { name: 'Highlight prerequisites', exact: true }).count(),
+        await app.getByRole('button', { name: 'Highlight work needed first', exact: true }).count(),
         0,
         'No highlight action for prerequisites outside the displayed graph',
       );
-      await app.getByRole('button', { name: 'Highlight downstream work', exact: true }).click();
+      await app
+        .getByRole('button', { name: 'Highlight work that depends on this', exact: true })
+        .click();
       assert(
         (await app.locator('.graph-node[data-traced=true]').count()) >= 2,
         'Highlight connects visible work',
       );
       await app.getByRole('button', { name: 'Clear highlights', exact: true }).click();
       assert.equal(await app.locator('.graph-node[data-traced=true]').count(), 0);
-      await app.getByRole('button', { name: 'Highlight downstream work', exact: true }).click();
-      await app.getByRole('button', { name: 'Ask about this', exact: true }).click();
+      await app
+        .getByRole('button', { name: 'Highlight work that depends on this', exact: true })
+        .click();
+      await app.getByRole('button', { name: 'Ask in chat', exact: true }).click();
       await page.waitForFunction(() => window.contexts.length > 0 && window.messages.length === 1);
       await app.locator('body').evaluate(() => {
         for (const el of document.querySelectorAll('*')) if (el.scrollTop) el.scrollTop = 0;
         window.scrollTo(0, 0);
       });
+      await page.screenshot({ path: resolve(output, `details-${width}-${theme}.png`) });
+      const hide = app.getByRole('button', { name: 'Hide details', exact: true });
+      if (await hide.isVisible()) await hide.click();
+      await settleLayout(app);
       await page.screenshot({
         path: resolve(output, `expanded-${width}-${theme}.png`),
         fullPage: true,
@@ -218,12 +232,6 @@ try {
         0,
         'Work titles do not repeat a Task label',
       );
-      const mapBounds = await app.locator('.graph-stage').boundingBox();
-      for (const link of await app.locator('.graph-portal').all())
-        assert(
-          (await link.boundingBox()).y >= mapBounds.y + mapBounds.height - 1,
-          'Offscreen links stay outside selectable work',
-        );
       assert(
         (await app.locator('.graph-stage').boundingBox()).height > 500,
         'Expanded map uses the host height',
@@ -239,7 +247,7 @@ try {
         [],
         'Map accessibility',
       );
-      const search = app.getByRole('combobox', { name: 'Find work in this scope' });
+      const search = app.getByRole('combobox', { name: 'Search work' });
       if (width === 390)
         assert((await search.boundingBox()).height >= 40, 'Search supports touch input');
       const priorView = await app.locator('.graph-world').getAttribute('style');
@@ -255,6 +263,7 @@ try {
         });
         await search.fill('permissions');
         await page.waitForFunction(() => window.pending.length === 1);
+        await page.screenshot({ path: resolve(output, 'search-loading-390-light.png') });
         await search.fill('launch guide');
         await page.waitForFunction(() => window.pending.length === 2);
         await page.evaluate(() => {
@@ -293,16 +302,17 @@ try {
         'Search match framed vertically',
       );
       await page.screenshot({ path: resolve(output, `search-reveal-${width}-${theme}.png`) });
+      await openWorkDetails(app);
       await verifySearchReturn(app, priorView, priorGroups, settleLayout);
       await page.screenshot({ path: resolve(output, `search-return-${width}-${theme}.png`) });
       await search.fill('passkey');
       await app.getByRole('option').filter({ hasText: 'Sign in with a passkey' }).click();
       await app.getByRole('heading', { name: 'Sign in with a passkey', exact: true }).waitFor();
-      assert.equal(await app.getByLabel('Completed work display').inputValue(), 'all');
+      assert.equal(await app.getByLabel('Work to show').inputValue(), 'all');
       await app.getByRole('button', { name: 'Back to previous view', exact: true }).click();
       await settleLayout(app);
       assert.equal(
-        await app.getByLabel('Completed work display').inputValue(),
+        await app.getByLabel('Work to show').inputValue(),
         'collapsed',
         'Search Back restores completion filter',
       );
@@ -310,7 +320,8 @@ try {
       await search.fill('Review team permissions');
       await app.getByRole('option').filter({ hasText: 'Review team permissions' }).click();
       await app.getByRole('heading', { name: 'Review team permissions', exact: true }).waitFor();
-      await app.getByRole('button', { name: 'Relationship list', exact: true }).click();
+      if (width === 390) await verifyNarrowGraphActions(page, app, settleLayout);
+      await graphAction(app, 'View as list');
       await app.locator('.graph-relations').waitFor();
       await app.getByText('Member portal contains Identity and access', { exact: true }).waitFor();
       const listSelection = app
@@ -373,12 +384,12 @@ try {
       });
       await page.goto(base + '/?scenario=' + scenario + '&theme=' + theme);
       const app = page.frameLocator('iframe');
-      await app.getByRole('button', { name: 'Explore graph', exact: true }).waitFor();
+      await app.getByRole('button', { name: 'Open graph', exact: true }).waitFor();
       if (scenario === 'empty')
         await app.getByText('No work recorded here yet', { exact: true }).waitFor();
       if (scenario === 'completed') {
-        await app.getByRole('button', { name: 'Explore graph', exact: true }).click();
-        const search = app.getByRole('combobox', { name: 'Find work in this scope' });
+        await app.getByRole('button', { name: 'Open graph', exact: true }).click();
+        const search = app.getByRole('combobox', { name: 'Search work' });
         await search.fill('Create an account');
         await app.getByRole('option').filter({ hasText: 'Create an account' }).click();
         await app.getByRole('heading', { name: 'Create an account', exact: true }).waitFor();
@@ -391,15 +402,15 @@ try {
       if (scenario === 'disconnected')
         assert.equal(await app.locator('.graph-edges > path').count(), 0);
       if (scenario === 'oversized') {
-        await app.getByRole('button', { name: 'Explore graph', exact: true }).click();
+        await app.getByRole('button', { name: 'Open graph', exact: true }).click();
         await app.getByRole('button', { name: 'Next page', exact: true }).waitFor();
         assert.equal(await app.locator('.graph-node').count(), 100);
         await app.getByRole('button', { name: 'Next page', exact: true }).click();
         await page.waitForFunction(() => window.calls.some((c) => c.arguments.page === 1));
         await app.getByRole('button', { name: 'Previous page', exact: true }).waitFor();
-        const search = app.getByRole('combobox', { name: 'Find work in this scope' });
+        const search = app.getByRole('combobox', { name: 'Search work' });
         await search.fill('Work item');
-        await app.getByRole('option', { name: 'More matches', exact: true }).click();
+        await app.getByRole('option', { name: 'More results', exact: true }).click();
         await app.getByRole('option').filter({ hasText: 'Work item 039' }).waitFor();
         await verifyMatchPages(app);
         await search.fill('Work item 249');
@@ -423,7 +434,7 @@ try {
     await page.goto(base + '/?scenario=subtasks&deny=1');
     const app = page.frameLocator('iframe');
     await app.locator('[data-graph-select="task:t03"]').click();
-    await app.getByRole('button', { name: 'Expand group', exact: true }).click();
+    await app.getByRole('button', { name: 'Show subtasks', exact: true }).click();
     await app.locator('[data-graph-toggle="task:t03"][aria-expanded=true]').waitFor();
     assert.equal(await app.locator('.graph-inline').count(), 0);
     assert.equal(await app.locator('body').getAttribute('data-display-mode'), 'inline');
@@ -440,6 +451,7 @@ try {
     );
     await page.close();
   }
+  await verifyHostLayout(browser, base, output, settleLayout);
   await verifyRefreshAndBack(browser, base, settleLayout);
   await verifyReturnAcrossModes(browser, base);
   for (const kind of ['entity', 'list']) {
@@ -450,7 +462,7 @@ try {
     await app.getByRole('button', { name: 'Back', exact: true }).waitFor();
     if (kind === 'list')
       assert(await page.evaluate(() => window.calls[0].arguments.focusFilter.state[0] === 'doing'));
-    await app.getByRole('button', { name: 'Explore graph', exact: true }).click();
+    await app.getByRole('button', { name: 'Open graph', exact: true }).click();
     assert.equal(await app.locator('body').getAttribute('data-display-mode'), 'inline');
     await app.getByRole('button', { name: 'Back', exact: true }).click();
     await app.getByRole('button', { name: 'View work graph', exact: true }).waitFor();
@@ -463,14 +475,17 @@ try {
   await page.evaluate(() => {
     window.fail = true;
   });
-  await app.getByText('View options', { exact: true }).click();
-  await app.getByRole('button', { name: 'Refresh graph', exact: true }).click();
-  await app.getByRole('status').filter({ hasText: 'could not be loaded' }).waitFor();
+  await graphAction(app, 'Refresh graph');
+  await app.getByRole('status').filter({ hasText: 'Couldn’t load the graph' }).waitFor();
   assert((await app.locator('[data-graph-select]').count()) > 0);
+  await page.screenshot({ path: resolve(output, 'refresh-error-inline.png') });
+  await app.getByRole('button', { name: 'Retry', exact: true }).click();
+  await app.getByRole('status').waitFor({ state: 'hidden' });
+  assert((await app.locator('[data-graph-select]').count()) > 0, 'Retry retains work');
   await page.close();
   writeFileSync(resolve(output, 'results.json'), JSON.stringify(results, null, 2));
   process.stdout.write(
-    JSON.stringify({ passed: true, captures: results.length * 6 + 10, results }) + '\n',
+    JSON.stringify({ passed: true, captures: results.length * 7 + 15, results }) + '\n',
   );
 } catch (error) {
   const page = browser.contexts().flatMap((context) => context.pages())[0];

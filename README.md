@@ -145,7 +145,9 @@ The MCP tools include a read-only work graph for exploring project, program, ini
 dependencies, including completed branches and visible external blockers. Compact conversation
 views open into a spatial explorer; scope-wide search reveals matching work across collapsed
 groups, completion filters, and graph pages. Search visits restore the previous view, and inspectors
-show original prerequisites without duplicating their collapsed project arrows. See the
+show original prerequisites without duplicating their collapsed project arrows. Expanded views fill
+the host canvas with a compact mobile selection tray or a floating desktop inspector, respecting
+MCP display modes, container sizing and safe areas. See the
 [work graph contract](docs/engineering/specs/mcp-work-graph.md).
 
 ## Public documentation

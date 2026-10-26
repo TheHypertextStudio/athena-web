@@ -34,11 +34,15 @@ Only recorded, visible dependencies are available; absence of an arrow is not pr
 Inline shows up to three work nodes (two in portrait), preferring a connected slice around focused
 or started work. Completed branches have expandable summaries. The map explicitly distinguishes
 its displayed scene from authorized scope totals and records connections continuing beyond it.
-Inline uses readable work rows with the scope totals and one Explore action; actual completed
+Inline uses readable work rows with the scope totals and one Open graph action; actual completed
 prerequisites attach to their dependent work. Secondary view controls are disclosed on demand.
-Fullscreen uses the host's available height, frames readable work by default and offers Fit all
-for an overview. Direct group controls, pan, centered zoom and a docked inspector support exploration;
-on narrow hosts selection details occupy the bottom of the map.
+Expanded views use the full available canvas and frame readable work by default. Zoom to fit offers
+an explicit overview. A contained header groups scope, remaining count and search; Graph options
+holds completion display, list view, refresh, the Docket destination and detailed counts. A floating
+inspector overlays the canvas on wide hosts. Narrow hosts show a compact selection tray containing
+title, parent, status and the first dependency's status; Show details opens the full inspector.
+Routine counts and offscreen-link strips do not occupy the bottom of the map. A continuation control
+appears only for a bounded scene; group headers show displayed children versus their authorized total.
 
 `search` (up to 160 characters) searches all authorized work in the selected scope, independently
 of collapsed groups, completion display and scene pagination. All query terms match title or ID,
@@ -49,7 +53,7 @@ work is explicitly included when chosen. Typing and selecting never start a conv
 
 `completedBranches` names real completed prerequisite chains attached to displayed work. Boundary
 counts retain every authorized off-view connection; each boundary names at most twenty endpoints
-for direct reveal, with neighborhood navigation for the rest. These counts never imply readiness.
+for direct reveal, with narrower-scope navigation for further exploration. These counts never imply readiness.
 
 Fullscreen can highlight prerequisite and downstream connections. Inspector actions say Highlight
 and Clear highlights; a Highlight action is offered only when a displayed connection exists. An equivalent relationship list supports keyboard and assistive navigation.
@@ -66,21 +70,23 @@ band. Individual work cards rely on their title and workflow status instead of a
 label. Canonical icons identify navigation, relationship direction, conversation and destination
 actions. Expanded group headers distinguish displayed children from authorized child totals.
 
-Focus frames a readable immediate neighborhood when it fits. Fit all remains an explicit overview;
-named offscreen connections sit below the map so they cannot cover selectable work. Narrow
-inspectors prioritize the selected title, status and first relationship; their location stays
-visible above the map.
+Show selection frames the selected item and nearby connected work when it fits. The canvas fills
+the host width, including the space beneath the floating inspector; automatic framing accounts for
+inspector, map controls, continuation controls and safe areas so the selected item stays visible.
+Original connections beyond the displayed scene remain reachable through inspector links labeled
+Show on graph. View details selects an endpoint already displayed. The options panel discloses
+when connections continue outside the scene.
 
-Search visits offer Previous view, restoring expansion, completion, selected work, tracing and the
-prior camera. The restoration reprojects through the authorized reader when the host display mode
+Search visits offer Back to previous view, restoring expansion, completion, selected work,
+expanded details, highlighting and the prior camera. The restoration reprojects through the authorized reader when the host display mode
 or coarse viewport changed; it never replays a large fullscreen scene as inline rows. Previous/next
-match controls traverse result pages while retaining the original return destination. Explicit
+result controls traverse result pages while retaining the original return destination. Explicit
 selection, close, a new query and Back invalidate superseded navigation. Selection and restored
 selection update model context without sending a conversation message.
 
 Structural changes call the same read-only tool through the existing MCP bridge. Geometry uses
 shared React-independent Dagre layout. Selection, highlighting and viewport gestures stay local;
-stale reads cannot replace newer results. Reads retain the previous view on failure. Refresh
+stale reads cannot replace newer results. Reads retain the previous view on failure and offer Retry. Refresh
 returns a new snapshot; there is no claim that this is a live subscription.
 
 `focusFilter` accepts the existing task `list_work` filters. It highlights matching work while
@@ -89,8 +95,17 @@ can highlight an explicit bounded set. These are presentation annotations, not s
 
 The `ui://docket/work-graph` resource is self-contained HTML under the existing CSP and theme
 runtime. Fullscreen negotiation checks available display modes and respects the actual response.
-Hosts declining fullscreen retain an inline explorer. Selection can update model context for a
-future turn; only an explicit Ask about this action sends a user message. Host support varies.
+Hosts declining fullscreen retain an inline explorer sized within their advertised height limit.
+Display mode, available modes, independent fixed/flexible/unbounded dimension axes and safe area
+insets follow the [MCP Apps standard](https://github.com/modelcontextprotocol/ext-apps/blob/main/specification/2026-01-26/apps.mdx).
+A new dimension object clears obsolete constraints on both axes. Theme-only updates preserve prior
+dimensions and safe areas. The shared runtime exposes merged host-context updates; graph layout
+observes these and the actual body size. CSS container queries choose the compact or wide inspector.
+Same-shape resizing adjusts framing locally; structural display/shape changes request new geometry.
+A pending user read settles before a resize read so the latter preserves its filter/expansion/scope.
+Explicitly fixed inline height is filled; flexible inline height uses up to 720px within the host cap.
+Inline explorer height also reacts to host-context changes without requiring a new graph snapshot. Selection can update model context for a
+future turn; only an explicit Ask in chat action sends a user message. Host support varies.
 
 ## Validation and operation
 

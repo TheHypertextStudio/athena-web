@@ -1,5 +1,7 @@
 # Design review: work graph orientation — 2026-10-26
 
+> Superseded for mobile hierarchy and framing by the [workspace review](2026-10-26-mcp-work-graph-workspace.md). User review exposed weaknesses that this scorecard graded too generously. Its data/provenance evidence remains applicable.
+
 Register: host-themed Docket app. This is a review of the production resource in the local sandbox
 with synthetic work. Hosted connector availability and launch acceptance remain separate.
 

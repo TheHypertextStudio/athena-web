@@ -3,7 +3,9 @@ import { StrictMode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const { exchange } = vi.hoisted(() => ({ exchange: vi.fn() }));
-vi.mock('../../src/lib/auth-client', () => ({ authClient: { $fetch: exchange } }));
+vi.mock('../../src/lib/auth-client', () => ({
+  authClient: { $fetch: exchange, $store: { notify: vi.fn() } },
+}));
 import { DemoLinkSignIn } from '../../src/app/(auth)/sign-in/demo-link-sign-in';
 
 const TOKEN = 'a'.repeat(43);

@@ -53,6 +53,8 @@ export function DemoLinkSignIn({
         setError(LINK_ERROR);
         return;
       }
+      // Low-level custom exchanges bypass Better Auth's normal sign-in signal listeners.
+      authClient.$store.notify('$sessionSignal');
       await onSignedIn();
     } catch {
       setError(LINK_ERROR);

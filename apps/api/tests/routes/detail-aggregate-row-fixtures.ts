@@ -51,6 +51,8 @@ export const projectRow: ProjectRow = {
   blueprintDateBindings: {},
   blueprintState: null,
   blueprintEverStarted: false,
+  privateInvocationId: null,
+  privateStepAlias: null,
   id: 'project-row',
   organizationId: 'organization-row',
   createdBy: null,

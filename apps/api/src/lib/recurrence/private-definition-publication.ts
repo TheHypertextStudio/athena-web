@@ -4,8 +4,10 @@ import {
   hashScheduleArchive,
   invocationHead,
   invocationRevision,
+  privateStep,
   type Database,
 } from '@docket/db';
+import type { CanonicalPrivateWorkDefinition } from '@docket/work/work-private-definition';
 import { and, desc, eq, sql } from 'drizzle-orm';
 import { canActor } from '@docket/authz';
 import type { ProcessDefinitionCreate } from '../../contracts/recurrence';
@@ -28,6 +30,7 @@ import { prepareProcessTemplates, type PreparedProcessDefinition } from './task-
 import { compilePrivateDefinitionSources } from './private-definition-source';
 import { compileAuthoredPrivateDefinition } from './private-definition-compiler';
 import { publishPrivateDefinitionRoots } from './private-definition-root-publication';
+import type { RecurrenceBlueprintSource } from './work-template-source';
 
 /** Canonical-only authored revision request; no raw invocation or source proof can be supplied. */
 export interface CanonicalPrivateDefinitionCommand {
@@ -95,7 +98,7 @@ async function publish(
   const sourceAliases = aliases(definition),
     revisionId = genId();
   const sources = compilePrivateDefinitionSources(definition, sourceAliases);
-  const published = await publishPrivateDefinitionRoots(tx, caller, definition.name, sources);
+  const published = await publishPrivateDefinitionRoots(tx, caller, sources);
   const document = compileAuthoredPrivateDefinition({
     definitionAlias: head.id,
     revisionAlias: revisionId,
@@ -115,6 +118,7 @@ async function publish(
     })
     .returning({ id: blueprintInvocation.id });
   if (!invocation) throw new ConflictError('Private authored publication was not created.');
+  await registerPrivateSteps(tx, input.organizationId, invocation.id, document, sources);
   await tx.insert(invocationRevision).values({
     id: revisionId,
     organizationId: input.organizationId,
@@ -151,8 +155,43 @@ async function publish(
     revisionId,
     revisionNumber: number,
     stepIdsByKey: Object.fromEntries(sourceAliases),
-    effects: published.effects,
+    effects: [],
   };
+}
+/** Containing step within the same root, or the root itself; matches the in-memory structure's parents. */
+function containingAlias(
+  source: RecurrenceBlueprintSource,
+  sources: readonly RecurrenceBlueprintSource[],
+): string | null {
+  if (source.id === source.rootId) return null;
+  const parent = sources.find(
+    (entry) => entry.id === source.parentId && entry.rootId === source.rootId,
+  );
+  return parent?.id ?? source.rootId;
+}
+/** Register every authored step with its invocation as the provenance target for generated work. */
+async function registerPrivateSteps(
+  tx: TemplateTransaction,
+  organizationId: string,
+  invocationId: string,
+  document: CanonicalPrivateWorkDefinition,
+  sources: readonly RecurrenceBlueprintSource[],
+): Promise<void> {
+  await tx.insert(privateStep).values(
+    document.sourceMappings.map((mapping) => {
+      const source = sources.find((entry) => entry.id === mapping.alias);
+      if (!source) throw new ConflictError('Private authored containment is unavailable.');
+      return {
+        invocationId,
+        stepAlias: mapping.alias,
+        organizationId,
+        rootKey: mapping.reference.rootKey,
+        path: [...mapping.reference.path],
+        kind: mapping.kind,
+        parentAlias: containingAlias(source, sources),
+      };
+    }),
+  );
 }
 /**
  * Create a private canonical publication using existing template preparation and immutable registry guards.

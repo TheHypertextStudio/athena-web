@@ -22,6 +22,7 @@ import {
 import { authorizeScheduleRevisionContinuity } from './schedule-authority';
 import type { WorkCreationBatchCommand } from '../work-creation/types';
 import { preflightScheduleClaim } from './schedule-preflight';
+import { attachPrivateScheduleStructures } from './schedule-private-structure';
 import { triggerStorage } from './series-trigger-storage';
 import { requireScheduleAccess } from './schedule-access';
 import { firstScheduleRunDate } from './schedule-review-date';
@@ -186,7 +187,11 @@ async function prepareRevisionInput(
         ownerProgramId: input.ownerProgramId ?? null,
         runDate,
       });
-  const roots = await preflightScheduleClaim(tx, command, document);
+  const roots = await preflightScheduleClaim(
+    tx,
+    publication ? attachPrivateScheduleStructures(tx, caller, command, publication) : command,
+    document,
+  );
   return { document, trigger, roots, aliases };
 }
 async function insertRevision(

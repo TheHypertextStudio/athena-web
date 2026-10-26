@@ -24,6 +24,7 @@ import type { ResolvedLabel } from '../labels';
 import type { PreparedMilestoneRow } from '../milestone-writes';
 import type { TaskStateMutation } from '../task-state';
 import type { InsertedWork, ResolvedWorkInsert } from './writers';
+import type { PrivateScheduleStructureGrant } from '../recurrence/schedule-private-structure';
 
 /** Ordinary creation keeps the four existing public request vocabularies. */
 export interface WorkCreateBodyByKind {
@@ -57,6 +58,8 @@ export interface TrustedCreationInvocation {
     readonly legacyTitles?: readonly PrivateScheduleTitle[];
     readonly rootPlacement?: PrivateScheduleRootPlacement;
     readonly placementPreview?: SchedulePlacementPreview;
+    /** Verified authored structure for an inline private root; resolves only on its own transaction. */
+    readonly privateStructure?: PrivateScheduleStructureGrant;
   };
   readonly scheduleBinding?: ScheduleRootBinding;
 }

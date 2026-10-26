@@ -1261,6 +1261,13 @@
       "when": 1792950323225,
       "tag": "0179_private_definition_identity_namespace",
       "breakpoints": true
+    },
+    {
+      "idx": 180,
+      "version": "7",
+      "when": 1792976779515,
+      "tag": "0180_private_schedule_structure",
+      "breakpoints": true
     }
   ]
 }

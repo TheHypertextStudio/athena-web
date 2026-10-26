@@ -31,6 +31,7 @@ import {
 } from './resolution-retained';
 import { planScheduleBlueprint } from '../recurrence/schedule-compiler';
 import { assertSchedulePlanBinding } from '../recurrence/schedule-authority';
+import { privateStructureForCommand } from '../recurrence/schedule-private-structure';
 import {
   validateSchedulePlacement,
   applyScheduleRootClears,
@@ -198,6 +199,7 @@ async function resolveCreationPlan(
       kind: command.kind,
       workTypeId: command.body.workTypeId,
       workTypeVersionId: command.body.workTypeVersionId,
+      privateStructure: privateStructureForCommand(tx, command),
     },
     binding || resolutionProof ? 'retained_schedule' : 'create',
     undefined,

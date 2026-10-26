@@ -1,5 +1,11 @@
 import { template, workTypeTeam } from '@docket/db';
-import type { ResolvedBlueprintGraph, WorkKind } from '@docket/work/blueprints';
+import type {
+  PublishedBlueprintSnapshot,
+  ResolvedBlueprintGraph,
+  WorkKind,
+} from '@docket/work/blueprints';
+import { BlueprintStepId } from '@docket/work/ids';
+import type { WorkTemplateDefinition } from '@docket/work/work-template-contract';
 import { and, asc, eq, inArray } from 'drizzle-orm';
 import { ConflictError, ValidationError } from '../../error';
 import type { TemplateTransaction } from '../templates/persistence';
@@ -16,12 +22,41 @@ import { blueprintFingerprint } from './fingerprint';
 import { readBlueprintPublication } from './publication-read';
 import { publicationDefinitionIds } from './publication';
 
+/** Authored steps beneath a root, verified by the private publication factory in this transaction. */
+export interface PrivateBlueprintStructure {
+  readonly invocationId: string;
+  readonly definition: WorkTemplateDefinition;
+  readonly stepAliases: Readonly<Record<string, string>>;
+}
+
 /** Root selection derived from a validated ordinary create, publication, or retained series binding. */
 export interface BlueprintSelection {
   readonly organizationId: string;
   readonly kind: WorkKind;
   readonly workTypeId?: string | undefined;
   readonly workTypeVersionId?: string | undefined;
+  /** Replaces the selected base root's structure; its identity stays the base publication. */
+  readonly privateStructure?: PrivateBlueprintStructure | undefined;
+}
+
+function privateRoot(
+  root: PublishedBlueprintSnapshot,
+  structure: PrivateBlueprintStructure | undefined,
+): PublishedBlueprintSnapshot {
+  if (!structure) return root;
+  if (root.definition.blueprint.steps.length)
+    throw new ConflictError('Private structure requires a base publication.');
+  return {
+    ...root,
+    definition: structure.definition,
+    stepIds: Object.fromEntries(
+      Object.entries(structure.stepAliases).map(([key, alias]) => [
+        key,
+        BlueprintStepId.parse(alias),
+      ]),
+    ),
+    privateInvocationId: structure.invocationId,
+  };
 }
 
 /** Internal invocation policy; clients cannot supply publication or archive-binding authority. */
@@ -42,10 +77,15 @@ async function discover(
   retainedRootVersionId?: string | null,
   retainedProof?: RetainedBlueprintResolutionProof,
 ): Promise<ResolvedBlueprintGraph> {
-  const root = await readBlueprintPublication(tx, selection, {
-    archived: mode === 'retained_schedule',
-    draft: mode === 'publish',
-  });
+  if (selection.privateStructure && mode === 'publish')
+    throw new ConflictError('Template selection changed');
+  const root = privateRoot(
+    await readBlueprintPublication(tx, selection, {
+      archived: mode === 'retained_schedule',
+      draft: mode === 'publish',
+    }),
+    selection.privateStructure,
+  );
   if (mode === 'publish') {
     const [row] = await tx
       .select()

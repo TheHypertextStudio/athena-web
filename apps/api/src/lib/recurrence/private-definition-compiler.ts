@@ -34,21 +34,16 @@ function requireSource(
   if (!source) throw new ConflictError('Private authored containment is unavailable.');
   return source;
 }
+/**
+ * Blueprint path of an authored step: every step beneath a root is in that root's single template
+ * scope, so its path is its own key. Containment is carried by the step's parent, not its path.
+ */
 function reference(
   source: RecurrenceBlueprintSource,
   sources: readonly RecurrenceBlueprintSource[],
 ): WorkScheduleTimingRef {
-  const path: string[] = [];
-  let current = source;
-  const visited = new Set<string>();
-  while (current.id !== source.rootId) {
-    if (!current.parentId || visited.has(current.id))
-      throw new ConflictError('Private authored containment is unavailable.');
-    visited.add(current.id);
-    path.unshift(current.key);
-    current = requireSource(sources, current.parentId);
-  }
-  return { rootKey: current.key, path };
+  const root = requireSource(sources, source.rootId);
+  return { rootKey: root.key, path: source.id === root.id ? [] : [source.key] };
 }
 function placements(
   sources: readonly RecurrenceBlueprintSource[],

@@ -48,6 +48,10 @@ import { integration, template } from './crosscutting';
 import { workStatus } from './work-status';
 import { workTemplateColumns, workTemplateConstraints } from './work-template-reference';
 import {
+  workPrivateOriginColumns,
+  workPrivateOriginConstraints,
+} from './work-template-private-step';
+import {
   workBlueprintColumns,
   workBlueprintConstraints,
 } from './work-template-blueprint-reference';
@@ -290,6 +294,7 @@ export const project = pgTable(
     ...auditColumns(),
     ...workTemplateColumns(),
     ...workBlueprintColumns(),
+    ...workPrivateOriginColumns(),
     name: text('name').notNull(),
     summary: text('summary'),
     description: text('description'),
@@ -324,6 +329,7 @@ export const project = pgTable(
   (t) => [
     ...workTemplateConstraints(t, 'project'),
     ...workBlueprintConstraints(t, 'project'),
+    ...workPrivateOriginConstraints(t, 'project'),
     index('project_org_idx').on(t.organizationId),
     index('project_status_idx').on(t.statusId),
     index('project_program_idx').on(t.programId),
@@ -377,6 +383,7 @@ export const milestone = pgTable(
   {
     ...auditColumns(),
     ...workBlueprintColumns(),
+    ...workPrivateOriginColumns(),
     projectId: text('project_id')
       .notNull()
       .references(() => project.id, { onDelete: 'cascade' }),
@@ -387,6 +394,7 @@ export const milestone = pgTable(
   },
   (t) => [
     ...workBlueprintConstraints(t, 'milestone'),
+    ...workPrivateOriginConstraints(t, 'milestone'),
     index('milestone_project_idx').on(t.projectId),
     notBlank('milestone_name_not_blank', t.name),
     dateInRange('milestone_target_date_range', t.targetDate),
@@ -443,6 +451,7 @@ export const task = pgTable(
     ...auditColumns(),
     ...workTemplateColumns(),
     ...workBlueprintColumns(),
+    ...workPrivateOriginColumns(),
     title: text('title').notNull(),
     description: text('description'),
     /**
@@ -505,6 +514,7 @@ export const task = pgTable(
   (t) => [
     ...workTemplateConstraints(t, 'task'),
     ...workBlueprintConstraints(t, 'task'),
+    ...workPrivateOriginConstraints(t, 'task'),
     index('task_org_idx').on(t.organizationId),
     index('task_team_state_idx').on(t.teamId, t.state),
     index('task_status_idx').on(t.statusId),

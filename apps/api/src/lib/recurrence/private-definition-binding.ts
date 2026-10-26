@@ -8,7 +8,6 @@ import type { ActorCtx } from '../../context';
 import { CapabilityError, ConflictError, NotFoundError } from '../../error';
 import type { TemplateTransaction } from '../templates/persistence';
 import { readBlueprintClosure, lockBlueprintClosures } from '../work-template-blueprints/resolve';
-import { blueprintFingerprint } from '../work-template-blueprints/fingerprint';
 import { rawResultRows } from '../raw-result';
 import { canonicalDefinitionHead } from './canonical-definition';
 import {
@@ -20,7 +19,7 @@ import {
   type PrivateDefinitionRootPublication,
 } from './private-definition-compiler';
 import { compilePrivateDefinitionSources } from './private-definition-source';
-import { recurrenceWorkTemplateDefinition } from './work-template-definition';
+import { privateRootStructures, type PrivateRootStructure } from './private-definition-structure';
 import type { RecurrenceBlueprintSource } from './work-template-source';
 
 /** Opaque same-transaction private publication read capability; copied JSON has no authority. */
@@ -38,6 +37,11 @@ interface RegisteredPublication extends CheckedCanonicalPrivatePublication {
   readonly tx: TemplateTransaction;
   readonly organizationId: string;
   readonly actorId: string;
+  readonly structures: readonly PrivateRootStructure[];
+}
+/** Current-access request; `invocationId` selects an exact earlier authored revision of the same head. */
+export interface CanonicalPrivatePublicationRequest extends LegacyDefinitionAccessRequest {
+  readonly invocationId?: string | undefined;
 }
 const bindings = new WeakMap<CanonicalPrivatePublicationBinding, RegisteredPublication>();
 async function requireNamespace(tx: TemplateTransaction): Promise<void> {
@@ -81,7 +85,7 @@ async function exactRootPublications(
       workTypeId: root.template.workTypeId,
       workTypeVersionId: root.template.selection.workTypeVersionId,
     });
-    await assertAuthoredPublication(tx, source, sources, definition, graph.root);
+    await assertAuthoredPublication(tx, organizationId, source, graph.root);
     graphs.push(graph);
     publications.set(source.id, {
       workTypeId: graph.root.workTypeId,
@@ -93,13 +97,11 @@ async function exactRootPublications(
 }
 async function assertAuthoredPublication(
   tx: TemplateTransaction,
+  organizationId: string,
   source: RecurrenceBlueprintSource,
-  sources: readonly RecurrenceBlueprintSource[],
-  definition: ProcessDefinitionCreate,
   publication: {
     readonly workTypeId: string;
     readonly versionId: string;
-    readonly definition: unknown;
   },
 ): Promise<void> {
   const selected = source.preset.fields['work_type_id'],
@@ -109,37 +111,44 @@ async function assertAuthoredPublication(
       throw new ConflictError('Private selected publication changed.');
     return;
   }
-  if (source.kind === 'task' && sources.length === 1) {
-    const [base] = await tx
-      .select({ id: template.id })
-      .from(template)
-      .where(and(eq(template.id, publication.workTypeId), eq(template.isBase, true)))
-      .limit(1);
-    if (!base) throw new ConflictError('Private base publication changed.');
-    return;
-  }
-  if (
-    blueprintFingerprint(publication.definition) !==
-    blueprintFingerprint(recurrenceWorkTemplateDefinition(definition.name, source, sources))
-  )
-    throw new ConflictError('Private structural publication changed.');
+  const [base] = await tx
+    .select({ id: template.id })
+    .from(template)
+    .where(
+      and(
+        eq(template.id, publication.workTypeId),
+        eq(template.organizationId, organizationId),
+        eq(template.isBase, true),
+      ),
+    )
+    .limit(1);
+  if (!base) throw new ConflictError('Private base publication changed.');
 }
 async function recompile(
   tx: TemplateTransaction,
   organizationId: string,
+  invocationId: string,
   document: CanonicalPrivateWorkDefinition,
-): Promise<void> {
+): Promise<readonly PrivateRootStructure[]> {
   const definition = ProcessDefinitionCreate.parse(document.authoring.definition);
+  const aliases = new Map(
+    document.sourceMappings.map((mapping) => [mapping.sourceKey, mapping.alias]),
+  );
   const publications = await exactRootPublications(tx, organizationId, document, definition);
   const expected = compileAuthoredPrivateDefinition({
     definitionAlias: document.authoring.definitionAlias,
     revisionAlias: document.authoring.revisionAlias,
     definition,
-    aliases: new Map(document.sourceMappings.map((mapping) => [mapping.sourceKey, mapping.alias])),
+    aliases,
     publications,
   });
   if (hashScheduleArchive(expected) !== hashScheduleArchive(document))
     throw new ConflictError('Private definition compilation evidence changed.');
+  return privateRootStructures(
+    definition.name,
+    invocationId,
+    compilePrivateDefinitionSources(definition, aliases),
+  );
 }
 function publishedHead(head: Awaited<ReturnType<typeof canonicalDefinitionHead>>): {
   readonly id: string;
@@ -156,13 +165,14 @@ function publishedHead(head: Awaited<ReturnType<typeof canonicalDefinitionHead>>
  */
 export async function loadCanonicalPrivatePublication(
   tx: TemplateTransaction,
-  input: LegacyDefinitionAccessRequest,
+  input: CanonicalPrivatePublicationRequest,
 ): Promise<CanonicalPrivatePublicationBinding> {
   if (!input.actorId) throw new NotFoundError('Process definition not found');
   await requireLegacyDefinitionAccess(tx, input);
   await requireNamespace(tx);
   const head = publishedHead(await canonicalDefinitionHead(tx, input, 'share'));
   await requireHeadOrigin(tx, head.id, input.organizationId);
+  const invocationId = input.invocationId ?? head.publishedInvocationId;
   const [row] = await tx
     .select({ revision: invocationRevision, manifest: blueprintInvocation.manifest })
     .from(invocationRevision)
@@ -177,7 +187,7 @@ export async function loadCanonicalPrivatePublication(
       and(
         eq(invocationRevision.headId, head.id),
         eq(invocationRevision.organizationId, input.organizationId),
-        eq(invocationRevision.invocationId, head.publishedInvocationId),
+        eq(invocationRevision.invocationId, invocationId),
         eq(invocationRevision.state, 'published'),
         eq(invocationRevision.origin, 'authored'),
       ),
@@ -193,7 +203,12 @@ export async function loadCanonicalPrivatePublication(
     parsed.data.authoring.revisionAlias !== row.revision.id
   )
     throw new ConflictError('Private authored publication is unavailable.');
-  await recompile(tx, input.organizationId, parsed.data);
+  const structures = await recompile(
+    tx,
+    input.organizationId,
+    row.revision.invocationId,
+    parsed.data,
+  );
   const binding = Object.freeze({ proof: {} });
   bindings.set(binding, {
     tx,
@@ -203,15 +218,15 @@ export async function loadCanonicalPrivatePublication(
     revisionId: row.revision.id,
     invocationId: row.revision.invocationId,
     document: parsed.data,
+    structures,
   });
   return binding;
 }
-/** Exact checked aliases and body for the owning transaction/caller; this is not an activation receipt. */
-export function requireCanonicalPrivatePublication(
+function registeredFor(
   tx: TemplateTransaction,
   caller: Pick<ActorCtx, 'orgId' | 'actorId'>,
   binding: CanonicalPrivatePublicationBinding,
-): Readonly<CheckedCanonicalPrivatePublication> {
+): RegisteredPublication {
   const registered = bindings.get(binding);
   if (
     registered?.tx !== tx ||
@@ -219,6 +234,23 @@ export function requireCanonicalPrivatePublication(
     registered.actorId !== caller.actorId
   )
     throw new CapabilityError();
+  return registered;
+}
+/** Verified in-memory structure for inline private roots, for the owning transaction and caller only. */
+export function requireCanonicalPrivateStructures(
+  tx: TemplateTransaction,
+  caller: Pick<ActorCtx, 'orgId' | 'actorId'>,
+  binding: CanonicalPrivatePublicationBinding,
+): readonly PrivateRootStructure[] {
+  return structuredClone(registeredFor(tx, caller, binding).structures);
+}
+/** Exact checked aliases and body for the owning transaction/caller; this is not an activation receipt. */
+export function requireCanonicalPrivatePublication(
+  tx: TemplateTransaction,
+  caller: Pick<ActorCtx, 'orgId' | 'actorId'>,
+  binding: CanonicalPrivatePublicationBinding,
+): Readonly<CheckedCanonicalPrivatePublication> {
+  const registered = registeredFor(tx, caller, binding);
   return {
     definitionId: registered.definitionId,
     revisionId: registered.revisionId,

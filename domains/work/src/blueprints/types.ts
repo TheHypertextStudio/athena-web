@@ -49,6 +49,16 @@ export interface PublishedBlueprintSnapshot {
   readonly versionId: WorkTypeVersionId;
   readonly definition: WorkTemplateDefinition;
   readonly stepIds: Readonly<Record<string, BlueprintStepId>>;
+  /**
+   * Set only for a root whose structure belongs to a private invocation. Its identity fields name the
+   * actual base publication, `definition` holds the authored steps and `stepIds` their private aliases.
+   */
+  readonly privateInvocationId?: string | undefined;
+}
+/** Registered private step that a generated node originates from, instead of a publication step. */
+export interface BlueprintPrivateOrigin {
+  readonly invocationId: string;
+  readonly stepAlias: string;
 }
 /** Frozen closure resolved by the API in its caller's transaction. */
 export interface ResolvedBlueprintGraph {
@@ -70,6 +80,8 @@ export interface ExpandedBlueprintNode {
   readonly sourceStepId: BlueprintStepId | null;
   readonly sourceWorkTypeId: WorkTypeId | null;
   readonly sourceVersionId: WorkTypeVersionId | null;
+  /** Private authored origin; present exactly when the node's step belongs to a private root. */
+  readonly privateOrigin?: BlueprintPrivateOrigin | null;
   readonly selected: boolean;
   readonly prerequisitePaths: readonly BlueprintPath[];
 }

@@ -105,6 +105,49 @@
   remains disabled until invocation-owned structure can replace generated public templates.
   Final proposal-screen, provider and physical-device acceptance remain outstanding.
 
+### [PRIVATE-SCHEDULE-STRUCTURE] Keep private schedule structure out of the template library
+
+- **Status**: IN_PROGRESS
+- **Started**: 2026-10-26
+- **Priority**: P1
+- **Description**: A private schedule definition with inline Project or multi-root structure
+  currently publishes an organization-scope work template built from its private names, titles and
+  labels. Another workspace viewer can then list and read those literals and sees an extra library
+  entry. Store authored structure only with the private invocation, give generated work its actual
+  base or selected template identity, and record genuine private provenance, while the existing
+  shared preflight and sole work writer still create the whole forest.
+- **Decisions**:
+  - Migration 0180 is the additive private structure expansion: a private step registry keyed by
+    invocation, step alias and organization; mutually exclusive private-origin columns on task,
+    project and milestone; claim and selected-work validators that accept a private origin only
+    when it matches the registry; and `docket_private_structure_schema_ready()`. It changes no
+    existing row and enables no writer.
+  - Migration 0181 is the conditional alias-reference enforcement that was prepared as the private
+    0180 candidate. It is renumbered unchanged apart from its number; its readiness already requires
+    `docket_private_structure_schema_ready()`.
+  - Private step paths are blueprint scope paths: every step beneath a root has the path `[key]`
+    and its containment is its registered parent alias. The planner and claim validator compare
+    these paths, so containment paths would never match.
+  - The planner receives the private structure as an in-memory snapshot rebuilt from the immutable
+    authoring body after the publication factory verifies it in the same transaction for the
+    current caller. Scheduled runs load it as the series creator through the same factory. Stored
+    JSON, copied documents and preparation receipts grant nothing.
+  - Inline roots and inline children select the organization's base Task or Project publication.
+    Selected Task and Project publications keep their real pinned closure and public origins.
+    Milestones keep a private origin and no template identity.
+  - `canonicalAliasReferencesEnforced` stays closed until 0181 is journaled with compatible runtime
+    consumers, so normal routes keep the retained authoring path.
+- **Subtasks**:
+  - [x] Second-viewer privacy regression in the default suite
+  - [x] 0180 private structure schema, guards and readiness function
+  - [x] Base-identity compilation with no template publication
+  - [x] Private snapshot in the shared planner and private origin columns in the writer
+  - [x] Scheduled run loads the private structure through the publication factory
+  - [x] Install and run regression: forest, parentage, Milestone and forged-origin refusals
+  - [ ] Selected nested publication and multiple-root runs
+  - [ ] Real PostgreSQL forged-origin, tenant, purge and fresh/populated upgrade proofs
+  - [ ] 0181 alias enforcement with runtime compatibility (separate delivery)
+
 ### [PRODUCT-ADMIN-CACHE-CI] Register private Product Admin CI
 
 - **Status**: DONE

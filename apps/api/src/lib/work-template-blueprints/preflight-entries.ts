@@ -55,9 +55,16 @@ function prospective(
     }
   }
 }
+function privateOriginColumns(row: AllocatedBlueprintNode) {
+  const origin = row.node.privateOrigin;
+  return origin
+    ? { privateInvocationId: origin.invocationId, privateStepAlias: origin.stepAlias }
+    : {};
+}
 function originColumns(row: AllocatedBlueprintNode) {
   return {
     id: row.id,
+    ...privateOriginColumns(row),
     blueprintStepId: row.node.sourceStepId,
     blueprintSourceVersionId: row.node.sourceVersionId,
     blueprintParentKind: row.parent?.node.kind ?? null,

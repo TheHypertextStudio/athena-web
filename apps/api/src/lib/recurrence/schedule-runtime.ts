@@ -12,6 +12,7 @@ import { BlueprintCivilDate } from '@docket/work/work-template-blueprint';
 import { and, eq, inArray, isNull } from 'drizzle-orm';
 import { ApiError, ConflictError, NotFoundError } from '../../error';
 import type { TemplateTransaction } from '../templates/persistence';
+import type { WorkCreationBatchCommand } from '../work-creation/types';
 import { authorizeRetainedRecurrence, loadCreationActor } from '../work-creation/context';
 import { createWorkBatchInTransaction } from '../work-creation/service';
 import { deferWorkCreationEffects } from '../work-creation/effects';
@@ -29,6 +30,7 @@ import {
 } from './schedule-compiler';
 import { preflightScheduleClaim } from './schedule-preflight';
 import { registerNativeScheduleDateOwnership } from './schedule-native-reflow';
+import { attachPersistedPrivateScheduleStructures } from './schedule-private-structure';
 import { canRetryScheduleOccurrence } from './schedule-run-recovery';
 import { resolveMissedScheduleOccurrence } from './schedule-run-resolution';
 
@@ -176,6 +178,56 @@ async function reserveAttempt(database: Database, input: ExecuteScheduleOccurren
     return { row: reserved, execute: true };
   });
 }
+/** Locked schedule facts the first claim is compiled from. */
+interface ClaimSource {
+  readonly organizationId: string;
+  readonly series: Awaited<ReturnType<typeof lockedRevision>>['series'];
+  readonly revision: Awaited<ReturnType<typeof lockedRevision>>['revision'];
+  readonly document: ReturnType<typeof parseScheduleDocument>;
+  readonly runDate: string;
+}
+/** Compile a first claim from the revision, with archive continuity and any private structure. */
+async function claimCommand(
+  tx: TemplateTransaction,
+  source: ClaimSource,
+): Promise<WorkCreationBatchCommand> {
+  const { organizationId, series, revision, document, runDate } = source;
+  const ids = scheduleDocumentRoots(document).map((root) => root.draft.template.workTypeId);
+  const definitions = await tx
+    .select({
+      id: template.id,
+      archivedAt: template.archivedAt,
+      state: template.publicationState,
+    })
+    .from(template)
+    .where(and(eq(template.organizationId, organizationId), inArray(template.id, ids)));
+  const caller = series.createdBy
+    ? await loadCreationActor(tx, organizationId, series.createdBy)
+    : await authorizeRetainedRecurrence(tx, organizationId, {
+        seriesId: series.id,
+        revisionId: revision.id,
+      });
+  const command = definitions.some(
+    (definition) => definition.archivedAt !== null || definition.state === 'archived',
+  )
+    ? await authorizeScheduleContinuity(tx, {
+        organizationId,
+        seriesRevisionId: revision.id,
+        runDate,
+      })
+    : compileScheduleCommand({
+        caller,
+        seriesId: series.id,
+        ownerProgramId: series.ownerProgramId,
+        document,
+        runDate,
+      });
+  return attachPersistedPrivateScheduleStructures(tx, command, {
+    organizationId,
+    seriesId: series.id,
+    invocationId: revision.blueprintInvocationId,
+  });
+}
 async function acceptClaim(
   database: Database,
   input: ExecuteScheduleOccurrenceCommand,
@@ -198,36 +250,13 @@ async function acceptClaim(
       throw new ConflictError('The schedule attempt changed.');
     if (occurrence.acceptedClaim) return;
     const document = parseScheduleDocument(revision.scheduleDraft);
-    const ids = scheduleDocumentRoots(document).map((root) => root.draft.template.workTypeId);
-    const definitions = await tx
-      .select({
-        id: template.id,
-        archivedAt: template.archivedAt,
-        state: template.publicationState,
-      })
-      .from(template)
-      .where(and(eq(template.organizationId, input.organizationId), inArray(template.id, ids)));
-    const caller = series.createdBy
-      ? await loadCreationActor(tx, input.organizationId, series.createdBy)
-      : await authorizeRetainedRecurrence(tx, input.organizationId, {
-          seriesId: series.id,
-          revisionId: revision.id,
-        });
-    const command = definitions.some(
-      (definition) => definition.archivedAt !== null || definition.state === 'archived',
-    )
-      ? await authorizeScheduleContinuity(tx, {
-          organizationId: input.organizationId,
-          seriesRevisionId: revision.id,
-          runDate: occurrence.scheduledFor,
-        })
-      : compileScheduleCommand({
-          caller,
-          seriesId: series.id,
-          ownerProgramId: series.ownerProgramId,
-          document,
-          runDate: occurrence.scheduledFor,
-        });
+    const command = await claimCommand(tx, {
+      organizationId: input.organizationId,
+      series,
+      revision,
+      document,
+      runDate: occurrence.scheduledFor,
+    });
     const roots = await preflightScheduleClaim(tx, command, document);
     const claim = AcceptedScheduleClaim.parse({
       kind: 'schedule',

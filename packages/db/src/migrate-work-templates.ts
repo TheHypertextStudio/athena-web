@@ -98,7 +98,7 @@ async function prepareFinalCheckpoints(
     await backfillScheduleHistoryImports(database, options);
   if (entries.some((entry) => entry.tag === '0175_schedule_conversion_preparation'))
     await backfillScheduleConversions(database, options);
-  if (entries.some((entry) => entry.tag === '0180_private_definition_alias_references')) {
+  if (entries.some((entry) => entry.tag === '0181_private_definition_alias_references')) {
     const aliases = await preparePrivateAliasReferences(database, options);
     if (!aliases.enforced)
       console.warn(

@@ -18,12 +18,16 @@ export {
 } from './graph-prerequisites';
 
 function sourceKey(snapshot: PublishedBlueprintSnapshot): string {
-  return JSON.stringify([snapshot.organizationId, snapshot.workTypeId, snapshot.versionId]);
+  return snapshot.privateInvocationId
+    ? JSON.stringify([snapshot.organizationId, 'private', snapshot.privateInvocationId])
+    : JSON.stringify([snapshot.organizationId, snapshot.workTypeId, snapshot.versionId]);
 }
 function structural(snapshot: PublishedBlueprintSnapshot): StructuralBlueprintSnapshot {
   return {
     sourceKey: sourceKey(snapshot),
-    definitionKey: JSON.stringify([snapshot.organizationId, snapshot.workTypeId]),
+    definitionKey: snapshot.privateInvocationId
+      ? JSON.stringify([snapshot.organizationId, 'private', snapshot.privateInvocationId])
+      : JSON.stringify([snapshot.organizationId, snapshot.workTypeId]),
     scopeKey: snapshot.organizationId,
     kind: snapshot.kind,
     definition: snapshot.definition,
@@ -66,9 +70,14 @@ function resolvePublication(
       [path],
     );
   const chosen = requireBlueprintValue(resolved[0]);
+  // A private root carries authored steps under its base identity; a step resolving to that same base
+  // publication must expand the publication itself, never the private structure again.
   const snapshot = requireBlueprintValue(
     [input.root, ...input.publications].find(
-      (item) => item.workTypeId === chosen.workTypeId && item.versionId === chosen.versionId,
+      (item) =>
+        !item.privateInvocationId &&
+        item.workTypeId === chosen.workTypeId &&
+        item.versionId === chosen.versionId,
     ),
   );
   assertReferenceSelection(step, snapshot, path);
@@ -97,7 +106,10 @@ function selectedIdentity(
 function projectedOrigin(
   node: StructuralBlueprintNode,
   sources: ReadonlyMap<string, PublishedBlueprintSnapshot>,
-): Pick<ExpandedBlueprintNode, 'sourceStepId' | 'sourceWorkTypeId' | 'sourceVersionId'> {
+): Pick<
+  ExpandedBlueprintNode,
+  'sourceStepId' | 'sourceWorkTypeId' | 'sourceVersionId' | 'privateOrigin'
+> {
   if (!node.ownerSourceKey)
     return { sourceStepId: null, sourceWorkTypeId: null, sourceVersionId: null };
   const owner = requireBlueprintValue(sources.get(node.ownerSourceKey));
@@ -106,6 +118,13 @@ function projectedOrigin(
     throw new BlueprintError('blueprint_invalid', 'Missing immutable step projection.', [
       node.path,
     ]);
+  if (owner.privateInvocationId)
+    return {
+      sourceStepId: null,
+      sourceWorkTypeId: null,
+      sourceVersionId: null,
+      privateOrigin: { invocationId: owner.privateInvocationId, stepAlias: sourceStepId },
+    };
   return { sourceStepId, sourceWorkTypeId: owner.workTypeId, sourceVersionId: owner.versionId };
 }
 function projectNode(

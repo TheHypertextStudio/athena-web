@@ -1,25 +1,18 @@
-import { readFileSync } from 'node:fs';
+import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import type { Database } from '@docket/db';
 import { sql } from 'drizzle-orm';
-import { rawResultRows } from '../../src/lib/raw-result';
 
-/** Apply the reviewed candidate on a disposable predecessor fixture; installed normal schemas are left untouched. */
+/**
+ * Apply the unjournaled alias-reference enforcement candidate to a test database.
+ * Production keeps this boundary closed until the migration is journaled with its runtime consumers.
+ */
 export async function installPrivateAliasReferenceCandidate(database: Database): Promise<void> {
-  const [state] = rawResultRows<{ present: boolean }>(
-    await database.execute(
-      sql`select to_regprocedure('public.docket_enforce_private_alias_references()') is not null as present`,
-    ),
+  const body = await readFile(
+    resolve(import.meta.dirname, 'private-alias-reference-candidate.sql'),
+    'utf8',
   );
-  if (state?.present) return;
-  const path =
-    process.env['DOCKET_ALIAS_REFERENCE_MIGRATION'] ??
-    resolve(
-      import.meta.dirname,
-      '../../../../packages/db/drizzle/0180_private_definition_alias_references.sql',
-    );
-  await database.transaction(async (tx) => {
-    for (const statement of readFileSync(path, 'utf8').split('--> statement-breakpoint'))
-      if (statement.trim()) await tx.execute(sql.raw(statement));
-  });
+  for (const statement of body.split('--> statement-breakpoint')) {
+    if (statement.trim()) await database.execute(sql.raw(statement));
+  }
 }

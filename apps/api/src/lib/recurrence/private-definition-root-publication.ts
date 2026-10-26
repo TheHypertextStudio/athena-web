@@ -2,39 +2,21 @@ import { WorkTypeId, WorkTypeVersionId } from '@docket/work/ids';
 import type { ActorCtx } from '../../context';
 import { ConflictError } from '../../error';
 import type { TemplateTransaction } from '../templates/persistence';
-import {
-  createPublishedWorkTemplateInTransaction,
-  type TemplateCreationEffect,
-} from '../templates/service';
 import { selectedVersion } from '../work-template-selection';
 import { readBlueprintClosure, lockBlueprintClosures } from '../work-template-blueprints/resolve';
-import { recurrenceWorkTemplateDefinition } from './work-template-definition';
 import type { RecurrenceBlueprintSource } from './work-template-source';
 import type { PrivateDefinitionRootPublication } from './private-definition-compiler';
-/** Exact current root publications and post-commit effects from the single existing publication service. */
+/** Exact current root publications: selected pins, or the workspace base for inline authored roots. */
 export interface PublishedPrivateRoots {
   readonly publications: ReadonlyMap<string, PrivateDefinitionRootPublication>;
-  readonly effects: readonly TemplateCreationEffect[];
 }
-async function singleTaskBase(
-  tx: TemplateTransaction,
-  caller: ActorCtx,
-  sources: readonly RecurrenceBlueprintSource[],
-) {
-  const only = sources.length === 1 ? sources[0] : undefined;
-  if (only?.kind !== 'task' || typeof only.preset.fields['work_type_id'] === 'string') return null;
-  const base = await readBlueprintClosure(tx, { organizationId: caller.orgId, kind: 'task' });
-  await lockBlueprintClosures(tx, [base]);
-  return {
-    id: only.id,
-    publication: { workTypeId: base.root.workTypeId, workTypeVersionId: base.root.versionId },
-  };
-}
-/** Resolve actual pinned selected roots and publish only sanitized reusable structure for inline authored roots. */
+/**
+ * Resolve actual pinned selected roots and the workspace base publication for inline authored roots.
+ * Authored structure stays with the private invocation; no template or version is created.
+ */
 export async function publishPrivateDefinitionRoots(
   tx: TemplateTransaction,
   caller: ActorCtx,
-  name: string,
   sources: readonly RecurrenceBlueprintSource[],
 ): Promise<PublishedPrivateRoots> {
   const roots = sources.filter((source) => source.id === source.rootId);
@@ -47,6 +29,16 @@ export async function publishPrivateDefinitionRoots(
       return typeof id === 'string' && typeof version === 'string' ? [{ source, id, version }] : [];
     })
     .sort((a, b) => a.id.localeCompare(b.id));
+  const inlineKinds = [
+    ...new Set(
+      roots
+        .filter((root) => !selections.some((selection) => selection.source.id === root.id))
+        .map((root) => (root.kind === 'project' ? 'project' : 'task')),
+    ),
+  ].sort();
+  const bases = await Promise.all(
+    inlineKinds.map((kind) => readBlueprintClosure(tx, { organizationId: caller.orgId, kind })),
+  );
   const graphs = await Promise.all(
     selections.map(({ source, id, version }) =>
       readBlueprintClosure(tx, {
@@ -57,9 +49,8 @@ export async function publishPrivateDefinitionRoots(
       }),
     ),
   );
-  await lockBlueprintClosures(tx, graphs);
-  const publications = new Map<string, PrivateDefinitionRootPublication>(),
-    effects: TemplateCreationEffect[] = [];
+  await lockBlueprintClosures(tx, [...bases, ...graphs]);
+  const publications = new Map<string, PrivateDefinitionRootPublication>();
   for (const { source, id, version } of selections) {
     const teamId = source.preset.fields['team_id'];
     const checked = await selectedVersion(
@@ -71,22 +62,14 @@ export async function publishPrivateDefinitionRoots(
     );
     publications.set(source.id, { workTypeId: id, workTypeVersionId: checked.id });
   }
-  const base = await singleTaskBase(tx, caller, sources);
-  if (base) publications.set(base.id, base.publication);
   for (const root of roots) {
     if (publications.has(root.id)) continue;
-    if (root.kind === 'milestone')
-      throw new ConflictError('Private root publication is unavailable.');
-    const created = await createPublishedWorkTemplateInTransaction(tx, caller, {
-      targetType: root.kind,
-      scope: 'organization',
-      offeredTeamIds: [],
-      definition: recurrenceWorkTemplateDefinition(name, root, sources),
+    const base = bases.find((graph) => graph.root.kind === root.kind);
+    if (!base) throw new ConflictError('Private root publication is unavailable.');
+    publications.set(root.id, {
+      workTypeId: base.root.workTypeId,
+      workTypeVersionId: base.root.versionId,
     });
-    const version = created.row.latestPublishedVersionId;
-    if (!version) throw new ConflictError('Private root publication is unavailable.');
-    publications.set(root.id, { workTypeId: created.row.id, workTypeVersionId: version });
-    effects.push(...created.effects);
   }
-  return { publications, effects };
+  return { publications };
 }

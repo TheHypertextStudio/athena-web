@@ -15,6 +15,7 @@ import {
   type ScheduleDocument,
 } from './schedule-compiler';
 import { requireScheduleAccess } from './schedule-access';
+import { attachPersistedPrivateScheduleStructures } from './schedule-private-structure';
 import { blueprintFingerprint } from '../work-template-blueprints/fingerprint';
 import type { PlannedWorkTree } from '@docket/work/blueprints';
 
@@ -219,7 +220,12 @@ export async function authorizeScheduleExecution(
     runDate: row.occurrence.scheduledFor,
     acceptedRoots: claim.roots,
   });
-  return bindCommand(tx, command, claim.roots);
+  const structured = await attachPersistedPrivateScheduleStructures(tx, command, {
+    organizationId: identity.organizationId,
+    seriesId: row.series.id,
+    invocationId: row.revision.blueprintInvocationId,
+  });
+  return bindCommand(tx, structured, claim.roots);
 }
 
 /** Resolve archive continuity only from the newest accepted full same-revision closure or persisted fallback. */

@@ -76,6 +76,7 @@ delegation are asserted in `apps/web/tests/pickers/timeframe-picker-contract.tes
 | 31  | Daily planning → yesterday review         | `apps/web/src/components/daily-planning/daily-planning-yesterday.tsx`   | Move unfinished work to another date     | Shared picker                                 |
 | 32  | Work schedule → repeat settings           | `apps/web/src/components/work-schedules/schedule-repeat-fields.tsx`     | Effective date                           | Shared picker                                 |
 | 33  | Work schedule → manual run                | `apps/web/src/components/work-schedules/schedule-run-dialog.tsx`        | Run date                                 | Shared picker                                 |
+| 34  | Admin → cost prices                       | `apps/admin/src/app/(admin)/costs/rates-section.tsx`                    | Price start day                          | Shared picker                                 |
 
 Before this pass, rows 9–12 each hosted their own `<input type="date">`, so four surfaces had four
 different behaviours and none of them had bounds. Rows 1–8 already shared a component, but that

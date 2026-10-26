@@ -8,6 +8,7 @@ import {
   formatRate,
   holderName,
   parseRate,
+  recentMonths,
 } from '../../src/lib/cost-format';
 
 describe('cost formatting', () => {
@@ -43,6 +44,20 @@ describe('price formatting', () => {
         day: 'numeric',
       }),
     );
+  });
+});
+
+describe('recentMonths', () => {
+  it('lists the current UTC month first and counts back across a year boundary', () => {
+    const months = recentMonths(new Date('2026-02-15T12:00:00Z'), 4);
+
+    expect(months.map((month) => month.value)).toEqual([
+      '2026-02',
+      '2026-01',
+      '2025-12',
+      '2025-11',
+    ]);
+    expect(new Set(months.map((month) => month.label)).size).toBe(4);
   });
 });
 

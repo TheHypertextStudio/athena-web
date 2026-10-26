@@ -2,14 +2,14 @@
 
 import { IdentityGlyph } from '@docket/ui/components';
 import { Building, Gauge, User } from '@docket/ui/icons';
-import { Badge, Button, Input, Row, Skeleton, Stack, Text } from '@docket/ui/primitives';
+import { Badge, Button, Row, Select, Skeleton, Stack, Text } from '@docket/ui/primitives';
 import { type JSX, useState } from 'react';
 
 import { AsyncContent, ListSkeleton, QueryErrorBanner } from '@/components/admin-feedback';
 import { AdminPage, AdminPageHeader, AdminSection } from '@/components/admin-page';
 import { AdminList, AdminListRow } from '@/components/admin-table';
 import { api } from '@/lib/api';
-import { RESOURCE_LABEL, formatCostFloor, holderName } from '@/lib/cost-format';
+import { RESOURCE_LABEL, formatCostFloor, holderName, recentMonths } from '@/lib/cost-format';
 import { formatTimestamp } from '@/lib/lifecycle';
 import { STALE, apiQueryOptions, queryKeys, useApiQuery } from '@/lib/query';
 import type { AdminCostHolder, AdminCosts } from '@/lib/types';
@@ -30,6 +30,12 @@ const METER_LABEL: Readonly<Record<AdminCosts['meters'][number]['meter'], string
   postgres_storage: 'Database storage',
   object_storage: 'File storage',
 };
+
+/** How many months back the picker reaches. */
+const MONTH_CHOICES = 12;
+
+/** The months an operator can look at, newest first. */
+const MONTHS = recentMonths(new Date(), MONTH_CHOICES);
 
 /** The UTC month an operator sees first. */
 function thisMonth(): string {
@@ -66,31 +72,7 @@ export default function CostsPage(): JSX.Element {
     <AdminPage width="list" outline>
       <AdminPageHeader
         title="Costs"
-        actions={
-          <Row gap={2} align="center">
-            {LENSES.map((option) => (
-              <Button
-                key={option.value}
-                variant={option.value === lens ? 'secondary' : 'ghost'}
-                controlSize="sm"
-                aria-pressed={option.value === lens}
-                onClick={() => {
-                  setLens(option.value);
-                }}
-              >
-                {option.label}
-              </Button>
-            ))}
-            <Input
-              type="month"
-              aria-label="Month"
-              value={month}
-              onChange={(event) => {
-                if (event.target.value) setMonth(event.target.value);
-              }}
-            />
-          </Row>
-        }
+        actions={<CostControls lens={lens} onLens={setLens} month={month} onMonth={setMonth} />}
       />
 
       {report.error ? (
@@ -138,6 +120,52 @@ export default function CostsPage(): JSX.Element {
 
       <RatesSection />
     </AdminPage>
+  );
+}
+
+/** Props for {@link CostControls}. */
+interface CostControlsProps {
+  /** Which question the ranking answers. */
+  readonly lens: Lens;
+  /** Choose the lens. */
+  readonly onLens: (lens: Lens) => void;
+  /** The UTC month shown, `YYYY-MM`. */
+  readonly month: string;
+  /** Choose the month. */
+  readonly onMonth: (month: string) => void;
+}
+
+/** The lens toggle and the month list that sit in the page header. */
+function CostControls({ lens, onLens, month, onMonth }: CostControlsProps): JSX.Element {
+  return (
+    <Row gap={2} align="center">
+      {LENSES.map((option) => (
+        <Button
+          key={option.value}
+          variant={option.value === lens ? 'secondary' : 'ghost'}
+          controlSize="sm"
+          aria-pressed={option.value === lens}
+          onClick={() => {
+            onLens(option.value);
+          }}
+        >
+          {option.label}
+        </Button>
+      ))}
+      <Select
+        aria-label="Month"
+        value={month}
+        onChange={(event) => {
+          onMonth(event.target.value);
+        }}
+      >
+        {MONTHS.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </Select>
+    </Row>
   );
 }
 

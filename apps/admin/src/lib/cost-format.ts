@@ -89,6 +89,35 @@ export function formatRate(microsPerMillionUnits: number): string {
   });
 }
 
+/** A month an operator can pick: its `YYYY-MM` value and the name shown for it. */
+export interface MonthOption {
+  /** The UTC month, `YYYY-MM`. */
+  readonly value: string;
+  /** The month written for a person, e.g. `October 2026`. */
+  readonly label: string;
+}
+
+/**
+ * The most recent UTC months, newest first.
+ *
+ * @param now - The instant the list is counted back from.
+ * @param count - How many months to list, including the current one.
+ * @returns one option per month.
+ */
+export function recentMonths(now: Date, count: number): MonthOption[] {
+  return Array.from({ length: count }, (_, back) => {
+    const month = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - back, 1));
+    return {
+      value: month.toISOString().slice(0, 7),
+      label: month.toLocaleDateString(undefined, {
+        timeZone: 'UTC',
+        year: 'numeric',
+        month: 'long',
+      }),
+    };
+  });
+}
+
 /**
  * Write the day a price starts applying.
  *

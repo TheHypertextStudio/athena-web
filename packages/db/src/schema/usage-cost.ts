@@ -68,10 +68,10 @@ export const usageRate = pgTable(
     resource: text('resource').$type<UsageResource>().notNull(),
     dimension: text('dimension').notNull().default(''),
     microsPerMillionUnits: bigint('micros_per_million_units', { mode: 'number' }).notNull(),
-    effectiveFrom: timestamp('effective_from').notNull(),
+    effectiveFrom: timestamp('effective_from', { withTimezone: true }).notNull(),
     note: text('note'),
     createdBy: text('created_by').references(() => staffUser.id, { onDelete: 'set null' }),
-    createdAt: timestamp('created_at').notNull().defaultNow(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
     uniqueIndex('usage_rate_key_uq').on(t.resource, t.dimension, t.effectiveFrom),
@@ -96,8 +96,8 @@ export const usageMeterRun = pgTable(
   'usage_meter_run',
   {
     meter: text('meter').$type<UsageMeter>().primaryKey(),
-    lastSuccessAt: timestamp('last_success_at'),
-    lastAttemptAt: timestamp('last_attempt_at').notNull(),
+    lastSuccessAt: timestamp('last_success_at', { withTimezone: true }),
+    lastAttemptAt: timestamp('last_attempt_at', { withTimezone: true }).notNull(),
     failed: boolean('failed').notNull().default(false),
   },
   (t) => [
@@ -136,7 +136,7 @@ export const usageDaily = pgTable(
     dimension: text('dimension').notNull().default(''),
     quantity: bigint('quantity', { mode: 'number' }).notNull().default(0),
     unmeasuredEvents: integer('unmeasured_events').notNull().default(0),
-    updatedAt: timestamp('updated_at')
+    updatedAt: timestamp('updated_at', { withTimezone: true })
       .notNull()
       .defaultNow()
       .$onUpdate(() => new Date()),

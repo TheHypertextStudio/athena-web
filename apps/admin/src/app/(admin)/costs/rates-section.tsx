@@ -14,6 +14,7 @@ import {
   Select,
   Text,
 } from '@docket/ui/primitives';
+import { DatePicker } from '@docket/ui/components';
 import { type JSX, useState } from 'react';
 
 import { AsyncContent, ListSkeleton, QueryErrorBanner } from '@/components/admin-feedback';
@@ -220,12 +221,15 @@ function RateFields({
         />
       </Field>
       <Field label="Starts">
-        <Input
-          type="date"
+        <DatePicker
           value={draft.from}
-          onChange={(event) => {
-            if (event.target.value) onChange({ from: event.target.value });
+          onChange={(value) => {
+            if (value) onChange({ from: value });
           }}
+          placeholder="Choose start day"
+          ariaLabel="Price start day"
+          triggerVariant="secondary"
+          triggerClassName="w-full justify-start"
         />
       </Field>
       <Field label="Source">

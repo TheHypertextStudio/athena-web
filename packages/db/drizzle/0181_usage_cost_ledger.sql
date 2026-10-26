@@ -7,7 +7,7 @@ CREATE TABLE "usage_daily" (
   "dimension" text DEFAULT '' NOT NULL,
   "quantity" bigint DEFAULT 0 NOT NULL,
   "unmeasured_events" integer DEFAULT 0 NOT NULL,
-  "updated_at" timestamp DEFAULT now() NOT NULL,
+  "updated_at" timestamp with time zone DEFAULT now() NOT NULL,
   CONSTRAINT "usage_daily_key_uq" UNIQUE NULLS NOT DISTINCT (
     "day",
     "user_id",
@@ -34,8 +34,8 @@ CREATE TABLE "usage_daily" (
 --> statement-breakpoint
 CREATE TABLE "usage_meter_run" (
   "meter" text PRIMARY KEY NOT NULL,
-  "last_success_at" timestamp,
-  "last_attempt_at" timestamp NOT NULL,
+  "last_success_at" timestamp with time zone,
+  "last_attempt_at" timestamp with time zone NOT NULL,
   "failed" boolean DEFAULT false NOT NULL,
   CONSTRAINT "usage_meter_run_meter_check" CHECK (
     "usage_meter_run"."meter" IN ('ai_tokens', 'postgres_storage', 'object_storage')
@@ -48,10 +48,10 @@ CREATE TABLE "usage_rate" (
   "resource" text NOT NULL,
   "dimension" text DEFAULT '' NOT NULL,
   "micros_per_million_units" bigint NOT NULL,
-  "effective_from" timestamp NOT NULL,
+  "effective_from" timestamp with time zone NOT NULL,
   "note" text,
   "created_by" text,
-  "created_at" timestamp DEFAULT now() NOT NULL,
+  "created_at" timestamp with time zone DEFAULT now() NOT NULL,
   CONSTRAINT "usage_rate_resource_check" CHECK (
     "usage_rate"."resource" IN (
       'ai_input_tokens',

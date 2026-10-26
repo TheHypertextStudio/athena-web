@@ -13,6 +13,7 @@ import { betterAuth } from 'better-auth';
 import { verifyAccessToken } from 'better-auth/oauth2';
 
 import { buildAuthOptions } from './auth-builder';
+import { resolveDemoSignIn } from './demo-access';
 import { createGoogleDirectory } from './google-directory';
 import { withOAuthRateLimitResponse } from './oauth-rate-limit-response';
 
@@ -141,6 +142,7 @@ const configuredAuth = betterAuth(
     mailer,
     ...(devEchoSignupCode ? { devEchoSignupCode: true } : {}),
     ...(googleDirectory ? { googleDirectory } : {}),
+    resolveDemoSignIn,
   }),
 );
 

@@ -7,17 +7,7 @@
  * the creator's Owner actor, a default team (+ its team actor + membership), and the
  * org-root role grants. All nested routes go through `orgContextMiddleware`.
  */
-import {
-  actor,
-  db,
-  grant,
-  initiativeHierarchyLink,
-  organization,
-  role,
-  team,
-  teamMember,
-  seedWorkspaceStatuses,
-} from '@docket/db';
+import { actor, db, initiativeHierarchyLink, organization, team } from '@docket/db';
 import type { DefaultTeamOut } from '../contracts/organization';
 import {
   OrgCreate,
@@ -44,15 +34,9 @@ import { zJson, zQuery } from '../lib/validate';
 import { capabilityGuard } from '../permissions/capability-guard';
 import { orgContextMiddleware } from '../permissions/org-context-middleware';
 import { enqueueSearchUpsert } from '../search/write-through';
+import { createOrganizationInTransaction } from '../services/organization-create';
 import { initiativeHierarchyDepth } from './initiative-hierarchy';
-import {
-  SYSTEM_ROLES,
-  resolveUniqueSlug,
-  slugify,
-  toOrgOut,
-  workspaceSettingsPatch,
-} from './org-helpers';
-import { createTeamActor } from './team-actor';
+import { resolveUniqueSlug, slugify, toOrgOut, workspaceSettingsPatch } from './org-helpers';
 import activity from './activity';
 import stream from './stream';
 import agentSessions from './agent-sessions';
@@ -224,88 +208,17 @@ Every new organization includes the Owner, Admin, Member, and Guest roles plus a
       const baseSlug = body.slug ?? (isPersonal ? `personal-${slugify(userId)}` : slugify(orgName));
       const slug = await resolveUniqueSlug(baseSlug, body.slug !== undefined);
 
-      const result = await db.transaction(async (tx) => {
-        const [org] = await tx
-          .insert(organization)
-          .values({
-            name: orgName,
-            slug,
-            purpose: body.purpose,
-            isPersonal,
-            vocabulary: { preset: body.vocabulary },
-          })
-          .returning();
-        /* v8 ignore next -- @preserve defensive: insert/update always returns a row */
-        if (!org) throw new Error('organization insert returned no row');
-
-        const insertedRoles = await tx
-          .insert(role)
-          .values(SYSTEM_ROLES.map((r) => ({ organizationId: org.id, isSystem: true, ...r })))
-          .returning();
-        const roleByKey = new Map(insertedRoles.map((r) => [r.key, r]));
-        const ownerRole = roleByKey.get('owner');
-        /* v8 ignore next -- @preserve defensive: the owner system role is always seeded above */
-        if (!ownerRole) throw new Error('owner role not seeded');
-
-        const [ownerActor] = await tx
-          .insert(actor)
-          .values({
-            organizationId: org.id,
-            kind: 'human',
-            displayName,
-            userId: session.user.id,
-            roleId: ownerRole.id,
-          })
-          .returning();
-        /* v8 ignore next -- @preserve defensive: insert/update always returns a row */
-        if (!ownerActor) throw new Error('owner actor insert returned no row');
-
-        // A workspace's statuses exist before any of its work can, because every task, project,
-        // program, and initiative points at one. Seeded inside the same transaction so a
-        // half-built workspace is impossible.
-        await seedWorkspaceStatuses(tx, org.id, ownerActor.id);
-
-        const [defaultTeam] = await tx
-          .insert(team)
-          .values({ organizationId: org.id, name: 'General', key: 'GEN' })
-          .returning();
-        /* v8 ignore next -- @preserve defensive: insert/update always returns a row */
-        if (!defaultTeam) throw new Error('default team insert returned no row');
-
-        await createTeamActor(tx, {
-          organizationId: org.id,
-          teamId: defaultTeam.id,
-          name: defaultTeam.name,
-        });
-        await tx.insert(teamMember).values({
-          teamId: defaultTeam.id,
-          actorId: ownerActor.id,
-          organizationId: org.id,
-          role: 'manager',
-        });
-
-        // Materialize the owner/admin/member role base as grants at the org root.
-        const grantValues: (typeof grant.$inferInsert)[] = [];
-        for (const key of ['owner', 'admin', 'member'] as const) {
-          const r = roleByKey.get(key);
-          /* v8 ignore next -- @preserve defensive: owner/admin/member are always in the seeded role map */
-          if (!r) continue;
-          grantValues.push({
-            organizationId: org.id,
-            subjectKind: 'role',
-            subjectId: r.id,
-            resourceKind: 'organization',
-            resourceId: org.id,
-            /* v8 ignore next -- @preserve owner/admin/member always carry a baseCapability; the [] side is unreachable here */
-            capabilities: r.baseCapability ? [r.baseCapability] : [],
-            effect: 'allow',
-          });
-        }
-        /* v8 ignore next -- @preserve owner/admin/member always populate grantValues, so the empty-list skip is unreachable */
-        if (grantValues.length > 0) await tx.insert(grant).values(grantValues);
-
-        return { org, ownerActor, defaultTeam };
-      });
+      const result = await db.transaction((tx) =>
+        createOrganizationInTransaction(tx, {
+          name: orgName,
+          slug,
+          purpose: body.purpose,
+          isPersonal,
+          vocabulary: { preset: body.vocabulary },
+          ownerDisplayName: displayName,
+          ownerUserId: session.user.id,
+        }),
+      );
 
       const payload: z.input<typeof OrgCreateResult> = {
         organization: toOrgOut(result.org),

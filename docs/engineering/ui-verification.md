@@ -322,3 +322,32 @@ failure from your own fixtures.
 - Do not write a screenshot script. Use `capture-shots.ts`.
 - Do not use `pkill` on an unqualified pattern to clean up. `dev-stack.sh stop` scopes it, and a
   stray `next dev` should be killed by the PID its own error message prints.
+
+## Reviewer demo sign-in
+
+Reviewer access uses a private operator-supplied link on the real `/sign-in?demo=<slug>` page. Its URL fragment carries the designated email and a random 256-bit bearer credential. The page removes the fragment from browser history and exchanges it through `POST /api/auth/sign-in/demo-link` for a normal session. Reviewers reach their existing workspace immediately: there is no password, inbox access, code entry, registration or onboarding. The link remains reusable for repeat reviews until its credential is rotated or access is disabled.
+
+The database stores only a SHA-256 digest bound to the email and slug. Every exchange checks the exact credential, active/unexpired demo and workspace, allow-listed email, active workspace membership and the `demo_sign_in` kill switch. Invalid credentials share one generic failure. Existing sessions retain the normal session lifecycle. Keep the complete link private, including in review submission instructions; never commit it or put it in logs. A bare demo slug or email grants no access.
+
+Run the existing dev stack procedure under the disk guard. Export its resolved `APP_URL` before seeding, then choose a new absolute private output path:
+
+```bash
+eval "$(bash scripts/dev-stack.sh env)"
+export APP_URL
+pnpm db:reset
+pnpm exec dotenv -e .env.local -- pnpm --filter @docket/api exec tsx scripts/seed-demo.ts openai-review "OpenAI review" mcp-review@theaicompany.org "OpenAI review workspace" /tmp/docket-reviewer-link.txt
+pnpm exec dotenv -e .env.local -- pnpm --filter @docket/api exec tsx scripts/seed-demo.ts other-review "Other review" other-review@example.com "Other review workspace" /tmp/docket-other-review-link.txt
+```
+
+The seed refuses hosted modes, non-PGlite databases, duplicate slugs, existing reviewer accounts and existing output files. It creates the reviewer and hub, an owned shared workspace with normal roles/team/statuses, four assigned sample tasks, complimentary Pro access, the shared `demo_workspace` association and the credential digest. It writes the full link to the new file with mode `0600` and prints only the file location. Use the actual reviewer email provided by the reviewing platform.
+
+With the stack ready and `APP_URL` and `API_URL` exported, run the real browser journey:
+
+```bash
+cd apps/web
+DEMO_REVIEW_LINK_FILE=/tmp/docket-reviewer-link.txt DEMO_OTHER_LINK_FILE=/tmp/docket-other-review-link.txt pnpm exec playwright test e2e/auth/demo-sign-in.spec.ts
+```
+
+The second seed is only a local account-switching fixture. The browser test first signs into that account, then opens the reviewer link with that existing session, with cleared cookies, and while already signed in as the reviewer. Each visit verifies the designated reviewer identity and a scrubbed URL fragment. It also checks the four seeded tasks and verifies their titles render in My work. No code echo or mail provider is involved. Capture normal sign-in and the link loading/incomplete/error states with `capture-shots.ts` in both themes and standard widths. Stop the stack and run `pnpm db:reset` when finished so API tests see an empty dev database. The seed is local-only; hosted provisioning and actual platform review acceptance are separate checks.
+
+Per-person provisioning, scheduled reset/expiry, source-workspace copying and demo management screens are deferred. The seed creates sample work directly; it does not implement those operations.

@@ -18,6 +18,7 @@ export * from './agents';
 export * from './athena-chapters';
 export * from './elicitation';
 export * from './admin';
+export * from './demo';
 export * from './billing';
 export * from './infra';
 export * from './status';

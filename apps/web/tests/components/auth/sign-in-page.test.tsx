@@ -8,21 +8,24 @@
  * into onboarding, where the first create-org call would surface the confusing
  * "Authentication required" notice.
  */
+import { StrictMode } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { configGet, orgsGet, push, signInPasskey, signInSocial, useSession } = vi.hoisted(() => ({
-  configGet: vi.fn(),
-  orgsGet: vi.fn(),
-  push: vi.fn(),
-  signInPasskey: vi.fn(),
-  signInSocial: vi.fn(),
-  useSession: vi.fn((): { data: { user: { id: string } } | null; isPending: boolean } => ({
-    data: null,
-    isPending: false,
-  })),
-}));
+const { configGet, orgsGet, push, signInPasskey, signInSocial, useSession, demoExchange } =
+  vi.hoisted(() => ({
+    demoExchange: vi.fn(),
+    configGet: vi.fn(),
+    orgsGet: vi.fn(),
+    push: vi.fn(),
+    signInPasskey: vi.fn(),
+    signInSocial: vi.fn(),
+    useSession: vi.fn((): { data: { user: { id: string } } | null; isPending: boolean } => ({
+      data: null,
+      isPending: false,
+    })),
+  }));
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push }),
@@ -34,6 +37,7 @@ vi.mock('../../../src/lib/api', () => ({
 
 vi.mock('../../../src/lib/auth-client', () => ({
   authClient: {
+    $fetch: demoExchange,
     signIn: { passkey: signInPasskey, social: signInSocial },
     useSession,
   },
@@ -76,19 +80,20 @@ async function expectSessionRecoveryError(): Promise<void> {
  * though none of the assertions below are about those buttons. Retry-free, and with a fresh client
  * per render so one test's cached config never leaks into the next.
  */
-function renderSignIn(): { rerender: () => void } {
+function renderSignIn(strict = false, demoMode = false): { rerender: () => void } {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
   const tree = (
     <QueryClientProvider client={client}>
-      <SignInClient />
+      <SignInClient demoMode={demoMode} />
     </QueryClientProvider>
   );
-  const { rerender } = render(tree);
+  const rendered = strict ? <StrictMode>{tree}</StrictMode> : tree;
+  const { rerender } = render(rendered);
   return {
     rerender: () => {
-      rerender(tree);
+      rerender(rendered);
     },
   };
 }
@@ -146,6 +151,20 @@ afterEach(() => {
 });
 
 describe('SignInClient', () => {
+  it('keeps post-sign-in routing active after Strict Mode replays mount effects', async () => {
+    orgsGet.mockResolvedValue(jsonResponse(200, { items: [{ id: 'org_1' }] }));
+    signInPasskey.mockResolvedValue({ data: {}, error: null });
+    renderSignIn(true);
+    const button = await screen.findByRole('button', { name: 'Sign in with a passkey' });
+    await waitFor(() => {
+      expect(button.hasAttribute('disabled')).toBe(false);
+    });
+    fireEvent.click(button);
+    await waitFor(() => {
+      expect(push).toHaveBeenCalledWith('/today');
+    });
+  });
+
   it('redirects an already-authenticated browser away without rendering the passkey form', async () => {
     useSession.mockReturnValue({ data: { user: { id: 'user_1' } }, isPending: false });
 
@@ -352,4 +371,20 @@ describe('SignInClient', () => {
     expect(push).not.toHaveBeenCalled();
     expect(signInPasskey).not.toHaveBeenCalled();
   });
+});
+
+it('waits for the supplied reviewer credential instead of redirecting an existing other-account session', async () => {
+  window.history.replaceState(
+    null,
+    '',
+    `/sign-in?demo=openai-review#email=mcp-review%40theaicompany.org&token=${'a'.repeat(43)}`,
+  );
+  useSession.mockReturnValue({ data: { user: { id: 'another-user' } }, isPending: false });
+  demoExchange.mockReturnValue(new Promise(() => undefined));
+  renderSignIn(false, true);
+  await waitFor(() => {
+    expect(demoExchange).toHaveBeenCalledOnce();
+  });
+  expect(push).not.toHaveBeenCalled();
+  expect(window.location.hash).toBe('');
 });

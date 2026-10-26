@@ -25,6 +25,7 @@ import { nextCookies } from 'better-auth/next-js';
 import { and, eq, inArray, ne } from 'drizzle-orm';
 
 import { generateAppleClientSecret, type AppleClientSecretInput } from './apple-secret';
+import { demoLink, type ResolveDemoSignIn } from './demo-link';
 import type { GoogleDirectoryPort } from './google-directory';
 import { syncStaffOnSignIn } from './staff-google-sync';
 import { getRecoveryCodeStatus } from './backup-codes';
@@ -72,6 +73,8 @@ export interface AuthDeps {
    * sign-in grants nothing, which is the correct posture when no directory is reachable.
    */
   readonly googleDirectory?: GoogleDirectoryPort | undefined;
+  /** Resolve an operator-supplied reviewer credential; absent disables demo sign-in. */
+  readonly resolveDemoSignIn?: ResolveDemoSignIn | undefined;
   /** Test seam for deterministic Restore Credentials ceremonies. */
   readonly restoreWebAuthn?: RestoreWebAuthn | undefined;
   /** Test seam for Restore Credentials persistence faults; production uses the shared client. */
@@ -764,6 +767,7 @@ export function buildAuthOptions(e: AuthEnv, deps: AuthDeps): BetterAuthOptions 
       mailer: deps.mailer,
       ...(deps.devEchoSignupCode ? { devEchoCode: true } : {}),
     }),
+    demoLink(deps.resolveDemoSignIn),
     restoreCredentialPlugin(e, deps.restoreWebAuthn, deps.restoreDatabase),
     ...configuredPasskeyMigration(e, deps),
   ];

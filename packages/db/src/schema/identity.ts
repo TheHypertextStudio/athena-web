@@ -147,6 +147,8 @@ export const organization = pgTable(
     purpose: text('purpose'),
     avatar: text('avatar'),
     isPersonal: boolean('is_personal').notNull().default(false),
+    /** True when operators may copy this workspace as the source for a demo. */
+    demoSource: boolean('demo_source').notNull().default(false),
     vocabulary: jsonb('vocabulary')
       .$type<VocabularySkin>()
       .notNull()

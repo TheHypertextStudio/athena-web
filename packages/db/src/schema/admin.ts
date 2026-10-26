@@ -124,6 +124,7 @@ export const SERVICE_CONTROL_KEYS = [
   'lattice_submissions',
   'lattice_polling',
   'service_probes',
+  'demo_sign_in',
 ] as const;
 /** One instance-wide service control key. */
 export type ServiceControlKey = (typeof SERVICE_CONTROL_KEYS)[number];

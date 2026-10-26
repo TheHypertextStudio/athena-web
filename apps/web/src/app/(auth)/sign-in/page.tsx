@@ -1,3 +1,5 @@
+import type { Metadata } from 'next';
+
 import type { JSX } from 'react';
 
 import {
@@ -30,6 +32,21 @@ export default async function SignInPage({
 }: {
   searchParams: AuthScreenSearchParams;
 }): Promise<JSX.Element> {
-  await redirectAuthenticatedVisitor(searchParams);
-  return <SignInClient />;
+  const params = await searchParams;
+  // Handle every supplied demo link before ordinary redirects, including unavailable links.
+  // The POST credential exchange is the single authoritative access decision.
+  const demoMode = params['demo'] !== undefined;
+  if (!demoMode) await redirectAuthenticatedVisitor(searchParams);
+  return <SignInClient demoMode={demoMode} />;
+}
+
+/** Keep operator-distributed demo entry links out of search results. */
+export async function generateMetadata({
+  searchParams,
+}: {
+  searchParams: AuthScreenSearchParams;
+}): Promise<Metadata> {
+  return (await searchParams)['demo'] !== undefined
+    ? { robots: { index: false, follow: false }, referrer: 'no-referrer' }
+    : {};
 }

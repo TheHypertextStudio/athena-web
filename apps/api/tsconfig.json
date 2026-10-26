@@ -5,6 +5,9 @@
     "declaration": false,
     "declarationMap": false,
     "noEmit": true,
+    // Acceptance tests deliberately import sibling package sources; this checking-only program
+    // must include the monorepo, while tsconfig.build.json keeps its source root at src.
+    "rootDir": "../..",
     "outDir": "dist",
     "types": ["node"]
   },

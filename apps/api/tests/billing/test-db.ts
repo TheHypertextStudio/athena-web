@@ -40,6 +40,7 @@ export async function createBillingLifecycleDb(): Promise<BillingLifecycleDbFixt
       purpose text,
       avatar text,
       is_personal boolean not null default false,
+      demo_source boolean not null default false,
       vocabulary jsonb not null default '{}'::jsonb,
       agent_guidance text,
       working_weekdays integer[] not null default '{1,2,3,4,5}',

@@ -13,6 +13,7 @@ import { fetchAllOrganizations } from '@/lib/org-collection-pages';
 import { usePublicConfig } from '@/lib/public-config';
 
 import { AuthError, Spinner } from '../_components/auth-feedback';
+import { DemoLinkSignIn } from './demo-link-sign-in';
 import { AuthShell } from '../_components/auth-shell';
 import { OAuthSignIn } from '../_components/oauth-sign-in';
 import { isPasskeyUnknownToServer, passkeyErrorMessage } from '../_lib/passkey-error';
@@ -141,6 +142,41 @@ async function loadOrgsAfterSignIn(isMounted: () => boolean): Promise<OrgsRespon
   return lastResponse ?? fetchAllOrganizations(api);
 }
 
+/** Keep sign-in choices separate from the ceremony and routing lifecycle. */
+function SignInMethods({
+  demoMode,
+  onSignedIn,
+  canSubmit,
+  pending,
+  onPasskey,
+}: {
+  readonly demoMode: boolean;
+  readonly onSignedIn: () => Promise<void>;
+  readonly canSubmit: boolean;
+  readonly pending: boolean;
+  readonly onPasskey: () => void;
+}): JSX.Element {
+  return (
+    <>
+      {demoMode ? (
+        <DemoLinkSignIn onSignedIn={onSignedIn} />
+      ) : (
+        <Button type="button" size="lg" disabled={!canSubmit} onClick={onPasskey}>
+          {pending ? (
+            <>
+              <Spinner />
+              Waiting for your passkey…
+            </>
+          ) : (
+            'Sign in with a passkey'
+          )}
+        </Button>
+      )}
+      {!demoMode && <OAuthSignIn />}
+    </>
+  );
+}
+
 /**
  * The passwordless, passkey-first sign-in screen.
  *
@@ -176,7 +212,7 @@ async function loadOrgsAfterSignIn(isMounted: () => boolean): Promise<OrgsRespon
  *
  * @returns The sign-in screen.
  */
-export function SignInClient(): JSX.Element {
+export function SignInClient({ demoMode = false }: { readonly demoMode?: boolean }): JSX.Element {
   const router = useRouter();
   const passkeyRpIdRef = usePasskeyPruningRpId();
   const [error, setError] = useState<string | null>(null);
@@ -197,6 +233,7 @@ export function SignInClient(): JSX.Element {
   const mountedRef = useRef(true);
   const isMounted = useCallback((): boolean => mountedRef.current, []);
   useEffect(() => {
+    mountedRef.current = true;
     return () => {
       mountedRef.current = false;
     };
@@ -295,7 +332,7 @@ export function SignInClient(): JSX.Element {
   // a live-for-the-lifetime effect would race `routeAfterSignIn`'s deliberate navigation with a
   // second, less-informed one.
   useRedirectIfAuthenticated(
-    existingSession,
+    demoMode ? null : existingSession,
     sessionPending,
     (destination) => {
       navigateAfterSignIn(router, destination);
@@ -311,7 +348,7 @@ export function SignInClient(): JSX.Element {
     const supported = isWebAuthnSupported();
     setPasskeySupported(supported);
     if (!supported) return;
-    if (sessionPending || existingSession) return;
+    if (demoMode || sessionPending || existingSession) return;
     void (async () => {
       if (conditionalArmed.current) return;
       if (await isConditionalMediationSupported()) {
@@ -319,7 +356,7 @@ export function SignInClient(): JSX.Element {
         void authenticate(true);
       }
     })();
-  }, [authenticate, existingSession, sessionPending]);
+  }, [authenticate, demoMode, existingSession, sessionPending]);
 
   const canSubmit = hydrated && passkeySupported && !pending;
 
@@ -354,33 +391,21 @@ export function SignInClient(): JSX.Element {
 
         <AuthError message={error} />
 
-        {!passkeySupported && hydrated ? (
+        {!demoMode && !passkeySupported && hydrated ? (
           <p className="text-on-surface-variant text-body-medium" role="status">
             This browser does not support passkeys. Try a different browser or device to sign in.
           </p>
         ) : null}
 
-        {/* `lg` (h-10) rather than the default h-9: the craft rubric's a11y gate requires 40px
-            touch targets on mobile, and this is the screen's only control. */}
-        <Button
-          type="button"
-          size="lg"
-          disabled={!canSubmit}
-          onClick={() => {
+        <SignInMethods
+          demoMode={demoMode}
+          onSignedIn={routeAfterSignIn}
+          canSubmit={canSubmit}
+          pending={pending}
+          onPasskey={() => {
             void authenticate(false);
           }}
-        >
-          {pending ? (
-            <>
-              <Spinner />
-              Waiting for your passkey…
-            </>
-          ) : (
-            'Sign in with a passkey'
-          )}
-        </Button>
-
-        <OAuthSignIn />
+        />
       </div>
 
       <p className="text-on-surface-variant text-body-medium">

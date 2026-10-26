@@ -1,7 +1,7 @@
 # Project Athena Work Log
 
 > **Purpose**: Comprehensive tracking of all work - past, present, and future.
-> **Last Updated**: 2026-10-25
+> **Last Updated**: 2026-10-26
 
 ---
 
@@ -13769,6 +13769,17 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
 ---
 
 ## Completed Tasks
+
+### [REVIEWER-DEMO-SIGN-IN] Immediate reviewer access through supplied magic links
+
+- **Completed**: 2026-10-26
+- **Summary**: A provisioned reviewer opens a private link bound to the designated email and enters the seeded workspace immediately. No password, inbox check, code entry, registration or onboarding is needed. The link supports repeat reviews until rotated or disabled.
+- **Implementation**: Generate a random 256-bit bearer credential and store only its email/slug-bound digest. Clear the private URL fragment before exchanging it for a normal session. Recheck demo and workspace expiry, active membership, the allow list and the kill switch on every exchange. Handle every demo entry before ordinary authenticated redirects, including unavailable links, so another signed-in account cannot intercept reviewer routing. Preserve normal sign-in. The local seed writes the complete link only to a new private file and creates complimentary access and four assigned sample tasks atomically.
+- **Files changed**: Demo schema and migration `0184_demo_workspaces`; auth plugin/access gate and tests; shared organization creation and local seed; sign-in page/client and browser/component tests; API/database checking configuration; commit scope, README and verification guide.
+- **Validation**: 614 auth tests, 128 web auth checks and 12 database regressions pass. Root typecheck, lint/complexity, formatting, API build, explicit seed-script lint and production web build pass. The real browser test switches from another account, reuses the supplied link with cleared cookies, and reuses it while already signed in; each visit verifies reviewer identity and a scrubbed fragment. It reads and renders all four sample tasks. Sixteen captures cover normal sign-in and incomplete/loading/refused link states at desktop/mobile widths in both themes. The dev stack is stopped and the disposable database reset.
+- **Pre-existing API failures**: Current main's deliverables operation lacks an OpenAPI tag. Eight assertions in `openapi-richness`, `infra` and `notification-boundary`, plus `security/route-auth` suite setup, fail identically on clean HEAD and the changed source. The exact failure names were compared after a clean-HEAD run; source restoration was verified byte-for-byte. The prior series/MCP and database failures no longer occur. This feature adds no failing tests.
+- **Review and learnings**: Independent source review has no remaining findings. Its existing-account redirect findings have regression coverage. Make the credential exchange the sole demo access decision, keep test identities distinct, and inspect current migration ownership before integrating a long-lived branch.
+- **Remaining operational scope**: Hosted account/link provisioning and actual platform review acceptance are separate from this local implementation. Per-person provisioning, copying, scheduled resets/expiry operations and admin screens remain deferred. Existing sessions retain their normal lifecycle after new demo sign-ins are disabled.
 
 ### [DELIVERABLE-RECOVERY-UX] Make comment and update deliverables recoverable and previewable
 

@@ -203,6 +203,24 @@ describe('TimeframePicker', () => {
 });
 
 describe('TimeframeRangePicker', () => {
+  it('notifies the host when either bound opens so calendar settings can load', () => {
+    const onOpenChange = vi.fn();
+    render(
+      <TimeframeRangePicker
+        value={{ start: null, target: null }}
+        fiscalYearStartMonth={0}
+        onChange={vi.fn()}
+        onOpenChange={onOpenChange}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Timeline start — not set' }));
+    expect(onOpenChange).toHaveBeenLastCalledWith(true);
+    fireEvent.keyDown(screen.getByRole('listbox', { name: 'Month choices' }), { key: 'Escape' });
+    expect(onOpenChange).toHaveBeenLastCalledWith(false);
+    fireEvent.click(screen.getByRole('button', { name: 'Timeline target — not set' }));
+    expect(onOpenChange).toHaveBeenLastCalledWith(true);
+  });
+
   it('forwards independent empty-state copy to both timeline controls', () => {
     render(
       <TimeframeRangePicker

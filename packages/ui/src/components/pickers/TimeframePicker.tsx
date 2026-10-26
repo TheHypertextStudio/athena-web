@@ -342,6 +342,8 @@ export interface TimeframeRangePickerProps {
   readonly fiscalYearStartMonth: number;
   /** Commit a range after anchor-order validation. */
   readonly onChange: (value: TimeframeRangeValue) => void;
+  /** Observe either date editor opening so its host can resolve calendar settings. */
+  readonly onOpenChange?: ((open: boolean) => void) | undefined;
   /** Disable both controls while their host is saving. */
   readonly disabled?: boolean | undefined;
   /** Render both values without edit affordances. */
@@ -372,6 +374,7 @@ export function TimeframeRangePicker({
   value,
   fiscalYearStartMonth,
   onChange,
+  onOpenChange,
   disabled,
   readOnly,
   triggerVariant = 'ghost',
@@ -396,7 +399,7 @@ export function TimeframeRangePicker({
 
   return (
     <div className="flex max-w-full flex-col gap-1">
-      <div role="group" aria-label={ariaLabel} className="flex max-w-full flex-nowrap gap-2">
+      <div role="group" aria-label={ariaLabel} className="flex max-w-full flex-wrap gap-2">
         <TimeframePicker
           label={startLabel}
           placeholder={startPlaceholder}
@@ -406,6 +409,7 @@ export function TimeframeRangePicker({
           onChange={(start) => {
             commit({ start, target: value.target });
           }}
+          onOpenChange={onOpenChange}
           disabled={disabled}
           readOnly={readOnly}
           triggerVariant={triggerVariant}
@@ -422,6 +426,7 @@ export function TimeframeRangePicker({
           onChange={(target) => {
             commit({ start: value.start, target });
           }}
+          onOpenChange={onOpenChange}
           disabled={disabled}
           readOnly={readOnly}
           triggerVariant={triggerVariant}

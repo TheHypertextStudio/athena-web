@@ -167,6 +167,7 @@ export function EntitySnapshotMetadata({ snapshot }: EntitySnapshotMetadataProps
     case 'project':
       return (
         <>
+          <PendingProperty priority={0} />
           <EntityMetadataItem priority={0}>
             <EntityStatusChip entityType="project" statusKey={snapshot.status} />
           </EntityMetadataItem>
@@ -178,9 +179,8 @@ export function EntitySnapshotMetadata({ snapshot }: EntitySnapshotMetadataProps
             </EntityMetadataItem>
           )}
           <PendingProperty priority={2} />
+          <PendingProperty priority={2} />
           <PendingProperty priority={3} />
-          <PendingProperty priority={4} />
-          <PendingProperty priority={5} />
         </>
       );
     // Mirrors ProgramPropertiesPanel: Status, Health, Owner, Visibility.
@@ -238,6 +238,9 @@ export function ContainerDetailLoading({
 }: ContainerDetailLoadingProps): JSX.Element {
   return (
     <EntityDetailSkeleton
+      identityLayout={target === 'project' ? 'inline' : 'stacked'}
+      typeLabel={target === 'project' ? entityName : undefined}
+      chipCount={target === 'project' ? 6 : undefined}
       tabCount={tabCount}
       entityName={entityName}
       title={snapshot?.name}
@@ -245,7 +248,7 @@ export function ContainerDetailLoading({
         <EntityIconSlot
           display={defaultEntityDisplay(target, id)}
           entityName={snapshot?.name ?? entityName}
-          size={48}
+          size={target === 'project' ? 40 : 48}
         />
       }
       snapshotMetadata={snapshot ? <EntitySnapshotMetadata snapshot={snapshot} /> : undefined}

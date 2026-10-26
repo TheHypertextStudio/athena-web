@@ -2,6 +2,7 @@
 import type { TemplateTargetType } from '@docket/work/template-contract';
 import type { JSX } from 'react';
 import { WorkTemplateIdentityControl } from './work-template-identity-control';
+import type { WorkTemplatePresentationProps } from './work-template-choice-menu';
 import { WorkTemplateCaptureAction } from './work-template-capture-action';
 
 interface HeaderWork {
@@ -18,7 +19,10 @@ export function WorkTemplateHeader({
   kind,
   work,
   canEdit,
-}: {
+  presentation,
+  menuLabel,
+  menuItems,
+}: WorkTemplatePresentationProps & {
   readonly orgId: string;
   readonly kind: TemplateTargetType;
   readonly work: HeaderWork;
@@ -40,6 +44,9 @@ export function WorkTemplateHeader({
             workTypeId={work.workTypeId}
             workTypeVersionId={work.workTypeVersionId}
             canEdit={canEdit}
+            presentation={presentation}
+            menuLabel={menuLabel}
+            menuItems={menuItems}
             onCapture={onCapture}
           />
         )}

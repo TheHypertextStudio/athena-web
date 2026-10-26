@@ -7,12 +7,17 @@ import type {
   WorkTemplateChangeField,
 } from '@docket/work/work-template-reference';
 import { Button } from '@docket/ui/primitives';
+import { useVocabulary } from '@docket/ui/hooks';
 import { useQueryClient } from '@tanstack/react-query';
 import { type JSX, useState } from 'react';
 import { UserFacingError } from '@/lib/problem';
 import { useApiQuery } from '@/lib/query';
 import { workTargetCollectionKey } from '@/lib/query-keys';
-import { WorkTemplateChoiceMenu, WorkTemplateIdentityLabel } from './work-template-choice-menu';
+import {
+  WorkTemplateChoiceMenu,
+  WorkTemplateIdentityLabel,
+  type WorkTemplatePresentationProps,
+} from './work-template-choice-menu';
 import { WorkTemplateChangePreview } from './work-template-change-preview';
 import {
   useWorkTemplateAssignment,
@@ -21,7 +26,7 @@ import {
 } from './work-template-identity-queries';
 
 /** One work item's immutable published identity and resource-authorized change action. */
-export interface WorkTemplateIdentityControlProps {
+export interface WorkTemplateIdentityControlProps extends WorkTemplatePresentationProps {
   readonly orgId: string;
   readonly kind: TemplateTargetType;
   readonly workId: string;
@@ -42,23 +47,28 @@ export function WorkTemplateIdentityControl({
   workTypeVersionId,
   canEdit,
   onCapture,
+  presentation,
+  menuLabel,
+  menuItems,
 }: WorkTemplateIdentityControlProps): JSX.Element {
+  const familyName = useVocabulary(kind);
   const change = useTemplateChangeController(orgId, kind, workId, workTypeId);
   const queryClient = useQueryClient();
   const identity = useApiQuery(workTemplateIdentityDef(orgId, workTypeId, workTypeVersionId));
   const current = identity.data;
-  if (!current)
+  const retry = (): void => {
+    if (workTypeId && workTypeVersionId) void identity.refetch();
+    else
+      void queryClient.invalidateQueries({
+        queryKey: [...workTargetCollectionKey(orgId, kind), workId],
+      });
+  };
+  if (!current && presentation !== 'menu')
     return (
       <>
         <TemplateIdentityRetry
           loading={identity.isPending && Boolean(workTypeId)}
-          onRetry={() => {
-            if (workTypeId && workTypeVersionId) void identity.refetch();
-            else
-              void queryClient.invalidateQueries({
-                queryKey: [...workTargetCollectionKey(orgId, kind), workId],
-              });
-          }}
+          onRetry={retry}
         />
         {onCapture ? (
           <Button variant="ghost" size="sm" onClick={onCapture}>
@@ -69,35 +79,56 @@ export function WorkTemplateIdentityControl({
     );
   return (
     <>
-      {canEdit || onCapture ? (
+      {canEdit || onCapture || presentation === 'menu' ? (
         <WorkTemplateChoiceMenu
           orgId={orgId}
           kind={kind}
           teamId={teamId}
           current={current}
+          presentation={presentation}
+          menuLabel={menuLabel}
+          menuItems={menuItems}
+          loading={identity.isPending && Boolean(workTypeId)}
+          onRetry={retry}
           versionId={workTypeVersionId}
           onSelect={change.select}
-          canChange={canEdit}
+          canChange={canEdit && Boolean(current)}
           onCapture={onCapture}
-          onUpdate={
-            canEdit &&
-            !current.archived &&
-            current.latestVersionNumber > current.versionNumber &&
-            workTypeVersionId
-              ? () => {
-                  change.select({ ...current, versionNumber: current.latestVersionNumber });
-                }
-              : undefined
-          }
+          onUpdate={templateUpdateAction(current, canEdit, workTypeVersionId, change.select)}
         />
-      ) : (
+      ) : current ? (
         <span className="text-label-medium inline-flex max-w-full min-w-0 items-center gap-1.5">
           <WorkTemplateIdentityLabel kind={kind} current={current} />
         </span>
-      )}
-      <WorkTemplateChangePreview key={change.previewKey} {...change.previewProps} />
+      ) : null}
+      <WorkTemplateChangePreview
+        key={change.previewKey}
+        {...change.previewProps}
+        workTypeContext={presentation === 'menu'}
+        familyName={familyName}
+      />
     </>
   );
+}
+
+/** Offer a deliberate update only when the pinned identity has a newer live publication. */
+function templateUpdateAction(
+  current: WorkTemplateDisplay | undefined,
+  canEdit: boolean,
+  versionId: string | undefined,
+  select: (choice: WorkTemplateDisplay) => void,
+): (() => void) | undefined {
+  if (
+    !current ||
+    !canEdit ||
+    current.archived ||
+    current.latestVersionNumber <= current.versionNumber ||
+    !versionId
+  )
+    return undefined;
+  return () => {
+    select({ ...current, versionNumber: current.latestVersionNumber });
+  };
 }
 
 function useTemplateChangeController(

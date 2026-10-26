@@ -5,6 +5,7 @@ import { resolve } from 'node:path';
 import type { Page } from '@playwright/test';
 
 import { signUpAndOnboard } from '../helpers/app';
+import { openPlan } from '../helpers/daily-planning';
 import { orgHref, TIMEOUTS } from '../helpers/constants';
 import { expect, test } from '../helpers/fixtures';
 import { apiJson, waitForApiResponse } from '../helpers/net';
@@ -52,7 +53,7 @@ async function createFixture(
 async function openInitiatives(page: Page): Promise<void> {
   const trigger = page.getByRole('button', { name: /^Initiatives —/ });
   if (!(await trigger.isVisible())) {
-    await page.getByRole('button', { name: 'More Project properties' }).click();
+    await page.getByRole('button', { name: 'Properties', exact: true }).click();
   }
   await trigger.click();
   await expect(page.getByRole('listbox', { name: 'Initiatives' })).toBeVisible({
@@ -66,6 +67,8 @@ test('Project Initiative links render on first paint and survive picker replacem
   test.setTimeout(240_000);
   mkdirSync(SHOT_ROOT, { recursive: true });
   const { orgId } = await signUpAndOnboard(page, 'ProjectInitiativeAssociations');
+  await apiJson(page, '/v1/hub/preferences', { method: 'PATCH', body: { timezone: 'UTC' } });
+  await openPlan(page, new Date().toISOString().slice(0, 10));
   const fixture = await createFixture(page, orgId);
   const projectPath = orgHref(orgId, `projects/${fixture.projectId}`);
   const patchUrl = new RegExp(`/v1/orgs/${orgId}/projects/${fixture.projectId}(?:\\?|$)`);
@@ -75,6 +78,7 @@ test('Project Initiative links render on first paint and survive picker replacem
   await expect(page.getByRole('heading', { name: 'Street redesign' })).toBeVisible({
     timeout: TIMEOUTS.pageReady,
   });
+  await page.getByRole('button', { name: 'Properties', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Initiatives — Safe streets' })).toBeVisible();
   await page.screenshot({
     path: resolve(SHOT_ROOT, 'project-initiative-association-wide-initial.png'),
@@ -87,6 +91,7 @@ test('Project Initiative links render on first paint and survive picker replacem
   expect((await addResponse).status()).toBe(200);
 
   await page.reload({ waitUntil: 'domcontentloaded', timeout: TIMEOUTS.pageReady });
+  await page.getByRole('button', { name: 'Properties', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Initiatives — 2 initiatives' })).toBeVisible({
     timeout: TIMEOUTS.pageReady,
   });
@@ -98,6 +103,7 @@ test('Project Initiative links render on first paint and survive picker replacem
 
   await page.setViewportSize({ width: 390, height: 844 });
   await page.reload({ waitUntil: 'domcontentloaded', timeout: TIMEOUTS.pageReady });
+  await page.getByRole('button', { name: 'Properties', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Initiatives — Frequent buses' })).toBeVisible({
     timeout: TIMEOUTS.pageReady,
   });

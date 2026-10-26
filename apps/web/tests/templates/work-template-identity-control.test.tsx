@@ -1,4 +1,6 @@
+import { event, choice, props, addition } from './work-template-identity-fixtures';
 import userEvent from '@testing-library/user-event';
+import { DropdownMenuItem } from '@docket/ui/primitives';
 import { UserFacingError } from '@/lib/problem';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -11,6 +13,8 @@ import { WorkTemplateIdentityControl } from '@/components/templates/work-templat
 
 const mocks = vi.hoisted(() => ({
   mutate: vi.fn(),
+  identityMissing: false,
+  identityRefetch: vi.fn(),
   reset: vi.fn(),
   invalidate: vi.fn(),
   isError: false,
@@ -24,22 +28,6 @@ const mocks = vi.hoisted(() => ({
   children: [] as WorkTemplateChildChange[],
   warnings: [] as BlueprintPreviewWarning[],
 }));
-const event = {
-  id: 'event',
-  name: 'Event',
-  icon: null,
-  isBase: false,
-  archived: false,
-  versionNumber: 1,
-  latestVersionNumber: 2,
-};
-const choice = {
-  ...event,
-  id: 'meeting',
-  name: 'Meeting',
-  versionId: 'meeting-v2',
-  versionNumber: 2,
-};
 vi.mock('@/components/templates/work-template-identity-queries', () => ({
   workTemplateIdentityDef: () => ({ identity: true }),
   workTemplateChoicesDef: () => ({ choices: true }),
@@ -69,7 +57,9 @@ vi.mock('@/lib/query', () => ({
   }),
   useApiQuery: (def: { identity?: boolean; preview?: boolean; mode?: string }) => ({
     data: def.identity
-      ? event
+      ? mocks.identityMissing
+        ? undefined
+        : event
       : def.preview
         ? {
             workTypeId: 'meeting',
@@ -95,22 +85,16 @@ vi.mock('@/lib/query', () => ({
         : { items: [choice] },
     isPending: def.preview ? mocks.previewPending : false,
     isError: def.preview ? mocks.previewError : false,
-    refetch: vi.fn(),
+    refetch: mocks.identityRefetch,
   }),
 }));
 vi.mock('@tanstack/react-query', () => ({
   useQueryClient: () => ({ invalidateQueries: mocks.invalidate }),
 }));
-const props = {
-  orgId: 'org',
-  kind: 'project' as const,
-  workId: 'project',
-  teamId: null,
-  workTypeId: 'event',
-  workTypeVersionId: 'event-v1',
-};
 beforeEach(() => {
   mocks.mutate.mockReset();
+  mocks.identityMissing = false;
+  mocks.identityRefetch.mockReset();
   mocks.isError = false;
   mocks.error = undefined;
   mocks.hasNext = false;
@@ -124,6 +108,68 @@ beforeEach(() => {
 });
 
 describe('existing work template header', () => {
+  it('keeps project actions and template retry usable when provenance cannot load', async () => {
+    mocks.identityMissing = true;
+    const repeat = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <WorkTemplateIdentityControl
+        {...props}
+        canEdit
+        presentation="menu"
+        menuLabel="Project actions"
+        menuItems={<DropdownMenuItem onSelect={repeat}>Repeat project</DropdownMenuItem>}
+      />,
+    );
+    await user.click(screen.getByRole('button', { name: 'Project actions' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Template unavailable · Retry' }));
+    expect(mocks.identityRefetch).toHaveBeenCalledOnce();
+    expect(screen.queryByRole('menuitem', { name: 'Change work type' })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('menuitem', { name: 'Repeat project' }));
+    expect(repeat).toHaveBeenCalledOnce();
+  });
+
+  it('keeps template details inside the project menu and retains its change preview', async () => {
+    const user = userEvent.setup();
+    render(
+      <WorkTemplateIdentityControl
+        {...props}
+        canEdit
+        presentation="menu"
+        menuLabel="Project actions"
+      />,
+    );
+    expect(screen.queryByText('Event')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Project actions' }));
+    expect(await screen.findByText('Event')).toBeVisible();
+    expect(screen.queryByText(/Version 1/)).not.toBeInTheDocument();
+    await user.click(screen.getByRole('menuitem', { name: 'Change work type' }));
+    await user.click(await screen.findByRole('menuitem', { name: /Meeting/ }));
+    expect(await screen.findByRole('dialog')).toBeVisible();
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'Change work type' })).toBeVisible();
+    expect(mocks.mutate).not.toHaveBeenCalled();
+  });
+
+  it('lets a reader inspect template provenance in the menu without change actions', async () => {
+    const user = userEvent.setup();
+    render(
+      <WorkTemplateIdentityControl
+        {...props}
+        canEdit={false}
+        presentation="menu"
+        menuLabel="Project actions"
+      />,
+    );
+    await user.click(screen.getByRole('button', { name: 'Project actions' }));
+    expect(await screen.findByText('Event')).toBeVisible();
+    expect(screen.queryByRole('menuitem', { name: 'Change work type' })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('menuitem', { name: 'Type definition details' }));
+    expect(
+      await screen.findByRole('dialog', { name: 'Type definition details' }),
+    ).toHaveTextContent('Definition revision 1');
+  });
+
   it('shows the pinned name/version to viewers without a change action', () => {
     render(<WorkTemplateIdentityControl {...props} canEdit={false} />);
     expect(screen.getByText('Event')).toBeVisible();
@@ -360,30 +406,6 @@ describe('existing work template header', () => {
     );
   });
   it('lets keyboard users decline a default addition while optional work starts unchecked', async () => {
-    const addition = (key: string, selected: boolean, changeId: string) =>
-      WorkTemplateChildChange.parse({
-        changeId,
-        kind: 'add_child',
-        path: [key],
-        count: 1,
-        selectedByDefault: selected,
-        children: [
-          {
-            path: [key],
-            parentPath: [],
-            kind: 'task',
-            title: key,
-            workTypeId: null,
-            workTypeVersionId: null,
-            dates: {},
-            unresolvedReasons: {},
-            optional: !selected,
-            selectedByDefault: selected,
-            selected,
-            prerequisites: [],
-          },
-        ],
-      });
     mocks.children = [
       addition('review', true, 'bp_1111111111111111'),
       addition('optional', false, 'bp_2222222222222222'),

@@ -57,9 +57,19 @@ export function FullDetailMasthead({
   subtitle,
   metadata,
   actions,
+  typeLabel,
+  identityLayout = 'stacked',
 }: Pick<
   DetailHeaderProps,
-  'cover' | 'eyebrow' | 'icon' | 'title' | 'subtitle' | 'metadata' | 'actions'
+  | 'cover'
+  | 'eyebrow'
+  | 'icon'
+  | 'title'
+  | 'subtitle'
+  | 'metadata'
+  | 'actions'
+  | 'identityLayout'
+  | 'typeLabel'
 >): JSX.Element {
   return (
     <div className="masthead-band page-bleed page-grid relative isolate gap-y-0">
@@ -93,21 +103,7 @@ export function FullDetailMasthead({
         {cover ? <div aria-hidden="true" className="detail-backdrop-space" /> : null}
 
         <div className="detail-masthead">
-          <div className="detail-primary">
-            <div className="detail-identity">
-              <div className="detail-glyph">{icon}</div>
-              <h1 className="detail-title text-on-surface text-headline-medium min-w-0">{title}</h1>
-            </div>
-            {actions ? (
-              <div
-                aria-label="Entity actions"
-                className="detail-actions flex shrink-0 items-center gap-1"
-                role="group"
-              >
-                {actions}
-              </div>
-            ) : null}
-          </div>
+          <MastheadIdentity {...{ icon, title, typeLabel, actions, identityLayout }} />
 
           <div className="detail-secondary">
             <div className="flex min-w-0 flex-col gap-3">
@@ -119,6 +115,45 @@ export function FullDetailMasthead({
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+/** Match compact work identity and expanded legacy identity without mixing their layout rules. */
+function MastheadIdentity({
+  icon,
+  title,
+  typeLabel,
+  actions,
+  identityLayout,
+}: Pick<DetailHeaderProps, 'icon' | 'title' | 'typeLabel' | 'actions'> & {
+  readonly identityLayout: 'inline' | 'stacked';
+}): JSX.Element {
+  const inline = identityLayout === 'inline';
+  return (
+    <div className={inline ? 'flex min-w-0 items-start gap-3' : 'detail-primary'}>
+      <div className={inline ? 'flex min-w-0 flex-1 items-start gap-3' : 'detail-identity'}>
+        <div className={inline ? 'shrink-0' : 'detail-glyph'}>{icon}</div>
+        {inline ? (
+          <div className="min-w-0 flex-1">
+            {typeLabel ? (
+              <div className="text-on-surface-variant text-label-medium">{typeLabel}</div>
+            ) : null}
+            <h1 className="text-on-surface text-title-large min-w-0 pt-1 break-words">{title}</h1>
+          </div>
+        ) : (
+          <h1 className="detail-title text-on-surface text-headline-medium min-w-0">{title}</h1>
+        )}
+      </div>
+      {actions ? (
+        <div
+          role="group"
+          aria-label="Entity actions"
+          className={cn('flex shrink-0 items-center gap-1', !inline && 'detail-actions')}
+        >
+          {actions}
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -27,6 +27,10 @@ import {
 
 /** Props for {@link EntityDetailSkeleton}. */
 export interface EntityDetailSkeletonProps {
+  /** Match the loaded page's inline or stacked identity arrangement. */
+  identityLayout?: 'stacked' | 'inline' | undefined;
+  /** Known work-type identity, outside the loading title. */
+  typeLabel?: ReactNode;
   /** How many property chips the metadata row will hold. Defaults to a typical detail page. */
   chipCount?: number | undefined;
   /** How many tabs the tab bar will hold. Defaults to a typical detail page. */
@@ -92,6 +96,8 @@ export interface EntityDetailSkeletonProps {
  * @returns The placeholder page.
  */
 export function EntityDetailSkeleton({
+  identityLayout = 'stacked',
+  typeLabel,
   chipCount = 5,
   tabCount = 4,
   hasSubtitle = true,
@@ -105,6 +111,16 @@ export function EntityDetailSkeleton({
   return (
     <div role="status" aria-busy="true" aria-label={`${entityName} detail`} className="h-full">
       <EntityDetailLayout
+        identityLayout={identityLayout}
+        typeLabel={typeLabel}
+        actions={
+          identityLayout === 'inline' ? (
+            <div className="flex gap-1.5">
+              <SkeletonChip className="w-10" />
+              <SkeletonChip className="w-10" />
+            </div>
+          ) : undefined
+        }
         // placeholder (only where a breadcrumb is known to be coming): the trail naming containers
         // the record has not been read from yet.
         // A breadcrumb renders at the 20px line of `text-sm` / `text-body-medium`, taller than the
@@ -115,10 +131,7 @@ export function EntityDetailSkeleton({
           // placeholder (only when the glyph cannot be derived): the entity's icon.
           icon ?? <SkeletonGlyph />
         }
-        title={
-          // placeholder (only when the name is not yet known): the entity's name.
-          title ?? <SkeletonText scale="headline" className="w-2/3 max-w-md" />
-        }
+        title={<DetailSkeletonTitle title={title} inline={identityLayout === 'inline'} />}
         subtitle={
           // placeholder (only when the summary is not yet known): the entity's one-line summary.
           // The summary renders at `text-body-large`, whose 24px line box is the `title` scale
@@ -128,18 +141,12 @@ export function EntityDetailSkeleton({
           (hasSubtitle ? <SkeletonText scale="title" className="w-1/2 max-w-sm" /> : undefined)
         }
         metadata={
-          <EntityMetadataRow ariaLabel={`${entityName} details`}>
-            {snapshotMetadata ??
-              Array.from({ length: chipCount }, (_, index) => (
-                // placeholder: one property whose value is part of the record being read.
-                <EntityMetadataItem
-                  key={index}
-                  priority={Math.min(index, 7) as EntityMetadataPriority}
-                >
-                  <SkeletonChip />
-                </EntityMetadataItem>
-              ))}
-          </EntityMetadataRow>
+          <DetailSkeletonMetadata
+            identityLayout={identityLayout}
+            entityName={entityName}
+            snapshotMetadata={snapshotMetadata}
+            chipCount={chipCount}
+          />
         }
         tabs={
           <div className="flex items-center gap-6 pt-1">
@@ -154,6 +161,48 @@ export function EntityDetailSkeleton({
         <Skeleton className="h-96 w-full rounded-xl" />
       </EntityDetailLayout>
     </div>
+  );
+}
+
+/** Reserve the loaded property layout while stating only snapshot values already known. */
+function DetailSkeletonMetadata({
+  identityLayout,
+  entityName,
+  snapshotMetadata,
+  chipCount,
+}: {
+  readonly identityLayout: 'inline' | 'stacked';
+  readonly entityName: string;
+  readonly snapshotMetadata: ReactNode;
+  readonly chipCount: number;
+}): JSX.Element {
+  return (
+    <EntityMetadataRow
+      ariaLabel={`${entityName} details`}
+      layout={identityLayout === 'inline' ? 'wrap' : 'adaptive'}
+    >
+      {snapshotMetadata ??
+        Array.from({ length: chipCount }, (_, index) => (
+          <EntityMetadataItem key={index} priority={Math.min(index, 7) as EntityMetadataPriority}>
+            <SkeletonChip />
+          </EntityMetadataItem>
+        ))}
+    </EntityMetadataRow>
+  );
+}
+
+/** Match the title scale of the layout while keeping a known name readable during loading. */
+function DetailSkeletonTitle({
+  title,
+  inline,
+}: {
+  readonly title: string | undefined;
+  readonly inline: boolean;
+}): JSX.Element {
+  return (
+    <>
+      {title ?? <SkeletonText scale={inline ? 'title' : 'headline'} className="w-2/3 max-w-md" />}
+    </>
   );
 }
 

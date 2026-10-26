@@ -173,7 +173,7 @@ export function PropertiesPanel({
           {...CHIP}
         />
       </EntityMetadataItem>
-      <EntityMetadataItem priority={2} className="max-w-none">
+      <EntityMetadataItem priority={2} className="max-w-full">
         <TimeframeRangePicker
           value={{ start: startTimeframe, target: targetTimeframe }}
           fiscalYearStartMonth={fiscalYearStartMonth}
@@ -187,7 +187,7 @@ export function PropertiesPanel({
           {...CHIP}
         />
       </EntityMetadataItem>
-      <EntityMetadataItem priority={3}>
+      <EntityMetadataItem priority={3} overflowOnly>
         <EntityPicker
           options={programOptions}
           value={programId}
@@ -203,7 +203,7 @@ export function PropertiesPanel({
           {...CHIP}
         />
       </EntityMetadataItem>
-      <EntityMetadataItem priority={4}>
+      <EntityMetadataItem priority={4} overflowOnly>
         <EntityMultiPicker
           options={initiativeOptions}
           value={initiativeIds}
@@ -228,7 +228,7 @@ export function PropertiesPanel({
           {...CHIP}
         />
       </EntityMetadataItem>
-      <EntityMetadataItem priority={5}>
+      <EntityMetadataItem priority={5} overflowOnly>
         <LabelsPicker
           options={labelPickerOptions}
           value={labelIds}

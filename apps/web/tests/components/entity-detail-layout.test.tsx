@@ -15,6 +15,35 @@ import {
 } from '../../src/components/views/entity-detail-layout';
 
 describe('EntityDetailLayout', () => {
+  it('keeps essential controls visible and discloses only supplemental properties', () => {
+    render(
+      <EntityMetadataRow ariaLabel="Project properties" layout="wrap" overflowLabel="Properties">
+        <EntityMetadataItem priority={0}>
+          <button>Owner</button>
+        </EntityMetadataItem>
+        <EntityMetadataItem priority={1}>
+          <button>Status</button>
+        </EntityMetadataItem>
+        <EntityMetadataItem priority={2}>
+          <button>Health</button>
+        </EntityMetadataItem>
+        <EntityMetadataItem priority={3}>
+          <button>Dates</button>
+        </EntityMetadataItem>
+        <EntityMetadataItem priority={4} overflowOnly>
+          <button>Program</button>
+        </EntityMetadataItem>
+      </EntityMetadataRow>,
+    );
+    for (const name of ['Owner', 'Status', 'Health', 'Dates']) {
+      expect(screen.getByRole('button', { name })).toBeVisible();
+    }
+    expect(screen.queryByRole('button', { name: 'Program' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Properties' }));
+    expect(screen.getByRole('button', { name: 'Program' })).toBeVisible();
+    expect(screen.getAllByRole('button', { name: 'Health' })).toHaveLength(1);
+  });
+
   it('keeps object context on a masthead that cannot be dragged', () => {
     const { container } = render(
       <EntityDetailLayout

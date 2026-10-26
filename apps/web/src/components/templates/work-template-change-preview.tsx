@@ -19,6 +19,7 @@ import {
 } from '@docket/ui/primitives';
 import { type JSX } from 'react';
 import { WorkTemplateChildChanges } from './work-template-child-changes';
+import { workTypeDisplayName } from './work-type-name';
 import { useTemplateChangeChoices } from './use-template-change-choices';
 import { StaticMarkdown } from '@/components/editor/static-markdown';
 
@@ -31,6 +32,8 @@ interface PreviewProps {
   readonly failed: boolean;
   readonly stale?: boolean;
   readonly mode?: 'change' | 'update';
+  readonly workTypeContext?: boolean;
+  readonly familyName?: string;
   readonly onClose: () => void;
   readonly onConfirm: (fields: WorkTemplateChangeField[], children: string[]) => void;
   readonly onRetryPreview: () => void;
@@ -41,6 +44,18 @@ function reviewedVersion(
   selected: WorkTemplateDisplay | null,
 ): number | undefined {
   return preview?.versionNumber ?? selected?.versionNumber;
+}
+
+/** Label an explicit change without presenting a definition revision as work identity. */
+function changeActionLabel(update: boolean, workTypeContext: boolean | undefined): string {
+  return `${update ? 'Update' : 'Change'} ${workTypeContext ? 'work type' : 'template'}`;
+}
+
+function reviewedIdentityLabel(props: PreviewProps): string | undefined {
+  if (!props.selected) return undefined;
+  return props.workTypeContext
+    ? workTypeDisplayName(props.selected, props.familyName ?? 'Work')
+    : props.selected.name;
 }
 
 /** Review default-off starting-field changes while authored dates and children remain unchanged. */
@@ -58,14 +73,17 @@ export function WorkTemplateChangePreview(props: PreviewProps): JSX.Element {
     >
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>{update ? 'Update template' : 'Change template'}</DialogTitle>
+          <DialogTitle>{changeActionLabel(update, props.workTypeContext)}</DialogTitle>
           <DialogDescription>
-            Use {selected?.name} · Version {reviewedVersion(preview, selected)}.{' '}
+            Use {reviewedIdentityLabel(props)}
+            {props.workTypeContext ? '' : ` · Version ${reviewedVersion(preview, selected)}`}.{' '}
             {reviewDescription(preview, choices.fields)}
           </DialogDescription>
         </DialogHeader>
         <DialogBody>
-          {props.failed ? <FieldError>{failureCopy(preview, props.stale)}</FieldError> : null}
+          {props.failed ? (
+            <FieldError>{failureCopy(preview, props.stale, props.workTypeContext)}</FieldError>
+          ) : null}
           <StartingChanges
             preview={preview}
             ready={ready}
@@ -74,6 +92,7 @@ export function WorkTemplateChangePreview(props: PreviewProps): JSX.Element {
             fields={choices.fields}
             pending={pending}
             onToggle={choices.toggleField}
+            workTypeContext={props.workTypeContext}
           />
           {ready && preview ? (
             <WorkTemplateChildChanges
@@ -118,6 +137,7 @@ function StartingChanges({
   fields,
   pending,
   onToggle,
+  workTypeContext,
 }: {
   readonly preview: Preview | undefined;
   readonly ready: boolean;
@@ -126,11 +146,12 @@ function StartingChanges({
   readonly fields: readonly WorkTemplateChangeField[];
   readonly pending: boolean;
   readonly onToggle: (field: WorkTemplateChangeField) => void;
+  readonly workTypeContext?: boolean | undefined;
 }): JSX.Element {
   return (
     <div className="flex min-w-0 flex-col gap-4">
       {loading ? <p role="status">Loading starting changes…</p> : null}
-      {failed ? <FieldError>Could not load the template preview.</FieldError> : null}
+      {failed ? <FieldError>Could not load the definition preview.</FieldError> : null}
       {ready && preview
         ? preview.changes.map((change) => (
             <StartingFieldChange
@@ -145,17 +166,25 @@ function StartingChanges({
           ))
         : null}
       {ready && preview?.mode !== 'update' && preview?.changes.length === 0 ? (
-        <p>Your work will use this template. Its details stay the same.</p>
+        <p>
+          Your work will use this {workTypeContext ? 'type' : 'template'}. Its details stay the
+          same.
+        </p>
       ) : null}
     </div>
   );
 }
 
-function failureCopy(preview: Preview | undefined, stale: boolean | undefined): string {
+function failureCopy(
+  preview: Preview | undefined,
+  stale: boolean | undefined,
+  workTypeContext: boolean | undefined,
+): string {
+  const noun = workTypeContext ? 'work type' : 'template';
   if (stale) return 'Work changed since this review. Refresh the preview; your choices are kept.';
   return preview?.mode === 'update'
-    ? 'Could not update the template. Review the current changes.'
-    : 'Could not change the template. Try again.';
+    ? `Could not update the ${noun}. Review the current changes.`
+    : `Could not change the ${noun}. Try again.`;
 }
 
 function PreviewActions({
@@ -170,6 +199,7 @@ function PreviewActions({
   onAccept,
   preview,
   mode,
+  workTypeContext,
 }: PreviewProps & {
   readonly ready: boolean;
   readonly onAccept: () => void;
@@ -188,8 +218,8 @@ function PreviewActions({
           {pending
             ? 'Applying…'
             : (mode ?? preview?.mode) === 'update'
-              ? 'Update template'
-              : 'Change template'}
+              ? changeActionLabel(true, workTypeContext)
+              : changeActionLabel(false, workTypeContext)}
         </Button>
       )}
     </DialogFooter>
@@ -224,7 +254,7 @@ function StartingFieldChange({
           <StartingValue value={change.before} markdown={change.field === 'description'} />
         </div>
         <div className="min-w-0 break-words">
-          <p className="text-label-small text-on-surface-variant">From template</p>
+          <p className="text-label-small text-on-surface-variant">From definition</p>
           <StartingValue value={change.after} markdown={change.field === 'description'} />
         </div>
       </div>

@@ -1,17 +1,6 @@
 'use client';
 
-import {
-  TabPanel,
-  Button,
-  ControlGroup,
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-  Surface,
-  Tabs,
-} from '@docket/ui/primitives';
+import { TabPanel, Button, Surface, Tabs } from '@docket/ui/primitives';
 import type { AttachmentOut } from '@docket/work/attachment-contract';
 import type { LabelOut } from '@docket/work/label-contract';
 import type {
@@ -25,7 +14,7 @@ import type { UpdateOut, UpdatePostInput } from '@docket/work/update-contract';
 import { ProjectSubjectRef } from '@docket/work/subject-ref-contract';
 import type { PickerOption } from '@docket/ui/components';
 import { useVocabulary } from '@docket/ui/hooks';
-import { Ellipsis, RefreshCw, Trash2, Undo } from '@docket/ui/icons';
+import { RefreshCw, Undo } from '@docket/ui/icons';
 
 import {
   type FetchQueryOptions,
@@ -66,14 +55,18 @@ import { UpdatesPanel } from '@/components/entity-detail/updates-panel';
 import { memberActorOptions } from '@/components/pickers/options';
 import { ProjectPeopleRow } from '@/components/project-detail/project-people-row';
 import { PropertiesPanel } from '@/components/project-detail/properties-panel';
-import { PublishAction } from '@/components/publishing/publish-action';
+import { WorkTypeLabel } from '@/components/templates/work-type-label';
+import { ProjectHeaderActions } from '@/components/project-detail/project-header-actions';
 import { RepeatProjectDialog } from '@/components/recurrence/repeat-project-dialog';
 import { useResolvedAccountId } from '@/components/resolved-account';
 import { ContainerDetailLoading } from '@/components/views/entity-snapshot-metadata';
 import { DetailPrintSummary } from '@/components/views/detail-print-summary';
 import { useDetailTab } from '@/components/views/use-detail-tab';
-import { WorkTemplateHeader } from '@/components/templates/work-template-header';
-import { EntityDetailLayout, EntityMetadataRow } from '@/components/views/entity-detail-layout';
+import {
+  EntityDetailLayout,
+  EntityMetadataRow,
+  EntityMetadataItem,
+} from '@/components/views/entity-detail-layout';
 import { api } from '@/lib/api';
 import { useProjectPageIdentity } from './use-project-page-identity';
 import { fetchAllInitiatives, fetchAllPrograms } from '@/lib/org-collection-pages';
@@ -562,6 +555,15 @@ export default function ProjectDetailPage(): JSX.Element {
 
   return (
     <EntityDetailLayout
+      identityLayout="inline"
+      typeLabel={
+        <WorkTypeLabel
+          orgId={orgId}
+          kind="project"
+          workTypeId={project.workTypeId}
+          workTypeVersionId={project.workTypeVersionId}
+        />
+      }
       object={{ kind: 'project', id: projectId, organizationId: orgId, title: project.name }}
       printSummary={
         <DetailPrintSummary
@@ -590,7 +592,7 @@ export default function ProjectDetailPage(): JSX.Element {
           editable={canEdit}
           pending={entityDisplay.mutation.isPending}
           loading={entityDisplay.loading}
-          size={48}
+          size={40}
           onChange={(glyph, colorKey, customColor) => {
             entityDisplay.mutation.mutate({ glyph, colorKey, customColor });
           }}
@@ -620,21 +622,26 @@ export default function ProjectDetailPage(): JSX.Element {
       }
       metadata={
         <div className="flex min-w-0 flex-col gap-2">
-          <WorkTemplateHeader orgId={orgId} kind="project" work={project} canEdit={canEdit} />
-          <ProjectPeopleRow
-            orgId={orgId}
-            sourcePeople={project.sourcePeople}
-            ownerId={project.leadId ?? null}
-            ownerOptions={memberOptions}
-            assignedPeople={[]}
-            canEdit={canEdit}
-            ownerLoading={ownerPickerOpen && membersQ.isPending}
-            onOwnerPickerOpenChange={setOwnerPickerOpen}
-            onOwnerChange={(leadId) => {
-              mutations.patchProject({ leadId });
-            }}
-          />
-          <EntityMetadataRow ariaLabel="Project properties">
+          <EntityMetadataRow
+            ariaLabel="Project properties"
+            layout="wrap"
+            overflowLabel="Properties"
+          >
+            <EntityMetadataItem priority={0} className="max-w-full">
+              <ProjectPeopleRow
+                orgId={orgId}
+                sourcePeople={project.sourcePeople}
+                ownerId={project.leadId ?? null}
+                ownerOptions={memberOptions}
+                assignedPeople={[]}
+                canEdit={canEdit}
+                ownerLoading={ownerPickerOpen && membersQ.isPending}
+                onOwnerPickerOpenChange={setOwnerPickerOpen}
+                onOwnerChange={(leadId) => {
+                  mutations.patchProject({ leadId });
+                }}
+              />
+            </EntityMetadataItem>
             <PropertiesPanel
               health={project.health ?? null}
               status={project.status}
@@ -710,49 +717,19 @@ export default function ProjectDetailPage(): JSX.Element {
         </div>
       }
       actions={
-        <ControlGroup controlSize="xl">
-          <PublishAction
-            orgId={orgId}
-            subjectKind="project"
-            subjectId={projectId}
-            title={project.name}
-            noun={projectNoun}
-            canPublish={canEdit}
-          />
-          {canEdit || canDelete ? (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" iconOnly aria-label={`${projectNoun} actions`}>
-                  <Ellipsis />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                {canEdit ? (
-                  <DropdownMenuItem
-                    onSelect={() => {
-                      setRepeatProjectOpen(true);
-                    }}
-                  >
-                    <RefreshCw className="size-4" />
-                    Repeat {projectNoun.toLowerCase()}
-                  </DropdownMenuItem>
-                ) : null}
-                {canEdit && canDelete ? <DropdownMenuSeparator /> : null}
-                {canDelete ? (
-                  <DropdownMenuItem
-                    destructive
-                    onSelect={() => {
-                      setConfirmDeleteOpen(true);
-                    }}
-                  >
-                    <Trash2 className="size-4" />
-                    Move {projectNoun.toLowerCase()} to trash
-                  </DropdownMenuItem>
-                ) : null}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          ) : null}
-        </ControlGroup>
+        <ProjectHeaderActions
+          orgId={orgId}
+          work={project}
+          noun={projectNoun}
+          canEdit={canEdit}
+          canDelete={canDelete}
+          onRepeat={() => {
+            setRepeatProjectOpen(true);
+          }}
+          onTrash={() => {
+            setConfirmDeleteOpen(true);
+          }}
+        />
       }
       tabs={
         <Tabs

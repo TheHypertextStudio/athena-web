@@ -11,7 +11,7 @@
  *    from at provision time; drift in either direction must name the exact path, because a
  *    route with no job never runs and a job with no route POSTs a 404 forever.
  * 2. **The full path set is asserted here.** `cron.ts` and `JOBS` are two hand-maintained
- *    views of the same twenty-five paths, so this file carries the list as the deliberate third
+ *    views of the same twenty-six paths, so this file carries the list as the deliberate third
  *    copy: adding a route or a job without the other now fails CI instead of drifting
  *    silently until someone reads a deploy log.
  */
@@ -57,6 +57,7 @@ const EXPECTED_PATHS = [
   '/internal/cron/sync-connectors',
   '/internal/cron/sync-work-locations',
   '/internal/cron/unfurl-resources',
+  '/internal/cron/usage-rollup',
 ] as const;
 
 describe('scheduler-setup — route parsing', () => {
@@ -106,7 +107,7 @@ describe('scheduler-setup — drift detection', () => {
   });
 });
 
-describe('scheduler-setup — the twenty-five jobs', () => {
+describe('scheduler-setup — the twenty-six jobs', () => {
   const cronSource = readFileSync(`${REPO_ROOT}${CRON_ROUTES_FILE}`, 'utf8');
   const routes = parseCronRoutes(cronSource);
 
@@ -116,11 +117,11 @@ describe('scheduler-setup — the twenty-five jobs', () => {
     expect(drift.dangling).toEqual([]);
   });
 
-  it('pins the exact twenty-five paths on both sides', () => {
+  it('pins the exact twenty-six paths on both sides', () => {
     // Guards the parser too: an empty parse cannot pass off as "no drift" here.
     expect([...routes].sort()).toEqual([...EXPECTED_PATHS].sort());
     expect(JOBS.map((job) => job.path).sort()).toEqual([...EXPECTED_PATHS].sort());
-    expect(JOBS).toHaveLength(25);
+    expect(JOBS).toHaveLength(26);
   });
 
   it('keeps every job id unique, since a duplicate would silently clobber its sibling', () => {

@@ -47,6 +47,7 @@ interface SeedArgs {
   readonly email: string;
   readonly workspaceName: string;
   readonly linkFile: string;
+  readonly target: 'local' | 'staging' | 'production';
 }
 
 /**
@@ -56,7 +57,14 @@ interface SeedArgs {
  * @throws {Error} When an argument is missing or the email is malformed.
  */
 function parseArgs(argv: readonly string[]): SeedArgs {
-  const [slug, demoName, email, workspaceName, linkFile] = argv;
+  const [slug, demoName, email, workspaceName, linkFile, targetFlag, requestedTarget] = argv;
+  const target = requestedTarget ?? 'local';
+  if (
+    (targetFlag && targetFlag !== '--target') ||
+    !['local', 'staging', 'production'].includes(target)
+  ) {
+    throw new Error('Use --target local, staging, or production.');
+  }
   if (!slug || !demoName || !email || !workspaceName || !linkFile || !isAbsolute(linkFile)) {
     throw new Error(
       'Usage: seed-demo.ts <slug> "<demo name>" <email> "<workspace name>" <absolute-private-link-file>',
@@ -64,7 +72,14 @@ function parseArgs(argv: readonly string[]): SeedArgs {
   }
   const normalized = email.trim().toLowerCase();
   if (!normalized.includes('@')) throw new Error(`Not an email address: ${email}`);
-  return { slug, demoName, email: normalized, workspaceName, linkFile };
+  return {
+    slug,
+    demoName,
+    email: normalized,
+    workspaceName,
+    linkFile,
+    target: target as SeedArgs['target'],
+  };
 }
 
 /**
@@ -163,13 +178,31 @@ async function seedDemo(
 }
 
 try {
-  if (process.env['APP_MODE'] !== 'local' || !process.env['DATABASE_URL']?.startsWith('pglite:')) {
-    throw new Error('This seed command requires APP_MODE=local and a local PGlite database.');
-  }
   const args = parseArgs(process.argv.slice(2));
+  if (process.env['APP_MODE'] !== args.target)
+    throw new Error('APP_MODE must match the explicit seed target.');
   const origin = new URL(process.env['APP_URL'] ?? 'http://localhost');
-  if (origin.hostname !== 'localhost' && !origin.hostname.endsWith('.localhost')) {
-    throw new Error('APP_URL must identify the local dev stack.');
+  if (args.target === 'local') {
+    if (
+      !process.env['DATABASE_URL']?.startsWith('pglite:') ||
+      (origin.hostname !== 'localhost' && !origin.hostname.endsWith('.localhost'))
+    ) {
+      throw new Error('Local seeding requires PGlite and the local dev-stack origin.');
+    }
+  } else {
+    const expected =
+      args.target === 'production'
+        ? 'https://clearthedocket.com'
+        : 'https://docket-staging.hypertext.studio';
+    if (
+      process.env['DEMO_PROVISION_TARGET'] !== args.target ||
+      origin.origin !== expected ||
+      !/^postgres(?:ql)?:/.test(process.env['DATABASE_URL'] ?? '')
+    ) {
+      throw new Error(
+        'Hosted seeding requires matching target acknowledgement, PostgreSQL connection and canonical HTTPS origin.',
+      );
+    }
   }
   const output = openSync(args.linkFile, 'wx', 0o600);
   try {

@@ -7,7 +7,16 @@
  * are ordinary organizations; these tables record which demo made each one and when it expires.
  */
 import { sql } from 'drizzle-orm';
-import { check, index, integer, pgTable, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-core';
+import {
+  bigint,
+  check,
+  index,
+  integer,
+  pgTable,
+  text,
+  timestamp,
+  uniqueIndex,
+} from 'drizzle-orm/pg-core';
 
 import { genId } from '../id';
 import { staffUser } from './admin';
@@ -115,3 +124,14 @@ export const demoWorkspace = pgTable(
       .where(sql`${t.ownerUserId} IS NOT NULL`),
   ],
 );
+
+/** Fixed reviewer counters and expiring stream leases, isolated from auth's short-lived cleanup. */
+export const demoBudget = pgTable('demo_budget', {
+  id: text('id').primaryKey(),
+  demoId: text('demo_id')
+    .notNull()
+    .references(() => demo.id, { onDelete: 'cascade' }),
+  key: text('key').notNull(),
+  count: integer('count').notNull(),
+  lastRequest: bigint('last_request', { mode: 'number' }).notNull(),
+});

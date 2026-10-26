@@ -44,7 +44,7 @@ export const deliverableRoutes = new Hono<AppEnv>()
     '/',
     apiDoc({
       status: 201,
-      tag: 'Attachments',
+      tag: 'Comments',
       summary: 'Upload a deliverable',
       response: DeliverableOut,
       description:
@@ -68,7 +68,7 @@ export const deliverableRoutes = new Hono<AppEnv>()
   .get(
     '/drafts',
     apiDoc({
-      tag: 'Attachments',
+      tag: 'Comments',
       summary: 'Recover private deliverable drafts',
       response: z.object({ items: z.array(DeliverableDraftOut) }),
       description:
@@ -84,7 +84,7 @@ export const deliverableRoutes = new Hono<AppEnv>()
   .get(
     '/',
     apiDoc({
-      tag: 'Attachments',
+      tag: 'Comments',
       summary: 'List post deliverables',
       response: z.object({ items: z.array(DeliverableOut) }),
       description:
@@ -102,7 +102,7 @@ export const deliverableRoutes = new Hono<AppEnv>()
   .get(
     '/:id/preview',
     apiDoc({
-      tag: 'Attachments',
+      tag: 'Comments',
       summary: 'Preview safe media',
       description:
         'Stream supported raster images, audio, or video after checking current parent access. Other files must be downloaded.',
@@ -135,7 +135,7 @@ export const deliverableRoutes = new Hono<AppEnv>()
   .get(
     '/:id/download',
     apiDoc({
-      tag: 'Attachments',
+      tag: 'Comments',
       summary: 'Download a deliverable',
       description:
         'Download exact file bytes after checking pending-upload ownership or current parent access. Active content is downloaded, never executed inline.',
@@ -159,7 +159,7 @@ export const deliverableRoutes = new Hono<AppEnv>()
   .delete(
     '/:id',
     apiDoc({
-      tag: 'Attachments',
+      tag: 'Comments',
       summary: 'Discard a pending deliverable',
       response: z.object({ removed: z.literal(true) }),
       description:

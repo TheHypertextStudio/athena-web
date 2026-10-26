@@ -22,6 +22,7 @@ import {
 import { insertExecutorActivity as insertActivity } from './session-activity';
 import { mailElicitationAttachmentContext } from '../services/athena-mail/attachments';
 import { isMailSession, mailSessionAuthorized } from '../services/athena-mail/session-auth';
+import { withDemoRuntimeBudget } from '../lib/demo-runtime-budget';
 import { collectProviderTurn } from './provider-turn';
 import { loadSessionAgent } from './session-agent';
 import { notificationTriageBrief } from '../services/device-notifications/triage-context';
@@ -482,7 +483,7 @@ async function driveSessionWithAdmission(
     if (!(await sessionGenerationAuthorized(session))) return await settleOwned('canceled');
     const triageBrief = await notificationTriageBrief(session);
     if (triageBrief === null) return await settleOwned('canceled');
-    const turnRuntime = deps.turnRuntime ?? (await resolveOwnerTurnRuntime(session.ownerUserId));
+    const turnRuntime = await selectSessionRuntime(session, deps.turnRuntime);
     const openedToolbox = (toolbox = await openToolbox(executor, sessionId));
 
     let messages = await loadOrStartTranscript(session, triageBrief, { lease, deps });
@@ -1219,4 +1220,15 @@ export async function approveLatestAndResume(
     { decision: 'approve' },
     deps,
   );
+}
+
+/** Apply reviewer provider-turn admission to personal and registered-agent execution alike. */
+async function selectSessionRuntime(
+  session: SessionRow,
+  override?: AgentTurnRuntime,
+): Promise<AgentTurnRuntime> {
+  const runtime = override ?? (await resolveOwnerTurnRuntime(session.ownerUserId));
+  if (session.ownerUserId) return withDemoRuntimeBudget(runtime, { userId: session.ownerUserId });
+  if (!session.organizationId) return runtime;
+  return withDemoRuntimeBudget(runtime, { organizationId: session.organizationId });
 }

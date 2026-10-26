@@ -11,6 +11,7 @@ import {
 import type { AppEnv } from '../context';
 import type { ApiOperationContract } from '../lib/api-operation-contract';
 import { created, resourceUrl } from '../lib/ok';
+import { admitDemoRequest } from '../lib/demo-admission';
 import { apiDoc } from '../lib/openapi-route';
 import { zForm, zParam } from '../lib/validate';
 
@@ -86,6 +87,14 @@ export const deliverableUploadRoutes = new Hono<AppEnv>().post(
   '/:sessionId',
   apiDoc(uploadContract),
   zParam(uploadParam),
+  async (c, next) => {
+    const session = await loadDeliverableUploadSession(
+      c.req.valid('param').sessionId,
+      c.req.header('X-Docket-Upload-Token') ?? '',
+    );
+    await admitDemoRequest(c, { organizationId: session.organizationId });
+    await next();
+  },
   zForm(uploadForm),
   async (c) => {
     const session = await loadDeliverableUploadSession(

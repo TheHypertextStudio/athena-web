@@ -154,3 +154,12 @@ export const auth = {
 
 /** The inferred type of the configured Better Auth instance. */
 export type Auth = typeof auth;
+
+export {
+  consumeDemoBudget,
+  consumeDemoBudgetInTransaction,
+  DemoBudgetExceeded,
+  type DemoBudgetSubject,
+} from './demo-budget';
+
+export { acquireDemoStream, DEMO_STREAM_LIFETIME_MS } from './demo-stream-budget';

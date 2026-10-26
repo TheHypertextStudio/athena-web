@@ -31,7 +31,8 @@ import type { VoiceSessionAuthorizationMethod } from '@docket/db';
 import { and, desc, eq, inArray, isNull } from 'drizzle-orm';
 
 import { assertProductCapability } from '../product-capability';
-import { ConflictError, NotFoundError, ProductRequiredError } from '../error';
+import { CapabilityError, ConflictError, NotFoundError, ProductRequiredError } from '../error';
+import { consumeDemoBudget } from '@docket/auth/demo-budget';
 
 import { markProvenanceInline } from '../agent/provenance';
 import { loadTranscript } from '../agent/transcript';
@@ -183,6 +184,9 @@ async function resolveVoiceResponderRuntime(
   if (input.channel === 'phone' || input.provider === 'mock') {
     return resolveOwnerTurnRuntime(input.userId);
   }
+  // Direct Realtime credentials move generation outside server-side turn admission.
+  // Reviewers must use a server-metered responder rather than an unbounded client session.
+  if (await consumeDemoBudget({ userId: input.userId }, [])) throw new CapabilityError();
   // The browser's speech-to-speech provider generates replies itself. It cannot use the
   // selected Lattice runtime, so refuse before minting its cloud audio credential.
   const connection = await loadLatticeConnection(input.userId);

@@ -339,7 +339,7 @@ pnpm exec dotenv -e .env.local -- pnpm --filter @docket/api exec tsx scripts/see
 pnpm exec dotenv -e .env.local -- pnpm --filter @docket/api exec tsx scripts/seed-demo.ts other-review "Other review" other-review@example.com "Other review workspace" /tmp/docket-other-review-link.txt
 ```
 
-The seed refuses hosted modes, non-PGlite databases, duplicate slugs, existing reviewer accounts and existing output files. It creates the reviewer and hub, an owned shared workspace with normal roles/team/statuses, four assigned sample tasks, complimentary Pro access, the shared `demo_workspace` association and the credential digest. It writes the full link to the new file with mode `0600` and prints only the file location. Use the actual reviewer email provided by the reviewing platform.
+The seed defaults to local mode and refuses mismatched targets, duplicate slugs, existing reviewer accounts and existing output files. Hosted provisioning requires `--target staging` or `--target production`, the same `APP_MODE` and `DEMO_PROVISION_TARGET`, a PostgreSQL URL supplied from the correct service’s Secret Manager binding, and the canonical HTTPS `APP_URL`. Local mode continues to require PGlite and a local origin. It creates the reviewer and hub, an owned shared workspace with normal roles/team/statuses, four assigned sample tasks, complimentary Pro access, the shared `demo_workspace` association and the credential digest. It writes the full link to the new file with mode `0600` and prints only the file location. Use the actual reviewer email provided by the reviewing platform.
 
 With the stack ready and `APP_URL` and `API_URL` exported, run the real browser journey:
 
@@ -348,6 +348,19 @@ cd apps/web
 DEMO_REVIEW_LINK_FILE=/tmp/docket-reviewer-link.txt DEMO_OTHER_LINK_FILE=/tmp/docket-other-review-link.txt pnpm exec playwright test e2e/auth/demo-sign-in.spec.ts
 ```
 
-The second seed is only a local account-switching fixture. The browser test first signs into that account, then opens the reviewer link with that existing session, with cleared cookies, and while already signed in as the reviewer. Each visit verifies the designated reviewer identity and a scrubbed URL fragment. It also checks the four seeded tasks and verifies their titles render in My work. No code echo or mail provider is involved. Capture normal sign-in and the link loading/incomplete/error states with `capture-shots.ts` in both themes and standard widths. Stop the stack and run `pnpm db:reset` when finished so API tests see an empty dev database. The seed is local-only; hosted provisioning and actual platform review acceptance are separate checks.
+Reviewer protection is independent of the private link. PostgreSQL serializes shared workspace budgets across instances, IPs, browser sessions, OAuth tokens and registered MCP agents:
+
+| Resource                                                        | Per minute        | Per day |
+| --------------------------------------------------------------- | ----------------- | ------- |
+| Link exchanges                                                  | 10                | 60      |
+| Authenticated requests                                          | 120               | 2,000   |
+| Work operation units, including MCP calls and bulk array items  | 30                | 250     |
+| Actual model turns, including voice and automatic continuations | 3                 | 12      |
+| Export/import/sync/voice requests                               | 3                 | 12      |
+| Uploaded request bytes                                          | 1 MiB per request | 20 MiB  |
+
+Three distributed stream slots are shared across the account; connections close after 60 seconds and crash-recovery leases expire after 90 seconds. Rejections return HTTP 429 with `Retry-After` before work dispatch. The ordinary auth IP limiter remains in place, magic-link request bodies are capped at 4 KiB, and MCP has a general 8 MiB ceiling. Reviewer accounts cannot create/delete workspaces, delete their account, or change authentication credentials. Removing membership does not turn a listed reviewer into an unmetered ordinary account. Reviewer counters live in their own table so authentication cleanup cannot reset daily allowances. Direct browser Realtime credentials are refused for reviewers; text and phone responders remain subject to actual model-turn admission. Normal accounts retain existing limits.
+
+The second seed is only a local account-switching fixture. The browser test first signs into that account, then opens the reviewer link with that existing session, with cleared cookies, and while already signed in as the reviewer. Each visit verifies the designated reviewer identity and a scrubbed URL fragment. It also checks the four seeded tasks and verifies their titles render in My work. No code echo or mail provider is involved. Capture normal sign-in and the link loading/incomplete/error states with `capture-shots.ts` in both themes and standard widths. Stop the stack and run `pnpm db:reset` when finished so API tests see an empty dev database. Hosted provisioning requires separate staging and production verification; actual platform review acceptance remains a separate check.
 
 Per-person provisioning, scheduled reset/expiry, source-workspace copying and demo management screens are deferred. The seed creates sample work directly; it does not implement those operations.

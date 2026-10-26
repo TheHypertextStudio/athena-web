@@ -6,7 +6,9 @@
   "license": "UNLICENSED",
   "description": "Docket authentication — the Better Auth configuration and passwordless sign-up challenge.",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./demo-budget": "./src/demo-budget.ts",
+    "./demo-stream-budget": "./src/demo-stream-budget.ts"
   },
   "main": "./src/index.ts",
   "types": "./src/index.ts",

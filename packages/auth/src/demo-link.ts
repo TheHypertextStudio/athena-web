@@ -2,6 +2,7 @@ import type { BetterAuthPlugin } from 'better-auth';
 import { APIError, createAuthEndpoint } from 'better-auth/api';
 import { setSessionCookie } from 'better-auth/cookies';
 import { z } from 'zod';
+import { DemoBudgetExceeded } from './demo-budget';
 
 /** A private reviewer link's email-bound credential, exchanged only by POST. */
 export interface DemoLinkCredential {
@@ -33,7 +34,17 @@ export function demoLink(resolve?: ResolveDemoSignIn): BetterAuthPlugin {
         },
         async (ctx) => {
           const credential = { ...ctx.body, email: ctx.body.email.trim().toLowerCase() };
-          const userId = await resolve?.(credential);
+          let userId: string | null | undefined;
+          try {
+            userId = await resolve?.(credential);
+          } catch (error) {
+            if (!(error instanceof DemoBudgetExceeded)) throw error;
+            ctx.setHeader('Retry-After', String(error.retryAfter));
+            throw new APIError('TOO_MANY_REQUESTS', {
+              code: 'RATE_LIMITED',
+              message: 'Too many requests. Please try again later.',
+            });
+          }
           const user = userId ? await ctx.context.internalAdapter.findUserById(userId) : null;
           if (user?.email.toLowerCase() !== credential.email) {
             throw new APIError('BAD_REQUEST', {

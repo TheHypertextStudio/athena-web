@@ -22,6 +22,7 @@
  * whole reason a person chooses local inference is to know where their data went, and a silent
  * fallback would make that unknowable from inside Docket.
  */
+import { withDemoRuntimeBudget } from '../lib/demo-runtime-budget';
 import type { AgentTurnRuntime } from '@docket/athena/turn';
 import {
   LatticeAgentTurnRuntime,
@@ -141,7 +142,7 @@ export function turnGatewayContext(gateway: LatticeGatewayContext): LatticeGatew
  * @returns The runtime to drive this turn with, and what it is.
  * @throws {LatticeUnavailableError} When the owner is on Lattice but it cannot serve right now.
  */
-export async function resolveOwnerBackend(
+async function resolveUnmeteredOwnerBackend(
   ownerUserId: string | null,
 ): Promise<ResolvedOwnerBackend> {
   const fallback = (): ResolvedOwnerBackend => ({
@@ -174,6 +175,18 @@ export async function resolveOwnerBackend(
     }),
     kind: 'lattice',
     deviceId,
+  };
+}
+
+/** Resolve the selected provider with a persistent reviewer budget on every model turn. */
+export async function resolveOwnerBackend(
+  ownerUserId: string | null,
+): Promise<ResolvedOwnerBackend> {
+  const backend = await resolveUnmeteredOwnerBackend(ownerUserId);
+  if (!ownerUserId) return backend;
+  return {
+    ...backend,
+    runtime: await withDemoRuntimeBudget(backend.runtime, { userId: ownerUserId }),
   };
 }
 

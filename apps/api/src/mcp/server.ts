@@ -1,3 +1,6 @@
+import { acquireDemoStream } from '@docket/auth/demo-stream-budget';
+import { DemoBudgetExceeded } from '@docket/auth/demo-budget';
+import { admitDemoRequest, boundedDemoStream } from '../lib/demo-admission';
 /**
  * `@docket/api` — the Streamable HTTP MCP server (one `/mcp` endpoint).
  *
@@ -21,7 +24,7 @@ import { publicProblemTitle } from '../contracts/errors';
 import type { Context } from 'hono';
 
 import { env } from '../env';
-import { ApiError, ConflictError, NotFoundError, problemTypeUrl } from '../error';
+import { ApiError, RateLimitedError, ConflictError, NotFoundError, problemTypeUrl } from '../error';
 import type { McpContext } from './auth';
 import { attachStream, notifyLog } from './notify';
 import {
@@ -621,7 +624,7 @@ function responseWithCleanup(response: Response, cleanup: () => void): Response 
 export async function mcpHandler(c: Context): Promise<Response> {
   let ctx: McpContext;
   try {
-    ctx = await resolveMcpContext(c.req.raw.headers);
+    ctx = await resolveBudgetedMcpContext(c);
   } catch (err) {
     return problem(c, err);
   }
@@ -648,7 +651,7 @@ export async function mcpHandler(c: Context): Promise<Response> {
   // per-request transport has nowhere to keep it.
   if (c.req.raw.method === 'GET') {
     if (!session) return problem(c, new NotFoundError('Session not found'));
-    return notificationStream(c, session);
+    return reviewerNotificationStream(c, session);
   }
 
   // Read the body once so we can both run the scope preflight AND hand an intact request to
@@ -747,5 +750,36 @@ export async function mcpHandler(c: Context): Promise<Response> {
   } catch (err) {
     cleanup();
     throw err;
+  }
+}
+
+const reviewerDemos = new WeakMap<Context, string>();
+
+/** Authenticate and admit both human and registered-agent reviewer calls before dispatch. */
+async function resolveBudgetedMcpContext(c: Context): Promise<McpContext> {
+  const ctx = await resolveMcpContext(c.req.raw.headers);
+  const subject =
+    ctx.principal.kind === 'user'
+      ? { userId: ctx.principal.userId }
+      : { organizationId: ctx.principal.orgId };
+  const demoId = await admitDemoRequest(c, subject);
+  if (demoId) reviewerDemos.set(c, demoId);
+  return ctx;
+}
+
+/** Share the same bounded reviewer stream slots with browser REST streams. */
+async function reviewerNotificationStream(c: Context, sessionId: string): Promise<Response> {
+  const demoId = reviewerDemos.get(c);
+  if (!demoId) return notificationStream(c, sessionId);
+  let release: (() => Promise<void>) | undefined;
+  try {
+    release = await acquireDemoStream(demoId);
+    return boundedDemoStream(await notificationStream(c, sessionId), release);
+  } catch (error) {
+    if (release) await release();
+    return problem(
+      c,
+      error instanceof DemoBudgetExceeded ? new RateLimitedError(error.retryAfter) : error,
+    );
   }
 }

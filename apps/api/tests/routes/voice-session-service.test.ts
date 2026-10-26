@@ -10,7 +10,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 
 import type * as DbModule from '@docket/db';
 
-import { NotFoundError } from '../../src/error';
+import { CapabilityError, NotFoundError } from '../../src/error';
 import type {
   closeVoiceSession as CloseVoiceSession,
   isAthenaEntitled as IsAthenaEntitled,
@@ -168,6 +168,36 @@ describe('openVoiceSession on a channel whose provider generates its own reply',
     } finally {
       await closeVoiceSession(opened.voiceSessionId, 'user_ended');
     }
+  });
+
+  it('refuses direct provider credentials for a reviewer before creating a voice session', async () => {
+    const person = await seedPerson();
+    const [review] = await db
+      .insert(schema.demo)
+      .values({
+        slug: `voice-review-${person.userId.toLowerCase()}`,
+        name: 'Voice review',
+        sourceOrganizationId: person.orgId,
+        mode: 'shared',
+      })
+      .returning();
+    await db
+      .insert(schema.demoWorkspace)
+      .values({ demoId: assertDefined(review).id, organizationId: person.orgId });
+    await expect(
+      openVoiceSession({
+        userId: person.userId,
+        channel: 'web',
+        provider: 'openai-realtime',
+        organizationId: person.orgId,
+      }),
+    ).rejects.toBeInstanceOf(CapabilityError);
+    expect(
+      await db
+        .select()
+        .from(schema.voiceSession)
+        .where(eq(schema.voiceSession.userId, person.userId)),
+    ).toHaveLength(0);
   });
 
   it('configures no responder for a real speech-to-speech web session', async () => {

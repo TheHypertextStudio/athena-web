@@ -3,6 +3,8 @@ import { createHash } from 'node:crypto';
 import { actor, db, demo, demoWorkspace, serviceControl, user } from '@docket/db';
 import { and, eq, gt, isNull, or, sql } from 'drizzle-orm';
 
+import { consumeDemoBudget } from './demo-budget';
+
 import type { DemoLinkCredential } from './demo-link';
 
 /**
@@ -40,5 +42,7 @@ export async function resolveDemoSignIn(credential: DemoLinkCredential): Promise
       ),
     )
     .limit(1);
-  return found?.userId ?? null;
+  if (!found) return null;
+  await consumeDemoBudget({ userId: found.userId }, [{ kind: 'sign-ins' }]);
+  return found.userId;
 }

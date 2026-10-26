@@ -3,6 +3,9 @@ import { resolve } from 'node:path';
 import { migrate } from 'drizzle-orm/pglite/migrator';
 import { beforeAll, describe, expect, it } from 'vitest';
 
+import { DemoBudgetExceeded } from '../../src/demo-budget';
+
+let throttled = false;
 const EMAIL = 'mcp-review@theaicompany.org';
 const TOKEN = 'a'.repeat(43);
 let allowed = true;
@@ -26,10 +29,12 @@ async function instance(): Promise<(request: Request) => Promise<Response>> {
             throw new Error('Reviewer access must not send mail');
           },
         },
-        resolveDemoSignIn: async ({ slug, email, token }) =>
-          allowed && slug === 'openai-review' && email === EMAIL && token === TOKEN
+        resolveDemoSignIn: async ({ slug, email, token }) => {
+          if (throttled) throw new DemoBudgetExceeded(42);
+          return allowed && slug === 'openai-review' && email === EMAIL && token === TOKEN
             ? 'demo-reviewer'
-            : null,
+            : null;
+        },
       },
     ),
   ).handler;
@@ -90,6 +95,18 @@ describe('supplied reviewer magic link', () => {
       expect(refused.headers.get('set-cookie')).toBeNull();
     } finally {
       allowed = true;
+    }
+  });
+  it('returns HTTP 429 and Retry-After without minting a session at the account budget', async () => {
+    const handler = await instance();
+    throttled = true;
+    try {
+      const response = await exchange(handler);
+      expect(response.status).toBe(429);
+      expect(response.headers.get('retry-after')).toBe('42');
+      expect(response.headers.get('set-cookie')).toBeNull();
+    } finally {
+      throttled = false;
     }
   });
   it('does not expose the superseded OTP request endpoint', async () => {

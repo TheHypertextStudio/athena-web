@@ -1296,6 +1296,13 @@
       "when": 1793047868339,
       "tag": "0184_demo_workspaces",
       "breakpoints": true
+    },
+    {
+      "idx": 185,
+      "version": "7",
+      "when": 1793054463521,
+      "tag": "0185_demo_budgets",
+      "breakpoints": true
     }
   ]
 }

@@ -63,6 +63,8 @@ import webhooks from './routes/webhooks';
 import oauthStubProvider from './lib/oauth-stub-provider';
 import { MAX_REQUEST_BYTES, rejectOversizedBody } from './lib/http-limits';
 
+import { demoAdmissionMiddleware } from './lib/demo-admission';
+
 const trustedOrigins =
   env.BETTER_AUTH_TRUSTED_ORIGINS?.split(',')
     .map((s) => s.trim())
@@ -97,15 +99,24 @@ server.use('*', secureHeaders({ crossOriginResourcePolicy: 'cross-origin', xFram
 
 registerPublicApiBoundary(server, trustedOrigins);
 
-// The REST byte ceiling sits outside the typed app because its stream/download routes are
-// root-mounted. It also keeps authentication and database reads behind the process-protection
-// boundary for every `/v1` request.
+// Root middleware resolves identity before reading reviewer bodies, so rejected traffic cannot
+// consume the ordinary upload allowance. The REST ceiling also covers root-mounted downloads/streams.
+server.use(
+  '/mcp',
+  bodyLimit({ maxSize: 8 * 1024 * 1024, onError: () => rejectOversizedBody(8 * 1024 * 1024) }),
+);
+server.use(
+  '/api/auth/sign-in/demo-link',
+  bodyLimit({ maxSize: 4096, onError: () => rejectOversizedBody(4096) }),
+);
+server.use('*', sessionMiddleware);
+server.use('*', principalMiddleware);
+server.use('*', demoAdmissionMiddleware);
 server.use(
   '/v1/*',
   bodyLimit({ maxSize: MAX_REQUEST_BYTES, onError: () => rejectOversizedBody() }),
 );
-server.use('*', sessionMiddleware);
-server.use('*', principalMiddleware);
+
 // CIMD preflight (mcp-surface.md §2.6): Better Auth resolves authorize clients by exact
 // `client_id`, so URL-form MCP client ids must be fetched/validated/upserted into the OAuth
 // client table BEFORE the authorize handler runs. Registered ahead of `/api/auth/*` so it

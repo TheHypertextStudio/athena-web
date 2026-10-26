@@ -5,7 +5,16 @@ import { and, eq } from 'drizzle-orm';
 import { migrate } from 'drizzle-orm/pglite/migrator';
 import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
-import { actor, db, demo, demoWorkspace, organization, serviceControl, user } from '@docket/db';
+import {
+  actor,
+  db,
+  demo,
+  demoWorkspace,
+  organization,
+  demoBudget,
+  serviceControl,
+  user,
+} from '@docket/db';
 import { resolveDemoSignIn } from '../../src/demo-access';
 
 const credential = { slug: 'review', email: 'reviewer@example.com', token: 'a'.repeat(43) };
@@ -42,6 +51,7 @@ beforeAll(async () => {
   await db.insert(demoWorkspace).values({ demoId: 'demo-rules', organizationId: 'demo-org' });
 });
 beforeEach(async () => {
+  await db.delete(demoBudget);
   await db
     .update(demo)
     .set({
@@ -57,6 +67,14 @@ beforeEach(async () => {
 });
 
 describe('live demo access rules', () => {
+  it('limits valid link exchanges across new sessions for the same reviewer', async () => {
+    for (let attempt = 0; attempt < 10; attempt++) {
+      await expect(resolveDemoSignIn(credential)).resolves.toBe('reviewer');
+    }
+    await expect(resolveDemoSignIn(credential)).rejects.toMatchObject({
+      name: 'DemoBudgetExceeded',
+    });
+  });
   it('matches the exact address case-insensitively and rejects other addresses', async () => {
     await expect(
       resolveDemoSignIn({ ...credential, email: ' REVIEWER@EXAMPLE.COM ' }),

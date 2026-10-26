@@ -5,6 +5,13 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { chromium } from '@playwright/test';
 import axe from 'axe-core';
+import {
+  verifySearchReturn,
+  verifyMatchPages,
+  verifySelectionRace,
+  verifyReturnAcrossModes,
+  verifyRefreshAndBack,
+} from './verify-work-graph-search.mjs';
 import { API_TEST_ENV } from '../apps/api/tests/support/env.ts';
 Object.assign(process.env, API_TEST_ENV);
 const { WORK_GRAPH_HTML } = await import('../apps/api/src/mcp/apps/work-graph.ts');
@@ -170,10 +177,9 @@ try {
         (await page.locator('iframe').boundingBox()).height < 480,
         'Inline dependency review should stay compact',
       );
-      await page.screenshot({
-        path: resolve(output, `inline-${width}-${theme}.png`),
-        fullPage: true,
-      });
+      await app
+        .locator('.graph-shell')
+        .screenshot({ path: resolve(output, `inline-${width}-${theme}.png`) });
       await app.getByRole('button', { name: 'Explore graph', exact: true }).click();
       await page.waitForFunction(() =>
         window.calls.some((c) => c.arguments.display === 'fullscreen'),
@@ -194,6 +200,17 @@ try {
         path: resolve(output, `expanded-${width}-${theme}.png`),
         fullPage: true,
       });
+      assert.equal(
+        await app.locator('.graph-node-kind').count(),
+        0,
+        'Work titles do not repeat a Task label',
+      );
+      const mapBounds = await app.locator('.graph-stage').boundingBox();
+      for (const link of await app.locator('.graph-portal').all())
+        assert(
+          (await link.boundingBox()).y >= mapBounds.y + mapBounds.height - 1,
+          'Offscreen links stay outside selectable work',
+        );
       assert(
         (await app.locator('.graph-stage').boundingBox()).height > 500,
         'Expanded map uses the host height',
@@ -212,6 +229,12 @@ try {
       const search = app.getByRole('combobox', { name: 'Find work in this scope' });
       if (width === 390)
         assert((await search.boundingBox()).height >= 40, 'Search supports touch input');
+      const priorView = await app.locator('.graph-world').getAttribute('style');
+      const priorGroups = await app
+        .locator('[data-graph-toggle]')
+        .evaluateAll((nodes) =>
+          nodes.map((n) => [n.dataset.graphToggle, n.getAttribute('aria-expanded')]),
+        );
       if (width === 390 && theme === 'light') {
         await page.evaluate(() => {
           window.hold = true;
@@ -257,9 +280,20 @@ try {
         'Search match framed vertically',
       );
       await page.screenshot({ path: resolve(output, `search-reveal-${width}-${theme}.png`) });
+      await verifySearchReturn(app, priorView, priorGroups, settleLayout);
+      await page.screenshot({ path: resolve(output, `search-return-${width}-${theme}.png`) });
       await search.fill('passkey');
       await app.getByRole('option').filter({ hasText: 'Sign in with a passkey' }).click();
       await app.getByRole('heading', { name: 'Sign in with a passkey', exact: true }).waitFor();
+      assert.equal(await app.getByLabel('Completed work display').inputValue(), 'all');
+      await app.getByRole('button', { name: 'Back to previous view', exact: true }).click();
+      await settleLayout(app);
+      assert.equal(
+        await app.getByLabel('Completed work display').inputValue(),
+        'collapsed',
+        'Search Back restores completion filter',
+      );
+      if (width === 390 && theme === 'light') await verifySelectionRace(page, app, settleLayout);
       await search.fill('Review team permissions');
       await app.getByRole('option').filter({ hasText: 'Review team permissions' }).click();
       await app.getByRole('heading', { name: 'Review team permissions', exact: true }).waitFor();
@@ -354,6 +388,7 @@ try {
         await search.fill('Work item');
         await app.getByRole('option', { name: 'More matches', exact: true }).click();
         await app.getByRole('option').filter({ hasText: 'Work item 039' }).waitFor();
+        await verifyMatchPages(app);
         await search.fill('Work item 249');
         await app.getByRole('option').filter({ hasText: 'Work item 249' }).click();
         await app.getByRole('heading', { name: 'Work item 249', exact: true }).waitFor();
@@ -392,57 +427,8 @@ try {
     );
     await page.close();
   }
-  // A superseded neighborhood response must leave Back's scope and viewport intact.
-  {
-    const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
-    await page.goto(base);
-    const app = page.frameLocator('iframe');
-    await app.getByRole('button', { name: 'Explore graph', exact: true }).click();
-    const search = app.getByRole('combobox', { name: 'Find work in this scope' });
-    await search.fill('Review team permissions');
-    await app.getByRole('option').filter({ hasText: 'Review team permissions' }).click();
-    await app.getByRole('heading', { name: 'Review team permissions', exact: true }).waitFor();
-    await settleLayout(app);
-    const camera = await app.locator('.graph-world').getAttribute('style');
-    await app.getByRole('button', { name: 'Refresh graph', exact: true }).click();
-    await app.getByRole('status').filter({ hasText: 'Loading' }).waitFor({ state: 'hidden' });
-    assert.equal(
-      await app.locator('.graph-world').getAttribute('style'),
-      camera,
-      'Refresh retains framing',
-    );
-    await app.getByRole('button', { name: 'Open neighborhood', exact: true }).click();
-    await app.locator('.graph-title h1').filter({ hasText: 'Review team permissions' }).waitFor();
-    await app.getByRole('button', { name: 'Relationship list', exact: true }).click();
-    await app.locator('[data-graph-select="task:t04"]').click();
-    await page.evaluate(() => {
-      window.hold = true;
-      window.pending = [];
-    });
-    await app.getByRole('button', { name: 'Open neighborhood', exact: true }).click();
-    await page.waitForFunction(() => window.pending.length === 1);
-    await app.getByRole('button', { name: 'Back', exact: true }).click();
-    await app.locator('.graph-title h1').filter({ hasText: 'Member portal' }).waitFor();
-    await page.evaluate(() => {
-      window.hold = false;
-      const pending = window.pending[0];
-      document.querySelector('iframe').contentWindow.postMessage(
-        {
-          jsonrpc: '2.0',
-          id: pending.id,
-          result: { structuredContent: pending.response, content: [] },
-        },
-        '*',
-      );
-    });
-    await page.waitForTimeout(100);
-    const callCount = await page.evaluate(() => window.calls.length);
-    await app.getByRole('button', { name: 'Refresh graph', exact: true }).click();
-    await page.waitForFunction((count) => window.calls.length > count, callCount);
-    assert.equal(await page.evaluate(() => window.calls.at(-1).arguments.scope.kind), 'program');
-    await app.locator('.graph-title h1').filter({ hasText: 'Member portal' }).waitFor();
-    await page.close();
-  }
+  await verifyRefreshAndBack(browser, base, settleLayout);
+  await verifyReturnAcrossModes(browser, base);
   for (const kind of ['entity', 'list']) {
     const page = await browser.newPage({ viewport: { width: 720, height: 900 } });
     await page.goto(base + '/?kind=' + kind + '&deny=1');
@@ -471,7 +457,7 @@ try {
   await page.close();
   writeFileSync(resolve(output, 'results.json'), JSON.stringify(results, null, 2));
   process.stdout.write(
-    JSON.stringify({ passed: true, captures: results.length * 5 + 10, results }) + '\n',
+    JSON.stringify({ passed: true, captures: results.length * 6 + 10, results }) + '\n',
   );
 } catch (error) {
   const page = browser.contexts().flatMap((context) => context.pages())[0];

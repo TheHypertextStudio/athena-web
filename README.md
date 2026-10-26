@@ -144,7 +144,8 @@ for schemas, settlement, lifecycle rules, and the dispatch kill switch.
 The MCP tools include a read-only work graph for exploring project, program, initiative, and task
 dependencies, including completed branches and visible external blockers. Compact conversation
 views open into a spatial explorer; scope-wide search reveals matching work across collapsed
-groups, completion filters, and graph pages. See the
+groups, completion filters, and graph pages. Search visits restore the previous view, and inspectors
+show original prerequisites without duplicating their collapsed project arrows. See the
 [work graph contract](docs/engineering/specs/mcp-work-graph.md).
 
 ## Public documentation

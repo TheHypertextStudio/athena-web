@@ -4,19 +4,25 @@ window.docketGraphView = function (state, act) {
   const d = window.docket,
     s = state.snapshot,
     expanded = state.exploring || d.fullscreen;
+  const ui = window.docketGraphUi;
   const root = d.canvas(),
     shell = d.el('div', 'graph-shell');
   shell.dataset.exploring = String(expanded);
   root.appendChild(shell);
   const header = d.el('div', 'graph-heading');
-  if (state.back || state.history.length) header.appendChild(d.button('Back', act.back));
+  if (!state.searchReturn && (state.back || state.history.length))
+    header.appendChild(ui.button('Back', 'undo', act.back));
   const title = d.el('div', 'graph-title');
-  title.appendChild(d.el('p', 'graph-kicker', s.scope.kind + ' · Work graph'));
+  const kicker = d.el('p', 'graph-kicker', 'Work graph'),
+    scopeIcon = d.kindIcon(s.scope.kind);
+  if (scopeIcon) kicker.prepend(scopeIcon);
+  title.appendChild(kicker);
   const name = d.el('h1', '', s.scope.title);
   name.title = s.scope.title;
   title.appendChild(name);
   header.appendChild(title);
-  if (!expanded) header.appendChild(d.button('Explore graph', act.explore, { tonal: true }));
+  if (!expanded)
+    header.appendChild(ui.button('Explore graph', 'expand', act.explore, { tonal: true }));
   shell.appendChild(header);
   const summary = d.el('div', 'graph-summary');
   for (const key of ['remaining', 'completed', 'canceled']) {
@@ -48,13 +54,13 @@ window.docketGraphView = function (state, act) {
     select.addEventListener('change', () => act.read({ completion: select.value, page: 0 }));
     items.appendChild(select);
     items.appendChild(
-      d.button(state.list ? 'Map' : 'Relationship list', () => {
+      ui.button(state.list ? 'Map' : 'Relationship list', state.list ? 'expand' : 'view', () => {
         state.list = !state.list;
         act.draw();
       }),
     );
     items.appendChild(
-      d.button(state.busy ? 'Refreshing…' : 'Refresh', () => act.read({}), {
+      ui.button(state.busy ? 'Refreshing…' : 'Refresh', 'cycle', () => act.read({}), {
         label: 'Refresh graph',
       }),
     );
@@ -70,6 +76,31 @@ window.docketGraphView = function (state, act) {
     toolbar.appendChild(details);
   }
   shell.appendChild(toolbar);
+  if (state.searchReturn || state.selected) {
+    const location = d.el('div', 'graph-navigation');
+    if (state.searchReturn)
+      location.appendChild(
+        ui.button('Previous view', 'undo', act.returnSearch, { label: 'Back to previous view' }),
+      );
+    if (state.selected) location.appendChild(ui.location(state, state.selected));
+    const nav = state.matchNav;
+    if (nav && nav.total > 1 && state.search === nav.query) {
+      const matches = d.el('div', 'graph-match-nav');
+      matches.setAttribute('aria-label', 'Search match navigation');
+      const previous = ui.button('', 'child', () => act.moveMatch(-1), { label: 'Previous match' });
+      previous.classList.add('graph-icon-incoming');
+      previous.disabled = nav.start + nav.index === 0;
+      const next = ui.button('', 'child', () => act.moveMatch(1), { label: 'Next match' });
+      next.disabled = nav.start + nav.index + 1 >= nav.total;
+      matches.append(
+        previous,
+        d.el('span', 'graph-meta', nav.start + nav.index + 1 + ' of ' + nav.total),
+        next,
+      );
+      location.appendChild(matches);
+    }
+    shell.appendChild(location);
+  }
   const body = d.el('div', 'graph-body');
   if (!s.nodes.length) {
     const empty = d.el('div', 'graph-empty');
@@ -102,7 +133,10 @@ window.docketGraphView = function (state, act) {
     controls.append(
       d.button('−', () => act.zoom(0.8), { label: 'Zoom out' }),
       d.button('+', () => act.zoom(1.25), { label: 'Zoom in' }),
-      d.button('Fit all', act.fit),
+      ui.button('Focus', 'search', () => act.frame(state.selected), {
+        label: 'Focus selected work',
+      }),
+      ui.button('Fit all', 'expand', act.fit),
     );
     body.appendChild(controls);
   }
@@ -112,7 +146,12 @@ window.docketGraphView = function (state, act) {
     ? s.nodes.length + ' shown' + (s.omitted ? ' · ' + s.omitted + ' outside this view' : '')
     : 'Showing ' + s.nodes.length + ' work items' + (s.omitted ? ' · More in Explore' : '');
   foot.appendChild(d.el('span', '', count));
-  if (expanded) foot.appendChild(d.el('span', '', '→ Blocks · Dashed groups contain work'));
+  if (expanded) {
+    const offscreen = d.el('nav', 'graph-offscreen');
+    offscreen.setAttribute('aria-label', 'Connections outside view');
+    foot.appendChild(offscreen);
+    foot.appendChild(d.el('span', 'graph-legend-key', '→ Blocks · Groups contain work'));
+  }
   if (s.page > 0) foot.appendChild(d.button('Previous page', () => act.read({ page: s.page - 1 })));
   if (expanded && s.hasNextPage)
     foot.appendChild(d.button('Next page', () => act.read({ page: s.page + 1, focus: undefined })));

@@ -2,24 +2,25 @@
 import type { GraphData, GraphInput, GraphSnapshot, GraphWork } from './contract';
 import { isDependency } from './selection';
 
-function trailFor(
+/** Resolve an authorized containment breadcrumb, excluding the selected root. */
+export function graphContext(
   key: string,
   parents: ReadonlyMap<string, string>,
   byKey: ReadonlyMap<string, GraphWork>,
   root: string,
-): { key: string; title: string }[] {
-  if (key === root) return [];
+): { trail: { key: string; title: string }[]; trailTruncated: boolean } {
+  if (key === root) return { trail: [], trailTruncated: false };
   const trail = [],
     seen = new Set([key]);
   let parent = parents.get(key);
-  while (parent && parent !== root && !seen.has(parent)) {
+  while (parent && parent !== root && !seen.has(parent) && trail.length < 10) {
     seen.add(parent);
     const work = byKey.get(parent);
     if (!work) break;
     trail.unshift({ key: work.key, title: work.title });
     parent = parents.get(parent);
   }
-  return trail;
+  return { trail, trailTruncated: Boolean(parent && parent !== root) };
 }
 
 /** Search the entire authorized scope independently of the current scene's filters and page. */
@@ -48,7 +49,7 @@ export function searchScope(
     hasMore: input.searchOffset + 20 < matches.length,
     results: matches.slice(input.searchOffset, input.searchOffset + 20).map((n) => ({
       ...n,
-      trail: trailFor(n.key, parents, byKey, root),
+      ...graphContext(n.key, parents, byKey, root),
     })),
   };
 }

@@ -1,6 +1,6 @@
 /** Local viewport gestures and readable framing; only structural changes ask the server for layout. */
 export const GRAPH_CAMERA_SCRIPT = String.raw`
-window.docketGraphCamera = function (state) {
+window.docketGraphCamera = function (state, act) {
   let stage, world;
   function transform() {
     if (world && state.camera)
@@ -12,28 +12,66 @@ window.docketGraphCamera = function (state) {
         'px) scale(' +
         state.camera.scale +
         ')';
+    if (stage) window.docketGraphPortals(stage, state, { ...act, frame }, usableHeight());
+  }
+  function usableHeight() {
+    if (!stage) return 0;
+    const panel = stage.parentElement.querySelector('.graph-inspector');
+    return (
+      stage.clientHeight -
+      (window.innerWidth < 800 && panel
+        ? Math.min(panel.offsetHeight, stage.clientHeight * 0.52)
+        : 0)
+    );
+  }
+  function rect(n) {
+    return { x: n.x, y: n.y, width: Math.min(n.width, 238), height: n.childCount ? 62 : n.height };
   }
   function frame(key) {
     if (!stage) return;
-    const n =
-      state.snapshot.nodes.find((n) => n.key === key) ||
-      state.snapshot.nodes.find((n) => !n.parentKey && !n.external) ||
-      state.snapshot.nodes[0];
+    const snapshot = state.snapshot,
+      n =
+        snapshot.nodes.find((n) => n.key === key) ||
+        snapshot.nodes.find((n) => !n.parentKey && !n.external) ||
+        snapshot.nodes[0];
     if (!n) return;
-    const scale = Math.min(1, Math.max(0.86, (stage.clientWidth - 40) / 238));
-    const container = n.childCount > 0;
-    const panel = stage.parentElement.querySelector('.graph-inspector');
-    const usableHeight =
-      stage.clientHeight -
-      (window.innerWidth < 800 && panel
-        ? Math.min(panel.offsetHeight, stage.clientHeight * 0.46)
-        : 0);
+    const related = new Set(
+      snapshot.edges
+        .filter((e) => e.source === n.key || e.target === n.key)
+        .flatMap((e) => [e.source, e.target]),
+    );
+    const nearby = snapshot.nodes.filter(
+      (other) => other.key !== n.key && (related.has(other.key) || other.parentKey === n.key),
+    );
+    nearby.sort(
+      (a, b) =>
+        Math.abs(a.x - n.x) + Math.abs(a.y - n.y) - (Math.abs(b.x - n.x) + Math.abs(b.y - n.y)),
+    );
+    let bounds = rect(n);
+    const join = (a, b) => ({
+      x: Math.min(a.x, b.x),
+      y: Math.min(a.y, b.y),
+      width: Math.max(a.x + a.width, b.x + b.width) - Math.min(a.x, b.x),
+      height: Math.max(a.y + a.height, b.y + b.height) - Math.min(a.y, b.y),
+    });
+    for (const candidate of nearby.slice(0, 4)) {
+      const next = join(bounds, rect(candidate));
+      if (next.width * 0.86 <= stage.clientWidth - 48 && next.height * 0.86 <= usableHeight() - 48)
+        bounds = next;
+    }
+    const scale = Math.min(
+      1,
+      (stage.clientWidth - 48) / bounds.width,
+      (usableHeight() - 48) / bounds.height,
+    );
     state.camera = {
-      scale,
-      x: container ? 24 - n.x * scale : (stage.clientWidth - n.width * scale) / 2 - n.x * scale,
-      y: container
-        ? 24 - n.y * scale
-        : Math.max(20, (usableHeight - n.height * scale) / 2) - n.y * scale,
+      scale: Math.max(0.86, scale),
+      x:
+        (stage.clientWidth - bounds.width * Math.max(0.86, scale)) / 2 -
+        bounds.x * Math.max(0.86, scale),
+      y:
+        Math.max(24, (usableHeight() - bounds.height * Math.max(0.86, scale)) * 0.3) -
+        bounds.y * Math.max(0.86, scale),
     };
     transform();
   }
@@ -48,7 +86,7 @@ window.docketGraphCamera = function (state) {
       window.innerWidth < 800 && panel ? panel.getBoundingClientRect().top : bounds.bottom;
     if (
       box.left < bounds.left ||
-      box.right > bounds.right ||
+      box.left + Math.min(box.width, 238 * (state.camera?.scale || 1)) > bounds.right ||
       box.top < bounds.top ||
       box.bottom > bottom
     )

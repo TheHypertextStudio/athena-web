@@ -38,7 +38,7 @@ window.docketGraphInline = function (state, act) {
     row.title = n.title;
     row.dataset.graphSelect = n.key;
     row.setAttribute('aria-pressed', String(state.selected === n.key));
-    const glyph = d.stateGlyph(n.category);
+    const glyph = n.kind === 'task' ? d.stateGlyph(n.category) : d.kindIcon(n.kind);
     if (glyph) row.appendChild(glyph);
     const text = d.el('span', 'graph-inline-text');
     text.appendChild(d.el('strong', '', n.title));

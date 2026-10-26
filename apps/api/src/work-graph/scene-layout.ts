@@ -13,6 +13,9 @@ function topLevelKey(key: string, byKey: Map<string, Node>, members: Set<string>
   }
   return current?.key ?? key;
 }
+function leafHeight(n: Node): number {
+  return n.kind === 'task' ? 96 : 104;
+}
 /** Lay out compound groups bottom-up, retaining actual dependency endpoints. */
 export function positionScene(
   nodes: Node[],
@@ -37,7 +40,7 @@ export function positionScene(
     for (const n of members) {
       const nested = measure(n.key);
       n.width = Math.max(238, nested.width ? nested.width + 40 : 0);
-      n.height = nested.height ? nested.height + 82 : 104;
+      n.height = nested.height ? nested.height + 82 : leafHeight(n);
     }
     const memberKeys = new Set(members.map((n) => n.key));
     const top = (key: string) => topLevelKey(key, byKey, memberKeys);

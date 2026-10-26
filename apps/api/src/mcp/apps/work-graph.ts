@@ -6,6 +6,9 @@ import { GRAPH_CAMERA_SCRIPT } from './work-graph-camera';
 import { GRAPH_SEARCH_SCRIPT } from './work-graph-search';
 import { GRAPH_INLINE_SCRIPT } from './work-graph-inline';
 import { GRAPH_INSPECTOR_SCRIPT } from './work-graph-inspector';
+import { GRAPH_UI_SCRIPT } from './work-graph-ui';
+import { GRAPH_PORTALS_SCRIPT } from './work-graph-portals';
+import { GRAPH_NAVIGATION_SCRIPT } from './work-graph-navigation';
 import { GRAPH_VIEW_SCRIPT } from './work-graph-view';
 
 const CONTROLLER = String.raw`
@@ -24,6 +27,8 @@ const CONTROLLER = String.raw`
       search: '',
       searchSerial: 0,
       searchResult: null,
+      searchReturn: null,
+      matchNav: null,
       frame: null,
       list: false,
       exploring: false,
@@ -35,7 +40,14 @@ const CONTROLLER = String.raw`
       busy: false,
     };
     let resizeTimer = null;
-    const camera = window.docketGraphCamera(state);
+    const camera = window.docketGraphCamera(state, { select, reveal });
+    const navigation = window.docketGraphNavigation(state, {
+      read,
+      draw,
+      select,
+      syncContext,
+      viewport: () => viewport(),
+    });
     const viewport = () =>
       document.documentElement.clientWidth < 480
         ? 'portrait'
@@ -54,16 +66,10 @@ const CONTROLLER = String.raw`
       await read({ display: 'fullscreen', viewport: viewport() });
     }
     async function reveal(node) {
-      const loaded = await read({
-        focus: node.key,
-        page: 0,
-        completion: ['completed', 'canceled'].includes(node.category)
-          ? 'all'
-          : state.args.completion,
-      });
-      if (loaded) select(node.key);
+      await navigation.searchJump(node);
     }
-    async function read(changes) {
+
+    async function read(changes, searchVersion) {
       const serial = ++state.serial;
       const args = Object.assign({}, state.args, changes);
       state.busy = true;
@@ -71,6 +77,11 @@ const CONTROLLER = String.raw`
       try {
         const result = await d.call('view_work_graph', args);
         if (serial !== state.serial) return;
+        if (searchVersion !== undefined && searchVersion !== state.searchSerial) {
+          state.busy = false;
+          d.notice('');
+          return;
+        }
         const snapshot = result && result.structuredContent;
         if (result.isError || !snapshot || !Array.isArray(snapshot.nodes))
           throw new Error('unavailable');
@@ -99,28 +110,34 @@ const CONTROLLER = String.raw`
       }
     }
     function select(key) {
+      state.serial++;
+      state.searchSerial++;
+      state.busy = false;
+      d.notice('');
       const previous = state.selected;
       state.selected = key;
       state.trace.clear();
       draw();
-      const n = state.snapshot.nodes.find((n) => n.key === key);
-      if (n)
-        void d
-          .updateContext({
-            structuredContent: {
-              orgId: state.args.orgId,
-              scope: state.args.scope,
-              selected: { kind: n.kind, id: n.id, title: n.title },
-              asOf: state.snapshot.asOf,
-            },
-          })
-          .catch(() => {});
+      syncContext();
       requestAnimationFrame(() => {
         if (document.activeElement?.closest('.graph-search-wrap')) return;
         document
           .querySelector('[data-graph-select="' + CSS.escape(key || previous || '') + '"]')
           ?.focus({ preventScroll: true });
       });
+    }
+    function syncContext() {
+      const n = state.snapshot.nodes.find((n) => n.key === state.selected);
+      void d
+        .updateContext({
+          structuredContent: {
+            orgId: state.args.orgId,
+            scope: state.args.scope,
+            selected: n ? { kind: n.kind, id: n.id, title: n.title } : null,
+            asOf: state.snapshot.asOf,
+          },
+        })
+        .catch(() => {});
     }
     function trace(direction) {
       state.trace.clear();
@@ -162,16 +179,9 @@ const CONTROLLER = String.raw`
       );
     }
     async function scope(next) {
-      const previous = {
-        snapshot: state.snapshot,
-        args: { ...state.args },
-        camera: state.camera,
-        selected: state.selected,
-        search: state.search,
-        searchResult: state.searchResult,
-        trace: new Set(state.trace),
-        list: state.list,
-      };
+      const previous = navigation.capture();
+      state.searchReturn = null;
+      state.matchNav = null;
       state.camera = null;
       state.search = '';
       state.trace.clear();
@@ -189,14 +199,17 @@ const CONTROLLER = String.raw`
       } else if (loaded === false) Object.assign(state, previous);
     }
     function back() {
+      if (state.searchReturn) {
+        navigation.returnSearch();
+        return;
+      }
       state.serial++;
       state.searchSerial++;
       state.frame = null;
       state.busy = false;
       const previous = state.history.pop();
       if (previous) {
-        Object.assign(state, previous);
-        draw();
+        navigation.restore(previous);
         return;
       }
       state.active = false;
@@ -237,6 +250,7 @@ const CONTROLLER = String.raw`
       explore,
       reveal,
       ...camera,
+      ...navigation,
     };
     document.addEventListener('keydown', (event) => {
       if (state.active && event.key === 'Escape' && !event.defaultPrevented) {
@@ -257,6 +271,8 @@ const CONTROLLER = String.raw`
       async open(scopeValue, orgId, onBack, focusKeys, listInput) {
         state.back = onBack;
         state.history = [];
+        state.searchReturn = null;
+        state.matchNav = null;
         state.selected = null;
         state.search = '';
         state.searchResult = null;
@@ -314,7 +330,7 @@ const CONTROLLER = String.raw`
 `;
 
 /** Install the same renderer/controller in graph, entity and scoped-list resources. */
-export const GRAPH_SCRIPT = `window.__docketGraphCss=${JSON.stringify(GRAPH_CSS)};\n${GRAPH_RENDER_SCRIPT}\n${GRAPH_CAMERA_SCRIPT}\n${GRAPH_SEARCH_SCRIPT}\n${GRAPH_INLINE_SCRIPT}\n${GRAPH_INSPECTOR_SCRIPT}\n${GRAPH_VIEW_SCRIPT}\n${CONTROLLER}`;
+export const GRAPH_SCRIPT = `window.__docketGraphCss=${JSON.stringify(GRAPH_CSS)};\n${GRAPH_RENDER_SCRIPT}\n${GRAPH_UI_SCRIPT}\n${GRAPH_PORTALS_SCRIPT}\n${GRAPH_CAMERA_SCRIPT}\n${GRAPH_SEARCH_SCRIPT}\n${GRAPH_INLINE_SCRIPT}\n${GRAPH_INSPECTOR_SCRIPT}\n${GRAPH_VIEW_SCRIPT}\n${GRAPH_NAVIGATION_SCRIPT}\n${CONTROLLER}`;
 /** Standalone graph resource, using the existing host protocol and loading shell. */
 export const WORK_GRAPH_HTML = appDocument(
   'Work graph',

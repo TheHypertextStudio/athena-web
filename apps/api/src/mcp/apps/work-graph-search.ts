@@ -62,7 +62,8 @@ window.docketGraphSearch = function (state, act) {
         d.el(
           'span',
           'graph-meta',
-          (n.trail.map((p) => p.title).join(' / ') || state.snapshot.scope.title) +
+          ((n.trailTruncated ? '… / ' : '') + n.trail.map((p) => p.title).join(' / ') ||
+            state.snapshot.scope.title) +
             ' · ' +
             n.status,
         ),
@@ -79,6 +80,7 @@ window.docketGraphSearch = function (state, act) {
     }
   }
   async function search(offset, append) {
+    if (!wrap.isConnected) return;
     const serial = ++state.searchSerial,
       query = state.search,
       scope = JSON.stringify(state.args.scope);
@@ -110,11 +112,13 @@ window.docketGraphSearch = function (state, act) {
     }
   }
   function choose(n) {
+    clearTimeout(timer);
+    const matches = state.searchResult;
     state.searchSerial++;
     state.searchResult = null;
     results.hidden = true;
     input.setAttribute('aria-expanded', 'false');
-    void act.reveal(n);
+    void act.searchJump(n, matches);
   }
   input.addEventListener('focus', () => {
     if (state.searchResult) paint(state.searchResult);

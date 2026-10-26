@@ -1,43 +1,50 @@
-/** Selection details keep relationship navigation and conversation actions beside the map. */
+/** Original endpoints and container context prevent collapsed arrows from duplicating prerequisites. */
 export const GRAPH_INSPECTOR_SCRIPT = String.raw`
 window.docketGraphInspector = function (state, act) {
   const d = window.docket,
+    ui = window.docketGraphUi,
     node = state.snapshot.nodes.find((n) => n.key === state.selected);
   if (!node) return null;
+  const detail = state.snapshot.details?.find((n) => n.key === node.key);
   const panel = d.el('aside', 'graph-inspector');
   panel.setAttribute('aria-label', 'Selected work');
   const heading = d.el('div', 'graph-detail-heading');
+  heading.appendChild(ui.location(state, node.key));
   heading.appendChild(
-    d.el('span', 'graph-meta', node.kind + (node.external ? ' · Outside scope' : '')),
+    ui.button('', 'close', () => act.select(null), { label: 'Close selected work' }),
   );
-  heading.appendChild(d.button('×', () => act.select(null), { label: 'Close selected work' }));
   panel.appendChild(heading);
-  panel.appendChild(d.el('h2', '', node.title));
-  const status = d.el('div', 'graph-detail-status');
-  const glyph = d.stateGlyph(node.category);
+  const name = d.el('h2', '', node.title);
+  if (node.kind !== 'task') {
+    const icon = d.kindIcon(node.kind);
+    if (icon) name.prepend(icon);
+  }
+  panel.appendChild(name);
+  const status = d.el('div', 'graph-detail-status'),
+    glyph = d.stateGlyph(node.category);
   if (glyph) status.appendChild(glyph);
-  status.appendChild(d.el('span', 'graph-meta', node.status));
+  status.appendChild(
+    d.el('span', 'graph-meta', node.status + (node.external ? ' · Outside scope' : '')),
+  );
   panel.appendChild(status);
   const primary = d.el('div', 'graph-actions');
-  primary.appendChild(d.button('Ask about this', () => act.ask(node), { tonal: true }));
-  primary.appendChild(d.button('Open in Docket', () => d.link(node.href)));
+  primary.append(
+    ui.button('Ask about this', 'comment', () => act.ask(node), { tonal: true }),
+    ui.button('Open', 'outward', () => d.link(node.href), { label: 'Open in Docket' }),
+  );
   panel.appendChild(primary);
-  const byKey = new Map(state.snapshot.nodes.map((n) => [n.key, n]));
-  const boundary = state.snapshot.boundaries.find((b) => b.key === node.key);
   function section(incoming) {
-    const section = d.el('section', 'graph-detail-section');
-    const head = d.el('div', 'graph-detail-heading');
-    head.appendChild(d.el('h3', '', incoming ? 'Prerequisites' : 'Downstream work'));
-    const items = state.snapshot.edges
-      .filter((e) => (incoming ? e.target : e.source) === node.key)
-      .map((e) => ({
-        work: byKey.get(incoming ? e.source : e.target),
-        outside: false,
-        aggregated: e.aggregated,
-      }));
-    for (const c of boundary?.connections || [])
-      if (c.direction === (incoming ? 'incoming' : 'outgoing'))
-        items.push({ work: c.work, outside: true });
+    const side = detail?.[incoming ? 'incoming' : 'outgoing'],
+      items = side?.items || [];
+    const section = d.el('section', 'graph-detail-section'),
+      head = d.el('div', 'graph-detail-heading');
+    const title = d.el('h3', '', incoming ? 'Prerequisites' : 'Downstream work'),
+      icon = d.kindIcon('child');
+    if (icon) {
+      if (incoming) icon.classList.add('graph-icon-incoming');
+      title.prepend(icon);
+    }
+    head.appendChild(title);
     if (items.length)
       head.appendChild(
         d.button('Trace', () => act.trace(incoming ? 'before' : 'after'), {
@@ -46,32 +53,41 @@ window.docketGraphInspector = function (state, act) {
       );
     section.appendChild(head);
     for (const item of items) {
-      if (!item.work) continue;
-      const row = d.button('', () =>
-        item.outside ? act.reveal(item.work) : act.select(item.work.key),
-      );
+      const shown = state.snapshot.nodes.some((n) => n.key === item.work.key);
+      const row = d.button('', () => (shown ? act.select(item.work.key) : act.reveal(item.work)));
       row.classList.add('graph-detail-link');
-      row.appendChild(d.el('span', '', item.work.title));
+      const label = d.el('span', 'graph-detail-name'),
+        icon =
+          item.work.kind === 'task' ? d.stateGlyph(item.work.category) : d.kindIcon(item.work.kind);
+      if (icon) label.appendChild(icon);
+      label.appendChild(d.el('span', '', item.work.title));
+      row.appendChild(label);
+      const context =
+        item.kind === 'project_dependency'
+          ? 'Saved project dependency'
+          : (item.trailTruncated ? '… / ' : '') + item.trail.map((p) => p.title).join(' / ');
       row.appendChild(
         d.el(
           'span',
           'graph-meta',
-          item.work.status +
-            (item.outside ? ' · Reveal' : item.aggregated ? ' · Grouped dependencies' : ''),
+          context + (context ? ' · ' : '') + item.work.status + (shown ? '' : ' · Reveal'),
         ),
       );
+      if (item.via)
+        row.appendChild(
+          d.el('span', 'graph-meta', (incoming ? 'Before ' : 'After ') + item.via.title),
+        );
+      row.dataset.relationshipKey =
+        item.kind + ':' + item.work.key + (item.via ? ':' + item.via.key : '');
       section.appendChild(row);
     }
-    const total = boundary?.[incoming ? 'incoming' : 'outgoing'] || 0,
-      named = items.filter((i) => i.outside).length;
-    if (total > named)
+    if ((side?.total || 0) > items.length)
       section.appendChild(
-        d.button(total - named + ' more connections · Open neighborhood', () =>
+        d.button(side.total - items.length + ' more connections · Open neighborhood', () =>
           act.scope({ kind: node.kind, id: node.id }),
         ),
       );
-    if (!items.length && !total)
-      section.appendChild(d.el('p', 'graph-meta', 'None recorded in this view'));
+    if (!items.length) section.appendChild(d.el('p', 'graph-meta', 'No recorded relationships'));
     return section;
   }
   panel.append(section(true), section(false));
@@ -85,7 +101,7 @@ window.docketGraphInspector = function (state, act) {
       ),
     );
   navigation.appendChild(
-    d.button('Open neighborhood', () => act.scope({ kind: node.kind, id: node.id })),
+    ui.button('Open neighborhood', 'expand', () => act.scope({ kind: node.kind, id: node.id })),
   );
   panel.appendChild(navigation);
   return panel;

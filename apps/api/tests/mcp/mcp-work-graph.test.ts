@@ -88,7 +88,11 @@ describe('view_work_graph', () => {
       .where(eq(schema.grant.organizationId, s.orgId));
     await schema.db
       .update(schema.task)
-      .set({ visibility: 'private', projectId: s.projectId })
+      .set({
+        visibility: 'private',
+        projectId: s.projectId,
+        title: 'Restricted prerequisite sentinel',
+      })
       .where(eq(schema.task.id, s.task2Id));
     const args = { orgId: s.orgId, scope: { kind: 'project', id: s.projectId } };
     const result = await s.client.callTool({ name: 'view_work_graph', arguments: args });
@@ -96,7 +100,7 @@ describe('view_work_graph', () => {
     expect((result.structuredContent as GraphSnapshot).totals.total).toBe(1);
     const searched = await s.client.callTool({
       name: 'view_work_graph',
-      arguments: { ...args, search: 'Ship 2' },
+      arguments: { ...args, search: 'restricted sentinel' },
     });
     expect(JSON.stringify(searched)).not.toContain(s.task2Id);
     expect((searched.structuredContent as GraphSnapshot).search.total).toBe(0);

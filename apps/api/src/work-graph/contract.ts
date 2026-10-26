@@ -70,6 +70,15 @@ export const SceneNode = GraphWork.extend({
   width: z.number(),
   height: z.number(),
 });
+/** Original relationship endpoints, distinct from their collapsed visual representatives. */
+const InspectorConnection = z.object({
+  work: GraphWork,
+  kind: z.enum(['task_dependency', 'project_dependency']),
+  trail: z.array(z.object({ key: z.string(), title: z.string() })).max(10),
+  trailTruncated: z.boolean(),
+  via: GraphWork.optional(),
+});
+const InspectorSide = z.object({ total: z.number(), items: z.array(InspectorConnection).max(10) });
 /** Complete validated response; displayed counts never stand in for scope totals. */
 export const GraphSnapshot = z.object({
   orgId: z.string(),
@@ -85,6 +94,15 @@ export const GraphSnapshot = z.object({
     completed: z.number(),
     canceled: z.number(),
   }),
+  details: z.array(
+    z.object({
+      key: z.string(),
+      trail: z.array(z.object({ key: z.string(), title: z.string() })).max(10),
+      trailTruncated: z.boolean(),
+      incoming: InspectorSide,
+      outgoing: InspectorSide,
+    }),
+  ),
   completedGroups: z.array(
     z.object({ key: z.string(), title: z.string(), count: z.number(), focus: z.string() }),
   ),
@@ -94,7 +112,10 @@ export const GraphSnapshot = z.object({
     offset: z.number(),
     hasMore: z.boolean(),
     results: z.array(
-      GraphWork.extend({ trail: z.array(z.object({ key: z.string(), title: z.string() })) }),
+      GraphWork.extend({
+        trail: z.array(z.object({ key: z.string(), title: z.string() })).max(10),
+        trailTruncated: z.boolean(),
+      }),
     ),
   }),
   completedBranches: z.array(

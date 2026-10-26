@@ -5,6 +5,7 @@ import { isDependency, isEnded, orderWork, parentKeys, scopeKeys, inlineSlice } 
 import { positionScene } from './scene-layout';
 import { expandFocusedAncestors, pageGraphScene } from './scene-selection';
 import { searchScope, completedBranches, graphBoundaries } from './discovery';
+import { inspectorDetails } from './inspector-details';
 import { NotFoundError } from '../error';
 
 type SceneNode = GraphSnapshot['nodes'][number];
@@ -68,6 +69,7 @@ function visibleCandidates(
     if (input.display === 'inline')
       return (
         n.kind === 'task' ||
+        n.key === input.focus ||
         !data.relations.some((r) => r.source === n.key && r.kind === 'contains')
       );
     return hasExpandedAncestors(n.key, { parents, root, scoped, expanded });
@@ -228,6 +230,7 @@ export function projectWorkGraph(
     omitted: page.omitted,
     hasNextPage: page.hasNextPage,
     page: input.page,
+    details: inspectorDetails(data, shown, edges, parents, root),
     boundaries: graphBoundaries(data, shown),
     completedBranches: completedBranches(data, shown),
     search: searchScope(data, scoped, parents, input),

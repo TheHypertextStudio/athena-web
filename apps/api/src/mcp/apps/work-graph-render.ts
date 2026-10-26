@@ -77,6 +77,7 @@ export const GRAPH_RENDER_SCRIPT = String.raw`
       height: n.height + 'px',
     });
     node.dataset.key = n.key;
+    node.dataset.kind = n.kind;
     node.dataset.graphSelect = n.key;
     const container = state.snapshot.nodes.some((c) => c.parentKey === n.key);
     node.dataset.container = String(container);
@@ -93,15 +94,30 @@ export const GRAPH_RENDER_SCRIPT = String.raw`
         n.status +
         (n.external ? ', outside selected scope' : ''),
     );
-    node.appendChild(
-      d.el('span', 'graph-node-kind', n.kind + (n.external ? ' · Outside scope' : '')),
-    );
-    node.appendChild(d.el('span', 'graph-node-name', nodeName(n)));
+    const title = d.el('span', 'graph-node-heading');
+    if (n.kind !== 'task') {
+      const icon = d.kindIcon(n.kind);
+      if (icon) title.appendChild(icon);
+    }
+    title.appendChild(d.el('span', 'graph-node-name', nodeName(n)));
+    node.appendChild(title);
     const meta = d.el('span', 'graph-node-meta');
     const glyph = d.stateGlyph(n.category);
     if (glyph) meta.appendChild(glyph);
     meta.appendChild(
-      document.createTextNode(n.status + (n.childCount ? ' · ' + n.childCount + ' inside' : '')),
+      document.createTextNode(
+        n.status +
+          (n.childCount
+            ? ' · ' +
+              (container
+                ? state.snapshot.nodes.filter((child) => child.parentKey === n.key).length +
+                  ' of ' +
+                  n.childCount +
+                  ' shown'
+                : n.childCount + ' inside')
+            : '') +
+          (n.external ? ' · Outside scope' : ''),
+      ),
     );
     node.appendChild(meta);
     node.addEventListener('click', () => act.select(n.key));
@@ -168,6 +184,7 @@ export const GRAPH_RENDER_SCRIPT = String.raw`
       const container = snapshot.nodes.some((c) => c.parentKey === n.key);
       if (container) {
         const region = d.el('div', 'graph-group');
+        region.dataset.kind = n.kind;
         Object.assign(region.style, {
           left: n.x + 'px',
           top: n.y + 'px',
@@ -202,6 +219,8 @@ export const GRAPH_RENDER_SCRIPT = String.raw`
       const row = d.el('div', 'graph-relation');
       const select = d.button(nodeName(n), () => act.select(n.key));
       select.dataset.graphSelect = n.key;
+      const identity = n.kind === 'task' ? d.stateGlyph(n.category) : d.kindIcon(n.kind);
+      if (identity) select.prepend(identity);
       row.appendChild(select);
       row.appendChild(
         d.el('span', 'graph-meta', n.status + (n.external ? ' · Outside scope' : '')),

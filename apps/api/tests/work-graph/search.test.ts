@@ -92,3 +92,81 @@ describe('searching a scoped work graph', () => {
     );
   });
 });
+
+describe('canonical inspector relationships', () => {
+  it('returns an actual prerequisite once even when its displayed arrow comes from a collapsed project', async () => {
+    const { graphFixture } = await import('./fixtures');
+    const result = projectWorkGraph(graphFixture(), {
+      orgId: 'demo',
+      scope: { kind: 'program', id: 'portal' },
+      display: 'fullscreen',
+      focus: 'task:t12',
+    });
+    expect(
+      result.edges.some((e) => e.source === 'project:membership' && e.target === 'task:t12'),
+    ).toBe(true);
+    const detail = result.details.find((d) => d.key === 'task:t12');
+    expect(detail?.incoming.total).toBe(1);
+    expect(detail?.incoming.items).toEqual([
+      expect.objectContaining({
+        kind: 'task_dependency',
+        work: expect.objectContaining({ key: 'task:t11' }),
+        trail: [{ key: 'project:membership', title: 'Membership' }],
+      }),
+    ]);
+    expect(detail?.trail).toEqual([{ key: 'project:launch', title: 'Launch and adoption' }]);
+  });
+  it('keeps saved project dependencies distinct from relationships between contained work', async () => {
+    const { graphFixture } = await import('./fixtures');
+    const result = projectWorkGraph(graphFixture(), {
+      orgId: 'demo',
+      scope: { kind: 'program', id: 'portal' },
+      display: 'fullscreen',
+    });
+    const incoming = result.details.find((d) => d.key === 'project:membership')?.incoming;
+    expect(incoming?.items).toContainEqual(
+      expect.objectContaining({
+        kind: 'project_dependency',
+        work: expect.objectContaining({ key: 'project:identity' }),
+      }),
+    );
+    expect(incoming?.items).toContainEqual(
+      expect.objectContaining({
+        kind: 'task_dependency',
+        work: expect.objectContaining({ key: 'task:t05' }),
+        via: expect.objectContaining({ key: 'task:t06' }),
+      }),
+    );
+  });
+});
+
+it('bounds deep ancestor context and discloses omitted groups', () => {
+  const groups = Array.from({ length: 14 }, (_, i) => node(`Group ${i}`, 'task'));
+  const data: GraphData = {
+    nodes: [node('root', 'program'), ...groups, node('needle')],
+    relations: [
+      { source: 'program:root', target: 'task:Group 0', kind: 'contains' },
+      ...groups
+        .slice(1)
+        .map((n, i) => ({ source: `task:Group ${i}`, target: n.key, kind: 'contains' as const })),
+      { source: 'task:Group 13', target: 'task:needle', kind: 'contains' },
+    ],
+  };
+  const result = projectWorkGraph(data, { ...input, search: 'needle', focus: 'task:needle' });
+  expect(result.search.results[0]?.trail).toHaveLength(10);
+  expect(result.search.results[0]?.trailTruncated).toBe(true);
+  expect(result.details.find((d) => d.key === 'task:needle')?.trailTruncated).toBe(true);
+});
+
+it('keeps an explicitly selected project inspectable in a bounded inline view', async () => {
+  const { graphFixture } = await import('./fixtures');
+  const result = projectWorkGraph(graphFixture(), {
+    orgId: 'demo',
+    scope: { kind: 'program', id: 'portal' },
+    display: 'inline',
+    viewport: 'portrait',
+    focus: 'project:identity',
+  });
+  expect(result.nodes.some((n) => n.key === 'project:identity')).toBe(true);
+  expect(result.nodes.length).toBeLessThanOrEqual(2);
+});

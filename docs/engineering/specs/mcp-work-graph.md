@@ -53,6 +53,30 @@ for direct reveal, with neighborhood navigation for the rest. These counts never
 
 Fullscreen supports prerequisite/downstream tracing. An equivalent relationship list supports keyboard and assistive navigation.
 
+Inspector `details` carry original relationship endpoints for each displayed identity, with separate
+incoming/outgoing totals and at most ten items per side. Collapsed visual arrows are not added as
+extra prerequisites. Saved project dependencies retain their kind; task dependencies summarized at
+a group retain the contained endpoint in `via`. Breadcrumbs contain at most ten nearest ancestors;
+`trailTruncated` explicitly discloses omitted earlier groups. All fields use the authorized semantic
+reader, including hidden-by-display endpoints; no filtered scene is treated as a readiness verdict.
+
+Project cards and group headers use the canonical folder glyph, an enclosing outline and a header
+band. Individual work cards rely on their title and workflow status instead of a repeated Task
+label. Canonical icons identify navigation, relationship direction, conversation and destination
+actions. Expanded group headers distinguish displayed children from authorized child totals.
+
+Focus frames a readable immediate neighborhood when it fits. Fit all remains an explicit overview;
+named offscreen connections sit below the map so they cannot cover selectable work. Narrow
+inspectors prioritize the selected title, status and first relationship; their location stays
+visible above the map.
+
+Search visits offer Previous view, restoring expansion, completion, selected work, tracing and the
+prior camera. The restoration reprojects through the authorized reader when the host display mode
+or coarse viewport changed; it never replays a large fullscreen scene as inline rows. Previous/next
+match controls traverse result pages while retaining the original return destination. Explicit
+selection, close, a new query and Back invalidate superseded navigation. Selection and restored
+selection update model context without sending a conversation message.
+
 Structural changes call the same read-only tool through the existing MCP bridge. Geometry uses
 shared React-independent Dagre layout. Selection, highlighting and viewport gestures stay local;
 stale reads cannot replace newer results. Reads retain the previous view on failure. Refresh

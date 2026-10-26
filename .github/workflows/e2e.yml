@@ -65,7 +65,7 @@ jobs:
       # first request — inside whichever test asked for it — which on a two-core runner outlasts
       # any per-test budget worth setting and makes the suite's result a function of which spec
       # drew the cold route.
-      - uses: TheHypertextStudio/release-engineering/actions/turbo-cache@a6dfdc28ff1dfbb4de567d813bfbee4208145367
+      - uses: TheHypertextStudio/release-engineering/actions/turbo-cache@31fd2b9bcf4a971f4d013e5b0f1aa576ad12b760
         with:
           workload-identity-provider: ${{ vars.GCP_TURBO_CACHE_WIF_PROVIDER }}
           service-account: ${{ vars.GCP_TURBO_CACHE_SERVICE_ACCOUNT }}

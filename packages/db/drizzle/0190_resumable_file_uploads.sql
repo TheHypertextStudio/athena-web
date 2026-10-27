@@ -1,4 +1,4 @@
-CREATE TABLE "file_upload" (
+CREATE TABLE IF NOT EXISTS "file_upload" (
   "id" text PRIMARY KEY,
   "organization_id" text NOT NULL,
   "actor_id" text NOT NULL,
@@ -32,16 +32,16 @@ CREATE TABLE "file_upload" (
 );
 
 --> statement-breakpoint
-CREATE UNIQUE INDEX "file_upload_request_idx" ON "file_upload" ("organization_id", "owner_key", "request_id");
+CREATE UNIQUE INDEX IF NOT EXISTS "file_upload_request_idx" ON "file_upload" ("organization_id", "owner_key", "request_id");
 
 --> statement-breakpoint
-CREATE INDEX "file_upload_pending_idx" ON "file_upload" ("organization_id", "state", "expires_at");
+CREATE INDEX IF NOT EXISTS "file_upload_pending_idx" ON "file_upload" ("organization_id", "state", "expires_at");
 
 --> statement-breakpoint
-CREATE INDEX "file_upload_rate_idx" ON "file_upload" ("organization_id", "created_at");
+CREATE INDEX IF NOT EXISTS "file_upload_rate_idx" ON "file_upload" ("organization_id", "created_at");
 
 --> statement-breakpoint
 ALTER TABLE "file_upload" ENABLE ROW LEVEL SECURITY;
 
 --> statement-breakpoint
-CREATE INDEX "file_upload_cleanup_idx" ON "file_upload" ("state", "cleanup_after", "expires_at");
+CREATE INDEX IF NOT EXISTS "file_upload_cleanup_idx" ON "file_upload" ("state", "cleanup_after", "expires_at");

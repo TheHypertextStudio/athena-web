@@ -70,14 +70,7 @@ export const ASK_USER_TOOL = 'ask_user';
 export const ASK_USER_DEF: TurnToolDef = {
   name: ASK_USER_TOOL,
   description:
-    'Ask the human principal for ONE piece of information you are blocked on, as typed, ' +
-    'schema-validated data. Always state in `actionSummary` the concrete action their answer ' +
-    'authorizes you to take on their behalf. Choose the narrowest `responseType` that fits: ' +
-    'prefer `confirm` or `select` over `text`, because those can be answered from a notification. ' +
-    "The session pauses until they answer; their answer is returned as this call's result. " +
-    'Set `timeoutPolicy: "derivable"` and supply `autoResolveValue` + `autoResolveReason` ONLY ' +
-    'when the context genuinely determines the answer and being wrong is recoverable; use ' +
-    '"destructive" for anything that cannot be undone.',
+    'Ask the human principal for ONE blocking fact as typed, schema-validated data. actionSummary must state the action their answer authorizes on their behalf. Use the narrowest responseType; prefer notification-answerable confirm/select over text. The session pauses until their answer returns as the result. Use timeoutPolicy:derivable with autoResolveValue + autoResolveReason ONLY when context determines the answer and being wrong is recoverable; use destructive for irreversible actions.',
   inputSchema: {
     type: 'object',
     properties: {

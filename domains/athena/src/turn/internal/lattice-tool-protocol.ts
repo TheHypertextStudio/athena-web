@@ -166,7 +166,7 @@ export function renderToolInstructions(tools: readonly TurnToolDef[]): string {
     additionalProperties: false,
   });
   const pooledDocs = pooled.length
-    ? `Input JSON Schema registry: find each tool's arguments under properties[tool name]. Resolve $refs within this one document.\n\n\`\`\`json\n${JSON.stringify(registry)}\n\`\`\``
+    ? `Input JSON Schema registry: find each tool's arguments under properties[tool name]. Resolve $refs (including #name via $anchor) within this one document.\n\n\`\`\`json\n${JSON.stringify(registry)}\n\`\`\``
     : '';
   const isolatedDocs = isolated
     .map(

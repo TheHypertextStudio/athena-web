@@ -174,7 +174,7 @@ export function registerContentTools(server: McpRegistrar, ctx: McpContext): voi
     {
       title: 'Report status',
       description:
-        'Say how a project, program, or initiative is tracking, in prose and optionally as a health rating. Attach private deliverable draft IDs from upload_deliverable or create_deliverable_upload_session; the response returns their file metadata and download URLs. The rating you give here also becomes the subject\'s current health, so this is the tool that answers "is this on track" — not update, which only sets the field without saying why.',
+        'Explain project/program/initiative status in prose with optional health rating, which becomes its current health. Attach private draft IDs from upload_deliverable/create_deliverable_upload_session for file metadata and download URLs. Use this to explain health; update sets the field without explaining why.',
       inputSchema: {
         orgId: orgIdParam,
         subjectType: z

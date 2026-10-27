@@ -2,7 +2,14 @@ import { describe, expect, it } from 'vitest';
 import { shareLargeSchemaFragments } from '../src/turn/internal/lattice-schema-registry';
 
 type Schema = Record<string, unknown>;
-const NAMED = new Set(['properties', 'patternProperties', 'definitions', 'dependentSchemas']);
+const NAMED = new Set([
+  'properties',
+  'patternProperties',
+  '$defs',
+  'definitions',
+  'dependentSchemas',
+  'dependencies',
+]);
 const CHILDREN = new Set([
   'items',
   'prefixItems',
@@ -10,6 +17,8 @@ const CHILDREN = new Set([
   'contains',
   'additionalProperties',
   'unevaluatedProperties',
+  'unevaluatedItems',
+  'contentSchema',
   'propertyNames',
   'not',
   'if',
@@ -24,8 +33,28 @@ function record(value: unknown): value is Schema {
 }
 /** Expand document-local references only in schema positions; annotation literals remain literal. */
 function expanded(root: Schema): unknown {
+  const anchors = new Map<string, Schema>();
+  function collect(value: unknown): void {
+    if (!record(value)) return;
+    if (typeof value['$anchor'] === 'string') {
+      if (anchors.has(value['$anchor'])) throw new Error('Duplicate schema anchor');
+      anchors.set(value['$anchor'], value);
+    }
+    for (const [key, child] of Object.entries(value)) {
+      if (NAMED.has(key) && record(child)) Object.values(child).forEach(collect);
+      else if (CHILDREN.has(key)) {
+        if (Array.isArray(child)) child.forEach(collect);
+        else collect(child);
+      }
+    }
+  }
+  collect(root);
   function pointer(ref: string): unknown {
-    if (!ref.startsWith('#/')) throw new Error('Expected document-local pointer');
+    if (!ref.startsWith('#/')) {
+      const target = anchors.get(ref.slice(1));
+      if (!target) throw new Error('Expected document-local anchor');
+      return target;
+    }
     return ref
       .slice(2)
       .split('/')
@@ -40,7 +69,7 @@ function expanded(root: Schema): unknown {
     if (referenced) return visit(referenced);
     return Object.fromEntries(
       Object.entries(value)
-        .filter(([key]) => key !== '$defs')
+        .filter(([key]) => key !== '$defs' && key !== '$anchor')
         .map(([key, child]) => {
           if (NAMED.has(key) && record(child))
             return [
@@ -209,6 +238,52 @@ describe('lossless local-model schema pooling', () => {
       expect(shareLargeSchemaFragments(original)).toBe(original);
     },
   );
+
+  it('uses unique short local anchors while preserving literal annotations and input immutability', () => {
+    const original = toolbox();
+    const properties = original['properties'] as Schema;
+    properties['literal'] = {
+      type: 'object',
+      default: { $anchor: 'A', $ref: '#A' },
+      examples: [{ $anchor: 'B', $ref: '#B' }],
+    };
+    const before = JSON.stringify(original);
+    const pooled = shareLargeSchemaFragments(original);
+    expect(JSON.stringify(pooled)).toContain('"$anchor"');
+    expect(expanded(pooled)).toEqual(expanded(original));
+    expect(JSON.stringify(original)).toBe(before);
+  });
+
+  it('leaves inherited JSON Pointer targets unresolved', () => {
+    const original = {
+      ...toolbox(),
+      additionalProperties: { $ref: '#/constructor/prototype' },
+    };
+    expect(shareLargeSchemaFragments(original)).toBe(original);
+  });
+
+  it('does not unfold a compact acyclic reference DAG into an exponential schema', () => {
+    const definitions: Schema = { leaf: { type: 'string', minLength: 1 } };
+    let previous = 'leaf';
+    for (let index = 0; index < 32; index += 1) {
+      const name = `level${index}`;
+      definitions[name] = {
+        type: 'object',
+        properties: {
+          left: { $ref: `#/$defs/${previous}` },
+          right: { $ref: `#/$defs/${previous}` },
+        },
+        required: ['left', 'right'],
+      };
+      previous = name;
+    }
+    const original = {
+      type: 'object',
+      $defs: definitions,
+      properties: { tree: { $ref: `#/$defs/${previous}` } },
+    };
+    expect(shareLargeSchemaFragments(original)).toEqual(original);
+  });
 
   it('does not expand a tiny schema when references cannot save bytes', () => {
     const original = {

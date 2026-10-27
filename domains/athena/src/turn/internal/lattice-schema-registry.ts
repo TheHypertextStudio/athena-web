@@ -267,11 +267,64 @@ function shareSchemaFragments(root: Schema, minimumFingerprintLength: number): S
   return JSON.stringify(result).length < JSON.stringify(root).length ? result : root;
 }
 
+/** Valid JSON Schema 2020-12 plain-name fragments, shortest names first. */
+function anchorName(index: number): string {
+  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_';
+  const digit = index % alphabet.length;
+  const rest = Math.floor(index / alphabet.length);
+  return `${rest ? anchorName(rest - 1) : ''}${alphabet[digit]}`;
+}
+
+/**
+ * Keep the first identical schema in place and name it; later copies use its local anchor.
+ * JSON Schema 2020-12 section 8.2.2 permits these location-independent fragment identifiers.
+ * Existing reference ancestors stay in place, and documents with their own named scopes are
+ * excluded, so generated names cannot collide with a caller's anchors or change resolution.
+ */
+function shareAnchoredFragments(root: Schema): Schema {
+  if (schemaNeedsIsolation(root)) return root;
+  const protectedNodes = referenceAncestors(root);
+  if (!protectedNodes) return root;
+  const names = new Map<string, string>();
+  const repeated = [...repeatedSchemas(root, 1, protectedNodes)].sort(
+    (left, right) => right[1].count - left[1].count,
+  );
+  for (const [fingerprint, entry] of repeated) {
+    const name = anchorName(names.size);
+    const referenceLength = JSON.stringify({ $ref: `#${name}` }).length;
+    const anchorLength = JSON.stringify({ $anchor: name }).length - 1;
+    if ((fingerprint.length - referenceLength) * (entry.count - 1) > anchorLength)
+      names.set(fingerprint, name);
+  }
+  const emitted = new Set<string>();
+  const referenced = new Set<string>();
+  const rewrite = (schema: Schema): Schema => {
+    const name = protectedNodes.has(schema) ? undefined : names.get(fingerprintOf(schema));
+    if (!name) return mapChildren(schema, rewrite);
+    if (emitted.has(name)) {
+      referenced.add(name);
+      return { $ref: `#${name}` };
+    }
+    emitted.add(name);
+    return { ...mapChildren(schema, rewrite), $anchor: name };
+  };
+  const rewritten = mapChildren(root, rewrite);
+  // A pooled parent can make its children's selected anchors unused. Remove their overhead.
+  const trim = (schema: Schema): Schema => {
+    const mapped = mapChildren(schema, trim);
+    const anchor = schema['$anchor'];
+    if (typeof anchor === 'string' && !referenced.has(anchor)) delete mapped['$anchor'];
+    return mapped;
+  };
+  const result = trim(rewritten);
+  return JSON.stringify(result).length < JSON.stringify(root).length ? result : root;
+}
+
 /** Pick the shorter lossless registry while preserving anchored scopes and literal values. */
 export function shareLargeSchemaFragments(root: Schema): Schema {
   const existing = shareSchemaFragments(root, 40);
   const smallFragments = shareSchemaFragments(root, 20);
-  return JSON.stringify(smallFragments).length < JSON.stringify(existing).length
-    ? smallFragments
-    : existing;
+  return [existing, smallFragments, shareAnchoredFragments(root)].reduce((shortest, candidate) =>
+    JSON.stringify(candidate).length < JSON.stringify(shortest).length ? candidate : shortest,
+  );
 }

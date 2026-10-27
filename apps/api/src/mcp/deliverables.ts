@@ -83,7 +83,7 @@ export function registerDeliverableTools(server: McpRegistrar, ctx: McpContext):
     {
       title: 'Upload deliverable',
       description:
-        'Upload generated text by passing textContent directly (UTF-8, at most 4 MB); this avoids base64 expansion and preserves the original text. For binary media, pass canonical base64 bytes. The server cannot read local paths. Reuse uploadId with identical file details and bytes after an uncertain upload result. Recover private uploads with list_my_deliverable_drafts, then attach their IDs to comment or report_status. Drafts expire after seven days; up to ten files per post. Never send credentials or upload work without permission.',
+        'Upload textContent as UTF-8 text (at most 4 MB), preserving text without base64 expansion; binary media needs canonical base64. The server cannot read local paths. After an uncertain result, reuse uploadId with identical file details/bytes. Recover private uploads via list_my_deliverable_drafts; attach IDs in comment/report_status. Drafts expire in seven days; posts allow ten files. Never send credentials or upload without permission.',
       inputSchema: uploadInput.shape,
       outputSchema: DeliverableOut.shape,
       annotations: {
@@ -205,7 +205,7 @@ function registerDeliverableUploadSessionTool(server: McpRegistrar, ctx: McpCont
     {
       title: 'Prepare a deliverable upload',
       description:
-        'Create a 15-minute, upload-only URL for a file in your local agent workspace. Pass orgId, fileName, and optional mimeType/title. Then stream the local file as multipart field `file` to uploadUrl with header `X-Docket-Upload-Token: uploadToken`; this avoids base64 and keeps the MCP request small. The token can upload only that file, expires after 15 minutes, and retries must use the same bytes. The result is a private draft; include its returned file id from the upload response in comment or report_status. Never share the token or upload work without permission.',
+        'Create a 15-minute upload-only URL for a local agent file: orgId, fileName, optional mimeType/title. Stream multipart field `file` to uploadUrl with header `X-Docket-Upload-Token: uploadToken`, avoiding base64/large MCP requests. The token accepts only that file, expires in 15 minutes, and retries need identical bytes. The upload response returns a private draft file ID for comment/report_status. Never share tokens or upload without permission.',
       inputSchema: uploadSessionInput.shape,
       outputSchema: DeliverableUploadSessionOut.shape,
       annotations: {

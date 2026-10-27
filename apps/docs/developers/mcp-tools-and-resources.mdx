@@ -10,7 +10,7 @@ can change after consent or grant changes, so handle `notifications/tools/list_c
 
 The work and planning tools are `workspaces`, `find`, `list_work`, `list_resources`, `get_resources`, `brief`, `capture`, `organize`,
 `update`, `milestones`, `comment`, `report_status`, `link`, `archive`, `plan_day`, `undo`,
-`retrospect`, `view_workload`, `define_process`, `schedule_process`, `repeat_task`, `define_labels`,
+`retrospect`, `view_work_graph`, `view_workload`, `define_process`, `schedule_process`, `repeat_task`, `define_labels`,
 `define_template`, `list_templates`, `browse_work_templates`, `copy_work_templates`, `list_work_schedules`, `manage_work_schedule`, `plan_start`, `plan_read`, `plan_draft`, `plan_commit`, and `track`.
 
 The agent, session, connector, and directive tools are `run_agent`, `manage_session`,
@@ -24,6 +24,38 @@ entity type: `get_tasks`, `get_projects`, `get_programs`, `get_initiatives`, `ge
 
 `review_work_destination` reviews a proposed work destination before writing. It does not create
 or move work on its own.
+
+### Dependency graphs
+
+Use `view_work_graph` for remaining work, blockers, and work that depends on a selected item. Pass
+`orgId` and a typed scope, for example:
+
+```json
+{
+  "orgId": "<workspace-id>",
+  "scope": { "kind": "project", "id": "<project-id>" }
+}
+```
+
+Scopes can be a task, project, program, or initiative. Optional `focus` uses a `kind:id` work key.
+`expanded` contains container keys, and `completion` accepts `collapsed` (the default), `all`, or
+`remaining`. The app offers Remaining work and All work. Completed and canceled work have separate
+counts; connected work outside the selected scope provides context without changing its totals.
+
+MCP Apps clients render `ui://docket/work-graph`: a compact conversation answer opens into a spatial
+explorer with project groups, search, selection details, and a relationship-list alternative. The
+same graph opens from work-detail apps and lists scoped to one project. Search finds authorized
+work across collapsed groups, completion display and pages; choosing a result reveals and frames
+it. Back restores the previous view. Selection updates context without starting a turn; Ask in chat
+sends an explicit question.
+
+Supply `display` (`inline` or `fullscreen`) and a coarse `viewport` (`portrait`, `square`, or
+`landscape`) when requesting geometry directly. The app negotiates the actual host display mode and
+retains an inline explorer when expansion is unavailable. Expanded scenes contain at most 200 work
+items, with 100-child pages for large containers and explicit continuation. Authorized scope totals
+remain separate from displayed counts. The structured snapshot and text summary also work in clients
+without app rendering. Reads require `work:read` and check current access before returning work or
+counts. Recorded visible dependencies do not establish that an item is ready to start.
 
 ### Daily workload
 
@@ -377,6 +409,10 @@ streams files directly without putting binary data in an MCP JSON argument.
 When the agent runtime cannot make a separate HTTP request, use `upload_deliverable` instead. Pass
 generated text through `textContent` (UTF-8) or binary bytes as canonical `base64`; files are limited
 to 4 MB. The server cannot read a local path from an MCP tool call.
+
+After an interruption, call `list_my_deliverable_drafts` with `orgId` to recover your own unexpired
+private uploads under the current workspace authority. It lists uploads rather than creating or
+posting them. Unclaimed drafts expire after seven days.
 
 Pass up to ten returned IDs in `attachmentIds` when calling `comment` or `report_status`. A comment
 can be on a task, project, program, or initiative, including a reply. Status updates belong to a

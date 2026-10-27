@@ -204,6 +204,7 @@
       "description": "The actionable-work hierarchy: initiatives, programs, projects, milestones, cycles, tasks, dependencies, labels, comments, templates, saved views, and recurrence.",
       "publicExports": [
         "./ids",
+        "./graph-layout",
         "./task-contract",
         "./task-drafting",
         "./task-titles",
@@ -271,7 +272,12 @@
         "./work-schedule-import-receipt",
         "./schedule-import-receipt"
       ],
-      "allowedRuntimeDependencies": ["@docket/automation", "@docket/identity-access", "zod"],
+      "allowedRuntimeDependencies": [
+        "@docket/automation",
+        "@docket/identity-access",
+        "dagre",
+        "zod"
+      ],
       "supportedDeployableRuntimes": ["api", "web", "admin", "runner", "desktop"]
     }
   ]

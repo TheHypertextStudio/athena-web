@@ -130,6 +130,8 @@ Actual rendered hierarchy must be assessed independently of interaction tests. G
 
 - **Concurrent integration**: Rebased onto the two usage-attribution commits published during acceptance. Preserve their migration numbers and place resource receipts/uploads at 0189/0190 with increasing timestamps. Their table/index creation is idempotent so the previously accepted staging schema can advance through the canonical journal without resetting data or changing historical migration records. Verify both first application and adoption over already-created upload tables before rebuilding the integrated candidate.
 
+- **Declared-length rejection**: An additional ten-byte provider probe confirms GCS rejects a body larger than its declared nine-byte reservation even when the checksum matches those ten bytes. The terminal failure is plain text and repeats on DELETE and valid status probes. Recognize only that exact provider message shape and require an identical failure on a valid probe before acknowledging cancellation; generic errors, changed messages and live sessions retain cleanup for retry. Keep this independent of the already-passing 100 MiB transfer and CRC rejection evidence. All 32 storage tests pass (99.31% line and 93.22% branch coverage), as do storage types/lint and the unchanged complexity gate. The actual provider confirms acknowledged cleanup with no objects remaining under the exact owned probe prefix.
+
 ### [ACTIVITY-METADATA-WRAPPER] Integrate session groups with ordinary activity
 
 - **Status**: REVIEW

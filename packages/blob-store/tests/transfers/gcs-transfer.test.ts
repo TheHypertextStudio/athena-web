@@ -14,6 +14,13 @@ function provider() {
   const file = vi.fn(() => object);
   return { object, bucket: { file } };
 }
+/** Sticky provider response from a final total that contradicts the reserved size. */
+function sizeMismatch(finalBytes = 10): Response {
+  return new Response(
+    `Invalid request.  According to the Content-Range header, the final size of the upload is ${finalBytes} byte(s). This does not match the expected size of 9 byte(s), which was specified in an earlier request.`,
+    { status: 400 },
+  );
+}
 describe('GCS resumable transfer boundary', () => {
   it('pins object creation, expected length and integrity at session creation', async () => {
     const p = provider();
@@ -116,6 +123,44 @@ describe('GCS resumable transfer boundary', () => {
     await expect(transfer.cancel('key', uri)).rejects.toThrow();
     await expect(transfer.cancel('key', uri)).rejects.toThrow();
   });
+  it('acknowledges the same terminal length rejection on cancellation and a valid status probe', async () => {
+    const request = vi
+      .fn()
+      .mockResolvedValueOnce(sizeMismatch())
+      .mockResolvedValueOnce(sizeMismatch());
+    await expect(
+      new GcsTransfer(provider().bucket, request).cancel(
+        'key',
+        'https://storage.googleapis.com/upload/secret',
+      ),
+    ).resolves.toBeUndefined();
+    expect(request).toHaveBeenCalledTimes(2);
+  });
+  it.each([
+    { state: 'live', probe: () => new Response(null, { status: 308 }) },
+    { state: 'different', probe: () => sizeMismatch(11) },
+  ])('retains cleanup when the length-rejection probe is $state', async ({ probe }) => {
+    const request = vi.fn().mockResolvedValueOnce(sizeMismatch()).mockResolvedValueOnce(probe());
+    await expect(
+      new GcsTransfer(provider().bucket, request).cancel(
+        'key',
+        'https://storage.googleapis.com/upload/secret',
+      ),
+    ).rejects.toThrow();
+  });
+  it.each(['Invalid request.', 'Permission denied.', 'Bad request'])(
+    'does not mistake generic plain text for a terminal session: %s',
+    async (body) => {
+      const request = vi.fn().mockResolvedValue(new Response(body, { status: 400 }));
+      await expect(
+        new GcsTransfer(provider().bucket, request).cancel(
+          'key',
+          'https://storage.googleapis.com/upload/secret',
+        ),
+      ).rejects.toThrow();
+      expect(request).toHaveBeenCalledTimes(1);
+    },
+  );
   it('handles completed, empty and invalid provider acknowledgements without assuming sent bytes', async () => {
     const p = provider();
     const request = vi

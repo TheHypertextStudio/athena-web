@@ -84,17 +84,18 @@ export class GcsTransfer implements BlobTransfer {
       await response.body?.cancel();
       return;
     }
-    // GCS invalidates a session after rejecting its checksum. Confirm that the capability also
-    // rejects a valid status probe before releasing its durable cleanup reservation.
+    // GCS retains terminal checksum/length failures on the session URI. Require the same
+    // recognized failure from a valid status probe before releasing its cleanup reservation.
+    const terminal = await invalidSession(response);
     if (
-      (await invalidSession(response)) &&
+      terminal &&
       (await invalidSession(
         await this.request(uri, {
           method: 'PUT',
           redirect: 'manual',
           headers: { 'Content-Length': '0', 'Content-Range': 'bytes */*' },
         }),
-      ))
+      )) === terminal
     )
       return;
     throw new Error('Upload cancellation unavailable');
@@ -141,16 +142,24 @@ export class GcsTransfer implements BlobTransfer {
 function record(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
-async function invalidSession(response: Response): Promise<boolean> {
+/** The provider's sticky error after a final size contradicts its reserved upload length. */
+const FINAL_SIZE_MISMATCH =
+  /^Invalid request\. {2}According to the Content-Range header, the final size of the upload is \d+ byte\(s\)\. This does not match the expected size of \d+ byte\(s\), which was specified in an earlier request\.$/u;
+
+async function invalidSession(response: Response): Promise<string | null> {
   if (response.status !== 400) {
     await response.body?.cancel();
-    return false;
+    return null;
+  }
+  if (response.headers.get('Content-Type')?.startsWith('text/plain')) {
+    const body = (await response.text()).trim();
+    return FINAL_SIZE_MISMATCH.test(body) ? body : null;
   }
   const body: unknown = await response.json().catch(() => null);
   const error = record(body) ? body['error'] : null;
-  if (!record(error) || error['code'] !== 400 || !Array.isArray(error['errors'])) return false;
-  return (
+  if (!record(error) || error['code'] !== 400 || !Array.isArray(error['errors'])) return null;
+  const invalid =
     error['errors'].length > 0 &&
-    error['errors'].every((item: unknown) => record(item) && item['reason'] === 'invalid')
-  );
+    error['errors'].every((item: unknown) => record(item) && item['reason'] === 'invalid');
+  return invalid ? 'invalid' : null;
 }

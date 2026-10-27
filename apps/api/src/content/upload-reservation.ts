@@ -1,3 +1,4 @@
+import { consumeDemoBudgetInTransaction, DemoBudgetExceeded } from '@docket/auth/demo-budget';
 import { createHash } from 'node:crypto';
 import { db, fileUpload, genId, organization, resourceWriteReceipt } from '@docket/db';
 import { and, count, eq, gt, inArray, sum } from 'drizzle-orm';
@@ -38,6 +39,14 @@ export async function reserveUpload(
       return existing.id;
     }
     await checkUploadBudget(tx, orgId, input.byteSize);
+    try {
+      await consumeDemoBudgetInTransaction(tx, { organizationId: orgId }, [
+        { kind: 'bytes', amount: input.byteSize },
+      ]);
+    } catch (error) {
+      if (error instanceof DemoBudgetExceeded) throw new RateLimitedError(error.retryAfter);
+      throw error;
+    }
     const id = genId();
     const attachmentId = genId();
     await tx.insert(fileUpload).values({

@@ -59,6 +59,84 @@ describe('Lattice same-document schema registry', () => {
     ]);
     expect(JSON.stringify(shared).length).toBeLessThan(JSON.stringify(original).length * 2);
   });
+  it.each(['oneOf', 'anyOf'])(
+    'factors %s without accepting missing, extra or contradictory branch fields',
+    (keyword) => {
+      const common = { type: 'string', minLength: 1, maxLength: 128 };
+      const union: Schema = {
+        [keyword]: ['task', 'project', 'program', 'initiative'].map((kind) => ({
+          type: 'object',
+          properties: { kind: { const: kind }, title: common, [kind]: { type: 'boolean' } },
+          required: ['kind', 'title', kind],
+          additionalProperties: false,
+        })),
+      };
+      const shared = registry({ capture: union });
+      const validator = new AjvJsonSchemaValidator();
+      const before = validator.getValidator(union);
+      const after = validator.getValidator(shared);
+      const samples: unknown[] = [
+        { kind: 'task', title: 'Report', task: true },
+        { kind: 'project', title: 'Report', project: false },
+        { kind: 'task', task: true },
+        { kind: 'task', title: '', task: true },
+        { kind: 'task', title: 'Report' },
+        { kind: 'task', title: 'Report', task: true, project: true },
+        { kind: 'task', title: 1, task: true },
+        null,
+        [],
+        'text',
+      ];
+      const expected = samples.map((sample) => before(sample).valid);
+      expect(expected).toEqual([
+        true,
+        true,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+      ]);
+      expect(samples.map((sample) => after({ capture: sample }).valid)).toEqual(expected);
+      expect(JSON.stringify(shared).length).toBeLessThan(JSON.stringify(union).length);
+    },
+  );
+  it('preserves incoming union-descendant pointers and overlapping oneOf match counts', () => {
+    const common = { type: 'string', minLength: 1, maxLength: 128 };
+    const union = {
+      oneOf: [0, 10].map((minimum) => ({
+        type: 'object',
+        properties: { title: common, value: { type: 'number', minimum } },
+        required: ['title', 'value'],
+        additionalProperties: false,
+      })),
+    };
+    const original: Schema = {
+      type: 'object',
+      properties: {
+        shape: union,
+        selected: { $ref: '#/properties/shape/oneOf/0/properties/title' },
+      },
+    };
+    const snapshot = JSON.stringify(original);
+    const shared = registry({ capture: original, overlap: union });
+    const validator = new AjvJsonSchemaValidator();
+    const before = validator.getValidator(original);
+    const after = validator.getValidator(shared);
+    for (const sample of [
+      { shape: { title: 'Report', value: 5 }, selected: 'title' },
+      { shape: { title: 'Report', value: 15 }, selected: 'title' },
+      { shape: { title: 'Report', value: 5 }, selected: '' },
+      { shape: { title: 'Report', value: 5 }, selected: 1 },
+    ])
+      expect(after({ capture: sample }).valid).toBe(before(sample).valid);
+    expect(after({ overlap: { title: 'Report', value: 5 } }).valid).toBe(true);
+    expect(after({ overlap: { title: 'Report', value: 15 } }).valid).toBe(false);
+    expect(JSON.stringify(original)).toBe(snapshot);
+  });
   it('rebases colliding local definitions and recursive root pointers without changing literals', () => {
     const a = {
       type: 'object',

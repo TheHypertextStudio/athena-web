@@ -67,7 +67,7 @@ mount and project/initiative/program resource rendering; keep the existing share
 The implementation also preserves published comment/update files as readable Library sources while
 keeping private drafts outside Library reuse. It reuses the shared attachment cleanup queue, adds
 container-deletion coverage, retains the existing local-model catalog ceiling, and makes resource
-controls usable with enlarged text. Migration 0185 follows the concurrent demo-workspace migration.
+controls usable with enlarged text. Migration 0187 follows the concurrent demo budget and timestamp migrations.
 
 CI footprint: one new browser regression runs inside the existing Chromium suite, with one account
 and four work destinations. Its measured local run took 16 seconds with a saved session. No new

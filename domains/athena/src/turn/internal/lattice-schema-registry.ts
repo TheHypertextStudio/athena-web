@@ -1,3 +1,5 @@
+import { factorSchemaUnions } from './lattice-schema-union';
+
 /** Lossless, same-document reuse for large identical MCP JSON Schema fragments. */
 type Schema = Record<string, unknown>;
 const namedSchemas = new Set([
@@ -137,11 +139,7 @@ function repeatedSchemas(
   const repeated = new Map<string, RepeatedSchema>();
   const visit = (schema: Schema): Schema => {
     const fingerprint = fingerprintOf(schema);
-    if (
-      !protectedNodes.has(schema) &&
-      fingerprint.length >= minimumFingerprintLength &&
-      schema['$ref'] === undefined
-    ) {
+    if (!protectedNodes.has(schema) && fingerprint.length >= minimumFingerprintLength) {
       const found = repeated.get(fingerprint);
       if (found) found.count += 1;
       else repeated.set(fingerprint, { schema, count: 1 });
@@ -235,13 +233,16 @@ function shareSchemaFragments(root: Schema, minimumFingerprintLength: number): S
     return root;
   const protectedNodes = referenceAncestors(root);
   if (!protectedNodes) return root;
+  root = factorSchemaUnions(root, protectedNodes, mapChildren);
+  const factoredProtection = referenceAncestors(root);
+  if (!factoredProtection) return root;
   const existing = record(root['$defs']) ? root['$defs'] : {};
   const names = new Map<string, string>();
   const originals = new Map<string, Schema>();
   for (const [fingerprint, entry] of repeatedSchemas(
     root,
     minimumFingerprintLength,
-    protectedNodes,
+    factoredProtection,
   )) {
     let index = names.size;
     let name = index.toString(36);
@@ -255,7 +256,7 @@ function shareSchemaFragments(root: Schema, minimumFingerprintLength: number): S
   }
   if (!names.size) return root;
   const rewrite = (schema: Schema): Schema => {
-    const name = protectedNodes.has(schema) ? undefined : names.get(fingerprintOf(schema));
+    const name = factoredProtection.has(schema) ? undefined : names.get(fingerprintOf(schema));
     return name ? { $ref: `#/$defs/${name}` } : mapChildren(schema, rewrite);
   };
   let transformed = mapChildren(root, rewrite);

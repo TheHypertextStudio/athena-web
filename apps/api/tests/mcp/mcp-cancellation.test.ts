@@ -15,6 +15,11 @@ function resetSlowTool(): void {
 
 resetSlowTool();
 
+vi.mock('@docket/auth/demo-budget', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  consumeDemoBudget: vi.fn(async () => null),
+}));
+
 vi.mock('../../src/mcp/auth', () => ({
   resolveMcpContext: vi.fn(async () => ({
     principal: {

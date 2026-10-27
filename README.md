@@ -318,6 +318,8 @@ People can attach up to ten files (100 MiB each) when posting updates and task c
 Work resources and private deliverables share resumable uploads. Agents use `manage_upload` to
 begin a file, transfer bounded chunks directly to storage, recover acknowledged progress and complete
 the upload. The same path accepts task, project, program and initiative resource destinations.
+Reviewer workspaces retain their shared 20 MiB daily allowance; declaring a new file reserves its
+bytes once, while retrying the same upload does not spend the allowance again.
 Small files can use `upload_deliverable` (4 MiB maximum) with UTF-8
 `textContent` for generated text and canonical `base64` when direct HTTP upload is unavailable. Pass
 returned file IDs as `attachmentIds` to `comment` or `report_status`.

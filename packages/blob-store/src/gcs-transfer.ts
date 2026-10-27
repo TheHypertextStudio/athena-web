@@ -75,10 +75,29 @@ export class GcsTransfer implements BlobTransfer {
   /** {@inheritDoc BlobTransfer.cancel} */
   async cancel(_key: string, uri: string | null): Promise<void> {
     if (!uri) return;
-    const response = await this.request(uri, { method: 'DELETE', redirect: 'manual' });
-    await response.body?.cancel();
-    if (![200, 204, 404, 410, 499].includes(response.status))
-      throw new Error('Upload cancellation unavailable');
+    const response = await this.request(uri, {
+      method: 'DELETE',
+      redirect: 'manual',
+      headers: { 'Content-Length': '0' },
+    });
+    if ([200, 204, 404, 410, 499].includes(response.status)) {
+      await response.body?.cancel();
+      return;
+    }
+    // GCS invalidates a session after rejecting its checksum. Confirm that the capability also
+    // rejects a valid status probe before releasing its durable cleanup reservation.
+    if (
+      (await invalidSession(response)) &&
+      (await invalidSession(
+        await this.request(uri, {
+          method: 'PUT',
+          redirect: 'manual',
+          headers: { 'Content-Length': '0', 'Content-Range': 'bytes */*' },
+        }),
+      ))
+    )
+      return;
+    throw new Error('Upload cancellation unavailable');
   }
 
   /** {@inheritDoc BlobTransfer.stat} */
@@ -117,4 +136,21 @@ export class GcsTransfer implements BlobTransfer {
       metadata: {},
     });
   }
+}
+
+function record(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+async function invalidSession(response: Response): Promise<boolean> {
+  if (response.status !== 400) {
+    await response.body?.cancel();
+    return false;
+  }
+  const body: unknown = await response.json().catch(() => null);
+  const error = record(body) ? body['error'] : null;
+  if (!record(error) || error['code'] !== 400 || !Array.isArray(error['errors'])) return false;
+  return (
+    error['errors'].length > 0 &&
+    error['errors'].every((item: unknown) => record(item) && item['reason'] === 'invalid')
+  );
 }

@@ -90,6 +90,32 @@ describe('GCS resumable transfer boundary', () => {
       transfer.cancel('key', 'https://storage.googleapis.com/upload/secret'),
     ).rejects.toThrow();
   });
+  it('acknowledges only a confirmed terminal invalid session after provider integrity rejection', async () => {
+    const invalid = () =>
+      Response.json({ error: { code: 400, errors: [{ reason: 'invalid' }] } }, { status: 400 });
+    const request = vi
+      .fn()
+      .mockResolvedValueOnce(invalid())
+      .mockResolvedValueOnce(invalid())
+      .mockResolvedValueOnce(invalid())
+      .mockResolvedValueOnce(new Response(null, { status: 308 }))
+      .mockResolvedValueOnce(
+        Response.json({ error: { code: 400, errors: [{ reason: 'other' }] } }, { status: 400 }),
+      );
+    const transfer = new GcsTransfer(provider().bucket, request);
+    const uri = 'https://storage.googleapis.com/upload/secret';
+    await expect(transfer.cancel('key', uri)).resolves.toBeUndefined();
+    expect(request).toHaveBeenNthCalledWith(
+      2,
+      uri,
+      expect.objectContaining({
+        method: 'PUT',
+        headers: { 'Content-Length': '0', 'Content-Range': 'bytes */*' },
+      }),
+    );
+    await expect(transfer.cancel('key', uri)).rejects.toThrow();
+    await expect(transfer.cancel('key', uri)).rejects.toThrow();
+  });
   it('handles completed, empty and invalid provider acknowledgements without assuming sent bytes', async () => {
     const p = provider();
     const request = vi

@@ -123,6 +123,25 @@ describe('lossless local-model schema pooling', () => {
     expect(JSON.stringify(original)).toBe(before);
   });
 
+  it('shares repeated long local references without moving their targets', () => {
+    const reference = '#/properties/a_very_long_tool_name/properties/a_very_long_argument_name';
+    const original: Schema = {
+      type: 'object',
+      properties: {
+        a_very_long_tool_name: {
+          type: 'object',
+          properties: { a_very_long_argument_name: { type: 'string', minLength: 1 } },
+        },
+        ...Object.fromEntries(
+          Array.from({ length: 40 }, (_, index) => [`argument${index}`, { $ref: reference }]),
+        ),
+      },
+    };
+    const pooled = shareLargeSchemaFragments(original);
+    expect(JSON.stringify(pooled).length).toBeLessThan(JSON.stringify(original).length * 0.8);
+    expect(expanded(pooled)).toEqual(expanded(original));
+  });
+
   it('retains the shorter existing candidate when extra leaf definitions would make it larger', () => {
     const original = toolbox(true);
     const pooled = shareLargeSchemaFragments(original);

@@ -159,6 +159,7 @@ function constrainedStringExample(schema: JsonObject, variant: number): string |
     'sha256:0123456789abcdef',
     `sha256:${'0'.repeat(64)}`,
     '0'.repeat(64),
+    '4waSgw==', // Canonical CRC32C of the standard 123456789 integrity fixture.
     'migration',
   ];
   const expression = new RegExp(pattern);

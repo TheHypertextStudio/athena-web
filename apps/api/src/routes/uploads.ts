@@ -17,7 +17,7 @@ export const uploadRoutes = new Hono<AppEnv>()
   .post(
     '/',
     apiDoc({
-      tag: 'Attachments',
+      tag: 'Resources',
       summary: 'Begin a resumable file upload',
       response: UploadSessionOut,
     }),
@@ -29,7 +29,7 @@ export const uploadRoutes = new Hono<AppEnv>()
   )
   .get(
     '/:id',
-    apiDoc({ tag: 'Attachments', summary: 'Recover upload progress', response: UploadSessionOut }),
+    apiDoc({ tag: 'Resources', summary: 'Recover upload progress', response: UploadSessionOut }),
     zParam(idParam),
     async (c) => {
       const { orgId, actorId } = c.get('actorCtx');
@@ -39,7 +39,7 @@ export const uploadRoutes = new Hono<AppEnv>()
   .post(
     '/:id/complete',
     apiDoc({
-      tag: 'Attachments',
+      tag: 'Resources',
       summary: 'Complete a verified file upload',
       response: UploadSessionOut,
     }),
@@ -52,7 +52,7 @@ export const uploadRoutes = new Hono<AppEnv>()
   .delete(
     '/:id',
     apiDoc({
-      tag: 'Attachments',
+      tag: 'Resources',
       summary: 'Retire an unfinished file upload',
       response: z.object({ removed: z.literal(true) }),
     }),
@@ -68,7 +68,7 @@ export const uploadRoutes = new Hono<AppEnv>()
 export const uploadBytesRoutes = new Hono<AppEnv>().put(
   '/:id/bytes',
   apiDoc({
-    tag: 'Attachments',
+    tag: 'Resources',
     summary: 'Transfer resumable file bytes',
     description:
       'Scoped local-provider upload capability. PUT at most 8 MiB with Content-Range and X-Docket-Upload-Token. Partial acknowledgement is 308 with Range; completion is 200. Probe with a zero-byte PUT and Content-Range: bytes */TOTAL. Production uploads use the storage provider directly.',

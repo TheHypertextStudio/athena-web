@@ -63,13 +63,13 @@ export const demo = pgTable(
       .default(sql`'{}'::text[]`),
     resetCron: text('reset_cron'),
     workspaceTtlDays: integer('workspace_ttl_days'),
-    expiresAt: timestamp('expires_at'),
+    expiresAt: timestamp('expires_at', { withTimezone: true }),
     status: text('status').$type<DemoStatus>().notNull().default('active'),
     createdByStaffId: text('created_by_staff_id').references(() => staffUser.id, {
       onDelete: 'set null',
     }),
-    createdAt: timestamp('created_at').notNull().defaultNow(),
-    updatedAt: timestamp('updated_at')
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
       .notNull()
       .defaultNow()
       .$onUpdate(() => new Date()),
@@ -108,9 +108,9 @@ export const demoWorkspace = pgTable(
       .notNull()
       .references(() => organization.id, { onDelete: 'cascade' }),
     ownerUserId: text('owner_user_id').references(() => user.id, { onDelete: 'cascade' }),
-    provisionedAt: timestamp('provisioned_at').notNull().defaultNow(),
-    lastResetAt: timestamp('last_reset_at'),
-    expiresAt: timestamp('expires_at'),
+    provisionedAt: timestamp('provisioned_at', { withTimezone: true }).notNull().defaultNow(),
+    lastResetAt: timestamp('last_reset_at', { withTimezone: true }),
+    expiresAt: timestamp('expires_at', { withTimezone: true }),
   },
   (t) => [
     uniqueIndex('demo_workspace_org_uq').on(t.organizationId),

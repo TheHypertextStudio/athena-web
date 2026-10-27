@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
+import type * as DemoAdmission from '../../src/lib/demo-admission';
 
 let activeSignal: AbortSignal | null = null;
 let slowToolStarted!: Promise<void>;
@@ -24,6 +25,12 @@ vi.mock('../../src/mcp/auth', () => ({
     },
     scopes: ['work:read', 'work:write', 'agents:run', 'connectors:link'],
   })),
+}));
+
+// Admission belongs to the authenticated identity fixture; this suite isolates transport cancellation.
+vi.mock('../../src/lib/demo-admission', async (importOriginal) => ({
+  ...(await importOriginal<typeof DemoAdmission>()),
+  admitDemoRequest: vi.fn(async () => null),
 }));
 
 vi.mock('../../src/mcp/tools', () => ({

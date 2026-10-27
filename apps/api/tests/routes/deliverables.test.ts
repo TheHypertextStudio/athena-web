@@ -85,6 +85,20 @@ async function post(
 }
 
 describe('deliverables on posts', () => {
+  it('locates a new upload at its downloadable resource', async () => {
+    const f = await fixture();
+    const response = await upload(f.app);
+    expect(response.status).toBe(201);
+    const uploaded = DeliverableOut.parse(await response.json());
+    const responseLocation = response.headers.get('Location');
+    const { env } = await import('../../src/env');
+    expect(responseLocation).toBe(`${env.API_URL}${uploaded.downloadUrl}`);
+    expect(uploaded.downloadUrl).toBe(`/v1/orgs/${f.orgId}/deliverables/${uploaded.id}/download`);
+    const download = await f.app.request(`/deliverables/${uploaded.id}/download`);
+    expect(download.status).toBe(200);
+    expect(await download.text()).toBe('finished work');
+  });
+
   it('reuses an upload id after an uncertain response and rejects changed bytes', async () => {
     const f = await fixture();
     const uploadId = crypto.randomUUID();

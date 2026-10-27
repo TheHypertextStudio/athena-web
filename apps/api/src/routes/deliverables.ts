@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { DeliverableDraftOut, DeliverableOut } from '@docket/work/attachment-contract';
 import type { AppEnv } from '../context';
 import { NotFoundError } from '../error';
-import { created, ok } from '../lib/ok';
+import { created, ok, resourceUrl } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
 import { zForm, zParam, zQuery } from '../lib/validate';
 import { assertSharedWorkWritable } from '../product-capability';
@@ -62,7 +62,7 @@ export const deliverableRoutes = new Hono<AppEnv>()
         title,
         uploadId,
       );
-      return created(c, DeliverableOut, uploaded);
+      return created(c, DeliverableOut, uploaded, resourceUrl(uploaded.downloadUrl));
     },
   )
   .get(

@@ -20786,3 +20786,9 @@ xhigh` passes (10 finder angles each, one-vote verification, a gap sweep) agains
 - **Approach and decision**: Restore each extracted regular file's archived modification time after its permission bits, keeping configure inputs in their released order. Preserve existing version pins, checksums, path checks, and native styles.
 - **Files**: `.hypertext/formatter-tools/dsl.py` and its existing regression suite.
 - **Validation**: The cold-build fixture failed before the fix because archive timestamps became extraction time. All five DSL acceptance tests pass after restoring timestamps, including executable configure permissions; a real isolated-cache setup builds the pinned gawk release. A separate release-runner fixture isolates its spawned package manager from operator credentials while preserving strict task filtering and every cookie, stderr, and status assertion. All 421 repository tooling tests pass through the real strict task runner.
+
+### [RESOURCE-RECEIPT-INSTANTS] Keep attachment retry timestamps consistent
+
+Resource write receipts now declare timezone-aware completed and created instants. A separate migration upgrades existing receipt tables with explicit UTC interpretation, preserving historical migration receipts and the original authored values.
+
+The focused migration regression verifies completed and pending receipts under a non-UTC session, retains cleanup and rate indexes, and checks defaults for new writes. The global timestamp policy also passes. Disposable database migration verification and the combined release gates remain required before deployment.

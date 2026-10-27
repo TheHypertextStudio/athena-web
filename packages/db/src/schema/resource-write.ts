@@ -18,8 +18,8 @@ export const resourceWriteReceipt = pgTable(
     /** A reserved opaque key lets failed or interrupted writes clean up without guessing. */
     blobKey: text('blob_key'),
     byteSize: integer('byte_size'),
-    completedAt: timestamp('completed_at'),
-    createdAt: timestamp('created_at').notNull().defaultNow(),
+    completedAt: timestamp('completed_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
     primaryKey({ columns: [t.organizationId, t.actorId, t.namespace, t.requestId] }),

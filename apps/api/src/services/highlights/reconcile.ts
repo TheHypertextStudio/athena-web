@@ -1,3 +1,4 @@
+import { narrateHighlights } from '../usage-cost/metered-narration';
 /**
  * `@docket/api` — reconciling one person's narrated day.
  *
@@ -40,7 +41,6 @@ import type {
 import { groupSubjectDayEpisodes } from '@docket/athena/digest-episodes';
 import { and, asc, eq, gte, isNull, lt, or } from 'drizzle-orm';
 
-import { getContainer } from '../../container';
 import { ConflictError } from '../../error';
 import {
   isFutureLocalDate,
@@ -398,8 +398,7 @@ export async function reconcileDay(
     }).format(dayStart);
 
     try {
-      const { summarizer } = getContainer();
-      const { highlights } = await summarizer.narrateDay({
+      const { highlights } = await narrateHighlights(userId, {
         dateLabel,
         episodes: toNarrationEpisodes(batch, byId),
       });

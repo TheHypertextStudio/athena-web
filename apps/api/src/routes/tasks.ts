@@ -1,3 +1,4 @@
+import { withAiUsage } from '../services/usage-cost/direct-calls';
 import { sameTaskTerminalState } from '../lib/task-terminal-instants';
 import {
   prepareBlueprintReflow,
@@ -496,7 +497,14 @@ The new task appears in the organization's activity stream. An assigned task als
       // a runtime replacement must not gain permission to invent a source merely by bypassing it.
       const expansion = constrainTaskExpansion(
         expansionInput,
-        await getContainer().taskExpander.expandTask(expansionInput),
+        await withAiUsage(
+          {
+            source: 'task_expansion',
+            userId: c.get('session')?.user.id ?? null,
+            organizationId: orgId,
+          },
+          () => getContainer().taskExpander.expandTask(expansionInput),
+        ),
       );
 
       await assertRefInOrg(actor, orgId, expansion.patch.assigneeId, 'Assignee not found');

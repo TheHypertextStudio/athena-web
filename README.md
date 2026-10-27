@@ -20,6 +20,9 @@ An Athena turn assigned to an unavailable Lattice computer returns a `503` probl
 `lattice_unavailable`; Docket keeps the chosen runtime and does not route the turn to a cloud model.
 Reported Lattice tokens are retained for interactive turns and durable assignment results. Operator
 cost reports keep own-hardware volume in separate dimensions and leave missing counts unmeasured.
+Direct model calls for plan assessment, destination review, phone replies, email drafting, task
+expansion and day narration also feed the Costs ledger. Reported usage is retained before output
+parsing, while interrupted or unreported calls remain unmeasured.
 See the [Lattice model-routing specification](docs/engineering/specs/lattice-byo-model.md) and
 [usage accounting design](docs/superpowers/specs/2026-10-25-usage-cost-attribution-design.md).
 

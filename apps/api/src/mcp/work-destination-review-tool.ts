@@ -1,3 +1,4 @@
+import { meterTurnRuntime } from '../services/usage-cost/direct-calls';
 /** Review whether one destination supports a task the caller can read. */
 import type { AgentTurnRuntime, TurnInput, TurnMessage, TurnToolDef } from '@docket/athena/turn';
 import { z } from 'zod';
@@ -223,7 +224,11 @@ async function reviewDestination(
         messages: [{ role: 'user', content: [{ type: 'text', text: 'Review this destination.' }] }],
         tools: [resultTool],
       },
-      runtime,
+      meterTurnRuntime(runtime, {
+        source: 'destination_review',
+        userId: ownerUserId,
+        organizationId: input.organizationId,
+      }),
     );
     if (!outcome.valid || outcome.calls.length !== 1) {
       return deny('Athena did not return exactly one valid review result.');

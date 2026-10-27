@@ -139,21 +139,41 @@ call.
 ### Provider caller audit
 
 The audit follows production call sites and container bindings, including direct Messages API
-adapters that bypass `collectProviderTurn` entirely. “Unmetered” describes the current source;
-this table does not establish deployed acceptance of any follow-up change.
+adapters that bypass `collectProviderTurn` entirely. Capture status describes the source;
+this table does not establish deployed acceptance.
 
-| Caller                                    | Execution path                                                                  | Current usage persistence                             | Coverage and remaining work                                                                    |
-| ----------------------------------------- | ------------------------------------------------------------------------------- | ----------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
-| Interactive Athena                        | `agent/loop.ts` → `collectProviderTurn`                                         | `addRunUsage` in the generation transaction           | Reported Lattice counts pass through both adapter boundaries; correction calls are accumulated |
-| Template tailoring                        | `agent/template-tailoring-delivery.ts` → generation admission and session loop  | Same session-run meter                                | No independent meter; avoid double counting                                                    |
-| Daily-plan assessment                     | `services/daily-plan-assessment.ts` → `streamTurn`                              | None; returns on the tool event before terminal usage | Drain terminal event and persist usage against the caller                                      |
-| Destination review                        | `mcp/work-destination-review-tool.ts` → `streamTurn`                            | None                                                  | Meter terminal usage with the caller and task workspace                                        |
-| Phone replies                             | `routes/voice-responder.ts` → `streamTurn`                                      | None                                                  | Persist each reply's terminal usage with voice-session ownership                               |
-| Email-to-task synthesis                   | `lib/email-to-task/synthesize.ts` → `RealTaskSynthesizer`                       | Messages response usage discarded by domain adapter   | Return usage from adapter and persist per source owner                                         |
-| Task-description expansion                | Container `taskExpander` → `RealTaskSynthesizer`                                | Messages response usage discarded                     | Capture usage with expansion requester/workspace                                               |
-| Daily digest and highlight reconciliation | `routes/daily-digest.ts`, `services/highlights/reconcile.ts` → `RealSummarizer` | Messages response usage discarded                     | Capture usage for the day owner, including malformed output                                    |
-| MCP elicitation                           | `mcp/elicit.ts` → host elicitation                                              | No Docket provider call                               | No provider meter; no sampling call found in API/domain production sources                     |
-| Durable Lattice delegation                | `agent/lattice-delegations.ts` → sealed relay result                            | Retained terminal usage rolled up by receipt day      | Missing counts remain unmeasured; placeholder compute counters do not establish measured zero  |
+| Caller                                    | Execution path                                                                  | Current usage persistence                        | Coverage and remaining work                                                                    |
+| ----------------------------------------- | ------------------------------------------------------------------------------- | ------------------------------------------------ | ---------------------------------------------------------------------------------------------- |
+| Interactive Athena                        | `agent/loop.ts` → `collectProviderTurn`                                         | `addRunUsage` in the generation transaction      | Reported Lattice counts pass through both adapter boundaries; correction calls are accumulated |
+| Template tailoring                        | `agent/template-tailoring-delivery.ts` → generation admission and session loop  | Same session-run meter                           | No independent meter; avoid double counting                                                    |
+| Daily-plan assessment                     | `services/daily-plan-assessment.ts` → `streamTurn`                              | Direct call record after draining terminal usage | Person attribution for the cross-workspace assessment                                          |
+| Destination review                        | `mcp/work-destination-review-tool.ts` → `streamTurn`                            | Direct call record                               | Caller and task workspace                                                                      |
+| Phone replies                             | `routes/voice-responder.ts` → `streamTurn`                                      | Direct call record                               | Voice-session person and workspace                                                             |
+| Email-to-task synthesis                   | `lib/email-to-task/synthesize.ts` → `RealTaskSynthesizer`                       | Direct call record before domain parsing         | Source actor person and receiving workspace                                                    |
+| Task-description expansion                | Container `taskExpander` → `RealTaskSynthesizer`                                | Direct call record before domain parsing         | Authenticated requester and task workspace                                                     |
+| Daily digest and highlight reconciliation | `routes/daily-digest.ts`, `services/highlights/reconcile.ts` → `RealSummarizer` | Direct call record before domain parsing         | Day owner; measured malformed output is retained                                               |
+| MCP elicitation                           | `mcp/elicit.ts` → host elicitation                                              | No Docket provider call                          | No provider meter; no sampling call found in API/domain production sources                     |
+| Durable Lattice delegation                | `agent/lattice-delegations.ts` → sealed relay result                            | Retained terminal usage rolled up by receipt day | Missing counts remain unmeasured; placeholder compute counters do not establish measured zero  |
+
+### Direct model-call capture (phase 1.5)
+
+Direct calls retain one `ai_call_usage` record per provider invocation, independently of the
+session-run meter. Migration 0188 adds the append-only source with a timezone-aware receipt time,
+source key, optional person/workspace, backend/model and nullable token counts. It stores no prompt
+or generated content. Provider errors and interrupted streams remain unmeasured; a response with
+reported counts remains measured even if later output parsing fails. Deterministic development
+turns are excluded. Template tailoring continues to use its canonical session run only.
+
+The API binds attribution per asynchronous invocation for the direct Messages adapters, so shared
+container instances cannot mix concurrent callers. Daily-plan assessment, destination review and
+phone reply streams capture terminal usage; assessment drains past its tool result before returning.
+Email synthesis resolves the source actor's person and retains the receiving workspace; task
+expansion uses its authenticated requester and workspace. Cross-workspace daily assessments,
+digests and highlight narration belong to the requesting person without inventing a workspace.
+The existing nightly AI meter combines these records with session and durable Lattice sources
+before replacing a window, preserving the own-hardware dimension and idempotent recomputation.
+Persistence failures emit a server error event while preserving the provider's original outcome;
+they are an accounting gap to investigate, not evidence of measured zero.
 
 The durable command requests `tool_use_session` through `buildAgentTaskCommand`. Its collected
 payload must be checked against that contract before reading text-generation usage or treating a

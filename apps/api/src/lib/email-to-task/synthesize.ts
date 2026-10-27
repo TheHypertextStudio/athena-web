@@ -1,3 +1,4 @@
+import { synthesizeEmailTask } from '../../services/usage-cost/metered-email';
 /**
  * `@docket/api` — email-to-task synthesis: turn classified threads into suggestions.
  *
@@ -139,7 +140,7 @@ export async function persistSuggestions(
       continue;
     }
     synthCalls += 1;
-    const draft = await input.synthesizer.synthesize({
+    const draft = await synthesizeEmailTask(input.synthesizer, input, {
       subject: thread.subject,
       snippet: thread.snippet,
       sender: thread.sender,

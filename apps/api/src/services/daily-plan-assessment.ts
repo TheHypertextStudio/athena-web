@@ -52,6 +52,8 @@ export async function assessDailyPlan(
 ): Promise<DailyPlanAssessment> {
   if (runtime instanceof MockAgentTurnRuntime)
     return unavailableDailyAssessment(proposalFingerprint);
+  let assessment = unavailableDailyAssessment(proposalFingerprint);
+  let received = false;
   try {
     for await (const event of runtime.streamTurn({
       system: [
@@ -70,10 +72,12 @@ export async function assessDailyPlan(
         },
       ],
     })) {
-      if (event.type !== 'tool_use' || event.name !== 'return_daily_plan_assessment') continue;
+      if (event.type !== 'tool_use' || event.name !== 'return_daily_plan_assessment' || received)
+        continue;
+      received = true;
       const parsed = dailyPlanAssessmentReply.safeParse(event.input);
-      if (!parsed.success) return unavailableDailyAssessment(proposalFingerprint);
-      return {
+      if (!parsed.success) continue;
+      assessment = {
         proposalFingerprint,
         assessment: parsed.data.assessment,
         suggestions: parsed.data.suggestions.flatMap((suggestion) => {
@@ -97,5 +101,5 @@ export async function assessDailyPlan(
     // Review must remain usable when the selected device or model is unavailable.
     return unavailableDailyAssessment(proposalFingerprint);
   }
-  return unavailableDailyAssessment(proposalFingerprint);
+  return assessment;
 }

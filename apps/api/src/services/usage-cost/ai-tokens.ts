@@ -9,6 +9,7 @@
 import { agentSession, agentSessionRun, db, usageDaily, type UsageResource } from '@docket/db';
 import { and, gte, inArray, isNotNull, lt, sql } from 'drizzle-orm';
 
+import { loadDirectCallTokenRows } from './direct-call-tokens';
 import { loadLatticeTokenRows, mergeTokenRows } from './lattice-tokens';
 
 /** The ledger resources this meter owns. */
@@ -101,7 +102,11 @@ export async function rollupAiTokens(window: UsageWindow): Promise<number> {
       }));
   });
 
-  const combinedRows = mergeTokenRows([...rows, ...(await loadLatticeTokenRows(window))]);
+  const combinedRows = mergeTokenRows([
+    ...rows,
+    ...(await loadLatticeTokenRows(window)),
+    ...(await loadDirectCallTokenRows(window)),
+  ]);
   await db.transaction(async (tx) => {
     await tx
       .delete(usageDaily)

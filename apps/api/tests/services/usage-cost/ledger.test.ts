@@ -27,6 +27,7 @@ beforeAll(async () => {
 });
 
 beforeEach(async () => {
+  await db.delete(schema.aiCallUsage);
   await db.delete(schema.usageDaily);
   await db.delete(schema.usageMeterRun);
   await db.delete(schema.agentSessionRun);

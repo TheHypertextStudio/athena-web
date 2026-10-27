@@ -1,3 +1,4 @@
+import { meterTurnRuntime } from '../services/usage-cost/direct-calls';
 /**
  * `@docket/api` — generating Athena's spoken reply on the channel where nobody else will.
  *
@@ -63,7 +64,7 @@ export class AthenaVoiceResponder implements VoiceResponder {
 
   /** Stream one reply. */
   async *respond(
-    _ctx: VoiceSessionContext,
+    ctx: VoiceSessionContext,
     history: readonly TurnMessage[],
     tools: readonly VoiceToolDefinition[],
   ): AsyncIterable<VoiceReplyChunk> {
@@ -73,7 +74,11 @@ export class AthenaVoiceResponder implements VoiceResponder {
       inputSchema: tool.parameters,
     }));
 
-    for await (const event of this.runtime.streamTurn({
+    for await (const event of meterTurnRuntime(this.runtime, {
+      source: 'phone_reply',
+      userId: ctx.userId,
+      organizationId: ctx.organizationId,
+    }).streamTurn({
       system: this.systemPrompt,
       messages: history,
       tools: turnTools,

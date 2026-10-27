@@ -1,10 +1,11 @@
+import { meteredSummarizer, meteredTaskSynthesizer } from './services/usage-cost/provider-adapters';
 import { MockAgentRuntime, RealProviderRuntime } from '@docket/athena/agent-session';
 import type { AgentRuntime } from '@docket/athena/agent-session';
 import type { AnthropicClientConfig } from '@docket/athena/anthropic';
-import { MockSummarizer, RealSummarizer } from '@docket/athena/digest';
+import { MockSummarizer } from '@docket/athena/digest';
 import type { Summarizer } from '@docket/athena/digest';
 import { MockTaskSynthesizer } from '@docket/athena/task-drafting/adapters/deterministic';
-import { RealTaskSynthesizer } from '@docket/athena/task-drafting/adapters/anthropic';
+
 import type { TaskExpansionSynthesizer } from '@docket/athena/task-expansion';
 import type { AgentTurnRuntime } from '@docket/athena/turn';
 import { resolveModelBackend } from '@docket/athena/turn/model-backend';
@@ -509,13 +510,13 @@ export function buildAppContainer(runtimeEnv: AppRuntimeEnv = toAppRuntimeEnv())
   const modelBackend = lazyValue(() => resolveModelBackend(toModelBackendEnv(runtimeEnv)));
   const agentTurn = lazyValue(() => modelBackend().turnRuntime());
   const summarizer = lazyValue(() =>
-    mock ? new MockSummarizer() : new RealSummarizer(anthropicConfigFromEnv(runtimeEnv)),
+    mock ? new MockSummarizer() : meteredSummarizer(anthropicConfigFromEnv(runtimeEnv)),
   );
   const taskSynthesizer = lazyValue(() =>
-    mock ? new MockTaskSynthesizer() : new RealTaskSynthesizer(anthropicConfigFromEnv(runtimeEnv)),
+    mock ? new MockTaskSynthesizer() : meteredTaskSynthesizer(anthropicConfigFromEnv(runtimeEnv)),
   );
   const taskExpander = lazyValue(() =>
-    mock ? new MockTaskSynthesizer() : new RealTaskSynthesizer(anthropicConfigFromEnv(runtimeEnv)),
+    mock ? new MockTaskSynthesizer() : meteredTaskSynthesizer(anthropicConfigFromEnv(runtimeEnv)),
   );
   const mailer = lazyValue(() => buildMailer(runtimeEnv));
   // The receiving edge is lazy for the same reason the sending one is: production refuses to

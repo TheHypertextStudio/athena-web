@@ -1,3 +1,4 @@
+import { narrateDigest } from '../services/usage-cost/metered-narration';
 /**
  * `@docket/api` — the daily-digest generator (the Sunsama-style hero feature).
  *
@@ -21,7 +22,6 @@ import { dailyDigest, db, event, hub, user } from '@docket/db';
 import type { ActorRef, DigestStats, EntityRef } from '@docket/db';
 import { and, asc, eq, gte, lte, sql } from 'drizzle-orm';
 
-import { getContainer } from '../container';
 import { dispatchSystemUserNotification } from '../services/notifications/system';
 
 /** The default local send time when a Hub enabled digests without choosing one. */
@@ -326,8 +326,7 @@ async function generateForUser(
       day: 'numeric',
     }).format(now);
 
-    const { summarizer } = getContainer();
-    const { highlights } = await summarizer.narrateDay({
+    const { highlights } = await narrateDigest(candidate.userId, {
       dateLabel,
       ...(candidate.name ? { recipientName: candidate.name } : {}),
       episodes: toNarrationEpisodes(rows, localDate),

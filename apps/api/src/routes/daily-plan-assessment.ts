@@ -1,3 +1,4 @@
+import { meterTurnRuntime } from '../services/usage-cost/direct-calls';
 /** Optional Athena assessment, mounted beside deterministic daily-plan operations. */
 import { Hono } from 'hono';
 import type { AppEnv } from '../context';
@@ -47,7 +48,15 @@ const dailyPlanAssessment = new Hono<AppEnv>().post(
       return ok(
         c,
         dailyPlanAssessmentOut,
-        await assessDailyPlan(backend.runtime, context, proposalFingerprint),
+        await assessDailyPlan(
+          meterTurnRuntime(backend.runtime, {
+            source: 'daily_assessment',
+            userId: session.user.id,
+            organizationId: null,
+          }),
+          context,
+          proposalFingerprint,
+        ),
       );
     } catch {
       return ok(c, dailyPlanAssessmentOut, unavailableDailyAssessment(proposalFingerprint));

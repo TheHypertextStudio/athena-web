@@ -16,7 +16,7 @@ export function uploadControl(orgId: string): UploadControl {
       ),
     complete: (id) =>
       unwrap(
-        () => route[':id'].complete.$post({ param: { orgId, id } }),
+        () => route[':id'].completion.$post({ param: { orgId, id } }),
         'Could not finish the file upload.',
       ),
     cancel: (id) =>

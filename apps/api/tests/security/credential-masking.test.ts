@@ -329,6 +329,12 @@ const CREDENTIAL_NAME_ALLOWLIST = new Set([
  */
 const MINTED_CREDENTIAL_RESPONSES: ReadonlySet<string> = new Set([
   'POST /v1/time/share-tokens 201 → token',
+  // Begin and recovery expose only the current performer's short-lived, single-file write
+  // capability after ownership and resource authorization. The local transfer endpoint bounds
+  // its bytes and lifetime; completion retires the capability and never returns it. Storage
+  // credentials remain sealed. Keep these exceptions tied to the exact authenticated operations.
+  'POST /v1/orgs/{orgId}/uploads 200 → uploadToken',
+  'GET /v1/orgs/{orgId}/uploads/{id} 200 → uploadToken',
   // Description expansion returns an opaque change-set handle so the same authorized actor can
   // undo or redo that one mutation. The task route rechecks organization and actor ownership
   // before using it, so this is an operation handle rather than a provider or session credential.

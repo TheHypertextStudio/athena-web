@@ -31,8 +31,9 @@ import ResourceDetailPanel from '@/components/library/resource-detail-panel';
 
 const ORG_ID = OrganizationId.parse('01HZZZ0000000000000000000G');
 
-function fileAttachment(): SearchResult {
-  const href = `/v1/orgs/${ORG_ID}/tasks/task-1/attachments/attachment-1/download`;
+function fileAttachment(subjectKind: 'task' | 'project' | 'program' | 'initiative'): SearchResult {
+  const subjectId = `${subjectKind}-1`;
+  const href = `/v1/orgs/${ORG_ID}/work-resources/${subjectKind}/${subjectId}/attachment-1/download`;
   return {
     id: `attachment:${ORG_ID}:attachment-1`,
     organizationId: ORG_ID,
@@ -46,13 +47,13 @@ function fileAttachment(): SearchResult {
     route: {
       type: 'content',
       organizationId: ORG_ID,
-      subjectKind: 'task',
-      subjectId: 'task-1',
+      subjectKind,
+      subjectId,
       contentKind: 'attachment',
       contentId: 'attachment-1',
       href: `/orgs/${ORG_ID}/search?attachmentId=attachment-1`,
     },
-    subject: { kind: 'task', id: 'task-1', title: null, organizationId: ORG_ID },
+    subject: { kind: subjectKind, id: subjectId, title: null, organizationId: ORG_ID },
     source: { system: 'docket', externalUrl: null, eventId: null },
     facets: {
       attachmentKind: 'file',
@@ -61,7 +62,7 @@ function fileAttachment(): SearchResult {
       byteSize: 48_721,
     },
     actions: [
-      { kind: 'open', label: 'Open', href: `/orgs/${ORG_ID}/tasks/task-1` },
+      { kind: 'open', label: 'Open', href: `/orgs/${ORG_ID}/${subjectKind}s/${subjectId}` },
       { kind: 'download', label: 'Download', href },
     ],
     score: 0,
@@ -99,23 +100,33 @@ function externalResource(): SearchResult {
 }
 
 describe('ResourceDetailPanel attachments', () => {
-  it('shows the host, file action, and work context without querying attachment backlinks', () => {
-    queryDefinitions.length = 0;
-    render(<ResourceDetailPanel orgId={ORG_ID} resource={fileAttachment()} onClose={vi.fn()} />);
+  it.each(['task', 'project', 'program', 'initiative'] as const)(
+    'shows the %s Resources host, file action, and work context without querying attachment backlinks',
+    (subjectKind) => {
+      const subjectId = `${subjectKind}-1`;
+      queryDefinitions.length = 0;
+      render(
+        <ResourceDetailPanel
+          orgId={ORG_ID}
+          resource={fileAttachment(subjectKind)}
+          onClose={vi.fn()}
+        />,
+      );
 
-    expect(screen.getByRole('link', { name: /Download/ })).toHaveAttribute(
-      'href',
-      `/v1/orgs/${ORG_ID}/tasks/task-1/attachments/attachment-1/download`,
-    );
-    expect(screen.getByRole('link', { name: /Open task/ })).toHaveAttribute(
-      'href',
-      `/orgs/${ORG_ID}/tasks/task-1?attachmentId=attachment-1`,
-    );
-    expect(screen.getByText('Q3 launch')).toBeInTheDocument();
-    expect(screen.queryByText('Referenced by')).not.toBeInTheDocument();
-    expect(queryDefinitions).toHaveLength(1);
-    expect(queryDefinitions[0]).toMatchObject({ enabled: false });
-  });
+      expect(screen.getByRole('link', { name: /Download/ })).toHaveAttribute(
+        'href',
+        `/v1/orgs/${ORG_ID}/work-resources/${subjectKind}/${subjectId}/attachment-1/download`,
+      );
+      expect(screen.getByRole('link', { name: `Open ${subjectKind}` })).toHaveAttribute(
+        'href',
+        `/orgs/${ORG_ID}/${subjectKind}s/${subjectId}?tab=resources&attachmentId=attachment-1`,
+      );
+      expect(screen.getByText('Q3 launch')).toBeInTheDocument();
+      expect(screen.queryByText('Referenced by')).not.toBeInTheDocument();
+      expect(queryDefinitions).toHaveLength(1);
+      expect(queryDefinitions[0]).toMatchObject({ enabled: false });
+    },
+  );
 
   it('calls direct attachments and prose references resource uses', () => {
     queryDefinitions.length = 0;

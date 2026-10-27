@@ -3,7 +3,7 @@ import { bodyLimit } from 'hono/body-limit';
 import { z } from 'zod';
 import { UPLOAD_CHUNK_BYTES } from '@docket/work/attachment-contract';
 import type { AppEnv } from '../context';
-import { UploadBegin, UploadSessionOut } from '../contracts/uploads';
+import { UploadBegin, UploadCompletionOut, UploadSessionOut } from '../contracts/uploads';
 import { beginUpload, readUpload, completeUpload } from '../content/upload-session';
 import { cancelUpload } from '../content/upload-cleanup';
 import { transferUploadBytes } from '../content/upload-bytes';
@@ -37,16 +37,20 @@ export const uploadRoutes = new Hono<AppEnv>()
     },
   )
   .post(
-    '/:id/complete',
+    '/:id/completion',
     apiDoc({
       tag: 'Resources',
       summary: 'Complete a verified file upload',
-      response: UploadSessionOut,
+      response: UploadCompletionOut,
     }),
     zParam(idParam),
     async (c) => {
       const { orgId, actorId } = c.get('actorCtx');
-      return ok(c, UploadSessionOut, await completeUpload(orgId, actorId, c.req.valid('param').id));
+      return ok(
+        c,
+        UploadCompletionOut,
+        await completeUpload(orgId, actorId, c.req.valid('param').id),
+      );
     },
   )
   .delete(

@@ -18,6 +18,7 @@ const expectedGroups = [
       'Cycles',
       'Tasks',
       'Labels',
+      'Resources',
       'Comments',
       'Updates',
       'Templates',

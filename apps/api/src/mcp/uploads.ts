@@ -25,6 +25,23 @@ const input = z.object({
     })
     .optional(),
 });
+const outputVariants = z.union([
+  UploadSessionOut.strict(),
+  z.strictObject({ removed: z.literal(true) }),
+]);
+/**
+ * The SDK normalizes only object schemas when validating structured output. Preserve all fields
+ * until the exact union checks them, including cancellation's strict shape. Advertise that same
+ * union at this root so its local references retain their scope and responses need no wrapper.
+ */
+export const UploadMcpOut = z
+  .looseObject({})
+  .superRefine((value, context) => {
+    if (!outputVariants.safeParse(value).success)
+      context.addIssue({ code: 'custom', message: 'Invalid upload management result.' });
+  })
+  .meta({ ...z.toJSONSchema(outputVariants), type: 'object' });
+
 /** One compact management tool; file bytes travel through the resumable PUT capability. */
 export function registerUploadTools(server: McpRegistrar, ctx: McpContext): void {
   server.registerTool(
@@ -34,6 +51,7 @@ export function registerUploadTools(server: McpRegistrar, ctx: McpContext): void
       description:
         'Files up to 100 MiB. Begin: requestId, fileName, byteSize, base64 CRC32C, destination. PUT Content-Range chunks to secret uploadUrl; use X-Docket-Upload-Token if returned. Resume at offset; complete for file.id. Draft IDs attach to posts.',
       inputSchema: input.shape,
+      outputSchema: UploadMcpOut,
       annotations: {
         readOnlyHint: false,
         destructiveHint: false,

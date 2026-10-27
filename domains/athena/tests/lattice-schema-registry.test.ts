@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   schemaNeedsIsolation,
   shareLargeSchemaFragments,
+  toolSchemaInRegistry,
 } from '../src/turn/internal/lattice-schema-registry';
 
 type Schema = Record<string, unknown>;
@@ -62,14 +63,14 @@ function expanded(root: Schema): unknown {
       .slice(2)
       .split('/')
       .reduce<unknown>((value, key) => {
-        if (!record(value)) throw new Error('Invalid schema reference');
-        return value[key.replaceAll('~1', '/').replaceAll('~0', '~')];
+        if (!record(value) && !Array.isArray(value)) throw new Error('Invalid schema reference');
+        return Reflect.get(value, key.replaceAll('~1', '/').replaceAll('~0', '~')) as unknown;
       }, root);
   }
   function visit(value: unknown): unknown {
     if (!record(value)) return value;
-    const referenced = typeof value['$ref'] === 'string' ? pointer(value['$ref']) : null;
-    if (referenced) return visit(referenced);
+    const referenced = typeof value['$ref'] === 'string' ? pointer(value['$ref']) : undefined;
+    if (referenced !== undefined) return visit(referenced);
     return Object.fromEntries(
       Object.entries(value)
         .filter(([key]) => key !== '$defs' && key !== '$anchor')
@@ -306,6 +307,141 @@ describe('lossless local-model schema pooling', () => {
       properties: { tree: { $ref: `#/$defs/${previous}` } },
     };
     expect(shareLargeSchemaFragments(original)).toEqual(original);
+  });
+
+  it.each(['anyOf', 'oneOf'])(
+    'hoists shared %s bounds while preserving closed keys and branch-specific requirements',
+    (keyword) => {
+      const title = { type: 'string', minLength: 1, maxLength: 128 };
+      const original: Schema = {
+        [keyword]: ['task', 'project', 'program', 'initiative'].map((kind, index) => ({
+          type: 'object',
+          properties: { kind: { const: kind }, title, tiny: {}, [kind]: { type: 'boolean' } },
+          required: index === 0 ? ['title'] : ['title', kind],
+          additionalProperties: false,
+        })),
+      };
+      const snapshot = JSON.stringify(original);
+      const pooled = shareLargeSchemaFragments(original);
+      expect(expanded(pooled)).toEqual({
+        type: 'object',
+        properties: { title },
+        required: ['title'],
+        [keyword]: ['task', 'project', 'program', 'initiative'].map((kind, index) => ({
+          properties: { kind: { const: kind }, title: {}, tiny: {}, [kind]: { type: 'boolean' } },
+          ...(index === 0 ? {} : { required: [kind] }),
+          additionalProperties: false,
+        })),
+      });
+      expect(JSON.stringify(pooled).length).toBeLessThan(snapshot.length);
+      expect(JSON.stringify(original)).toBe(snapshot);
+    },
+  );
+
+  it('keeps overlapping oneOf ranges distinct when sharing their required fields', () => {
+    const title = { type: 'string', minLength: 1, maxLength: 128 };
+    const original = {
+      oneOf: [0, 10, 20].map((minimum) => ({
+        type: 'object',
+        properties: { title, value: { type: 'number', minimum } },
+        required: ['title', 'value'],
+      })),
+    };
+    expect(expanded(shareLargeSchemaFragments(original))).toEqual({
+      type: 'object',
+      properties: { title },
+      required: ['title', 'value'],
+      oneOf: [0, 10, 20].map((minimum) => ({
+        properties: { title: {}, value: { type: 'number', minimum } },
+      })),
+    });
+  });
+
+  it('retains mixed scalar and unconstrained union branches without imposing object fields', () => {
+    const original = {
+      anyOf: [{ type: 'string', minLength: 2 }, { type: 'number', minimum: 3 }, {}],
+    };
+    expect(shareLargeSchemaFragments(original)).toEqual(original);
+  });
+
+  it('does not apply a branch property bound to other unconstrained object branches', () => {
+    const title = { type: 'string', minLength: 1, maxLength: 128 };
+    const original = {
+      anyOf: [
+        { type: 'object', properties: { title } },
+        { type: 'object', maxProperties: 2 },
+        { type: 'object', minProperties: 1 },
+      ],
+    };
+    expect(expanded(shareLargeSchemaFragments(original))).toEqual({
+      type: 'object',
+      anyOf: [{ properties: { title } }, { maxProperties: 2 }, { minProperties: 1 }],
+    });
+  });
+
+  it('preserves pointers into union descendants instead of hoisting their target property', () => {
+    const title = { type: 'string', minLength: 1, maxLength: 128 };
+    const original: Schema = {
+      type: 'object',
+      properties: {
+        work: {
+          oneOf: ['task', 'project', 'program'].map((kind) => ({
+            type: 'object',
+            properties: { kind: { const: kind }, title },
+            required: ['kind', 'title'],
+          })),
+        },
+        selected: { $ref: '#/properties/work/oneOf/0/properties/title' },
+      },
+    };
+    expect(expanded(shareLargeSchemaFragments(original))).toEqual(expanded(original));
+  });
+
+  it('rebases recursive root and definition pointers without rewriting literal references', () => {
+    const original = {
+      type: 'object',
+      properties: {
+        child: { $ref: '#' },
+        selected: { $ref: '#/$defs/value' },
+        literal: { default: { $ref: '#/$defs/untouched' } },
+      },
+      $defs: { value: { type: 'string' } },
+    };
+    const snapshot = JSON.stringify(original);
+    expect(toolSchemaInRegistry('~/', original)).toEqual({
+      ...original,
+      properties: {
+        child: { $ref: '#/properties/~0~1' },
+        selected: { $ref: '#/properties/~0~1/$defs/value' },
+        literal: { default: { $ref: '#/$defs/untouched' } },
+      },
+    });
+    expect(JSON.stringify(original)).toBe(snapshot);
+    expect(shareLargeSchemaFragments(original)).toEqual(original);
+  });
+
+  it.each(['#/properties/value/minLength/absent', '#/%ZZ', 'https://example.test/schema'])(
+    'preserves a schema with an unresolved or externally scoped reference %s',
+    (reference) => {
+      const original = {
+        type: 'object',
+        properties: { value: { type: 'string', minLength: 1 }, selected: { $ref: reference } },
+      };
+      expect(shareLargeSchemaFragments(original)).toBe(original);
+      if (reference.startsWith('https:')) expect(schemaNeedsIsolation(original)).toBe(true);
+    },
+  );
+
+  it('preserves references to boolean schema targets', () => {
+    const original = {
+      type: 'object',
+      $defs: { denied: false },
+      properties: { denied: { $ref: '#/$defs/denied' } },
+    };
+    expect(expanded(shareLargeSchemaFragments(original))).toEqual({
+      type: 'object',
+      properties: { denied: false },
+    });
   });
 
   it('does not expand a tiny schema when references cannot save bytes', () => {

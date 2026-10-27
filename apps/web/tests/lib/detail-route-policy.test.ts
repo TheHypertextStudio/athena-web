@@ -10,6 +10,48 @@ const details = [
   'src/app/(app)/orgs/[orgId]/initiatives/[initiativeId]/initiative-detail-client.tsx',
 ] as const;
 
+/** Resource reads live in the panel mounted only by the active Resources tab. */
+function expectDeferredResources(source: string, subjectType: 'project' | 'initiative'): void {
+  expect(source).toMatch(
+    /<TabPanel\s+hidden=\{!\(tab === 'resources'\)\}[^>]*value="resources"[^>]*render=\{\(\) => \([\s\S]*?<WorkResourcesPanel/,
+  );
+  const panel = /<WorkResourcesPanel\b[^>]*\/>/.exec(source)?.[0];
+  expect(panel).toContain('orgId={orgId}');
+  expect(panel).toContain(`subjectType="${subjectType}"`);
+  expect(panel).toContain(`subjectId={${subjectType}Id}`);
+  const aggregateGuard = source.indexOf(
+    `if (!${subjectType === 'project' ? 'project' : 'detail'}) return`,
+  );
+  expect(aggregateGuard).toBeGreaterThan(-1);
+  expect(aggregateGuard).toBeLessThan(source.indexOf('<WorkResourcesPanel'));
+  // The shared primitive skips render callbacks for hidden panels, keeping their queries dormant.
+  const tabs = readFileSync(join(root, '../../packages/ui/src/primitives/tabs.tsx'), 'utf8');
+  expect(tabs).toContain('render ? (props.hidden ? null : render()) : children');
+  const resources = readFileSync(
+    join(root, 'src/components/entity-detail/work-resources-panel.tsx'),
+    'utf8',
+  );
+  expect(resources).toContain('useWorkResources(orgId, subjectType, subjectId)');
+  expect(resources).toContain('error={data.error}');
+  expect(resources).toContain('loadFailure={data.loadFailure}');
+  expect(resources).toContain('onRetry={data.retry}');
+  const hook = readFileSync(join(root, 'src/lib/use-work-resources.ts'), 'utf8');
+  expect(hook).toContain("['work-resources'][':subjectType'][':subjectId']");
+  expect(hook).toContain('fetchAllCursorPages((cursor) =>');
+  expect(hook).toContain("query: { limit: '100', ...(cursor ? { cursor } : {}) }");
+  expect(hook).toContain('Could not load resources.');
+  expect(hook).toContain('loadFailure: list.error');
+  expect(hook).toContain('void list.refetch()');
+  const resourceTab = readFileSync(
+    join(root, 'src/components/entity-detail/resources-tab.tsx'),
+    'utf8',
+  );
+  expect(resourceTab).toContain(
+    '<ResourceFailure message={error} failure={loadFailure} onRetry={onRetry} />',
+  );
+  expect(resourceTab).toContain('<LoadFailure title="Resources" error={failure} onRetry={onRetry}');
+}
+
 describe('detail route ownership', () => {
   it.each(details)('%s reads only its generated typed route variant', (file) => {
     const source = readFileSync(join(root, file), 'utf8');
@@ -45,7 +87,7 @@ describe('detail route ownership', () => {
     expect(source).toContain('Could not refresh this');
     expect(source).toContain('relationshipsQ.isError');
     expect(source).toContain('PartialLoadBanner');
-    expect(source).toContain('Could not load resources.');
+    expectDeferredResources(source, 'initiative');
   });
 
   it('keeps the Project shell on one aggregate read and leaves roster-backed controls dormant', () => {
@@ -58,7 +100,7 @@ describe('detail route ownership', () => {
     expect(source).toContain(
       "enabled: aggregate !== null && (tab === 'overview' || tab === 'updates')",
     );
-    expect(source).toContain("enabled: aggregate !== null && tab === 'resources'");
+    expectDeferredResources(source, 'project');
     expect(source).toContain(
       "enabled: aggregate !== null && (tab === 'overview' || tab === 'tasks' || repeatProjectOpen)",
     );

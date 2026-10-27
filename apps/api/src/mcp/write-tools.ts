@@ -102,7 +102,7 @@ export function registerWriteTools(server: McpRegistrar, ctx: McpContext): void 
     {
       title: 'Capture',
       description:
-        'Capture tasks from text. Read list_templates and fill its Markdown body; select workTypeId/version or give withoutTemplateReason. Explicit fields win.\n\nCapture tasks from text. First read list_templates; keep and fill payload.description headings. Select workTypeId/version or a legacy template, or give withoutTemplateReason. Explicit fields win. With a template, one line sets title; multiple lines replace body. Returns saved bodies. Use organize for placement.',
+        'Capture tasks from text. Read list_templates and fill its Markdown body instead of inventing a format; select workTypeId/version or give withoutTemplateReason. Explicit fields win.\n\nCapture tasks from text. First read list_templates; keep and fill payload.description headings. Select workTypeId/version or a legacy template, or give withoutTemplateReason. Explicit fields win. With a template, one line sets title; multiple lines replace body. Returns saved bodies. Use organize for placement.',
       inputSchema: {
         orgId: orgIdParam,
         ...templateDecisionFields,

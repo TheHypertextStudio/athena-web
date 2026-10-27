@@ -101,7 +101,9 @@ function schemaToJson(schema: ToolInputSchema): Record<string, unknown> {
 function outputSchemaToJson(
   schema: ToolOutputSchema | undefined,
 ): Record<string, unknown> | undefined {
-  return schema ? schemaToJson(schema) : undefined;
+  // Structured tool results are objects. Zod may omit this redundant root type for object
+  // unions or references; keep their keywords and local-reference paths in the same document.
+  return schema ? { type: 'object', ...schemaToJson(schema) } : undefined;
 }
 
 function promptArguments(schema: z.ZodRawShape | undefined): readonly PromptArgument[] | undefined {

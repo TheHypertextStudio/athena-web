@@ -89,8 +89,8 @@ describe('Library primary resource actions', () => {
     ).toEqual({ kind: 'download', label: 'Download', href });
   });
 
-  it('opens attachments without a provider action at their task, project, or initiative host', () => {
-    for (const subjectKind of ['task', 'project', 'initiative'] as const) {
+  it('opens attachments without a provider action in each work host’s Resources tab', () => {
+    for (const subjectKind of ['task', 'project', 'program', 'initiative'] as const) {
       const subjectId = `${subjectKind}-1`;
       expect(
         primaryResourceAction(
@@ -111,7 +111,7 @@ describe('Library primary resource actions', () => {
       ).toEqual({
         kind: 'internal',
         label: `Open ${subjectKind}`,
-        href: `/orgs/${ORG_ID}/${subjectKind}s/${subjectId}?attachmentId=attachment-1`,
+        href: `/orgs/${ORG_ID}/${subjectKind}s/${subjectId}?tab=resources&attachmentId=attachment-1`,
       });
     }
   });

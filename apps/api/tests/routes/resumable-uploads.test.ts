@@ -80,7 +80,7 @@ async function send(
   });
 }
 async function finish(f: Awaited<ReturnType<typeof fixture>>, id: string) {
-  return f.app.request(`/uploads/${id}/complete`, { method: 'POST' });
+  return f.app.request(`/uploads/${id}/completion`, { method: 'POST' });
 }
 
 describe('shared resumable uploads', () => {
@@ -106,6 +106,8 @@ describe('shared resumable uploads', () => {
       expect(Session.parse(await concurrentCompletion.json()).file?.id).toBe(completed.file?.id);
       expect(completed.state).toBe('completed');
       expect(completed.file).toBeDefined();
+      expect(completed.uploadToken).toBeUndefined();
+      expect(completed.uploadUrl).toBeUndefined();
       expect(Session.parse(await (await finish(f, session.id)).json()).file?.id).toBe(
         completed.file?.id,
       );
@@ -165,7 +167,46 @@ describe('shared resumable uploads', () => {
       },
     });
     expect(result.isError, JSON.stringify(result)).not.toBe(true);
-    expect(Session.parse(result.structuredContent).uploadUrl).toBeDefined();
+    const session = Session.parse(result.structuredContent);
+    expect(session.uploadUrl).toBeDefined();
+    const status = await client.callTool({
+      name: 'manage_upload',
+      arguments: { orgId: f.orgId, action: 'status', uploadId: session.id },
+    });
+    expect(status.isError, JSON.stringify(status)).not.toBe(true);
+    expect(Session.parse(status.structuredContent)).toMatchObject({ id: session.id, offset: 0 });
+    await send(f, session, '123456789', 0);
+    const completed = await client.callTool({
+      name: 'manage_upload',
+      arguments: { orgId: f.orgId, action: 'complete', uploadId: session.id },
+    });
+    expect(completed.isError, JSON.stringify(completed)).not.toBe(true);
+    expect(Session.parse(completed.structuredContent)).toMatchObject({
+      id: session.id,
+      state: 'completed',
+      file: { id: expect.any(String) },
+    });
+    const pending = await client.callTool({
+      name: 'manage_upload',
+      arguments: {
+        orgId: f.orgId,
+        action: 'begin',
+        ...metadata,
+        requestId: 'mcp-cancel',
+        destination: { kind: 'draft' },
+      },
+    });
+    expect(pending.isError, JSON.stringify(pending)).not.toBe(true);
+    const cancelled = await client.callTool({
+      name: 'manage_upload',
+      arguments: {
+        orgId: f.orgId,
+        action: 'cancel',
+        uploadId: Session.parse(pending.structuredContent).id,
+      },
+    });
+    expect(cancelled.isError, JSON.stringify(cancelled)).not.toBe(true);
+    expect(cancelled.structuredContent).toEqual({ removed: true });
   });
   it('streams an accepted large file and copies Library bytes without whole-object reads', async () => {
     const f = await fixture();

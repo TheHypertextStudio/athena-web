@@ -20792,3 +20792,9 @@ xhigh` passes (10 finder angles each, one-vote verification, a gap sweep) agains
 Resource write receipts now declare timezone-aware completed and created instants. A separate migration upgrades existing receipt tables with explicit UTC interpretation, preserving historical migration receipts and the original authored values.
 
 The focused migration regression verifies completed and pending receipts under a non-UTC session, retains cleanup and rate indexes, and checks defaults for new writes. The global timestamp policy also passes. Disposable database migration verification and the combined release gates remain required before deployment.
+
+### [UPLOAD-CONTRACTS] Keep upload clients and advertised results aligned
+
+Upload completion now uses a noun resource and declares only the accepted receipt fields; private transfer capabilities remain limited to authenticated reservation creation and recovery. MCP upload results keep their session or cancellation shape while using the SDK-compatible object validator and the same advertised union. Creation and organization tools retain their required template-body instructions.
+
+Targeted checks cover the real MCP lifecycle, malformed result rejection, schema-reference equivalence, the existing prompt ceiling, and resource navigation for all four kinds of work. New union-factoring regressions restore branch coverage without lowering its threshold. Shared resource panels continue to load lazily and expose failure recovery. Complete combined checks and matching staging API and Worker acceptance remain release prerequisites.

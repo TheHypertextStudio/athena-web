@@ -44,3 +44,5 @@ export const UploadSessionOut = z.object({
 });
 /** Shared session response for REST, MCP and browser clients. */
 export type UploadSessionOut = z.infer<typeof UploadSessionOut>;
+/** Accepted upload receipt; completion retires the transfer capability. */
+export const UploadCompletionOut = UploadSessionOut.omit({ uploadUrl: true, uploadToken: true });

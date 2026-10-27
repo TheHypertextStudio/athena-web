@@ -107,7 +107,7 @@ export function registerOrganizeTool(server: McpRegistrar, ctx: McpContext): voi
     {
       title: 'Organize work',
       description:
-        'Create/match work atomically. Read list_templates and fill its Markdown body; select workTypeId/version or give withoutTemplateReason. Explicit fields win. Returns saved bodies.\n\nCreate or match work atomically. First read list_templates and fill its Markdown body, keeping headings. Select workTypeId/version or a legacy template, or give withoutTemplateReason. Explicit fields win. Blueprints may add children. Use local parent refs or saved placements; names match within placement. Returns saved bodies. For one task, use capture.',
+        'Create/match tasks, projects, initiatives, or programs atomically. Read list_templates and fill its Markdown body instead of inventing a format; select workTypeId/version or give withoutTemplateReason. Explicit fields win. Returns saved bodies.\n\nCreate or match work atomically. First read list_templates and fill its Markdown body, keeping headings. Select workTypeId/version or a legacy template, or give withoutTemplateReason. Explicit fields win. Blueprints may add children. Use local parent refs or saved placements; names match within placement. Returns saved bodies. For one task, use capture.',
       inputSchema: {
         orgId: orgIdParam,
         items: z

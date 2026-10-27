@@ -7,7 +7,7 @@
  */
 import type { TurnMessage } from '../../turn-protocol';
 
-import type { AgentTurnRuntime, TurnEvent, TurnInput, TurnStopReason } from '../turn';
+import type { AgentTurnRuntime, TurnEvent, TurnInput, TurnStopReason, TurnUsage } from '../turn';
 import {
   latticeToolUseId,
   parseLatticeReply,
@@ -54,6 +54,8 @@ export interface LatticeChatPortResult {
   readonly finishReason?: string;
   /** Model id the device actually served. */
   readonly model?: string;
+  /** Reported token consumption; absent when the device cannot measure it. */
+  readonly usage?: TurnUsage | undefined;
 }
 
 /** Injected network edge for running one local-model chat turn. */
@@ -162,7 +164,25 @@ async function requestLatticeTurn(
   if (/<tool_call>[\s\S]*<\/tool_call>\s*$/i.test(corrected.text)) {
     throw new Error('Lattice returned unsupported tool-call syntax after one correction.');
   }
-  return corrected;
+  return {
+    ...corrected,
+    usage: combineLatticeUsage(result.usage, corrected.usage),
+  };
+}
+
+/** Sum a correction's two measured calls; keep incomplete measurements unmeasured. */
+function combineLatticeUsage(
+  first: TurnUsage | undefined,
+  second: TurnUsage | undefined,
+): TurnUsage | undefined {
+  if (!first || !second) return undefined;
+  return {
+    model: second.model,
+    inputTokens: first.inputTokens + second.inputTokens,
+    outputTokens: first.outputTokens + second.outputTokens,
+    cacheReadTokens: first.cacheReadTokens + second.cacheReadTokens,
+    cacheCreationTokens: first.cacheCreationTokens + second.cacheCreationTokens,
+  };
 }
 
 /** Provider-neutral turn runtime whose model computation stays on the person's paired device. */
@@ -199,7 +219,13 @@ export class LatticeAgentTurnRuntime implements AgentTurnRuntime {
         content: [{ type: 'tool_use', id, name: parsed.name, input: parsed.input }],
       };
       yield { type: 'tool_use', id, name: parsed.name, input: parsed.input };
-      yield { type: 'turn_end', stopReason: 'tool_use', message };
+      yield {
+        type: 'turn_end',
+        stopReason: 'tool_use',
+        message,
+        usage: result.usage,
+        usageBackend: 'lattice',
+      };
       return;
     }
 
@@ -208,6 +234,12 @@ export class LatticeAgentTurnRuntime implements AgentTurnRuntime {
       content: [{ type: 'text', text: parsed.text }],
     };
     yield { type: 'text', text: parsed.text };
-    yield { type: 'turn_end', stopReason: toLatticeStopReason(result.finishReason), message };
+    yield {
+      type: 'turn_end',
+      stopReason: toLatticeStopReason(result.finishReason),
+      message,
+      usage: result.usage,
+      usageBackend: 'lattice',
+    };
   }
 }

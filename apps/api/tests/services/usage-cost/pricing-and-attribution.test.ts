@@ -10,6 +10,7 @@ import {
   workspaceKey,
   type LedgerRow,
 } from '../../../src/services/usage-cost/attribution';
+import { mergeTokenRows } from '../../../src/services/usage-cost/lattice-tokens';
 import { costMicros, resolveRate, type RateRow } from '../../../src/services/usage-cost/rates';
 import { samplePercent, splitByRowBytes } from '../../../src/services/usage-cost/storage';
 
@@ -35,6 +36,21 @@ function row(overrides: Partial<LedgerRow> & Pick<LedgerRow, 'resource'>): Ledge
 }
 
 describe('resolveRate', () => {
+  it('never applies a general hosted-token rate to own-hardware usage', () => {
+    const general = rate({ resource: 'ai_input_tokens' });
+    const local = rate({
+      resource: 'ai_input_tokens',
+      dimension: 'lattice:model',
+      microsPerMillionUnits: 0,
+    });
+    expect(
+      resolveRate([general], 'ai_input_tokens', 'lattice:model', '2026-03-10'),
+    ).toBeUndefined();
+    expect(resolveRate([general, local], 'ai_input_tokens', 'lattice:model', '2026-03-10')).toBe(
+      local,
+    );
+  });
+
   it('uses the resource rate when no rate names the dimension', () => {
     const general = rate({ resource: 'ai_input_tokens', microsPerMillionUnits: 3 });
 
@@ -262,5 +278,27 @@ describe('storage splitting', () => {
     expect(samplePercent(1_000_000)).toBe(100);
     expect(samplePercent(10_000_000)).toBe(10);
     expect(samplePercent(5_000_000_000)).toBe(1);
+  });
+});
+
+describe('merging token sources', () => {
+  it('combines matching owners and models while preserving missing measurements', () => {
+    const base = {
+      day: '2026-10-26',
+      userId: 'person',
+      organizationId: 'workspace',
+      resource: 'ai_input_tokens' as const,
+      dimension: 'lattice:model',
+    };
+    expect(
+      mergeTokenRows([
+        { ...base, quantity: 120, unmeasuredEvents: 0 },
+        { ...base, quantity: 5, unmeasuredEvents: 1 },
+        { ...base, dimension: 'model', quantity: 40, unmeasuredEvents: 0 },
+      ]),
+    ).toEqual([
+      { ...base, quantity: 125, unmeasuredEvents: 1 },
+      { ...base, dimension: 'model', quantity: 40, unmeasuredEvents: 0 },
+    ]);
   });
 });

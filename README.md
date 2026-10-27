@@ -18,7 +18,10 @@ The authorizing human remains in the audit record and is not shown as the author
 Edited comments retain their original author and record the last editor separately.
 An Athena turn assigned to an unavailable Lattice computer returns a `503` problem with code
 `lattice_unavailable`; Docket keeps the chosen runtime and does not route the turn to a cloud model.
-See the [Lattice model-routing specification](docs/engineering/specs/lattice-byo-model.md).
+Reported Lattice tokens are retained for interactive turns and durable assignment results. Operator
+cost reports keep own-hardware volume in separate dimensions and leave missing counts unmeasured.
+See the [Lattice model-routing specification](docs/engineering/specs/lattice-byo-model.md) and
+[usage accounting design](docs/superpowers/specs/2026-10-25-usage-cost-attribution-design.md).
 
 Athena keeps one conversation across visits. After six quiet hours, the panel opens on a fresh
 view; the Earlier messages menu or an upward pull reveals the older stream. People can save a named

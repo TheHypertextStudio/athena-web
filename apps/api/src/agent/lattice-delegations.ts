@@ -33,6 +33,7 @@ import { and, asc, eq, isNotNull, isNull, lte, or } from 'drizzle-orm';
 import { sealCredential, unsealCredential } from '../lib/credentials';
 import type { AthenaAssignmentRow } from './assignments';
 import { failureMessage } from './lattice-failure-copy';
+import { latticeResultReceipt } from './lattice-result-receipt';
 import { promptForSession } from './lattice-delegation-prompt';
 import type { LatticeConnectionRow } from '../routes/lattice-connection';
 
@@ -372,7 +373,7 @@ async function settleFailureInTransaction(
       cancellationRequestedAt: null,
       ...(options.retainReplyKey ? {} : { replyKeyCiphertext: null }),
       ...(options.relayCursor ? { relayCursor: options.relayCursor } : {}),
-      terminalOutcome: options.terminalOutcome,
+      ...latticeResultReceipt(options.terminalOutcome, now),
       returnedActivityId: null,
       nextPollAt: null,
       settledAt: now,
@@ -423,7 +424,7 @@ async function settleCanceled(
         cancellationRequestedAt: null,
         failureCode: null,
         replyKeyCiphertext: null,
-        terminalOutcome,
+        ...latticeResultReceipt(terminalOutcome, now),
         ...(relayCursor ? { relayCursor } : {}),
         nextPollAt: null,
         settledAt: now,
@@ -1335,7 +1336,7 @@ async function proposeResult(
         workState: 'completed',
         relayCursor,
         nextPollAt: null,
-        terminalOutcome,
+        ...latticeResultReceipt(terminalOutcome, now),
         failureCode: null,
         returnedActivityId: activity.id,
       })

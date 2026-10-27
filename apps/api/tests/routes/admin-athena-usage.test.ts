@@ -89,6 +89,21 @@ function sliceOf(
 }
 
 describe('Athena usage', () => {
+  it('preserves own-hardware provenance without inventing token counts', async () => {
+    const runId = await makeRun({ surface: 'docket', kind: 'chat' });
+    await addRunUsage(db, runId, undefined, 'lattice');
+    const [run] = await db
+      .select()
+      .from(schema.agentSessionRun)
+      .where(eq(schema.agentSessionRun.id, runId));
+    expect(run).toMatchObject({
+      inputTokens: null,
+      outputTokens: null,
+      model: null,
+      usageBackend: 'lattice',
+    });
+  });
+
   it('refuses an anonymous caller', async () => {
     const anonymous = appWithSession(admin, null);
     expect((await anonymous.request('/athena-usage', { method: 'GET' })).status).toBe(401);

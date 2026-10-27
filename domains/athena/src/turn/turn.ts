@@ -59,11 +59,12 @@ export type TurnEvent =
        *
        * @remarks
        * Absent rather than zeroed when unreported, because a runtime that does not account for
-       * tokens has not told us the turn was free — it has told us nothing. A Lattice-executed turn
-       * runs on someone else's compute and returns no counts at all, so the two cases have to stay
-       * distinguishable all the way to the operator console.
+       * tokens has not told us the turn was free — it has told us nothing. Preserve this distinction
+       * for both hosted providers and a person's own Lattice runtime.
        */
       readonly usage?: TurnUsage | undefined;
+      /** Own-hardware provenance, including when token counts are absent. */
+      readonly usageBackend?: 'lattice' | undefined;
     };
 
 /**

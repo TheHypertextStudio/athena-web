@@ -6,12 +6,11 @@ The operator can see, for every user and workspace, how much of each metered res
 and what it costs, so unit economics against the $8 Docket Pro price are known before growth
 rather than discovered after it.
 
-Today the admin app shows blob bytes and total database size
+The resource view shows blob bytes and total database size
 ([admin-resource-routes.ts](../../../apps/api/src/routes/admin-resource-routes.ts)) and Athena token
 totals grouped by model, surface and kind
-([admin-athena-usage-routes.ts](../../../apps/api/src/routes/admin-athena-usage-routes.ts)). Nothing
-is grouped by user or workspace, nothing carries a dollar figure, and database growth is visible
-only as one total.
+([admin-athena-usage-routes.ts](../../../apps/api/src/routes/admin-athena-usage-routes.ts)). The Costs view adds daily resource quantities attributed by person and workspace, effective-dated
+prices, and separate caused-by and payer lenses. Missing measurements and prices remain visible.
 
 ## Principles
 
@@ -20,8 +19,8 @@ only as one total.
 2. **Quantities are facts, prices are opinions.** The ledger stores quantities. Dollar cost is
    computed at read time from an effective-dated rate card, so a price change reprices history
    correctly and a missing price never reads as zero.
-3. **Unseen is not free.** A quantity we cannot observe (a generation that ran on a person's own
-   Lattice runtime, a store whose size is not recorded) is counted as an unmeasured event and
+3. **Unseen is not free.** A quantity a provider does not report (including a Lattice generation
+   without usage, or a store whose size is not recorded) is counted as an unmeasured event and
    reported beside the total. This is the rule `agent_session_run` already follows.
 4. **Two lenses, one dataset.** Cost is shown by who caused it and by who pays. The toggle changes
    attribution at read time and never changes the stored data.
@@ -46,7 +45,9 @@ later change if the distinction starts to matter.
 
 ## Data model
 
-All tables live in `packages/db/src/schema/usage-cost.ts`.
+All tables live in `packages/db/src/schema/usage-cost.ts`. Migration
+`0181_usage_cost_ledger.sql` creates the ledger; migration 0180 was already allocated. Instant
+columns use `timestamptz`; the ledger day is a UTC date.
 
 ### `usage_rate`
 
@@ -66,8 +67,11 @@ Unique on `(resource, dimension, effective_from)`. The rate for a usage row is t
 its `(resource, dimension)` at or before the row's day, falling back to the same resource with an
 empty dimension. No match means the row is unpriced.
 
-Micro-dollars per million units gives integer arithmetic at every scale in use: a $0.075 per
-million token price is `75000`, and $0.35 per gigabyte-month spread over byte-days is `11667`.
+Micro-dollars per million units supports integer token prices: a $0.075 per
+million token price is `75000`, while $0.35 per decimal gigabyte-month over a 30-day month is about `11.666667`.
+The current integer rate field cannot represent this exactly; fractional storage rates need a
+precision change before they can be entered without distortion. `11667` would overstate that
+storage price by 1,000 times.
 
 ### `usage_daily`
 
@@ -115,9 +119,11 @@ Later phases add `api_requests`, `api_wall_ms`, `cron_runs`, `emails_sent`, `ema
 
 ### AI tokens
 
-Derived from `agent_session_run`, not hooked into the write path, so the run code does not change.
-A rollup pass selects runs whose completion (falling back to start, then queue time) falls in the
-window and groups them by day, causing person, workspace and model.
+Derived from persisted `agent_session_run` totals and `agent_delegation` terminal results. Interactive
+turns accumulate reported counts in the transaction that retains their transcript; durable results
+retain their receipt timestamp with the terminal payload. The nightly pass never calls a provider.
+A rollup pass selects started runs whose completion (falling back to start time) falls in the
+window and groups them by day, causing person, workspace and model. Queued runs are excluded.
 
 - Causing person is `agent_session.owner_user_id`. Workspace is `context_organization_id`, falling
   back to `organization_id` for registered agents. A registered-agent run has no person and groups
@@ -125,11 +131,47 @@ window and groups them by day, causing person, workspace and model.
 - A run with null token columns adds to `unmeasured_events` and no quantity.
 - The pass recomputes the previous three days on every run, because generations finish late.
 
-Model calls that happen outside a session run (template tailoring, daily-plan assessment,
-email-to-task synthesis, elicitation sampling) are not in this source. Phase 1 includes an audit of
-every caller of the provider turn adapters and records which of them write no usage. The audit
-result is added to this spec as a table, and the uncovered callers become phase 1.5 work. Until
-then the Costs page states the uncovered callers by name.
+The caller audit below distinguishes canonical session execution from direct provider calls.
+Template tailoring uses session runs and must not be counted twice. Direct model calls outside
+those records require separate capture in phase 1.5; host elicitation is not itself a Docket model
+call.
+
+### Provider caller audit
+
+The audit follows production call sites and container bindings, including direct Messages API
+adapters that bypass `collectProviderTurn` entirely. “Unmetered” describes the current source;
+this table does not establish deployed acceptance of any follow-up change.
+
+| Caller                                    | Execution path                                                                  | Current usage persistence                             | Coverage and remaining work                                                                    |
+| ----------------------------------------- | ------------------------------------------------------------------------------- | ----------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| Interactive Athena                        | `agent/loop.ts` → `collectProviderTurn`                                         | `addRunUsage` in the generation transaction           | Reported Lattice counts pass through both adapter boundaries; correction calls are accumulated |
+| Template tailoring                        | `agent/template-tailoring-delivery.ts` → generation admission and session loop  | Same session-run meter                                | No independent meter; avoid double counting                                                    |
+| Daily-plan assessment                     | `services/daily-plan-assessment.ts` → `streamTurn`                              | None; returns on the tool event before terminal usage | Drain terminal event and persist usage against the caller                                      |
+| Destination review                        | `mcp/work-destination-review-tool.ts` → `streamTurn`                            | None                                                  | Meter terminal usage with the caller and task workspace                                        |
+| Phone replies                             | `routes/voice-responder.ts` → `streamTurn`                                      | None                                                  | Persist each reply's terminal usage with voice-session ownership                               |
+| Email-to-task synthesis                   | `lib/email-to-task/synthesize.ts` → `RealTaskSynthesizer`                       | Messages response usage discarded by domain adapter   | Return usage from adapter and persist per source owner                                         |
+| Task-description expansion                | Container `taskExpander` → `RealTaskSynthesizer`                                | Messages response usage discarded                     | Capture usage with expansion requester/workspace                                               |
+| Daily digest and highlight reconciliation | `routes/daily-digest.ts`, `services/highlights/reconcile.ts` → `RealSummarizer` | Messages response usage discarded                     | Capture usage for the day owner, including malformed output                                    |
+| MCP elicitation                           | `mcp/elicit.ts` → host elicitation                                              | No Docket provider call                               | No provider meter; no sampling call found in API/domain production sources                     |
+| Durable Lattice delegation                | `agent/lattice-delegations.ts` → sealed relay result                            | Retained terminal usage rolled up by receipt day      | Missing counts remain unmeasured; placeholder compute counters do not establish measured zero  |
+
+The durable command requests `tool_use_session` through `buildAgentTaskCommand`. Its collected
+payload must be checked against that contract before reading text-generation usage or treating a
+compute counter as verified. The inspected daemon implementation's agent-task result builders return
+`providerId`, `model`, `outputText` and a `computeCounter`, but no `usage`; the counter's output-token
+value is explicitly zero. That value cannot establish measured zero model usage. This is source
+inspection, not confirmation of the owner's installed daemon version. Capture counts when supplied
+and retain an unmeasured event otherwise. Own-hardware volume needs a distinct ledger dimension
+from hosted model usage.
+
+Interactive runs retain `usage_backend` separately from the provider model. Ledger dimensions use
+`lattice:<model>` for own hardware, including `lattice:` for an unknown model. A general hosted-token
+rate never falls back onto this namespace; pricing it requires an explicit own-hardware rate.
+Durable results use their first decrypted `result_received_at`, so later approval or acknowledgement
+does not move the usage day. Legacy results without a receipt timestamp use submission time as a
+historical approximation. Both sources merge before atomic window replacement. A correction turn
+with an unreported constituent call remains unmeasured because its complete token total is unknown.
+Migration 0187 adds the backend and receipt fields without rewriting existing token measurements.
 
 ### Postgres storage
 
@@ -165,14 +207,15 @@ Rate writes require the same and write an `operator_audit_event`.
 - `GET /admin/costs?month=YYYY-MM&lens=caused|pays` returns people ranked by cost, each with total
   cost, unpriced quantity indicator, top resource, and unmeasured event count; plus a totals line
   that includes unattributed cost.
-- `GET /admin/costs/users/:userId?month=...&lens=...` returns that person's cost by resource and by
+- `GET /admin/costs/holders/:key?month=...&lens=...` returns that person's cost by resource and by
   workspace, the month's daily series and a cumulative lifetime total.
-- `GET /admin/costs/rates` and `PUT /admin/costs/rates` read and add rate rows. Rates are
+- `GET /admin/costs/rates` and `POST /admin/costs/rates` read and add rate rows. Rates are
   append-only; correcting a price adds a row with a new effective date.
 
 The page is `/costs` in the admin app and follows the app's list-row pattern: one aligned row per
-person, a lens toggle and a month control in the header, the biggest resource named in each row. A
-person's detail is a second level with resource rows. Rows with unpriced quantities show the
+person, a lens toggle and a month list in the header, the biggest resource named in each row. A
+person's detail is a second level with resource rows. Price effective dates use the shared
+DatePicker, recorded in `docs/design/audits/inventories/date-pickers.md`. Rows with unpriced quantities show the
 quantity and the word "unpriced" in the cost column, never `$0`. There are no explanatory
 paragraphs; empty states are a label and the action that fills them (add a rate).
 
@@ -195,7 +238,9 @@ Tests live in `tests/` beside the code and assert behaviour and structure, not c
 
 - Rate lookup: effective dating, dimension fallback, no match yields unpriced.
 - Token rollup: attribution of owned and registered-agent runs, null tokens counted as unmeasured,
-  idempotent recompute, late completion inside the window.
+  idempotent recompute, late completion inside the window, and aggregation across result sources.
+- Lattice: reported text/tool counts, correction-call totals, missing usage, retained receipt day,
+  placeholder compute counters, and separation from hosted-model prices.
 - Storage snapshot: index scaling, sampling scale-up, remainder line, per-owner grouping.
 - Payer resolution: single owner, several owners split equally, personal workspace, user-owned run.
 - Routes: staff tier gating, month and lens parameters, rate append-only behaviour and audit write.

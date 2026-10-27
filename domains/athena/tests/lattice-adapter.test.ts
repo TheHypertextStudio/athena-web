@@ -397,6 +397,8 @@ describe('LatticeAgentTurnRuntime', () => {
       {
         type: 'turn_end',
         stopReason: 'end_turn',
+        usageBackend: 'lattice',
+        usage: undefined,
         message: { role: 'assistant', content: [{ type: 'text', text: 'The answer.' }] },
       },
     ]);

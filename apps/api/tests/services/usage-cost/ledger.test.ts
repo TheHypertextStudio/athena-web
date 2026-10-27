@@ -86,6 +86,31 @@ async function ledger(
 }
 
 describe('AI token rollup', () => {
+  it('separates own-hardware volume from the same hosted model and retains missing counts', async () => {
+    const userId = await seedUserWithHub(db, schema, 'Local owner');
+    const sessionId = await seedSession(userId);
+    await seedRun(sessionId, userId, { model: 'same-model', inputTokens: 100 });
+    await seedRun(sessionId, userId, {
+      model: 'same-model',
+      inputTokens: 200,
+      usageBackend: 'lattice',
+    });
+    await seedRun(sessionId, userId, { model: null, inputTokens: null, usageBackend: 'lattice' });
+    await rollupAiTokens(WINDOW);
+    const rows = await ledger('ai_input_tokens');
+    expect(rows).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ dimension: 'same-model', quantity: 100, unmeasuredEvents: 0 }),
+        expect.objectContaining({
+          dimension: 'lattice:same-model',
+          quantity: 200,
+          unmeasuredEvents: 0,
+        }),
+        expect.objectContaining({ dimension: 'lattice:', quantity: 0, unmeasuredEvents: 1 }),
+      ]),
+    );
+  });
+
   it('records each measured run against its owner, day and model', async () => {
     const userId = await seedUserWithHub(db, schema, 'Cara');
     const sessionId = await seedSession(userId);

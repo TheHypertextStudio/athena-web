@@ -99,6 +99,18 @@ export function latticeChatPort(
         text: choice?.message.content ?? '',
         ...(choice?.finish_reason === undefined ? {} : { finishReason: choice.finish_reason }),
         model: completion.model,
+        ...(completion.usage?.prompt_tokens === undefined ||
+        completion.usage.completion_tokens === undefined
+          ? {}
+          : {
+              usage: {
+                inputTokens: completion.usage.prompt_tokens,
+                outputTokens: completion.usage.completion_tokens,
+                cacheReadTokens: 0,
+                cacheCreationTokens: 0,
+                model: completion.model,
+              },
+            }),
       };
     },
   };

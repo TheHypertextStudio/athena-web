@@ -35,6 +35,7 @@ const gateway = createServer((request, response) => {
           id: 'cmpl_local',
           object: 'chat.completion',
           model: 'local-scripted',
+          usage: { prompt_tokens: 120, completion_tokens: 12, total_tokens: 132 },
           choices: [
             {
               index: 0,
@@ -95,6 +96,13 @@ describe('a delayed successful Lattice turn', () => {
     ).runChat({ messages: [{ role: 'user', content: 'Are you back?' }], maxTokens: 100 });
 
     expect(reply.text).toBe('Studio answered.');
+    expect(reply.usage).toEqual({
+      inputTokens: 120,
+      outputTokens: 12,
+      cacheReadTokens: 0,
+      cacheCreationTokens: 0,
+      model: 'local-scripted',
+    });
     const [connection] = await db
       .select()
       .from(schema.latticeConnection)

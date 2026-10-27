@@ -293,11 +293,9 @@ export const agentSessionRun = pgTable(
      * What this generation consumed at the model provider, accumulated across its turns.
      *
      * @remarks
-     * Null means unmeasured, not free. A generation executed on a person's own Lattice runtime
-     * reports no counts at all — the compute is theirs and the provider is not ours to ask — so an
-     * operator reading a total has to be able to tell "nothing was spent" from "we cannot see what
-     * was spent". Zero would erase that distinction on the one screen that exists to make spend
-     * legible.
+     * Null means unmeasured, not free. Lattice runtimes can report token counts, just as hosted
+     * providers do. Preserve reported counts regardless of who owns the hardware; leave these
+     * columns null when no turn reports usage so missing measurements never read as zero.
      *
      * Cache reads and cache writes are separate because they are priced differently.
      */
@@ -307,6 +305,8 @@ export const agentSessionRun = pgTable(
     cacheCreationTokens: integer('cache_creation_tokens'),
     /** The model that served this generation, as the provider named it. Null when unmeasured. */
     model: text('model'),
+    /** Own-hardware provenance, preserved even when token counts are unavailable. */
+    usageBackend: text('usage_backend').$type<'lattice'>(),
     queuedAt: timestamp('queued_at').notNull().defaultNow(),
     startedAt: timestamp('started_at'),
     completedAt: timestamp('completed_at'),
@@ -945,6 +945,8 @@ export const agentDelegation = pgTable(
     relayQueuePosition: integer('relay_queue_position'),
     failureCode: text('failure_code'),
     terminalOutcome: jsonb('terminal_outcome').$type<AgentDelegationTerminalOutcome>(),
+    /** First decrypted result receipt; human review and acknowledgements never move its usage day. */
+    resultReceivedAt: timestamp('result_received_at', { withTimezone: true }),
     returnedActivityId: text('returned_activity_id'),
     resultAcknowledgedAt: timestamp('result_acknowledged_at'),
     submittedAt: timestamp('submitted_at'),

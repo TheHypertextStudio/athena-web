@@ -57,7 +57,8 @@ const RESOURCE_LIST = sql.raw(USAGE_RESOURCES.map((key) => `'${key}'`).join(', '
  * @remarks
  * Append-only: correcting a price adds a row with a later `effective_from`. The price is stored as
  * millionths of a US dollar per million units, which keeps every rate in use an integer — a $0.075
- * per million token price is `75000` and $0.35 per gigabyte-month spread over byte-days is `11667`.
+ * per million token price is `75000`. Byte-day storage rates may require fractional values;
+ * the current integer rate field cannot represent those prices exactly.
  * An empty `dimension` is the general rate for the resource; a named dimension (a model, a table)
  * overrides it.
  */
@@ -116,9 +117,9 @@ export const usageMeterRun = pgTable(
  * `organization_id` is the workspace it happened in. Both are nullable and set null when the row they
  * point at is deleted, so purging an account leaves totals that identify no one.
  *
- * `unmeasured_events` counts events in the day that could not be quantified. A generation that ran on
- * a person's own runtime reports no tokens, and zero would erase the difference between "nothing was
- * spent" and "we cannot see what was spent".
+ * `unmeasured_events` counts events in the day that could not be quantified. A generation whose
+ * provider reported no counts must preserve the difference between "nothing was spent" and
+ * "we cannot see what was spent".
  *
  * Rows are written by upsert on the unique key, so recomputing a day replaces it. NULLS NOT DISTINCT
  * makes a missing person or workspace part of the key rather than a way around it.

@@ -564,6 +564,7 @@ async function driveSessionWithAdmission(
         message: assistantMessage,
         stopReason,
         usage: turnUsage,
+        usageBackend,
       } = await collectProviderTurn(
         turnRuntime,
         { system, messages, tools: openedToolbox.tools, subjectTask: context.subjectTask },
@@ -612,7 +613,7 @@ async function driveSessionWithAdmission(
       await persistGenerationEffect(lease, deps, 'assistant-turn', async (tx) => {
         // Folded into the transaction that already persists the turn, so a crash cannot leave the
         // transcript recorded and its cost unrecorded, and so accounting costs no extra round trip.
-        await addRunUsage(tx, lease.runId, turnUsage);
+        await addRunUsage(tx, lease.runId, turnUsage, usageBackend);
         await saveTranscript(
           tx,
           sessionId,

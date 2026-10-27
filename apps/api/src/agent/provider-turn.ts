@@ -7,10 +7,16 @@ export async function collectProviderTurn(
   runtime: AgentTurnRuntime,
   request: Parameters<AgentTurnRuntime['streamTurn']>[0],
   onActivity: (type: 'thought' | 'response', text: string) => Promise<void>,
-): Promise<{ message: TurnMessage; stopReason: string; usage: TurnUsage | undefined }> {
+): Promise<{
+  message: TurnMessage;
+  stopReason: string;
+  usage: TurnUsage | undefined;
+  usageBackend: 'lattice' | undefined;
+}> {
   let message: TurnMessage | undefined;
   let stopReason = 'end_turn';
   let usage: TurnUsage | undefined;
+  let usageBackend: 'lattice' | undefined;
   for await (const event of runtime.streamTurn(request)) {
     if (event.type === 'thinking') await onActivity('thought', event.text);
     else if (event.type === 'text') await onActivity('response', event.text);
@@ -18,8 +24,9 @@ export async function collectProviderTurn(
       message = event.message;
       stopReason = event.stopReason;
       usage = event.usage;
+      usageBackend = event.usageBackend;
     }
   }
   if (!message) throw new Error('turn ended without a terminal message');
-  return { message, stopReason, usage };
+  return { message, stopReason, usage, usageBackend };
 }

@@ -9,6 +9,8 @@
 import { agentSession, agentSessionRun, db, usageDaily, type UsageResource } from '@docket/db';
 import { and, gte, inArray, isNotNull, lt, sql } from 'drizzle-orm';
 
+import { loadLatticeTokenRows, mergeTokenRows } from './lattice-tokens';
+
 /** The ledger resources this meter owns. */
 const AI_RESOURCES: readonly UsageResource[] = [
   'ai_input_tokens',
@@ -28,6 +30,8 @@ export interface UsageWindow {
 /** A run's day: when it finished, else when it started. */
 const RUN_AT = sql`coalesce(${agentSessionRun.completedAt}, ${agentSessionRun.startedAt})`;
 
+const RUN_DIMENSION = sql<string>`case when ${agentSessionRun.usageBackend} = 'lattice' or ${agentSession.executionSurface} = 'lattice' then 'lattice:' || coalesce(${agentSessionRun.model}, '') else coalesce(${agentSessionRun.model}, '') end`;
+
 /**
  * Recompute the AI token rows for a window of days.
  *
@@ -35,7 +39,7 @@ const RUN_AT = sql`coalesce(${agentSessionRun.completedAt}, ${agentSessionRun.st
  * Attribution follows the session: the owning person for Athena, and the workspace the session was
  * operating in (falling back to the registered agent's workspace). A registered-agent run has no
  * person. A run with no token counts adds to `unmeasured_events` on the input-token row and adds no
- * quantity, because its provider is not ours to ask.
+ * quantity, because no provider measurement is available.
  *
  * @param window - The days to replace.
  * @returns the number of ledger rows written.
@@ -48,7 +52,7 @@ export async function rollupAiTokens(window: UsageWindow): Promise<number> {
       organizationId: sql<
         string | null
       >`coalesce(${agentSession.contextOrganizationId}, ${agentSession.organizationId})`,
-      model: sql<string>`coalesce(${agentSessionRun.model}, '')`,
+      model: RUN_DIMENSION,
       // `bigint` sums arrive as strings from `postgres-js` and numbers from PGlite.
       input: sql<string | number>`coalesce(sum(${agentSessionRun.inputTokens}), 0)::bigint`,
       output: sql<string | number>`coalesce(sum(${agentSessionRun.outputTokens}), 0)::bigint`,
@@ -71,7 +75,7 @@ export async function rollupAiTokens(window: UsageWindow): Promise<number> {
       sql`to_char(${RUN_AT}, 'YYYY-MM-DD')`,
       agentSession.ownerUserId,
       sql`coalesce(${agentSession.contextOrganizationId}, ${agentSession.organizationId})`,
-      sql`coalesce(${agentSessionRun.model}, '')`,
+      RUN_DIMENSION,
     );
 
   const rows: (typeof usageDaily.$inferInsert)[] = groups.flatMap((group) => {
@@ -97,6 +101,7 @@ export async function rollupAiTokens(window: UsageWindow): Promise<number> {
       }));
   });
 
+  const combinedRows = mergeTokenRows([...rows, ...(await loadLatticeTokenRows(window))]);
   await db.transaction(async (tx) => {
     await tx
       .delete(usageDaily)
@@ -107,7 +112,7 @@ export async function rollupAiTokens(window: UsageWindow): Promise<number> {
           lt(usageDaily.day, window.to),
         ),
       );
-    if (rows.length > 0) await tx.insert(usageDaily).values(rows);
+    if (combinedRows.length > 0) await tx.insert(usageDaily).values(combinedRows);
   });
-  return rows.length;
+  return combinedRows.length;
 }

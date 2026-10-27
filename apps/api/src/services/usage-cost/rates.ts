@@ -58,6 +58,7 @@ export function resolveRate(
       undefined,
     );
   const exact = latest(inEffect.filter((rate) => rate.dimension === dimension && dimension !== ''));
+  if (dimension.startsWith('lattice:') && resource.startsWith('ai_')) return exact;
   return exact ?? latest(inEffect.filter((rate) => rate.dimension === ''));
 }
 

@@ -6,10 +6,11 @@
  * @remarks
  * The one path from a rejected write to the screen. It reads no `.message`: the copy and the
  * action come from `failurePresentation`, which branches on the failure's stable code and status
- * only, so a 403 offers the destination that can resolve it and a 500 offers retry. Notices are
- * keyed by that code, so a poll that keeps failing shows one card rather than a column.
+ * only, so a 403 offers the destination that can resolve it and a 500 offers retry. Notices
+ * without a retry action are keyed by that code, so passive repeated failures do not stack.
+ * Retry actions retain their own operation and remain reachable until acted on.
  */
-import { notifyFailure } from '@docket/ui/components';
+import { dismissNotice, notifyFailure } from '@docket/ui/components';
 
 import { failureAction, failurePresentation } from '@/lib/failure-presentation';
 import { readProblemError } from '@/lib/problem';
@@ -36,18 +37,28 @@ export function presentFailure(
 ): string {
   const failure = failurePresentation(error, fallbackTitle);
   const destination = failureAction(failure);
-  const action =
-    failure.canRetry && options.retry
-      ? { label: 'Try again', onSelect: options.retry }
-      : destination
-        ? { label: destination.label, href: destination.href }
-        : undefined;
-  return notifyFailure({
+  const retry = failure.canRetry ? options.retry : undefined;
+  const action = retry
+    ? {
+        label: 'Try again',
+        onSelect: () => {
+          dismissNotice(id);
+          retry();
+        },
+      }
+    : destination
+      ? { label: destination.label, href: destination.href }
+      : undefined;
+  const id = notifyFailure({
     title: failure.title,
     detail: failure.detail,
     action,
-    dedupeKey: `failure:${failure.code ?? failure.status ?? 'unknown'}`,
+    dedupeKey: retry ? undefined : `failure:${failure.code ?? failure.status ?? 'unknown'}`,
+    // A retry may hold the only remaining File/reference to an interrupted transfer.
+    // Keep it reachable until the person retries or dismisses the notice.
+    durationMs: retry ? Infinity : undefined,
   });
+  return id;
 }
 
 /**

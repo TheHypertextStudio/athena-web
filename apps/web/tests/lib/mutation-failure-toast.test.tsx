@@ -15,6 +15,7 @@ import { makeQueryWrapper, problemResponse } from '../support/query';
 afterEach(() => {
   dismissAllNotices();
   cleanup();
+  vi.useRealTimers();
 });
 
 /** A query wrapper that also mounts the notice stack. */
@@ -77,6 +78,53 @@ describe('useApiMutation failure presentation', () => {
       expect(mutationFn).toHaveBeenCalledTimes(2);
     });
     expect(mutationFn).toHaveBeenLastCalledWith('title');
+  });
+
+  it('retains an interrupted upload retry until acted on, with its original file and identity', async () => {
+    vi.useFakeTimers();
+    const file = new File(['123456789'], 'report.txt');
+    const variables = { file, requestId: 'same-reservation' };
+    const mutationFn = vi.fn(async (_input: typeof variables) => failingWrite());
+    const { result } = renderHook(() => useApiMutation({ mutationFn }), {
+      wrapper: wrapperWithToaster(),
+    });
+    await act(async () => {
+      await result.current.mutateAsync(variables).catch(() => undefined);
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(60_000);
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1_000);
+    });
+    expect(mutationFn).toHaveBeenCalledTimes(2);
+    expect(mutationFn.mock.calls[1]?.[0]).toBe(variables);
+  });
+
+  it('keeps distinct failed writes recoverable when they have the same failure code', async () => {
+    const mutationFn = vi.fn(async (_input: string) => failingWrite());
+    const { result } = renderHook(() => useApiMutation<never, string>({ mutationFn }), {
+      wrapper: wrapperWithToaster(),
+    });
+    await act(async () => {
+      await result.current.mutateAsync('first').catch(() => undefined);
+      await result.current.mutateAsync('second').catch(() => undefined);
+    });
+    await waitFor(() => {
+      expect(screen.getAllByRole('button', { name: 'Try again' })).toHaveLength(2);
+    });
+    const retries = screen.getAllByRole('button', { name: 'Try again' });
+    for (const button of retries) fireEvent.click(button);
+    await waitFor(() => {
+      expect(mutationFn).toHaveBeenCalledTimes(4);
+    });
+    expect(
+      mutationFn.mock.calls
+        .slice(2)
+        .map(([input]) => input)
+        .sort(),
+    ).toEqual(['first', 'second']);
   });
 
   it('stays quiet when the caller owns presentation', async () => {

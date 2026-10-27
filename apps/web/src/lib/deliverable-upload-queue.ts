@@ -2,6 +2,9 @@ import type { Dispatch, SetStateAction } from 'react';
 import type { DeliverableOut } from '@docket/work/attachment-contract';
 import { surfaceHeaders } from './provenance/surface';
 
+/** Typed local abort signal, distinct from provider or exception text. */
+class UploadCancelledError extends Error {}
+
 /** One browser-local upload that can be retried or cancelled before it becomes a draft. */
 export interface PendingDeliverableUpload {
   readonly key: string;
@@ -71,7 +74,7 @@ async function uploadOne(queue: UploadQueueContext, item: PendingDeliverableUplo
       };
       xhr.onabort = () => {
         queue.xhrs.delete(item.key);
-        reject(new Error('upload_cancelled'));
+        reject(new UploadCancelledError());
       };
       const form = new FormData();
       form.set('file', item.file);
@@ -82,13 +85,12 @@ async function uploadOne(queue: UploadQueueContext, item: PendingDeliverableUplo
     queue.setPending((current) => current.filter((candidate) => candidate.key !== item.key));
     queue.states.delete(item.key);
   } catch (caught) {
-    const state =
-      caught instanceof Error && caught.message === 'upload_cancelled' ? 'cancelled' : 'failed';
+    const state = caught instanceof UploadCancelledError ? 'cancelled' : 'failed';
     queue.states.set(item.key, state);
     updatePending(queue, item.key, {
       state,
     });
-    if (!(caught instanceof Error && caught.message === 'upload_cancelled'))
+    if (state !== 'cancelled')
       queue.setError('One or more files could not upload. Retry that file or remove it.');
   }
 }

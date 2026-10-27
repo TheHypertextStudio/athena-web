@@ -129,32 +129,38 @@ describe('Program mutation invalidation', () => {
     });
   });
 
-  it('refreshes Program projections after posting an update', async () => {
-    const { client, wrapper } = makeQueryWrapper();
-    const { result } = renderHook(
-      () => useProgramMutations(ORGANIZATION_ID, PROGRAM_ID, 'Program', AGGREGATE_KEY),
-      { wrapper },
-    );
+  it.each([undefined, 'b3d286d5-bef9-4a1d-a7e9-73d0e351b83e'])(
+    'refreshes Program projections with optional retry key %s',
+    async (requestId) => {
+      const { client, wrapper } = makeQueryWrapper();
+      const { result } = renderHook(
+        () => useProgramMutations(ORGANIZATION_ID, PROGRAM_ID, 'Program', AGGREGATE_KEY),
+        { wrapper },
+      );
 
-    await act(async () => {
-      await result.current.postUpdate('At risk', 'at_risk');
-    });
+      await act(async () => {
+        await result.current.postUpdate('At risk', 'at_risk', undefined, requestId);
+      });
 
-    expect(postUpdate).toHaveBeenCalledWith({
-      param: { orgId: ORGANIZATION_ID },
-      json: {
-        subjectType: 'program',
-        subjectId: PROGRAM_ID,
-        body: 'At risk',
-        health: 'at_risk',
-      },
-    });
-    expect(invalidateWorkTargetQueries).toHaveBeenCalledOnce();
-    expect(invalidateWorkTargetQueries).toHaveBeenCalledWith(client, {
-      target: 'program',
-      ownerOrganizationId: ORGANIZATION_ID,
-    });
-  });
+      expect(postUpdate).toHaveBeenCalledWith(
+        {
+          param: { orgId: ORGANIZATION_ID },
+          json: {
+            subjectType: 'program',
+            subjectId: PROGRAM_ID,
+            body: 'At risk',
+            health: 'at_risk',
+          },
+        },
+        requestId ? { headers: { 'Idempotency-Key': requestId } } : undefined,
+      );
+      expect(invalidateWorkTargetQueries).toHaveBeenCalledOnce();
+      expect(invalidateWorkTargetQueries).toHaveBeenCalledWith(client, {
+        target: 'program',
+        ownerOrganizationId: ORGANIZATION_ID,
+      });
+    },
+  );
 
   it('repairs Program projections after an indeterminate update failure', async () => {
     postUpdate.mockRejectedValueOnce(new Error('Connection closed after the write.'));

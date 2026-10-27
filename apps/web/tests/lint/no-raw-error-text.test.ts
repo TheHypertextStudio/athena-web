@@ -1,4 +1,4 @@
-import { type ESLint, Linter, type Linter as LinterTypes } from 'eslint';
+import { Linter, type Linter as LinterTypes } from 'eslint';
 import tseslint from 'typescript-eslint';
 import { describe, expect, it } from 'vitest';
 
@@ -13,7 +13,7 @@ const CONFIG: LinterTypes.Config[] = [
       parser: tseslint.parser,
       parserOptions: { ecmaFeatures: { jsx: true }, projectService: false },
     },
-    plugins: { 'docket-ui': uiOwnershipPlugin as ESLint.Plugin },
+    plugins: { 'docket-ui': uiOwnershipPlugin },
     rules: { [RULE]: 'error' },
   },
 ];

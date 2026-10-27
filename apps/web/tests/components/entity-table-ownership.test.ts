@@ -1,14 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
-import {
-  Linter,
-  type AST,
-  type ESLint,
-  type Linter as LinterTypes,
-  type Rule,
-  type Scope,
-} from 'eslint';
+import { Linter, type AST, type Linter as LinterTypes, type Rule, type Scope } from 'eslint';
 import tseslint from 'typescript-eslint';
 import { describe, expect, it } from 'vitest';
 
@@ -101,7 +94,7 @@ describe('EntityTable ownership', () => {
           parser: tseslint.parser,
           parserOptions: { ecmaFeatures: { jsx: true }, projectService: false },
         },
-        plugins: { 'docket-ui': uiOwnershipPlugin as ESLint.Plugin },
+        plugins: { 'docket-ui': uiOwnershipPlugin },
         rules: { [ownershipRule]: 'error' },
       },
     ];

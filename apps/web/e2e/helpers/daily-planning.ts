@@ -197,6 +197,7 @@ export async function editPlanningTouchWork(
   const saveBlock = page.getByRole('button', { name: 'Save block', exact: true });
   await assertPlanningTouchTarget(saveBlock);
   await saveBlock.tap();
+  await expect(page.getByRole('dialog', { name: 'Edit block' })).toBeHidden();
 }
 
 /** Confirm through the measured phone actions while leaving tracking idle. */

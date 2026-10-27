@@ -123,17 +123,11 @@ function AgendaSessionEditor({
         plan.setEditing(null);
       }}
       onSave={(session) => {
-        if (plan.preview) {
-          plan.setError('Apply or keep the current schedule before editing a block.');
-          return;
-        }
+        // Saving an already-open editor is explicit manual intent. editDraft invalidates any
+        // proposal that arrived meanwhile; requiring a decision behind this dialog traps the edit.
         plan.saveSession(session);
       }}
       onRemove={(id) => {
-        if (plan.preview) {
-          plan.setError('Apply or keep the current schedule before editing a block.');
-          return;
-        }
         plan.editDraft({
           ...plan.draft,
           sessions: plan.draft.sessions.filter((session) => session.id !== id),

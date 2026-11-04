@@ -333,3 +333,7 @@ parent work's access. See
 ### Reviewer demo access
 
 Pre-provisioned reviewers can sign in through `/sign-in?demo=<slug>` by opening a private magic link bound to their designated email and enter an existing workspace without registration, password entry or inbox access. Normal sign-in keeps its existing passkey/provider choices. See [local reviewer verification](docs/engineering/ui-verification.md#reviewer-demo-sign-in) for the guarded seed and end-to-end procedure. Operator provisioning requires an explicit local, staging or production target; reviewer requests, bulk writes, upload bytes, streams and server-side AI turns have shared persistent limits. Direct browser Realtime credentials are unavailable to reviewers because their generation bypasses server-side metering. Reset and management screens remain deferred.
+
+### Private Studio package access
+
+Run `./bootstrap packages setup` once per machine after authenticating GitHub CLI with package-read access. The shared installer verifies access and installs a user-level credential helper without saving a token. Fresh worktrees inherit it without shell token exports, and repeat setup leaves current files unchanged. Run `./bootstrap packages check @thehypertextstudio/web-config` to check effective pnpm access. Online `./bootstrap worktree prepare` preflights each private Studio package in the frozen lockfile. CI retains its explicit workflow token, registry configuration, and package Actions grants.

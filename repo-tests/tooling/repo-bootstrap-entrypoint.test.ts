@@ -86,7 +86,7 @@ describe('repository bootstrap entrypoint', () => {
     expect(launcher).toContain('scripts/bootstrap-production');
     expect(launcher).toContain('scripts/bootstrap-verify');
     expect(launcher).toContain('scripts/dev-stack.sh');
-    expect(launcher).toContain('status >/dev/null');
+    expect(launcher).toMatch(/status\s*>\s*\/dev\/null/);
     expect(manifest.scripts['bootstrap']).toBe('./bootstrap');
   });
 
@@ -140,6 +140,21 @@ describe('repository bootstrap entrypoint', () => {
       expect(result.status).toBe(0);
       expect(result.calls).toBe(
         `worktree-engine worktree ${operation} --offline --no-install --json\n`,
+      );
+      expect(result.hookEnvironment).toBe('');
+    },
+  );
+
+  it.each(['setup', 'check'])(
+    'delegates packages %s to the shared engine without running application hooks',
+    (operation) => {
+      const root = fixture();
+      const args = operation === 'check' ? ['@thehypertextstudio/web-config'] : [];
+      const result = run(root, ['packages', operation, ...args]);
+
+      expect(result.status).toBe(0);
+      expect(result.calls).toBe(
+        `worktree-engine packages ${operation}${args.length ? ` ${args[0]}` : ''}\n`,
       );
       expect(result.hookEnvironment).toBe('');
     },

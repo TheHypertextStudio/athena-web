@@ -1,7 +1,7 @@
 # Project Athena Work Log
 
 > **Purpose**: Comprehensive tracking of all work - past, present, and future.
-> **Last Updated**: 2026-10-26
+> **Last Updated**: 2026-11-03
 
 ---
 
@@ -13907,6 +13907,16 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
 ---
 
 ## Completed Tasks
+
+### [STUDIO-PACKAGES-AUTH] Make private package setup repeatable
+
+- **Completed**: 2026-11-03
+- **Summary**: The root bootstrap delegates package setup and checks to checksum-pinned Studio engine v0.1.3. Developers configure the user helper once per machine and reuse it across worktrees without shell token exports. Online preparation checks private dependency access before installation. CI retains its explicit workflow token and package grants.
+- **Approach**: Preserve the existing local and production hooks, add package-command dispatch, consume the shared release, and document machine setup alongside the existing repository workflow. The shared checker accepts helper execution only from trusted user configuration.
+- **Files changed**: `bootstrap`, `scripts/bootstrap-worktree-engine`, `repo-tests/tooling/repo-bootstrap-entrypoint.test.ts`, `README.md`, and `docs/WORKLOG.md`.
+- **Validation**: All 18 launcher and local-hook tests pass with two workers. The two package-command cases first failed against the old dispatch. The changed test passes ESLint and an isolated strict TypeScript check. The normal secret scan and all nine design-policy cases pass. The declared formatters, shell syntax, repeated render/format identity, and whitespace check pass. The published launcher reads web-config through the managed user helper.
+- **Scope limits**: The broad repository typecheck includes the uninstalled application graph. The separate provisioning suite requires the uninstalled billing/Stripe graph. Those attempts did not establish app-wide results for this shell change. Product assertions and dependency pins remain intact.
+- **Learnings**: A registry mapping does not attach GitHub CLI credentials to package requests. A shared user helper keeps that authentication available across checkouts, while an explicit package check separates credential failures from dependency-download failures.
 
 ### [PROJECT-UI-RELEASE] Prepare the refined project UI for deployment
 

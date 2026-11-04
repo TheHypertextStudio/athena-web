@@ -7,7 +7,7 @@ repo_root=$(CDPATH='' cd -- "$(dirname "$0")" && pwd)
 cd "$repo_root"
 
 case "${1:-}" in
-  worktree) exec "$repo_root/scripts/bootstrap-worktree-engine" "$@" ;;
+  worktree | packages) exec "$repo_root/scripts/bootstrap-worktree-engine" "$@" ;;
 esac
 
 command_name=converge
@@ -21,10 +21,12 @@ no_install=0
 json=0
 
 usage() {
-  cat <<'EOF'
+  cat << 'EOF'
 Usage:
   ./bootstrap [flags]
   ./bootstrap worktree prepare|check|plan [--json] [--offline] [--no-install]
+  ./bootstrap packages setup
+  ./bootstrap packages check [@thehypertextstudio/package]
   ./bootstrap check [flags]
   ./bootstrap plan [local|production] [flags]
   ./bootstrap production [flags]
@@ -53,15 +55,18 @@ for argument in "$@"; do
     --json) json=1 ;;
     --offline) offline=1 ;;
     --no-install) no_install=1 ;;
-    -h|--help) usage; exit 0 ;;
-    check|plan|verify)
+    -h | --help)
+      usage
+      exit 0
+      ;;
+    check | plan | verify)
       [ "$command_seen" -eq 0 ] || fail_usage "multiple commands were supplied"
       command_name=$argument
       command_seen=1
       ;;
     production)
       case "$command_name" in
-        plan|verify)
+        plan | verify)
           [ "$target_seen" -eq 0 ] || fail_usage "multiple targets were supplied"
           target=production
           target_seen=1
@@ -77,7 +82,7 @@ for argument in "$@"; do
       ;;
     local)
       case "$command_name" in
-        plan|verify)
+        plan | verify)
           [ "$target_seen" -eq 0 ] || fail_usage "multiple targets were supplied"
           target=$argument
           target_seen=1
@@ -117,28 +122,28 @@ require_hook() {
 
 check_machine() {
   status=0
-  os=$(uname -s 2>/dev/null || echo unknown)
+  os=$(uname -s 2> /dev/null || echo unknown)
   case "$os" in
-    Darwin|Linux) echo "PASS platform.$os" ;;
+    Darwin | Linux) echo "PASS platform.$os" ;;
     *)
       echo "FAIL platform: macOS or Linux is required; found $os" >&2
       status=1
       ;;
   esac
-  if command -v git >/dev/null 2>&1; then
+  if command -v git > /dev/null 2>&1; then
     echo 'PASS tool.git'
   else
     echo 'FAIL tool.git: install Git with Apple Command Line Tools or your Linux package manager' >&2
     status=1
   fi
   if [ -f package.json ]; then
-    if command -v node >/dev/null 2>&1; then
+    if command -v node > /dev/null 2>&1; then
       echo 'PASS tool.node'
     else
       echo 'FAIL tool.node: install the Node.js version declared by this repository and rerun' >&2
       status=1
     fi
-    if command -v pnpm >/dev/null 2>&1 || command -v corepack >/dev/null 2>&1; then
+    if command -v pnpm > /dev/null 2>&1 || command -v corepack > /dev/null 2>&1; then
       echo 'PASS tool.pnpm'
     else
       echo 'FAIL tool.pnpm: enable Corepack for the repository-pinned pnpm version and rerun' >&2
@@ -182,7 +187,10 @@ case "$command_name" in
       fi
       printf 'Continue with production bootstrap? Type yes: '
       IFS= read -r response
-      [ "$response" = yes ] || { echo 'bootstrap: production bootstrap cancelled' >&2; exit 4; }
+      [ "$response" = yes ] || {
+        echo 'bootstrap: production bootstrap cancelled' >&2
+        exit 4
+      }
       export BOOTSTRAP_APPROVED=1
     fi
     "$repo_root/scripts/bootstrap-production"
@@ -194,7 +202,7 @@ case "$command_name" in
     "$repo_root/scripts/bootstrap-local"
     "$repo_root/scripts/bootstrap-verify" local
     if [ -x "$repo_root/scripts/dev-stack.sh" ]; then
-      if "$repo_root/scripts/dev-stack.sh" status >/dev/null 2>&1; then
+      if "$repo_root/scripts/dev-stack.sh" status > /dev/null 2>&1; then
         emit 'Retaining the already healthy local development stack.'
       else
         emit 'Starting the verified local development stack.'

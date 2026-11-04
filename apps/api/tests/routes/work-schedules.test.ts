@@ -102,7 +102,7 @@ describe('canonical Program schedule routes', () => {
       body: JSON.stringify({
         document: f.command.document,
         trigger: f.command.trigger,
-        effectiveFrom: '2026-11-01',
+        effectiveFrom: '2099-11-01',
         expectedRevisionId: schedule.revision.id,
       }),
     });
@@ -284,7 +284,7 @@ describe('canonical Program schedule routes', () => {
     const body = {
       document: f.command.document,
       trigger: { kind: 'manual' },
-      effectiveFrom: '2026-11-01',
+      effectiveFrom: '2099-11-01',
       expectedRevisionId: schedule.revision.id,
     };
     const first = await f.app.request(`/${schedule.id}/revisions`, {

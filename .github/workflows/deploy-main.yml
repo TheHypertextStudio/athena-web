@@ -16,10 +16,9 @@ concurrency:
 jobs:
   still-latest:
     name: Confirm validated commit is still main
-    if: >-
-      github.event.workflow_run.conclusion == 'success' &&
-      github.event.workflow_run.event == 'push' &&
-      github.event.workflow_run.head_branch == 'main'
+    # Production is published by the operator after the local CI gate.
+    # Keep workflow_run from allocating a hosted runner.
+    if: ${{ false }}
     runs-on: ubuntu-latest
     permissions:
       contents: read

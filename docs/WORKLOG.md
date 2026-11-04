@@ -7,6 +7,15 @@
 
 ## Active Tasks
 
+### [LOCAL-PRODUCTION-RELEASE] Publish the project UI and deliverable uploads
+
+- **Status**: IN_PROGRESS
+- **Description**: Ship the approved project header, mobile description and deliverable upload changes to production without hosted runner spending or another acceptance pass. Custom properties remain excluded.
+- **Plan**: Route the existing CI checks to the shared Linux pool with exact trusted-main guards, retaining every gate and image build. Inline the reusable image job so enrollment can inspect it. Use installed runtime capabilities rather than privileged guest setup, hold automatic hosted deployment, then publish the API and web release through the existing operator path.
+- **Runner footprint**: Fifteen one-job VM allocations per eligible main push or manual run; existing shard counts and commands are retained. No pull-request or hosted fallback lane is introduced.
+- **Prerequisites**: Admit this exact public repository/workflow through the supported enrollment transaction and provide the Docker/QEMU and browser runtime capabilities required by the existing jobs.
+- **Release correction**: Two schedule-route tests used November 1, 2026 as a future revision boundary. Use the existing suite's 2099 convention so these cases keep exercising mounted-route and stale-revision behavior after that date. Production schedule validation stays unchanged.
+
 ### [MCP-GRAPH-INTEGRATION] Integrate and verify the hosted work graph
 
 - **Status**: IN_PROGRESS

@@ -2,10 +2,18 @@
 
 /** Typed reads and writes for the focused daily planning flow. */
 import type { DailyPlanSnapshot } from '@docket/planning/daily-plan-flow';
-import type { SearchOut } from '@/lib/contracts/search';
+import type { InferResponseType } from 'hono/client';
 
 import { api } from '@/lib/api';
-import { apiQueryOptions, queryKeys, unwrap, useApiMutation, useApiQuery } from '@/lib/query';
+import {
+  apiInfiniteQueryOptions,
+  apiQueryOptions,
+  queryKeys,
+  unwrap,
+  useApiMutation,
+  useApiQuery,
+  useInfiniteApiQuery,
+} from '@/lib/query';
 
 /** Resolve a date-less planning entry in the person's saved timezone. */
 export function useDailyPlanningPreferences() {
@@ -30,20 +38,40 @@ export function useDailyPlanningDay(date: string, enabled = true) {
   );
 }
 
-/** Browse viewable tasks across workspaces. */
-export function useAvailableDailyWork(query: string, enabled: boolean) {
-  return useApiQuery(
-    apiQueryOptions<SearchOut>(
-      queryKeys.search('hub', `daily-plan:${query}`, null),
-      () =>
-        api.v1.hub.search.$get({
-          query: {
-            ...(query.trim() ? { q: query.trim() } : {}),
-            kinds: 'task',
-            limit: '60',
-            surface: 'page',
+/** Responsibility filter for existing daily work. */
+export type DailyWorkScope = 'mine' | 'assigned' | 'created' | 'all';
+type DailyWorkPage = InferResponseType<(typeof api.v1)['daily-plan']['work']['$get'], 200>;
+
+/** Browse live unfinished tasks without a search-index or first-page ceiling. */
+export function useAvailableDailyWork(
+  date: string,
+  query: string,
+  filters: {
+    scope: DailyWorkScope;
+    orgId: string;
+    dueOnly: boolean;
+  },
+  enabled: boolean,
+): ReturnType<typeof useInfiniteApiQuery<DailyWorkPage>> {
+  return useInfiniteApiQuery(
+    apiInfiniteQueryOptions(
+      ['me', 'daily-planning-work', date, query.trim(), filters],
+      (cursor, signal) =>
+        api.v1['daily-plan'].work.$get(
+          {
+            query: {
+              date,
+              ...(query.trim() ? { q: query.trim() } : {}),
+              scope: filters.scope,
+              ...(filters.orgId ? { orgId: filters.orgId } : {}),
+              due: filters.dueOnly ? 'true' : 'false',
+              limit: '50',
+              ...(cursor ? { cursor } : {}),
+            },
           },
-        }),
+          { init: { signal } },
+        ),
+      (page) => page.nextCursor,
       'Could not load available tasks.',
       { enabled },
     ),

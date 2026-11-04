@@ -46,6 +46,8 @@ export const dayReadOut = dayOut.extend({
       startsAt: z.iso.datetime(),
       endsAt: z.iso.datetime(),
       kind: z.enum(['event', 'protected']),
+      allDay: z.boolean().optional(),
+      blocksTime: z.boolean().optional(),
     }),
   ),
   tasks: z.array(

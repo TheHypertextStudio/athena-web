@@ -281,7 +281,12 @@ export function useRailShowsConversation(): boolean {
 
 /** Read Athena controls from a contextual surface. */
 export function useAthenaPanel(): AthenaPanelValue {
-  const value = useContext(AthenaPanelContext);
+  const value = useOptionalAthenaPanel();
   if (value === null) throw new Error('useAthenaPanel must be used within AthenaPanelProvider.');
   return value;
+}
+
+/** Read assistant controls when a surface can also be hosted outside the application rail. */
+export function useOptionalAthenaPanel(): AthenaPanelValue | null {
+  return useContext(AthenaPanelContext);
 }

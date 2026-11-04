@@ -1,9 +1,10 @@
 'use client';
 
 import { instantAt } from '@docket/planning/zoned-time';
-import { ChevronDown } from '@docket/ui/icons';
+import { ChevronDown, Sparkles } from '@docket/ui/icons';
 import {
   Button,
+  IconButton,
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
@@ -65,6 +66,9 @@ function WorkdayBuffer({ plan }: { readonly plan: ReadyPlanningController }): JS
 /** Edit the scheduling bounds and buffer used by the proposal service. */
 export function WorkdayControls({ plan }: { readonly plan: ReadyPlanningController }): JSX.Element {
   const [open, setOpen] = useState(false);
+  const configuredStart = plan.draft.settings?.startAt ?? plan.planningStartAt;
+  const ended = Date.parse(plan.startAt) >= Date.parse(plan.draft.finishAt);
+  const invalid = Date.parse(configuredStart) >= Date.parse(plan.draft.finishAt);
   const changeTime = (value: string, field: 'start' | 'finish'): void => {
     if (!value) return;
     const [hours, minutes] = value.split(':').map(Number);
@@ -90,7 +94,9 @@ export function WorkdayControls({ plan }: { readonly plan: ReadyPlanningControll
         >
           <span className="text-on-surface-variant">Work hours</span>
           <span>
-            {clock(plan.startAt, plan.timezone)} – {clock(plan.draft.finishAt, plan.timezone)}
+            {invalid
+              ? 'Set hours'
+              : `${clock(configuredStart, plan.timezone)} – ${clock(plan.draft.finishAt, plan.timezone)}`}
           </span>
           <ChevronDown aria-hidden="true" className="group-data-[state=open]:rotate-180" />
         </Button>
@@ -105,7 +111,7 @@ export function WorkdayControls({ plan }: { readonly plan: ReadyPlanningControll
         <div className="flex flex-wrap items-end gap-3">
           <WorkdayTimeInput
             label="Start"
-            value={clockValue(plan.startAt, plan.timezone)}
+            value={clockValue(configuredStart, plan.timezone)}
             onChange={(value) => {
               changeTime(value, 'start');
             }}
@@ -120,6 +126,13 @@ export function WorkdayControls({ plan }: { readonly plan: ReadyPlanningControll
           <WorkdayBuffer plan={plan} />
         </div>
       </CollapsibleContent>
+      {invalid || ended ? (
+        <p role="status" className="text-body-small text-on-surface-variant">
+          {invalid
+            ? 'Start must be before Finish. Adjust work hours to schedule this day.'
+            : 'Work hours have ended. Change Finish to schedule more work.'}
+        </p>
+      ) : null}
     </Collapsible>
   );
 }
@@ -127,16 +140,15 @@ export function WorkdayControls({ plan }: { readonly plan: ReadyPlanningControll
 /** Rebuild flexible work without replacing the current agenda until it is accepted. */
 export function OrganizeDay({ plan }: { readonly plan: ReadyPlanningController }): JSX.Element {
   return (
-    <Button
-      size="sm"
-      variant="secondary"
+    <IconButton
+      label="Organize day"
       disabled={plan.proposalPending}
       onClick={() => {
         void plan.rebuild();
       }}
     >
-      Organize day
-    </Button>
+      <Sparkles />
+    </IconButton>
   );
 }
 

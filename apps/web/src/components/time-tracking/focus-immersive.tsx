@@ -2,7 +2,7 @@
 
 /** The chrome-free, task-dominant immersive Focus composition. */
 import { ChevronLeft, OpenInNew } from '@docket/ui/icons';
-import { Button, Skeleton, Text } from '@docket/ui/primitives';
+import { Button, Separator, Skeleton, Text } from '@docket/ui/primitives';
 import Link from '@/components/docket-link';
 import { LoadFailure } from '@/components/feedback';
 import { useAppRouter as useRouter } from '@/lib/interactions/navigation';
@@ -13,6 +13,7 @@ import FocusRouteFrame from './focus-route-frame';
 import FocusSession from './focus-session';
 import FocusTaskContext from './focus-task-context';
 import FocusToday from './focus-today';
+import FocusDayContext from './focus-day-context';
 import { returnFromFocus } from './focus-window';
 import { useFocusTask } from './use-focus-task';
 import { useFocusToday } from './use-focus-today';
@@ -25,6 +26,65 @@ const IMMERSIVE_SHORTCUT_LIMIT = 4;
 export interface FocusImmersiveProps {
   /** The authenticated person whose density preference scopes this page. */
   readonly userId?: string | null | undefined;
+}
+
+function focusShortcuts(
+  records: ReturnType<typeof useFocusToday>['records'],
+  activeRecordId: string | undefined,
+): FocusShortcut[] {
+  const shortcuts: FocusShortcut[] = [];
+  const seen = new Set<string>();
+  for (const item of records) {
+    if (!item.taskId || item.id === activeRecordId || seen.has(item.taskId)) continue;
+    seen.add(item.taskId);
+    shortcuts.push({
+      taskId: item.taskId,
+      title: item.title,
+      trackedMs: item.measures.humanEffortMs,
+    });
+    if (shortcuts.length === IMMERSIVE_SHORTCUT_LIMIT) break;
+  }
+
+  return shortcuts;
+}
+
+function ImmersiveSession({
+  timer,
+  controls,
+  notice,
+  onNotice,
+  nameFieldId,
+}: {
+  readonly timer: ReturnType<typeof useTimerState>;
+  readonly controls: ReturnType<typeof useTimerControls>;
+  readonly notice: string | null;
+  readonly onNotice: (notice: string | null) => void;
+  readonly nameFieldId: string;
+}): JSX.Element | null {
+  if (!timer.record) return null;
+  return (
+    <div className="relative min-w-0 md:col-start-2 md:row-start-1 md:pl-8">
+      <Separator orientation="vertical" className="absolute inset-y-0 left-0 hidden md:block" />
+      <FocusSession
+        running={timer.phase === 'running'}
+        title={timer.title}
+        unanchored={timer.unanchored}
+        organizationId={timer.record.organizationId}
+        taskId={timer.record.taskId}
+        elapsedMs={timer.elapsedMs}
+        fromPlan={timer.record.contexts.some((context) => context.role === 'planning_context')}
+        notice={notice}
+        onNotice={onNotice}
+        controls={controls}
+        nameFieldId={nameFieldId}
+        onRequestName={() => {
+          onNotice('Name this before finishing.');
+          document.querySelector<HTMLInputElement>(`#${CSS.escape(nameFieldId)} input`)?.focus();
+        }}
+        presentation="page"
+      />
+    </div>
+  );
 }
 
 /** Immersive Focus mode, sharing all work state and controls with the rail companion. */
@@ -40,18 +100,7 @@ export default function FocusImmersive({ userId = null }: FocusImmersiveProps): 
   const [notice, setNotice] = useState<string | null>(null);
   const nameFieldId = useId();
 
-  const shortcuts: FocusShortcut[] = [];
-  const seen = new Set<string>();
-  for (const item of today.records) {
-    if (!item.taskId || item.id === timer.record?.id || seen.has(item.taskId)) continue;
-    seen.add(item.taskId);
-    shortcuts.push({
-      taskId: item.taskId,
-      title: item.title,
-      trackedMs: item.measures.humanEffortMs,
-    });
-    if (shortcuts.length === IMMERSIVE_SHORTCUT_LIMIT) break;
-  }
+  const shortcuts = focusShortcuts(today.records, timer.record?.id);
 
   const start = (taskId?: string): void => {
     setNotice(null);
@@ -59,7 +108,6 @@ export default function FocusImmersive({ userId = null }: FocusImmersiveProps): 
     void controls.start(taskId ? { taskId } : {}).catch(() => undefined);
   };
 
-  // placeholder: the running timer, the task it is against, and that task's notes.
   return (
     <FocusRouteFrame
       userId={userId}
@@ -98,8 +146,18 @@ export default function FocusImmersive({ userId = null }: FocusImmersiveProps): 
         </Text>
       }
     >
-      <div className="mx-auto grid w-full max-w-[1440px] grid-cols-1 gap-6 px-4 py-5 sm:px-6 md:grid-cols-[minmax(0,1fr)_22rem] md:px-10 md:py-8 lg:gap-12 lg:px-16">
-        <section aria-label="Focused work" className="min-w-0 py-2 md:pr-4">
+      <div className="mx-auto grid w-full max-w-[1440px] grid-cols-1 gap-6 px-4 py-5 sm:px-6 md:grid-cols-[minmax(0,1fr)_22rem] md:grid-rows-[auto_1fr] md:px-10 md:py-8 lg:gap-12 lg:px-16">
+        <ImmersiveSession
+          timer={timer}
+          controls={controls}
+          notice={notice}
+          onNotice={setNotice}
+          nameFieldId={nameFieldId}
+        />
+        <section
+          aria-label="Focused work"
+          className="min-w-0 py-2 md:col-start-1 md:row-span-2 md:row-start-1 md:pr-4"
+        >
           {timer.loading ? (
             <div className="flex max-w-2xl flex-col gap-4">
               <Skeleton className="h-5 w-40" />
@@ -139,6 +197,7 @@ export default function FocusImmersive({ userId = null }: FocusImmersiveProps): 
                   workflowState={taskContext.workflowState}
                   workflowStates={taskContext.workflowStates}
                   expanded
+                  project={taskContext.project}
                 />
               ) : null}
             </div>
@@ -174,36 +233,17 @@ export default function FocusImmersive({ userId = null }: FocusImmersiveProps): 
           ) : null}
         </section>
 
-        <aside className="border-outline-variant/40 flex min-w-0 flex-col gap-5 border-t pt-6 md:border-t-0 md:border-l md:pt-0 md:pl-8">
-          {timer.record ? (
-            <FocusSession
-              running={timer.phase === 'running'}
-              title={timer.title}
-              unanchored={timer.unanchored}
-              organizationId={timer.record.organizationId}
-              taskId={timer.record.taskId}
-              elapsedMs={timer.elapsedMs}
-              fromPlan={timer.record.contexts.some(
-                (context) => context.role === 'planning_context',
-              )}
-              notice={notice}
-              onNotice={setNotice}
-              controls={controls}
-              nameFieldId={nameFieldId}
-              onRequestName={() => {
-                setNotice('Name this before finishing.');
-                document
-                  .querySelector<HTMLInputElement>(`#${CSS.escape(nameFieldId)} input`)
-                  ?.focus();
-              }}
-              presentation="page"
-            />
-          ) : null}
+        <aside
+          className={`relative flex min-w-0 flex-col gap-5 pt-6 md:col-start-2 md:pt-0 md:pl-8 ${timer.record ? 'md:row-start-2' : 'md:row-start-1'}`}
+        >
+          <Separator className="absolute inset-x-0 top-0 md:hidden" />
+          <Separator orientation="vertical" className="absolute inset-y-0 left-0 hidden md:block" />
           <FocusToday
             records={today.records}
             activeRecordId={timer.record?.id ?? null}
             presentation="page"
           />
+          <FocusDayContext taskId={timer.record?.taskId ?? null} />
           {today.error ? (
             <Text token="body-small" role="status" tone="muted">
               {today.error}

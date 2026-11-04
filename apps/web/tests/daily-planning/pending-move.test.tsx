@@ -1,5 +1,6 @@
+import { renderPlanning as render } from './render';
 import '@testing-library/jest-dom/vitest';
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ReadyPlanningController } from '../../src/components/daily-planning/daily-planning-controller';
 
@@ -28,6 +29,11 @@ import {
   PlanningActions,
 } from '../../src/components/daily-planning/daily-planning-plan';
 
+vi.mock('../../src/lib/interactions/navigation', () => ({
+  useAppRouter: () => ({ push: vi.fn() }),
+}));
+vi.mock('../../src/components/calendar/calendar-item-drawer', () => ({ default: () => null }));
+
 afterEach(cleanup);
 function controller(pending: boolean): ReadyPlanningController {
   return {
@@ -41,7 +47,7 @@ function controller(pending: boolean): ReadyPlanningController {
       date: '2026-10-07',
       finishAt: '2026-10-07T17:00:00.000Z',
       mainTaskId: null,
-      tasks: [],
+      tasks: [{ taskId: 'planned', organizationId: 'org', plannedMinutes: 30, sort: 0 }],
       sessions: [],
     },
     names: new Map(),
@@ -58,6 +64,17 @@ function controller(pending: boolean): ReadyPlanningController {
   } as unknown as ReadyPlanningController;
 }
 describe('confirmation during a pending move', () => {
+  it('requires an explicit empty-day choice before confirming a plan with no work', () => {
+    const plan = controller(false);
+    plan.draft.tasks = [];
+    render(<PlanningActions plan={plan} />);
+    expect(screen.getByText('No work is selected for this day.')).toBeVisible();
+    const confirm = screen.getByRole('button', { name: 'Confirm plan' });
+    expect(confirm).toBeDisabled();
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Keep this day without planned work' }));
+    expect(confirm).toBeEnabled();
+  });
+
   it('keeps confirmation available when the agenda panel is hidden', async () => {
     const plan = controller(false);
     vi.mocked(plan.confirm.mutateAsync).mockResolvedValue({

@@ -72,6 +72,15 @@ function PlanningLoading({ exit }: { readonly exit: ReactNode }): JSX.Element {
   );
 }
 
+function planningLoadFailed(controller: ReturnType<typeof useDailyPlanningController>): boolean {
+  return (
+    controller.preferencesError ||
+    controller.dayQ.isError ||
+    controller.previousQ.isError ||
+    (!controller.draft && Boolean(controller.error))
+  );
+}
+
 /** Enter a resumable day draft from Today, or adjust an accepted plan. */
 export function DailyPlanningSurface(): JSX.Element {
   const controller = useDailyPlanningController();
@@ -91,11 +100,7 @@ export function DailyPlanningSurface(): JSX.Element {
       </Link>
     </Button>
   );
-  if (
-    controller.dayQ.isError ||
-    controller.previousQ.isError ||
-    (!controller.draft && Boolean(controller.error))
-  ) {
+  if (planningLoadFailed(controller)) {
     return (
       <ImmersiveShell header={exit}>
         <div className="p-4 sm:p-6">
@@ -105,6 +110,7 @@ export function DailyPlanningSurface(): JSX.Element {
             action={{
               label: 'Retry',
               onSelect: () => {
+                controller.retryPreferences();
                 void controller.dayQ.refetch();
                 void controller.previousQ.refetch();
                 void controller.retryInitialProposal();

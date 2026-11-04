@@ -1,6 +1,6 @@
 # Docket
 
-Daily planning opens from Today into its own activity at `/plan/day`. Its centered workspace keeps the agenda and editable work together without the application sidebar. Panel controls show Work, Agenda, or both. Leaving saves the draft and returns to Today. The agenda keeps work hours and all-day details behind disclosures while retaining scheduling conflicts and proposed changes.
+Daily planning opens from Today into its own activity at `/plan/day`. Existing tasks assigned to or created by you are searchable beside selected work and the agenda, with workspace and due filters, bulk selection, and pagination. The browser reads current tasks directly, independently of the search index. Select time to schedule work, open calendar events for details, and move or resize draft blocks. Panel controls show Work, Agenda, or both. Leaving saves the draft and returns to Today.
 
 Content navigation uses scoped Material primary and secondary tabs, with horizontal scrolling when
 space is constrained. Mode choices use radio semantics, and the open-document strip remains link

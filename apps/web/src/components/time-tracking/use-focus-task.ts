@@ -4,7 +4,7 @@
  * Focused task data shared by the rail companion and immersive Focus mode.
  *
  * @remarks
- * Focus needs only the task itself and the owning team's workflow. Keeping this boundary smaller
+ * Focus reads the task, its project name, and the owning team's workflow. Keeping this boundary smaller
  * than the full task-detail hook avoids loading rosters, comments, sessions, and activity into a
  * surface whose job is to protect attention.
  */
@@ -21,8 +21,28 @@ export interface FocusTaskData {
   readonly task: TaskDetail | null;
   readonly workflowState: WorkflowState | null;
   readonly workflowStates: readonly WorkflowState[];
+  readonly project: { id: string; name: string } | null;
   readonly isPending: boolean;
   readonly error: string | null;
+}
+
+function useFocusProject(
+  organizationId: string | null,
+  task: TaskDetail | null,
+): { id: string; name: string } | null {
+  const projectId = task?.projectId;
+  const projectQ = useApiQuery(
+    apiQueryOptions(
+      queryKeys.project(organizationId ?? '', projectId ?? ''),
+      () =>
+        api.v1.orgs[':orgId'].projects[':id'].$get({
+          param: { orgId: organizationId ?? '', id: projectId ?? '' },
+        }),
+      'Could not load the project.',
+      { enabled: Boolean(organizationId && projectId) },
+    ),
+  );
+  return projectQ.data ? { id: projectQ.data.id, name: projectQ.data.name } : null;
 }
 
 /**
@@ -52,8 +72,11 @@ export function useFocusTask(organizationId: string | null, taskId: string | nul
     ),
   );
 
+  const project = useFocusProject(organizationId, task);
+
   return {
     task,
+    project,
     workflowState: teamQ.data?.workflowStates.find((state) => state.key === task?.state) ?? null,
     workflowStates: teamQ.data?.workflowStates ?? [],
     isPending: enabled && (taskQ.isPending || (Boolean(teamId) && teamQ.isPending)),

@@ -37,6 +37,8 @@ export const proposalOut = z.object({
       startsAt: z.iso.datetime(),
       endsAt: z.iso.datetime(),
       kind: z.enum(['event', 'protected']),
+      allDay: z.boolean().optional(),
+      blocksTime: z.boolean().optional(),
     }),
   ),
   tasks: z.array(
@@ -104,9 +106,12 @@ function externalCommitments(
   agenda: z.input<typeof AgendaOut>,
   dayStart: Date,
   dayEnd: Date,
+  ignored: readonly string[],
 ): Interval[] {
   return agenda.entries.flatMap((entry) =>
-    entry.kind === 'google_calendar_event' && entry.event.blocksTime !== false
+    entry.kind === 'google_calendar_event' &&
+    entry.event.blocksTime !== false &&
+    !(entry.event.allDayStartDate && ignored.includes(entry.event.id))
       ? [
           {
             start: entry.event.startsAt ? Date.parse(entry.event.startsAt) : dayStart.getTime(),
@@ -211,7 +216,12 @@ export async function buildDailyProposal(
       candidates,
       recorded,
     }));
-  const external = externalCommitments(agenda, dayStart, dayEnd);
+  const external = externalCommitments(
+    agenda,
+    dayStart,
+    dayEnd,
+    draft.settings?.ignoredAllDayEventIds ?? [],
+  );
   const activeBusy = activeCommitments(actual, candidates, now);
   const result = proposeDailyPlan({
     draft,

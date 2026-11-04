@@ -3,24 +3,23 @@
 /** Timed daily agenda and explicit block controls for keyboard and touch. */
 import type { DailyPlanSession, DailyPlanSnapshot } from '@docket/planning/daily-plan-flow';
 import { instantAt, localMinuteOfDay } from '@docket/planning/zoned-time';
-import {
-  Button,
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-  Surface,
-} from '@docket/ui/primitives';
-import { ChevronDown } from '@docket/ui/icons';
+import { Button, Checkbox, Surface } from '@docket/ui/primitives';
 import type { JSX, ReactNode } from 'react';
-import { SchedulingCanvas, type ScheduleItem } from '@/components/scheduling';
+import {
+  SchedulingCanvas,
+  type ScheduleItem,
+  type ScheduleRegionSelection,
+} from '@/components/scheduling';
 import { useDailyPlanDropTarget } from '@/components/dnd/use-daily-plan-drop-target';
 
 import { type BusyInterval } from './daily-planning-model';
 
 /** One fixed calendar event. */
 export interface EventBlock extends BusyInterval {
+  readonly id?: string | undefined;
   readonly title: string;
   readonly allDay?: boolean | undefined;
+  readonly calendarBlocksTime?: boolean | undefined;
 }
 
 /** Format a timed agenda label in the workday timezone. */
@@ -49,6 +48,9 @@ interface DailyAgendaProps {
   readonly onDropTask: (taskId: string, minute: number) => void;
   readonly onAddToBlock: (taskId: string, sessionId: string) => void;
   readonly onChangeSession: (session: DailyPlanSession, startsAt: string, endsAt: string) => void;
+  readonly onOpenEvent?: (id: string) => void;
+  readonly onSelectRegion?: (selection: ScheduleRegionSelection) => void;
+  readonly onToggleAllDayBlocking?: (id: string, blocks: boolean) => void;
 }
 
 function AgendaTaskTarget({
@@ -97,7 +99,7 @@ function AgendaGridTarget({
   return (
     <div
       ref={drop.ref}
-      className={`pointer-events-auto absolute inset-0 ${drop.isOver ? 'bg-primary/5 ring-primary ring-1' : ''}`}
+      className={`pointer-events-none absolute inset-0 ${drop.isOver ? 'bg-primary/5 ring-primary ring-1' : ''}`}
       aria-label="Drop task at a time"
     >
       {drop.startMinutes !== null ? (
@@ -118,9 +120,9 @@ function agendaItems(props: DailyAgendaProps): ScheduleItem[] {
       .filter((event) => !event.allDay)
       .map((event, index) => ({
         ...event,
-        id: `fixed-${index}`,
+        id: event.id ? `event:${event.id}` : `fixed-${index}`,
         editable: false,
-        openable: false,
+        openable: Boolean(event.id && props.onOpenEvent),
         appearance: 'event' as const,
       })),
     ...props.draft.sessions.map((session) => ({
@@ -133,39 +135,60 @@ function agendaItems(props: DailyAgendaProps): ScheduleItem[] {
   ];
 }
 
-function AllDayContext({ events }: { readonly events: readonly EventBlock[] }): JSX.Element | null {
+function AllDayContext({
+  events,
+  onOpenEvent,
+  onToggleAllDayBlocking,
+}: {
+  readonly events: readonly EventBlock[];
+  readonly onOpenEvent?: DailyAgendaProps['onOpenEvent'];
+  readonly onToggleAllDayBlocking?: DailyAgendaProps['onToggleAllDayBlocking'];
+}): JSX.Element | null {
   const allDay = events.filter((event) => event.allDay);
-  if (allDay.length === 0) return null;
-  const busy = allDay.filter((event) => event.blocksTime !== false);
-  const label =
-    busy.length === 1
-      ? `${busy[0]?.title} · Busy all day`
-      : busy.length > 1
-        ? `${busy.length} busy all-day events`
-        : `${allDay.length} all-day ${allDay.length === 1 ? 'event' : 'events'}`;
+  if (!allDay.length) return null;
   return (
-    <Collapsible role="group" aria-label="All-day calendar context" className="space-y-1">
-      <CollapsibleTrigger asChild>
-        <Button
-          size="sm"
-          variant="ghost"
-          className="group h-auto max-w-full justify-start gap-2 px-0 text-left"
-        >
-          <span className="text-body-small text-on-surface-variant min-w-0 text-wrap">{label}</span>
-          <ChevronDown aria-hidden="true" className="shrink-0 group-data-[state=open]:rotate-180" />
-        </Button>
-      </CollapsibleTrigger>
-      <CollapsibleContent>
-        <ul className="text-body-small text-on-surface-variant space-y-1 px-3">
-          {allDay.map((event, index) => (
-            <li key={`${event.title}-${index}`}>
-              {event.title}
-              {event.blocksTime !== false ? ' (busy)' : ''}
-            </li>
-          ))}
-        </ul>
-      </CollapsibleContent>
-    </Collapsible>
+    <div role="group" aria-label="All-day calendar context" className="space-y-1">
+      <p className="text-label-small text-on-surface-variant">All day</p>
+      <ul className="space-y-1">
+        {allDay.map((event, index) => (
+          <li
+            key={event.id ?? `${event.title}-${index}`}
+            className="flex flex-wrap items-center justify-between gap-2"
+          >
+            {event.id && onOpenEvent ? (
+              <Button
+                variant="link"
+                size="sm"
+                className="h-auto min-h-10 px-0 text-left whitespace-normal"
+                onClick={() => {
+                  if (event.id) onOpenEvent(event.id);
+                }}
+              >
+                {event.title}
+              </Button>
+            ) : (
+              <span className="text-body-small">{event.title}</span>
+            )}
+            {event.id &&
+            onToggleAllDayBlocking &&
+            (event.calendarBlocksTime ?? event.blocksTime) !== false ? (
+              <label className="text-label-small text-on-surface-variant flex min-h-10 items-center gap-2">
+                <Checkbox
+                  aria-label={`${event.title} blocks work`}
+                  checked={event.blocksTime !== false}
+                  onChange={(change) => {
+                    if (event.id) onToggleAllDayBlocking(event.id, change.target.checked);
+                  }}
+                />
+                Blocks work
+              </label>
+            ) : event.blocksTime !== false ? (
+              <span className="text-label-small text-on-surface-variant">Busy all day</span>
+            ) : null}
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 
@@ -189,7 +212,7 @@ export function DailyAgenda(props: DailyAgendaProps): JSX.Element {
   const items = agendaItems(props);
   return (
     <>
-      <AllDayContext events={props.events} />
+      <AllDayContext {...props} />
       <Surface tone="page" shape="medium" className="overflow-hidden">
         <SchedulingCanvas
           presentation="agenda"
@@ -203,7 +226,13 @@ export function DailyAgenda(props: DailyAgendaProps): JSX.Element {
             0,
             localMinuteOfDay(new Date(props.startAt), props.timezone) - 15,
           )}
+          onSelectRegion={props.onSelectRegion}
           onOpenItem={({ item }) => {
+            const event = props.events.find((value) => value.id && item.id === `event:${value.id}`);
+            if (event?.id) {
+              props.onOpenEvent?.(event.id);
+              return;
+            }
             const session = props.draft.sessions.find((value) => value.id === item.id);
             if (session) props.onEdit(session);
           }}

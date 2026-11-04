@@ -6,7 +6,6 @@ import { EntityList, EntityListRow } from '@docket/ui/components';
 import {
   Button,
   Card,
-  CardContent,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -21,8 +20,14 @@ import type { DailyPlanTask } from '@docket/planning/daily-plan-flow';
 import type { JSX } from 'react';
 
 import type { ReadyPlanningController } from './daily-planning-controller';
-import { movePlannedTask, unplacedMinutes, setPlannedMinutes } from './daily-planning-model';
+import {
+  movePlannedTask,
+  unplacedMinutes,
+  setPlannedMinutes,
+  capacityMinutes,
+} from './daily-planning-model';
 import { useWorkRowDropTarget } from '@/components/dnd';
+import { ExistingWorkBrowser } from './daily-planning-add';
 
 function WorkSchedulingActions({
   plan,
@@ -312,8 +317,25 @@ function WorkRow({
 function WorkSignals({ plan }: { readonly plan: ReadyPlanningController }): JSX.Element {
   const actual = plan.dayQ.data?.actual ?? [];
   const recorded = actual.reduce((sum, interval) => sum + interval.recordedMinutes, 0);
+  const selected = plan.draft.tasks.reduce(
+    (sum, task) =>
+      sum +
+      Math.max(
+        0,
+        task.plannedMinutes -
+          actual
+            .filter((entry) => entry.taskId === task.taskId)
+            .reduce((total, entry) => total + entry.recordedMinutes, 0),
+      ),
+    0,
+  );
+  const available = capacityMinutes(plan.startAt, plan.draft.finishAt, plan.fixed);
   return (
     <>
+      <p className="text-on-surface-variant text-body-small" role="status">
+        {selected} min remaining in plan · {available} min available
+        {selected > available ? ` · ${selected - available} min over capacity` : ''}
+      </p>
       {recorded > 0 ? (
         <p className="text-on-surface-variant text-body-small">{recorded} minutes recorded today</p>
       ) : null}
@@ -332,36 +354,17 @@ export function WorkColumn({ plan }: { readonly plan: ReadyPlanningController })
   const completed = plan.dayQ.data?.tasks.filter((task) => task.completedAt !== null) ?? [];
   return (
     <section className="min-w-0 space-y-3">
-      <div className="flex items-center justify-between gap-2">
-        <h2 className="text-title-large">Work</h2>
-        {plan.stage !== 'confirmed' ? (
-          <Button
-            variant="secondary"
-            disabled={plan.deferPending}
-            onClick={() => {
-              plan.setStage('add');
-            }}
-          >
-            Add work
-          </Button>
-        ) : null}
-      </div>
-      <WorkSignals plan={plan} />
-      <div>
-        {plan.draft.tasks.length === 0 ? (
-          <Card>
-            <CardContent className="pt-5">
-              No work selected. Add work to build this plan.
-            </CardContent>
-          </Card>
-        ) : (
+      <h2 className="text-title-large">Work</h2>
+      {plan.draft.tasks.length > 0 ? (
+        <>
+          <WorkSignals plan={plan} />
           <EntityList aria-label="Work selected for today" className="gap-2 bg-transparent p-0">
             {plan.draft.tasks.map((entry) => (
               <WorkRow key={entry.taskId} plan={plan} entry={entry} />
             ))}
           </EntityList>
-        )}
-      </div>
+        </>
+      ) : null}
       {completed.length > 0 ? (
         <div className="space-y-1">
           <h3 className="text-label-medium">Completed today</h3>
@@ -372,6 +375,7 @@ export function WorkColumn({ plan }: { readonly plan: ReadyPlanningController })
           ))}
         </div>
       ) : null}
+      {plan.stage !== 'confirmed' ? <ExistingWorkBrowser key={plan.date} plan={plan} /> : null}
     </section>
   );
 }

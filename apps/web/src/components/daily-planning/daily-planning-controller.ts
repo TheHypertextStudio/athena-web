@@ -9,6 +9,7 @@ import { useTimerControls, useTimerState } from '@/components/time-tracking/use-
 import { useAppSearchParams } from '@/lib/app-location';
 import type { EventBlock } from './daily-planning-agenda';
 import { useDailyPlanStore } from './daily-planning-store';
+import { usePlanningTimezoneSetup } from './daily-planning-timezone';
 import { useDailyPlanningTasks } from './daily-planning-task-state';
 import { useDailyPlanningMove } from './daily-planning-move';
 import {
@@ -18,6 +19,7 @@ import {
   useConfirmDailyPlan,
   useDailyPlanningDay,
   useDailyPlanningPreferences,
+  type DailyWorkScope,
 } from './daily-planning-queries';
 
 /** The screens in the focused daily flow. */
@@ -28,7 +30,7 @@ export type DayData = NonNullable<ReturnType<typeof useDailyPlanningDay>['data']
 export type Task = DayData['tasks'][number];
 
 function calendarEventForDay(event: CalendarEventOut, day: DayData): EventBlock | null {
-  const context = { title: event.title, blocksTime: event.blocksTime };
+  const context = { id: event.id, title: event.title, blocksTime: event.blocksTime };
   if (event.startsAt && event.endsAt)
     return { ...context, startsAt: event.startsAt, endsAt: event.endsAt };
   if (
@@ -49,9 +51,12 @@ function calendarEventForDay(event: CalendarEventOut, day: DayData): EventBlock 
 function eventsFor(day: DayData): EventBlock[] {
   return [
     ...day.fixedIntervals.map((value) => ({
+      id: value.kind === 'event' ? value.id : undefined,
       title: value.title,
       startsAt: value.startsAt,
       endsAt: value.endsAt,
+      allDay: value.allDay,
+      blocksTime: value.blocksTime,
     })),
     ...day.agenda.entries.flatMap((entry) => {
       if (entry.kind !== 'google_calendar_event') return [];
@@ -59,6 +64,22 @@ function eventsFor(day: DayData): EventBlock[] {
       return event ? [event] : [];
     }),
   ];
+}
+
+function useFixedEvents(
+  day: DayData | undefined,
+  ignoredAllDay: readonly string[] | undefined,
+): EventBlock[] {
+  return useMemo(
+    () =>
+      (day ? eventsFor(day) : []).map((event) => ({
+        ...event,
+        calendarBlocksTime: event.blocksTime !== false,
+        blocksTime:
+          event.allDay && event.id && ignoredAllDay?.includes(event.id) ? false : event.blocksTime,
+      })),
+    [day, ignoredAllDay],
+  );
 }
 
 function useReviewChoices(previousDate: string, date: string) {
@@ -171,11 +192,22 @@ function usePlanningDate() {
   const params = useAppSearchParams();
   const preferences = useDailyPlanningPreferences();
   const requested = requestedPlanningDate(params.get('date'));
+  const timezoneSetup = usePlanningTimezoneSetup(preferences.data?.timezone, preferences.isSuccess);
   const preferredTimezone =
     preferences.data?.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
   const date = requested ?? new Date().toLocaleDateString('en-CA', { timeZone: preferredTimezone });
-  const dateReady = Boolean(requested) || preferences.isSuccess || preferences.isError;
-  return { params, date, dateReady, preferredTimezone };
+  const dateReady = preferences.isSuccess && timezoneSetup.ready;
+  return {
+    params,
+    date,
+    dateReady,
+    preferredTimezone,
+    preferencesError: preferences.isError || timezoneSetup.isError,
+    retryPreferences: (): void => {
+      if (timezoneSetup.isError) timezoneSetup.retry();
+      else void preferences.refetch();
+    },
+  };
 }
 
 function useRequestedDayReview(input: {
@@ -193,21 +225,26 @@ function useRequestedDayReview(input: {
   }, [input.requested, input.date, input.draft, input.setStage]);
 }
 
+function readyDay(day: DayData | undefined, ready: boolean, timezone: string): DayData | undefined {
+  return ready && day?.timezone === timezone ? day : undefined;
+}
+
 function usePlanningDraft() {
-  const { params, date, dateReady, preferredTimezone } = usePlanningDate();
+  const { params, date, dateReady, preferredTimezone, preferencesError, retryPreferences } =
+    usePlanningDate();
   const previousDate = addDays(date, -1);
   const dayQ = useDailyPlanningDay(date, dateReady);
   const previousQ = useDailyPlanningDay(previousDate, dateReady);
   const timezone = dayQ.data?.timezone ?? preferredTimezone;
-  const fixed = useMemo(() => (dayQ.data ? eventsFor(dayQ.data) : []), [dayQ.data]);
   const store = useDailyPlanStore({
     date,
-    day: dayQ.data,
-    previous: previousQ.data,
+    day: readyDay(dayQ.data, dateReady, preferredTimezone),
+    previous: readyDay(previousQ.data, dateReady, preferredTimezone),
     missedId: params.get('missed'),
     recovery: params.get('recovery'),
     recoveryTaskId: params.get('task'),
   });
+  const fixed = useFixedEvents(dayQ.data, store.draft?.settings?.ignoredAllDayEventIds);
   const dayReview = params.get('review') === 'day';
   useRequestedDayReview({
     requested: dayReview,
@@ -239,7 +276,11 @@ function usePlanningDraft() {
     setEditing: tasks.setEditing,
   });
   const names = useMemo(
-    () => new Map([...allTasks].map(([id, task]) => [id, tasks.taskNames[id] ?? task.title])),
+    () =>
+      new Map([
+        ...[...allTasks].map(([id, task]): [string, string] => [id, task.title]),
+        ...Object.entries(tasks.taskNames),
+      ]),
     [allTasks, tasks.taskNames],
   );
   const titleFor = (taskId: string): string =>
@@ -248,6 +289,8 @@ function usePlanningDraft() {
     date,
     previousDate,
     dayReview,
+    preferencesError,
+    retryPreferences,
     reviewLabel,
     dayQ,
     previousQ,
@@ -267,10 +310,22 @@ export function useDailyPlanningController() {
   const store = usePlanningDraft();
   const { date, previousDate } = store;
   const [search, setSearch] = useState('');
+  const [workScope, setWorkScope] = useState<DailyWorkScope>('mine');
+  const [workOrganization, setWorkOrganization] = useState('');
+  const [dueOnly, setDueOnly] = useState(false);
   const review = useReviewChoices(previousDate, date);
   const [wasAdjustment, setWasAdjustment] = useState(false);
   const [confirming, setConfirming] = useState(false);
-  const searchQ = useAvailableDailyWork(search, store.stage === 'add');
+  const searchQ = useAvailableDailyWork(
+    date,
+    search,
+    {
+      scope: workScope,
+      orgId: workOrganization,
+      dueOnly,
+    },
+    store.stage === 'add' || store.stage === 'plan' || store.stage === 'review',
+  );
   const confirm = useConfirmDailyPlan(date);
   const move = useDailyPlanningMove({
     date,
@@ -288,6 +343,12 @@ export function useDailyPlanningController() {
     search,
     setSearch,
     searchQ,
+    workScope,
+    setWorkScope,
+    workOrganization,
+    setWorkOrganization,
+    dueOnly,
+    setDueOnly,
     confirm,
     ...move,
     go: async (next: Stage, value?: DailyPlanSnapshot): Promise<void> => {

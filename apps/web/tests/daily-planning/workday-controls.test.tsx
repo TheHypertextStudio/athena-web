@@ -10,12 +10,34 @@ import {
 
 afterEach(cleanup);
 
+it('provides a correction for an older draft whose saved start is after its finish', () => {
+  const plan = controller('plan');
+  plan.draft.settings = { startAt: '2026-10-07T20:57:00.000Z' };
+  render(<WorkdayControls plan={plan} />);
+  expect(screen.getByRole('button', { name: 'Workday settings' })).toHaveTextContent('Set hours');
+  expect(
+    screen.getByText('Start must be before Finish. Adjust work hours to schedule this day.'),
+  ).toBeVisible();
+});
+
+it('shows configured hours after the workday ends instead of reversing the range', async () => {
+  const plan = controller('plan');
+  plan.startAt = '2026-10-07T20:57:00.000Z';
+  plan.draft.settings = { startAt: '2026-10-07T09:00:00.000Z' };
+  render(<WorkdayControls plan={plan} />);
+  expect(screen.getByRole('button', { name: 'Workday settings' })).toHaveTextContent('9:00 AM');
+  expect(screen.getByText(/Work hours have ended/)).toBeVisible();
+  await userEvent.click(screen.getByRole('button', { name: 'Workday settings' }));
+  expect(screen.getByLabelText('Start')).toHaveValue('09:00');
+});
+
 function controller(stage: 'plan' | 'review'): ReadyPlanningController {
   return {
     stage,
     date: '2026-10-07',
     timezone: 'UTC',
     startAt: '2026-10-07T09:00:00.000Z',
+    planningStartAt: '2026-10-07T09:00:00.000Z',
     proposalContext: { workScheduleMissing: true },
     draft: {
       date: '2026-10-07',

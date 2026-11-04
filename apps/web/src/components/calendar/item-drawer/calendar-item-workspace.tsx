@@ -34,7 +34,7 @@ import {
 } from '@docket/ui/primitives';
 import { type JSX, useState } from 'react';
 
-import { useAthenaPanel } from '@/components/athena/athena-panel-provider';
+import { useOptionalAthenaPanel } from '@/components/athena/athena-panel-provider';
 import { usePublishPageSource } from '@/components/athena/page-context';
 import { PropertyPanelRow } from '@/components/property-pickers/property-panel';
 
@@ -205,8 +205,10 @@ function EventOverflowMenu({ item, onClose }: EventOverflowMenuProps): JSX.Eleme
 }
 
 /** Open Athena with this event as context without outranking the event editor. */
-function AthenaAction({ item }: { readonly item: CalendarItemOut }): JSX.Element {
-  const { openAthena } = useAthenaPanel();
+function AthenaAction({ item }: { readonly item: CalendarItemOut }): JSX.Element | null {
+  const panel = useOptionalAthenaPanel();
+  if (!panel) return null;
+  const { openAthena } = panel;
   return (
     <Button
       type="button"

@@ -25,6 +25,7 @@ const { timerState, taskState } = vi.hoisted(() => ({
   },
   taskState: {
     task: null,
+    project: null,
     workflowState: null,
     workflowStates: [],
     isPending: true,
@@ -52,6 +53,7 @@ vi.mock('@/components/time-tracking/use-focus-task', () => ({
 vi.mock('@/components/time-tracking/use-focus-today', () => ({
   useFocusToday: () => ({ records: [], isPending: false, error: null }),
 }));
+vi.mock('@/components/time-tracking/focus-day-context', () => ({ default: () => null }));
 const { default: FocusImmersive } = await import('@/components/time-tracking/focus-immersive');
 
 afterEach(cleanup);

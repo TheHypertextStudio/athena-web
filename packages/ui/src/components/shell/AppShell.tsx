@@ -78,6 +78,7 @@
  * window produce a *narrower* content panel — measured at 1119px of `<main>` at a 1439px viewport
  * and 760px at 1440px — because 400px of chrome arrived in a single pixel of window growth.
  */
+import { ShellMobileTrigger } from './ShellMobileTrigger';
 import * as React from 'react';
 
 import { useMediaQuery } from '../../hooks/useMediaQuery';
@@ -585,20 +586,15 @@ export function AppShell({
         <ShellTopBar
           className="lg:hidden"
           navigation={
-            <button
-              type="button"
-              aria-label="Open navigation"
-              aria-expanded={drawerOpen}
-              onClick={() => {
+            <ShellMobileTrigger
+              label="Open navigation"
+              expanded={drawerOpen}
+              onOpen={() => {
                 setDrawerOpen(true);
               }}
-              className={cn(
-                'text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface flex size-10 shrink-0 items-center justify-center rounded-lg transition-colors',
-                focusRing,
-              )}
             >
               <Menu aria-hidden="true" className="size-5" />
-            </button>
+            </ShellMobileTrigger>
           }
           title={mobileBrand ?? <span className="text-title-small truncate">Docket</span>}
           actions={
@@ -606,21 +602,16 @@ export function AppShell({
               {mobileActions}
               {/* Mobile rail trigger — opens the panels as a right sheet. Uses the active panel's glyph. */}
               {activePanel && mobileAsideTrigger ? (
-                <button
-                  type="button"
-                  aria-label={`Show ${activePanel.label}`}
-                  aria-controls={SHELL_ASIDE_SHEET_ID}
-                  aria-expanded={overlayPanelOpen}
-                  onClick={() => {
+                <ShellMobileTrigger
+                  label={`Show ${activePanel.label}`}
+                  controls={SHELL_ASIDE_SHEET_ID}
+                  expanded={overlayPanelOpen}
+                  onOpen={() => {
                     setOverlayPanelOpen(true);
                   }}
-                  className={cn(
-                    'text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface flex size-10 shrink-0 items-center justify-center rounded-lg transition-colors [&_svg]:size-5',
-                    focusRing,
-                  )}
                 >
                   {activePanel.icon}
-                </button>
+                </ShellMobileTrigger>
               ) : null}
             </>
           }

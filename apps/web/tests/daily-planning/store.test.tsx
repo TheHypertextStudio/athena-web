@@ -177,7 +177,12 @@ describe('guarded planner persistence and recovery', () => {
     });
     expect(hook.result.current.draft).toEqual(saved);
     expect(hook.result.current.serverRevision.current).toBe(8);
+    state.propose.mockClear();
     await advance(900);
+    expect(state.propose).not.toHaveBeenCalled();
+    await act(async () => {
+      await hook.result.current.rebuild();
+    });
     expect(state.propose).toHaveBeenLastCalledWith(
       expect.objectContaining({ draft: saved, expectedRevision: 8 }),
     );

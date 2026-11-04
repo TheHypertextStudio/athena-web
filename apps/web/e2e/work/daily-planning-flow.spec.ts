@@ -401,6 +401,7 @@ test('direct numeric editing resolves work that exceeds the remaining day', asyn
       response.request().method() === 'POST',
   );
   await planned.press('Enter');
+  await page.getByRole('button', { name: 'Organize day', exact: true }).click();
   await proposed;
   await expect(page.getByRole('button', { name: 'Organize day', exact: true })).toBeEnabled();
   const apply = page.getByRole('button', { name: 'Apply schedule', exact: true });

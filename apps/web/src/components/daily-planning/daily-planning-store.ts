@@ -49,7 +49,6 @@ function usePlanState(date: string) {
   const [draft, setDraft] = useState<DailyPlanSnapshot | null>(null);
   const [stage, setStage] = useState<Stage>('plan');
   const [revision, setRevision] = useState(0);
-  const [scheduleRevision, setScheduleRevision] = useState(0);
   const [preview, setPreview] = useState<SchedulePreview | null>(null);
   const [proposalContext, setProposalContext] = useState<Proposal | null>(null);
   const [undoDraft, setUndoDraft] = useState<DailyPlanSnapshot | null>(null);
@@ -76,8 +75,6 @@ function usePlanState(date: string) {
     setStage,
     revision,
     setRevision,
-    scheduleRevision,
-    setScheduleRevision,
     preview,
     setPreview,
     proposalContext,
@@ -207,7 +204,6 @@ function initializeDraft(input: StoreInput, state: PlanState) {
   if (!input.day || !input.previous) return undefined;
   state.savedRevision.current = 0;
   state.setRevision(0);
-  state.setScheduleRevision(0);
   state.setPreview(null);
   state.setProposalContext(null);
   state.setUndoDraft(null);
@@ -281,7 +277,6 @@ function useDraftActions(state: PlanState, persistence: Persistence, propose: Pr
     state.setDraft(value);
     state.setPreview(null);
     state.setRevision((count) => count + 1);
-    state.setScheduleRevision((count) => count + 1);
     if (!persistence.conflict) persistence.setError(null);
   };
   const rebuild = async (value = state.draft): Promise<void> => {
@@ -310,7 +305,6 @@ function useDraftActions(state: PlanState, persistence: Persistence, propose: Pr
     if (state.preview.proposal) state.setProposalContext(state.preview.proposal);
     state.setPreview(null);
     state.setRevision((count) => count + 1);
-    state.setScheduleRevision(0);
   };
   const undoSchedule = (): void => {
     if (!state.undoDraft) return;
@@ -319,18 +313,8 @@ function useDraftActions(state: PlanState, persistence: Persistence, propose: Pr
     state.setUndoDraft(null);
     state.setPreview(null);
     state.setRevision((count) => count + 1);
-    state.setScheduleRevision(0);
   };
   const go = useStageTransition(state, persistence, editDraft);
-  useEffect(() => {
-    if (!state.scheduleRevision || !state.draft || state.stage === 'confirmed') return;
-    const timer = setTimeout(() => {
-      void rebuild(state.draft);
-    }, 900);
-    return () => {
-      clearTimeout(timer);
-    };
-  }, [state.scheduleRevision, state.stage]);
   return {
     editDraft,
     rebuild,
@@ -373,7 +357,6 @@ function useConflictRecovery(input: StoreInput, state: PlanState, persistence: P
     state.savedRevision.current = state.revision + 1;
     state.setDraft(savedDraftReview.draft);
     state.setRevision((value) => value + 1);
-    state.setScheduleRevision((value) => value + 1);
     state.setPreview(null);
     state.setUndoDraft(null);
     state.setProposalContext(null);

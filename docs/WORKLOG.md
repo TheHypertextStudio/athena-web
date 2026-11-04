@@ -2,6 +2,7 @@
 
 > **Purpose**: Comprehensive tracking of all work - past, present, and future.
 > **Last Updated**: 2026-11-03
+> **Last Updated**: 2026-11-04
 
 ---
 
@@ -13938,6 +13939,17 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
   - [x] All tools, validation constraints, defaults and authority guidance remain available within the existing prompt ceiling.
   - [x] The approved project layout retains rendered desktop/phone review and browser coverage.
 - **Delivery boundary**: Local release-candidate preparation. Deployment and target verification are recorded separately in the owned shipping build records.
+### [DAILY-PLANNING-TASK-AGENDA] Plan from existing tasks and an interactive agenda
+
+- **Completed**: 2026-11-04
+- **Summary**: Read live unfinished tasks assigned to or created by the person across active workspaces, with permission-filtered search and keyset pagination. Keep a compact inline task browser beside selected work and the agenda. Use plus actions and named toolbar icons, reveal filters on demand, and put creation and bulk selection in the task menu.
+- **Behavior**: Open canonical calendar details; select time, schedule, edit, move and resize draft work blocks. Keep all-day context visible with a private Blocks work choice. Preserve configured work hours, establish an unset timezone from the browser, and require acknowledgement before accepting an empty day. Confirmation retains accepted tasks and ongoing commitments. Focus shows the canonical Markdown document, project, subtasks, related work, next commitment and other accepted work, with timer controls first on phones.
+- **Files changed**: Daily-plan task discovery and availability routes/contracts; web daily-planning queries, controller and surfaces; immersive Focus context; shared icon action and hydrated shell launcher; API, component and browser regressions; README and daily-planning product spec.
+- **Validation**: 24 task/calendar API tests and 44 portable planning tests pass. Affected calendar/Focus tests, 154 daily-planning tests and 75 shell tests pass; two additional review regressions pass with the final 20-test controller/confirmation run. Shared icon-action and SSR interaction tests pass. All 20 browser journeys pass, including pointer, keyboard, touch, save/reload, timezone initialization, empty confirmation and private all-day overrides; the authored-task scheduling journey was rerun after the final title correction. Twenty-eight standard desktop/phone captures cover seven populated states in both themes, with eight final confirmation/search captures and no horizontal overflow. Affected typechecks, final changed-file ESLint, formatting, unchanged complexity ledger and the API/web production build pass. The canonical local stack is stopped and its synthetic database reset.
+- **Review and learnings**: Independent review has no remaining blocking findings. Regressions reproduce and correct titles missing before an added task's autosave, and ongoing/all-day events disappearing at confirmation. Search-index coverage and a first-page ceiling are unsuitable for personal task discovery. An invisible drop layer must not intercept agenda gestures. Configured work hours are separate from the remaining day. Explicit scheduling proposals preserve manual edits. The shared shell waits to enable client-only launchers until hydration, following [React's server-snapshot guidance](https://react.dev/reference/react/useSyncExternalStore#adding-support-for-server-rendering).
+- **Local verification notes**: Clearing this checkout's documented development caches recovered a font compiler error after a production build. Cold routes were warmed before service-worker browser checks. No production data, provider calendar entries, or deployment was changed; hosted integration and production acceptance are separate from this locally verified implementation.
+
+- **Design-system review**: The commit policy caught extra responsive Focus borders. Replaced all dividers with shared Separator primitives and removed the obsolete border-debt ledger entry. All nine design-policy tests, four affected Focus component tests, the long-document phone browser journey, four fresh Focus captures, affected lint/complexity checks and the final API/web build pass. The debt ledger shrinks; no exemption was added.
 
 ### [REVIEWER-DEMO-PRODUCTION] Guarded production reviewer access
 

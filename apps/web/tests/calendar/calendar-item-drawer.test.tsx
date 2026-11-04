@@ -77,7 +77,7 @@ vi.mock('../../src/components/create-object/create-object-provider', () => ({
 }));
 
 vi.mock('../../src/components/athena/athena-panel-provider', () => ({
-  useAthenaPanel: () => ({ openAthena }),
+  useOptionalAthenaPanel: () => ({ openAthena }),
 }));
 
 import { ActiveOrgContext } from '../../src/components/active-org';

@@ -3,9 +3,11 @@
 /** Task metadata and progress shared by both Focus surfaces. */
 import type { TaskDetail } from '@docket/work/task-model';
 import type { WorkflowState } from '@docket/work/workflow';
-import { Text } from '@docket/ui/primitives';
+import { Button, Text } from '@docket/ui/primitives';
 import type { JSX } from 'react';
 
+import Link from '@/components/docket-link';
+import { StaticMarkdown } from '@/components/editor/static-markdown';
 import { formatDay } from '@/components/date-picker';
 import { PRIORITY_LABEL } from '@/components/task-detail/priority';
 import { todayISODate } from '@/lib/today';
@@ -17,6 +19,7 @@ export interface FocusTaskContextProps {
   readonly workflowStates?: readonly WorkflowState[];
   /** Immersive mode also shows the task description and individual subtasks. */
   readonly expanded?: boolean;
+  readonly project?: { id: string; name: string } | null | undefined;
 }
 
 /** Convert a due date to the shortest truthful focus label. */
@@ -35,6 +38,7 @@ export default function FocusTaskContext({
   workflowState,
   workflowStates = [],
   expanded = false,
+  project = null,
 }: FocusTaskContextProps): JSX.Element {
   const workflowAvailable = workflowStates.length > 0;
   const isComplete = (key: string): boolean | null => {
@@ -66,17 +70,7 @@ export default function FocusTaskContext({
         ))}
       </div>
 
-      {task.description ? (
-        expanded ? (
-          <p className="text-on-surface text-body-medium max-w-prose whitespace-pre-wrap">
-            {task.description}
-          </p>
-        ) : (
-          <p className="text-on-surface-variant text-body-small line-clamp-2 whitespace-pre-wrap">
-            {task.description}
-          </p>
-        )
-      ) : null}
+      <FocusDetails task={task} expanded={expanded} project={project} />
 
       {task.subtasks.length > 0 ? (
         expanded ? (
@@ -104,7 +98,12 @@ export default function FocusTaskContext({
                           : 'text-on-surface text-body-medium'
                       }
                     >
-                      {subtask.title}
+                      <Link
+                        href={`/orgs/${task.organizationId}/tasks/${subtask.id}`}
+                        className="hover:underline"
+                      >
+                        {subtask.title}
+                      </Link>
                     </span>
                   </li>
                 );
@@ -120,5 +119,78 @@ export default function FocusTaskContext({
         )
       ) : null}
     </div>
+  );
+}
+
+function FocusDescription({
+  task,
+  expanded,
+}: {
+  readonly task: TaskDetail;
+  readonly expanded: boolean;
+}): JSX.Element | null {
+  if (task.description)
+    return expanded ? (
+      <StaticMarkdown value={task.description} className="max-w-prose" />
+    ) : (
+      <p className="text-body-small text-on-surface-variant line-clamp-2 whitespace-pre-wrap">
+        {task.description}
+      </p>
+    );
+  return expanded ? (
+    <Button variant="ghost" className="w-fit" asChild>
+      <Link href={`/orgs/${task.organizationId}/tasks/${task.id}`}>Add task details</Link>
+    </Button>
+  ) : null;
+}
+
+function FocusRelations({ task }: { readonly task: TaskDetail }): JSX.Element {
+  const groups = [
+    { label: 'Blocked by', tasks: task.blockedBy },
+    { label: 'Unblocks', tasks: task.blocking },
+    { label: 'Related work', tasks: task.relatedTasks },
+  ].filter((group) => group.tasks.length > 0);
+  return (
+    <>
+      {groups.map((group) => (
+        <section key={group.label} className="space-y-2">
+          <h3 className="text-label-large">{group.label}</h3>
+          <ul className="space-y-2">
+            {group.tasks.map((ref) => (
+              <li key={ref.id}>
+                <Link
+                  className="text-body-medium text-primary hover:underline"
+                  href={`/orgs/${task.organizationId}/tasks/${ref.id}`}
+                >
+                  {ref.title}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ))}
+    </>
+  );
+}
+
+function FocusDetails({
+  task,
+  expanded,
+  project,
+}: Pick<FocusTaskContextProps, 'task' | 'project'> & { readonly expanded: boolean }): JSX.Element {
+  return (
+    <>
+      {' '}
+      {expanded && project ? (
+        <Link
+          href={`/orgs/${task.organizationId}/projects/${project.id}`}
+          className="text-body-small text-primary hover:underline"
+        >
+          {project.name}
+        </Link>
+      ) : null}
+      <FocusDescription task={task} expanded={expanded} />
+      {expanded ? <FocusRelations task={task} /> : null}
+    </>
   );
 }

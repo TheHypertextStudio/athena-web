@@ -29,6 +29,7 @@ function selectedTask(
   draft: DailyPlanSnapshot,
   taskId: string,
   organizationId: string,
+  plannedMinutes?: number,
 ): DailyPlanSnapshot {
   return {
     ...draft,
@@ -41,13 +42,32 @@ function selectedTask(
       {
         taskId,
         organizationId,
-        plannedMinutes: 45,
+        plannedMinutes: plannedMinutes ?? 45,
         sort: draft.tasks.length,
         selectionSource: 'explicit',
-        durationSource: 'default',
+        durationSource: plannedMinutes === undefined ? 'default' : 'estimate',
       },
     ],
   };
+}
+
+function useTaskNames(date: string) {
+  const rename = useRenameDailyTask(date);
+  const [taskNames, setTaskNames] = useState<Record<string, string>>({});
+  const [failedTitle, setFailedTitle] = useState<{ taskId: string; title: string } | null>(null);
+  const renameTask = async (
+    task: Pick<Task, 'taskId' | 'organizationId'>,
+    title: string,
+  ): Promise<void> => {
+    setTaskNames((current) => ({ ...current, [task.taskId]: title }));
+    try {
+      await rename.mutateAsync({ organizationId: task.organizationId, taskId: task.taskId, title });
+      setFailedTitle(null);
+    } catch {
+      setFailedTitle({ taskId: task.taskId, title });
+    }
+  };
+  return { taskNames, setTaskNames, failedTitle, renameTask };
 }
 
 /** Edit shared task values and place manual sessions in the planning draft. */
@@ -61,31 +81,34 @@ export function useDailyPlanningTasks(input: {
   startAt: string;
   actual: readonly { taskId: string | null; recordedMinutes: number }[];
 }) {
-  const rename = useRenameDailyTask(input.date);
   const latest = useRef(input);
   useEffect(() => {
     latest.current = input;
   }, [input]);
-  const [taskNames, setTaskNames] = useState<Record<string, string>>({});
-  const [failedTitle, setFailedTitle] = useState<{ taskId: string; title: string } | null>(null);
+  const { taskNames, setTaskNames, failedTitle, renameTask } = useTaskNames(input.date);
   const [editing, setEditing] = useState<{ taskId: string; sessionId?: string } | null>(null);
-  const renameTask = async (
-    task: Pick<Task, 'taskId' | 'organizationId'>,
-    title: string,
-  ): Promise<void> => {
-    setTaskNames((current) => ({ ...current, [task.taskId]: title }));
-    try {
-      await rename.mutateAsync({ organizationId: task.organizationId, taskId: task.taskId, title });
-      setFailedTitle(null);
-    } catch {
-      setFailedTitle({ taskId: task.taskId, title });
+  const addTasks = (
+    items: readonly {
+      taskId: string;
+      organizationId: string;
+      title: string;
+      plannedMinutes?: number;
+    }[],
+  ): void => {
+    let draft = input.draft;
+    if (!draft) return;
+    for (const item of items) {
+      if (!draft.tasks.some((task) => task.taskId === item.taskId))
+        draft = selectedTask(draft, item.taskId, item.organizationId, item.plannedMinutes);
     }
+    setTaskNames((current) => ({
+      ...current,
+      ...Object.fromEntries(items.map((item) => [item.taskId, item.title])),
+    }));
+    input.editDraft(draft);
   };
   const addTask = (taskId: string, organizationId: string, title: string): void => {
-    const draft = input.draft;
-    if (!draft || draft.tasks.some((task) => task.taskId === taskId)) return;
-    setTaskNames((current) => ({ ...current, [taskId]: title }));
-    input.editDraft(selectedTask(draft, taskId, organizationId));
+    addTasks([{ taskId, organizationId, title }]);
   };
   const removeTask = (taskId: string, sourceDate = input.date): void => {
     const current = latest.current;
@@ -93,9 +116,9 @@ export function useDailyPlanningTasks(input: {
     if (current.date !== sourceDate || draft?.date !== sourceDate) return;
     current.editDraft(removeSelectedTask(draft, taskId));
   };
-  const saveSession = (session: DailyPlanSession, value = input.draft): void => {
+  const saveSession = (session: DailyPlanSession, value = input.draft): boolean => {
     const draft = value;
-    if (!draft) return;
+    if (!draft) return false;
     try {
       input.editDraft(
         placeSession(
@@ -106,10 +129,12 @@ export function useDailyPlanningTasks(input: {
         ),
       );
       setEditing(null);
+      return true;
     } catch {
       input.setError(
         'Choose a time within the workday that does not overlap another block or event. Check Planned time if the block is too long.',
       );
+      return false;
     }
   };
   return {
@@ -119,6 +144,7 @@ export function useDailyPlanningTasks(input: {
     setEditing,
     renameTask,
     addTask,
+    addTasks,
     removeTask,
     saveSession,
   };

@@ -1,7 +1,12 @@
 import { act, cleanup, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { CalendarEventId } from '@docket/planning/ids';
 import type { CalendarEventOut } from '@docket/planning/calendar-contract';
 import type { DailyPlanSnapshot } from '@docket/planning/daily-plan-flow';
+
+vi.mock('../../src/components/daily-planning/daily-planning-timezone', () => ({
+  usePlanningTimezoneSetup: () => ({ ready: true, isError: false, retry: vi.fn() }),
+}));
 
 const state = vi.hoisted(() => ({
   params: new URLSearchParams(),
@@ -10,11 +15,12 @@ const state = vi.hoisted(() => ({
     kind: 'google_calendar_event';
     event: Pick<
       CalendarEventOut,
-      'title' | 'startsAt' | 'endsAt' | 'allDayStartDate' | 'allDayEndDate' | 'blocksTime'
+      'id' | 'title' | 'startsAt' | 'endsAt' | 'allDayStartDate' | 'allDayEndDate' | 'blocksTime'
     >;
   }[],
   ready: false,
   draft: null as DailyPlanSnapshot | null,
+  taskNames: {},
   editing: vi.fn(),
   days: vi.fn(),
   persist: vi.fn(),
@@ -33,7 +39,7 @@ vi.mock('../../src/components/time-tracking/use-timer', () => ({
 }));
 vi.mock('../../src/components/daily-planning/daily-planning-task-state', () => ({
   useDailyPlanningTasks: () => ({
-    taskNames: {},
+    taskNames: state.taskNames,
     setEditing: state.editing,
     removeTask: state.remove,
   }),
@@ -86,6 +92,7 @@ beforeEach(() => {
   state.timezone = 'Asia/Tokyo';
   state.ready = false;
   state.draft = null;
+  state.taskNames = {};
   state.days.mockClear();
   state.editing.mockClear();
   state.persist.mockReset().mockResolvedValue(undefined);
@@ -121,6 +128,11 @@ function selectedDraft(): DailyPlanSnapshot {
   };
 }
 describe('planning entry context', () => {
+  it('names newly selected work before it appears in the saved day catalog', () => {
+    state.taskNames = { work: 'Prepare community meeting' };
+    const hook = renderHook(() => useDailyPlanningController());
+    expect(hook.result.current.names.get('work')).toBe('Prepare community meeting');
+  });
   it('does not confirm an old-day undo after the save finishes on another date', async () => {
     let finishSave: (() => void) | undefined;
     state.persist.mockImplementation(
@@ -278,6 +290,7 @@ it('carries provider availability and all-day bounds using the canonical day tim
     {
       kind: 'google_calendar_event',
       event: {
+        id: CalendarEventId.parse('01ARZ3NDEKTSV4RRFFQ69G5FAV'),
         title: 'Free note',
         startsAt: '2026-10-07T10:00:00.000Z',
         endsAt: '2026-10-07T10:30:00.000Z',
@@ -289,6 +302,7 @@ it('carries provider availability and all-day bounds using the canonical day tim
     {
       kind: 'google_calendar_event',
       event: {
+        id: CalendarEventId.parse('01ARZ3NDEKTSV4RRFFQ69G5FAW'),
         title: 'Home',
         startsAt: null,
         endsAt: null,
@@ -300,6 +314,7 @@ it('carries provider availability and all-day bounds using the canonical day tim
     {
       kind: 'google_calendar_event',
       event: {
+        id: CalendarEventId.parse('01ARZ3NDEKTSV4RRFFQ69G5FAX'),
         title: 'Busy day',
         startsAt: null,
         endsAt: null,
@@ -313,24 +328,59 @@ it('carries provider availability and all-day bounds using the canonical day tim
   expect(result.current.timezone).toBe('UTC');
   expect(result.current.fixed).toEqual([
     {
+      id: CalendarEventId.parse('01ARZ3NDEKTSV4RRFFQ69G5FAV'),
       title: 'Free note',
       startsAt: '2026-10-07T10:00:00.000Z',
       endsAt: '2026-10-07T10:30:00.000Z',
       blocksTime: false,
+      calendarBlocksTime: false,
     },
     {
+      id: CalendarEventId.parse('01ARZ3NDEKTSV4RRFFQ69G5FAW'),
       title: 'Home',
       startsAt: '2026-10-07T00:00:00.000Z',
       endsAt: '2026-10-08T00:00:00.000Z',
       allDay: true,
       blocksTime: false,
+      calendarBlocksTime: false,
     },
     {
+      id: CalendarEventId.parse('01ARZ3NDEKTSV4RRFFQ69G5FAX'),
       title: 'Busy day',
       startsAt: '2026-10-07T00:00:00.000Z',
       endsAt: '2026-10-08T00:00:00.000Z',
       allDay: true,
       blocksTime: true,
+      calendarBlocksTime: true,
     },
   ]);
+});
+
+it('keeps calendar busy facts while a saved per-day override permits work', () => {
+  state.params = new URLSearchParams('date=2026-10-07');
+  state.draft = {
+    ...selectedDraft(),
+    settings: { ignoredAllDayEventIds: ['01ARZ3NDEKTSV4RRFFQ69G5FAY'] },
+  };
+  state.entries = [
+    {
+      kind: 'google_calendar_event',
+      event: {
+        id: CalendarEventId.parse('01ARZ3NDEKTSV4RRFFQ69G5FAY'),
+        title: 'Cycle',
+        startsAt: null,
+        endsAt: null,
+        allDayStartDate: '2026-10-07',
+        allDayEndDate: '2026-10-08',
+        blocksTime: true,
+      },
+    },
+  ];
+  const { result } = renderHook(() => useDailyPlanningController());
+  expect(result.current.fixed[0]).toMatchObject({
+    id: CalendarEventId.parse('01ARZ3NDEKTSV4RRFFQ69G5FAY'),
+    allDay: true,
+    calendarBlocksTime: true,
+    blocksTime: false,
+  });
 });

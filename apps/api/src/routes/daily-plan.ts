@@ -46,6 +46,7 @@ import { buildDailyProposal, proposalInput, proposalOut } from './daily-plan-pro
 import { loadSchedulingPreferences } from '../services/scheduling/repository';
 import { projectAcceptedDailyPlan } from './daily-plan-confirm-write';
 import { requireLegacyPlanMutation } from '../services/scheduling/daily-plan-compatibility';
+import { dailyPlanningWorkRoutes } from './daily-planning-work';
 
 type DailyPlanItemRow = typeof dailyPlanItem.$inferSelect;
 
@@ -126,6 +127,7 @@ const listQuery = CursorQuery.extend({ date: z.iso.date() });
 const idParam = z.object({ id: z.string() });
 /** Daily-plan router: accepted day history, editable drafts, and legacy item operations. */
 const dailyPlan = new Hono<AppEnv>()
+  .route('/', dailyPlanningWorkRoutes)
   .get(
     '/day/:date',
     apiDoc({

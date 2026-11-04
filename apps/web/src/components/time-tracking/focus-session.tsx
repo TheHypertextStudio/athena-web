@@ -142,6 +142,7 @@ export default function FocusSession({
       data-testid="focus-session"
       data-timer-state={running ? 'running' : 'paused'}
     >
+      <SessionTotalLabel presentation={presentation} />
       <div className="flex items-center gap-2">
         <span
           aria-hidden="true"
@@ -202,11 +203,7 @@ export default function FocusSession({
         )}
       </div>
 
-      {provenanceText ? (
-        <Text token="body-small" tone="muted" truncate>
-          {provenanceText}
-        </Text>
-      ) : null}
+      <SessionProvenance text={provenanceText} />
 
       <ControlGroup controlSize={presentation === 'page' ? 'xl' : 'sm'} className="w-full min-w-0">
         <Tooltip>
@@ -292,4 +289,23 @@ export default function FocusSession({
       ) : null}
     </Surface>
   );
+}
+
+function SessionTotalLabel({
+  presentation,
+}: {
+  readonly presentation: FocusPresentation;
+}): JSX.Element | null {
+  return presentation === 'page' ? (
+    <Text token="label-small" tone="muted">
+      Session total
+    </Text>
+  ) : null;
+}
+function SessionProvenance({ text }: { readonly text: string | null }): JSX.Element | null {
+  return text ? (
+    <Text token="body-small" tone="muted" truncate>
+      {text}
+    </Text>
+  ) : null;
 }

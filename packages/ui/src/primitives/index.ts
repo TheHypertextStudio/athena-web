@@ -28,6 +28,7 @@ export {
   type ButtonVariantsOptions,
   type LegacyButtonSize,
 } from './button';
+export { IconButton, type IconButtonProps } from './icon-button';
 export {
   CHIP_TONES,
   CHIP_VARIANTS,

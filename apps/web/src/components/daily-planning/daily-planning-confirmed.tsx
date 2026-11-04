@@ -1,8 +1,9 @@
 'use client';
 
 /** Final screen after a person accepts or adjusts the day. */
-import { Button, Card, CardContent } from '@docket/ui/primitives';
+import { Button, Card, CardContent, IconButton } from '@docket/ui/primitives';
 import { EntityList, EntityListRow } from '@docket/ui/components';
+import { Edit, Undo } from '@docket/ui/icons';
 import { useState, type JSX } from 'react';
 import {
   selectDailyExecution,
@@ -10,6 +11,8 @@ import {
   dailyAllocations,
 } from '@docket/planning/daily-plan-execution';
 
+import CalendarItemDrawer from '@/components/calendar/calendar-item-drawer';
+import Link from '@/components/docket-link';
 import { clock } from './daily-planning-agenda';
 import type { ReadyPlanningController } from './daily-planning-controller';
 
@@ -77,6 +80,7 @@ function nextFocus(plan: ReadyPlanningController) {
     taskId,
     title: focusTitle(plan, taskId, workingTaskId),
     event: execution.event,
+    eventAllDay: plan.fixed.some((event) => event === execution.event && event.allDay),
     eventFirst: Boolean(execution.event),
     continueTask: Boolean(taskId && workingTaskId === taskId),
   };
@@ -94,7 +98,8 @@ function NextDescription({
   if (next.eventFirst && next.event)
     return (
       <p>
-        {next.event.title} at {clock(next.event.startsAt, plan.timezone)}
+        {next.event.title}
+        {next.eventAllDay ? ' · All day' : ` at ${clock(next.event.startsAt, plan.timezone)}`}
       </p>
     );
   if (next.taskId) return <p>{next.title}</p>;
@@ -117,6 +122,7 @@ function StartTaskAction({
   const label = `${next.continueTask ? 'Continue' : 'Start'} ${next.title}`;
   return (
     <Button
+      aria-label={label}
       className="h-auto min-h-10 max-w-full text-left whitespace-normal"
       disabled={starting}
       onClick={() => {
@@ -136,7 +142,7 @@ function StartTaskAction({
         })();
       }}
     >
-      {label}
+      {next.continueTask ? 'Continue working' : 'Start working'}
     </Button>
   );
 }
@@ -157,89 +163,205 @@ function GoToTodayAction({ plan }: { readonly plan: ReadyPlanningController }): 
   );
 }
 
-function upcomingKind(kind: string): JSX.Element | undefined {
-  return kind === 'Event' ? (
-    <span className="text-on-surface-variant text-label-small">{kind}</span>
-  ) : undefined;
-}
-
-/** Offer an explicit start while leaving confirmation itself timer-free. */
-export function ConfirmedStage({ plan }: { readonly plan: ReadyPlanningController }): JSX.Element {
-  const next = nextFocus(plan);
-  const upcoming = [
-    ...plan.fixed.map((event) => ({
-      id: `event-${event.startsAt}`,
-      startsAt: event.startsAt,
-      title: event.title,
-      kind: 'Event',
-    })),
-    ...dailyAllocations(plan.draft.sessions)
-      .filter((part) => next.remaining.has(part.taskId))
-      .map((part) => ({
-        id: `${part.sessionId}-${part.taskId}`,
-        startsAt: part.startsAt,
-        title: plan.titleFor(part.taskId),
-        kind: 'Work',
-      })),
-  ]
-    .filter((item) => Date.parse(item.startsAt) >= Date.now())
-    .sort((a, b) => a.startsAt.localeCompare(b.startsAt))
-    .slice(0, 4);
+function AcceptedWork({ plan }: { readonly plan: ReadyPlanningController }): JSX.Element {
+  const minutes = plan.draft.tasks.reduce((sum, task) => sum + task.plannedMinutes, 0);
   return (
-    <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,0.8fr)]">
-      <Card className="bg-primary-container min-w-0">
-        <CardContent className="space-y-4 p-4 sm:p-5">
-          <span className="text-primary text-display-small block" aria-hidden="true">
-            ✳
-          </span>
-          <div className="space-y-2">
-            <h2 className="text-on-primary-container text-title-large">Next</h2>
-            <div className="text-on-primary-container text-body-large break-words">
-              <NextDescription plan={plan} next={next} />
-            </div>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <StartTaskAction plan={plan} next={next} />
-            <GoToTodayAction plan={plan} />
-            {plan.wasAdjustment && plan.previousAccepted ? (
-              <Button
-                variant="ghost"
-                onClick={() => {
-                  void plan.undoAdjustment();
-                }}
-              >
-                Undo update
-              </Button>
-            ) : null}
-          </div>
-        </CardContent>
-      </Card>
-      <section className="min-w-0 space-y-3" aria-label="Upcoming agenda">
-        <h2 className="text-title-large">Coming up</h2>
-        {upcoming.length > 0 ? (
-          <EntityList aria-label="Upcoming agenda">
-            {upcoming.map((item) => (
+    <section aria-label="Accepted work" className="min-w-0 space-y-3">
+      <h2 className="text-title-large">Planned work</h2>
+      {plan.draft.tasks.length ? (
+        <>
+          <p className="text-body-small text-on-surface-variant">
+            {plan.draft.tasks.length} {plan.draft.tasks.length === 1 ? 'task' : 'tasks'} ·{' '}
+            <span>{minutes} min planned</span>
+          </p>
+          <EntityList aria-label="Accepted tasks">
+            {plan.draft.tasks.map((task) => (
               <EntityListRow
-                key={item.id}
+                key={task.taskId}
                 interactive={false}
                 title={
-                  <span className="text-label-large block break-words whitespace-normal">
-                    {item.title}
+                  <Link
+                    href={`/orgs/${task.organizationId}/tasks/${task.taskId}`}
+                    className="hover:underline"
+                  >
+                    {plan.titleFor(task.taskId)}
+                  </Link>
+                }
+                subtitle={plan.allTasks.get(task.taskId)?.projectName ?? undefined}
+                trailing={
+                  <span className="text-body-small text-on-surface-variant">
+                    {task.plannedMinutes} min
                   </span>
                 }
-                leading={
-                  <span className="text-on-surface-variant text-label-small w-14 tabular-nums">
-                    {clock(item.startsAt, plan.timezone)}
-                  </span>
-                }
-                trailing={upcomingKind(item.kind)}
               />
             ))}
           </EntityList>
-        ) : (
-          <p className="text-on-surface-variant text-body-medium">No timed blocks are coming up.</p>
-        )}
-      </section>
+        </>
+      ) : (
+        <p className="text-body-medium text-on-surface-variant">
+          No work was selected for this day.
+        </p>
+      )}
+    </section>
+  );
+}
+
+function acceptedAgendaItems(plan: ReadyPlanningController, remaining: ReadonlySet<string>) {
+  return [
+    ...plan.fixed.map((event, index) => ({
+      id: `event-${index}`,
+      startsAt: event.startsAt,
+      endsAt: event.endsAt,
+      title: event.title,
+      allDay: event.allDay,
+      eventId: event.id,
+      sessionId: undefined as string | undefined,
+      taskId: undefined as string | undefined,
+    })),
+    ...dailyAllocations(plan.draft.sessions)
+      .filter((part) => remaining.has(part.taskId))
+      .map((part) => ({
+        id: `${part.sessionId}-${part.taskId}`,
+        startsAt: part.startsAt,
+        endsAt: part.endsAt,
+        title: plan.titleFor(part.taskId),
+        allDay: false,
+        eventId: undefined as string | undefined,
+        sessionId: part.sessionId,
+        taskId: part.taskId,
+      })),
+  ]
+    .filter((item) => Date.parse(item.endsAt) > Date.now())
+    .sort((left, right) => left.startsAt.localeCompare(right.startsAt));
+}
+
+function AcceptedAgenda({
+  plan,
+  remaining,
+}: {
+  readonly plan: ReadyPlanningController;
+  readonly remaining: ReadonlySet<string>;
+}): JSX.Element {
+  const [eventId, setEventId] = useState<string | null>(null);
+  const entries = acceptedAgendaItems(plan, remaining);
+  return (
+    <section aria-label="Upcoming agenda" className="min-w-0 space-y-3">
+      <h2 className="text-title-large">Coming up</h2>
+      {entries.length ? (
+        <EntityList aria-label="Accepted day agenda">
+          {entries.map((item) => (
+            <EntityListRow
+              key={item.id}
+              interactive={false}
+              title={
+                item.eventId || item.taskId ? (
+                  <Button
+                    variant="link"
+                    className="h-auto min-h-10 w-full justify-start px-0 text-left whitespace-normal"
+                    onClick={() => {
+                      if (item.eventId) setEventId(item.eventId);
+                      else if (item.taskId) {
+                        plan.setStage('plan');
+                        plan.setEditing({
+                          taskId: item.taskId,
+                          ...(item.sessionId ? { sessionId: item.sessionId } : {}),
+                        });
+                      }
+                    }}
+                  >
+                    {item.title}
+                  </Button>
+                ) : (
+                  item.title
+                )
+              }
+              leading={
+                <span className="text-body-small text-on-surface-variant w-16 tabular-nums">
+                  {item.allDay ? 'All day' : clock(item.startsAt, plan.timezone)}
+                </span>
+              }
+            />
+          ))}
+        </EntityList>
+      ) : (
+        <p className="text-body-medium text-on-surface-variant">
+          No calendar events or work blocks are scheduled.
+        </p>
+      )}
+      {eventId ? (
+        <CalendarItemDrawer
+          itemId={eventId}
+          displayTimezone={plan.timezone}
+          onClose={() => {
+            setEventId(null);
+            void plan.dayQ.refetch();
+          }}
+          onOpenTask={(orgId, taskId) => {
+            window.location.assign(`/orgs/${orgId}/tasks/${taskId}`);
+          }}
+        />
+      ) : null}
+    </section>
+  );
+}
+
+function ConfirmationActions({
+  plan,
+  next,
+}: {
+  readonly plan: ReadyPlanningController;
+  readonly next: NextFocus;
+}): JSX.Element {
+  return (
+    <div className="flex flex-wrap gap-2">
+      <StartTaskAction plan={plan} next={next} />
+      <GoToTodayAction plan={plan} />
+      <IconButton
+        label="Adjust plan"
+        onClick={() => {
+          plan.setStage('plan');
+        }}
+      >
+        <Edit />
+      </IconButton>
+      {plan.wasAdjustment && plan.previousAccepted ? (
+        <IconButton
+          label="Undo update"
+          onClick={() => {
+            void plan.undoAdjustment();
+          }}
+        >
+          <Undo />
+        </IconButton>
+      ) : null}
+    </div>
+  );
+}
+
+/** Show the accepted day and offer an explicit start while leaving confirmation timer-free. */
+export function ConfirmedStage({ plan }: { readonly plan: ReadyPlanningController }): JSX.Element {
+  const next = nextFocus(plan);
+  return (
+    <div className="space-y-6">
+      <Card variant="outlined">
+        <CardContent className="space-y-3 p-4 sm:p-5">
+          <h2 className="text-title-large">
+            {next.continueTask
+              ? 'Current session'
+              : plan.draft.tasks.length
+                ? 'Next'
+                : 'Day kept clear'}
+          </h2>
+          <div className="text-body-large">
+            <NextDescription plan={plan} next={next} />
+          </div>
+          <ConfirmationActions plan={plan} next={next} />
+        </CardContent>
+      </Card>
+      <div className="grid items-start gap-6 lg:grid-cols-2">
+        <AcceptedWork plan={plan} />
+        <AcceptedAgenda plan={plan} remaining={next.remaining} />
+      </div>
     </div>
   );
 }

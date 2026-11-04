@@ -68,6 +68,7 @@ export const DailyPlanSnapshot = z
         startAt: z.iso.datetime().optional(),
         bufferPercent: z.number().min(0).max(100).optional(),
         excludedTaskIds: z.array(z.string().min(1)).optional(),
+        ignoredAllDayEventIds: z.array(z.string().min(1)).optional(),
         sequenceEdited: z.boolean().optional(),
       })
       .optional(),

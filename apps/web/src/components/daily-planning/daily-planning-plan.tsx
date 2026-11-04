@@ -3,11 +3,12 @@
 /** The single editable agenda used while choosing and reviewing a day. */
 import type { DailyPlanSession } from '@docket/planning/daily-plan-flow';
 import { instantAt } from '@docket/planning/zoned-time';
-import { Button, Card, CardContent } from '@docket/ui/primitives';
-import type { JSX } from 'react';
+import { Button, Card, CardContent, Checkbox, IconButton } from '@docket/ui/primitives';
+import { Calendar } from '@docket/ui/icons';
+import { useState, type JSX } from 'react';
 import { visiblePlanningPanels, type PlanningPanels } from './daily-planning-panels';
 import { useMediaQuery } from '@docket/ui/hooks';
-import { ActivityPanels } from '@docket/ui/components';
+import { ActivityPanels, InlineBanner } from '@docket/ui/components';
 
 import { DailyAgenda } from './daily-planning-agenda';
 import { SessionEditor } from './daily-planning-session-editor';
@@ -22,6 +23,10 @@ import {
 } from './daily-planning-model';
 import { UnplacedWork } from './daily-planning-unplaced';
 import { OutsideWorkHours } from './daily-planning-outside-hours';
+import CalendarItemDrawer from '@/components/calendar/calendar-item-drawer';
+import { useAppRouter } from '@/lib/interactions/navigation';
+import { PlanningTimeSelection } from './daily-planning-time-selection';
+import type { ScheduleRegionSelection } from '@/components/scheduling';
 import { WorkColumn } from './daily-planning-work';
 
 function agendaActions(plan: ReadyPlanningController) {
@@ -89,12 +94,37 @@ function agendaActions(plan: ReadyPlanningController) {
   };
 }
 
-function AgendaHeading({ plan }: { readonly plan: ReadyPlanningController }): JSX.Element {
+function toggleAllDayBlocking(plan: ReadyPlanningController, id: string, blocks: boolean): void {
+  if (plan.preview) {
+    plan.setError('Apply or keep the current schedule before changing availability.');
+    return;
+  }
+  const ignored = new Set(plan.draft.settings?.ignoredAllDayEventIds ?? []);
+  if (blocks) ignored.delete(id);
+  else ignored.add(id);
+  plan.editDraft({
+    ...plan.draft,
+    settings: { ...plan.draft.settings, ignoredAllDayEventIds: [...ignored] },
+  });
+}
+
+function AgendaHeading({
+  plan,
+  onSchedule,
+}: {
+  readonly plan: ReadyPlanningController;
+  readonly onSchedule: () => void;
+}): JSX.Element {
   return (
     <>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-title-large">Agenda</h2>
-        <OrganizeDay plan={plan} />
+        <div className="flex items-center gap-1">
+          <IconButton label="Schedule work" disabled={Boolean(plan.preview)} onClick={onSchedule}>
+            <Calendar />
+          </IconButton>
+          <OrganizeDay plan={plan} />
+        </div>
       </div>
       <WorkdayControls plan={plan} />
       <ScheduleControls plan={plan} />
@@ -140,10 +170,40 @@ function AgendaSessionEditor({
 
 function AgendaColumn({ plan }: { readonly plan: ReadyPlanningController }): JSX.Element {
   const displayed = plan.preview?.draft ?? plan.draft;
+  const [calendarItemId, setCalendarItemId] = useState<string | null>(null);
+  const [selection, setSelection] = useState<{ region: ScheduleRegionSelection | null } | null>(
+    null,
+  );
+  const router = useAppRouter();
   return (
     <section className="min-w-0 space-y-3" aria-label="Planned agenda">
-      <AgendaHeading plan={plan} />
+      <AgendaHeading
+        plan={plan}
+        onSchedule={() => {
+          setSelection({ region: null });
+        }}
+      />
       <AgendaSessionEditor plan={plan} />
+      {selection ? (
+        <PlanningTimeSelection
+          plan={plan}
+          region={selection.region}
+          onClose={() => {
+            setSelection(null);
+          }}
+        />
+      ) : null}
+      <CalendarItemDrawer
+        displayTimezone={plan.timezone}
+        itemId={calendarItemId}
+        onClose={() => {
+          setCalendarItemId(null);
+          void plan.dayQ.refetch();
+        }}
+        onOpenTask={(orgId, taskId) => {
+          router.push(`/orgs/${orgId}/tasks/${taskId}`);
+        }}
+      />
       <DailyAgenda
         date={plan.date}
         timezone={plan.timezone}
@@ -151,6 +211,17 @@ function AgendaColumn({ plan }: { readonly plan: ReadyPlanningController }): JSX
         draft={displayed}
         events={plan.fixed}
         names={plan.names}
+        onOpenEvent={setCalendarItemId}
+        onToggleAllDayBlocking={(id, blocks) => {
+          toggleAllDayBlocking(plan, id, blocks);
+        }}
+        onSelectRegion={(region) => {
+          if (plan.preview) {
+            plan.setError('Apply or keep the current schedule before placing work.');
+            return;
+          }
+          setSelection({ region });
+        }}
         onEdit={(session) => {
           if (plan.preview) {
             plan.setError('Apply or keep the current schedule before editing a block.');
@@ -199,10 +270,16 @@ async function confirmPlan(plan: ReadyPlanningController): Promise<void> {
   }
 }
 
-function ConfirmPlanButton({ plan }: { readonly plan: ReadyPlanningController }): JSX.Element {
+function ConfirmPlanButton({
+  plan,
+  allowEmpty = false,
+}: {
+  readonly plan: ReadyPlanningController;
+  readonly allowEmpty?: boolean;
+}): JSX.Element {
   return (
     <Button
-      disabled={confirmationDisabled(plan)}
+      disabled={confirmationDisabled(plan) || (plan.draft.tasks.length === 0 && !allowEmpty)}
       onClick={() => {
         void confirmPlan(plan);
       }}
@@ -247,20 +324,54 @@ function PlanFooter({ plan }: { readonly plan: ReadyPlanningController }): JSX.E
   );
 }
 
+function EditPlanButton({ plan }: { readonly plan: ReadyPlanningController }): JSX.Element {
+  return (
+    <Button
+      variant="secondary"
+      disabled={plan.deferPending}
+      onClick={() => {
+        void plan.go('plan');
+      }}
+    >
+      Edit plan
+    </Button>
+  );
+}
+
+function EmptyDayConfirmation({ plan }: { readonly plan: ReadyPlanningController }): JSX.Element {
+  const [acknowledged, setAcknowledged] = useState(false);
+  return (
+    <div className="w-full space-y-2">
+      <InlineBanner tone="warning" title="No work is selected for this day." />
+      <label className="text-body-small inline-flex min-h-10 items-center gap-2">
+        <Checkbox
+          checked={acknowledged}
+          onChange={(event) => {
+            setAcknowledged(event.target.checked);
+          }}
+        />
+        Keep this day without planned work
+      </label>
+      <div className="flex items-center justify-between gap-3">
+        <EditPlanButton plan={plan} />
+        <ConfirmPlanButton plan={plan} allowEmpty={acknowledged} />
+      </div>
+    </div>
+  );
+}
+
 function ReviewFooter({ plan }: { readonly plan: ReadyPlanningController }): JSX.Element {
   return (
     <Card>
       <CardContent className="flex flex-wrap items-center justify-between gap-3 py-3">
-        <Button
-          variant="secondary"
-          disabled={plan.deferPending}
-          onClick={() => {
-            void plan.go('plan');
-          }}
-        >
-          Edit plan
-        </Button>
-        <ConfirmPlanButton plan={plan} />
+        {plan.draft.tasks.length === 0 ? (
+          <EmptyDayConfirmation key={plan.date} plan={plan} />
+        ) : (
+          <>
+            <EditPlanButton plan={plan} />
+            <ConfirmPlanButton plan={plan} />
+          </>
+        )}
       </CardContent>
     </Card>
   );
@@ -315,10 +426,10 @@ export function PlanStage({
         </div>
       ) : null}
       <ActivityPanels
-        showPrimary={reviewing ? visible.agenda : visible.work}
-        showSecondary={reviewing ? visible.work : visible.agenda}
-        primary={reviewing ? <AgendaColumn plan={plan} /> : <WorkColumn plan={plan} />}
-        secondary={reviewing ? <WorkColumn plan={plan} /> : <AgendaColumn plan={plan} />}
+        showPrimary={visible.work}
+        showSecondary={visible.agenda}
+        primary={<WorkColumn plan={plan} />}
+        secondary={<AgendaColumn plan={plan} />}
       />
     </fieldset>
   );

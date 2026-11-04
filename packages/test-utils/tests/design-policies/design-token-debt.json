@@ -429,9 +429,6 @@
   "apps/web/src/components/teams/team-picker.tsx": {
     "raw-type-utility": 1
   },
-  "apps/web/src/components/time-tracking/focus-immersive.tsx": {
-    "ad-hoc-border": 3
-  },
   "apps/web/src/components/time-tracking/focus-session.tsx": {
     "raw-radius-utility": 2
   },

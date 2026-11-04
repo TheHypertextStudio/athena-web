@@ -1,9 +1,13 @@
+import { renderPlanning as render } from './render';
 import '@testing-library/jest-dom/vitest';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ReadyPlanningController } from '../../src/components/daily-planning/daily-planning-controller';
 import { WorkColumn } from '../../src/components/daily-planning/daily-planning-work';
+vi.mock('../../src/components/daily-planning/daily-planning-add', () => ({
+  ExistingWorkBrowser: () => null,
+}));
 
 vi.mock('../../src/components/dnd/use-draggable', () => ({
   useDraggable: () => ({ ref: vi.fn(), className: '', 'data-drag-state': 'idle' }),
@@ -17,6 +21,8 @@ function mount(scheduledMinutes: number) {
   const entry = { taskId: 'task', organizationId: 'org', plannedMinutes: 60, sort: 0 };
   const controller = {
     stage: 'plan_today',
+    startAt: '2026-10-08T09:00:00.000Z',
+    fixed: [],
     draft: {
       date: '2026-10-08',
       mainTaskId: null,

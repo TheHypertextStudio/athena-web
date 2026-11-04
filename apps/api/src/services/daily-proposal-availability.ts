@@ -20,6 +20,8 @@ export interface ProposalFixedInterval {
   readonly startsAt: string;
   readonly endsAt: string;
   readonly kind: 'event' | 'protected';
+  readonly allDay?: boolean;
+  readonly blocksTime?: boolean;
 }
 
 /** Exact availability with a visible editable fallback when no schedule governs the date. */
@@ -77,15 +79,11 @@ function canonicalWindows(
 function planningBounds(
   input: AvailabilityInput,
   known: readonly Interval[],
-  dayStart: Date,
-  dayEnd: Date,
 ): { startAt: string; finishAt: string; fallback: Interval } {
   const defaultStart = instantAt(input.date, 9 * 60, input.timezone).getTime();
-  const currentStart =
-    input.now.getTime() < dayEnd.getTime() ? input.now.getTime() : dayStart.getTime();
   const start = input.draft?.settings?.startAt
     ? Date.parse(input.draft.settings.startAt)
-    : Math.max(currentStart, known[0]?.start ?? defaultStart);
+    : (known[0]?.start ?? defaultStart);
   const defaultFinish =
     known.length > 0
       ? Math.max(...known.map((span) => span.end))
@@ -159,6 +157,8 @@ async function nativeCommitments(
     startsAt: (item.startsAt ?? dayStart).toISOString(),
     endsAt: (item.endsAt ?? dayEnd).toISOString(),
     kind: 'event',
+    allDay: Boolean(item.allDayStartDate),
+    blocksTime: true,
   }));
 }
 
@@ -186,7 +186,7 @@ export async function loadProposalAvailability(
     .map((window) => weeklyInterval(window, input));
   const workScheduleMissing = !hasCanonicalDay && scheduled.length === 0;
   const known = hasCanonicalDay ? segments : scheduled;
-  const bounds = planningBounds(input, known, dayStart, dayEnd);
+  const bounds = planningBounds(input, known);
   const protectedIntervals = protectedContext(weekly, input);
   const protectedTime = protectedIntervals.map((interval) => ({
     start: Date.parse(interval.startsAt),
@@ -198,7 +198,13 @@ export async function loadProposalAvailability(
     input.date,
   );
   const busy = mergeIntervals(
-    native.map((item) => ({ start: Date.parse(item.startsAt), end: Date.parse(item.endsAt) })),
+    native
+      .filter(
+        (item) =>
+          item.blocksTime !== false &&
+          !(item.allDay && input.draft?.settings?.ignoredAllDayEventIds?.includes(item.id)),
+      )
+      .map((item) => ({ start: Date.parse(item.startsAt), end: Date.parse(item.endsAt) })),
   );
   return {
     windows,

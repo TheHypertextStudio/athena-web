@@ -81,30 +81,34 @@ async function providerEvent(
   providerRaw: Record<string, unknown>,
   timed = false,
 ) {
-  await schema.db.insert(schema.calendarItem).values({
-    userId: context.userId,
-    layerId: context.layerId,
-    connectionId: context.connectionId,
-    kind: 'provider_event',
-    provider: 'google',
-    externalCalendarId: 'primary',
-    externalEventId: title,
-    status: 'confirmed',
-    title,
-    providerRaw,
-    startsAt: timed ? new Date(at(9)) : null,
-    endsAt: timed ? new Date(at(17)) : null,
-    allDayStartDate: timed ? null : date,
-    allDayEndDate: timed ? null : '2027-01-06',
-  });
+  const [item] = await schema.db
+    .insert(schema.calendarItem)
+    .values({
+      userId: context.userId,
+      layerId: context.layerId,
+      connectionId: context.connectionId,
+      kind: 'provider_event',
+      provider: 'google',
+      externalCalendarId: 'primary',
+      externalEventId: title,
+      status: 'confirmed',
+      title,
+      providerRaw,
+      startsAt: timed ? new Date(at(9)) : null,
+      endsAt: timed ? new Date(at(17)) : null,
+      allDayStartDate: timed ? null : date,
+      allDayEndDate: timed ? null : '2027-01-06',
+    })
+    .returning();
+  return one(item ? [item] : []);
 }
 
-async function propose(userId: string) {
+async function propose(userId: string, draft?: unknown) {
   const app = appWithSession(router, fakeSession(userId));
   const response = await app.request(`/day/${date}/proposal`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: '{}',
+    body: JSON.stringify(draft ? { draft } : {}),
   });
   expect(response.status).toBe(200);
   return response.json() as Promise<{
@@ -115,6 +119,25 @@ async function propose(userId: string) {
 }
 
 describe('daily proposal with provider availability', () => {
+  it('allows a private day override without changing the busy source event', async () => {
+    const context = await account('ContextDayOverride');
+    const event = await providerEvent(context, 'Cycle', { transparency: 'opaque' });
+    expect((await propose(context.userId)).availableMinutes).toBe(0);
+    const result = await propose(context.userId, {
+      date,
+      finishAt: at(17),
+      mainTaskId: null,
+      tasks: [],
+      sessions: [],
+      settings: { ignoredAllDayEventIds: [event.id] },
+    });
+    expect(result.availableMinutes).toBe(480);
+    const [stored] = await schema.db
+      .select()
+      .from(schema.calendarItem)
+      .where(eq(schema.calendarItem.id, event.id));
+    expect(stored?.providerRaw).toEqual({ transparency: 'opaque' });
+  });
   it('keeps transparent all-day and timed context without consuming work capacity', async () => {
     const context = await account('FreeCalendarProposal');
     await providerEvent(context, 'Week Without Driving', { transparency: 'transparent' });

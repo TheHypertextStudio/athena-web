@@ -141,6 +141,20 @@ Actual rendered hierarchy must be assessed independently of interaction tests. G
 - **Concurrent integration**: Rebased onto the two usage-attribution commits published during acceptance. Preserve their migration numbers and place resource receipts/uploads at 0189/0190 with increasing timestamps. Their table/index creation is idempotent so the previously accepted staging schema can advance through the canonical journal without resetting data or changing historical migration records. Verify both first application and adoption over already-created upload tables before rebuilding the integrated candidate.
 
 - **Declared-length rejection**: An additional ten-byte provider probe confirms GCS rejects a body larger than its declared nine-byte reservation even when the checksum matches those ten bytes. The terminal failure is plain text and repeats on DELETE and valid status probes. Recognize only that exact provider message shape and require an identical failure on a valid probe before acknowledging cancellation; generic errors, changed messages and live sessions retain cleanup for retry. Keep this independent of the already-passing 100 MiB transfer and CRC rejection evidence. All 32 storage tests pass (99.31% line and 93.22% branch coverage), as do storage types/lint and the unchanged complexity gate. The actual provider confirms acknowledged cleanup with no objects remaining under the exact owned probe prefix.
+### [DAILY-PLANNING-DESIGN-PASS] Clarify the daily planning workspace
+
+- **Status**: IN_PROGRESS
+- **Started**: 2026-11-04
+- **Priority**: P2
+- **Description**: Refine the complete daily planning, review, confirmation and Focus experience after restoring its core functionality.
+- **Approach**: Use the app's Plex/MD3 register and existing shared list, text, control and surface primitives. Keep selected work compact, let task discovery follow it with quiet separation, and show the workday as a shaded interval on the agenda with one compact clock control for adjustments. Format durations as hours and minutes, and reduce duplicated content. Preserve direct editing, drag scheduling, accessible icon actions and existing save/recovery behavior. Keep one forward footer action and use the numbered stage navigation for backward movement. Review confirmation and Focus as continuations of the same working day.
+- **Plan**:
+  - [ ] Review current screenshots and source against the eight craft dimensions; record concrete baseline findings in the design audit.
+  - [ ] Refine task-list hierarchy, mobile density, duration presentation, active-filter clarity, agenda workday representation, confirmation and Focus composition where the rendered evidence warrants it.
+  - [ ] Exercise selection, editing, search, filters, scheduling and keyboard recovery with a large task collection, long content and empty/loading/error states.
+  - [ ] Capture desktop/phone in both themes and check 320px, text scaling, contrast, touch targets and focus; finish the audit with honest evidence and remaining limits.
+  - [ ] Run affected component/browser checks, lint, types, design policy and build; update docs, then integrate and deploy through the established release path.
+- **Tradeoff**: Prefer compact lists and explicit object grouping over individual task cards or another picker screen. Keep advanced controls available in their existing menu/popover and show active scope visibly. Keep this to the planning and Focus experience without changing its data model or providers.
 
 ### [ACTIVITY-METADATA-WRAPPER] Integrate session groups with ordinary activity
 

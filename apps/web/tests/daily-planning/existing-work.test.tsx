@@ -4,7 +4,10 @@ import { cleanup, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { ReadyPlanningController } from '../../src/components/daily-planning/daily-planning-controller';
-import { AddWorkStage } from '../../src/components/daily-planning/daily-planning-add';
+import {
+  AddWorkStage,
+  ExistingWorkBrowser,
+} from '../../src/components/daily-planning/daily-planning-add';
 
 const openCreate = vi.hoisted(() => vi.fn());
 vi.mock('../../src/components/create-object/create-object-provider', () => ({
@@ -25,7 +28,7 @@ function plan() {
     projectName: 'Better streets',
     priority: 'high',
     dueAt: null,
-    estimateMinutes: 30,
+    estimateMinutes: 150,
   }));
   return {
     draft: { tasks: [], sessions: [] },
@@ -63,21 +66,23 @@ it('adds several existing tasks in one action without losing the selection or ca
       taskId: 'task-0',
       organizationId: 'org',
       title: 'Prepare community meeting',
-      plannedMinutes: 30,
+      plannedMinutes: 150,
     },
     {
       taskId: 'task-1',
       organizationId: 'org',
       title: 'Review transit proposal',
-      plannedMinutes: 30,
+      plannedMinutes: 150,
     },
   ]);
   expect(screen.getByRole('searchbox', { name: 'Search existing tasks' })).toHaveValue('');
+  expect(screen.getAllByText(/2h 30m/)).toHaveLength(2);
 });
 
 it('offers continuation beyond the first page and explicit responsibility filters', async () => {
   const controller = plan();
   render(<AddWorkStage plan={controller} />);
+  expect(screen.getAllByText(/2h 30m/)).toHaveLength(2);
   await userEvent.click(screen.getByRole('button', { name: 'Load more tasks' }));
   expect(controller.searchQ.fetchNextPage).toHaveBeenCalledOnce();
   await userEvent.click(screen.getByRole('button', { name: 'Filter' }));
@@ -94,4 +99,31 @@ it('opens the normal task composer from the task actions menu', async () => {
     expect.objectContaining({ kind: 'task' }),
     expect.any(HTMLButtonElement),
   );
+});
+
+it('keeps chosen work out of the default browser and finds it again when searching', () => {
+  const controller = plan();
+  controller.draft.tasks = [
+    { taskId: 'task-0', organizationId: 'org', plannedMinutes: 30, sort: 0 },
+  ];
+  const view = render(<ExistingWorkBrowser plan={controller} />);
+  expect(screen.queryByText('Prepare community meeting')).not.toBeInTheDocument();
+  expect(screen.getByText('Review transit proposal')).toBeVisible();
+  controller.search = 'Prepare';
+  view.rerender(<ExistingWorkBrowser plan={controller} />);
+  expect(screen.getByText('Prepare community meeting')).toBeVisible();
+  expect(screen.getByText('In plan')).toBeVisible();
+});
+
+it('shows the active task scope outside the popover and clears it in one action', async () => {
+  const controller = plan();
+  controller.workScope = 'created';
+  controller.workOrganization = 'org';
+  render(<ExistingWorkBrowser plan={controller} />);
+  expect(screen.getByRole('group', { name: 'Active task filters' })).toHaveTextContent(
+    'Created by me · Community',
+  );
+  await userEvent.click(screen.getByRole('button', { name: 'Clear task filters' }));
+  expect(controller.setWorkScope).toHaveBeenCalledWith('mine');
+  expect(controller.setWorkOrganization).toHaveBeenCalledWith('');
 });

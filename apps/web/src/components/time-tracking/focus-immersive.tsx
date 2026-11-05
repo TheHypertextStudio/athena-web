@@ -146,7 +146,7 @@ export default function FocusImmersive({ userId = null }: FocusImmersiveProps): 
         </Text>
       }
     >
-      <div className="mx-auto grid w-full max-w-[1440px] grid-cols-1 gap-6 px-4 py-5 sm:px-6 md:grid-cols-[minmax(0,1fr)_22rem] md:grid-rows-[auto_1fr] md:px-10 md:py-8 lg:gap-12 lg:px-16">
+      <div className="mx-auto grid w-full max-w-[1320px] grid-cols-1 gap-6 px-4 py-5 sm:px-6 md:grid-cols-[minmax(0,1fr)_22rem] md:grid-rows-[auto_1fr] md:py-8 lg:gap-10 lg:px-8">
         <ImmersiveSession
           timer={timer}
           controls={controls}
@@ -172,12 +172,12 @@ export default function FocusImmersive({ userId = null }: FocusImmersiveProps): 
               retrying={timer.reloading}
             />
           ) : timer.record?.taskId && timer.record.organizationId ? (
-            <div className="flex max-w-3xl flex-col gap-6">
+            <div className="flex max-w-3xl flex-col gap-4">
               <Link
                 href={`/orgs/${timer.record.organizationId}/tasks/${timer.record.taskId}`}
                 className="group focus-visible:outline-primary rounded-md focus-visible:outline-2 focus-visible:outline-offset-4"
               >
-                <span className="text-on-surface text-display-small group-hover:text-primary inline text-balance">
+                <span className="text-on-surface text-headline-small md:text-display-small group-hover:text-primary inline text-balance">
                   {timer.title}
                 </span>{' '}
                 <OpenInNew

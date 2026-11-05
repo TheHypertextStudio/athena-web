@@ -17,8 +17,8 @@ vi.mock('../../src/components/dnd', () => ({
 }));
 
 const title = 'Prepare the complete launch report';
-function mount(scheduledMinutes: number) {
-  const entry = { taskId: 'task', organizationId: 'org', plannedMinutes: 60, sort: 0 };
+function mount(scheduledMinutes: number, plannedMinutes = 60) {
+  const entry = { taskId: 'task', organizationId: 'org', plannedMinutes, sort: 0 };
   const controller = {
     stage: 'plan_today',
     startAt: '2026-10-08T09:00:00.000Z',
@@ -77,6 +77,11 @@ describe('compact work card actions', () => {
         tasks: [expect.objectContaining({ plannedMinutes: 90 })],
       }),
     );
+  });
+
+  it('shows the day capacity in hours and minutes', () => {
+    mount(0, 105);
+    expect(screen.getByRole('status')).toHaveTextContent('1h 45m remaining · 8h available');
   });
 
   it('opens a fully scheduled block through the menu with the keyboard', async () => {

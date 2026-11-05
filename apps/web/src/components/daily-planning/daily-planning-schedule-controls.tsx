@@ -1,14 +1,16 @@
 'use client';
 
 import { instantAt } from '@docket/planning/zoned-time';
-import { ChevronDown, Sparkles } from '@docket/ui/icons';
+import { AlarmClock, Sparkles } from '@docket/ui/icons';
 import {
   Button,
   IconButton,
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
   Input,
+  Popover,
+  PopoverBody,
+  PopoverContent,
+  PopoverHeader,
+  PopoverTrigger,
 } from '@docket/ui/primitives';
 import { useState, type JSX } from 'react';
 import type { ReadyPlanningController } from './daily-planning-controller';
@@ -84,56 +86,59 @@ export function WorkdayControls({ plan }: { readonly plan: ReadyPlanningControll
     );
   };
   return (
-    <Collapsible open={open} onOpenChange={setOpen} className="space-y-2">
-      <CollapsibleTrigger asChild>
-        <Button
-          size="sm"
-          variant="ghost"
-          aria-label="Workday settings"
-          className="group max-w-full justify-start gap-2 px-0"
-        >
-          <span className="text-on-surface-variant">Work hours</span>
-          <span>
-            {invalid
-              ? 'Set hours'
-              : `${clock(configuredStart, plan.timezone)} – ${clock(plan.draft.finishAt, plan.timezone)}`}
-          </span>
-          <ChevronDown aria-hidden="true" className="group-data-[state=open]:rotate-180" />
-        </Button>
-      </CollapsibleTrigger>
-      <CollapsibleContent className="space-y-2">
-        <p className="text-body-small text-on-surface-variant">Timezone: {plan.timezone}</p>
-        {plan.proposalContext?.workScheduleMissing ? (
-          <p className="text-body-small text-on-surface-variant">
-            No saved work schedule. Set the hours for this day.
-          </p>
-        ) : null}
-        <div className="flex flex-wrap items-end gap-3">
-          <WorkdayTimeInput
-            label="Start"
-            value={clockValue(configuredStart, plan.timezone)}
-            onChange={(value) => {
-              changeTime(value, 'start');
-            }}
-          />
-          <WorkdayTimeInput
-            label="Finish"
-            value={clockValue(plan.draft.finishAt, plan.timezone)}
-            onChange={(value) => {
-              changeTime(value, 'finish');
-            }}
-          />
-          <WorkdayBuffer plan={plan} />
-        </div>
-      </CollapsibleContent>
+    <div className="space-y-2">
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <Button
+            size="sm"
+            variant="ghost"
+            aria-label="Workday hours"
+            className="max-w-full justify-start gap-2 px-2"
+          >
+            <AlarmClock aria-hidden="true" className="text-on-surface-variant size-4" />
+            <span className="text-label-medium">
+              {invalid
+                ? 'Set hours'
+                : `${clock(configuredStart, plan.timezone)} – ${clock(plan.draft.finishAt, plan.timezone)}`}
+            </span>
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent align="start" presentation="panel" width="lg" aria-label="Workday">
+          <PopoverHeader inset="compact">
+            <h3 className="text-title-small text-on-surface">Workday</h3>
+          </PopoverHeader>
+          <PopoverBody inset="compact" className="space-y-3">
+            <p className="text-body-small text-on-surface-variant">
+              Times shown in {plan.timezone}
+            </p>
+            <div className="flex flex-wrap items-end gap-3">
+              <WorkdayTimeInput
+                label="Starts"
+                value={clockValue(configuredStart, plan.timezone)}
+                onChange={(value) => {
+                  changeTime(value, 'start');
+                }}
+              />
+              <WorkdayTimeInput
+                label="Ends"
+                value={clockValue(plan.draft.finishAt, plan.timezone)}
+                onChange={(value) => {
+                  changeTime(value, 'finish');
+                }}
+              />
+              <WorkdayBuffer plan={plan} />
+            </div>
+          </PopoverBody>
+        </PopoverContent>
+      </Popover>
       {invalid || ended ? (
         <p role="status" className="text-body-small text-on-surface-variant">
           {invalid
-            ? 'Start must be before Finish. Adjust work hours to schedule this day.'
-            : 'Work hours have ended. Change Finish to schedule more work.'}
+            ? 'Start must be before finish. Adjust the workday to schedule this day.'
+            : 'The workday has ended. Change its finish time to schedule more work.'}
         </p>
       ) : null}
-    </Collapsible>
+    </div>
   );
 }
 

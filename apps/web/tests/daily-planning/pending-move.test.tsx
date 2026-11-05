@@ -35,10 +35,14 @@ vi.mock('../../src/lib/interactions/navigation', () => ({
 vi.mock('../../src/components/calendar/calendar-item-drawer', () => ({ default: () => null }));
 
 afterEach(cleanup);
-function controller(pending: boolean): ReadyPlanningController {
+function controller(
+  pending: boolean,
+  stage: 'plan' | 'review' = 'review',
+  hasPreviousWork = false,
+): ReadyPlanningController {
   return {
     date: '2026-10-07',
-    stage: 'review',
+    stage,
     deferPending: pending,
     isMovingTask: () => pending,
     isCurrentDate: () => true,
@@ -52,7 +56,7 @@ function controller(pending: boolean): ReadyPlanningController {
     },
     names: new Map(),
     dayQ: { data: { actual: [], carryover: [] } },
-    previousQ: { data: { tasks: [], actual: [] } },
+    previousQ: { data: { tasks: hasPreviousWork ? [{ taskId: 'previous' }] : [], actual: [] } },
     setConfirming: vi.fn(),
     setWasAdjustment: vi.fn(),
     setPreviousAccepted: vi.fn(),
@@ -63,6 +67,19 @@ function controller(pending: boolean): ReadyPlanningController {
     go: vi.fn(),
   } as unknown as ReadyPlanningController;
 }
+describe('daily plan footer actions', () => {
+  it('keeps the footer to one forward action when prior work is available', () => {
+    render(<PlanningActions plan={controller(false, 'plan', true)} />);
+    expect(screen.getByRole('button', { name: /^Review plan$/ })).toBeVisible();
+    expect(screen.queryByRole('button', { name: /^Review today$/ })).not.toBeInTheDocument();
+  });
+
+  it('keeps the reviewed footer to confirmation when work is selected', () => {
+    render(<PlanningActions plan={controller(false)} />);
+    expect(screen.getByRole('button', { name: /^Confirm plan$/ })).toBeVisible();
+    expect(screen.queryByRole('button', { name: /^Edit plan$/ })).not.toBeInTheDocument();
+  });
+});
 describe('confirmation during a pending move', () => {
   it('requires an explicit empty-day choice before confirming a plan with no work', () => {
     const plan = controller(false);

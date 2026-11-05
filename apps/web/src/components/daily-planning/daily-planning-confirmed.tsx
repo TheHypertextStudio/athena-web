@@ -167,7 +167,7 @@ function AcceptedWork({ plan }: { readonly plan: ReadyPlanningController }): JSX
   const minutes = plan.draft.tasks.reduce((sum, task) => sum + task.plannedMinutes, 0);
   return (
     <section aria-label="Accepted work" className="min-w-0 space-y-3">
-      <h2 className="text-title-large">Planned work</h2>
+      <h2 className="text-title-medium">Planned work</h2>
       {plan.draft.tasks.length ? (
         <>
           <p className="text-body-small text-on-surface-variant">
@@ -246,7 +246,7 @@ function AcceptedAgenda({
   const entries = acceptedAgendaItems(plan, remaining);
   return (
     <section aria-label="Upcoming agenda" className="min-w-0 space-y-3">
-      <h2 className="text-title-large">Coming up</h2>
+      <h2 className="text-title-medium">Coming up</h2>
       {entries.length ? (
         <EntityList aria-label="Accepted day agenda">
           {entries.map((item) => (
@@ -342,26 +342,26 @@ function ConfirmationActions({
 export function ConfirmedStage({ plan }: { readonly plan: ReadyPlanningController }): JSX.Element {
   const next = nextFocus(plan);
   return (
-    <div className="space-y-6">
-      <Card variant="outlined">
-        <CardContent className="space-y-3 p-4 sm:p-5">
-          <h2 className="text-title-large">
-            {next.continueTask
-              ? 'Current session'
-              : plan.draft.tasks.length
-                ? 'Next'
-                : 'Day kept clear'}
-          </h2>
-          <div className="text-body-large">
-            <NextDescription plan={plan} next={next} />
-          </div>
-          <ConfirmationActions plan={plan} next={next} />
-        </CardContent>
-      </Card>
-      <div className="grid items-start gap-6 lg:grid-cols-2">
+    <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
+      <div className="min-w-0 space-y-6">
+        <Card>
+          <CardContent className="space-y-3 p-4 sm:p-5">
+            <h2 className="text-label-large text-on-surface-variant">
+              {next.continueTask
+                ? 'Current session'
+                : plan.draft.tasks.length
+                  ? 'Next'
+                  : 'Day kept clear'}
+            </h2>
+            <div className="text-title-large">
+              <NextDescription plan={plan} next={next} />
+            </div>
+            <ConfirmationActions plan={plan} next={next} />
+          </CardContent>
+        </Card>
         <AcceptedWork plan={plan} />
-        <AcceptedAgenda plan={plan} remaining={next.remaining} />
       </div>
+      <AcceptedAgenda plan={plan} remaining={next.remaining} />
     </div>
   );
 }

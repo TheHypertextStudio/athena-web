@@ -5,12 +5,12 @@ import { Ellipsis, GripVertical } from '@docket/ui/icons';
 import { EntityList, EntityListRow } from '@docket/ui/components';
 import {
   Button,
-  Card,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
   Input,
+  focusRingInset,
 } from '@docket/ui/primitives';
 import { useEffect, useState } from 'react';
 import Link from '@/components/docket-link';
@@ -27,6 +27,7 @@ import {
   capacityMinutes,
 } from './daily-planning-model';
 import { useWorkRowDropTarget } from '@/components/dnd';
+import { formatDuration } from '@/components/time-tracking/format-duration';
 import { ExistingWorkBrowser } from './daily-planning-add';
 
 function WorkSchedulingActions({
@@ -147,8 +148,8 @@ function WorkRowContents({
 }): JSX.Element {
   const projectName = plan.allTasks.get(entry.taskId)?.projectName;
   return (
-    <span className="flex w-full min-w-0 flex-wrap items-center gap-1">
-      <span className="min-w-0 basis-full @sm/row:flex-1 @sm/row:basis-0">
+    <span className="flex w-full min-w-0 flex-wrap items-start gap-2">
+      <span className="min-w-0 flex-1">
         <WorkRowTitle plan={plan} entry={entry} title={title} />
         {projectName || entry.selectionSource === 'suggested' ? (
           <span className="text-on-surface-variant text-body-small block min-w-0 truncate">
@@ -164,14 +165,16 @@ function WorkRowContents({
         <WorkRowMenu plan={plan} entry={entry} title={title} remaining={remaining} />
       </span>
       {plan.failedTitle?.taskId === entry.taskId ? (
-        <Button
-          size="sm"
-          onClick={() => {
-            void plan.renameTask(entry, plan.failedTitle?.title ?? title);
-          }}
-        >
-          Retry rename
-        </Button>
+        <span className="basis-full">
+          <Button
+            size="sm"
+            onClick={() => {
+              void plan.renameTask(entry, plan.failedTitle?.title ?? title);
+            }}
+          >
+            Retry rename
+          </Button>
+        </span>
       ) : null}
     </span>
   );
@@ -194,7 +197,7 @@ function WorkRowTitle({
       }}
       canEdit
       ariaLabel={`Task title: ${title}`}
-      className="text-on-surface text-label-large min-h-10 min-w-0 flex-1 py-2.5 sm:min-h-8 sm:py-1.5"
+      className={`text-on-surface text-label-large min-h-10 min-w-0 flex-1 py-2.5 sm:min-h-8 sm:py-1.5 ${focusRingInset}`}
     />
   );
 }
@@ -237,9 +240,9 @@ function PlannedTime({
         min={1}
         step={1}
         inputMode="numeric"
-        variant="outlined"
+        variant="plain"
         controlSize="sm"
-        className="min-h-10 w-12 px-1.5 text-right tabular-nums sm:min-h-8"
+        className="min-h-10 w-12 px-1 text-right tabular-nums sm:min-h-8"
         aria-label={`Planned time for ${title}`}
         value={value}
         onChange={(event) => {
@@ -284,23 +287,23 @@ function WorkRow({
     },
   });
   return (
-    <Card
-      variant="outlined"
+    <div
       ref={drop.ref}
       data-drop-state={drop.isOver ? 'accept' : 'idle'}
       data-drop-placement={drop.isOver ? drop.placement : undefined}
-      className={`hover:bg-surface-container-high relative rounded-xl transition-[background-color,opacity] duration-(--dur-fast) ${drag['data-drag-state'] === 'dragging' ? 'opacity-45' : ''} ${drop.isOver ? `bg-secondary-container before:bg-primary before:absolute before:right-3 before:left-3 before:z-10 before:h-1 before:rounded-full ${drop.placement === 'before' ? 'before:-top-1.5' : 'before:-bottom-1.5'}` : ''}`}
+      className={`relative transition-opacity duration-(--dur-fast) ${drag['data-drag-state'] === 'dragging' ? 'opacity-45' : ''} ${drop.isOver ? `before:bg-primary before:absolute before:right-3 before:left-3 before:z-10 before:h-1 before:rounded-full ${drop.placement === 'before' ? 'before:-top-1.5' : 'before:-bottom-1.5'}` : ''}`}
     >
       <EntityListRow
         interactive={false}
-        className="min-w-0 items-start gap-1 px-2 py-1"
+        className="hover:bg-surface-container-high min-w-0 items-start gap-1 px-0 py-1"
+        selected={drop.isOver}
         leading={
           <Button
             ref={drag.ref}
             variant="ghost"
             size="sm"
             iconOnly
-            className={`${drag.className} coarse:min-w-10 min-h-10 min-w-10 sm:min-h-8 sm:min-w-6`}
+            className={`${drag.className} coarse:min-w-10 min-h-10 min-w-8 sm:min-h-8 sm:min-w-6`}
             data-object-id={entry.taskId}
             data-drag-state={drag['data-drag-state']}
             aria-label={`Drag ${title} to reorder or schedule`}
@@ -310,7 +313,7 @@ function WorkRow({
         }
         title={<WorkRowContents plan={plan} entry={entry} title={title} remaining={remaining} />}
       />
-    </Card>
+    </div>
   );
 }
 
@@ -333,11 +336,16 @@ function WorkSignals({ plan }: { readonly plan: ReadyPlanningController }): JSX.
   return (
     <>
       <p className="text-on-surface-variant text-body-small" role="status">
-        {selected} min remaining in plan · {available} min available
-        {selected > available ? ` · ${selected - available} min over capacity` : ''}
+        {formatDuration(selected * 60_000)} remaining · {formatDuration(available * 60_000)}
+        {' available'}
+        {selected > available
+          ? ` · ${formatDuration((selected - available) * 60_000)} over capacity`
+          : ''}
       </p>
       {recorded > 0 ? (
-        <p className="text-on-surface-variant text-body-small">{recorded} minutes recorded today</p>
+        <p className="text-on-surface-variant text-body-small">
+          {formatDuration(recorded * 60_000)} recorded today
+        </p>
       ) : null}
       {plan.timer.phase === 'running' && plan.timer.record ? (
         <p className="text-on-surface-variant text-body-small">
@@ -356,14 +364,15 @@ export function WorkColumn({ plan }: { readonly plan: ReadyPlanningController })
     <section className="min-w-0 space-y-3">
       <h2 className="text-title-large">Work</h2>
       {plan.draft.tasks.length > 0 ? (
-        <>
+        <section aria-label="Selected work" className="space-y-2">
+          <h3 className="text-label-large">In your plan</h3>
           <WorkSignals plan={plan} />
-          <EntityList aria-label="Work selected for today" className="gap-2 bg-transparent p-0">
+          <EntityList aria-label="Work selected for today" className="bg-transparent p-0">
             {plan.draft.tasks.map((entry) => (
               <WorkRow key={entry.taskId} plan={plan} entry={entry} />
             ))}
           </EntityList>
-        </>
+        </section>
       ) : null}
       {completed.length > 0 ? (
         <div className="space-y-1">
@@ -375,7 +384,11 @@ export function WorkColumn({ plan }: { readonly plan: ReadyPlanningController })
           ))}
         </div>
       ) : null}
-      {plan.stage !== 'confirmed' ? <ExistingWorkBrowser key={plan.date} plan={plan} /> : null}
+      {plan.stage !== 'confirmed' ? (
+        <div className={plan.draft.tasks.length > 0 ? 'pt-2' : ''}>
+          <ExistingWorkBrowser key={plan.date} plan={plan} />
+        </div>
+      ) : null}
     </section>
   );
 }

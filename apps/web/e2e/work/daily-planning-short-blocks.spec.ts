@@ -49,7 +49,7 @@ test('five-minute adjacent blocks keep exact geometry before and after acceptanc
   const secondTop = await second.evaluate((element) =>
     Number.parseFloat((element as HTMLElement).style.top),
   );
-  expect(secondTop - firstTop).toBe(7);
+  expect(secondTop - firstTop).toBeCloseTo(7, 8);
   await captureShortBlockEvidence(page, testInfo, 'plan', 'short-0', '7px');
   await reviewPlan(page);
   await captureShortBlockEvidence(page, testInfo, 'review', 'short-0', '7px');

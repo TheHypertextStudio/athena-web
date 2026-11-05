@@ -6,8 +6,18 @@ import type { SchedulingCanvasProps } from '../../src/components/scheduling';
 import { DailyAgenda } from '../../src/components/daily-planning/daily-planning-agenda';
 
 vi.mock('../../src/components/scheduling', () => ({
-  SchedulingCanvas: ({ lanes, onOpenItem, onSelectRegion }: SchedulingCanvasProps) => (
+  SchedulingCanvas: ({
+    lanes,
+    onOpenItem,
+    onSelectRegion,
+    renderTimedLaneUnderlay,
+  }: SchedulingCanvasProps) => (
     <div>
+      {lanes[0] &&
+        renderTimedLaneUnderlay?.({
+          lane: lanes[0],
+          geometry: { laneIndex: 0, laneWidth: 600, laneHeight: 2016, pixelsPerHour: 84 },
+        })}
       {onSelectRegion && lanes[0] ? (
         <button
           onClick={() => {
@@ -51,6 +61,7 @@ it('lets a busy all-day entry stop blocking only this plan', async () => {
       date="2026-10-07"
       timezone="UTC"
       startAt="2026-10-07T09:00:00.000Z"
+      workStartAt="2026-10-07T09:00:00.000Z"
       draft={{
         date: '2026-10-07',
         finishAt: '2026-10-07T17:00:00.000Z',
@@ -90,6 +101,7 @@ it('opens fixed calendar events and forwards empty-time selection', async () => 
       date="2026-10-07"
       timezone="UTC"
       startAt="2026-10-07T09:00:00.000Z"
+      workStartAt="2026-10-07T09:00:00.000Z"
       draft={{
         date: '2026-10-07',
         finishAt: '2026-10-07T17:00:00.000Z',
@@ -150,6 +162,7 @@ it('shows all-day entries directly without repeating an event in a disclosure', 
       date="2026-10-07"
       timezone="UTC"
       startAt="2026-10-07T09:00:00.000Z"
+      workStartAt="2026-10-07T09:00:00.000Z"
       draft={{
         date: '2026-10-07',
         mainTaskId: null,
@@ -173,4 +186,6 @@ it('shows all-day entries directly without repeating an event in a disclosure', 
   expect(within(context).queryByRole('button', { expanded: false })).not.toBeInTheDocument();
   expect(container.querySelectorAll('[data-schedule-item]')).toHaveLength(1);
   expect(screen.getByText('Optional calendar note')).toBeVisible();
+  const workdayWindow = container.querySelector('[data-workday-window]');
+  expect(workdayWindow).toHaveStyle({ top: '756px', height: '672px' });
 });

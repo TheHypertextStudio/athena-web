@@ -8,25 +8,68 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  Field,
   Input,
   IconButton,
   Popover,
+  PopoverBody,
   PopoverContent,
+  PopoverHeader,
   PopoverTrigger,
   Select,
   Skeleton,
 } from '@docket/ui/primitives';
-import { Ellipsis, Filter as FilterIcon, Plus } from '@docket/ui/icons';
+import { Ellipsis, Filter as FilterIcon, Plus, X } from '@docket/ui/icons';
 import { EntityList, EntityListRow, InlineBanner } from '@docket/ui/components';
 import { useRef, useState, type JSX } from 'react';
 import Link from '@/components/docket-link';
 import type { ReadyPlanningController } from './daily-planning-controller';
 import type { DailyWorkScope } from './daily-planning-queries';
 import { useCreateObject } from '@/components/create-object/create-object-provider';
+import { formatDuration } from '@/components/time-tracking/format-duration';
 
 type WorkItem = NonNullable<
   ReadyPlanningController['searchQ']['data']
 >['pages'][number]['items'][number];
+
+function clearTaskFilters(plan: ReadyPlanningController): void {
+  plan.setWorkOrganization('');
+  plan.setDueOnly(false);
+  plan.setWorkScope('mine');
+}
+
+function ActiveWorkFilters({
+  plan,
+}: {
+  readonly plan: ReadyPlanningController;
+}): JSX.Element | null {
+  const scope = {
+    mine: '',
+    assigned: 'Assigned to me',
+    created: 'Created by me',
+    all: 'All accessible tasks',
+  }[plan.workScope];
+  const workspace = plan.searchQ.data?.pages[0]?.workspaces.find(
+    (item) => item.id === plan.workOrganization,
+  )?.name;
+  const labels = [scope, workspace, plan.dueOnly ? 'Due or overdue' : ''].filter(Boolean);
+  if (!labels.length) return null;
+  return (
+    <div role="group" aria-label="Active task filters" className="flex min-w-0 items-center gap-2">
+      <p className="text-label-small text-on-surface-variant min-w-0 flex-1">
+        {labels.join(' · ')}
+      </p>
+      <IconButton
+        label="Clear task filters"
+        onClick={() => {
+          clearTaskFilters(plan);
+        }}
+      >
+        <X />
+      </IconButton>
+    </div>
+  );
+}
 function taskSelection(item: WorkItem) {
   return {
     taskId: item.id,
@@ -55,46 +98,51 @@ function WorkFilters({ plan }: { readonly plan: ReadyPlanningController }): JSX.
           <FilterIcon />
         </IconButton>
       </PopoverTrigger>
-      <PopoverContent align="end" className="space-y-3">
-        <label className="text-body-small block">
-          Task scope
-          <Select
-            value={plan.workScope}
-            onChange={(event) => {
-              plan.setWorkScope(event.target.value as DailyWorkScope);
-            }}
-          >
-            <option value="mine">Assigned to me or created by me</option>
-            <option value="assigned">Assigned to me</option>
-            <option value="created">Created by me</option>
-            <option value="all">All accessible tasks</option>
-          </Select>
-        </label>
-        <label className="text-body-small block">
-          Task workspace
-          <Select
-            value={plan.workOrganization}
-            onChange={(event) => {
-              plan.setWorkOrganization(event.target.value);
-            }}
-          >
-            <option value="">All workspaces</option>
-            {workspaces.map((workspace) => (
-              <option key={workspace.id} value={workspace.id}>
-                {workspace.name}
-              </option>
-            ))}
-          </Select>
-        </label>
-        <label className="text-body-small flex min-h-10 items-center gap-2">
-          <Checkbox
-            checked={plan.dueOnly}
-            onChange={(event) => {
-              plan.setDueOnly(event.target.checked);
-            }}
-          />
-          Due or overdue
-        </label>
+      <PopoverContent align="end" presentation="panel" width="lg" aria-label="Task filters">
+        <PopoverHeader inset="compact">
+          <h2 className="text-title-small text-on-surface">Filter tasks</h2>
+        </PopoverHeader>
+        <PopoverBody inset="compact" className="space-y-3">
+          <Field label="Task scope">
+            <Select
+              controlSize="sm"
+              value={plan.workScope}
+              onChange={(event) => {
+                plan.setWorkScope(event.target.value as DailyWorkScope);
+              }}
+            >
+              <option value="mine">Assigned to me or created by me</option>
+              <option value="assigned">Assigned to me</option>
+              <option value="created">Created by me</option>
+              <option value="all">All accessible tasks</option>
+            </Select>
+          </Field>
+          <Field label="Workspace">
+            <Select
+              controlSize="sm"
+              value={plan.workOrganization}
+              onChange={(event) => {
+                plan.setWorkOrganization(event.target.value);
+              }}
+            >
+              <option value="">All workspaces</option>
+              {workspaces.map((workspace) => (
+                <option key={workspace.id} value={workspace.id}>
+                  {workspace.name}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <label className="text-label-large text-on-surface flex min-h-10 items-center gap-2">
+            <Checkbox
+              checked={plan.dueOnly}
+              onChange={(event) => {
+                plan.setDueOnly(event.target.checked);
+              }}
+            />
+            Due or overdue
+          </label>
+        </PopoverBody>
       </PopoverContent>
     </Popover>
   );
@@ -175,7 +223,7 @@ function WorkFacts({
         item.projectName,
         item.priority !== 'none' ? `${item.priority} priority` : null,
         due ? `Due ${due}` : null,
-        item.estimateMinutes ? `${item.estimateMinutes} min` : null,
+        item.estimateMinutes ? formatDuration(item.estimateMinutes * 60_000) : null,
       ]
         .filter(Boolean)
         .join(' · ')}
@@ -247,9 +295,11 @@ function WorkRow({
 function BrowserStatus({
   plan,
   count,
+  allInPlan,
 }: {
   readonly plan: ReadyPlanningController;
   readonly count: number;
+  readonly allInPlan: boolean;
 }): JSX.Element | null {
   if (plan.searchQ.isPending)
     return (
@@ -273,6 +323,12 @@ function BrowserStatus({
       />
     );
   if (count || plan.searchQ.hasNextPage) return null;
+  if (allInPlan)
+    return (
+      <p className="text-body-small text-on-surface-variant py-4">
+        These tasks are already in your plan.
+      </p>
+    );
   const filtered = Boolean(
     plan.search || plan.workOrganization || plan.dueOnly || plan.workScope !== 'mine',
   );
@@ -287,8 +343,7 @@ function BrowserStatus({
         variant="secondary"
         onClick={() => {
           plan.setSearch('');
-          plan.setWorkOrganization('');
-          plan.setDueOnly(false);
+          clearTaskFilters(plan);
           plan.setWorkScope(filtered ? 'mine' : 'all');
         }}
       >
@@ -301,11 +356,14 @@ function BrowserStatus({
 function useWorkSelection(plan: ReadyPlanningController) {
   const [bulk, setBulk] = useState(false);
   const [selected, setSelected] = useState(new Map<string, WorkItem>());
-  const items = [
+  const loaded = [
     ...new Map(
       (plan.searchQ.data?.pages.flatMap((page) => page.items) ?? []).map((item) => [item.id, item]),
     ).values(),
   ];
+  const items = loaded.filter(
+    (item) => plan.search.trim() || !plan.draft.tasks.some((task) => task.taskId === item.id),
+  );
   const pending = [...selected.values()].filter(
     (item) => !plan.draft.tasks.some((task) => task.taskId === item.id),
   );
@@ -314,6 +372,7 @@ function useWorkSelection(plan: ReadyPlanningController) {
     setBulk,
     selected,
     items,
+    allInPlan: loaded.length > 0 && items.length === 0,
     pending,
     cancel: (): void => {
       setSelected(new Map());
@@ -378,8 +437,9 @@ export function ExistingWorkBrowser({
           selection.setBulk(true);
         }}
       />
+      <ActiveWorkFilters plan={plan} />
       <BulkActions selection={selection} />
-      <BrowserStatus plan={plan} count={selection.items.length} />
+      <BrowserStatus plan={plan} count={selection.items.length} allInPlan={selection.allInPlan} />
       {selection.items.length ? (
         <EntityList
           aria-label="Available tasks"

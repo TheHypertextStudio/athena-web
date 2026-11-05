@@ -10,13 +10,13 @@ import {
 
 afterEach(cleanup);
 
-it('provides a correction for an older draft whose saved start is after its finish', () => {
+it('shows a compact workday control and a correction for reversed hours', () => {
   const plan = controller('plan');
   plan.draft.settings = { startAt: '2026-10-07T20:57:00.000Z' };
   render(<WorkdayControls plan={plan} />);
-  expect(screen.getByRole('button', { name: 'Workday settings' })).toHaveTextContent('Set hours');
+  expect(screen.getByRole('button', { name: 'Workday hours' })).toHaveTextContent('Set hours');
   expect(
-    screen.getByText('Start must be before Finish. Adjust work hours to schedule this day.'),
+    screen.getByText('Start must be before finish. Adjust the workday to schedule this day.'),
   ).toBeVisible();
 });
 
@@ -25,10 +25,10 @@ it('shows configured hours after the workday ends instead of reversing the range
   plan.startAt = '2026-10-07T20:57:00.000Z';
   plan.draft.settings = { startAt: '2026-10-07T09:00:00.000Z' };
   render(<WorkdayControls plan={plan} />);
-  expect(screen.getByRole('button', { name: 'Workday settings' })).toHaveTextContent('9:00 AM');
-  expect(screen.getByText(/Work hours have ended/)).toBeVisible();
-  await userEvent.click(screen.getByRole('button', { name: 'Workday settings' }));
-  expect(screen.getByLabelText('Start')).toHaveValue('09:00');
+  expect(screen.getByRole('button', { name: 'Workday hours' })).toHaveTextContent('9:00 AM');
+  expect(screen.getByText(/The workday has ended/)).toBeVisible();
+  await userEvent.click(screen.getByRole('button', { name: 'Workday hours' }));
+  expect(screen.getByLabelText('Starts')).toHaveValue('09:00');
 });
 
 function controller(stage: 'plan' | 'review'): ReadyPlanningController {
@@ -54,13 +54,13 @@ function controller(stage: 'plan' | 'review'): ReadyPlanningController {
 it('keeps review settings closed while allowing a keyboard edit of the finish time', async () => {
   const plan = controller('review');
   render(<WorkdayControls plan={plan} />);
-  const trigger = screen.getByRole('button', { name: 'Workday settings' });
+  const trigger = screen.getByRole('button', { name: 'Workday hours' });
   expect(trigger).toHaveAttribute('aria-expanded', 'false');
-  expect(screen.queryByLabelText('Finish')).not.toBeInTheDocument();
+  expect(screen.queryByLabelText('Ends')).not.toBeInTheDocument();
   trigger.focus();
   await userEvent.keyboard('{Enter}');
   expect(trigger).toHaveAttribute('aria-expanded', 'true');
-  fireEvent.change(screen.getByLabelText('Finish'), { target: { value: '18:00' } });
+  fireEvent.change(screen.getByLabelText('Ends'), { target: { value: '18:00' } });
   expect(plan.editDraft).toHaveBeenCalledWith({
     ...plan.draft,
     finishAt: '2026-10-07T18:00:00.000Z',
@@ -69,11 +69,11 @@ it('keeps review settings closed while allowing a keyboard edit of the finish ti
 
 it('opens editable bounds on demand when no work schedule has been saved', async () => {
   render(<WorkdayControls plan={controller('plan')} />);
-  expect(screen.queryByLabelText('Start')).not.toBeInTheDocument();
-  await userEvent.click(screen.getByRole('button', { name: 'Workday settings' }));
-  expect(screen.getByText('Timezone: UTC')).toBeVisible();
-  expect(screen.getByLabelText('Start')).toHaveValue('09:00');
-  expect(screen.getByLabelText('Finish')).toHaveValue('17:00');
+  expect(screen.queryByLabelText('Starts')).not.toBeInTheDocument();
+  await userEvent.click(screen.getByRole('button', { name: 'Workday hours' }));
+  expect(screen.getByText('Times shown in UTC')).toBeVisible();
+  expect(screen.getByLabelText('Starts')).toHaveValue('09:00');
+  expect(screen.getByLabelText('Ends')).toHaveValue('17:00');
   expect(screen.getByLabelText('Buffer %')).toHaveValue(15);
 });
 
@@ -81,13 +81,13 @@ it('keeps settings closed when proposal context arrives after the first render',
   const plan = controller('plan');
   const pending = { ...plan, proposalContext: null };
   const view = render(<WorkdayControls plan={pending} />);
-  expect(screen.getByRole('button', { name: 'Workday settings' })).toHaveAttribute(
+  expect(screen.getByRole('button', { name: 'Workday hours' })).toHaveAttribute(
     'aria-expanded',
     'false',
   );
   view.rerender(<WorkdayControls plan={plan} />);
-  expect(screen.queryByLabelText('Start')).not.toBeInTheDocument();
-  expect(screen.getByRole('button', { name: 'Workday settings' })).toHaveAttribute(
+  expect(screen.queryByLabelText('Starts')).not.toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Workday hours' })).toHaveAttribute(
     'aria-expanded',
     'false',
   );
@@ -99,7 +99,7 @@ it.each([true, false])(
     const plan = controller('plan');
     const view = render(<WorkdayControls plan={{ ...plan, proposalContext: null }} />);
     const user = userEvent.setup();
-    const trigger = screen.getByRole('button', { name: 'Workday settings' });
+    const trigger = screen.getByRole('button', { name: 'Workday hours' });
     await user.click(trigger);
     if (!open) await user.click(trigger);
     view.rerender(<WorkdayControls plan={plan} />);

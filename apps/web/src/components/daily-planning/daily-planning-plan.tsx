@@ -120,13 +120,13 @@ function AgendaHeading({
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-title-large">Agenda</h2>
         <div className="flex items-center gap-1">
+          <WorkdayControls plan={plan} />
           <IconButton label="Schedule work" disabled={Boolean(plan.preview)} onClick={onSchedule}>
             <Calendar />
           </IconButton>
           <OrganizeDay plan={plan} />
         </div>
       </div>
-      <WorkdayControls plan={plan} />
       <ScheduleControls plan={plan} />
     </>
   );
@@ -208,6 +208,7 @@ function AgendaColumn({ plan }: { readonly plan: ReadyPlanningController }): JSX
         date={plan.date}
         timezone={plan.timezone}
         startAt={plan.startAt}
+        workStartAt={plan.draft.settings?.startAt ?? plan.planningStartAt}
         draft={displayed}
         events={plan.fixed}
         names={plan.names}
@@ -290,27 +291,9 @@ function ConfirmPlanButton({
 }
 
 function PlanFooter({ plan }: { readonly plan: ReadyPlanningController }): JSX.Element {
-  const hasYesterday =
-    (plan.dayQ.data?.carryover.length ?? 0) +
-      (plan.previousQ.data?.tasks.length ?? 0) +
-      (plan.previousQ.data?.actual.length ?? 0) >
-    0;
   return (
     <Card>
-      <CardContent className="flex flex-wrap items-center justify-between gap-3 py-3">
-        {hasYesterday ? (
-          <Button
-            variant="ghost"
-            disabled={plan.deferPending}
-            onClick={() => {
-              void plan.go('yesterday');
-            }}
-          >
-            {plan.reviewLabel}
-          </Button>
-        ) : (
-          <span />
-        )}
+      <CardContent className="flex justify-end py-3">
         <Button
           disabled={plan.deferPending}
           onClick={() => {
@@ -321,20 +304,6 @@ function PlanFooter({ plan }: { readonly plan: ReadyPlanningController }): JSX.E
         </Button>
       </CardContent>
     </Card>
-  );
-}
-
-function EditPlanButton({ plan }: { readonly plan: ReadyPlanningController }): JSX.Element {
-  return (
-    <Button
-      variant="secondary"
-      disabled={plan.deferPending}
-      onClick={() => {
-        void plan.go('plan');
-      }}
-    >
-      Edit plan
-    </Button>
   );
 }
 
@@ -352,8 +321,7 @@ function EmptyDayConfirmation({ plan }: { readonly plan: ReadyPlanningController
         />
         Keep this day without planned work
       </label>
-      <div className="flex items-center justify-between gap-3">
-        <EditPlanButton plan={plan} />
+      <div className="flex justify-end">
         <ConfirmPlanButton plan={plan} allowEmpty={acknowledged} />
       </div>
     </div>
@@ -363,14 +331,11 @@ function EmptyDayConfirmation({ plan }: { readonly plan: ReadyPlanningController
 function ReviewFooter({ plan }: { readonly plan: ReadyPlanningController }): JSX.Element {
   return (
     <Card>
-      <CardContent className="flex flex-wrap items-center justify-between gap-3 py-3">
+      <CardContent className="flex justify-end py-3">
         {plan.draft.tasks.length === 0 ? (
           <EmptyDayConfirmation key={plan.date} plan={plan} />
         ) : (
-          <>
-            <EditPlanButton plan={plan} />
-            <ConfirmPlanButton plan={plan} />
-          </>
+          <ConfirmPlanButton plan={plan} />
         )}
       </CardContent>
     </Card>

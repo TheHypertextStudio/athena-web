@@ -41,6 +41,7 @@ interface DailyAgendaProps {
   readonly date: string;
   readonly timezone: string;
   readonly startAt: string;
+  readonly workStartAt: string;
   readonly draft: DailyPlanSnapshot;
   readonly events: readonly EventBlock[];
   readonly names: ReadonlyMap<string, string>;
@@ -77,6 +78,22 @@ function AgendaTaskTarget({
     >
       {children}
     </span>
+  );
+}
+
+function AgendaItemContent({
+  item,
+  onAddToBlock,
+}: {
+  readonly item: ScheduleItem;
+  readonly onAddToBlock: DailyAgendaProps['onAddToBlock'];
+}): ReactNode {
+  return item.appearance === 'timebox' ? (
+    <AgendaTaskTarget item={item} onDrop={onAddToBlock}>
+      {item.title}
+    </AgendaTaskTarget>
+  ) : (
+    item.title
   );
 }
 
@@ -207,6 +224,23 @@ function changeAgendaSession(
   );
 }
 
+/** Shade the configured work interval beneath the day's appointments. */
+function workdayWindow(props: DailyAgendaProps, pixelsPerHour: number): JSX.Element | null {
+  const start = localMinuteOfDay(new Date(props.workStartAt), props.timezone);
+  const end = localMinuteOfDay(new Date(props.draft.finishAt), props.timezone);
+  if (end <= start) return null;
+  return (
+    <div
+      data-workday-window
+      className="bg-primary/5 absolute inset-x-0"
+      style={{
+        top: (start / 60) * pixelsPerHour,
+        height: ((end - start) / 60) * pixelsPerHour,
+      }}
+    />
+  );
+}
+
 /** Use the shared calendar geometry and move/resize gestures for the daily draft. */
 export function DailyAgenda(props: DailyAgendaProps): JSX.Element {
   const items = agendaItems(props);
@@ -242,6 +276,7 @@ export function DailyAgenda(props: DailyAgendaProps): JSX.Element {
           onResizeItem={({ item, startMinutes, endMinutes }) => {
             changeAgendaSession(props, item.id, startMinutes, endMinutes);
           }}
+          renderTimedLaneUnderlay={({ geometry }) => workdayWindow(props, geometry.pixelsPerHour)}
           renderTimedLaneContext={({ geometry }) => (
             <AgendaGridTarget
               pixelsPerHour={geometry.pixelsPerHour}
@@ -250,15 +285,9 @@ export function DailyAgenda(props: DailyAgendaProps): JSX.Element {
               timezone={props.timezone}
             />
           )}
-          renderItem={({ item }) =>
-            item.appearance === 'timebox' ? (
-              <AgendaTaskTarget item={item} onDrop={props.onAddToBlock}>
-                {item.title}
-              </AgendaTaskTarget>
-            ) : (
-              item.title
-            )
-          }
+          renderItem={({ item }) => (
+            <AgendaItemContent item={item} onAddToBlock={props.onAddToBlock} />
+          )}
         />
       </Surface>
       <div className="space-y-1">

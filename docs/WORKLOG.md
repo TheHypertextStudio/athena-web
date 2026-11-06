@@ -8,6 +8,12 @@
 
 ## Active Tasks
 
+### [COMMITMENT-TIME-PROGRESS] Expose time-goal progress
+
+- **Status**: COMPLETE locally; Curfew integration and deployment remain separate.
+- **Result**: Added a personal read-only MCP time-goal query over the Time Ledger. It unions qualifying human intervals, supports explicit filters and manual-time selection, and returns a minimal progress result. The existing `work:read` grant remains broader than this query.
+- **Verification**: Focused time and MCP tests passed with two workers. The API package typecheck and changed-file lint passed.
+
 ### [LOCAL-PRODUCTION-RELEASE] Publish the project UI and deliverable uploads
 
 - **Status**: IN_PROGRESS

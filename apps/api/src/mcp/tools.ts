@@ -44,6 +44,7 @@ import { registerTemplateDiscoveryTool } from './template-discovery-tool';
 import { registerWorkGraphTool } from './work-graph-tool';
 import { registerWorkloadTool } from './workload-tool';
 import { registerTimeTools } from './time-tools';
+import { registerTimeGoalTool } from './time-goal-tool';
 import { registerUpdateTool } from './update-tool';
 import { registerViewPlanTools } from './view-plan-tools';
 import { registerAthenaAssignmentTools } from './athena-assignment-tools';
@@ -105,6 +106,7 @@ export function registerTools(
   registerWorkspacesTool(server, ctx);
   registerAthenaAssignmentTools(server, ctx);
   registerTimeTools(server, ctx);
+  registerTimeGoalTool(server, ctx);
   registerWorkloadTool(server, ctx);
   registerWorkGraphTool(server, ctx);
   registerWorkDestinationReviewTool(server, ctx);

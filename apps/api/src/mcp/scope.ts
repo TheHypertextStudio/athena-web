@@ -115,6 +115,7 @@ export const TOOL_SCOPE: Readonly<Record<string, McpScope>> = {
   // The timer's read actions (`status`, `segments`) narrow to `work:read` inside the handler;
   // the map records the strictest scope the tool can require.
   track: 'work:write',
+  time_goal_progress: 'work:read',
   // Listed at `work:read` so a read-only token reaches `list`; the handler requires `work:write`
   // for create, update, and delete.
   milestones: 'work:read',

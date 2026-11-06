@@ -56,6 +56,12 @@ signals. It measures user-started intervals and agent-runtime lifecycle interval
 repair a missed interval later, and the system must label it as manually reconstructed rather than
 pretending it was live-tracked.
 
+### Time-goal progress over MCP
+
+A user-authorized MCP client with `work:read` can call `time_goal_progress` for a UTC window of at most 31 days. The client supplies a target in milliseconds and may filter by task, project, workspace, or personal category. The response contains only the distinct qualifying duration, the requested target, whether that target was reached, and the observation time. The client must retain its own goal and check the returned target and freshness. The existing `work:read` grant is broader than this one query; it is not a commitment-only credential.
+
+Docket clips intervals to the window and the current time, unions overlaps, and counts only the caller’s human time. Manually entered and reconstructed intervals count only when the client opts in. Agent time, replaced intervals, and pauses never count. A tracked interval does not prove attention or the quality of work. This query does not schedule work or control devices.
+
 ### 1.3 Separation of concerns
 
 | Existing primitive             | Meaning                                           | Time Ledger relationship                                                                    |

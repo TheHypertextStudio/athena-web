@@ -16,7 +16,10 @@ env:
 jobs:
   deploy-api:
     name: Migrate database and deploy API
-    runs-on: ubuntu-latest
+    if: ${{ github.repository == 'TheHypertextStudio/athena-web' && github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.workflow_ref == 'TheHypertextStudio/athena-web/.github/workflows/deploy-main.yml@refs/heads/main' }}
+    runs-on:
+      group: studio-linux
+      labels: [self-hosted, Linux, ARM64, studio-linux]
     environment: production
     permissions:
       contents: read
@@ -26,6 +29,7 @@ jobs:
       - uses: actions/checkout@v7.0.1
         with:
           ref: ${{ inputs.release_sha }}
+          persist-credentials: false
 
       - uses: google-github-actions/auth@v3
         with:
@@ -91,6 +95,10 @@ jobs:
       - name: Configure Docker for Artifact Registry
         run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
 
+      - uses: docker/setup-qemu-action@v3
+        with:
+          platforms: amd64
+
       # Built by the `build-images` workflow, which ci.yml starts at t=0 alongside the gates
       # rather than after them. `docker run` below pulls this tag; it is no longer in the local
       # daemon because a different runner produced it.
@@ -105,7 +113,7 @@ jobs:
             --secret=docket-database-url-unpooled \
             --project='${{ vars.GCP_PROJECT_ID }}')"
           export DATABASE_URL_UNPOOLED
-          docker run --rm \
+          docker run --rm --platform=linux/amd64 \
             --env DATABASE_URL_UNPOOLED \
             "$API_IMAGE" \
             node /app/packages/db/dist/migrate.mjs
@@ -248,8 +256,11 @@ jobs:
   # remains independently approved and does not depend on Vercel promotion.
   ensure-scheduler:
     name: Ensure Cloud Scheduler jobs
+    if: ${{ github.repository == 'TheHypertextStudio/athena-web' && github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.workflow_ref == 'TheHypertextStudio/athena-web/.github/workflows/deploy-main.yml@refs/heads/main' }}
     needs: deploy-api
-    runs-on: ubuntu-latest
+    runs-on:
+      group: studio-linux
+      labels: [self-hosted, Linux, ARM64, studio-linux]
     environment: production
     permissions:
       contents: read
@@ -259,6 +270,7 @@ jobs:
       - uses: actions/checkout@v7.0.1
         with:
           ref: ${{ inputs.release_sha }}
+          persist-credentials: false
 
       - uses: google-github-actions/auth@v3
         with:
@@ -293,8 +305,11 @@ jobs:
   # previous note weighed. Ordering costs a rollout's wait and keeps the console with its API.
   deploy-admin:
     name: Deploy admin
+    if: ${{ github.repository == 'TheHypertextStudio/athena-web' && github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.workflow_ref == 'TheHypertextStudio/athena-web/.github/workflows/deploy-main.yml@refs/heads/main' }}
     needs: deploy-api
-    runs-on: ubuntu-latest
+    runs-on:
+      group: studio-linux
+      labels: [self-hosted, Linux, ARM64, studio-linux]
     environment: production
     permissions:
       contents: read
@@ -303,6 +318,7 @@ jobs:
       - uses: actions/checkout@v7.0.1
         with:
           ref: ${{ inputs.release_sha }}
+          persist-credentials: false
 
       - uses: google-github-actions/auth@v3
         with:
@@ -355,9 +371,11 @@ jobs:
   # function such as always(), which is the one edit that would silently drop the implicit gate.
   deploy-runner:
     name: Deploy Athena runner
+    if: ${{ needs.deploy-api.result == 'success' && vars.CLOUDFLARE_ACCOUNT_ID != '' && github.repository == 'TheHypertextStudio/athena-web' && github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.workflow_ref == 'TheHypertextStudio/athena-web/.github/workflows/deploy-main.yml@refs/heads/main' }}
     needs: deploy-api
-    if: needs.deploy-api.result == 'success' && vars.CLOUDFLARE_ACCOUNT_ID != ''
-    runs-on: ubuntu-latest
+    runs-on:
+      group: studio-linux
+      labels: [self-hosted, Linux, ARM64, studio-linux]
     environment: production
     permissions:
       contents: read
@@ -366,6 +384,7 @@ jobs:
       - uses: actions/checkout@v7.0.1
         with:
           ref: ${{ inputs.release_sha }}
+          persist-credentials: false
 
       # A filtered install so this job costs one workspace, not the monorepo. The deploy runs
       # the runner's own wrangler pin (apps/runner/package.json), so CI and an operator's local

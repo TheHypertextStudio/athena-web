@@ -3,6 +3,7 @@ import { expect, test } from '../helpers/fixtures';
 import { apiJson } from '../helpers/net';
 import { signUpAndOnboard } from '../helpers/app';
 import {
+  captureDailyPlanningEvidence,
   openPlan,
   saveDraft,
   setupPlan,
@@ -29,14 +30,64 @@ test('opens a fixed calendar event from the planning agenda', async ({ page }) =
   await expect(page.getByLabel('Title', { exact: true })).toHaveValue('Community planning meeting');
 });
 
-test('choose existing authored work beside the agenda, schedule it, and resume the saved block', async ({
-  page,
-}) => {
+test('opens with existing work already selected and scheduled', async ({ page }, testInfo) => {
+  const context = await setupPlan(page, 'planning-auto-created-work', [], 1);
+  const teams = await apiJson<{ items: { id: string }[] }>(page, `/v1/orgs/${context.orgId}/teams`);
+  const created = await apiJson<{ id: string }>(page, `/v1/orgs/${context.orgId}/tasks`, {
+    method: 'POST',
+    body: { title: 'Prepare community meeting', teamId: teams.items[0]?.id, estimateMinutes: 60 },
+  });
+  await apiJson(page, `/v1/orgs/${context.orgId}/tasks/${created.id}`, {
+    method: 'PATCH',
+    body: { assigneeId: null },
+  });
+
+  await openPlan(page, context.date);
+  await showPlanningPanel(page, 'Work');
+  const selected = page.getByRole('region', { name: 'Selected work', exact: true });
+  await expect(selected.getByText('Prepare community meeting', { exact: true })).toBeVisible();
+  await expect(selected.getByText('Existing backlog work', { exact: true })).toBeVisible();
+  await expect(
+    selected.getByRole('spinbutton', { name: 'Planned time for Prepare community meeting' }),
+  ).toHaveValue('60');
+  await captureDailyPlanningEvidence(page, testInfo, 'plan-tomorrow');
+  await expect
+    .poll(async () => {
+      const saved = await apiJson<DayRead>(page, `/v1/daily-plan/day/${context.date}`);
+      return saved.draft?.tasks.some((task) => task.taskId === created.id);
+    })
+    .toBe(true);
+  await showPlanningPanel(page, 'Agenda');
+  const block = page
+    .locator('[data-schedule-item]')
+    .filter({ hasText: 'Prepare community meeting' })
+    .first();
+  await expect(block).toBeVisible();
+  await block.click();
+  await expect(page.getByRole('dialog', { name: 'Edit block' })).toBeVisible();
+  await expect(
+    page.getByRole('spinbutton', { name: 'Duration for Prepare community meeting' }),
+  ).toHaveValue('60');
+  await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+});
+
+test('can add and reschedule work intentionally left out of the proposed day', async ({ page }) => {
   const context = await setupPlan(page, 'planning-existing', [], 1);
   const teams = await apiJson<{ items: { id: string }[] }>(page, `/v1/orgs/${context.orgId}/teams`);
   const created = await apiJson<{ id: string }>(page, `/v1/orgs/${context.orgId}/tasks`, {
     method: 'POST',
     body: { title: 'Prepare community meeting', teamId: teams.items[0]?.id, estimateMinutes: 60 },
+  });
+  await saveDraft(page, {
+    date: context.date,
+    finishAt: instantAt(context.date, 17 * 60, context.timezone).toISOString(),
+    mainTaskId: null,
+    tasks: [],
+    sessions: [],
+    settings: {
+      startAt: instantAt(context.date, 9 * 60, context.timezone).toISOString(),
+      excludedTaskIds: [created.id],
+    },
   });
   await openPlan(page, context.date);
   await showPlanningPanel(page, 'Work');

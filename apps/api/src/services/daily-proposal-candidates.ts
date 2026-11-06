@@ -32,7 +32,7 @@ export interface ProposalCandidatesInput {
 
 type TaskRow = typeof task.$inferSelect;
 
-async function selectedAndAssigned(
+async function selectedAndMine(
   input: ProposalCandidatesInput,
 ): Promise<{ rows: TaskRow[]; selectedIds: Set<string> }> {
   const [memberships, selected] = await Promise.all([
@@ -66,6 +66,7 @@ async function selectedAndAssigned(
         isNull(task.archivedAt),
         or(
           actorIds.length > 0 ? inArray(task.assigneeId, actorIds) : undefined,
+          actorIds.length > 0 ? inArray(task.createdBy, actorIds) : undefined,
           selectedIds.size > 0 ? inArray(task.id, [...selectedIds]) : undefined,
         ),
       ),
@@ -142,7 +143,7 @@ function selectionReason(
   if (selectedIds.has(row.id)) return 'Selected for today';
   if (row.dueDate && row.dueDate < input.dayEnd) return 'Due today or overdue';
   if (projectName) return `Next task in ${projectName}`;
-  return 'Assigned backlog work';
+  return 'Existing backlog work';
 }
 
 function candidateDuration(row: TaskRow, input: ProposalCandidatesInput, history: number | null) {
@@ -194,11 +195,11 @@ function toCandidate(
   };
 }
 
-/** Visible selected work and eligible assigned work, including unfinished dependency edges. */
+/** Visible selected work and eligible work assigned to or created by the caller. */
 export async function loadProposalCandidates(
   input: ProposalCandidatesInput,
 ): Promise<VisibleProposalCandidate[]> {
-  const { rows, selectedIds } = await selectedAndAssigned(input);
+  const { rows, selectedIds } = await selectedAndMine(input);
   const eligible = await visibleCandidates(rows, input, selectedIds);
   if (eligible.length === 0) return [];
   const [edges, projectNames, actuals] = await Promise.all([

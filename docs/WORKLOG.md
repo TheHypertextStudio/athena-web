@@ -141,20 +141,32 @@ Actual rendered hierarchy must be assessed independently of interaction tests. G
 - **Concurrent integration**: Rebased onto the two usage-attribution commits published during acceptance. Preserve their migration numbers and place resource receipts/uploads at 0189/0190 with increasing timestamps. Their table/index creation is idempotent so the previously accepted staging schema can advance through the canonical journal without resetting data or changing historical migration records. Verify both first application and adoption over already-created upload tables before rebuilding the integrated candidate.
 
 - **Declared-length rejection**: An additional ten-byte provider probe confirms GCS rejects a body larger than its declared nine-byte reservation even when the checksum matches those ten bytes. The terminal failure is plain text and repeats on DELETE and valid status probes. Recognize only that exact provider message shape and require an identical failure on a valid probe before acknowledging cancellation; generic errors, changed messages and live sessions retain cleanup for retry. Keep this independent of the already-passing 100 MiB transfer and CRC rejection evidence. All 32 storage tests pass (99.31% line and 93.22% branch coverage), as do storage types/lint and the unchanged complexity gate. The actual provider confirms acknowledged cleanup with no objects remaining under the exact owned probe prefix.
+
 ### [DAILY-PLANNING-DESIGN-PASS] Clarify the daily planning workspace
 
 - **Status**: IN_PROGRESS
 - **Started**: 2026-11-04
 - **Priority**: P2
-- **Description**: Refine the complete daily planning, review, confirmation and Focus experience after restoring its core functionality.
+- **Description**: Make the daily planning, review, confirmation and Focus flow a useful continuation of the working day, with an automatically prepared schedule from existing work and clear controls for adjustments.
 - **Approach**: Use the app's Plex/MD3 register and existing shared list, text, control and surface primitives. Keep selected work compact, let task discovery follow it with quiet separation, and show the workday as a shaded interval on the agenda with one compact clock control for adjustments. Format durations as hours and minutes, and reduce duplicated content. Preserve direct editing, drag scheduling, accessible icon actions and existing save/recovery behavior. Keep one forward footer action and use the numbered stage navigation for backward movement. Review confirmation and Focus as continuations of the same working day.
 - **Plan**:
-  - [ ] Review current screenshots and source against the eight craft dimensions; record concrete baseline findings in the design audit.
-  - [ ] Refine task-list hierarchy, mobile density, duration presentation, active-filter clarity, agenda workday representation, confirmation and Focus composition where the rendered evidence warrants it.
+  - [x] Review current screenshots and source against the eight craft dimensions; record concrete baseline findings in the design audit.
+  - [x] Refine task-list hierarchy, mobile density, duration presentation, active-filter clarity, agenda workday representation, confirmation and Focus composition where the rendered evidence warrants it.
   - [ ] Exercise selection, editing, search, filters, scheduling and keyboard recovery with a large task collection, long content and empty/loading/error states.
-  - [ ] Capture desktop/phone in both themes and check 320px, text scaling, contrast, touch targets and focus; finish the audit with honest evidence and remaining limits.
-  - [ ] Run affected component/browser checks, lint, types, design policy and build; update docs, then integrate and deploy through the established release path.
+  - [x] Capture desktop/phone in both themes and check 320px, text scaling, contrast, touch targets and focus; finish the audit with honest evidence and remaining limits.
+  - [ ] Ensure the opening proposal includes unfinished work assigned to or created by the person across memberships, then schedules fitting work around their calendar and work hours without replacing saved or manually edited drafts.
+  - [ ] Run affected component/browser checks, lint, types, design policy and build; update docs; deploy the exact CI-built frontend and API to staging; accept the staged flow; then promote that commit through the production backend workflow and publish the matching native Worker.
 - **Tradeoff**: Prefer compact lists and explicit object grouping over individual task cards or another picker screen. Keep advanced controls available in their existing menu/popover and show active scope visibly. Keep this to the planning and Focus experience without changing its data model or providers.
+
+### [DAILY-PLANNING-AUTO-FILL] Prepare the day from existing work
+
+- **Status**: IN_PROGRESS
+- **Started**: 2026-11-05
+- **Priority**: P1
+- **Description**: Ensure opening daily planning immediately proposes a sensible, editable schedule from unfinished work assigned to or created by the person, using actual work windows, calendar commitments, dependencies and known task durations.
+- **Plan**: Extend the existing visibility-filtered proposal candidate query to include created work alongside assigned work. Add route coverage proving created tasks are selected and scheduled when they fit, while existing calendar and saved-draft behavior remains intact. Preserve explicit confirmation before acceptance or time tracking. Review the rendered first-open experience and carry the exact release through main, staging acceptance and the authorized production path.
+- **Constraints**: Reuse deterministic daily proposal and existing task visibility rules. Search is secondary. Never overwrite accepted plans, saved drafts, manual placements or an explicit task exclusion. Never accept a proposal or start a timer automatically.
+- **Validation**: Focused API proposal tests, affected web planning tests, typecheck, lint, unchanged complexity check and rendered planning review; require main and staging acceptance before production promotion. The staging workflow must publish the same commit's API image, and production promotion must run only on the configured local runner after staging acceptance.
 
 ### [ACTIVITY-METADATA-WRAPPER] Integrate session groups with ordinary activity
 
@@ -13953,6 +13965,7 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
   - [x] All tools, validation constraints, defaults and authority guidance remain available within the existing prompt ceiling.
   - [x] The approved project layout retains rendered desktop/phone review and browser coverage.
 - **Delivery boundary**: Local release-candidate preparation. Deployment and target verification are recorded separately in the owned shipping build records.
+
 ### [DAILY-PLANNING-TASK-AGENDA] Plan from existing tasks and an interactive agenda
 
 - **Completed**: 2026-11-04

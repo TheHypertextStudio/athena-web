@@ -1,6 +1,7 @@
 # Operator-only staging publication: one runner per deliberate dispatch, no push multiplier.
-# Uses existing main CI; it neither repeats that suite nor enters the backend release workflow.
-name: Deploy Workers staging
+# Builds the frontend from the validated commit and reuses its CI-built API image; never touches
+# production.
+name: Deploy Docket staging
 
 on:
   workflow_dispatch:
@@ -9,6 +10,7 @@ permissions:
   contents: read
   actions: read
   packages: read
+  id-token: write
 
 concurrency:
   group: docket-workers-staging
@@ -16,8 +18,10 @@ concurrency:
 
 jobs:
   deploy-staging:
-    if: ${{ github.repository == 'TheHypertextStudio/athena-web' && github.ref == 'refs/heads/main' }}
-    runs-on: ubuntu-latest
+    if: ${{ github.repository == 'TheHypertextStudio/athena-web' && github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.workflow_ref == 'TheHypertextStudio/athena-web/.github/workflows/deploy-workers-staging.yml@refs/heads/main' }}
+    runs-on:
+      group: studio-linux
+      labels: [self-hosted, Linux, ARM64, studio-linux]
     timeout-minutes: 30
     environment: staging
     steps:
@@ -79,6 +83,46 @@ jobs:
             echo '::error::main moved after dispatch; refusing stale staging publication.'
             exit 1
           fi
+
+      - uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+
+      - name: Deploy the matching API image to isolated staging
+        env:
+          GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+          GCP_REGION: ${{ vars.GCP_REGION }}
+          API_IMAGE: ${{ vars.GCP_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/docket/api:${{ github.sha }}
+          API_IMAGE_BASE: ${{ vars.GCP_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/docket/api
+        run: |
+          set -euo pipefail
+          expected_digest="$(gcloud artifacts docker images describe "$API_IMAGE" \
+            --project "$GCP_PROJECT_ID" --format='value(image_summary.digest)')"
+          if [[ ! "$expected_digest" =~ ^sha256:[a-f0-9]{64}$ ]]; then
+            echo '::error::The CI-built staging API image has no valid registry digest.'
+            exit 1
+          fi
+          expected_image="$API_IMAGE_BASE@$expected_digest"
+          gcloud run services update docket-api-staging \
+            --project "$GCP_PROJECT_ID" \
+            --region "$GCP_REGION" \
+            --image "$API_IMAGE" \
+            --quiet
+          revision="$(gcloud run services describe docket-api-staging \
+            --project "$GCP_PROJECT_ID" --region "$GCP_REGION" \
+            --format='value(status.latestReadyRevisionName)')"
+          deployed_image="$(gcloud run revisions describe "$revision" \
+            --project "$GCP_PROJECT_ID" --region "$GCP_REGION" \
+            --format='value(spec.containers[0].image)')"
+          if [[ "$deployed_image" != "$expected_image" ]]; then
+            echo '::error::The ready staging API revision does not use the dispatched commit image.'
+            exit 1
+          fi
+          api_url="$(gcloud run services describe docket-api-staging \
+            --project "$GCP_PROJECT_ID" --region "$GCP_REGION" \
+            --format='value(status.url)')"
+          curl --fail --silent --show-error --max-time 30 "$api_url/v1/health"
 
       - name: Deploy native OpenNext staging
         env:

@@ -103,6 +103,10 @@ calendar-day contract.
 | Daily planning → session editor     | `apps/web/src/components/daily-planning/daily-planning-session-editor.tsx`    | Block start              | `time` in the planning date's timezone                |
 | Daily planning → planned task row   | `apps/web/src/components/daily-planning/daily-planning-schedule-controls.tsx` | Workday start/end        | `time` in the planning date's timezone                |
 
+The explicit Agenda **Schedule work** editor uses a `time` field for its block start in
+`apps/web/src/components/daily-planning/daily-planning-time-selection.tsx`; it reads and writes in
+the planning date's timezone.
+
 ## Formatting
 
 `apps/web/src/components/date-picker/format-day.ts` is the app's only sanctioned day formatter.

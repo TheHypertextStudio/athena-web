@@ -2,14 +2,8 @@ import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { eq } from 'drizzle-orm';
 import type * as DbModule from '@docket/db';
 import type dailyPlanRouter from '../../src/routes/daily-plan';
-import {
-  appWithSession,
-  fakeSession,
-  getDb,
-  seedBaseOrg,
-  seedStatuses,
-  seedUserWithHub,
-} from '../support/routes-harness';
+import { appWithSession, fakeSession, getDb, seedUserWithHub } from '../support/routes-harness';
+import { assignedWork } from './daily-plan-proposal.fixtures';
 
 let schema: typeof DbModule;
 let router: typeof dailyPlanRouter;
@@ -23,31 +17,6 @@ const at = (hour: number): string => `2027-01-05T${String(hour).padStart(2, '0')
 function required<T>(row: T | undefined): T {
   if (!row) throw new Error('Expected seeded row');
   return row;
-}
-
-async function assignedWork(userId: string, title: string, estimateMinutes: number | null) {
-  const { orgId, teamId } = await seedBaseOrg(schema.db, schema);
-  const [actor] = await schema.db
-    .insert(schema.actor)
-    .values({ organizationId: orgId, kind: 'human', displayName: 'Planner', userId })
-    .returning();
-  const statusId = await seedStatuses(schema.db, schema, orgId);
-  const [task] = await schema.db
-    .insert(schema.task)
-    .values({
-      organizationId: orgId,
-      teamId,
-      title,
-      assigneeId: required(actor).id,
-      state: 'todo',
-      statusId: statusId('task', 'todo'),
-      visibility: 'public',
-      estimate: 100,
-      estimateMinutes,
-      dueDate: new Date(at(17)),
-    })
-    .returning();
-  return { task: required(task), orgId, teamId, statusId };
 }
 
 interface ProposalBody {
@@ -105,12 +74,12 @@ function allocatedTaskIds(draft: ProposalBody['draft']): string[] {
 describe('daily proposal visible work and duration evidence', () => {
   it('selects only work that fits from a large assigned backlog and none when the day is full', async () => {
     const userId = await seedUserWithHub(schema.db, schema, 'ProposalLargeBacklog');
-    const work = await assignedWork(userId, 'First assigned task', 45);
+    const work = await assignedWork(schema, userId, 'First assigned task', 45);
     await schema.db.insert(schema.task).values(
       Array.from({ length: 229 }, (_, index) => ({
         organizationId: work.orgId,
         teamId: work.teamId,
-        assigneeId: work.task.assigneeId,
+        ...(index % 2 === 0 ? { createdBy: work.actorId } : { assigneeId: work.task.assigneeId }),
         title: `Backlog ${index}`,
         state: 'todo' as const,
         statusId: work.statusId('task', 'todo'),
@@ -126,6 +95,7 @@ describe('daily proposal visible work and duration evidence', () => {
       settings: { startAt: at(9) },
     };
     const limited = await proposal(userId, { draft: { ...emptyDraft, finishAt: at(10) } });
+    expect(limited.tasks).toHaveLength(230);
     expect(limited.draft.tasks).toHaveLength(1);
     expect(limited.draft.sessions.flatMap((session) => session.allocations)).toHaveLength(1);
     expect(limited.unplaced).toEqual([]);
@@ -137,8 +107,8 @@ describe('daily proposal visible work and duration evidence', () => {
 
   it('selects assigned tasks across workspaces and never converts point estimates', async () => {
     const userId = await seedUserWithHub(schema.db, schema, 'ProposalCrossOrg');
-    const first = await assignedWork(userId, 'Minute estimate', 90);
-    const second = await assignedWork(userId, 'Points only', null);
+    const first = await assignedWork(schema, userId, 'Minute estimate', 90);
+    const second = await assignedWork(schema, userId, 'Points only', null);
     const result = await proposal(userId);
     expect(result.tasks.map((entry) => entry.organizationId)).toEqual(
       expect.arrayContaining([first.orgId, second.orgId]),
@@ -156,8 +126,8 @@ describe('daily proposal visible work and duration evidence', () => {
 
   it('keeps edited duration and exclusions without modifying the task estimate', async () => {
     const userId = await seedUserWithHub(schema.db, schema, 'ProposalEdited');
-    const first = await assignedWork(userId, 'Edited work', 120);
-    const second = await assignedWork(userId, 'Excluded work', 45);
+    const first = await assignedWork(schema, userId, 'Edited work', 120);
+    const second = await assignedWork(schema, userId, 'Excluded work', 45);
     const result = await proposal(userId, {
       draft: {
         date,
@@ -198,7 +168,7 @@ describe('daily proposal visible work and duration evidence', () => {
     'resolves newly added default time and preserves resolved commitments: %j',
     async (scenario) => {
       const userId = await seedUserWithHub(schema.db, schema, 'ProposalDefaultSelection');
-      const work = await assignedWork(userId, 'Added existing work', 90);
+      const work = await assignedWork(schema, userId, 'Added existing work', 90);
       const result = await proposal(userId, {
         draft: {
           date,
@@ -230,7 +200,7 @@ describe('daily proposal visible work and duration evidence', () => {
 
   it('skips blocked suggestions and retains selected blocked work with its concrete reason', async () => {
     const userId = await seedUserWithHub(schema.db, schema, 'ProposalBlocked');
-    const work = await assignedWork(userId, 'Cannot start yet', 30);
+    const work = await assignedWork(schema, userId, 'Cannot start yet', 30);
     const [blocker] = await schema.db
       .insert(schema.task)
       .values({
@@ -259,7 +229,7 @@ describe('daily proposal visible work and duration evidence', () => {
 
   it('does not suggest completed work', async () => {
     const userId = await seedUserWithHub(schema.db, schema, 'ProposalCompleted');
-    const work = await assignedWork(userId, 'Done', 30);
+    const work = await assignedWork(schema, userId, 'Done', 30);
     await schema.db
       .update(schema.task)
       .set({ completedAt: new Date() })
@@ -272,7 +242,7 @@ describe('daily proposal visible work and duration evidence', () => {
     { estimate: null, source: 'history', budget: 30, future: 0 },
   ])('subtracts recorded work once from the $source budget across rebuilds', async (scenario) => {
     const userId = await seedUserWithHub(schema.db, schema, 'ProposalRecorded');
-    const work = await assignedWork(userId, 'Remaining estimate', scenario.estimate);
+    const work = await assignedWork(schema, userId, 'Remaining estimate', scenario.estimate);
     const [hub] = await schema.db.select().from(schema.hub).where(eq(schema.hub.userId, userId));
     const startedAt = new Date(at(8));
     const endedAt = new Date('2027-01-05T08:30:00.000Z');
@@ -325,7 +295,7 @@ describe('daily proposal visible work and duration evidence', () => {
 
   it('keeps protected windows open and exposes them as calendar context', async () => {
     const userId = await seedUserWithHub(schema.db, schema, 'ProposalProtected');
-    await assignedWork(userId, 'Long work', 240);
+    await assignedWork(schema, userId, 'Long work', 240);
     const [hub] = await schema.db.select().from(schema.hub).where(eq(schema.hub.userId, userId));
     await schema.db.insert(schema.schedulingPreference).values({
       hubId: required(hub).id,
@@ -348,7 +318,7 @@ describe('daily proposal visible work and duration evidence', () => {
   });
   it('splits remaining work across canonical segments and preserves an explicit day off', async () => {
     const userId = await seedUserWithHub(schema.db, schema, 'ProposalCanonical');
-    const work = await assignedWork(userId, 'Two work segments', 90);
+    const work = await assignedWork(schema, userId, 'Two work segments', 90);
     const [hub] = await schema.db.select().from(schema.hub).where(eq(schema.hub.userId, userId));
     const [plan] = await schema.db
       .insert(schema.workSchedulePlan)
@@ -402,8 +372,8 @@ describe('daily proposal visible work and duration evidence', () => {
 
   it('reserves active work without making another future block for that task', async () => {
     const userId = await seedUserWithHub(schema.db, schema, 'ProposalActive');
-    const active = await assignedWork(userId, 'Active work', 90);
-    const next = await assignedWork(userId, 'Next work', 30);
+    const active = await assignedWork(schema, userId, 'Active work', 90);
+    const next = await assignedWork(schema, userId, 'Next work', 30);
     const [hub] = await schema.db.select().from(schema.hub).where(eq(schema.hub.userId, userId));
     const startedAt = new Date(at(8));
     const [record] = await schema.db
@@ -477,7 +447,7 @@ describe('daily proposal visible work and duration evidence', () => {
 
   it('keeps native weekly blocks fixed and returns their display facts', async () => {
     const userId = await seedUserWithHub(schema.db, schema, 'ProposalNative');
-    await assignedWork(userId, 'Work around weekly block', 120);
+    await assignedWork(schema, userId, 'Work around weekly block', 120);
     const [layer] = await schema.db
       .insert(schema.calendarLayer)
       .values({ userId, sourceKind: 'native_blocks', title: 'Weekly schedule' })
@@ -499,7 +469,7 @@ describe('daily proposal visible work and duration evidence', () => {
   });
   it('preserves a legacy explicit timebox before any day snapshot exists', async () => {
     const userId = await seedUserWithHub(schema.db, schema, 'ProposalLegacyTimebox');
-    const work = await assignedWork(userId, 'Legacy placement', 90);
+    const work = await assignedWork(schema, userId, 'Legacy placement', 90);
     const [hub] = await schema.db.select().from(schema.hub).where(eq(schema.hub.userId, userId));
     await schema.db.insert(schema.dailyPlanItem).values({
       hubId: required(hub).id,

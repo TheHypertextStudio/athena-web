@@ -53,8 +53,9 @@ pnpm --dir apps/web preview:worker --env staging
 `opennextjs-cloudflare build --skipNextBuild`. It freezes `DOCKET_RUNTIME_TARGET=workers` through
 `DOCKET_WORKERS_BUILD=1`. OpenNext owns `.open-next` output and cache population; `preview:worker`
 runs native OpenNext preview (local Wrangler). No extra artifact assembler, shipping launcher,
-Python lifecycle, prebuilt Wrangler config, release-marker endpoint or custom release workflow is
-required. Ordinary CI retains all mandatory validation and existing backend/native release rules.
+Python lifecycle, prebuilt Wrangler config or release-marker endpoint is needed for local preview.
+Ordinary CI retains its required validation; the operator staging and production release steps are
+described below.
 
 Supply reviewed public build inputs in the calling environment:
 `NEXT_PUBLIC_APP_URL`, `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_PASSKEY_RP_ID`, and
@@ -111,12 +112,15 @@ the separately approved cutover.
 
 ## Manual staging workflow
 
-`Deploy Workers staging` is an operator-only `workflow_dispatch` workflow with no inputs or
-production option. It admits only this repository's `main`, checks out the dispatched SHA,
-requires the latest ordinary push CI run for that exact SHA to have succeeded, runs the existing
-frozen install and native Turbo/Next/service-worker/OpenNext build, then checks the live main ref
-immediately before native `deploy:worker --env staging --rclone --no-x-provision --env-file /dev/null`. It serializes staging deployments and
-never invokes the backend CI/release pipeline. Non-main dispatches skip the job.
+`Deploy Docket staging` is an operator-only `workflow_dispatch` workflow with no inputs or
+production option. It admits only this repository's `main`, checks out the dispatched SHA, and
+requires the latest ordinary push CI run for that exact SHA to have succeeded. It runs the frozen
+install and native Turbo/Next/service-worker/OpenNext build, checks the live main ref, and publishes
+the Worker with `deploy:worker --env staging --rclone --no-x-provision --env-file /dev/null`. It
+then uses the existing Google Workload Identity Federation configuration to update only the
+isolated `docket-api-staging` image to the CI-built image for that same commit. It verifies the ready
+revision's image digest and probes its health endpoint. This workflow never invokes the production
+release workflow. Non-main dispatches skip the job.
 
 Public compile values come from `env.staging.vars` in the single `wrangler.jsonc`, including the
 existing Mintlify upstream. No missing input is replaced with production values. The deployment
@@ -128,6 +132,9 @@ Editor access only to `docket-web-staging`; the separate S3 credential needs Obj
 only on `docket-web-staging-cache`. Supply `RCLONE_S3_NO_CHECK_BUCKET=true` for object-only access.
 OpenNext's supported `--rclone` path avoids its default bucket metadata lookup and temporary cache
 Worker; `--no-x-provision` disables Wrangler resource provisioning. Provision resources separately.
+The API step also needs the repository's `GCP_WIF_PROVIDER`, `GCP_SERVICE_ACCOUNT`, `GCP_PROJECT_ID`
+and `GCP_REGION` variables. It changes only the image, retaining the staging service's existing
+runtime identity, secrets and environment configuration.
 
 There is no `--keep-vars`: source owns nonsecret runtime vars, while provider-managed secrets
 remain separate. `--env-file /dev/null` suppresses final Wrangler dotenv input only. OpenNext
@@ -140,9 +147,6 @@ provider acceptance.
 
 Before dispatch, an operator must establish all of these prerequisites:
 
-- Read the current production API/admin revision, image and public configuration through the
-  authenticated Google account before an integration that enters the existing automatic backend
-  release pipeline. Frontend production cutover requires separate approval.
 - Verify that this repository actually has a protected `staging` GitHub environment, restricted to
   main and the intended environment-owned
   three staging secrets listed above. The generic repository `CLOUDFLARE_API_TOKEN` is never referenced. A YAML
@@ -151,23 +155,31 @@ Before dispatch, an operator must establish all of these prerequisites:
   access and ordinary CI success for the intended main SHA.
 - Verify the existing `docket-web-staging` Worker, Studio account, custom domain, Images and isolated
   `docket-web-staging-cache` R2 resource/authority and record their current version/configuration for
-  recovery. The selected native flags require existing resources and bucket-scoped cache access;
-  they do not create a temporary cache Worker. Production
-  Worker/DNS/Cloud Run resources must remain outside this operation.
+  recovery. Read the current `docket-api-staging` image, service identity and configuration through
+  the authenticated Google account, and retain them for recovery. The selected native flags require
+  existing frontend resources and bucket-scoped cache access; they do not create a temporary cache
+  Worker. Production Worker, DNS and Cloud Run resources must remain outside this operation.
 - Reconcile the existing isolated API's actual allowed origins/hosts, RP, cookie scope, OAuth and
   Lattice metadata/callbacks with the configured frontend. Read the actual backend settings before
   accepting the configured frontend identity. Review isolated
   Publishing/data/secret inputs rather than inventing a brief host, copying production values or
   treating an unavailable metadata read as acceptance.
 - Confirm intended staging compile identity and absence of app-local `.env*` input, retain the
-  previous staging version and backend configuration, and confirm the operation stays within the
-  reviewed staging authority.
-  Deployment success still needs actual staging journeys/auth/cache/Images/runtime acceptance;
-  the workflow adds no test probes or production cutover.
+  previous staging Worker version and API configuration, and confirm the operation stays within the
+  reviewed staging authority. Deployment success still needs actual staging
+  journeys/auth/cache/Images/runtime acceptance; the API health probe does not establish product
+  acceptance, and the workflow performs no production cutover.
+
+Before production promotion, read the current production API/admin revisions, image and public
+configuration through the authenticated Google account, and retain the previous state for recovery.
+The native production Worker cutover remains a separate operation: use the Studio Cloudflare account,
+review Worker/Images/R2/custom-domain ownership and recovery, and publish only after the owner has
+authorized that production cutover.
 
 The trigger multiplier is zero for push/PR and one runner per deliberate manual dispatch, bounded
-at 30 minutes. It reuses existing CI evidence instead of rerunning validation and builds only the
-web prerequisite graph with local Turbo caching. No workflow run, credential setup or provider
+at 30 minutes. It reuses existing CI evidence instead of rerunning validation, builds the web
+prerequisite graph with local Turbo caching, and publishes the matching CI API image. The health
+probe is not a substitute for staging acceptance. No workflow run, credential setup or provider
 acceptance is claimed by this source preparation.
 
 ## Application routing and auth

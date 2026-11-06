@@ -223,8 +223,11 @@ private API artifacts use Google Cloud Storage with the Cloud Run runtime identi
 artifacts use a private Cloudflare Worker with direct R2 storage and short-lived Google identity
 tokens. No cache artifact traffic passes through Google. CI authenticates through short-lived Workload Identity Federation tokens; local developers
 use native `gcloud` identity tokens. See [storage and cache setup](docs/engineering/deployment.md#private-storage-and-signed-turbo-cache).
-Ordinary CI and backend/native publication retain their existing triggers and mandatory checks;
-there are no custom candidate/promote workflows or temporary publication-hold flags.
+Ordinary CI and backend/native publication retain their existing triggers and mandatory checks. The
+operator-only `Deploy Docket staging` workflow builds and publishes the frontend for the validated
+commit and deploys the API image built by CI for that same commit. The manual production workflow
+requires successful CI, a staging deployment of the same commit, staging acceptance evidence, and the
+production release environment.
 
 Private shared packages `0.0.1` remain in the genuine accepted registry lock. GitHub Actions installs
 with its ephemeral `github.token` and package-read grants, not a classic personal token. The

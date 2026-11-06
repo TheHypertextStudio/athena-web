@@ -221,6 +221,7 @@ async function assertPlanningEvidenceStage(page: Page, stage: string): Promise<v
     'add-work': 'Add work',
     yesterday: 'Review yesterday',
     revision: 'Plan updated',
+    'plan-tomorrow': 'Plan tomorrow',
     'revision-preview': 'Review plan',
     'short-blocks-plan': 'Plan today',
     'short-blocks-review': 'Review plan',

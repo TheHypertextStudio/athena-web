@@ -10,9 +10,9 @@
 # The frontend is published independently of the backend release that also calls this workflow.
 # A failure reports broken live delivery; it does not replace frontend or backend acceptance.
 #
-# Billed footprint: one `ubuntu-latest` runner that makes roughly a dozen HTTP requests and exits.
-# Two triggers, both cheap. `workflow_call` adds one run per production release, which is at most
-# one per push to main. `schedule` adds exactly one run per day, and it is the trigger that earns
+# Footprint: one `studio-linux` runner that makes roughly a dozen HTTP requests and exits.
+# Two triggers, both cheap. `workflow_call` adds one run per manual production release.
+# `schedule` adds exactly one run per day, and it is the trigger that earns
 # its keep: the outage above was caused by a project-configuration change rather than a commit, so
 # a release-only check would have stayed silent until whenever someone next pushed. There is no
 # `push`/`pull_request` trigger, so branch and pull-request traffic costs nothing.
@@ -34,7 +34,10 @@ concurrency:
 jobs:
   verify-docs:
     name: Verify documentation site
-    runs-on: ubuntu-latest
+    if: ${{ github.repository == 'TheHypertextStudio/athena-web' && github.ref == 'refs/heads/main' && (github.event_name == 'workflow_dispatch' || github.event_name == 'schedule' || (github.event_name == 'workflow_call' && github.workflow_ref == 'TheHypertextStudio/athena-web/.github/workflows/deploy-main.yml@refs/heads/main')) && (github.workflow_ref == 'TheHypertextStudio/athena-web/.github/workflows/verify-docs.yml@refs/heads/main' || github.workflow_ref == 'TheHypertextStudio/athena-web/.github/workflows/deploy-main.yml@refs/heads/main') }}
+    runs-on:
+      group: studio-linux
+      labels: [self-hosted, Linux, ARM64, studio-linux]
     # Backstop, not the expected duration: a healthy site settles on the first probe in seconds, and
     # the retry loop's own ceiling is four and a half minutes. This bounds the billed cost of a
     # verifier that stops making progress rather than letting it run to the six-hour default.

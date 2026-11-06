@@ -70,6 +70,15 @@ and complete Settings link → Studio selection → interactive Athena reply →
 and sealed proposal. Correlate the Docket request, Lattice work ID, Studio daemon, and LM Studio
 inference. A health check or a successful deploy alone is insufficient.
 
+The operator-only `Deploy Docket staging` workflow builds and publishes the frontend for the
+validated commit and deploys the API image built by CI for that same main commit. It requires
+successful ordinary CI for that exact commit and refuses to publish a stale main revision. API
+deployment updates only the image on the isolated `docket-api-staging` service, preserving its
+staging environment and Secret Manager bindings.
+After the affected staging journey is accepted, dispatch `Deploy main` with that exact commit SHA,
+the staging acceptance confirmation, and a brief evidence reference. The workflow verifies the
+matching CI and staging deployment records before invoking the production release workflow.
+
 ### Native Athena email readiness
 
 Native email uses a dedicated Resend receiving and sending subdomain. Keep its MX, DKIM and SPF
@@ -190,9 +199,9 @@ The bootstrap script checks for these and exits if any are missing or unauthenti
 --provider=mapbox`. Confirm that the account can store permanent geocoding results before adding
    `MAPBOX_ACCESS_TOKEN`. The wizard writes `docket-mapbox-access-token` to Secret Manager and adds
    its Cloud Run binding.
-6. Publish the validated backend commit through the ordinary main release workflow. CI migrates
-   the database, deploys the API, verifies health/session/signup routes, refreshes Scheduler jobs,
-   and deploys admin. Keep all backend release gates intact.
+6. After accepting the exact staging commit, dispatch `Deploy main` for that SHA. The production
+   workflow migrates the database, deploys the API, verifies health/session/signup routes, refreshes
+   Scheduler jobs, and deploys admin. Keep all backend release gates intact.
 7. Publish the frontend separately through the approved native production Worker operation with
    matching public build inputs and runtime bindings. Follow
    [Workers operations](workers-compatibility.md#production-and-recovery); backend success alone

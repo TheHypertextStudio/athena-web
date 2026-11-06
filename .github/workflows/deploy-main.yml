@@ -1,43 +1,77 @@
 name: Deploy main
 
 on:
-  workflow_run:
-    workflows: [CI]
-    types: [completed]
+  workflow_dispatch:
+    inputs:
+      release_sha:
+        description: Exact main commit with successful CI and a staging deployment.
+        required: true
+        type: string
+      staging_acceptance:
+        description: Confirm the affected daily-planning flow passed on the staging deployment.
+        required: true
+        type: choice
+        options: [no, yes]
+        default: no
+      staging_evidence:
+        description: Brief evidence reference and the staging journey observed for this commit.
+        required: true
+        type: string
 
-# A production migration or rollout must never be cancelled halfway through. Only qualifying
-# success/push/main events share the production group: failed, cancelled, and PR completions still
-# create workflow_run events, but unique no-op groups keep them from evicting the one pending
-# production release GitHub concurrency retains. The freshness job prevents queued stale releases.
 concurrency:
-  group: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' && github.event.workflow_run.head_branch == 'main' && 'deploy-main' || format('deploy-main-noop-{0}', github.run_id) }}
+  group: deploy-main
   cancel-in-progress: false
 
 jobs:
   still-latest:
     name: Confirm validated commit is still main
-    # Production is published by the operator after the local CI gate.
-    # Keep workflow_run from allocating a hosted runner.
-    if: ${{ false }}
-    runs-on: ubuntu-latest
+    if: ${{ github.repository == 'TheHypertextStudio/athena-web' && github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.workflow_ref == 'TheHypertextStudio/athena-web/.github/workflows/deploy-main.yml@refs/heads/main' }}
+    runs-on:
+      group: studio-linux
+      labels: [self-hosted, Linux, ARM64, studio-linux]
     permissions:
       contents: read
+      actions: read
     outputs:
       proceed: ${{ steps.check.outputs.proceed }}
     steps:
       - id: check
         env:
           GH_TOKEN: ${{ github.token }}
-          VALIDATED_SHA: ${{ github.event.workflow_run.head_sha }}
+          RELEASE_SHA: ${{ inputs.release_sha }}
+          STAGING_ACCEPTANCE: ${{ inputs.staging_acceptance }}
+          STAGING_EVIDENCE: ${{ inputs.staging_evidence }}
         run: |
           set -euo pipefail
-          latest="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq '.object.sha')"
-          if [ "$latest" = "$VALIDATED_SHA" ]; then
-            echo "proceed=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "proceed=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::main moved to $latest after CI validated $VALIDATED_SHA; skipping the stale release."
+          if [[ "$STAGING_ACCEPTANCE" != 'yes' || -z "${STAGING_EVIDENCE//[[:space:]]/}" ]]; then
+            echo '::error::Staging acceptance and its evidence reference are required.'
+            exit 1
           fi
+          latest="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq '.object.sha')"
+          if [[ "$latest" != "$RELEASE_SHA" || "$GITHUB_SHA" != "$RELEASE_SHA" ]]; then
+            echo '::error::Release SHA must be the current main commit.'
+            exit 1
+          fi
+          ci_sha="$(gh run list --repo "$GITHUB_REPOSITORY" --workflow ci.yml \
+            --branch main --commit "$RELEASE_SHA" --event push --limit 1 \
+            --json status,conclusion,headSha \
+            --jq '.[0] | select(.status == "completed" and .conclusion == "success") | .headSha')"
+          if [[ "$ci_sha" != "$RELEASE_SHA" ]]; then
+            echo '::error::Ordinary CI has not succeeded for this exact main commit.'
+            exit 1
+          fi
+          staging_sha="$(gh run list --repo "$GITHUB_REPOSITORY" \
+            --workflow deploy-workers-staging.yml --branch main \
+            --commit "$RELEASE_SHA" --event workflow_dispatch --limit 1 \
+            --json status,conclusion,headSha \
+            --jq '.[0] | select(.status == "completed" and .conclusion == "success") | .headSha')"
+          if [[ "$staging_sha" != "$RELEASE_SHA" ]]; then
+            echo '::error::The exact release commit has not been deployed successfully to staging.'
+            exit 1
+          fi
+          echo "proceed=true" >> "$GITHUB_OUTPUT"
+          printf '## Staging acceptance\n\nCommit: %s\n\nEvidence: %s\n' \
+            "$RELEASE_SHA" "$STAGING_EVIDENCE" >> "$GITHUB_STEP_SUMMARY"
 
   deploy-production:
     name: Deploy production
@@ -49,7 +83,7 @@ jobs:
       id-token: write
     uses: ./.github/workflows/deploy.yml
     with:
-      release_sha: ${{ github.event.workflow_run.head_sha }}
+      release_sha: ${{ inputs.release_sha }}
     secrets: inherit
 
   # Observe the current public documentation after the backend release. Frontend publication

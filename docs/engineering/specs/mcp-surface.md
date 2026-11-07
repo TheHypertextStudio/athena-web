@@ -91,13 +91,13 @@ export const auth = betterAuth({
 
 ### 2.2 Scope set (the five Docket MCP scopes)
 
-| Scope             | Grants (token-level capability)                                                | Maps to Actor grant capabilities (RS-enforced per org)              |
-| ----------------- | ------------------------------------------------------------------------------ | ------------------------------------------------------------------- |
-| `work:read`       | Read any work-layer entity the principal can see.                              | `view` on the resolved resource.                                    |
-| `time:progress`   | Read aggregate tracked-time progress for a client-selected period and filters. | Personal time of the authenticated user only.                       |
-| `work:write`      | Create/update/move/assign/comment/post-update/run-view/link_external.          | `contribute`/`assign`/`comment`/`manage` (per tool — see §3 table). |
-| `agents:run`      | Trigger agent sessions, approve/reject agent actions.                          | `manage` on the target + approver-eligibility check.                |
-| `connectors:link` | Link external resources / initiate connector OAuth.                            | `manage` on the Integration + `contribute` on the linked entity.    |
+| Scope             | Grants (token-level capability)                                                                             | Maps to Actor grant capabilities (RS-enforced per org)              |
+| ----------------- | ----------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| `work:read`       | Read any work-layer entity the principal can see.                                                           | `view` on the resolved resource.                                    |
+| `time:progress`   | Read personal time categories and aggregate tracked-time progress for a client-selected period and filters. | Personal time of the authenticated user only.                       |
+| `work:write`      | Create/update/move/assign/comment/post-update/run-view/link_external.                                       | `contribute`/`assign`/`comment`/`manage` (per tool — see §3 table). |
+| `agents:run`      | Trigger agent sessions, approve/reject agent actions.                                                       | `manage` on the target + approver-eligibility check.                |
+| `connectors:link` | Link external resources / initiate connector OAuth.                                                         | `manage` on the Integration + `contribute` on the linked entity.    |
 
 **Two-layer authorization (mandatory).** A token scope is **necessary but not sufficient**. Every tool/resource call ALSO resolves the caller's `Actor` in the target `organization_id` and checks the granular `Grant` cascade (`view/comment/contribute/assign/manage`, data-model §5 "Permission / Grant"). Scopes gate _capability class_; grants gate _which org/resource_. A token with `work:write` still gets HTTP 403 / `isError` if the principal lacks `contribute` on that task.
 
@@ -166,7 +166,7 @@ Per spec §"Client Registration Approaches", the priority order is pre-registrat
 >
 > **Consent enforcement (net-new, discovered live):** Better Auth's `mcp()` authorize only routes through the consent page when the client sends `prompt=consent` — otherwise it silently mints a code for any registered client. `mcpConsentGuard` (`apps/api/src/mcp/consent-guard.ts`, mounted beside the CIMD preflight) 302s consent-less authorize requests back with `prompt=consent` unless a stored `oauth_consent` row already covers the requested scopes, restoring consent-once-per-scope-set semantics.
 
-The `time:progress` grant permits the `time_goal_progress` tool without granting
+The `time:progress` grant permits `time_goal_progress` and `time_goal_categories` without granting
 access to general work reads. A `work:read` grant also permits this aggregate
 query because it already covers tracked time. The query reports tracked time,
 not attention or proof that the person worked.

@@ -84,7 +84,8 @@ export const OAUTH_SCOPE_COPY: Readonly<Record<OAuthIssuableScope, OAuthScopeCop
   },
   'time:progress': {
     label: 'Check your time goals',
-    detail: 'View totals for your tracked time within periods and work filters the app chooses.',
+    detail:
+      'View your time categories and tracked-time totals for periods and work filters the app chooses.',
     access: 'read',
   },
   'agents:run': {

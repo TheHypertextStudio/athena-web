@@ -2,6 +2,7 @@
 interface ProgressInterval {
   readonly startedAt: string;
   readonly endedAt: string | null;
+  readonly actorKind: string;
   readonly mode: string;
   readonly source: string;
   readonly userId: string | null;
@@ -17,6 +18,17 @@ interface ProgressWindow {
   readonly includeManual: boolean;
 }
 
+/** Keep recorded human work separate from agent and optional manual entries. */
+function qualifies(interval: ProgressInterval, window: ProgressWindow): boolean {
+  if (interval.userId !== window.userId || interval.actorKind !== 'human') return false;
+  if (interval.mode !== 'human_active' || interval.supersededById !== null) return false;
+  return (
+    interval.source === 'user_timer' ||
+    (window.includeManual &&
+      (interval.source === 'manual_entry' || interval.source === 'reconstructed_entry'))
+  );
+}
+
 /** Count distinct wall-clock milliseconds of the person's qualifying tracked time. */
 export function measureHumanProgress(
   intervals: readonly ProgressInterval[],
@@ -24,17 +36,7 @@ export function measureHumanProgress(
 ): number {
   const spans = intervals
     .flatMap((interval) => {
-      if (
-        interval.userId !== window.userId ||
-        interval.mode !== 'human_active' ||
-        interval.supersededById !== null ||
-        (interval.source !== 'user_timer' &&
-          !(
-            window.includeManual &&
-            (interval.source === 'manual_entry' || interval.source === 'reconstructed_entry')
-          ))
-      )
-        return [];
+      if (!qualifies(interval, window)) return [];
       const start = Math.max(window.start, Date.parse(interval.startedAt));
       const end = Math.min(
         window.end,

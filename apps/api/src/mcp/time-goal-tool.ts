@@ -6,10 +6,55 @@ import { errorResult, jsonResult, runTool } from './result';
 import { requireScope } from './scope';
 import { TimeTimelineQuery } from '../contracts/time';
 import { measureHumanProgress } from '../time/commitment-progress';
-import { getTimeTimeline } from '../time/service';
+import { getTimeTimeline, listTimeCategories } from '../time/service';
 
-/** Register a personal read-only time-goal progress tool. */
+function registerTimeGoalCategories(server: McpRegistrar, ctx: McpContext): void {
+  server.registerTool(
+    'time_goal_categories',
+    {
+      title: 'List time categories',
+      description: 'List the person’s time categories for choosing a time-goal filter.',
+      inputSchema: {},
+      outputSchema: {
+        categories: z.array(
+          z.object({
+            id: z.string(),
+            name: z.string(),
+            parentId: z.string().nullable(),
+            archived: z.boolean(),
+          }),
+        ),
+        truncated: z.boolean(),
+      },
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    () =>
+      runTool(async () => {
+        requireScope(ctx.scopes, 'time:progress');
+        if (ctx.principal.kind !== 'user')
+          return errorResult('Time categories belong to a person.');
+        const categories = await listTimeCategories(ctx.principal.userId);
+        return jsonResult({
+          categories: categories.slice(0, 500).map(({ id, name, parentId, archivedAt }) => ({
+            id,
+            name,
+            parentId,
+            archived: archivedAt !== null,
+          })),
+          truncated: categories.length > 500,
+        });
+      }),
+  );
+}
+
+/** Register personal time-goal queries. */
 export function registerTimeGoalTool(server: McpRegistrar, ctx: McpContext): void {
+  registerTimeGoalCategories(server, ctx);
   server.registerTool(
     'time_goal_progress',
     {

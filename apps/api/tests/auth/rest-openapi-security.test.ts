@@ -161,7 +161,7 @@ describe('REST OpenAPI authentication contract', () => {
               'work:write':
                 'Create and update work, comments, plans, schedules, time records, notification read state, and published brief content.',
               'time:progress':
-                'View totals for your tracked time within periods and work filters the app chooses.',
+                'View your time categories and tracked-time totals for periods and work filters the app chooses.',
               'agents:run':
                 'Start, steer, resume, and cancel Athena or agent sessions, use voice sessions, and approve or reject proposed actions.',
               'connectors:link':

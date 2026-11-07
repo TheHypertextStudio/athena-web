@@ -119,6 +119,7 @@ export const TOOL_SCOPE: Readonly<Record<string, McpScope>> = {
   // the map records the strictest scope the tool can require.
   track: 'work:write',
   time_goal_progress: 'time:progress',
+  time_goal_categories: 'time:progress',
   // Listed at `work:read` so a read-only token reaches `list`; the handler requires `work:write`
   // for create, update, and delete.
   milestones: 'work:read',

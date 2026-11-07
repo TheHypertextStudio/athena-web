@@ -8,6 +8,12 @@
 
 ## Active Tasks
 
+### [COMMITMENT-CATEGORY-CHOICES] Choose time-goal categories
+
+- **Status**: COMPLETE locally; deployment and client acceptance remain open.
+- **Result**: Added a personal category list for time-goal setup. The response identifies archived categories and reports truncation after 500 entries. Updated consent copy to disclose category access.
+- **Verification**: Focused MCP, REST metadata, consent copy, and documentation tests passed. API typecheck and changed-file lint passed.
+
 ### [COMMITMENT-TIME-SCOPE] Narrow time-goal authorization
 
 - **Status**: COMPLETE locally; client enrollment and deployment remain open.
@@ -18,7 +24,7 @@
 
 - **Status**: COMPLETE locally; Curfew integration and deployment remain separate.
 - **Result**: Added a personal read-only MCP time-goal query over the Time Ledger. It unions qualifying human intervals, supports explicit filters and manual-time selection, and returns a minimal progress result. The existing `work:read` grant remains broader than this query.
-- **Verification**: Focused time and MCP tests passed with two workers. The API package typecheck and changed-file lint passed.
+- **Verification**: Focused time and MCP tests passed with two workers. The API package typecheck and changed-file lint passed. A regression now checks actor kind as well as mode, so an agent-labeled interval cannot count as human time even if its other fields claim a human timer.
 
 ### [LOCAL-PRODUCTION-RELEASE] Publish the project UI and deliverable uploads
 

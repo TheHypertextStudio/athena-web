@@ -122,6 +122,36 @@ function mcpApp() {
 }
 
 describe('time goal progress', () => {
+  it('lists only the authenticated person’s time categories for goal setup', async () => {
+    const owner = await seedOrg();
+    const other = await seedOrg();
+    const hubs = await db.select().from(schema.hub);
+    const ownerHub = assertDefined(hubs.find((hub) => hub.userId === owner.userId));
+    const otherHub = assertDefined(hubs.find((hub) => hub.userId === other.userId));
+    const [category] = await db
+      .insert(schema.timeCategory)
+      .values({
+        hubId: ownerHub.id,
+        name: 'Design work',
+      })
+      .returning();
+    await db
+      .insert(schema.timeCategory)
+      .values({ hubId: otherHub.id, name: 'Private other category' });
+    const client = await connect({ ...owner.ctx, scopes: ['time:progress'] });
+    const response = await client.callTool({ name: 'time_goal_categories', arguments: {} });
+    expect(response.isError).not.toBe(true);
+    expect(response.structuredContent).toMatchObject({
+      categories: [
+        { id: assertDefined(category).id, name: 'Design work', parentId: null, archived: false },
+      ],
+    });
+    expect(JSON.stringify(response)).not.toContain('Private other category');
+    const noAccess = await connect({ ...owner.ctx, scopes: [] });
+    const denied = await noAccess.callTool({ name: 'time_goal_categories', arguments: {} });
+    expect(denied.isError).toBe(true);
+  });
+
   it('maps every registered tool to a transport-level scope', async () => {
     const s = await seedOrg();
     const client = await connect(s.ctx);
@@ -198,7 +228,12 @@ describe('time goal progress', () => {
       .from(schema.hub)
       .where(eq(schema.hub.userId, s.userId));
     const hubId = assertDefined(hub).id;
-    async function addInterval(taskId: string, start: string, end: string) {
+    async function addInterval(
+      taskId: string,
+      start: string,
+      end: string,
+      actorKind: 'human' | 'agent' = 'human',
+    ) {
       const [record] = await db
         .insert(schema.timeRecord)
         .values({
@@ -216,7 +251,7 @@ describe('time goal progress', () => {
         hubId,
         taskId,
         userId: s.userId,
-        actorKind: 'human',
+        actorKind,
         mode: 'human_active',
         source: 'user_timer',
         startedAt: new Date(start),
@@ -226,6 +261,7 @@ describe('time goal progress', () => {
     await addInterval(selected, '2026-10-01T09:00:00Z', '2026-10-01T10:00:00Z');
     await addInterval(selected, '2026-10-01T09:30:00Z', '2026-10-01T10:30:00Z');
     await addInterval(other, '2026-10-01T10:30:00Z', '2026-10-01T11:00:00Z');
+    await addInterval(selected, '2026-10-01T11:00:00Z', '2026-10-01T12:00:00Z', 'agent');
     const client = await connect(s.ctx);
     const result = await client.callTool({
       name: 'time_goal_progress',

@@ -8,6 +8,7 @@ const now = Date.parse('2026-11-06T11:00:00Z');
 const span = (startedAt: string, endedAt: string | null, overrides = {}) => ({
   startedAt,
   endedAt,
+  actorKind: 'human',
   mode: 'human_active',
   source: 'user_timer',
   userId: 'owner',
@@ -33,6 +34,7 @@ describe('commitment time progress', () => {
     const base = ['2026-11-06T09:00:00Z', '2026-11-06T10:00:00Z'] as const;
     const intervals = [
       span(...base, { mode: 'agent_active' }),
+      span(...base, { actorKind: 'agent' }),
       span(...base, { userId: 'other' }),
       span(...base, { supersededById: 'replacement' }),
       span(...base, { source: 'manual_entry' }),

@@ -59,16 +59,7 @@
  * back on this exact request instead of abandoning it.
  */
 import { AuthLayout } from '@docket/ui/components';
-import {
-  Cable,
-  ChevronDown,
-  Edit,
-  Link as LinkIcon,
-  Play,
-  RefreshCw,
-  TaskAlt,
-  XCircle,
-} from '@docket/ui/icons';
+import { ChevronDown, Link as LinkIcon, XCircle } from '@docket/ui/icons';
 import { cn } from '@docket/ui/lib/utils';
 import {
   Avatar,
@@ -89,7 +80,6 @@ import Link from 'next/link';
 // `(app)/`, `components/`, and `lib/` for the same reason.
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
-  type ComponentType,
   type JSX,
   type ReactNode,
   Suspense,
@@ -105,26 +95,8 @@ import Wordmark from '@/components/wordmark';
 import { api } from '@/lib/api';
 import { signOut, useSession } from '@/lib/auth-client';
 import { describeScope, OAUTH_SCOPE_ACCESS_LABEL } from '@/lib/oauth-scope-copy';
+import { OAUTH_SCOPE_ICON } from '@/lib/oauth-scope-icons';
 import { resolveSessionStatus } from '@/lib/session-status';
-
-/**
- * The glyph for each permission Docket can grant.
- *
- * @remarks
- * Icons are presentation, so they live with the screen while the words live in
- * `@/lib/oauth-scope-copy` — which keeps that module free of React and trivially testable. Keyed
- * by the permission string rather than folded into the copy entries for the same reason.
- *
- * The fallback is deliberately a "no" glyph: a request Docket cannot satisfy should not borrow
- * the icon of a capability it does not have.
- */
-const SCOPE_ICON: Readonly<Record<string, ComponentType<{ className?: string }>>> = {
-  'work:read': TaskAlt,
-  'work:write': Edit,
-  'agents:run': Play,
-  'connectors:link': Cable,
-  offline_access: RefreshCw,
-};
 
 /** Shown while the session read is still in flight, in place of the account address. */
 const ACCOUNT_PENDING_LABEL = 'Checking your account…';
@@ -292,7 +264,7 @@ function ContextRow({
  */
 function ScopeRow({ scope }: { scope: string }): JSX.Element {
   const { label, detail, access } = describeScope(scope);
-  const Icon = SCOPE_ICON[scope] ?? XCircle;
+  const Icon = OAUTH_SCOPE_ICON[scope] ?? XCircle;
   const [open, setOpen] = useState(false);
   const contentRef = useRef<HTMLDivElement>(null);
 

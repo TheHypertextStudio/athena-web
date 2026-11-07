@@ -7,9 +7,8 @@
  * drift are asserted: the MCP tools, the OAuth scopes, the vocabulary keys, and the `docs.json`
  * navigation.
  *
- * Read from source text rather than imported. The tool list has no importable form — registration
- * is identity-scoped — and `TOOL_SCOPE` covers only 22 of the 25, since `repeating-work-tools.ts`
- * enforces scope inline.
+ * Read from source text rather than imported. The tool list has no importable form because
+ * registration is identity-scoped.
  */
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { relative, resolve } from 'node:path';
@@ -52,7 +51,7 @@ const DEVELOPER_PAGE_ORDER = [
  */
 const MINIMUM_MCP_TOOLS = 20;
 const MINIMUM_NAVIGATION_PAGES = 25;
-const EXPECTED_CAPABILITY_SCOPES = 4;
+const EXPECTED_CAPABILITY_SCOPES = 5;
 const EXPECTED_VOCABULARY_KEYS = 6;
 
 /**

@@ -1,6 +1,6 @@
 ---
-title: 'Authentication'
-description: 'Discover Docket resources, register an OAuth client, and request only the permissions it needs.'
+title: "Authentication"
+description: "Discover Docket resources, register an OAuth client, and request only the permissions it needs."
 ---
 
 Docket uses OAuth authorization code flow with PKCE `S256`. A client acts as the person who
@@ -32,6 +32,7 @@ tokens or API keys.
 | ----------------- | --------------------------------------------------------------------------------------------------------------------------- |
 | `work:read`       | View workspace structure, work, comments, updates, search, saved views, schedules, calendars, time, and your notifications. |
 | `work:write`      | Create and update work, comments, plans, schedules, time records, notification read state, and published brief content.     |
+| `time:progress`   | View totals for your tracked time within periods and work filters the app chooses.                                          |
 | `agents:run`      | Start, steer, resume, and cancel Athena or agent sessions, use voice sessions, and approve or reject proposed actions.      |
 | `connectors:link` | Connect, configure, disconnect, and run integrations with other tools you use.                                              |
 | `offline_access`  | Keep working on your behalf without asking you to sign in again.                                                            |

@@ -50,7 +50,7 @@ export function registerTimeGoalTool(server: McpRegistrar, ctx: McpContext): voi
       includeManual?: boolean | undefined;
     }) =>
       runTool(async () => {
-        requireScope(ctx.scopes, 'work:read');
+        requireScope(ctx.scopes, 'time:progress');
         if (ctx.principal.kind !== 'user') return errorResult('Time progress belongs to a person.');
         const parsed = TimeTimelineQuery.safeParse({
           start: args.start,

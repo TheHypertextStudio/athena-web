@@ -18,13 +18,14 @@
  */
 
 /**
- * The four capability scopes the Docket resource server enforces.
+ * The five capability scopes the Docket resource server enforces.
  *
  * @remarks
  * Deliberately excludes `offline_access`: that scope gates nothing on the resource server, so it
  * must never be assignable where a capability is required (see `apps/api/src/mcp/scope.ts`).
  */
-export type OAuthCapabilityScope = 'work:read' | 'work:write' | 'agents:run' | 'connectors:link';
+export type OAuthCapabilityScope =
+  'work:read' | 'work:write' | 'time:progress' | 'agents:run' | 'connectors:link';
 
 /** Compatibility alias for MCP callers while REST adopts the shared capability scope type. */
 export type McpCapabilityScope = OAuthCapabilityScope;
@@ -54,10 +55,18 @@ export const OFFLINE_ACCESS_SCOPE = 'offline_access';
 export const OAUTH_ISSUABLE_SCOPES: readonly [
   'work:read',
   'work:write',
+  'time:progress',
   'agents:run',
   'connectors:link',
   'offline_access',
-] = ['work:read', 'work:write', 'agents:run', 'connectors:link', 'offline_access'] as const;
+] = [
+  'work:read',
+  'work:write',
+  'time:progress',
+  'agents:run',
+  'connectors:link',
+  'offline_access',
+] as const;
 
 /** The closed resource-operation subset, kept in consent-screen order. */
 export const OAUTH_CAPABILITY_SCOPES: readonly OAuthCapabilityScope[] =

@@ -2,22 +2,33 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { eq } from 'drizzle-orm';
-import { afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { Hono } from 'hono';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import type * as DbModule from '@docket/db';
 import { assertDefined } from '@docket/test-utils';
 import type { McpContext } from '../../src/mcp/auth';
+import type * as ScopeModule from '../../src/mcp/scope';
+import type * as ServerModule from '../../src/mcp/server';
 import type { registerTools as RegisterTools } from '../../src/mcp/tools';
-import { resetAuthMocks } from '../support/auth-mock';
+import { resetAuthMocks, verifyAccessToken } from '../support/auth-mock';
+import { seedConsentedClient } from '../support/oauth-grant';
 import { getMigratedDb } from '../support/db';
 import { seedStatuses, type StatusIdLookup } from '../support/routes-harness';
 
 let schema: typeof DbModule;
 let db: typeof DbModule.db;
 let registerTools: typeof RegisterTools;
+let scopeMod: typeof ScopeModule;
+let serverMod: typeof ServerModule;
 beforeAll(async () => {
+  vi.stubEnv('MCP_ISSUER_URL', 'https://auth.docket.test');
+  vi.stubEnv('MCP_RESOURCE_URL', 'https://api.docket.test/mcp');
+  vi.stubEnv('WEB_URL', 'https://docket.test');
   schema = await getMigratedDb();
   db = schema.db;
   registerTools = (await import('../../src/mcp/tools')).registerTools;
+  scopeMod = await import('../../src/mcp/scope');
+  serverMod = await import('../../src/mcp/server');
 });
 interface Seed {
   orgId: string;
@@ -104,7 +115,80 @@ afterEach(async () => {
   resetAuthMocks();
 });
 
+function mcpApp() {
+  const app = new Hono();
+  app.on(['POST', 'GET'], '/mcp', serverMod.mcpHandler);
+  return app;
+}
+
 describe('time goal progress', () => {
+  it('maps every registered tool to a transport-level scope', async () => {
+    const s = await seedOrg();
+    const client = await connect(s.ctx);
+    const { tools } = await client.listTools();
+    expect(tools.map((tool) => tool.name).filter((name) => !scopeMod.TOOL_SCOPE[name])).toEqual([]);
+  });
+
+  it('allows a time progress grant through the transport but rejects general work reads', async () => {
+    const s = await seedOrg();
+    const taskId = await seedTask(s, 'Scoped task');
+    const { clientId } = await seedConsentedClient(schema, s.userId, ['time:progress']);
+    verifyAccessToken.mockResolvedValue({ sub: s.userId, azp: clientId, scope: 'time:progress' });
+    async function call(name: string, args: Record<string, unknown>) {
+      return mcpApp().request('/mcp', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          accept: 'application/json, text/event-stream',
+          authorization: 'Bearer progress-only',
+        },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: 10,
+          method: 'tools/call',
+          params: { name, arguments: args },
+        }),
+      });
+    }
+    const allowed = await call('time_goal_progress', {
+      start: '2026-10-01T09:00:00Z',
+      end: '2026-10-01T12:00:00Z',
+      targetMs: 60000,
+    });
+    expect(allowed.status).not.toBe(403);
+    for (const name of ['get', 'get_tasks', 'unregistered_tool']) {
+      const denied = await call(name, { orgId: s.orgId, type: 'task', refs: [taskId] });
+      expect(denied.status).toBe(403);
+      expect(await denied.json()).toMatchObject({ code: 'insufficient_scope', scope: 'work:read' });
+    }
+  });
+
+  it('allows a progress-only grant without granting general work access', async () => {
+    const s = await seedOrg();
+    const task = await seedTask(s, 'Private work title');
+    const client = await connect({ ...s.ctx, scopes: ['time:progress'] });
+    const progress = await client.callTool({
+      name: 'time_goal_progress',
+      arguments: {
+        start: '2026-10-01T09:00:00Z',
+        end: '2026-10-01T12:00:00Z',
+        targetMs: 60000,
+      },
+    });
+    expect(progress.isError).not.toBe(true);
+    expect(progress.structuredContent).toMatchObject({ elapsedMs: 0, satisfied: false });
+    const work = await client.callTool({
+      name: 'get',
+      arguments: { orgId: s.orgId, type: 'task', refs: [task] },
+    });
+    expect(work.isError).toBe(true);
+    const semanticWork = await client.callTool({
+      name: 'get_tasks',
+      arguments: { orgId: s.orgId, refs: [task] },
+    });
+    expect(semanticWork.isError).toBe(true);
+  });
+
   it('reports only the qualifying distinct time for the chosen task and period', async () => {
     const s = await seedOrg();
     const selected = await seedTask(s, 'Selected work');

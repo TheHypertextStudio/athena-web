@@ -75,6 +75,7 @@ export const auth = betterAuth({
           // the Docket MCP scope set, flat/global
           "work:read",
           "work:write",
+          "time:progress",
           "agents:run",
           "connectors:link",
         ],
@@ -88,14 +89,15 @@ export const auth = betterAuth({
 
 > **Note on plugin choice (resolves engineering open decision).** Use `oidcProvider()` **and** `mcp()` together. `mcp()` is built on the OIDC provider and adds the MCP-specific discovery helpers; the OIDC provider owns the `oauthApplication/oauthAccessToken/oauthConsent` tables and the consent UI. `mcp()` alone is insufficient because Docket also acts as a general OIDC provider for first-party apps.
 
-### 2.2 Scope set (the four Docket MCP scopes)
+### 2.2 Scope set (the five Docket MCP scopes)
 
-| Scope             | Grants (token-level capability)                                       | Maps to Actor grant capabilities (RS-enforced per org)              |
-| ----------------- | --------------------------------------------------------------------- | ------------------------------------------------------------------- |
-| `work:read`       | Read any work-layer entity the principal can see.                     | `view` on the resolved resource.                                    |
-| `work:write`      | Create/update/move/assign/comment/post-update/run-view/link_external. | `contribute`/`assign`/`comment`/`manage` (per tool — see §3 table). |
-| `agents:run`      | Trigger agent sessions, approve/reject agent actions.                 | `manage` on the target + approver-eligibility check.                |
-| `connectors:link` | Link external resources / initiate connector OAuth.                   | `manage` on the Integration + `contribute` on the linked entity.    |
+| Scope             | Grants (token-level capability)                                                | Maps to Actor grant capabilities (RS-enforced per org)              |
+| ----------------- | ------------------------------------------------------------------------------ | ------------------------------------------------------------------- |
+| `work:read`       | Read any work-layer entity the principal can see.                              | `view` on the resolved resource.                                    |
+| `time:progress`   | Read aggregate tracked-time progress for a client-selected period and filters. | Personal time of the authenticated user only.                       |
+| `work:write`      | Create/update/move/assign/comment/post-update/run-view/link_external.          | `contribute`/`assign`/`comment`/`manage` (per tool — see §3 table). |
+| `agents:run`      | Trigger agent sessions, approve/reject agent actions.                          | `manage` on the target + approver-eligibility check.                |
+| `connectors:link` | Link external resources / initiate connector OAuth.                            | `manage` on the Integration + `contribute` on the linked entity.    |
 
 **Two-layer authorization (mandatory).** A token scope is **necessary but not sufficient**. Every tool/resource call ALSO resolves the caller's `Actor` in the target `organization_id` and checks the granular `Grant` cascade (`view/comment/contribute/assign/manage`, data-model §5 "Permission / Grant"). Scopes gate _capability class_; grants gate _which org/resource_. A token with `work:write` still gets HTTP 403 / `isError` if the principal lacks `contribute` on that task.
 
@@ -130,6 +132,7 @@ app.get("/.well-known/oauth-protected-resource/mcp", (c) =>
   "scopes_supported": [
     "work:read",
     "work:write",
+    "time:progress",
     "agents:run",
     "connectors:link",
     "offline_access",
@@ -163,6 +166,11 @@ Per spec §"Client Registration Approaches", the priority order is pre-registrat
 >
 > **Consent enforcement (net-new, discovered live):** Better Auth's `mcp()` authorize only routes through the consent page when the client sends `prompt=consent` — otherwise it silently mints a code for any registered client. `mcpConsentGuard` (`apps/api/src/mcp/consent-guard.ts`, mounted beside the CIMD preflight) 302s consent-less authorize requests back with `prompt=consent` unless a stored `oauth_consent` row already covers the requested scopes, restoring consent-once-per-scope-set semantics.
 
+The `time:progress` grant permits the `time_goal_progress` tool without granting
+access to general work reads. A `work:read` grant also permits this aggregate
+query because it already covers tracked time. The query reports tracked time,
+not attention or proof that the person worked.
+
 ### 2.5 Token validation (RS, on every request — MUST)
 
 `withMcpAuth(auth, handler)` wraps `/mcp`; inside, `auth.api.getMcpSession({ headers })` returns `{ accessToken, userId, scopes, clientId }`. The RS additionally enforces:
@@ -179,7 +187,7 @@ Per spec §"Client Registration Approaches", the priority order is pre-registrat
 
 ```
 WWW-Authenticate: Bearer resource_metadata="https://api.docket.app/.well-known/oauth-protected-resource/mcp",
-                         scope="work:read work:write agents:run connectors:link offline_access"
+                         scope="work:read work:write time:progress agents:run connectors:link offline_access"
 ```
 
 The challenge advertises the **full** connect set, not a `work:read` baseline. A client asks for exactly what it is told to ask for, so a narrower hint connects it read-only — and because a client's granted set is fixed at registration/consent time, "read-only for now, escalate later" is not recoverable in practice. One consent screen listing everything is both more honest to the user and the only reliable path. Including `offline_access` stretches RFC 6750 §3 (which scopes the attribute to what is _required_ to access the resource); it is deliberate, for the renewal reason in §2.3.

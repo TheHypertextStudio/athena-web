@@ -3,8 +3,8 @@
  *
  * @remarks
  * This is the FIRST of the two mandatory authorization layers on the MCP surface. The
- * access token carries a flat, global set of the four Docket scopes
- * (`work:read`/`work:write`/`agents:run`/`connectors:link`). Each tool/resource declares
+ * access token carries a flat, global set of the five Docket scopes
+ * (`work:read`/`work:write`/`time:progress`/`agents:run`/`connectors:link`). Each tool/resource declares
  * the scope its operation requires; {@link requireScope} verifies the token carries it
  * BEFORE the per-org {@link import('@docket/authz').canActor} grant check runs.
  *
@@ -24,7 +24,7 @@ import {
 import { InsufficientScopeError } from '../error';
 
 /**
- * One of the four flat, global Docket MCP scopes (mcp-surface.md §2.2).
+ * One of the five flat, global Docket MCP scopes (mcp-surface.md §2.2).
  *
  * @remarks
  * An alias for `domain packages`' {@link McpCapabilityScope} rather than a second literal union:
@@ -60,12 +60,12 @@ export const MCP_SCOPES: readonly McpScope[] = OAUTH_ISSUABLE_SCOPES.filter(
 export const OFFLINE_ACCESS_SCOPE = ISSUABLE_OFFLINE_ACCESS_SCOPE;
 
 /**
- * Everything a connecting client is asked to consent to, in one screen: the four capability
+ * Everything a connecting client is asked to consent to, in one screen: the five capability
  * scopes plus `offline_access` (mcp-surface.md §2.3/§2.6).
  *
  * @remarks
  * Advertised in the PRM `scopes_supported`, in both `WWW-Authenticate` challenges, and — via
- * `oauthProvider({ scopes })` — in the AS metadata document. Those four sources describe the
+ * `oauthProvider({ scopes })` — in the AS metadata document. Those sources describe the
  * same authorization request and must not disagree: a client that intersects them would drop
  * whatever one of them omits, which is precisely how a connector ends up read-only or
  * non-renewable.
@@ -101,6 +101,9 @@ export const TOOL_SCOPE: Readonly<Record<string, McpScope>> = {
   archive: 'work:write',
   define_labels: 'work:write',
   define_template: 'work:write',
+  define_process: 'work:write',
+  schedule_process: 'work:write',
+  repeat_task: 'work:write',
   manage_work_schedule: 'work:write',
   plan_day: 'work:write',
   view_workload: 'work:read',
@@ -115,7 +118,7 @@ export const TOOL_SCOPE: Readonly<Record<string, McpScope>> = {
   // The timer's read actions (`status`, `segments`) narrow to `work:read` inside the handler;
   // the map records the strictest scope the tool can require.
   track: 'work:write',
-  time_goal_progress: 'work:read',
+  time_goal_progress: 'time:progress',
   // Listed at `work:read` so a read-only token reaches `list`; the handler requires `work:write`
   // for create, update, and delete.
   milestones: 'work:read',
@@ -139,6 +142,18 @@ export const TOOL_SCOPE: Readonly<Record<string, McpScope>> = {
   list_resources: 'work:read',
   get_resources: 'work:read',
   get: 'work:read',
+  get_tasks: 'work:read',
+  get_projects: 'work:read',
+  get_programs: 'work:read',
+  get_initiatives: 'work:read',
+  get_cycles: 'work:read',
+  get_teams: 'work:read',
+  get_updates: 'work:read',
+  get_comments: 'work:read',
+  get_sessions: 'work:read',
+  get_agents: 'work:read',
+  get_views: 'work:read',
+  get_organizations: 'work:read',
   brief: 'work:read',
   retrospect: 'work:read',
   workspaces: 'work:read',
@@ -161,7 +176,14 @@ export const RESOURCE_READ_SCOPE: McpScope = 'work:read';
  * @throws {InsufficientScopeError} When `required` is not present in `scopes`.
  */
 export function requireScope(scopes: readonly string[], required: McpScope): void {
-  if (!scopes.includes(required)) throw new InsufficientScopeError(required);
+  if (!hasScope(scopes, required)) throw new InsufficientScopeError(required);
+}
+
+/** A general work reader already has access to tracked time and its aggregates. */
+export function hasScope(scopes: readonly string[], required: McpScope): boolean {
+  return (
+    scopes.includes(required) || (required === 'time:progress' && scopes.includes('work:read'))
+  );
 }
 
 /**

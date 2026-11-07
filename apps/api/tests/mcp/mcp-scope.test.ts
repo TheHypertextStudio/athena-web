@@ -194,7 +194,9 @@ describe('scope helpers', () => {
     );
     // The whole set, not just `work:read`: a client asks for exactly what this advertises, so a
     // narrower hint connects it read-only forever (and, without `offline_access`, un-renewably).
-    expect(c).toContain('scope="work:read work:write agents:run connectors:link offline_access"');
+    expect(c).toContain(
+      'scope="work:read work:write time:progress agents:run connectors:link offline_access"',
+    );
   });
 
   it('challenge403 lists granted + newly-required scopes (recommended strategy), deduped + ordered', () => {
@@ -423,6 +425,7 @@ describe('discovery routes (PRM + AS metadata)', () => {
     expect(prm.scopes_supported).toEqual([
       'work:read',
       'work:write',
+      'time:progress',
       'agents:run',
       'connectors:link',
       'offline_access',
@@ -517,7 +520,9 @@ describe('/mcp handler — 401 challenge + 403 step-up', () => {
     const wa = res.headers.get('www-authenticate') ?? '';
     expect(wa).toContain('resource_metadata=');
     expect(wa).toContain('/.well-known/oauth-protected-resource/mcp');
-    expect(wa).toContain('scope="work:read work:write agents:run connectors:link offline_access"');
+    expect(wa).toContain(
+      'scope="work:read work:write time:progress agents:run connectors:link offline_access"',
+    );
   });
 
   it.each(['capture', 'send_email'])(

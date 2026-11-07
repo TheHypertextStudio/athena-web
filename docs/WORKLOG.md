@@ -8,6 +8,12 @@
 
 ## Active Tasks
 
+### [COMMITMENT-TIME-SCOPE] Narrow time-goal authorization
+
+- **Status**: COMPLETE locally; client enrollment and deployment remain open.
+- **Result**: Added an aggregate time-progress grant and consent copy. The MCP transport and handler accept it without granting general work access. Existing `work:read` clients retain time-goal access.
+- **Verification**: Focused MCP, OAuth consent, REST metadata, and documentation tests passed. API and web typechecks passed.
+
 ### [COMMITMENT-TIME-PROGRESS] Expose time-goal progress
 
 - **Status**: COMPLETE locally; Curfew integration and deployment remain separate.

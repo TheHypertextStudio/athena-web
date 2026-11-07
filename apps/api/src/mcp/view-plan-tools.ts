@@ -16,6 +16,7 @@ import { ApiError } from '../error';
 import { DESCRIPTOR_HINT, type DescriptorKind, resolveDescriptor } from './descriptors';
 import { entityHref, entityListHref, type ReadableType } from './entity-href';
 import { READABLE_TYPES, readEntity } from './resources';
+import { requireScope } from './scope';
 
 /**
  * Which readable types can also be addressed by name.
@@ -85,6 +86,7 @@ async function readResult(
   type: ReadableType,
   refs: readonly string[],
 ): Promise<ReturnType<typeof jsonResult>> {
+  requireScope(ctx.scopes, 'work:read');
   const { data, work } = await readEntities(ctx, orgId, type, refs);
   return jsonResult(data, entityRenderMeta(data.items, work));
 }

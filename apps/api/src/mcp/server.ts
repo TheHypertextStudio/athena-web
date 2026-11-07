@@ -42,7 +42,7 @@ import { registerPrompts } from './prompts';
 import { withRequestScope } from './request-context';
 import { registerResources } from './resources';
 import { SERVED_ICONS } from '../routes/brand-icons';
-import { challenge401, challenge403, CONNECT_SCOPES, TOOL_SCOPE } from './scope';
+import { challenge401, challenge403, CONNECT_SCOPES, hasScope, TOOL_SCOPE } from './scope';
 import { installTaskProtocolHandlers } from './task-protocol';
 import { taskStoreForContext } from './task-store';
 import { registerTools } from './tools';
@@ -216,7 +216,7 @@ function problem(c: Context, err: unknown): Response {
  * issuer (`MCP_ISSUER_URL`), the {@link CONNECT_SCOPES} set, and `bearer_methods_supported`
  * so a client can locate the AS, register/consent, and mint an audience-bound token.
  *
- * `scopes_supported` lists `offline_access` alongside the four capability scopes because
+ * `scopes_supported` lists `offline_access` alongside the five capability scopes because
  * RFC 9728 §2 defines the field as the scope values "used in authorization requests to the
  * authorization server for this resource" — not the resource's own capabilities — and
  * `offline_access` genuinely is one of them. Omitting it would let a client that intersects
@@ -547,8 +547,18 @@ function toolScopeForBody(body: unknown): (typeof TOOL_SCOPE)[string] | null {
  * @returns a 403 Problem Response, or `null` when scope is satisfied / not applicable.
  */
 function scopeStepUp(c: Context, ctx: McpContext, body: unknown): Response | null {
-  const required = toolScopeForBody(body);
-  if (!required || ctx.scopes.includes(required)) return null;
+  let required = toolScopeForBody(body);
+  if (
+    !required &&
+    ctx.scopes.includes('time:progress') &&
+    ctx.scopes.every((scope) => scope === 'time:progress' || scope === 'offline_access') &&
+    typeof body === 'object' &&
+    body !== null &&
+    (body as ToolsCallBody).method === 'tools/call'
+  ) {
+    required = 'work:read';
+  }
+  if (!required || hasScope(ctx.scopes, required)) return null;
   c.header('Content-Type', 'application/problem+json');
   c.header('WWW-Authenticate', challenge403(resourceMetadataUrl(c), required, ctx.scopes));
   return c.json(
@@ -685,9 +695,7 @@ export async function mcpHandler(c: Context): Promise<Response> {
         // in a test without mocking notifyLog itself and risking masking a real regression in it.
         void notifyLog(session, 'warning', {
           event: 'tool_scope_refused',
-          /* v8 ignore next -- @preserve defensive: `stepUp` is only truthy when scopeStepUp's own
-             `toolScopeForBody(body)` call returned non-null a moment ago; this call reruns the
-             same pure function over the same unmutated `body`, so `refused` is always truthy here */
+          // A progress-only caller can also be refused for an unmapped tool.
           ...(refused ? { requiredScope: refused } : {}),
         }).catch(() => undefined);
       }

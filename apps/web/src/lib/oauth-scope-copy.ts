@@ -82,6 +82,11 @@ export const OAUTH_SCOPE_COPY: Readonly<Record<OAuthIssuableScope, OAuthScopeCop
       'Create and update work, comments, plans, schedules, time records, notification read state, and published brief content.',
     access: 'write',
   },
+  'time:progress': {
+    label: 'Check your time goals',
+    detail: 'View totals for your tracked time within periods and work filters the app chooses.',
+    access: 'read',
+  },
   'agents:run': {
     label: 'Run Athena and agents',
     detail:

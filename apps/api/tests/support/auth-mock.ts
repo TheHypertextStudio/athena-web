@@ -117,6 +117,7 @@ export function fakeAsMetadata(issuer: string): Record<string, unknown> {
     scopes_supported: [
       'work:read',
       'work:write',
+      'time:progress',
       'agents:run',
       'connectors:link',
       'offline_access',

@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "license": "UNLICENSED",
+  "license": "MIT",
   "description": "Connection-owned contracts and application rules for Docket's external-service experiences.",
   "exports": {
     "./ids": "./src/ids.ts",

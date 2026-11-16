@@ -340,3 +340,7 @@ Pre-provisioned reviewers can sign in through `/sign-in?demo=<slug>` by opening 
 ### Private Studio package access
 
 Run `./bootstrap packages setup` once per machine after authenticating GitHub CLI with package-read access. The shared installer verifies access and installs a user-level credential helper without saving a token. Fresh worktrees inherit it without shell token exports, and repeat setup leaves current files unchanged. Run `./bootstrap packages check @thehypertextstudio/web-config` to check effective pnpm access. Online `./bootstrap worktree prepare` preflights each private Studio package in the frozen lockfile. CI retains its explicit workflow token, registry configuration, and package Actions grants.
+
+## License
+
+[MIT](LICENSE) © Hypertext Studio.

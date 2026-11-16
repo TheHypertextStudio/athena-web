@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "license": "UNLICENSED",
+  "license": "MIT",
   "description": "Portable Automation Rules contracts and pure evaluation for Docket delivery runtimes.",
   "exports": {
     "./ids": "./src/ids.ts",

@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "license": "UNLICENSED",
+  "license": "MIT",
   "description": "The one definition of which hosts and ports a local checkout serves.",
   "exports": {
     ".": "./src/index.ts"

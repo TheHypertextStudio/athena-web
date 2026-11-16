@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "license": "UNLICENSED",
+  "license": "MIT",
   "description": "Docket authentication — the Better Auth configuration and passwordless sign-up challenge.",
   "exports": {
     ".": "./src/index.ts",

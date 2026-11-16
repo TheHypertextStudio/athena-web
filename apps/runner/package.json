@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "license": "UNLICENSED",
+  "license": "MIT",
   "description": "Cloudflare Queue and Workflow execution bridge for durable Athena generations.",
   "exports": {
     ".": "./src/index.ts"

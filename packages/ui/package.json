@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "license": "UNLICENSED",
+  "license": "MIT",
   "description": "Docket design system — design tokens, primitives, and shared UI components.",
   "exports": {
     ".": "./src/index.ts",

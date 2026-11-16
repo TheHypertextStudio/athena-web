@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "license": "UNLICENSED",
+  "license": "MIT",
   "description": "Docket service-admin console \u2014 the staff-gated operations surface for the hosted service.",
   "portless": {
     "name": "admin.docket",

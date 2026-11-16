@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "license": "UNLICENSED",
+  "license": "MIT",
   "description": "Third-party provider connectors, observers, fixtures, and integration test doubles.",
   "exports": {
     ".": "./src/index.ts",

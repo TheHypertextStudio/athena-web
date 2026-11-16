@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "license": "UNLICENSED",
+  "license": "MIT",
   "description": "Private Studio Turbo remote cache backed by Cloudflare R2.",
   "scripts": {
     "build": "cf build",

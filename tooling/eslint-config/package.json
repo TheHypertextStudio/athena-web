@@ -4,17 +4,12 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "license": "UNLICENSED",
+  "license": "MIT",
   "exports": {
     ".": "./index.js"
   },
   "main": "./index.js",
-  "files": [
-    "index.js",
-    "plugin.js",
-    "rules/**/*.js",
-    "complexity-debt.json"
-  ],
+  "files": ["index.js", "plugin.js", "rules/**/*.js", "complexity-debt.json"],
   "dependencies": {
     "@eslint/js": "catalog:",
     "eslint-plugin-sonarjs": "catalog:",

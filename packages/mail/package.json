@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "license": "UNLICENSED",
+  "license": "MIT",
   "description": "Transactional mail port, capture test double, and SMTP transport.",
   "exports": {
     ".": "./src/index.ts"

@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "license": "UNLICENSED",
+  "license": "MIT",
   "description": "Portable capability and explicit-grant policy for Docket identity and access decisions.",
   "exports": {
     "./ids": "./src/ids.ts",

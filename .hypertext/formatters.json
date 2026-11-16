@@ -210,7 +210,7 @@
       "reason": "Locked shared formatter engine; maintained and formatted in product-standards."
     },
     {
-      "include": [".github/CODEOWNERS"],
+      "include": [".github/CODEOWNERS", "LICENSE"],
       "kind": "non-formattable",
       "reason": "Line-oriented ownership patterns; GitHub reads each line as a path rule."
     },

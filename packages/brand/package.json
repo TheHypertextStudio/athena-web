@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "license": "UNLICENSED",
+  "license": "MIT",
   "description": "Docket brand mark — the single source of the app icon, and the generators for every asset derived from it.",
   "exports": {
     ".": "./src/index.ts",

@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "license": "UNLICENSED",
+  "license": "MIT",
   "description": "Docket validated, fail-fast environment configuration, per app surface.",
   "exports": {
     ".": "./src/index.ts",

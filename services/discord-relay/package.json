@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "license": "UNLICENSED",
+  "license": "MIT",
   "description": "Discord Gateway relay — the one always-on process. Holds the Gateway WebSocket, expands @role/reply/DM mentions into concrete user ids, and forwards them to Docket's token-routed ingest edge. No business logic; Docket's inbox is the ledger.",
   "main": "./src/index.ts",
   "scripts": {

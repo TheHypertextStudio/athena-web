@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "license": "UNLICENSED",
+  "license": "MIT",
   "description": "Docket notifications domain — schemas, policy, delivery orchestration, inbox state, and provider event handling.",
   "exports": {
     "./ids": "./src/ids.ts",

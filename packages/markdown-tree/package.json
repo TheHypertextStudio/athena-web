@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "license": "UNLICENSED",
+  "license": "MIT",
   "description": "Shared marked token-tree primitives — childTokensOf and the excerpt skip-list every plain/reduced-fidelity Markdown walker builds on.",
   "exports": {
     ".": "./src/index.ts"

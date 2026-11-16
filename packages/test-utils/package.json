@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "license": "UNLICENSED",
+  "license": "MIT",
   "description": "Shared testing utilities — tenant and session-seed helpers, plus the documentation-coverage harness.",
   "exports": {
     ".": "./src/index.ts"

@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "license": "UNLICENSED",
+  "license": "MIT",
   "description": "Planning contracts and portable scheduling, time, and work-location rules.",
   "exports": {
     "./date-time": "./src/date-time.ts",

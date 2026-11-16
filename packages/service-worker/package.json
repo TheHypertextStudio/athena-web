@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "license": "UNLICENSED",
+  "license": "MIT",
   "description": "Docket's service worker \u2014 the offline routing table, cache strategies, and the bundler that emits it into a host app's public directory.",
   "scripts": {
     "typecheck": "tsc --noEmit && tsc --noEmit -p src/worker/tsconfig.json",

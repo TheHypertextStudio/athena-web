@@ -4,8 +4,8 @@
 > capture pass exposed compressed Start-of-day heading/count/actions and clipped archive pagination
 > labels. The earlier scores below describe the inspected default and authoring frames; they do not
 > establish acceptance of these newly exercised states. Actual screenshots preserve both defects.
-> [Start-of-day phone](/Users/williecubed/.codex/recovery/2026-10-16-all-work-states/planning/lenses/plan-morning-undecided-390x844-light.png)
-> · [Archive pagination phone](/Users/williecubed/.codex/recovery/2026-10-16-all-work-states/authoring/131-archive-active-schedules-390x844-light.png).
+> Start-of-day phone
+> · Archive pagination phone.
 
 Register: app, IBM Plex / neutral MD3. Scope: choosing and defining organizational work,
 focused child/routine editing, weekly planning and proposal review. This replaces the withdrawn
@@ -19,22 +19,22 @@ including approved gallery copies, private drafts, a published definition with d
 an actual proposal. The zero-active state retains four defaults and twelve archived starter
 definitions; it is not a newly created empty workspace. No mockup supplies acceptance evidence.
 
-[Private capture/source receipt](/Users/williecubed/.codex/recovery/2026-10-14-athena/focused-activities-delivery-receipt.json) records final
+Private capture/source receipt records final
 source and image hashes. The independent reviewer reinspected the corrected workspace header,
 child affordances, phone step chooser and compact overview and found no remaining blocker in
 that visual scope. Representative final captures:
 
-| State                   | Desktop                                                                                                                                                                                                                | Phone                                                                                                                                                                                                                   |
-| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Overview                | [Desktop light](/Users/williecubed/.codex/recovery/2026-10-14-athena/focused-activities-final-captures/orgs-01M51SW902EPB6CNVC1XTKSHWT-work-templates-1440x900-light.png)                                              | [Phone dark](/Users/williecubed/.codex/recovery/2026-10-14-athena/focused-activities-final-captures/orgs-01M51SW902EPB6CNVC1XTKSHWT-work-templates-390x844-dark.png)                                                    |
-| Purpose                 | [Desktop light](/Users/williecubed/.codex/recovery/2026-10-14-athena/focused-activities-final-captures/orgs-01M51SW902EPB6CNVC1XTKSHWT-work-templates-new-1440x900-light.png)                                          | [Phone dark](/Users/williecubed/.codex/recovery/2026-10-14-athena/focused-activities-final-captures/orgs-01M51SW902EPB6CNVC1XTKSHWT-work-templates-new-390x844-dark.png)                                                |
-| Starting work           | [Desktop light](/Users/williecubed/.codex/recovery/2026-10-14-athena/focused-activities-final-captures/orgs-01M51SW902EPB6CNVC1XTKSHWT-work-templates-01M51SW92NXXAK8W0HWA8DJVZT-1440x900-light.png)                   | [Phone dark](/Users/williecubed/.codex/recovery/2026-10-14-athena/focused-activities-final-captures/orgs-01M51SW902EPB6CNVC1XTKSHWT-work-templates-01M51SW92NXXAK8W0HWA8DJVZT-390x844-dark.png)                         |
-| Included work           | [Desktop light](/Users/williecubed/.codex/recovery/2026-10-14-athena/focused-activities-final-captures/orgs-01M51SW902EPB6CNVC1XTKSHWT-work-templates-01M51SW92NXXAK8W0HWA8DJVZT?section=structure-1440x900-light.png) | [Phone dark](/Users/williecubed/.codex/recovery/2026-10-14-athena/focused-activities-final-captures/orgs-01M51SW902EPB6CNVC1XTKSHWT-work-templates-01M51SW92NXXAK8W0HWA8DJVZT?section=structure-390x844-dark.png)       |
-| Review                  | [Desktop light](/Users/williecubed/.codex/recovery/2026-10-14-athena/focused-activities-final-captures/orgs-01M51SW902EPB6CNVC1XTKSHWT-work-templates-01M51SW92NXXAK8W0HWA8DJVZT?section=review-1440x900-light.png)    | [Phone dark](/Users/williecubed/.codex/recovery/2026-10-14-athena/focused-activities-final-captures/orgs-01M51SW902EPB6CNVC1XTKSHWT-work-templates-01M51SW92NXXAK8W0HWA8DJVZT?section=review-390x844-dark.png)          |
-| Zero active definitions | [Desktop light](/Users/williecubed/.codex/recovery/2026-10-14-athena/focused-activities-final-captures/orgs-01M51SW90QB8VT08PFPSY2X9NP-work-templates-1440x900-light.png)                                              | [Phone dark](/Users/williecubed/.codex/recovery/2026-10-14-athena/focused-activities-final-captures/orgs-01M51SW90QB8VT08PFPSY2X9NP-work-templates-390x844-dark.png)                                                    |
-| Weekly planning         | [Desktop light](/Users/williecubed/.codex/recovery/2026-10-14-athena/focused-activities-final-captures/plan-1440x900-light.png)                                                                                        | [Phone dark](/Users/williecubed/.codex/recovery/2026-10-14-athena/focused-activities-final-captures/plan-390x844-dark.png)                                                                                              |
-| Proposal review         | [Desktop light](/Users/williecubed/.codex/recovery/2026-10-14-athena/focused-activities-final-captures/orgs-01M51SW902EPB6CNVC1XTKSHWT-plans-01M51SW953D705WHNQ1EF17Q4C-1440x900-light.png)                            | [Phone dark](/Users/williecubed/.codex/recovery/2026-10-14-athena/focused-activities-final-captures/orgs-01M51SW902EPB6CNVC1XTKSHWT-plans-01M51SW953D705WHNQ1EF17Q4C-390x844-dark.png)                                  |
-| Selected child          | [Desktop light](/Users/williecubed/.codex/recovery/2026-10-14-athena/focused-activities-child-captures/orgs-01M51SW902EPB6CNVC1XTKSHWT-work-templates-01M51SW92NXXAK8W0HWA8DJVZT?section=structure-1440x900-light.png) | [Short phone dark](/Users/williecubed/.codex/recovery/2026-10-14-athena/focused-activities-child-captures/orgs-01M51SW902EPB6CNVC1XTKSHWT-work-templates-01M51SW92NXXAK8W0HWA8DJVZT?section=structure-390x600-dark.png) |
+| State                   | Desktop       | Phone            |
+| ----------------------- | ------------- | ---------------- |
+| Overview                | Desktop light | Phone dark       |
+| Purpose                 | Desktop light | Phone dark       |
+| Starting work           | Desktop light | Phone dark       |
+| Included work           | Desktop light | Phone dark       |
+| Review                  | Desktop light | Phone dark       |
+| Zero active definitions | Desktop light | Phone dark       |
+| Weekly planning         | Desktop light | Phone dark       |
+| Proposal review         | Desktop light | Phone dark       |
+| Selected child          | Desktop light | Short phone dark |
 
 ## Scorecard
 

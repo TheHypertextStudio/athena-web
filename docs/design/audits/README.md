@@ -18,9 +18,9 @@ number a test can compute. Ten documents of careful prose cannot be counted. A h
 
 Two policy tests read this directory:
 
-- [`packages/test-utils/tests/design-policies/scorecard-schema.test.ts`](../../../packages/test-utils/tests/design-policies/scorecard-schema.test.ts)
+- `packages/test-utils/tests/design-policies/scorecard-schema.test.ts`
   validates every header in this directory.
-- [`packages/test-utils/tests/design-policies/surface-inventory.test.ts`](../../../packages/test-utils/tests/design-policies/surface-inventory.test.ts)
+- `packages/test-utils/tests/design-policies/surface-inventory.test.ts`
   keeps [`../surface-inventory.md`](../surface-inventory.md) current with the source tree.
 
 ---

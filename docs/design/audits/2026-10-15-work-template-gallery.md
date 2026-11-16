@@ -19,19 +19,19 @@ desktop-light and short-phone-dark image for every surface, plus standard-phone,
 the actual API; the gallery uses the approved catalog. These are local runtime captures; the
 implementation is not yet shipped.
 
-| Surface             | Desktop, light                                                                                                                                                | Short phone, dark                                                                                                                                          |
-| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Library             | [1440×900](/Users/williecubed/.codex/recovery/2026-10-14-athena/gallery-final-library/orgs-orgId-settings-templates-1440x900-light.png)                       | [390×600](/Users/williecubed/.codex/recovery/2026-10-14-athena/gallery-final-library/orgs-orgId-settings-templates-390x600-dark.png)                       |
-| Nonprofit browse    | [1440×900](/Users/williecubed/.codex/recovery/2026-10-14-athena/gallery-final-nonprofit-verified/orgs-orgId-settings-templates-gallery-1440x900-light.png)    | [390×600](/Users/williecubed/.codex/recovery/2026-10-14-athena/gallery-final-nonprofit-verified/orgs-orgId-settings-templates-gallery-390x600-dark.png)    |
-| Event detail        | [1440×900](/Users/williecubed/.codex/recovery/2026-10-14-athena/gallery-final-detail/orgs-orgId-settings-templates-gallery-event-1440x900-light.png)          | [390×600](/Users/williecubed/.codex/recovery/2026-10-14-athena/gallery-final-detail/orgs-orgId-settings-templates-gallery-event-390x600-dark.png)          |
-| Event review        | [1440×900](/Users/williecubed/.codex/recovery/2026-10-14-athena/gallery-final-review-verified/orgs-orgId-settings-templates-gallery-event-1440x900-light.png) | [390×600](/Users/williecubed/.codex/recovery/2026-10-14-athena/gallery-final-review-verified/orgs-orgId-settings-templates-gallery-event-390x600-dark.png) |
-| Full startup review | [1440×900](/Users/williecubed/.codex/recovery/2026-10-14-athena/gallery-final-startup-verified/orgs-orgId-settings-templates-gallery-1440x900-light.png)      | [390×600](/Users/williecubed/.codex/recovery/2026-10-14-athena/gallery-final-startup-verified/orgs-orgId-settings-templates-gallery-390x600-dark.png)      |
+| Surface             | Desktop, light | Short phone, dark |
+| ------------------- | -------------- | ----------------- |
+| Library             | 1440×900       | 390×600           |
+| Nonprofit browse    | 1440×900       | 390×600           |
+| Event detail        | 1440×900       | 390×600           |
+| Event review        | 1440×900       | 390×600           |
+| Full startup review | 1440×900       | 390×600           |
 
 Additional inspected states:
 
-- First use: [desktop light](/Users/williecubed/.codex/recovery/2026-10-14-athena/gallery-final-first-use-contained/orgs-orgId-settings-templates-gallery-1440x900-light.png), [short phone dark](/Users/williecubed/.codex/recovery/2026-10-14-athena/gallery-final-first-use-contained/orgs-orgId-settings-templates-gallery-390x600-dark.png).
-- Saved-copy reentry: [desktop light](/Users/williecubed/.codex/recovery/2026-10-14-athena/gallery-final-bundle-verified/orgs-orgId-settings-templates-gallery-copies-01M51988Y5CK48SJTVDD773ZJY-1440x900-light.png), [short phone dark](/Users/williecubed/.codex/recovery/2026-10-14-athena/gallery-final-bundle-verified/orgs-orgId-settings-templates-gallery-copies-01M51988Y5CK48SJTVDD773ZJY-390x600-dark.png).
-- Focused Event inspection: [desktop light](/Users/williecubed/.codex/recovery/2026-10-14-athena/gallery-final-focused/orgs-orgId-settings-templates-gallery-event-1440x900-light.png), [short phone dark](/Users/williecubed/.codex/recovery/2026-10-14-athena/gallery-final-focused/orgs-orgId-settings-templates-gallery-event-390x600-dark.png).
+- First use: desktop light, short phone dark.
+- Saved-copy reentry: desktop light, short phone dark.
+- Focused Event inspection: desktop light, short phone dark.
 
 ## Eight dimensions
 
@@ -60,8 +60,8 @@ Additional inspected states:
 
 1. **First-use audience choices overlapped at 320px.** The coarse-pointer
    fixed-height class overrode automatic height. Rich choices now grow with their
-   labels. Both corrected [320×844 light](/Users/williecubed/.codex/recovery/2026-10-14-athena/gallery-final-first-use-contained/orgs-orgId-settings-templates-gallery-320x844-light.png)
-   and [320×844 dark](/Users/williecubed/.codex/recovery/2026-10-14-athena/gallery-final-first-use-contained/orgs-orgId-settings-templates-gallery-320x844-dark.png)
+   labels. Both corrected 320×844 light
+   and 320×844 dark
    frames were inspected. The new actual-touch E2E asserts label containment and
    next-button separation in both themes; the final three-case run is green.
 2. **False empty state while fork facts were pending.** The earlier nonprofit
@@ -82,7 +82,7 @@ does not extend to the full editor or unexercised states elsewhere.
 
 ## Actual behavior evidence
 
-The final [E2E log](/Users/williecubed/.codex/recovery/2026-10-14-athena/gallery-organization-final-e2e-contained.log)
+The final E2E log
 records **3 passed (12.3s)** in
 `apps/web/e2e/work-template-gallery.spec.ts`: actual private Event
 install/reload/reentry/Undo, complete 60-root startup review, and 320px first-use
@@ -94,7 +94,7 @@ copy response/reload, real Undo and no page errors. The full-fork case verifies
 
 The final E2E follows the first-use button-height correction. The source-only
 bundle function extraction changes no rendered behavior.
-No browser, server or database operations were run by this reviewer. The [capture receipt](/Users/williecubed/.codex/recovery/2026-10-14-athena/gallery-organization-capture-receipt.json)
+No browser, server or database operations were run by this reviewer. The capture receipt
 records the canonical capture tool, frame hashes and bounded overflow checks.
 Final source-manifest binding is maintained by the stack owner in the private
 recovery record.

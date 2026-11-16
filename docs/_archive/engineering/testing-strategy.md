@@ -475,4 +475,4 @@ jobs:
 
 ---
 
-_See also: [Architecture](./architecture.md), [Code Style](../contributing/code-style.md)_
+_See also: [Architecture](./architecture.md), [Code Style](../../contributing/code-style.md)_

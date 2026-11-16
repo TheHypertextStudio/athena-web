@@ -597,4 +597,4 @@ export default [
 
 ---
 
-_See also: [Development Workflow](./workflow.md), [Testing Strategy](../engineering/testing-strategy.md)_
+_See also: [Development Workflow](./workflow.md), [Testing Strategy](../_archive/engineering/testing-strategy.md)_

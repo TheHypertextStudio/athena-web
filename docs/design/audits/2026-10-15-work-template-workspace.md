@@ -23,27 +23,27 @@ The content is populated through real API definitions and approved catalog copie
 The account has both private drafts and a published definition with edited draft.
 No generated mockup supplies visual evidence.
 
-The [capture receipt](/Users/williecubed/.codex/recovery/2026-10-14-athena/work-template-workspace-capture-receipt.json)
+The capture receipt
 binds all 72 image hashes and the final UI source manifest. The reviewer verified
 all 72 image hashes and the manifest hash independently, with no missing or
 mismatched files. The receipt records the canonical 320px overflow checks.
 
-| State                               | Desktop                                                                                                                                                                                                                                        | Phone                                                                                                                                                                                                                                           |
-| ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Returning overview                  | [Desktop light](/Users/williecubed/.codex/recovery/2026-10-14-athena/workspace-final-captures/orgs-01M51KCXB1S6S4B2VMAF4XVJK1-work-templates-1440x900-light.png)                                                                               | [Short phone dark](/Users/williecubed/.codex/recovery/2026-10-14-athena/workspace-final-captures/orgs-01M51KCXB1S6S4B2VMAF4XVJK1-work-templates-390x600-dark.png)                                                                               |
-| First use with existing definitions | [Desktop light](/Users/williecubed/.codex/recovery/2026-10-14-athena/workspace-final-captures/orgs-01M51KCX0ZMA9QJGZEW3SPM823-work-templates-1440x900-light.png)                                                                               | [Short phone dark](/Users/williecubed/.codex/recovery/2026-10-14-athena/workspace-final-captures/orgs-01M51KCX0ZMA9QJGZEW3SPM823-work-templates-390x600-dark.png)                                                                               |
-| New definition: Purpose             | [Desktop light](/Users/williecubed/.codex/recovery/2026-10-14-athena/workspace-final-captures/orgs-01M51KCXB1S6S4B2VMAF4XVJK1-work-templates-new-1440x900-light.png)                                                                           | [Short phone dark](/Users/williecubed/.codex/recovery/2026-10-14-athena/workspace-final-captures/orgs-01M51KCXB1S6S4B2VMAF4XVJK1-work-templates-new-390x600-dark.png)                                                                           |
-| Event: publication review           | [Desktop light](/Users/williecubed/.codex/recovery/2026-10-14-athena/workspace-final-captures/orgs-01M51KCXB1S6S4B2VMAF4XVJK1-work-templates-01M51KFRA4Q5076C8AMTDFT6BT?section=review-1440x900-light.png)                                     | [Short phone dark](/Users/williecubed/.codex/recovery/2026-10-14-athena/workspace-final-captures/orgs-01M51KCXB1S6S4B2VMAF4XVJK1-work-templates-01M51KFRA4Q5076C8AMTDFT6BT?section=review-390x600-dark.png)                                     |
-| Vendor booking: return to Event     | [Desktop light](/Users/williecubed/.codex/recovery/2026-10-14-athena/workspace-final-captures/orgs-01M51KCXB1S6S4B2VMAF4XVJK1-work-templates-01M51KFRA468C1PJANG6WZKZ24?section=review&returnTo=01M51KFRA4Q5076C8AMTDFT6BT-1440x900-light.png) | [Short phone dark](/Users/williecubed/.codex/recovery/2026-10-14-athena/workspace-final-captures/orgs-01M51KCXB1S6S4B2VMAF4XVJK1-work-templates-01M51KFRA468C1PJANG6WZKZ24?section=review&returnTo=01M51KFRA4Q5076C8AMTDFT6BT-390x600-dark.png) |
-| Choose existing starting work       | [Desktop light](/Users/williecubed/.codex/recovery/2026-10-14-athena/workspace-final-captures/orgs-01M51KCXB1S6S4B2VMAF4XVJK1-work-templates-gallery-1440x900-light.png)                                                                       | [Short phone dark](/Users/williecubed/.codex/recovery/2026-10-14-athena/workspace-final-captures/orgs-01M51KCXB1S6S4B2VMAF4XVJK1-work-templates-gallery-390x600-dark.png)                                                                       |
-| Inspect Event starting work         | [Desktop light](/Users/williecubed/.codex/recovery/2026-10-14-athena/workspace-final-captures/orgs-01M51KCXB1S6S4B2VMAF4XVJK1-work-templates-gallery-event-1440x900-light.png)                                                                 | [Short phone dark](/Users/williecubed/.codex/recovery/2026-10-14-athena/workspace-final-captures/orgs-01M51KCXB1S6S4B2VMAF4XVJK1-work-templates-gallery-event-390x600-dark.png)                                                                 |
-| Saved-copy reentry                  | [Desktop light](/Users/williecubed/.codex/recovery/2026-10-14-athena/workspace-final-captures/orgs-01M51KCXB1S6S4B2VMAF4XVJK1-work-templates-gallery-copies-01M51KFRA2R4DN7SSCK0S85VWY-1440x900-light.png)                                     | [Short phone dark](/Users/williecubed/.codex/recovery/2026-10-14-athena/workspace-final-captures/orgs-01M51KCXB1S6S4B2VMAF4XVJK1-work-templates-gallery-copies-01M51KFRA2R4DN7SSCK0S85VWY-390x600-dark.png)                                     |
+| State                               | Desktop       | Phone            |
+| ----------------------------------- | ------------- | ---------------- |
+| Returning overview                  | Desktop light | Short phone dark |
+| First use with existing definitions | Desktop light | Short phone dark |
+| New definition: Purpose             | Desktop light | Short phone dark |
+| Event: publication review           | Desktop light | Short phone dark |
+| Vendor booking: return to Event     | Desktop light | Short phone dark |
+| Choose existing starting work       | Desktop light | Short phone dark |
+| Inspect Event starting work         | Desktop light | Short phone dark |
+| Saved-copy reentry                  | Desktop light | Short phone dark |
 
 Additional decisive evidence:
 
-- [Event review, 320px dark](/Users/williecubed/.codex/recovery/2026-10-14-athena/workspace-final-captures/orgs-01M51KCXB1S6S4B2VMAF4XVJK1-work-templates-01M51KFRA4Q5076C8AMTDFT6BT?section=review-320x844-dark.png): prerequisite beside disabled Publish; Included work precedes Starting work.
-- [Vendor review, 320px light](/Users/williecubed/.codex/recovery/2026-10-14-athena/workspace-final-captures/orgs-01M51KCXB1S6S4B2VMAF4XVJK1-work-templates-01M51KFRA468C1PJANG6WZKZ24?section=review&returnTo=01M51KFRA4Q5076C8AMTDFT6BT-320x844-light.png): explicit Back to parent definition and readable included work.
-- Community dinner's expanded publication: [desktop light](/Users/williecubed/.codex/recovery/2026-10-14-athena/workspace-publication-captures/orgs-01M51KCXB1S6S4B2VMAF4XVJK1-work-templates-1440x900-light.png), [320px dark](/Users/williecubed/.codex/recovery/2026-10-14-athena/workspace-publication-captures/orgs-01M51KCXB1S6S4B2VMAF4XVJK1-work-templates-320x844-dark.png). The older publication and current changes are shown within one definition.
+- Event review, 320px dark: prerequisite beside disabled Publish; Included work precedes Starting work.
+- Vendor review, 320px light: explicit Back to parent definition and readable included work.
+- Community dinner's expanded publication: desktop light, 320px dark. The older publication and current changes are shown within one definition.
 
 ## Product-journey findings
 
@@ -93,14 +93,14 @@ The four prior blockers are closed in the reviewed evidence:
 
 ## Runtime verification
 
-The final [guidance/workspace browser log](/tmp/athena-workspace-final-e2e.log)
+The final guidance/workspace browser log
 records **7 passed (16.2s)** after the final content-order and copy changes. This
 includes actual 320px Vendor → Event publication, a measured Included-before-Starting
 layout assertion, visible workspace navigation, legacy query/fragment replacement
 without a Back loop, phone navigation, revisitable field edits, explicit draft
 save from Review, and long touch-action containment in both themes.
 
-The earlier [combined browser log](/tmp/athena-workspace-redesigned-e2e.log)
+The earlier combined browser log
 records **10 passed (24.7s)**. Its three unchanged gallery cases supply private
 copy/reload/Undo, complete 60-root selection without 60 mounted outlines, and
 320px rich-choice containment. Its seven guidance/workspace cases are superseded

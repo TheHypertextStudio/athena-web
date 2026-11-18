@@ -13,7 +13,7 @@
  */
 import { uploadBytesRoutes } from './routes/uploads';
 import { serve } from '@hono/node-server';
-import { auth } from '@docket/auth';
+import { auth, pruneUndecryptableJwks } from '@docket/auth';
 import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { requestId } from 'hono/request-id';
@@ -285,6 +285,18 @@ try {
   // still fail loudly on its own, and the ones that do not should keep serving.
   console.error('Container build failed at startup; continuing to serve', error);
 }
+
+// Clear JWKS rows left encrypted under a rotated BETTER_AUTH_SECRET so Better Auth regenerates
+// a valid signing key instead of failing every authenticated session lookup with HTTP 500.
+void pruneUndecryptableJwks()
+  .then((pruned) => {
+    if (pruned > 0) {
+      console.warn(`Pruned ${String(pruned)} undecryptable JWKS row(s) after secret rotation.`);
+    }
+  })
+  .catch((error: unknown) => {
+    console.error('JWKS recovery check failed at startup; continuing to serve', error);
+  });
 
 // Local dev has no Cloud Scheduler, so run the account sweeps in-process (export/deletion).
 if (env.APP_MODE === 'local') startDevScheduler();

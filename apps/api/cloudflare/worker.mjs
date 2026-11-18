@@ -74,6 +74,10 @@ export class DocketApiContainer extends DurableObject {
     if (!headers.has('x-forwarded-proto')) {
       headers.set('x-forwarded-proto', incomingUrl.protocol.slice(0, -1));
     }
+    const clientIp = headers.get('cf-connecting-ip');
+    if (clientIp && !headers.has('x-forwarded-for')) {
+      headers.set('x-forwarded-for', clientIp);
+    }
 
     const forwarded = new Request(targetUrl, {
       method: request.method,

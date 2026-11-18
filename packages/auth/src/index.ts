@@ -23,6 +23,7 @@ export {
   hasRecoveryCodes,
   type RecoveryCodeStatus,
 } from './backup-codes';
+export { pruneUndecryptableJwks } from './jwks-recovery';
 /**
  * Locally verify an OAuth Bearer access token (JWT, `jose`-based signature check against
  * the AS's own `/jwks` endpoint — no DB round-trip). Re-exported so callers outside this

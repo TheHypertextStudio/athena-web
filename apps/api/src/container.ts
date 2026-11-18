@@ -129,6 +129,7 @@ export interface AppRuntimeEnv {
   readonly GOOGLE_CALENDAR_API_BASE?: string;
   readonly GOOGLE_TASKS_API_BASE?: string;
   readonly OPENAI_API_KEY?: string;
+  readonly OPENAI_API_BASE?: string;
   readonly VOICE_REALTIME_MODEL?: string;
   readonly VOICE_REALTIME_VOICE?: string;
   readonly TWILIO_ACCOUNT_SID?: string;

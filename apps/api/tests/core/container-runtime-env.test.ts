@@ -50,6 +50,7 @@ const FULL_ENV = {
   R2_SECRET_ACCESS_KEY: 'r2-secret-key',
   WEB_URL: 'https://docket.example',
   OPENAI_API_KEY: 'sk-openai-x',
+  OPENAI_API_BASE: 'https://gateway.ai.cloudflare.com/v1/acct/gw/openai',
   VOICE_REALTIME_MODEL: 'gpt-realtime-x',
   VOICE_REALTIME_VOICE: 'sage',
   GITHUB_API_BASE: 'https://api.github.example',

@@ -332,6 +332,15 @@ export const SERVICE_VARS: readonly VarSpec[] = [
     sensitive: true,
   },
   {
+    name: 'OPENAI_API_BASE',
+    slice: 'voice',
+    scope: 'server',
+    targets: ['api'],
+    required: false,
+    zod: voiceServer.OPENAI_API_BASE,
+    where: 'Optional OpenAI API base URL (for Cloudflare AI Gateway /openai routing)',
+  },
+  {
     name: 'VOICE_REALTIME_MODEL',
     slice: 'voice',
     scope: 'server',

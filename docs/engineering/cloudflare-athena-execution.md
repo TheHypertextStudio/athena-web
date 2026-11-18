@@ -84,7 +84,10 @@ DOCKET_TO_CLOUDFLARE_HMAC_SECRET=<different-32-or-more-random-characters>
 ```
 
 Runner secrets/vars are shown in [`apps/runner/.dev.vars.example`](../../apps/runner/.dev.vars.example).
-The two HMAC values must be distinct and the matching directional value must be identical on both
+To replace GCP Cloud Scheduler, set `DOCKET_CRON_MODE` (`off` default, `staging-athena`, or `all`)
+and `CRON_SECRET` on the Worker; its `* * * * *` trigger dispatches `RUNNER_CRON_JOBS` in UTC
+alongside `/internal/athena/execution/dispatch/sweep`. The two HMAC values must be distinct and the
+matching directional value must be identical on both
 sides. Do not put either secret in `wrangler.jsonc`, Queue messages, logs, or repository files.
 
 Production boot fails when the feature is enabled without the runner URL and both distinct secrets.
@@ -103,6 +106,9 @@ pnpm exec wrangler queues create docket-athena-runs-dlq
 pnpm exec wrangler secret put DOCKET_TO_CLOUDFLARE_HMAC_SECRET
 pnpm exec wrangler secret put CLOUDFLARE_TO_DOCKET_HMAC_SECRET
 pnpm exec wrangler secret put DOCKET_API_URL
+# Optional: replace GCP Cloud Scheduler with Worker cron fan-out
+pnpm exec wrangler secret put CRON_SECRET
+pnpm exec wrangler secret put DOCKET_CRON_MODE
 pnpm exec wrangler deploy
 ```
 

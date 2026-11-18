@@ -66,6 +66,7 @@ export interface VoiceRealtimeProvider {
 export interface VoiceProviderEnv {
   readonly APP_MODE?: string | undefined;
   readonly OPENAI_API_KEY?: string | undefined;
+  readonly OPENAI_API_BASE?: string | undefined;
   readonly VOICE_REALTIME_MODEL?: string | undefined;
   readonly VOICE_REALTIME_VOICE?: string | undefined;
 }
@@ -77,10 +78,12 @@ export const DEFAULT_REALTIME_VOICE = 'marin';
 /** How long a minted client secret stays usable. */
 export const CLIENT_SECRET_TTL_SECONDS = 600;
 
-/** OpenAI's ephemeral-credential endpoint (`POST /v1/realtime/client_secrets`). */
-const OPENAI_CLIENT_SECRETS_URL = 'https://api.openai.com/v1/realtime/client_secrets';
-/** The endpoint a browser posts its SDP offer to. */
-const OPENAI_CALLS_URL = 'https://api.openai.com/v1/realtime/calls';
+/** Default OpenAI API origin when `OPENAI_API_BASE` is unset. */
+const DEFAULT_OPENAI_API_BASE = 'https://api.openai.com';
+
+function normalizeBaseUrl(raw: string): string {
+  return raw.replace(/\/+$/, '');
+}
 
 /** The GA response shape of `POST /v1/realtime/client_secrets`. */
 interface ClientSecretResponse {
@@ -116,11 +119,13 @@ export class OpenAiRealtimeProvider implements VoiceRealtimeProvider {
     private readonly model: string = DEFAULT_REALTIME_MODEL,
     private readonly voice: string = DEFAULT_REALTIME_VOICE,
     private readonly fetchImpl: typeof fetch = fetch,
+    private readonly baseURL: string = DEFAULT_OPENAI_API_BASE,
   ) {}
 
   /** Mint the ephemeral credential. */
   async issueClientSession(input: IssueClientSessionInput): Promise<VoiceProviderCredential> {
-    const response = await this.fetchImpl(OPENAI_CLIENT_SECRETS_URL, {
+    const base = normalizeBaseUrl(this.baseURL);
+    const response = await this.fetchImpl(`${base}/v1/realtime/client_secrets`, {
       method: 'POST',
       headers: {
         authorization: `Bearer ${this.apiKey}`,
@@ -170,7 +175,7 @@ export class OpenAiRealtimeProvider implements VoiceRealtimeProvider {
       transport: 'webrtc',
       provider: this.id,
       model: this.model,
-      url: OPENAI_CALLS_URL,
+      url: `${base}/v1/realtime/calls`,
       clientSecret: value,
       expiresAt: expiresAt.toISOString(),
     };
@@ -246,5 +251,6 @@ export function resolveVoiceProvider(
     env.VOICE_REALTIME_MODEL ?? DEFAULT_REALTIME_MODEL,
     env.VOICE_REALTIME_VOICE ?? DEFAULT_REALTIME_VOICE,
     fetchImpl,
+    env.OPENAI_API_BASE ?? DEFAULT_OPENAI_API_BASE,
   );
 }

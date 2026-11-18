@@ -326,6 +326,8 @@ export const voiceServer = {
   PHONE_VERIFICATION_CANARY_EMAILS: z.string().optional(),
   /** Realtime speech credential for the browser voice channel (ephemeral secrets are minted from it). */
   OPENAI_API_KEY: z.string().min(1).optional(),
+  /** Optional OpenAI API base URL (such as a Cloudflare AI Gateway `/openai` endpoint). */
+  OPENAI_API_BASE: z.url().optional(),
   /** Realtime model id; defaults to the adapter's pinned model when absent. */
   VOICE_REALTIME_MODEL: z.string().min(1).optional(),
   /** Synthesized voice id; defaults to the adapter's pinned voice when absent. */

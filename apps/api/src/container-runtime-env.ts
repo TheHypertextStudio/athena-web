@@ -50,6 +50,7 @@ function agentRuntimeEnv(): Partial<AppRuntimeEnv> {
     ...(env.GOOGLE_CLOUD_LOCATION ? { GOOGLE_CLOUD_LOCATION: env.GOOGLE_CLOUD_LOCATION } : {}),
     ...(env.ATHENA_MODEL ? { ATHENA_MODEL: env.ATHENA_MODEL } : {}),
     ...(env.OPENAI_API_KEY ? { OPENAI_API_KEY: env.OPENAI_API_KEY } : {}),
+    ...(env.OPENAI_API_BASE ? { OPENAI_API_BASE: env.OPENAI_API_BASE } : {}),
   };
 }
 

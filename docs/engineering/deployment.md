@@ -15,11 +15,20 @@ For a local build, provide `NODE_AUTH_TOKEN` from an existing GitHub login with 
 
 ## Architecture
 
-| Service        | Domain                     | Platform  | Notes                                                   |
-| -------------- | -------------------------- | --------- | ------------------------------------------------------- |
-| `docket` web   | `clearthedocket.com`       | Workers   | Next.js product + marketing; same-origin API/auth proxy |
-| `docket-api`   | `api.clearthedocket.com`   | Cloud Run | Hono API, Better Auth, MCP, webhooks, cron endpoints    |
-| `docket-admin` | `admin.clearthedocket.com` | Cloud Run | Next.js operator back office                            |
+| Service        | Domain                     | Platform  | Notes                                                                                  |
+| -------------- | -------------------------- | --------- | -------------------------------------------------------------------------------------- |
+| `docket` web   | `clearthedocket.com`       | Workers   | Next.js product + marketing; same-origin API/auth proxy                                |
+| `docket-api`   | `api.clearthedocket.com`   | Cloud Run | Hono API, Better Auth, MCP, webhooks, cron endpoints                                   |
+| `docket-admin` | `admin.clearthedocket.com` | Cloud Run | Next.js operator back office (`apps/admin/wrangler.jsonc` targets Workers for cutover) |
+
+### Cloudflare R2, AI Gateway, and Worker Cron replacements
+
+Docket decouples storage, scheduling, and model inference from GCP incrementally so deployments keep running when GCP services such as Cloud Storage, Cloud Scheduler, or Vertex AI are unavailable:
+
+1. **Object storage (`R2Blob` + `R2Transfer`):** Set `R2_BLOB_BUCKET`, `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, and `R2_SECRET_ACCESS_KEY` on `@docket/api` to use Cloudflare R2 instead of `GCS_BLOB_BUCKET`. When `R2_BLOB_BUCKET` is non-empty outside `local`/`test` mode, `buildBlobStore` selects `R2Blob`, eliminates R2 internet egress charges, and writes single-chunk uploads directly without staging temporary `.partial` objects.
+2. **Scheduled jobs (`docket-athena-runner`):** Set Worker secrets `CRON_SECRET` and `DOCKET_CRON_MODE` (`staging-athena` or `all`) on `apps/runner` (`account_id` `2500680a3b2b0fe6a011c1c25fed5008`) to fan out all 26 `/internal/cron/*` routes from the Worker's existing `* * * * *` cron trigger instead of GCP Cloud Scheduler. Note that `athena-triggers` (`* * * * *`) and `*/5 * * * *` sweeps wake Neon Postgres on every tick; converting `process-events`, `search-index`, and `unfurl-resources` from polling to Cloudflare Queues is the follow-up required to let Neon scale to zero between active sessions.
+3. **AI Gateway routing (`OPENAI_API_BASE` and `CLOUDFLARE_AI_GATEWAY_*`):** Set `CLOUDFLARE_AI_GATEWAY_BASE_URL` + `CLOUDFLARE_AI_GATEWAY_TOKEN` (Anthropic) and `OPENAI_API_BASE` (OpenAI Realtime voice `client_secrets` and browser WebRTC calls) to route inference through Cloudflare AI Gateway without relying on GCP Vertex AI (`GOOGLE_CLOUD_PROJECT`).
+4. **Remaining GCP dependencies:** `.github/workflows/deploy.yml` still deploys `docket-api` (`api.clearthedocket.com`) and `docket-admin` (`admin.clearthedocket.com`) to Cloud Run with Secret Manager bindings. Finishing the exit from Cloud Run requires adding `@opennextjs/cloudflare` build scripts to `apps/admin` against `apps/admin/wrangler.jsonc` and moving `docket-api` onto Cloudflare Containers/Workers with Hyperdrive.
 
 **Passkey RP ID:** `clearthedocket.com`. During the native passkey migration window,
 `BETTER_AUTH_PASSKEY_LEGACY_RP_ID=hypertext.studio` mounts a separate assertion-only bridge
@@ -846,11 +855,14 @@ token audience. The iOS app also needs a public iOS OAuth client in the same Goo
    `/v1/config` returns the web client ID, and run the Google ID-token, restoration, and sign-out
    canaries. Set the gate back to `false` immediately if the exchange fails.
 
-### Scheduled jobs (Cloud Scheduler)
+### Scheduled jobs (Cloud Scheduler or Worker Cron)
 
-Cloud Run is scale-to-zero, so there is no in-process worker — scheduled work is driven by
-**Cloud Scheduler** POSTing to a secret-guarded cron endpoint on the API. Each endpoint checks
-`CRON_SECRET` (sent as `Authorization: Bearer …` or `x-cron-secret`) and is idempotent.
+Cloud Run is scale-to-zero, so scheduled work runs externally by POSTing to secret-guarded API cron
+endpoints (`Authorization: Bearer …` or `x-cron-secret`, validated against `CRON_SECRET`, idempotent).
+Operators may drive these endpoints either from `docket-athena-runner` on Cloudflare Workers
+(`DOCKET_CRON_MODE=all` with `CRON_SECRET`, configured in
+[the Cloudflare execution runbook](./cloudflare-athena-execution.md#configuration-and-secrets)) or
+from GCP **Cloud Scheduler** below.
 
 | Endpoint (all under `/internal/cron/`) | Purpose                                                                                                                                             | Cadence (as provisioned) |
 | -------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------ |

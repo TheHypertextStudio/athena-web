@@ -173,4 +173,30 @@ describe('OpenAiRealtimeProvider', () => {
     );
     await expect(provider.issueClientSession(INPUT)).rejects.toThrow(VoiceProviderUnavailableError);
   });
+
+  it('routes client_secrets and browser WebRTC calls through OPENAI_API_BASE when set', async () => {
+    const fetchImpl = vi.fn(
+      async (_url: string | URL, _init?: RequestInit) =>
+        new Response(JSON.stringify({ value: 'ek_gateway_123', expires_at: 1_800_000_000 }), {
+          status: 200,
+        }),
+    );
+    const provider = resolveVoiceProvider(
+      {
+        APP_MODE: 'production',
+        OPENAI_API_KEY: 'sk-test',
+        OPENAI_API_BASE: 'https://gateway.ai.cloudflare.com/v1/acct/gw/openai/',
+      },
+      fetchImpl as unknown as typeof fetch,
+    );
+
+    const credential = await provider.issueClientSession(INPUT);
+    expect(credential.url).toBe(
+      'https://gateway.ai.cloudflare.com/v1/acct/gw/openai/v1/realtime/calls',
+    );
+    const [fetchUrl] = assertDefined(fetchImpl.mock.calls[0]);
+    expect(fetchUrl).toBe(
+      'https://gateway.ai.cloudflare.com/v1/acct/gw/openai/v1/realtime/client_secrets',
+    );
+  });
 });

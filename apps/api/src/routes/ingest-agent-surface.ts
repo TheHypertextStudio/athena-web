@@ -88,9 +88,9 @@ export function createFixedAgentSurfaceIngestRouter(
   config: AgentSurfaceVerificationConfig,
   path = '/',
 ): Hono {
-  return new Hono().post(path, (c) =>
+  return new Hono().post(path, async (c) =>
     config[provider]
-      ? ingestProvider(c, provider, config, true)
+      ? await ingestProvider(c, provider, config, true)
       : c.json({ error: 'provider not found' }, 404),
   );
 }

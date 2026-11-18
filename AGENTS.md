@@ -14,15 +14,14 @@ This document defines the operational framework for AI agents contributing to Pr
 2. [Documentation Requirements](#documentation-requirements)
 3. [Version Control Protocol](#version-control-protocol)
 4. [Billed Resource Policy](#billed-resource-policy)
-5. [Work Tracking System](#work-tracking-system)
-6. [Platform Best Practices](#platform-best-practices)
-7. [Task Completion Standards](#task-completion-standards)
-8. [Reusable Tooling](#reusable-tooling)
-9. [Self-Modification Protocol](#self-modification-protocol)
-10. [Research Requirements](#research-requirements)
-11. [Planning Protocol](#planning-protocol)
-12. [Retrospection Requirements](#retrospection-requirements)
-13. [Self-Validation Protocol](#self-validation-protocol)
+5. [Platform Best Practices](#platform-best-practices)
+6. [Task Completion Standards](#task-completion-standards)
+7. [Reusable Tooling](#reusable-tooling)
+8. [Self-Modification Protocol](#self-modification-protocol)
+9. [Research Requirements](#research-requirements)
+10. [Planning Protocol](#planning-protocol)
+11. [Retrospection Requirements](#retrospection-requirements)
+12. [Self-Validation Protocol](#self-validation-protocol)
 
 ---
 
@@ -37,14 +36,14 @@ DOCUMENTING → COMMITTING → RETROSPECTING → IDLE
 | State         | Exit criteria                                                      |
 | ------------- | ------------------------------------------------------------------ |
 | IDLE          | Task received                                                      |
-| PLANNING      | Plan documented in `docs/WORKLOG.md`                               |
+| PLANNING      | Plan documented and reviewed                                       |
 | RESEARCHING   | Sufficient context obtained                                        |
 | CLARIFYING    | User response received; returns to whichever state triggered it    |
 | IMPLEMENTING  | All code changes complete                                          |
 | VALIDATING    | All checks pass — a failure returns to IMPLEMENTING, never past it |
 | DOCUMENTING   | Docs reflect the change                                            |
 | COMMITTING    | Changes committed                                                  |
-| RETROSPECTING | `docs/WORKLOG.md` entry complete                                   |
+| RETROSPECTING | Learnings captured in commit/docs if process-wide                  |
 
 ---
 
@@ -56,8 +55,8 @@ Every significant piece of work MUST include:
 
 1. Code comments (TSDoc format) on all exported functions, classes, and types; on complex or
    non-obvious logic; and cross-references to related code
-2. A `docs/WORKLOG.md` entry covering the task description, approach taken, files modified, and
-   decisions made
+2. Substantive Conventional Commit messages explaining what changed, why, and key operational
+   learnings
 3. README updates when the change adds a feature, changes an API or interface, or changes setup
    instructions
 
@@ -74,7 +73,6 @@ for anything not obvious from the signature, and `@throws` when a call can throw
 | Product specs        | `docs/core/`                      |
 | Engineering specs    | `docs/engineering/`               |
 | API documentation    | Auto-generated via Scalar/OpenAPI |
-| Work history         | `docs/WORKLOG.md`                 |
 | Agent guidelines     | `AGENTS.md` (this file)           |
 | Repo-specific config | `.claude/`                        |
 | Scripts              | `scripts/`                        |
@@ -250,59 +248,6 @@ consume billed minutes.
 
 ---
 
-## Work Tracking System
-
-### WORKLOG.md Structure
-
-All work MUST be tracked in `docs/WORKLOG.md`. The base shape for every task:
-
-```markdown
-# Project Athena Work Log
-
-## Active Tasks
-
-### [TASK-ID] Task Title
-
-- **Status**: IN_PROGRESS | BLOCKED | REVIEW
-- **Started**: YYYY-MM-DD
-- **Priority**: P0 | P1 | P2 | P3
-- **Description**: What needs to be done
-- **Subtasks**:
-  - [ ] Subtask 1
-  - [x] Subtask 2 (completed)
-- **Blockers**: Any blocking issues
-- **Notes**: Implementation notes
-
----
-
-## Completed Tasks
-
-### [TASK-ID] Task Title
-
-- **Completed**: YYYY-MM-DD
-- **Summary**: What was accomplished
-- **Files Changed**: List of modified files
-- **Learnings**: What was learned
-```
-
-For substantial tasks, add sections as needed rather than forcing everything into **Notes** — recent
-entries in `docs/WORKLOG.md` use **Files changed**, **Validation**, **Learnings**, and **Blockers for
-launch** as their own subsections. Read a recent entry there before writing a large one; it's the
-canonical example, not this template.
-
-Tasks move `backlog` → `active (in_progress)` → `active (review)` → `completed`, with `blocked` as a
-detour back to `in_progress` once unblocked.
-
-### Work Tracking Rules
-
-1. **Create task entry BEFORE starting work**
-2. **Update status immediately** when state changes
-3. **Document blockers explicitly** with details
-4. **Move to COMPLETED only after validation**
-5. **Include learnings** for future reference
-
----
-
 ## Platform Best Practices
 
 ### TypeScript Standards
@@ -357,7 +302,6 @@ A task is ONLY complete when:
 - [ ] Error handling is complete and no security vulnerabilities were introduced
 - [ ] Performance and accessibility requirements are met
 - [ ] Documentation is updated (TSDoc, README if needed)
-- [ ] `docs/WORKLOG.md` is updated
 - [ ] Code has been self-reviewed or peer reviewed
 
 ### NO Stubs or TODOs
@@ -383,8 +327,8 @@ A task is ONLY complete when:
 
 If a task cannot be completed:
 
-1. Document the blocker in WORKLOG.md
-2. Create explicit subtask for the remaining work
+1. Document the blocker clearly in the task or commit notes
+2. Create an explicit subtask or follow-up for the remaining work
 3. Notify user with specific details
 4. Move to next actionable task
 
@@ -395,7 +339,7 @@ When encountering obstacles:
 1. **Try at least 3 different approaches** before escalating
 2. **Research solutions** via web search or documentation
 3. **Examine similar code** in the codebase
-4. **Document failed approaches** in WORKLOG.md
+4. **Record failed approaches** in commit/blocker notes so they are not repeated
 5. **Only escalate to user** with specific, actionable questions
 
 ---
@@ -461,10 +405,9 @@ This file SHOULD be updated when:
 ### Update Process
 
 1. Propose change with rationale
-2. Document in WORKLOG.md
-3. Make atomic, focused changes
-4. Increment version number
-5. Update "Last Updated" date
+2. Make atomic, focused changes
+3. Increment version number
+4. Update "Last Updated" date
 
 ### Protected Sections
 
@@ -499,7 +442,6 @@ Research is REQUIRED when:
 Document research findings in:
 
 - `docs/research/` for significant explorations
-- WORKLOG.md task notes for task-specific research
 - Code comments for implementation decisions
 
 ---
@@ -550,9 +492,9 @@ How we'll verify success
 
 ### Plan Approval
 
-For significant changes, write the plan to WORKLOG.md and proceed. Ask for approval only when the
-next action is irreversible or genuinely needs a product decision. Do not stop implementation merely
-to obtain approval of a plan.
+For significant changes, document the plan (e.g. under `docs/plans/` or in the conversation plan)
+and proceed. Ask for approval only when the next action is irreversible or genuinely needs a product
+decision. Do not stop implementation merely to obtain approval of a plan.
 
 ---
 
@@ -571,15 +513,15 @@ After completing each significant task:
 
 Record retrospections in:
 
-- WORKLOG.md task completion entry
-- AGENTS.md if process changes warranted
+- Commit message bodies for task-specific learnings
+- `AGENTS.md` if process changes are warranted
 - `docs/research/` if significant learnings
 
 ### Periodic Review
 
 Agents SHOULD periodically review:
 
-- Recent WORKLOG.md entries
+- Recent git history and commit messages
 - Common patterns across tasks
 - Recurring blockers or issues
 

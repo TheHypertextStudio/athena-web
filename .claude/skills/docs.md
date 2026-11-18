@@ -41,4 +41,4 @@ Per AGENTS.md, every exported function, class, and type needs TSDoc: a one-line 
 
 ## Notes
 
-A `/docs` pass on its own rarely counts as "significant work" needing its own `docs/WORKLOG.md` entry. If it's part of a larger task, fold the documentation changes into that task's existing entry instead of creating a second one.
+Record significant documentation changes directly in the commit message body of the slice they belong to.

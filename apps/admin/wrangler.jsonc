@@ -47,7 +47,12 @@
         "API_URL": "https://api.clearthedocket.com",
         "NEXT_PUBLIC_APP_URL": "https://admin.clearthedocket.com",
       },
-      "routes": [],
+      "routes": [
+        {
+          "pattern": "admin.clearthedocket.com",
+          "custom_domain": true,
+        },
+      ],
     },
   },
 }

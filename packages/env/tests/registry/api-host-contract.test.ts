@@ -70,14 +70,33 @@ describe('apiHosts', () => {
     expect(connectorServer.MAPBOX_ACCESS_TOKEN.parse('pk.mapbox-test')).toBe('pk.mapbox-test');
   });
 
-  it('requires the Mapbox geocoding token in production', async () => {
-    const production = productionBase();
+  it('requires the Mapbox geocoding token in production when work location projection is enabled', async () => {
+    const production: Record<string, string> = {
+      ...productionBase(),
+      WORK_LOCATION_PROJECTION_ENABLED: 'true',
+      PUBLIC_BRIEF_HOST: 'briefs.docket.example',
+      CUSTOM_DOMAIN_CNAME_TARGET: 'briefs.docket.example',
+    };
     delete production['MAPBOX_ACCESS_TOKEN'];
     stubAll(production);
 
     await expect(import('../../src/api')).rejects.toThrow(
       'MAPBOX_ACCESS_TOKEN is required for production saved-place geocoding',
     );
+  });
+
+  it('allows omitting the Mapbox token in production when work location projection is disabled', async () => {
+    const production: Record<string, string> = {
+      ...productionBase(),
+      WORK_LOCATION_PROJECTION_ENABLED: 'false',
+      PUBLIC_BRIEF_HOST: 'briefs.docket.example',
+      CUSTOM_DOMAIN_CNAME_TARGET: 'briefs.docket.example',
+    };
+    delete production['MAPBOX_ACCESS_TOKEN'];
+    stubAll(production);
+
+    const { env } = await import('../../src/api');
+    expect(env.MAPBOX_ACCESS_TOKEN).toBeUndefined();
   });
 
   it('reads each host from its own variable', async () => {

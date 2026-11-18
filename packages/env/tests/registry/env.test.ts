@@ -544,6 +544,15 @@ describe('api composition', () => {
       );
     });
 
+    it('allows omitting all Linear credentials in production when Linear is not configured', async () => {
+      for (const [key, value] of Object.entries(productionLinearEnv)) vi.stubEnv(key, value);
+      vi.stubEnv('LINEAR_CLIENT_ID', undefined);
+      vi.stubEnv('LINEAR_CLIENT_SECRET', undefined);
+      vi.stubEnv('LINEAR_WEBHOOK_SECRET', undefined);
+      const mod = await import('../../src/api');
+      expect(mod.env.LINEAR_CLIENT_ID).toBeUndefined();
+    });
+
     it('accepts real Linear credentials in production', async () => {
       for (const [key, value] of Object.entries(productionLinearEnv)) vi.stubEnv(key, value);
       const mod = await import('../../src/api');

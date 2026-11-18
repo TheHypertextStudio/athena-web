@@ -176,7 +176,7 @@ function assertPhoneVerificationConfig(e: typeof env): void {
 }
 
 function assertProductionMapbox(e: typeof env, fail: (message: string) => never): void {
-  if (e.APP_MODE !== 'production') return;
+  if (e.APP_MODE !== 'production' || !e.WORK_LOCATION_PROJECTION_ENABLED) return;
   if (!e.MAPBOX_ACCESS_TOKEN || !isRealValue(e.MAPBOX_ACCESS_TOKEN)) {
     fail('MAPBOX_ACCESS_TOKEN is required for production saved-place geocoding.');
   }
@@ -301,10 +301,18 @@ function assertCrossFieldRules(e: typeof env): void {
         fail(`${name} must not contain an empty or placeholder value.`);
       }
     }
-    for (const name of ['LINEAR_CLIENT_ID', 'LINEAR_CLIENT_SECRET', 'LINEAR_WEBHOOK_SECRET']) {
-      const value = e[name as keyof typeof e];
-      if (typeof value !== 'string' || !isRealValue(value)) {
-        fail(`${name} is required for the production Linear integration.`);
+    const linearNames = [
+      'LINEAR_CLIENT_ID',
+      'LINEAR_CLIENT_SECRET',
+      'LINEAR_WEBHOOK_SECRET',
+    ] as const;
+    const anyLinearConfigured = linearNames.some((name) => Boolean(e[name]));
+    if (anyLinearConfigured) {
+      for (const name of linearNames) {
+        const value = e[name];
+        if (typeof value !== 'string' || !isRealValue(value)) {
+          fail(`${name} is required for the production Linear integration.`);
+        }
       }
     }
 

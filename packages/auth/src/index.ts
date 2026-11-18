@@ -8,7 +8,7 @@
  * env-gated plugins, MCP/OIDC binding decisions).
  */
 import { env } from '@docket/env/api';
-import { buildMailerFromEnv } from '@docket/mail';
+import { buildMailerFromEnv, type Mailer } from '@docket/mail';
 import { betterAuth } from 'better-auth';
 import { verifyAccessToken } from 'better-auth/oauth2';
 
@@ -108,7 +108,9 @@ export {
  * boundary container, so it builds its own mailer from the shared env-driven selector
  * (Resend API in production, optional Mailpit locally, capture mock under test).
  */
-const mailer = buildMailerFromEnv({
+// Defer mailer construction in production when Resend credentials are absent so a deploy
+// can boot and serve passkey/session traffic before transactional email is configured.
+const mailerEnv = {
   APP_MODE: env.APP_MODE,
   ...(env.RESEND_API_KEY ? { RESEND_API_KEY: env.RESEND_API_KEY } : {}),
   ...(env.SMTP_HOST ? { SMTP_HOST: env.SMTP_HOST } : {}),
@@ -117,7 +119,17 @@ const mailer = buildMailerFromEnv({
   ...(env.SMTP_USER ? { SMTP_USER: env.SMTP_USER } : {}),
   ...(env.SMTP_PASS ? { SMTP_PASS: env.SMTP_PASS } : {}),
   ...(env.MAIL_FROM ? { MAIL_FROM: env.MAIL_FROM } : {}),
-});
+};
+let resolvedMailer: Mailer | undefined =
+  env.APP_MODE !== 'production' || Boolean(env.RESEND_API_KEY && env.MAIL_FROM)
+    ? buildMailerFromEnv(mailerEnv)
+    : undefined;
+const mailer: Mailer = {
+  send(message) {
+    resolvedMailer ??= buildMailerFromEnv(mailerEnv);
+    return resolvedMailer.send(message);
+  },
+};
 
 /**
  * Non-production echo of the sign-up code (for e2e). Gated to `APP_MODE ∈ {local,test}`; the same

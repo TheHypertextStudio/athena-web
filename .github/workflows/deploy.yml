@@ -119,6 +119,12 @@ jobs:
             node /app/packages/db/dist/migrate.mjs
 
       - name: Write Cloud Run environment configuration
+        env:
+          API_SECRET_BINDINGS: ${{ steps.active-secrets.outputs.bindings }}
+          R2_BLOB_BUCKET: ${{ vars.R2_BLOB_BUCKET }}
+          R2_ACCOUNT_ID: ${{ vars.R2_ACCOUNT_ID }}
+          CLOUDFLARE_AI_GATEWAY_BASE_URL: ${{ vars.CLOUDFLARE_AI_GATEWAY_BASE_URL }}
+          OPENAI_API_BASE: ${{ vars.OPENAI_API_BASE }}
         shell: bash
         run: |
           cat > "$RUNNER_TEMP/docket-api-env.yaml" <<'EOF'
@@ -183,6 +189,17 @@ jobs:
           PHONE_VERIFICATION_CANARY_EMAILS: "${{ vars.PHONE_VERIFICATION_CANARY_EMAILS }}"
           MCP_TASKS_ENABLED: "false"
           EOF
+          if [[ -n "${R2_BLOB_BUCKET:-}" && -n "${R2_ACCOUNT_ID:-}" ]] \
+            && printf '%s\n' "$API_SECRET_BINDINGS" | grep -q '^R2_ACCESS_KEY_ID=' \
+            && printf '%s\n' "$API_SECRET_BINDINGS" | grep -q '^R2_SECRET_ACCESS_KEY='; then
+            printf 'R2_BLOB_BUCKET: "%s"\nR2_ACCOUNT_ID: "%s"\n' "$R2_BLOB_BUCKET" "$R2_ACCOUNT_ID" >> "$RUNNER_TEMP/docket-api-env.yaml"
+          fi
+          if [[ -n "${CLOUDFLARE_AI_GATEWAY_BASE_URL:-}" ]]; then
+            printf 'CLOUDFLARE_AI_GATEWAY_BASE_URL: "%s"\n' "$CLOUDFLARE_AI_GATEWAY_BASE_URL" >> "$RUNNER_TEMP/docket-api-env.yaml"
+          fi
+          if [[ -n "${OPENAI_API_BASE:-}" ]]; then
+            printf 'OPENAI_API_BASE: "%s"\n' "$OPENAI_API_BASE" >> "$RUNNER_TEMP/docket-api-env.yaml"
+          fi
 
       # Drift between what bootstrap provisions and what the project actually has: a variable never
       # created, a role granted by hand and never recorded, an API left on the default compute

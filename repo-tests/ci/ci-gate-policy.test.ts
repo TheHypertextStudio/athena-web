@@ -436,16 +436,17 @@ describe('the real workflows', () => {
     const releaseDocument = parseYaml(readFileSync(releasePath, 'utf8')) as Record<string, unknown>;
     const releaseConcurrency = releaseDocument['concurrency'] as Record<string, unknown>;
     const releaseTriggers = releaseDocument['on'] as Record<string, unknown>;
-    const workflowRun = releaseTriggers['workflow_run'] as Record<string, unknown>;
+    const workflowDispatch = releaseTriggers['workflow_dispatch'] as Record<string, unknown>;
+    const dispatchInputs = workflowDispatch['inputs'] as Record<string, unknown>;
     const releaseGroup = releaseConcurrency['group'] as string;
 
     expect(releaseConcurrency['cancel-in-progress']).toBe(false);
-    expect(releaseGroup).toContain("github.event.workflow_run.conclusion == 'success'");
-    expect(releaseGroup).toContain("github.event.workflow_run.event == 'push'");
-    expect(releaseGroup).toContain("github.event.workflow_run.head_branch == 'main'");
-    expect(releaseGroup).toContain('github.run_id');
-    expect(workflowRun['workflows']).toEqual(['CI']);
-    expect(workflowRun['types']).toEqual(['completed']);
+    expect(releaseGroup).toBe('deploy-main');
+    expect(Object.keys(dispatchInputs)).toEqual([
+      'release_sha',
+      'staging_acceptance',
+      'staging_evidence',
+    ]);
   });
 
   it('deploys the exact SHA whose CI run passed', () => {

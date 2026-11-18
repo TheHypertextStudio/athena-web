@@ -1,4 +1,5 @@
 {
+  "$schema": "node_modules/wrangler/config-schema.json",
   "account_id": "2500680a3b2b0fe6a011c1c25fed5008",
   "name": "docket-admin-candidate",
   "main": ".open-next/worker.js",

@@ -11,6 +11,9 @@
   },
   "scripts": {
     "build": "next build",
+    "build:worker": "DOCKET_WORKERS_BUILD=1 NODE_OPTIONS=--max-old-space-size=4096 next build --webpack && opennextjs-cloudflare build --skipNextBuild",
+    "deploy:worker": "opennextjs-cloudflare deploy",
+    "upload:worker": "opennextjs-cloudflare upload",
     "dev": "portless run --force",
     "dev:app": "tsx ../../scripts/portless-env.ts next dev",
     "start": "next start",
@@ -44,6 +47,7 @@
     "@docket/eslint-config": "workspace:*",
     "@docket/notifications": "workspace:*",
     "@docket/tsconfig": "workspace:*",
+    "@opennextjs/cloudflare": "1.20.10",
     "@tailwindcss/postcss": "^4.3.2",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
@@ -52,6 +56,7 @@
     "tailwindcss": "^4.3.2",
     "tsx": "^4.23.1",
     "tw-animate-css": "^1.4.0",
-    "vitest": "catalog:"
+    "vitest": "catalog:",
+    "wrangler": "4.148.0"
   }
 }

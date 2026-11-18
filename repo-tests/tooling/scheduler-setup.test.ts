@@ -19,6 +19,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
+import { RUNNER_CRON_JOBS } from '../../apps/runner/src/cron-sweeps';
 import {
   computeRouteDrift,
   CRON_ROUTES_FILE,
@@ -126,6 +127,12 @@ describe('scheduler-setup — the twenty-six jobs', () => {
 
   it('keeps every job id unique, since a duplicate would silently clobber its sibling', () => {
     expect(new Set(JOBS.map((job) => job.name)).size).toBe(JOBS.length);
+  });
+
+  it('keeps the Cloudflare Worker cron registry identical to scheduler-setup JOBS', () => {
+    expect(RUNNER_CRON_JOBS).toEqual(
+      JOBS.map(({ name, path, schedule }) => ({ name, path, schedule })),
+    );
   });
 });
 

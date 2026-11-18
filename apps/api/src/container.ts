@@ -13,7 +13,6 @@ import type { ModelBackendEnv } from '@docket/athena/turn/model-backend';
 import { InMemoryBillingGateway } from '@docket/billing/adapters/in-memory';
 import { RealStripeGateway } from '@docket/billing/adapters/stripe';
 import type { BillingGateway } from '@docket/billing/contracts';
-import { GcsBlob, LocalDiskBlob } from '@docket/blob-store';
 import type { BlobStore } from '@docket/blob-store';
 import { MockNotionMirror } from '@docket/connections/notion/adapters/in-memory';
 import { NotionMirrorClient } from '@docket/connections/notion/adapters/notion-sdk';
@@ -56,6 +55,7 @@ import type { InboundMailReceiver, Mailer } from '@docket/mail';
 import { configureNotificationTransports } from '@docket/notifications/dispatch';
 import type { TaskSynthesizer } from '@docket/work/task-drafting';
 
+import { buildBlobStore } from './container-blob-store';
 import { toAppRuntimeEnv } from './container-runtime-env';
 import {
   CapturePhoneVerificationProvider,
@@ -118,6 +118,10 @@ export interface AppRuntimeEnv {
   readonly PUSH_API_KEY?: string;
   readonly PUSH_APP_ID?: string;
   readonly GCS_BLOB_BUCKET?: string;
+  readonly R2_BLOB_BUCKET?: string;
+  readonly R2_ACCOUNT_ID?: string;
+  readonly R2_ACCESS_KEY_ID?: string;
+  readonly R2_SECRET_ACCESS_KEY?: string;
   readonly WEB_URL?: string;
   readonly GITHUB_API_BASE?: string;
   readonly LINEAR_API_BASE?: string;
@@ -534,14 +538,7 @@ export function buildAppContainer(runtimeEnv: AppRuntimeEnv = toAppRuntimeEnv())
   const voice = lazyValue(() => resolveVoiceProvider(runtimeEnv));
   const push = lazyValue(() => buildPushSender(runtimeEnv));
   const unfurler = lazyValue(() => (mock ? new MockUnfurler() : new RealUnfurler()));
-  const blob = lazyValue(() =>
-    mock
-      ? new LocalDiskBlob()
-      : new GcsBlob({
-          bucket: required('GCS_BLOB_BUCKET', runtimeEnv.GCS_BLOB_BUCKET),
-          uploadOrigin: required('WEB_URL', runtimeEnv.WEB_URL),
-        }),
-  );
+  const blob = lazyValue(() => buildBlobStore(runtimeEnv));
   const placeGeocoder = lazyValue(() => buildPlaceGeocoder(runtimeEnv));
 
   const built: AppContainer = {

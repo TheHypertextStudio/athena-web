@@ -353,6 +353,17 @@ export const opsServer = {
     .string()
     .regex(/^[a-z0-9][a-z0-9._-]{1,220}[a-z0-9]$/)
     .optional(),
+  /** Private Cloudflare R2 bucket for binary artifacts (preferred over GCS when configured). */
+  R2_BLOB_BUCKET: z
+    .string()
+    .regex(/^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$/)
+    .optional(),
+  /** Cloudflare account id owning the R2 artifact bucket. */
+  R2_ACCOUNT_ID: z.string().min(1).optional(),
+  /** Cloudflare R2 S3-compatible access key id for the private artifact bucket. */
+  R2_ACCESS_KEY_ID: z.string().min(1).optional(),
+  /** Cloudflare R2 S3-compatible secret access key for the private artifact bucket. */
+  R2_SECRET_ACCESS_KEY: z.string().min(1).optional(),
   /** Resend API key for production transactional email over HTTPS, and inbound body reads. */
   RESEND_API_KEY: z.string().min(1).optional(),
   /** Dedicated receiving API key; absent uses the existing transactional key. */

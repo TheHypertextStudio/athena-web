@@ -42,6 +42,7 @@
         "CREDENTIALS_ENCRYPTION_KEY",
         "SENTRY_DSN",
         "GCS_BLOB_BUCKET",
+        "R2_*",
         "BILLING_CANARY_EMAILS",
         "BILLING_ENABLED",
         "BILLING_RECONCILIATION_MODE",

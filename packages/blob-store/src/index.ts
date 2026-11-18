@@ -2,9 +2,10 @@
  * `@docket/blob-store` - the `BlobStore` port.
  *
  * @remarks
- * The single typed edge for binary artifact storage (export artifacts). The real
- * adapter targets private Google Cloud Storage using ADC; the mock `LocalDiskBlob` writes
- * under `.data/exports`. No business logic lives here; only the storage edge does.
+ * The single typed edge for binary artifact storage (export artifacts). Production adapters
+ * target Cloudflare R2 (`R2Blob`) or private Google Cloud Storage (`GcsBlob`); the mock
+ * `LocalDiskBlob` writes under `.data/exports`. No business logic lives here; only the storage
+ * edge does.
  */
 
 import type { BlobTransfer } from './transfer';
@@ -26,7 +27,7 @@ export interface BlobPutResult {
 
 /**
  * The blob storage port: a single typed edge for putting, getting, and addressing
- * binary artifacts by key. Implemented by `GcsBlob` and `LocalDiskBlob`.
+ * binary artifacts by key. Implemented by `R2Blob`, `GcsBlob`, and `LocalDiskBlob`.
  */
 export interface BlobStore {
   /** Bounded transfer, streaming reads and storage-side copies. */
@@ -69,3 +70,8 @@ export { LocalDiskBlob } from './local-disk';
 export type { LocalDiskBlobOptions } from './local-disk';
 export { GcsBlob } from './gcs';
 export type { GcsBlobConfig, GcsBucket, GcsObject } from './gcs';
+export { R2Blob } from './r2';
+export type { R2BlobConfig } from './r2';
+export { R2Transfer } from './r2-transfer';
+export { signR2Request } from './r2-signer';
+export type { R2Credentials, R2SignInput, SignedR2Request } from './r2-signer';

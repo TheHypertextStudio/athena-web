@@ -12,6 +12,7 @@ import { describe, expect, it } from 'vitest';
 
 import { InMemoryBillingGateway } from '@docket/billing/adapters/in-memory';
 import { RealStripeGateway } from '@docket/billing/adapters/stripe';
+import { R2Blob } from '@docket/blob-store';
 import { MockNotionMirror } from '@docket/connections/notion/adapters/in-memory';
 import { NotionMirrorClient } from '@docket/connections/notion/adapters/notion-sdk';
 import {
@@ -409,5 +410,25 @@ describe('buildAppContainer', () => {
   it('refuses production blob storage without a bucket', () => {
     const container = buildAppContainer(PROD_BASE);
     expect(() => container.blob).toThrow('Missing required production config: GCS_BLOB_BUCKET');
+  });
+
+  it('prefers Cloudflare R2 over GCS when R2_BLOB_BUCKET and R2 credentials are configured', () => {
+    const container = buildAppContainer({
+      ...PROD_BASE,
+      R2_BLOB_BUCKET: 'studio-r2-artifacts',
+      R2_ACCOUNT_ID: 'acct-123',
+      R2_ACCESS_KEY_ID: 'r2-key',
+      R2_SECRET_ACCESS_KEY: 'r2-secret',
+    });
+    expect(container.blob).toBeInstanceOf(R2Blob);
+    expect(container.blob.url('exports/1.zip')).toBe('r2://studio-r2-artifacts/exports/1.zip');
+  });
+
+  it('refuses R2 blob storage when R2_BLOB_BUCKET is set without R2_ACCOUNT_ID', () => {
+    const container = buildAppContainer({
+      ...PROD_BASE,
+      R2_BLOB_BUCKET: 'studio-r2-artifacts',
+    });
+    expect(() => container.blob).toThrow('Missing required production config: R2_ACCOUNT_ID');
   });
 });

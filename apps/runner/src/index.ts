@@ -21,12 +21,22 @@ export default {
     await consumeExecutionBatch(batch.messages, env.ATHENA_WORKFLOW);
   },
   async scheduled(controller, env): Promise<void> {
-    const result = await runDispatchSweep(env);
-    console.log(JSON.stringify({ event: 'athena_dispatch_sweep_completed', ...result }));
+    let dispatchError: Error | undefined;
+    const hmacSecret = (env as { readonly CLOUDFLARE_TO_DOCKET_HMAC_SECRET?: string })
+      .CLOUDFLARE_TO_DOCKET_HMAC_SECRET;
+    if (typeof hmacSecret === 'string' && hmacSecret.trim().length > 0) {
+      try {
+        const result = await runDispatchSweep(env);
+        console.log(JSON.stringify({ event: 'athena_dispatch_sweep_completed', ...result }));
+      } catch (error) {
+        dispatchError = error instanceof Error ? error : new Error(String(error));
+      }
+    }
     if (resolveCronMode(env.DOCKET_CRON_MODE) !== 'off') {
       const now = controller.scheduledTime ? new Date(controller.scheduledTime) : new Date();
       const cronSummary = await runScheduledCronSweeps(env, { fetch, now });
       console.log(JSON.stringify({ event: 'docket_cron_sweep_completed', ...cronSummary }));
     }
+    if (dispatchError) throw dispatchError;
   },
 } satisfies ExportedHandler<RunnerEnv>;

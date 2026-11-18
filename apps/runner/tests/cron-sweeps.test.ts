@@ -176,4 +176,52 @@ describe('runScheduledCronSweeps', () => {
     expect(calledPaths).toContain('/internal/cron/athena-triggers');
     expect(calledPaths).toContain('/internal/cron/document-image-cleanup');
   });
+
+  it('still runs scheduled cron sweeps when async runner HMAC secret is omitted', async () => {
+    const fetchMock = vi.fn((_url: URL | string) => Promise.resolve(Response.json({ ok: true })));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await worker.scheduled(
+      { scheduledTime: Date.parse('2026-11-18T04:37:00.000Z') } as ScheduledController,
+      {
+        ...baseEnv,
+        DOCKET_CRON_MODE: 'all',
+        ATHENA_RUN_QUEUE: { send: vi.fn() },
+        ATHENA_WORKFLOW: { get: vi.fn() },
+      } as never,
+    );
+
+    const calledPaths = fetchMock.mock.calls.map(([url]) => new URL(String(url)).pathname);
+    expect(calledPaths).not.toContain('/internal/athena/execution/dispatch/sweep');
+    expect(calledPaths).toContain('/internal/cron/athena-triggers');
+    expect(calledPaths).toContain('/internal/cron/document-image-cleanup');
+  });
+
+  it('finishes cron sweeps before rethrowing when the dispatch sweep fails', async () => {
+    const fetchMock = vi.fn((url: URL | string) => {
+      if (String(url).endsWith('/internal/athena/execution/dispatch/sweep')) {
+        return Promise.resolve(new Response('unauthorized', { status: 401 }));
+      }
+      return Promise.resolve(Response.json({ ok: true }));
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(
+      worker.scheduled(
+        { scheduledTime: Date.parse('2026-11-18T04:37:00.000Z') } as ScheduledController,
+        {
+          ...baseEnv,
+          DOCKET_CRON_MODE: 'all',
+          ATHENA_RUN_QUEUE: { send: vi.fn() },
+          ATHENA_WORKFLOW: { get: vi.fn() },
+          CLOUDFLARE_TO_DOCKET_HMAC_SECRET: 'cloudflare-to-docket-secret',
+          DOCKET_TO_CLOUDFLARE_HMAC_SECRET: 'docket-to-cloudflare-secret',
+        } as never,
+      ),
+    ).rejects.toThrow('Docket dispatch sweep failed (401)');
+
+    const calledPaths = fetchMock.mock.calls.map(([url]) => new URL(String(url)).pathname);
+    expect(calledPaths).toContain('/internal/cron/athena-triggers');
+    expect(calledPaths).toContain('/internal/cron/document-image-cleanup');
+  });
 });

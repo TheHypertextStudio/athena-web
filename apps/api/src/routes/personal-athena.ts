@@ -27,7 +27,8 @@ import { CursorQuery, pageOf } from '../contracts/pagination';
 import { getContainer } from '../container';
 import { env } from '../env';
 import { AuthError, ConflictError, NotFoundError } from '../error';
-import { sealCredential, unsealCredential } from '../lib/credentials';
+import { sealCredential } from '../lib/credentials';
+import { unsealPersonalMcpCredential } from '../lib/credential-recovery';
 import { signConnectState } from '../lib/oauth-state';
 import { created, ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
@@ -101,7 +102,7 @@ export async function verifyPersonalMcpConnection(
       ),
     )
     .limit(1);
-  const stored = credential ? unsealCredential(credential.ciphertext) : undefined;
+  const stored = await unsealPersonalMcpCredential(row.id, credential?.ciphertext);
   const oauth = stored ? parseMcpOAuthCredential(stored) : null;
   const bearerToken =
     oauth?.kind === 'mcp_oauth' ? oauth.tokens.access_token : oauth ? undefined : stored;

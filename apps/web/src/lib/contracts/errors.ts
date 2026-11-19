@@ -62,6 +62,7 @@ export const ProblemCode = z
     'precondition_failed',
     'unsupported_media_type',
     'lattice_unavailable',
+    'credential_reauth_required',
     'internal',
   ])
   .describe(
@@ -103,6 +104,7 @@ export const ProblemCode = z
       '- `unsupported_media_type` (HTTP 415): the request body arrived under a `Content-Type` the endpoint does not read. Send `application/json` for a JSON body, or `multipart/form-data` where a file is expected.',
       '- `precondition_failed` (HTTP 412): the `If-Match` entity tag did not match the current representation, so the write was refused to avoid overwriting a concurrent change — re-read the resource and retry against the new `ETag`.',
       '- `lattice_unavailable` (HTTP 503): the selected personal runtime cannot serve this Athena turn. Wake the computer or reconnect Lovelace in Settings, then retry.',
+      '- `credential_reauth_required` (HTTP 409): the stored credential for this integration can no longer be unlocked and must be reconnected in Settings.',
       '- `internal` (HTTP 500): an unexpected server error; safe to retry.',
     ].join('\n'),
   );
@@ -174,6 +176,7 @@ export const PUBLIC_PROBLEM_TITLES = {
   precondition_failed: 'Someone else changed this first.',
   unsupported_media_type: 'That file or format cannot be read.',
   lattice_unavailable: 'Your Lattice computer is unavailable.',
+  credential_reauth_required: 'Reconnect this integration to continue.',
   internal: 'Something went wrong on our side.',
 } as const satisfies Record<ProblemCode, string>;
 
@@ -235,6 +238,8 @@ export const PUBLIC_PROBLEM_SUMMARIES = {
   unsupported_media_type: 'This address cannot read the request content type.',
   lattice_unavailable:
     'Wake the selected computer or reconnect Lovelace in Settings, then try again.',
+  credential_reauth_required:
+    'The stored credential for this integration expired or was rotated. Reconnect it in Settings.',
   internal: 'Docket could not complete the request.',
 } as const satisfies Record<ProblemCode, string>;
 
@@ -305,6 +310,7 @@ const PROBLEM_RECOVERY: Record<ProblemCode, ProblemRecovery> = {
   precondition_failed: 'retry',
   unsupported_media_type: 'review',
   lattice_unavailable: 'retry',
+  credential_reauth_required: 'reconnect',
   internal: 'retry',
 };
 
@@ -361,6 +367,7 @@ const PROBLEM_STATUS: Record<ProblemCode, number> = {
   precondition_failed: 412,
   unsupported_media_type: 415,
   lattice_unavailable: 503,
+  credential_reauth_required: 409,
   internal: 500,
 };
 

@@ -23,7 +23,8 @@ import {
 } from '@docket/integrations';
 
 import { buildLinearAgentClient } from '../container';
-import { sealCredential, unsealCredential } from './credentials';
+import { sealCredential } from './credentials';
+import { unsealIntegrationCredential } from './credential-recovery';
 import { linearAgentConfigFromEnv } from './linear-agent-connect';
 
 /**
@@ -96,7 +97,7 @@ export async function buildLinearAgentPortForIntegration(
   if (!credentialRow) return null;
 
   const parsedTokens = linearAgentTokensSchema.safeParse(
-    JSON.parse(unsealCredential(credentialRow.ciphertext)),
+    JSON.parse(await unsealIntegrationCredential(integrationId, credentialRow.ciphertext)),
   );
   if (!parsedTokens.success) return null;
 

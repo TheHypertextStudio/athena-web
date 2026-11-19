@@ -59,6 +59,7 @@ import { EntityIconGlyph } from '@/components/entity-display/entity-icon-glyph';
 import { OfflineSyncIndicator, OfflineSyncRuntime, useOutboxSummary } from '@/components/pwa';
 import { NavigationSnapshotPersistence } from '@/components/navigation-snapshot-persistence';
 import { ReachabilityProvider } from '@/components/reachability';
+import { IntegrationReauthBanner } from '@/components/integration-reauth-banner';
 import { RecoveryNudgeBanner } from '@/components/recovery-nudge-banner';
 import { ResolvedAccountProvider } from '@/components/resolved-account';
 import { SessionSnapshotPersistence } from '@/components/session-snapshot-persistence';
@@ -359,15 +360,53 @@ function SidebarUpdateCard({ onApply }: { readonly onApply: () => void }): JSX.E
 }
 
 function SidebarRecoveryNudge({
+  activeOrgId,
   personalOrgId,
   userId,
 }: {
+  readonly activeOrgId: string | null;
   readonly personalOrgId: string | null;
   readonly userId: string | null;
 }): JSX.Element | null {
   const { collapsed } = useShellSidebar();
   if (collapsed) return null;
-  return <RecoveryNudgeBanner personalOrgId={personalOrgId} userId={userId} />;
+  return (
+    <>
+      <IntegrationReauthBanner orgId={activeOrgId} />
+      <RecoveryNudgeBanner personalOrgId={personalOrgId} userId={userId} />
+    </>
+  );
+}
+
+function SidebarFooter({
+  identityUnknown,
+  accountIdentity,
+  activeOrgId,
+  personalOrgId,
+  userId,
+  applyUpdate,
+  onCreateWorkspace,
+}: {
+  readonly identityUnknown: boolean;
+  readonly accountIdentity: AccountMenuIdentity | null;
+  readonly activeOrgId: string | null;
+  readonly personalOrgId: string | null;
+  readonly userId: string | null;
+  readonly applyUpdate: (() => void) | null;
+  readonly onCreateWorkspace: () => void;
+}): JSX.Element {
+  if (identityUnknown || !accountIdentity) return <AppShellAccountSkeleton />;
+  return (
+    <div className="flex flex-col gap-2">
+      <SidebarRecoveryNudge
+        activeOrgId={activeOrgId}
+        personalOrgId={personalOrgId}
+        userId={userId}
+      />
+      {applyUpdate ? <SidebarUpdateCard onApply={applyUpdate} /> : null}
+      <AccountMenu identity={accountIdentity} onCreateWorkspace={onCreateWorkspace} />
+    </div>
+  );
 }
 
 interface AppShellInnerProps {
@@ -644,18 +683,15 @@ function AppShellInner({
       onOpenSearch={openPalette}
       personalWorkspace={resolvedOrgIsPersonal}
       footer={
-        identityUnknown || !accountIdentity ? (
-          <AppShellAccountSkeleton />
-        ) : (
-          // A real gap between every footer card, including the account row — the recovery nudge
-          // and update card previously relied on their own bottom margin, which left them flush
-          // against whichever card came before them.
-          <div className="flex flex-col gap-2">
-            <SidebarRecoveryNudge personalOrgId={personalOrgId} userId={userId} />
-            {applyUpdate ? <SidebarUpdateCard onApply={applyUpdate} /> : null}
-            <AccountMenu identity={accountIdentity} onCreateWorkspace={onCreateWorkspace} />
-          </div>
-        )
+        <SidebarFooter
+          identityUnknown={identityUnknown}
+          accountIdentity={accountIdentity}
+          activeOrgId={routeOrgId ?? personalOrgId}
+          personalOrgId={personalOrgId}
+          userId={userId}
+          applyUpdate={applyUpdate}
+          onCreateWorkspace={onCreateWorkspace}
+        />
       }
     />
   );

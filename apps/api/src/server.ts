@@ -30,6 +30,7 @@ import { restProtectedResourceMetadata } from './auth/rest-resource-metadata';
 import type { AppEnv } from './context';
 import { registerPublicApiBoundary } from './api-version-middleware';
 import { getContainer } from './container';
+import { auditSealedCredentials } from './lib/credential-recovery';
 import { flushDeferredWork } from './lib/after-response';
 import { startDevScheduler } from './dev-scheduler';
 import { env } from './env';
@@ -296,6 +297,20 @@ void pruneUndecryptableJwks()
   })
   .catch((error: unknown) => {
     console.error('JWKS recovery check failed at startup; continuing to serve', error);
+  });
+
+// Flag connected integrations whose sealed credentials can no longer be unlocked under the active
+// CREDENTIALS_ENCRYPTION_KEY so the UI surfaces reconnect prompts up front.
+void auditSealedCredentials()
+  .then((flagged) => {
+    if (flagged > 0) {
+      console.warn(
+        `Flagged ${String(flagged)} integration(s) for reconnection after encryption key rotation.`,
+      );
+    }
+  })
+  .catch((error: unknown) => {
+    console.error('Sealed credential audit failed at startup; continuing to serve', error);
   });
 
 // Local dev has no Cloud Scheduler, so run the account sweeps in-process (export/deletion).

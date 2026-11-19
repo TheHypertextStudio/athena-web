@@ -15,7 +15,8 @@ import { CursorQuery, pageOf } from '../contracts/pagination';
 import { getContainer } from '../container';
 import { env } from '../env';
 import { ConflictError, NotFoundError } from '../error';
-import { sealCredential, unsealCredential } from '../lib/credentials';
+import { sealCredential } from '../lib/credentials';
+import { unsealIntegrationCredential } from '../lib/credential-recovery';
 import { signConnectState } from '../lib/oauth-state';
 import { created, ok } from '../lib/ok';
 import { pageResult, seekAfter } from '../lib/list-cursor';
@@ -90,7 +91,9 @@ export async function verifyIntegration(row: IntegrationRow): Promise<Integratio
     .from(integrationCredential)
     .where(eq(integrationCredential.integrationId, row.id))
     .limit(1);
-  const storedCredential = credRows[0] ? unsealCredential(credRows[0].ciphertext) : undefined;
+  const storedCredential = credRows[0]
+    ? await unsealIntegrationCredential(row.id, credRows[0].ciphertext)
+    : undefined;
   const oauthCredential = storedCredential ? parseMcpOAuthCredential(storedCredential) : null;
   const bearerToken =
     oauthCredential?.kind === 'mcp_oauth'

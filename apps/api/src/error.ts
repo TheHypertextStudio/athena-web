@@ -132,6 +132,13 @@ export class ConflictError extends ApiError {
   }
 }
 
+/** 409 — a sealed integration credential can no longer be decrypted and must be reconnected. */
+export class CredentialReauthRequiredError extends ApiError {
+  constructor(message = 'Reconnect this integration to continue.') {
+    super(409, 'credential_reauth_required', message);
+  }
+}
+
 /** 409 — billing cannot continue until the organization has a reconciled provider customer. */
 export class BillingCustomerMissingError extends ApiError {
   constructor(message = 'Billing customer is not available') {

@@ -43,12 +43,8 @@ function makeCode(): string {
  * `verifyBackupCode` needs (it looks the same row up), so it cannot diverge from "recovery works".
  */
 export async function hasRecoveryCodes(userId: string): Promise<boolean> {
-  const [row] = await db
-    .select({ id: twoFactorTable.id })
-    .from(twoFactorTable)
-    .where(eq(twoFactorTable.userId, userId))
-    .limit(1);
-  return row !== undefined;
+  const status = await getRecoveryCodeStatus(userId);
+  return status !== null && status.remaining > 0;
 }
 
 /** A user's recovery-code status: how many remain and when they were last generated. */
@@ -89,8 +85,18 @@ export async function getRecoveryCodeStatus(
     .limit(1);
   if (!row) return null;
 
-  const decrypted = await symmetricDecrypt({ key: env.BETTER_AUTH_SECRET, data: row.backupCodes });
-  const codes: unknown = JSON.parse(decrypted);
+  let codes: unknown;
+  try {
+    const decrypted = await symmetricDecrypt({
+      key: env.BETTER_AUTH_SECRET,
+      data: row.backupCodes,
+    });
+    codes = JSON.parse(decrypted);
+  } catch {
+    // A rotated BETTER_AUTH_SECRET leaves old encrypted blobs unreadable; report null so the UI
+    // prompts the user to generate fresh recovery codes instead of crashing the Security panel.
+    return null;
+  }
   return {
     remaining: Array.isArray(codes) ? codes.length : 0,
     generatedAt: row.generatedAt.toISOString(),

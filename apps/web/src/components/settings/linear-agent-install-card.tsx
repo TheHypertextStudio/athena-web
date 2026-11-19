@@ -48,6 +48,53 @@ export interface LinearAgentInstallCardProps {
   canManage: boolean;
 }
 
+function linearAgentActionLabel(
+  isPending: boolean,
+  needsReauth: boolean,
+  isErrored: boolean,
+): string {
+  if (isPending) return 'Connecting…';
+  if (needsReauth) return 'Reconnect';
+  if (isErrored) return 'Try again';
+  return 'Install';
+}
+
+function LinearAgentFooter({
+  installReturn,
+  needsReauth,
+  isErrored,
+  queryError,
+}: {
+  readonly installReturn: string | null;
+  readonly needsReauth: boolean;
+  readonly isErrored: boolean;
+  readonly queryError: unknown;
+}): JSX.Element {
+  return (
+    <>
+      {installReturn === 'connected' ? (
+        <CardNote tone="muted">Athena was installed as a Linear agent.</CardNote>
+      ) : null}
+      {needsReauth ? (
+        <CardNote tone="error">
+          The Linear Agent connection expired. Reconnect it to keep delegating to Athena in Linear.
+        </CardNote>
+      ) : null}
+      {isErrored || installReturn === 'error' ? (
+        <CardNote tone="error">
+          Athena could not be installed as a Linear agent. Try again, or check that the Linear Agent
+          app is configured for this workspace.
+        </CardNote>
+      ) : null}
+      {queryError ? (
+        <CardNote tone="error">
+          {userErrorMessage(queryError, 'Could not load the Linear Agent install status.')}
+        </CardNote>
+      ) : null}
+    </>
+  );
+}
+
 /**
  * The admin-only "Install Athena as a Linear Agent" card.
  *
@@ -88,32 +135,18 @@ export function LinearAgentInstallCard({
   const existing = items.find((item) => item.provider === 'linear_agent');
   const status = existing?.status;
   const isConnected = status === 'connected';
-  // A persisted pending row only means a prior browser redirect did not come back. It must not
-  // strand the workspace behind a disabled second step; a fresh click starts Linear's complete
-  // installer again and lands on either Installed or a durable error.
   const isPending = install.isPending;
-  const isErrored = !install.isPending && status === 'error';
+  const needsReauth = !isPending && status === 'error' && existing?.lastErrorKind === 'auth';
+  const isErrored = !isPending && status === 'error' && !needsReauth;
   const workspaceName = existing?.connection.externalWorkspaceName;
 
-  // Pinned beneath the row rather than stacked inside it: a CardNote paints its own full-bleed
-  // tonal band, which only reads as one when it spans the group.
   const footer = (
-    <>
-      {installReturn === 'connected' ? (
-        <CardNote tone="muted">Athena was installed as a Linear agent.</CardNote>
-      ) : null}
-      {isErrored || installReturn === 'error' ? (
-        <CardNote tone="error">
-          Athena could not be installed as a Linear agent. Try again, or check that the Linear Agent
-          app is configured for this workspace.
-        </CardNote>
-      ) : null}
-      {integrationsQ.isError ? (
-        <CardNote tone="error">
-          {userErrorMessage(integrationsQ.error, 'Could not load the Linear Agent install status.')}
-        </CardNote>
-      ) : null}
-    </>
+    <LinearAgentFooter
+      installReturn={installReturn}
+      needsReauth={needsReauth}
+      isErrored={isErrored}
+      queryError={integrationsQ.isError ? integrationsQ.error : null}
+    />
   );
 
   return (
@@ -145,7 +178,7 @@ export function LinearAgentInstallCard({
                 install.mutate(undefined);
               }}
             >
-              {isPending ? 'Connecting…' : isErrored ? 'Try again' : 'Install'}
+              {linearAgentActionLabel(isPending, needsReauth, isErrored)}
             </Button>
           )
         }

@@ -10,7 +10,7 @@
  */
 import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
 
-import { ConflictError } from '../error';
+import { ConflictError, CredentialReauthRequiredError } from '../error';
 import { env } from '../env';
 
 const ENVELOPE_PREFIX = 'v1:gcm';
@@ -89,6 +89,6 @@ export function unsealCredential(envelope: string): string {
       decipher.final(),
     ]).toString('utf8');
   } catch {
-    throw new ConflictError('Credential envelope failed authentication');
+    throw new CredentialReauthRequiredError('Credential envelope failed authentication');
   }
 }
